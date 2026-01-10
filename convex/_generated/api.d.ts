@@ -35,6 +35,7 @@ import type * as pilotSetup from "../pilotSetup.js";
 import type * as rateLimits from "../rateLimits.js";
 import type * as rateLimits_index from "../rateLimits/index.js";
 import type * as rateLimits_types from "../rateLimits/types.js";
+import type * as scheduled from "../scheduled.js";
 import type * as traderBuyerNegotiations from "../traderBuyerNegotiations.js";
 import type * as traderDashboard from "../traderDashboard.js";
 import type * as userManagement_index from "../userManagement/index.js";
@@ -78,6 +79,7 @@ declare const fullApi: ApiFromModules<{
   rateLimits: typeof rateLimits;
   "rateLimits/index": typeof rateLimits_index;
   "rateLimits/types": typeof rateLimits_types;
+  scheduled: typeof scheduled;
   traderBuyerNegotiations: typeof traderBuyerNegotiations;
   traderDashboard: typeof traderDashboard;
   "userManagement/index": typeof userManagement_index;

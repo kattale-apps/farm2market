@@ -512,10 +512,12 @@ export const getExpiredUTIDs = query({
       .collect();
 
     // Filter to only units from this farmer's listings that are expired
+    // Expired means: deadline has passed by more than 1 hour
     const expiredUnits = allLockedUnits.filter((unit) => {
       if (!listingIds.includes(unit.listingId)) return false;
       if (!unit.deliveryDeadline) return false;
-      if (now <= unit.deliveryDeadline) return false; // Not expired yet
+      const expirationTime = unit.deliveryDeadline + (60 * 60 * 1000); // Deadline + 1 hour
+      if (now < expirationTime) return false; // Not expired yet (need 1 hour past deadline)
       if (unit.deliveryStatus === "delivered") return false; // Already delivered
       if (unit.archived) return false; // Already archived
       return true;

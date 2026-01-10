@@ -45,6 +45,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   const updateStorageLocation = useMutation(api.admin.updateStorageLocation);
   const deleteStorageLocation = useMutation(api.admin.deleteStorageLocation);
   const todayMetrics = useQuery(api.admin.getTodaySystemMetrics, { adminId: userId });
+  const markFarmerUTIDAsDelivered = useMutation(api.admin.markFarmerUTIDAsDelivered);
   
   const [reason, setReason] = useState("");
   const [windowActionLoading, setWindowActionLoading] = useState(false);
@@ -52,6 +53,10 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   const [pilotModeReason, setPilotModeReason] = useState("");
   const [pilotModeLoading, setPilotModeLoading] = useState(false);
   const [pilotModeMessage, setPilotModeMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [expandedMetric, setExpandedMetric] = useState<string | null>(null); // Track which metric card is expanded
+  const [selectedLockUtid, setSelectedLockUtid] = useState<string>("");
+  const [deliveryReason, setDeliveryReason] = useState<string>("");
+  const [markingDelivery, setMarkingDelivery] = useState(false);
 
   const handleExportUTIDs = (format: "excel" | "pdf") => {
     if (!allUTIDs || !allUTIDs.utids || allUTIDs.utids.length === 0) {
@@ -172,9 +177,21 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "1rem" }}>
             {/* Open Listings */}
-            <div style={{ padding: "1.5rem", background: "#e3f2fd", borderRadius: "8px", border: "1px solid #2196f3" }}>
-              <div style={{ fontSize: "1.1rem", fontWeight: "600", color: "#1976d2", marginBottom: "0.5rem" }}>
-                Open Listings
+            <div 
+              style={{ 
+                padding: "1.5rem", 
+                background: "#e3f2fd", 
+                borderRadius: "8px", 
+                border: "1px solid #2196f3",
+                cursor: "pointer",
+                transition: "all 0.2s",
+                boxShadow: expandedMetric === "open" ? "0 4px 12px rgba(33, 150, 243, 0.3)" : "none"
+              }}
+              onClick={() => setExpandedMetric(expandedMetric === "open" ? null : "open")}
+            >
+              <div style={{ fontSize: "1.1rem", fontWeight: "600", color: "#1976d2", marginBottom: "0.5rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>Open Listings</span>
+                <span style={{ fontSize: "0.8rem" }}>{expandedMetric === "open" ? "▼" : "▶"}</span>
               </div>
               <div style={{ fontSize: "2rem", fontWeight: "700", color: "#1565c0", marginBottom: "0.25rem" }}>
                 {todayMetrics?.open?.count || 0}
@@ -188,12 +205,36 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
               <div style={{ fontSize: "0.9rem", color: "#424242" }}>
                 <strong>UGX {(todayMetrics?.open?.totalMoney || 0).toLocaleString()}</strong>
               </div>
+              {expandedMetric === "open" && todayMetrics?.open?.listings && todayMetrics.open.listings.length > 0 && (
+                <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid #90caf9" }}>
+                  <div style={{ fontSize: "0.85rem", fontWeight: "600", color: "#1976d2", marginBottom: "0.5rem" }}>UTID Details:</div>
+                  {todayMetrics.open.listings.map((item: any, idx: number) => (
+                    <div key={idx} style={{ fontSize: "0.75rem", color: "#424242", marginBottom: "0.5rem", padding: "0.5rem", background: "#fff", borderRadius: "4px" }}>
+                      <div><strong>UTID:</strong> {item.utid}</div>
+                      <div><strong>Kilos:</strong> {item.kilos.toFixed(2)} kg</div>
+                      <div><strong>Value:</strong> UGX {item.money.toLocaleString()}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Locked Listings */}
-            <div style={{ padding: "1.5rem", background: "#fff3cd", borderRadius: "8px", border: "1px solid #ffc107" }}>
-              <div style={{ fontSize: "1.1rem", fontWeight: "600", color: "#f57c00", marginBottom: "0.5rem" }}>
-                Locked Listings
+            <div 
+              style={{ 
+                padding: "1.5rem", 
+                background: "#fff3cd", 
+                borderRadius: "8px", 
+                border: "1px solid #ffc107",
+                cursor: "pointer",
+                transition: "all 0.2s",
+                boxShadow: expandedMetric === "locked" ? "0 4px 12px rgba(255, 193, 7, 0.3)" : "none"
+              }}
+              onClick={() => setExpandedMetric(expandedMetric === "locked" ? null : "locked")}
+            >
+              <div style={{ fontSize: "1.1rem", fontWeight: "600", color: "#f57c00", marginBottom: "0.5rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>Locked Listings</span>
+                <span style={{ fontSize: "0.8rem" }}>{expandedMetric === "locked" ? "▼" : "▶"}</span>
               </div>
               <div style={{ fontSize: "2rem", fontWeight: "700", color: "#e65100", marginBottom: "0.25rem" }}>
                 {todayMetrics?.locked?.count || 0}
@@ -207,12 +248,36 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
               <div style={{ fontSize: "0.9rem", color: "#424242" }}>
                 <strong>UGX {(todayMetrics?.locked?.totalMoney || 0).toLocaleString()}</strong>
               </div>
+              {expandedMetric === "locked" && todayMetrics?.locked?.listings && todayMetrics.locked.listings.length > 0 && (
+                <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid #ffd54f" }}>
+                  <div style={{ fontSize: "0.85rem", fontWeight: "600", color: "#f57c00", marginBottom: "0.5rem" }}>UTID Details:</div>
+                  {todayMetrics.locked.listings.map((item: any, idx: number) => (
+                    <div key={idx} style={{ fontSize: "0.75rem", color: "#424242", marginBottom: "0.5rem", padding: "0.5rem", background: "#fff", borderRadius: "4px" }}>
+                      <div><strong>UTID:</strong> {item.utid}</div>
+                      <div><strong>Kilos:</strong> {item.kilos.toFixed(2)} kg</div>
+                      <div><strong>Value:</strong> UGX {item.money.toLocaleString()}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Delivered Listings */}
-            <div style={{ padding: "1.5rem", background: "#e8f5e9", borderRadius: "8px", border: "1px solid #4caf50" }}>
-              <div style={{ fontSize: "1.1rem", fontWeight: "600", color: "#2e7d32", marginBottom: "0.5rem" }}>
-                Delivered Listings
+            <div 
+              style={{ 
+                padding: "1.5rem", 
+                background: "#e8f5e9", 
+                borderRadius: "8px", 
+                border: "1px solid #4caf50",
+                cursor: "pointer",
+                transition: "all 0.2s",
+                boxShadow: expandedMetric === "delivered" ? "0 4px 12px rgba(76, 175, 80, 0.3)" : "none"
+              }}
+              onClick={() => setExpandedMetric(expandedMetric === "delivered" ? null : "delivered")}
+            >
+              <div style={{ fontSize: "1.1rem", fontWeight: "600", color: "#2e7d32", marginBottom: "0.5rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>Delivered Listings</span>
+                <span style={{ fontSize: "0.8rem" }}>{expandedMetric === "delivered" ? "▼" : "▶"}</span>
               </div>
               <div style={{ fontSize: "2rem", fontWeight: "700", color: "#1b5e20", marginBottom: "0.25rem" }}>
                 {todayMetrics?.delivered?.count || 0}
@@ -226,12 +291,36 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
               <div style={{ fontSize: "0.9rem", color: "#424242" }}>
                 <strong>UGX {(todayMetrics?.delivered?.totalMoney || 0).toLocaleString()}</strong>
               </div>
+              {expandedMetric === "delivered" && todayMetrics?.delivered?.listings && todayMetrics.delivered.listings.length > 0 && (
+                <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid #81c784" }}>
+                  <div style={{ fontSize: "0.85rem", fontWeight: "600", color: "#2e7d32", marginBottom: "0.5rem" }}>UTID Details:</div>
+                  {todayMetrics.delivered.listings.map((item: any, idx: number) => (
+                    <div key={idx} style={{ fontSize: "0.75rem", color: "#424242", marginBottom: "0.5rem", padding: "0.5rem", background: "#fff", borderRadius: "4px" }}>
+                      <div><strong>UTID:</strong> {item.utid}</div>
+                      <div><strong>Kilos:</strong> {item.kilos.toFixed(2)} kg</div>
+                      <div><strong>Value:</strong> UGX {item.money.toLocaleString()}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Collectable Listings */}
-            <div style={{ padding: "1.5rem", background: "#f3e5f5", borderRadius: "8px", border: "1px solid #9c27b0" }}>
-              <div style={{ fontSize: "1.1rem", fontWeight: "600", color: "#7b1fa2", marginBottom: "0.5rem" }}>
-                Collectable Listings
+            <div 
+              style={{ 
+                padding: "1.5rem", 
+                background: "#f3e5f5", 
+                borderRadius: "8px", 
+                border: "1px solid #9c27b0",
+                cursor: "pointer",
+                transition: "all 0.2s",
+                boxShadow: expandedMetric === "collectable" ? "0 4px 12px rgba(156, 39, 176, 0.3)" : "none"
+              }}
+              onClick={() => setExpandedMetric(expandedMetric === "collectable" ? null : "collectable")}
+            >
+              <div style={{ fontSize: "1.1rem", fontWeight: "600", color: "#7b1fa2", marginBottom: "0.5rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>Collectable Listings</span>
+                <span style={{ fontSize: "0.8rem" }}>{expandedMetric === "collectable" ? "▼" : "▶"}</span>
               </div>
               <div style={{ fontSize: "2rem", fontWeight: "700", color: "#4a148c", marginBottom: "0.25rem" }}>
                 {todayMetrics?.collectable?.count || 0}
@@ -245,12 +334,36 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
               <div style={{ fontSize: "0.9rem", color: "#424242" }}>
                 <strong>UGX {(todayMetrics?.collectable?.totalMoney || 0).toLocaleString()}</strong>
               </div>
+              {expandedMetric === "collectable" && todayMetrics?.collectable?.listings && todayMetrics.collectable.listings.length > 0 && (
+                <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid #ba68c8" }}>
+                  <div style={{ fontSize: "0.85rem", fontWeight: "600", color: "#7b1fa2", marginBottom: "0.5rem" }}>UTID Details:</div>
+                  {todayMetrics.collectable.listings.map((item: any, idx: number) => (
+                    <div key={idx} style={{ fontSize: "0.75rem", color: "#424242", marginBottom: "0.5rem", padding: "0.5rem", background: "#fff", borderRadius: "4px" }}>
+                      <div><strong>UTID:</strong> {item.utid}</div>
+                      <div><strong>Kilos:</strong> {item.kilos.toFixed(2)} kg</div>
+                      <div><strong>Value:</strong> UGX {item.money.toLocaleString()}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Picked Up Listings */}
-            <div style={{ padding: "1.5rem", background: "#e0f2f1", borderRadius: "8px", border: "1px solid #009688" }}>
-              <div style={{ fontSize: "1.1rem", fontWeight: "600", color: "#00695c", marginBottom: "0.5rem" }}>
-                Picked Up Listings
+            <div 
+              style={{ 
+                padding: "1.5rem", 
+                background: "#e0f2f1", 
+                borderRadius: "8px", 
+                border: "1px solid #009688",
+                cursor: "pointer",
+                transition: "all 0.2s",
+                boxShadow: expandedMetric === "pickedUp" ? "0 4px 12px rgba(0, 150, 136, 0.3)" : "none"
+              }}
+              onClick={() => setExpandedMetric(expandedMetric === "pickedUp" ? null : "pickedUp")}
+            >
+              <div style={{ fontSize: "1.1rem", fontWeight: "600", color: "#00695c", marginBottom: "0.5rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>Picked Up Listings</span>
+                <span style={{ fontSize: "0.8rem" }}>{expandedMetric === "pickedUp" ? "▼" : "▶"}</span>
               </div>
               <div style={{ fontSize: "2rem", fontWeight: "700", color: "#004d40", marginBottom: "0.25rem" }}>
                 {todayMetrics?.pickedUp?.count || 0}
@@ -264,6 +377,18 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
               <div style={{ fontSize: "0.9rem", color: "#424242" }}>
                 <strong>UGX {(todayMetrics?.pickedUp?.totalMoney || 0).toLocaleString()}</strong>
               </div>
+              {expandedMetric === "pickedUp" && todayMetrics?.pickedUp?.listings && todayMetrics.pickedUp.listings.length > 0 && (
+                <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid #4db6ac" }}>
+                  <div style={{ fontSize: "0.85rem", fontWeight: "600", color: "#00695c", marginBottom: "0.5rem" }}>UTID Details:</div>
+                  {todayMetrics.pickedUp.listings.map((item: any, idx: number) => (
+                    <div key={idx} style={{ fontSize: "0.75rem", color: "#424242", marginBottom: "0.5rem", padding: "0.5rem", background: "#fff", borderRadius: "4px" }}>
+                      <div><strong>UTID:</strong> {item.utid}</div>
+                      <div><strong>Kilos:</strong> {item.kilos.toFixed(2)} kg</div>
+                      <div><strong>Value:</strong> UGX {item.money.toLocaleString()}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -597,6 +722,91 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
         )}
         <div style={{ marginTop: "1.5rem", paddingTop: "1.5rem", borderTop: "2px solid #e0e0e0" }}>
           <h4 style={{ marginBottom: "1rem", fontSize: "1.1rem", color: "#1a1a1a" }}>
+            Mark Farmer UTID as Delivered
+          </h4>
+          <div style={{ 
+            padding: "1.5rem", 
+            background: "#f9f9f9", 
+            borderRadius: "8px", 
+            border: "1px solid #ddd",
+            marginBottom: "1.5rem"
+          }}>
+            <div style={{ marginBottom: "1rem" }}>
+              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                Lock UTID (Farmer's Delivery UTID):
+              </label>
+              <input
+                type="text"
+                value={selectedLockUtid}
+                onChange={(e) => setSelectedLockUtid(e.target.value)}
+                placeholder="Enter lockUtid (e.g., 20240110-143022-tra-a3k9x2)"
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  border: "1px solid #ccc",
+                  borderRadius: "6px",
+                  fontSize: "0.9rem"
+                }}
+              />
+            </div>
+            <div style={{ marginBottom: "1rem" }}>
+              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                Reason:
+              </label>
+              <textarea
+                value={deliveryReason}
+                onChange={(e) => setDeliveryReason(e.target.value)}
+                placeholder="Enter reason for marking as delivered..."
+                rows={3}
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  border: "1px solid #ccc",
+                  borderRadius: "6px",
+                  fontSize: "0.9rem",
+                  fontFamily: "inherit"
+                }}
+              />
+            </div>
+            <button
+              onClick={async () => {
+                if (!selectedLockUtid.trim() || !deliveryReason.trim()) {
+                  alert("Please enter both UTID and reason");
+                  return;
+                }
+                setMarkingDelivery(true);
+                try {
+                  await markFarmerUTIDAsDelivered({
+                    adminId: userId,
+                    lockUtid: selectedLockUtid.trim(),
+                    reason: deliveryReason.trim(),
+                  });
+                  alert("Successfully marked UTID as delivered!");
+                  setSelectedLockUtid("");
+                  setDeliveryReason("");
+                } catch (error: any) {
+                  alert(`Error: ${error.message || "Failed to mark UTID as delivered"}`);
+                } finally {
+                  setMarkingDelivery(false);
+                }
+              }}
+              disabled={markingDelivery || !selectedLockUtid.trim() || !deliveryReason.trim()}
+              style={{
+                padding: "0.75rem 1.5rem",
+                background: markingDelivery ? "#ccc" : "#4caf50",
+                color: "#fff",
+                border: "none",
+                borderRadius: "6px",
+                fontSize: "0.9rem",
+                fontWeight: "600",
+                cursor: markingDelivery ? "not-allowed" : "pointer"
+              }}
+            >
+              {markingDelivery ? "Marking..." : "Mark as Delivered"}
+            </button>
+          </div>
+
+          <h4 style={{ marginBottom: "1rem", fontSize: "1.1rem", color: "#1a1a1a", marginTop: "2rem" }}>
             Confirm Delivery to Storage by UTID
           </h4>
           {allUTIDs === undefined ? (

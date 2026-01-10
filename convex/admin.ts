@@ -219,6 +219,60 @@ export const verifyDelivery = mutation({
 });
 
 /**
+ * Mark farmer UTID as delivered (admin only)
+ * Admin can mark a lockUtid (farmer's delivery UTID) as delivered
+ * This updates the deliveryStatus of the associated unit(s)
+ */
+export const markFarmerUTIDAsDelivered = mutation({
+  args: {
+    adminId: v.id("users"),
+    lockUtid: v.string(), // The lockUtid from the farmer's delivery
+    reason: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await verifyAdmin(ctx, args.adminId);
+
+    // Find all units with this lockUtid using the index
+    const allUnits = await ctx.db
+      .query("listingUnits")
+      .withIndex("by_lock_utid", (q: any) => q.eq("lockUtid", args.lockUtid))
+      .collect();
+
+    const unitsWithUtid = allUnits.filter((unit) => unit.status === "locked");
+
+    if (unitsWithUtid.length === 0) {
+      throw new Error(`No locked units found with UTID: ${args.lockUtid}`);
+    }
+
+    const utid = await logAdminAction(
+      ctx,
+      args.adminId,
+      "mark_farmer_utid_delivered",
+      args.reason,
+      args.lockUtid,
+      {
+        unitsUpdated: unitsWithUtid.length,
+        unitIds: unitsWithUtid.map((u) => u._id),
+      }
+    );
+
+    // Update all units with this lockUtid to delivered status
+    for (const unit of unitsWithUtid) {
+      await ctx.db.patch(unit._id, {
+        deliveryStatus: "delivered",
+      });
+    }
+
+    return {
+      utid,
+      lockUtid: args.lockUtid,
+      unitsUpdated: unitsWithUtid.length,
+      unitIds: unitsWithUtid.map((u) => u._id),
+    };
+  },
+});
+
+/**
  * Confirm delivery to storage by UTID (admin only)
  * Admin selects a UTID and confirms delivery, creating trader inventory
  */

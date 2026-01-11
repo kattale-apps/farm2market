@@ -888,16 +888,15 @@ export const cancelOverdueUTID = mutation({
       userId: traderId,
       type: "capital_unlock",
       amount: unitPrice,
-      balanceBefore: currentBalance,
       balanceAfter: balanceAfter,
       utid: cancellationUtid,
       timestamp: getUgandaTime(),
-      description: `Capital unlocked - Farmer cancelled overdue delivery (UTID: ${unit.lockUtid})`,
       metadata: {
         originalLockUtid: unit.lockUtid,
         unitId: unit._id,
         cancelledBy: "farmer",
         farmerId: args.farmerId,
+        description: `Capital unlocked - Farmer cancelled overdue delivery (UTID: ${unit.lockUtid})`,
       },
     });
 

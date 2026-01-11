@@ -55,25 +55,26 @@ This error indicates that Pesapal API v3 is expecting a `notification_id` (IPN U
 
 1. **Register an IPN URL with Pesapal** (Required for API v3):
    
-   **Step 1: Create a Webhook Endpoint**
+   **Step 1: Get Your Convex Webhook URL**
    
-   You need a publicly accessible HTTP endpoint that Pesapal can call. Since you're using Convex, you have a few options:
+   The webhook endpoint is already set up in `convex/http.ts`. After deploying Convex, you'll get a webhook URL like:
    
-   **Option A: Use Vercel/Next.js API Route** (Recommended if using Vercel):
-   - Create an API route at `app/api/pesapal/webhook/route.ts` (or `pages/api/pesapal/webhook.ts` for Pages Router)
-   - This endpoint should accept POST requests from Pesapal
-   - It should call your Convex `handlePesapalWebhook` action
+   ```
+   https://your-deployment-name.convex.site/pesapal/webhook
+   ```
    
-   **Option B: Use a Convex HTTP Action** (If Convex supports HTTP endpoints):
-   - Check if Convex supports HTTP endpoints for webhooks
-   - Configure the webhook handler to accept direct HTTP calls
+   To find your Convex deployment URL:
+   - Go to **Convex Dashboard** → Your Project
+   - Check the deployment URL (usually shown in the dashboard)
+   - Or check your `CONVEX_URL` environment variable
+   - The webhook path is: `{your-convex-url}/pesapal/webhook`
    
    **Step 2: Register IPN URL in Pesapal Dashboard**
    - Log into your Pesapal dashboard (sandbox or production)
    - Navigate to **Settings** → **IPN (Instant Payment Notification)**
-   - Click **Register IPN URL**
-   - Enter your webhook URL (e.g., `https://your-domain.com/api/pesapal/webhook`)
-   - Save and copy the `notification_id` you receive
+   - Click **Register IPN URL** or **Add IPN URL**
+   - Enter your Convex webhook URL: `https://your-deployment-name.convex.site/pesapal/webhook`
+   - Save and copy the `notification_id` you receive (it will look like a UUID or alphanumeric string)
    
    **Step 3: Add Notification ID to Convex**
    - Go to **Convex Dashboard** → **Settings** → **Environment Variables**

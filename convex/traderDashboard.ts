@@ -246,7 +246,7 @@ export const getTraderActiveUTIDs = query({
         
         // Get listing info (no farmer identity exposed)
         const listing = await ctx.db.get(unit.listingId);
-        const farmer = listing ? await ctx.db.get(listing.farmerId) : null;
+        const farmer = listing && listing.farmerId ? await ctx.db.get(listing.farmerId) : null;
 
         utidData.entities.push({
           table: "listingUnits",

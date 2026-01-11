@@ -96,7 +96,7 @@ async function findUsersByUTID(
   for (const unit of units) {
     // Get farmer via listing
     const listing = await ctx.db.get(unit.listingId);
-    if (listing) {
+    if (listing && listing.farmerId) {
       if (!seenUserIds.has(listing.farmerId)) {
         const farmer = await ctx.db.get(listing.farmerId);
         if (farmer) {
@@ -150,7 +150,7 @@ async function findUsersByUTID(
     .collect();
 
   for (const listing of listings) {
-    if (!seenUserIds.has(listing.farmerId)) {
+    if (listing.farmerId && !seenUserIds.has(listing.farmerId)) {
       const farmer = await ctx.db.get(listing.farmerId);
       if (farmer) {
         users.push({ userId: listing.farmerId, role: farmer.role });

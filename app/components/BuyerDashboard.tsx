@@ -368,11 +368,14 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
               </div>
             )}
           </div>
-          {paymentTransactions && paymentTransactions.length > 0 && (
+          {paymentTransactions && paymentTransactions.filter((tx: any) => tx.status === "completed").length > 0 && (
             <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid #e0e0e0" }}>
-              <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.5rem" }}>Recent Deposits</div>
+              <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.5rem" }}>Recent Successful Deposits</div>
               <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                {paymentTransactions.slice(0, 3).map((tx: any) => (
+                {paymentTransactions
+                  .filter((tx: any) => tx.status === "completed")
+                  .slice(0, 3)
+                  .map((tx: any) => (
                   <div key={tx.transactionId} style={{
                     padding: "0.5rem",
                     background: "#f9f9f9",
@@ -382,10 +385,10 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.25rem" }}>
                       <span style={{ fontWeight: "600" }}>{formatUGX(tx.amount)}</span>
                       <span style={{
-                        color: tx.status === "completed" ? "#2e7d32" : tx.status === "pending" ? "#ff9800" : "#d32f2f",
+                        color: "#2e7d32",
                         textTransform: "capitalize"
                       }}>
-                        {tx.status}
+                        Completed
                       </span>
                     </div>
                     {tx.walletDepositUtid && (

@@ -9,6 +9,7 @@
 
 import { v } from "convex/values";
 import { query } from "./_generated/server";
+import { Id } from "./_generated/dataModel";
 import { calculateTraderExposureInternal, getStorageFeeRate } from "./utils";
 import { MAX_TRADER_EXPOSURE_UGX } from "./constants";
 

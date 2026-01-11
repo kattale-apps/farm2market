@@ -931,3 +931,153 @@ export const cancelOverdueUTID = mutation({
     };
   },
 });
+
+/**
+ * Get all units ledger (comprehensive view)
+ * 
+ * Returns all units from all listings, grouped by listing,
+ * showing status (open/locked/delivered) and earnings for each unit.
+ * This allows farmers to track how their listings are performing.
+ */
+export const getAllUnitsLedger = query({
+  args: {
+    farmerId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    // Verify user is a farmer
+    const user = await ctx.db.get(args.farmerId);
+    if (!user || user.role !== "farmer") {
+      throw new Error("User is not a farmer");
+    }
+
+    // Get all listings for this farmer
+    const listings = await ctx.db
+      .query("listings")
+      .withIndex("by_farmer", (q) => q.eq("farmerId", args.farmerId))
+      .collect();
+
+    const listingIds = listings.map((l) => l._id);
+    const listingsMap = new Map(listings.map((l) => [l._id, l]));
+
+    // Get all units from these listings
+    const allUnits = await ctx.db
+      .query("listingUnits")
+      .collect();
+
+    const farmerUnits = allUnits.filter((unit) =>
+      listingIds.includes(unit.listingId)
+    );
+
+    // Group units by listing and enrich with status and earnings
+    const listingsWithUnits = await Promise.all(
+      listings.map(async (listing) => {
+        const listingUnits = farmerUnits.filter((u) => u.listingId === listing._id);
+        
+        // Sort units by unit number
+        listingUnits.sort((a, b) => a.unitNumber - b.unitNumber);
+
+        // Process each unit
+        const unitsData = await Promise.all(
+          listingUnits.map(async (unit) => {
+            // Determine status
+            let status: "open" | "locked" | "delivered" | "cancelled" = "open";
+            if (unit.status === "delivered") {
+              status = "delivered";
+            } else if (unit.status === "locked") {
+              status = "locked";
+            } else if (unit.status === "cancelled") {
+              status = "cancelled";
+            } else {
+              status = "open";
+            }
+
+            // Calculate earnings (only for delivered units)
+            let earnings = 0;
+            let pricePerKilo = listing.pricePerKilo;
+            let lockUtid = unit.lockUtid || null;
+
+            if (status === "delivered") {
+              // Get negotiation history if available
+              let negotiationHistory = null;
+              if (unit.activeNegotiationId) {
+                const negotiation = await ctx.db.get(unit.activeNegotiationId);
+                if (negotiation) {
+                  negotiationHistory = {
+                    currentPricePerKilo: negotiation.currentPricePerKilo,
+                  };
+                }
+              }
+
+              // Use negotiated price if available, otherwise use listing price
+              pricePerKilo = negotiationHistory?.currentPricePerKilo || listing.pricePerKilo;
+              const kilos = listing.unitSize || 10;
+              earnings = pricePerKilo * kilos;
+            } else if (status === "locked") {
+              // For locked units, get the negotiated price if available
+              if (unit.activeNegotiationId) {
+                const negotiation = await ctx.db.get(unit.activeNegotiationId);
+                if (negotiation) {
+                  pricePerKilo = negotiation.currentPricePerKilo;
+                }
+              }
+            }
+
+            return {
+              unitId: unit._id,
+              unitNumber: unit.unitNumber,
+              status,
+              lockUtid,
+              pricePerKilo,
+              earnings,
+              lockedAt: unit.lockedAt || null,
+              deliveryDeadline: unit.deliveryDeadline || null,
+            };
+          })
+        );
+
+        // Calculate totals for this listing
+        const openCount = unitsData.filter((u) => u.status === "open").length;
+        const lockedCount = unitsData.filter((u) => u.status === "locked").length;
+        const deliveredCount = unitsData.filter((u) => u.status === "delivered").length;
+        const cancelledCount = unitsData.filter((u) => u.status === "cancelled").length;
+        const totalEarnings = unitsData.reduce((sum, u) => sum + u.earnings, 0);
+
+        return {
+          listingId: listing._id,
+          listingUtid: listing.utid,
+          produceType: listing.produceType,
+          totalKilos: listing.totalKilos,
+          totalUnits: listing.totalUnits,
+          unitSize: listing.unitSize || 10,
+          pricePerKilo: listing.pricePerKilo,
+          createdAt: listing.createdAt,
+          units: unitsData,
+          totals: {
+            open: openCount,
+            locked: lockedCount,
+            delivered: deliveredCount,
+            cancelled: cancelledCount,
+            totalEarnings,
+          },
+        };
+      })
+    );
+
+    // Calculate grand totals
+    const grandTotals = listingsWithUnits.reduce(
+      (acc, listing) => ({
+        open: acc.open + listing.totals.open,
+        locked: acc.locked + listing.totals.locked,
+        delivered: acc.delivered + listing.totals.delivered,
+        cancelled: acc.cancelled + listing.totals.cancelled,
+        totalEarnings: acc.totalEarnings + listing.totals.totalEarnings,
+      }),
+      { open: 0, locked: 0, delivered: 0, cancelled: 0, totalEarnings: 0 }
+    );
+
+    return {
+      listings: listingsWithUnits,
+      grandTotals,
+    };
+  },
+});

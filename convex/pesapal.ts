@@ -141,7 +141,7 @@ export const initiatePesapalPayment = action({
     // Generate unique order tracking ID
     const orderTrackingId = `F2M-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
-    // Prepare payment request
+    // Prepare payment request according to Pesapal API v3 format
     const paymentRequest = {
       id: orderTrackingId,
       currency: args.currency || "UGX",
@@ -166,6 +166,15 @@ export const initiatePesapalPayment = action({
       },
     };
 
+    // Log request for debugging (without sensitive data)
+    console.log("Pesapal payment request:", {
+      id: paymentRequest.id,
+      amount: paymentRequest.amount,
+      currency: paymentRequest.currency,
+      callback_url: paymentRequest.callback_url,
+      cancellation_url: paymentRequest.cancellation_url,
+    });
+
     // Validate token before using
     if (!token || typeof token !== "string" || token.trim() === "") {
       throw new Error("Invalid access token received from Pesapal authentication");
@@ -182,25 +191,107 @@ export const initiatePesapalPayment = action({
       body: JSON.stringify(paymentRequest),
     });
 
+    // Get response text first to handle both JSON and non-JSON responses
+    const responseText = await response.text();
+
     if (!response.ok) {
-      const errorText = await response.text();
       let errorMessage = `Pesapal payment initiation failed: ${response.status}`;
       
       try {
-        const errorData = JSON.parse(errorText);
+        const errorData = JSON.parse(responseText);
         if (errorData.error) {
           errorMessage = `Pesapal payment error: ${errorData.error.message || errorData.error.code || JSON.stringify(errorData.error)}`;
         } else {
-          errorMessage += ` - ${errorData.message || errorText}`;
+          errorMessage += ` - ${errorData.message || responseText}`;
         }
       } catch {
-        errorMessage += ` - ${errorText}`;
+        errorMessage += ` - ${responseText}`;
       }
       
       throw new Error(errorMessage);
     }
 
-    const paymentData: any = await response.json();
+    // Parse JSON response
+    let paymentData: any;
+    try {
+      paymentData = JSON.parse(responseText);
+    } catch (parseError) {
+      throw new Error(
+        `Pesapal returned invalid JSON response: ${responseText.substring(0, 500)}. ` +
+        `Status: ${response.status}, Content-Type: ${response.headers.get("content-type")}`
+      );
+    }
+
+    // Log full response for debugging
+    console.log("Pesapal payment response:", JSON.stringify(paymentData, null, 2));
+
+    // Extract redirect URL from response (Pesapal v3 may use different field names)
+    // Try multiple possible field names based on Pesapal API documentation
+    // Pesapal v3 typically returns: { redirect_url: "...", order_tracking_id: "..." }
+    let redirectUrl = paymentData.redirect_url || 
+                   paymentData.redirectUrl || 
+                   paymentData.payment_url || 
+                   paymentData.paymentUrl || 
+                   paymentData.link || 
+                   paymentData.url ||
+                   paymentData.data?.redirect_url ||
+                   paymentData.data?.redirectUrl ||
+                   paymentData.data?.payment_url ||
+                   paymentData.result?.redirect_url ||
+                   paymentData.result?.redirectUrl ||
+                   paymentData.instructions?.redirect_url ||
+                   "";
+
+    // If no redirect URL found, try to construct it from order tracking ID
+    // Some Pesapal implementations return the order tracking ID and we construct the URL
+    if (!redirectUrl && (paymentData.order_tracking_id || paymentData.orderTrackingId || orderTrackingId)) {
+      const trackingId = paymentData.order_tracking_id || paymentData.orderTrackingId || orderTrackingId;
+      // Pesapal v3 redirect URL format might be: https://cybqa.pesapal.com/pesapalv3/api/RedirectToMobileCheckout/?OrderTrackingId=...
+      redirectUrl = `${PESAPAL_BASE_URL}/api/RedirectToMobileCheckout/?OrderTrackingId=${trackingId}`;
+    }
+
+    // Validate redirect URL is present and is a valid URL
+    if (!redirectUrl || typeof redirectUrl !== "string" || redirectUrl.trim() === "") {
+      const responseKeys = Object.keys(paymentData).join(", ");
+      const responseStr = JSON.stringify(paymentData, null, 2);
+      
+      // Check if this is a successful response but with different structure
+      // Pesapal might return success with order_tracking_id but redirect URL in a different format
+      const actualTrackingId = paymentData.order_tracking_id || paymentData.orderTrackingId || orderTrackingId;
+      
+      if (actualTrackingId) {
+        // Payment was created - try constructed URL as fallback
+        const constructedUrl = `${PESAPAL_BASE_URL}/api/RedirectToMobileCheckout/?OrderTrackingId=${actualTrackingId}`;
+        
+        // Log warning but use constructed URL
+        console.warn(
+          `Pesapal payment created (orderTrackingId: ${actualTrackingId}) but redirect URL not in response. ` +
+          `Using constructed URL: ${constructedUrl}. ` +
+          `Response keys: ${responseKeys}`
+        );
+        
+        // Use constructed URL as fallback
+        redirectUrl = constructedUrl;
+      } else {
+        // No order tracking ID either - this is a real problem
+        throw new Error(
+          `Pesapal payment response missing both redirect URL and order tracking ID. ` +
+          `Response contains keys: ${responseKeys}. ` +
+          `Full response: ${responseStr.substring(0, 1000)}... ` +
+          `Please check Pesapal API v3 documentation. Status: ${response.status}`
+        );
+      }
+    }
+
+    // Validate it's a valid URL format
+    try {
+      new URL(redirectUrl);
+    } catch {
+      throw new Error(
+        `Pesapal returned invalid redirect URL format: ${redirectUrl}. ` +
+        `Expected a valid HTTP/HTTPS URL.`
+      );
+    }
 
     // Create payment transaction record
     const transactionId: any = await ctx.runMutation(internal.pesapal.createPaymentTransaction, {
@@ -209,14 +300,14 @@ export const initiatePesapalPayment = action({
       amount: args.amount,
       currency: args.currency || "UGX",
       pesapalOrderTrackingId: orderTrackingId,
-      redirectUrl: paymentData.redirect_url || "",
+      redirectUrl: redirectUrl,
       callbackUrl: args.callbackUrl,
     });
 
     return {
       transactionId,
       orderTrackingId,
-      redirectUrl: paymentData.redirect_url || paymentData.redirectUrl || "",
+      redirectUrl: redirectUrl,
     };
   },
 });

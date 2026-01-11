@@ -20,6 +20,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
   const deliveryDeadlines = useQuery(api.farmerDashboard.getDeliveryDeadlines, { farmerId: userId });
   const expiredUTIDs = useQuery(api.farmerDashboard.getExpiredUTIDs, { farmerId: userId });
   const transactionsLedger = useQuery(api.farmerDashboard.getSuccessfulTransactionsLedger, { farmerId: userId });
+  const allUnitsLedger = useQuery(api.farmerDashboard.getAllUnitsLedger, { farmerId: userId });
   
   const acceptOffer = useMutation(api.negotiations.acceptOffer);
   const rejectOffer = useMutation(api.negotiations.rejectOffer);
@@ -729,7 +730,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
         )}
       </div>
 
-      {/* Successful Transactions Ledger */}
+      {/* All Units Ledger - Comprehensive View */}
       <div style={{
         padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
@@ -737,162 +738,199 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
         border: "1px solid #e0e0e0"
       }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-          <h3 style={{ 
-            marginTop: 0, 
-            marginBottom: 0, 
-            fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", 
-            color: "#2c2c2c",
-            fontFamily: '"Montserrat", sans-serif',
-            fontWeight: "600",
-            letterSpacing: "-0.01em"
-          }}>
-            Transactions Ledger
-          </h3>
-          {transactionsLedger && transactionsLedger.transactions && transactionsLedger.transactions.length > 0 && (
-            <div style={{ display: "flex", gap: "0.5rem" }}>
-              <button
-                onClick={() => handleExportLedger("excel")}
-                style={{
-                  padding: "0.5rem 1rem",
-                  background: "#2e7d32",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontSize: "0.85rem",
-                  fontWeight: "500"
-                }}
-              >
-                📊 Excel
-              </button>
-              <button
-                onClick={() => handleExportLedger("pdf")}
-                style={{
-                  padding: "0.5rem 1rem",
-                  background: "#d32f2f",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontSize: "0.85rem",
-                  fontWeight: "500"
-                }}
-              >
-                📄 PDF
-              </button>
-            </div>
-          )}
-        </div>
-        {transactionsLedger === undefined ? (
+        <h3 style={{ 
+          marginTop: 0, 
+          marginBottom: "1rem", 
+          fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", 
+          color: "#2c2c2c",
+          fontFamily: '"Montserrat", sans-serif',
+          fontWeight: "600",
+          letterSpacing: "-0.01em"
+        }}>
+          Transactions Ledger
+        </h3>
+        {allUnitsLedger === undefined ? (
           <p style={{ color: "#999" }}>Loading...</p>
-        ) : transactionsLedger.transactions.length === 0 ? (
-          <p style={{ color: "#666" }}>No successful transactions yet. Deliveries will appear here once completed.</p>
+        ) : allUnitsLedger.listings.length === 0 ? (
+          <p style={{ color: "#666" }}>No listings yet. Create a listing to start tracking units.</p>
         ) : (
-          <div>
-            <div style={{ 
-              padding: "1rem", 
-              background: "#e8f5e9", 
-              borderRadius: "8px", 
-              marginBottom: "1rem",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center"
-            }}>
-              <div>
-                <div style={{ fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", color: "#666" }}>
-                  Total Transactions: <strong>{transactionsLedger.totalTransactions}</strong>
-                </div>
-                <div style={{ fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", color: "#666" }}>
-                  Total Kilos: <strong>{transactionsLedger.totalKilos} kg</strong>
-                </div>
-              </div>
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: "clamp(1rem, 3vw, 1.2rem)", fontWeight: "600", color: "#2e7d32" }}>
-                  Total Earned: {formatUGX(transactionsLedger.totalEarned)}
-                </div>
-              </div>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "1rem", maxHeight: "600px", overflowY: "auto" }}>
-              {transactionsLedger.transactions.map((tx: any, index: number) => (
-                <div key={index} style={{
+          <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
+            {allUnitsLedger.listings.map((listing: any, listingIndex: number) => (
+              <div key={listingIndex} style={{
+                border: "1px solid #e0e0e0",
+                borderRadius: "8px",
+                overflow: "hidden"
+              }}>
+                {/* Listing Header */}
+                <div style={{
                   padding: "1rem",
-                  background: "#f9f9f9",
-                  borderRadius: "8px",
-                  border: "1px solid #e0e0e0"
+                  background: "#f5f5f5",
+                  borderBottom: "2px solid #e0e0e0"
                 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.5rem" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem" }}>
                     <div>
-                      <div style={{ fontWeight: "600", marginBottom: "0.25rem" }}>
-                        {tx.produceType} - {tx.kilos} kg
+                      <h4 style={{ 
+                        margin: "0 0 0.5rem 0", 
+                        fontSize: "clamp(1rem, 3vw, 1.1rem)", 
+                        color: "#2c2c2c",
+                        fontWeight: "600"
+                      }}>
+                        {listing.produceType} - {listing.totalKilos} kg ({listing.totalUnits} units)
+                      </h4>
+                      <div style={{ fontSize: "clamp(0.75rem, 2vw, 0.8rem)", color: "#666" }}>
+                        Listed: {formatDate(listing.createdAt)} | Price: {formatUGX(listing.pricePerKilo)}/kg
                       </div>
-                      <div style={{ fontSize: "clamp(0.7rem, 2vw, 0.75rem)", color: "#999", fontFamily: "monospace", wordBreak: "break-all" }}>
-                        UTID: {tx.lockUtid}
+                      <div style={{ fontSize: "clamp(0.7rem, 2vw, 0.75rem)", color: "#999", fontFamily: "monospace", marginTop: "0.25rem" }}>
+                        Listing UTID: {listing.listingUtid}
                       </div>
                     </div>
                     <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", color: "#666", marginBottom: "0.25rem" }}>
+                        <span style={{ color: "#4caf50" }}>Open: {listing.totals.open}</span> | 
+                        <span style={{ color: "#2196f3" }}> Locked: {listing.totals.locked}</span> | 
+                        <span style={{ color: "#2e7d32" }}> Delivered: {listing.totals.delivered}</span>
+                        {listing.totals.cancelled > 0 && (
+                          <span style={{ color: "#999" }}> | Cancelled: {listing.totals.cancelled}</span>
+                        )}
+                      </div>
                       <div style={{ fontSize: "clamp(0.9rem, 2.5vw, 1rem)", fontWeight: "600", color: "#2e7d32" }}>
-                        {formatUGX(tx.totalEarned)}
-                      </div>
-                      <div style={{ fontSize: "clamp(0.75rem, 2vw, 0.8rem)", color: "#666" }}>
-                        {formatUGX(tx.finalPricePerKilo)}/kg
+                        Earnings: {formatUGX(listing.totals.totalEarnings)}
                       </div>
                     </div>
                   </div>
-                  <div style={{ 
-                    display: "grid", 
-                    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", 
-                    gap: "0.5rem",
-                    marginTop: "0.5rem",
-                    paddingTop: "0.5rem",
-                    borderTop: "1px solid #e0e0e0"
-                  }}>
-                    <div>
-                      <div style={{ fontSize: "clamp(0.7rem, 2vw, 0.75rem)", color: "#666" }}>Desired Price</div>
-                      <div style={{ fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", fontWeight: "500" }}>
-                        {formatUGX(tx.desiredPricePerKilo)}/kg
-                      </div>
-                    </div>
-                    {tx.priceAction && (
-                      <div>
-                        <div style={{ fontSize: "clamp(0.7rem, 2vw, 0.75rem)", color: "#666" }}>Negotiated Price</div>
-                        <div style={{ fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", fontWeight: "500" }}>
-                          {formatUGX(tx.negotiatedPricePerKilo)}/kg
-                        </div>
-                      </div>
-                    )}
-                    <div>
-                      <div style={{ fontSize: "clamp(0.7rem, 2vw, 0.75rem)", color: "#666" }}>Final Price</div>
-                      <div style={{ fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", fontWeight: "500" }}>
-                        {formatUGX(tx.finalPricePerKilo)}/kg
-                      </div>
-                    </div>
-                    {tx.soldToBuyer && (
-                      <div>
-                        <div style={{ fontSize: "clamp(0.7rem, 2vw, 0.75rem)", color: "#666" }}>Sold to Buyer</div>
-                        <div style={{ fontSize: "clamp(0.7rem, 2vw, 0.75rem)", color: "#999", fontFamily: "monospace", wordBreak: "break-all" }}>
-                          {tx.buyerPurchaseUtid?.slice(-8) || "N/A"}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  {tx.priceAction && (
-                    <div style={{ 
-                      marginTop: "0.5rem", 
-                      padding: "0.5rem", 
-                      background: "#fff", 
-                      borderRadius: "4px",
-                      fontSize: "clamp(0.7rem, 2vw, 0.75rem)",
-                      color: "#666"
-                    }}>
-                      <strong>Price Action:</strong> Original {formatUGX(tx.priceAction.originalPrice)}/kg → 
-                      Trader Offer {formatUGX(tx.priceAction.traderOffer)}/kg → 
-                      Final {formatUGX(tx.priceAction.finalNegotiated)}/kg
-                    </div>
-                  )}
                 </div>
-              ))}
-            </div>
+
+                {/* Units Table */}
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr style={{ background: "#f9f9f9", borderBottom: "2px solid #e0e0e0" }}>
+                        <th style={{ 
+                          padding: "0.75rem", 
+                          textAlign: "left", 
+                          fontSize: "clamp(0.8rem, 2.5vw, 0.85rem)",
+                          fontWeight: "600",
+                          color: "#2c2c2c"
+                        }}>
+                          Unit #
+                        </th>
+                        <th style={{ 
+                          padding: "0.75rem", 
+                          textAlign: "left", 
+                          fontSize: "clamp(0.8rem, 2.5vw, 0.85rem)",
+                          fontWeight: "600",
+                          color: "#2c2c2c"
+                        }}>
+                          UTID
+                        </th>
+                        <th style={{ 
+                          padding: "0.75rem", 
+                          textAlign: "center", 
+                          fontSize: "clamp(0.8rem, 2.5vw, 0.85rem)",
+                          fontWeight: "600",
+                          color: "#2c2c2c"
+                        }}>
+                          Status
+                        </th>
+                        <th style={{ 
+                          padding: "0.75rem", 
+                          textAlign: "right", 
+                          fontSize: "clamp(0.8rem, 2.5vw, 0.85rem)",
+                          fontWeight: "600",
+                          color: "#2c2c2c"
+                        }}>
+                          Earnings
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {listing.units.map((unit: any, unitIndex: number) => {
+                        const getStatusColor = (status: string) => {
+                          if (status === "open") return { bg: "#e8f5e9", text: "#2e7d32", label: "Open" };
+                          if (status === "locked") return { bg: "#e3f2fd", text: "#1976d2", label: "Locked" };
+                          if (status === "delivered") return { bg: "#e8f5e9", text: "#2e7d32", label: "Delivered" };
+                          return { bg: "#f5f5f5", text: "#999", label: "Cancelled" };
+                        };
+                        const statusStyle = getStatusColor(unit.status);
+
+                        return (
+                          <tr key={unitIndex} style={{ borderBottom: "1px solid #f0f0f0" }}>
+                            <td style={{ padding: "0.75rem", fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)" }}>
+                              {unit.unitNumber}
+                            </td>
+                            <td style={{ padding: "0.75rem", fontSize: "clamp(0.7rem, 2vw, 0.75rem)", fontFamily: "monospace", color: "#666", wordBreak: "break-all" }}>
+                              {unit.lockUtid || "-"}
+                            </td>
+                            <td style={{ padding: "0.75rem", textAlign: "center" }}>
+                              <span style={{
+                                padding: "0.25rem 0.75rem",
+                                borderRadius: "12px",
+                                fontSize: "clamp(0.75rem, 2vw, 0.8rem)",
+                                fontWeight: "600",
+                                background: statusStyle.bg,
+                                color: statusStyle.text,
+                                display: "inline-block"
+                              }}>
+                                {statusStyle.label}
+                              </span>
+                            </td>
+                            <td style={{ padding: "0.75rem", textAlign: "right", fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", fontWeight: unit.earnings > 0 ? "600" : "400", color: unit.earnings > 0 ? "#2e7d32" : "#999" }}>
+                              {unit.earnings > 0 ? formatUGX(unit.earnings) : "-"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ background: "#f9f9f9", borderTop: "2px solid #e0e0e0" }}>
+                        <td colSpan={2} style={{ padding: "0.75rem", fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", fontWeight: "600" }}>
+                          Totals
+                        </td>
+                        <td style={{ padding: "0.75rem", textAlign: "center", fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)" }}>
+                          <span style={{ color: "#4caf50" }}>O: {listing.totals.open}</span> | 
+                          <span style={{ color: "#2196f3" }}> L: {listing.totals.locked}</span> | 
+                          <span style={{ color: "#2e7d32" }}> D: {listing.totals.delivered}</span>
+                        </td>
+                        <td style={{ padding: "0.75rem", textAlign: "right", fontSize: "clamp(0.9rem, 2.5vw, 1rem)", fontWeight: "600", color: "#2e7d32" }}>
+                          {formatUGX(listing.totals.totalEarnings)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            ))}
+
+            {/* Grand Totals */}
+            {allUnitsLedger.listings.length > 0 && (
+              <div style={{
+                padding: "1rem",
+                background: "#e8f5e9",
+                borderRadius: "8px",
+                border: "2px solid #4caf50"
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
+                  <div>
+                    <div style={{ fontSize: "clamp(0.9rem, 2.5vw, 1rem)", fontWeight: "600", marginBottom: "0.5rem" }}>
+                      Grand Totals (All Listings)
+                    </div>
+                    <div style={{ fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", color: "#666" }}>
+                      <span style={{ color: "#4caf50" }}>Open: {allUnitsLedger.grandTotals.open}</span> | 
+                      <span style={{ color: "#2196f3" }}> Locked: {allUnitsLedger.grandTotals.locked}</span> | 
+                      <span style={{ color: "#2e7d32" }}> Delivered: {allUnitsLedger.grandTotals.delivered}</span>
+                      {allUnitsLedger.grandTotals.cancelled > 0 && (
+                        <span style={{ color: "#999" }}> | Cancelled: {allUnitsLedger.grandTotals.cancelled}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: "clamp(1.1rem, 3vw, 1.3rem)", fontWeight: "700", color: "#2e7d32" }}>
+                      Total Earnings: {formatUGX(allUnitsLedger.grandTotals.totalEarnings)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

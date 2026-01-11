@@ -186,7 +186,7 @@ export const getListingDetails = query({
       return null;
     }
 
-    const farmer = await ctx.db.get(listing.farmerId);
+    const farmer = listing.farmerId ? await ctx.db.get(listing.farmerId) : null;
     const units = await ctx.db
       .query("listingUnits")
       .withIndex("by_listing", (q) => q.eq("listingId", args.listingId))

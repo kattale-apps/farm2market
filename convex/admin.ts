@@ -273,6 +273,82 @@ export const markFarmerUTIDAsDelivered = mutation({
 });
 
 /**
+ * Admin demo deposit to trader or buyer
+ * Adds demo funds to a user's wallet for learning/sandbox
+ */
+export const depositDemoFunds = mutation({
+  args: {
+    adminId: v.id("users"),
+    targetUserId: v.id("users"),
+    amount: v.number(),
+    reason: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await verifyAdmin(ctx, args.adminId);
+
+    if (args.amount <= 0) {
+      throw new Error("Amount must be positive");
+    }
+
+    const user = await ctx.db.get(args.targetUserId);
+    if (!user || (user.role !== "trader" && user.role !== "buyer")) {
+      throw new Error("Target user must be a trader or buyer");
+    }
+
+    // Get current balance
+    const latestEntry = await ctx.db
+      .query("walletLedger")
+      .withIndex("by_user", (q: any) => q.eq("userId", args.targetUserId))
+      .order("desc")
+      .first();
+
+    const currentBalance = latestEntry?.balanceAfter || 0;
+    const balanceAfter = currentBalance + args.amount;
+    const utid = generateUTID("admin");
+
+    await ctx.db.insert("walletLedger", {
+      userId: args.targetUserId,
+      utid,
+      type: "capital_deposit",
+      amount: args.amount,
+      balanceAfter,
+      timestamp: getUgandaTime(),
+      metadata: {
+        source: "admin_demo_deposit",
+        reason: args.reason,
+        adminId: args.adminId,
+        role: user.role,
+      },
+    });
+
+    const actionUtid = await logAdminAction(
+      ctx,
+      args.adminId,
+      "demo_deposit",
+      args.reason,
+      utid,
+      {
+        targetUserId: args.targetUserId,
+        role: user.role,
+        amount: args.amount,
+        previousBalance: currentBalance,
+        balanceAfter,
+      }
+    );
+
+    return {
+      utid,
+      actionUtid,
+      targetUserId: args.targetUserId,
+      role: user.role,
+      amount: args.amount,
+      balanceAfter,
+      previousBalance: currentBalance,
+    };
+  },
+});
+
+/**
  * Confirm delivery to storage by UTID (admin only)
  * Admin selects a UTID and confirms delivery, creating trader inventory
  */

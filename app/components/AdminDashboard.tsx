@@ -31,6 +31,8 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   const sendNotificationToSelectedUsers = useMutation(api.notifications.sendNotificationToSelectedUsers);
   const sendRoleBasedNotification = useMutation(api.notifications.sendRoleBasedNotification);
   const confirmDeliveryToStorageByUTID = useMutation(api.admin.confirmDeliveryToStorageByUTID);
+  const depositDemoFunds = useMutation(api.admin.depositDemoFunds);
+  const adminDepositDemoFunds = useMutation(api.admin.adminDepositDemoFunds);
   const allUsers = useQuery(api.introspection.getAllUsers, { adminId: userId });
   const qualityOptions = useQuery(api.admin.getQualityOptions, { adminId: userId, activeOnly: false });
   const addQualityOption = useMutation(api.admin.addQualityOption);
@@ -57,6 +59,11 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   const [selectedLockUtid, setSelectedLockUtid] = useState<string>("");
   const [deliveryReason, setDeliveryReason] = useState<string>("");
   const [markingDelivery, setMarkingDelivery] = useState(false);
+  const [depositUserId, setDepositUserId] = useState<string>("");
+  const [depositRole, setDepositRole] = useState<"all" | "trader" | "buyer">("trader");
+  const [depositAmount, setDepositAmount] = useState<string>("");
+  const [depositReason, setDepositReason] = useState<string>("");
+  const [depositMessage, setDepositMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const handleExportUTIDs = (format: "excel" | "pdf") => {
     if (!allUTIDs || !allUTIDs.utids || allUTIDs.utids.length === 0) {
@@ -819,6 +826,162 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
             />
           )}
         </div>
+
+        {/* Demo Deposit to Trader/Buyer */}
+        <div style={{ marginTop: "1.5rem", paddingTop: "1.5rem", borderTop: "2px solid #e0e0e0" }}>
+          <h4 style={{ marginBottom: "1rem", fontSize: "1.1rem", color: "#1a1a1a" }}>
+            Demo Deposit to Trader/Buyer
+          </h4>
+          <div style={{
+            padding: "1.5rem",
+            background: "#f9f9f9",
+            borderRadius: "8px",
+            border: "1px solid #ddd",
+            marginBottom: "1.5rem"
+          }}>
+            <div style={{ display: "flex", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" }}>
+              <div style={{ minWidth: "160px" }}>
+                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                  Role Filter
+                </label>
+                <select
+                  value={depositRole}
+                  onChange={(e) => setDepositRole(e.target.value as "all" | "trader" | "buyer")}
+                  style={{
+                    width: "100%",
+                    padding: "0.6rem",
+                    border: "1px solid #ccc",
+                    borderRadius: "6px",
+                    fontSize: "0.9rem"
+                  }}
+                >
+                  <option value="all">All</option>
+                  <option value="trader">Traders</option>
+                  <option value="buyer">Buyers</option>
+                </select>
+              </div>
+
+              <div style={{ flex: 1, minWidth: "220px" }}>
+                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                  Select User
+                </label>
+                <select
+                  value={depositUserId}
+                  onChange={(e) => setDepositUserId(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "0.6rem",
+                    border: "1px solid #ccc",
+                    borderRadius: "6px",
+                    fontSize: "0.9rem"
+                  }}
+                >
+                  <option value="">-- Choose user --</option>
+                  {(allUsers?.users || [])
+                    .filter((u: any) => depositRole === "all" ? true : u.role === depositRole)
+                    .map((u: any) => (
+                      <option key={u._id} value={u._id}>
+                        {u.alias} ({u.role})
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div style={{ minWidth: "160px" }}>
+                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                  Amount (UGX)
+                </label>
+                <input
+                  type="number"
+                  value={depositAmount}
+                  onChange={(e) => setDepositAmount(e.target.value)}
+                  placeholder="e.g., 500000"
+                  style={{
+                    width: "100%",
+                    padding: "0.6rem",
+                    border: "1px solid #ccc",
+                    borderRadius: "6px",
+                    fontSize: "0.9rem"
+                  }}
+                />
+              </div>
+            </div>
+
+            <div style={{ marginBottom: "1rem" }}>
+              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                Reason
+              </label>
+              <textarea
+                value={depositReason}
+                onChange={(e) => setDepositReason(e.target.value)}
+                placeholder="Enter reason for demo deposit..."
+                rows={3}
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  border: "1px solid #ccc",
+                  borderRadius: "6px",
+                  fontSize: "0.9rem",
+                  fontFamily: "inherit"
+                }}
+              />
+            </div>
+
+            {depositMessage && (
+              <div style={{
+                marginBottom: "1rem",
+                padding: "0.75rem",
+                borderRadius: "6px",
+                background: depositMessage.type === "success" ? "#e8f5e9" : "#ffebee",
+                border: depositMessage.type === "success" ? "1px solid #4caf50" : "1px solid #ef5350",
+                color: depositMessage.type === "success" ? "#2e7d32" : "#c62828",
+                fontSize: "0.9rem"
+              }}>
+                {depositMessage.text}
+              </div>
+            )}
+
+            <button
+              onClick={async () => {
+                const amountNumber = Number(depositAmount);
+                if (!depositUserId || isNaN(amountNumber) || amountNumber <= 0 || !depositReason.trim()) {
+                  setDepositMessage({ type: "error", text: "Select user, enter positive amount, and add a reason." });
+                  return;
+                }
+                setDepositMessage(null);
+                try {
+                  const result = await depositDemoFunds({
+                    adminId: userId,
+                    targetUserId: depositUserId as Id<"users">,
+                    amount: amountNumber,
+                    reason: depositReason.trim(),
+                  });
+                  setDepositMessage({
+                    type: "success",
+                    text: `Deposited UGX ${amountNumber.toLocaleString()} to user. New balance: UGX ${result.balanceAfter.toLocaleString()}. UTID: ${result.utid}`,
+                  });
+                  setDepositAmount("");
+                  setDepositReason("");
+                  setDepositUserId("");
+                } catch (error: any) {
+                  setDepositMessage({ type: "error", text: error.message || "Failed to deposit demo funds" });
+                }
+              }}
+              style={{
+                padding: "0.75rem 1.5rem",
+                background: "#1976d2",
+                color: "#fff",
+                border: "none",
+                borderRadius: "6px",
+                fontSize: "0.95rem",
+                fontWeight: "600",
+                cursor: "pointer"
+              }}
+            >
+              Deposit Demo Funds
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* System Controls - Maintenance Mode */}
@@ -1279,7 +1442,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
         ) : (
           <DemoFundsForm
             allUsers={allUsers}
-            adminDepositDemoFunds={useMutation(api.admin.adminDepositDemoFunds)}
+            adminDepositDemoFunds={adminDepositDemoFunds}
             adminId={userId}
           />
         )}

@@ -95,6 +95,228 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
     return `${hours}h ${minutes}m remaining`;
   };
 
+  const exportTransactionLedgerToExcel = () => {
+    if (!transactionLedger || transactionLedger.transactions.length === 0) return;
+
+    const worksheetData = transactionLedger.transactions.map((tx: any) => ({
+      Date: formatDate(tx.timestamp),
+      "Produce Type": tx.produceType || "N/A",
+      "Quantity (kg)": tx.quantityKilos.toFixed(2),
+      "Unit Price/kg (UGX)": tx.unitPricePerKilo.toFixed(2),
+      "Service Fee (UGX)": tx.serviceFee.toFixed(2),
+      "Service Fee %": `${tx.serviceFeePercentage}%`,
+      "Total Cost (UGX)": tx.totalCost.toFixed(2),
+      UTID: tx.utid,
+    }));
+
+    const XLSX = require("xlsx");
+    const worksheet = XLSX.utils.json_to_sheet(worksheetData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Transaction Ledger");
+
+    // Set column widths
+    worksheet["!cols"] = [
+      { wch: 20 }, // Date
+      { wch: 15 }, // Produce Type
+      { wch: 15 }, // Quantity
+      { wch: 18 }, // Unit Price
+      { wch: 18 }, // Service Fee
+      { wch: 15 }, // Service Fee %
+      { wch: 18 }, // Total Cost
+      { wch: 35 }, // UTID
+    ];
+
+    XLSX.writeFile(workbook, `Buyer_Transaction_Ledger_${new Date().toISOString().split("T")[0]}.xlsx`);
+  };
+
+  const exportTransactionLedgerToPDF = () => {
+    if (!transactionLedger || transactionLedger.transactions.length === 0) return;
+
+    const jsPDF = require("jspdf");
+    require("jspdf-autotable");
+
+    const doc = new jsPDF();
+
+    // Add title
+    doc.setFontSize(18);
+    doc.text("Transaction Ledger - Buyer Report", 14, 20);
+
+    // Add summary
+    doc.setFontSize(12);
+    doc.text(`Total Transactions: ${transactionLedger.totals.totalTransactions}`, 14, 30);
+    doc.text(`Total Quantity: ${transactionLedger.totals.totalQuantityKilos.toFixed(2)} kg`, 14, 38);
+    doc.text(`Total Cost: UGX ${transactionLedger.totals.totalCost.toFixed(2)}`, 14, 46);
+
+    // Add transactions table
+    const tableData = transactionLedger.transactions.map((tx: any) => [
+      formatDate(tx.timestamp),
+      tx.produceType || "N/A",
+      tx.quantityKilos.toFixed(2),
+      tx.unitPricePerKilo.toFixed(2),
+      `${tx.serviceFee.toFixed(2)} (${tx.serviceFeePercentage}%)`,
+      tx.totalCost.toFixed(2),
+      tx.utid,
+    ]);
+
+    (doc as any).autoTable({
+      startY: 54,
+      head: [["Date", "Produce", "Qty (kg)", "Price/kg", "Service Fee", "Total Cost", "UTID"]],
+      body: tableData,
+      styles: { fontSize: 8, cellPadding: 2 },
+      columnStyles: {
+        0: { cellWidth: 25 },
+        1: { cellWidth: 20 },
+        2: { cellWidth: 15 },
+        3: { cellWidth: 18 },
+        4: { cellWidth: 25 },
+        5: { cellWidth: 18 },
+        6: { cellWidth: 45 },
+      },
+    });
+
+    doc.save(`Buyer_Transaction_Ledger_${new Date().toISOString().split("T")[0]}.pdf`);
+  };
+
+  const exportWalletReportToExcel = () => {
+    if (!walletReport) return;
+
+    const XLSX = require("xlsx");
+    const workbook = XLSX.utils.book_new();
+
+    // Money In sheet
+    if (walletReport.moneyIn.length > 0) {
+      const moneyInData = walletReport.moneyIn.map((entry: any) => ({
+        Date: formatDate(entry.timestamp),
+        Type: entry.type,
+        "Amount (UGX)": entry.amount.toFixed(2),
+        UTID: entry.utid,
+      }));
+
+      const moneyInSheet = XLSX.utils.json_to_sheet(moneyInData);
+      moneyInSheet["!cols"] = [
+        { wch: 20 }, // Date
+        { wch: 20 }, // Type
+        { wch: 15 }, // Amount
+        { wch: 35 }, // UTID
+      ];
+      XLSX.utils.book_append_sheet(workbook, moneyInSheet, "Money In");
+    }
+
+    // Money Out sheet
+    if (walletReport.moneyOut.length > 0) {
+      const moneyOutData = walletReport.moneyOut.map((entry: any) => ({
+        Date: formatDate(entry.timestamp),
+        Type: entry.type,
+        "Amount (UGX)": entry.amount.toFixed(2),
+        UTID: entry.utid,
+      }));
+
+      const moneyOutSheet = XLSX.utils.json_to_sheet(moneyOutData);
+      moneyOutSheet["!cols"] = [
+        { wch: 20 }, // Date
+        { wch: 20 }, // Type
+        { wch: 15 }, // Amount
+        { wch: 35 }, // UTID
+      ];
+      XLSX.utils.book_append_sheet(workbook, moneyOutSheet, "Money Out");
+    }
+
+    // Summary sheet
+    const summaryData = [
+      { Metric: "Total Money In", "Amount (UGX)": walletReport.totals.totalMoneyIn.toFixed(2) },
+      { Metric: "Total Money Out", "Amount (UGX)": walletReport.totals.totalMoneyOut.toFixed(2) },
+      { Metric: "Current Balance", "Amount (UGX)": walletReport.totals.currentBalance.toFixed(2) },
+    ];
+    const summarySheet = XLSX.utils.json_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(workbook, summarySheet, "Summary");
+
+    XLSX.writeFile(workbook, `Buyer_Wallet_Report_${new Date().toISOString().split("T")[0]}.xlsx`);
+  };
+
+  const exportWalletReportToPDF = () => {
+    if (!walletReport) return;
+
+    const jsPDF = require("jspdf");
+    require("jspdf-autotable");
+
+    const doc = new jsPDF();
+
+    // Add title
+    doc.setFontSize(18);
+    doc.text("Wallet Report - Buyer", 14, 20);
+
+    // Add summary
+    doc.setFontSize(12);
+    doc.text(`Total Money In: UGX ${walletReport.totals.totalMoneyIn.toFixed(2)}`, 14, 30);
+    doc.text(`Total Money Out: UGX ${walletReport.totals.totalMoneyOut.toFixed(2)}`, 14, 38);
+    doc.text(`Current Balance: UGX ${walletReport.totals.currentBalance.toFixed(2)}`, 14, 46);
+
+    let startY = 54;
+
+    // Money In table
+    if (walletReport.moneyIn.length > 0) {
+      doc.setFontSize(14);
+      doc.text("Money In (Deposits)", 14, startY);
+      startY += 6;
+
+      const moneyInData = walletReport.moneyIn.map((entry: any) => [
+        formatDate(entry.timestamp),
+        entry.type,
+        entry.amount.toFixed(2),
+        entry.utid,
+      ]);
+
+      (doc as any).autoTable({
+        startY,
+        head: [["Date", "Type", "Amount (UGX)", "UTID"]],
+        body: moneyInData,
+        styles: { fontSize: 8, cellPadding: 2 },
+        columnStyles: {
+          0: { cellWidth: 30 },
+          1: { cellWidth: 30 },
+          2: { cellWidth: 25 },
+          3: { cellWidth: 45 },
+        },
+      });
+
+      startY = (doc as any).lastAutoTable.finalY + 10;
+    }
+
+    // Money Out table
+    if (walletReport.moneyOut.length > 0) {
+      if (startY > 250) {
+        doc.addPage();
+        startY = 20;
+      }
+
+      doc.setFontSize(14);
+      doc.text("Money Out (Payments)", 14, startY);
+      startY += 6;
+
+      const moneyOutData = walletReport.moneyOut.map((entry: any) => [
+        formatDate(entry.timestamp),
+        entry.type,
+        entry.amount.toFixed(2),
+        entry.utid,
+      ]);
+
+      (doc as any).autoTable({
+        startY,
+        head: [["Date", "Type", "Amount (UGX)", "UTID"]],
+        body: moneyOutData,
+        styles: { fontSize: 8, cellPadding: 2 },
+        columnStyles: {
+          0: { cellWidth: 30 },
+          1: { cellWidth: 30 },
+          2: { cellWidth: 25 },
+          3: { cellWidth: 45 },
+        },
+      });
+    }
+
+    doc.save(`Buyer_Wallet_Report_${new Date().toISOString().split("T")[0]}.pdf`);
+  };
+
   const handlePurchase = async (inventoryId: Id<"traderInventory">, availableKilos: number) => {
     const kilosStr = kilosInput[inventoryId] || "";
     const kilos = parseFloat(kilosStr);
@@ -1068,9 +1290,45 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
         border: "1px solid #e0e0e0",
         marginBottom: "1.5rem"
       }}>
-        <h3 style={{ marginTop: 0, marginBottom: "1rem", fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", color: "#1a1a1a" }}>
-          Transaction Ledger
-        </h3>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.5rem" }}>
+          <h3 style={{ margin: 0, fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", color: "#1a1a1a" }}>
+            Transaction Ledger
+          </h3>
+          {transactionLedger && transactionLedger.transactions.length > 0 && (
+            <div style={{ display: "flex", gap: "0.5rem" }}>
+              <button
+                onClick={() => exportTransactionLedgerToExcel()}
+                style={{
+                  padding: "0.5rem 1rem",
+                  background: "#2e7d32",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontSize: "0.9rem",
+                  fontWeight: "600"
+                }}
+              >
+                📊 Export Excel
+              </button>
+              <button
+                onClick={() => exportTransactionLedgerToPDF()}
+                style={{
+                  padding: "0.5rem 1rem",
+                  background: "#d32f2f",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontSize: "0.9rem",
+                  fontWeight: "600"
+                }}
+              >
+                📄 Export PDF
+              </button>
+            </div>
+          )}
+        </div>
         {transactionLedger === undefined ? (
           <p style={{ color: "#999" }}>Loading...</p>
         ) : transactionLedger.transactions.length === 0 ? (
@@ -1163,9 +1421,45 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
         border: "1px solid #e0e0e0"
       }}>
-        <h3 style={{ marginTop: 0, marginBottom: "1rem", fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", color: "#1a1a1a" }}>
-          Wallet Report
-        </h3>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.5rem" }}>
+          <h3 style={{ margin: 0, fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", color: "#1a1a1a" }}>
+            Wallet Report
+          </h3>
+          {walletReport && (walletReport.moneyIn.length > 0 || walletReport.moneyOut.length > 0) && (
+            <div style={{ display: "flex", gap: "0.5rem" }}>
+              <button
+                onClick={() => exportWalletReportToExcel()}
+                style={{
+                  padding: "0.5rem 1rem",
+                  background: "#2e7d32",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontSize: "0.9rem",
+                  fontWeight: "600"
+                }}
+              >
+                📊 Export Excel
+              </button>
+              <button
+                onClick={() => exportWalletReportToPDF()}
+                style={{
+                  padding: "0.5rem 1rem",
+                  background: "#d32f2f",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontSize: "0.9rem",
+                  fontWeight: "600"
+                }}
+              >
+                📄 Export PDF
+              </button>
+            </div>
+          )}
+        </div>
         {walletReport === undefined ? (
           <p style={{ color: "#999" }}>Loading...</p>
         ) : (

@@ -26,7 +26,6 @@ export function exportToExcel(
   filename: string,
   role: string
 ): void {
-  // Prepare worksheet data
   const worksheetData = data.map((item) => {
     return {
       UTID: item.utid,

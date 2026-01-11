@@ -474,8 +474,32 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                   Trader Offer: {formatUGX(neg.traderOfferPricePerKilo)}/kg | 
                   Current: {formatUGX(neg.currentPricePerKilo)}/kg
                 </div>
-                <div style={{ fontSize: "clamp(0.7rem, 2vw, 0.75rem)", color: "#999", fontFamily: "monospace", wordBreak: "break-all", marginBottom: "0.5rem" }}>
-                  UTID: {neg.negotiationUtid}
+                <div style={{ 
+                  marginTop: "0.75rem",
+                  padding: "0.5rem",
+                  background: "#f5f5f5",
+                  borderRadius: "6px",
+                  border: "1px solid #e0e0e0",
+                }}>
+                  <div style={{
+                    fontSize: "clamp(0.9rem, 2.5vw, 1rem)",
+                    color: "#666",
+                    fontWeight: "600",
+                    marginBottom: "0.25rem",
+                    fontFamily: '"Montserrat", sans-serif',
+                  }}>
+                    UTID:
+                  </div>
+                  <div style={{
+                    fontSize: "clamp(1.4rem, 4vw, 1.8rem)",
+                    color: "#2c2c2c",
+                    fontFamily: "monospace",
+                    fontWeight: "700",
+                    letterSpacing: "0.05em",
+                    wordBreak: "break-all",
+                  }}>
+                    {neg.negotiationUtid}
+                  </div>
                 </div>
                 <div style={{ fontSize: "clamp(0.8rem, 2.5vw, 0.85rem)", fontWeight: "600", marginBottom: "0.75rem", color: neg.status === "accepted" ? "#155724" : "#856404" }}>
                   Status: {neg.status.toUpperCase()}

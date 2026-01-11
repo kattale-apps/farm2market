@@ -50,25 +50,29 @@ export function NotificationMailbox({ userId }: NotificationMailboxProps) {
           onClick={() => setIsOpen(!isOpen)}
           style={{
             position: "relative",
-            padding: "0.75rem",
-            background: "#fff",
-            border: "1px solid #ddd",
-            borderRadius: "8px",
+            padding: "1rem 1.25rem",
+            background: unreadCount > 0 ? "#e3f2fd" : "#fff",
+            border: `2px solid ${unreadCount > 0 ? "#2196f3" : "#ddd"}`,
+            borderRadius: "12px",
             cursor: "pointer",
-            fontSize: "1.2rem",
+            fontSize: "2rem",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+            boxShadow: unreadCount > 0 ? "0 4px 12px rgba(33, 150, 243, 0.3)" : "0 2px 8px rgba(0,0,0,0.15)",
             transition: "all 0.2s",
+            minWidth: "60px",
+            minHeight: "60px",
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = "#f5f5f5";
-            e.currentTarget.style.transform = "scale(1.05)";
+            e.currentTarget.style.background = unreadCount > 0 ? "#bbdefb" : "#f5f5f5";
+            e.currentTarget.style.transform = "scale(1.1)";
+            e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.2)";
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = "#fff";
+            e.currentTarget.style.background = unreadCount > 0 ? "#e3f2fd" : "#fff";
             e.currentTarget.style.transform = "scale(1)";
+            e.currentTarget.style.boxShadow = unreadCount > 0 ? "0 4px 12px rgba(33, 150, 243, 0.3)" : "0 2px 8px rgba(0,0,0,0.15)";
           }}
         >
           📬
@@ -76,19 +80,20 @@ export function NotificationMailbox({ userId }: NotificationMailboxProps) {
             <span
               style={{
                 position: "absolute",
-                top: "-4px",
-                right: "-4px",
+                top: "-6px",
+                right: "-6px",
                 background: "#d32f2f",
                 color: "#fff",
                 borderRadius: "50%",
-                width: "20px",
-                height: "20px",
-                fontSize: "0.7rem",
+                width: "28px",
+                height: "28px",
+                fontSize: "0.85rem",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 fontWeight: "bold",
-                border: "2px solid #fff",
+                border: "3px solid #fff",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
               }}
             >
               {unreadCount > 99 ? "99+" : unreadCount}
@@ -348,13 +353,31 @@ export function NotificationMailbox({ userId }: NotificationMailboxProps) {
                     {notification.utid && (
                       <div
                         style={{
-                          marginTop: "0.5rem",
-                          fontSize: "0.75rem",
-                          color: "#666",
-                          fontFamily: "monospace",
+                          marginTop: "0.75rem",
+                          padding: "0.5rem",
+                          background: "#f5f5f5",
+                          borderRadius: "6px",
+                          border: "1px solid #e0e0e0",
                         }}
                       >
-                        UTID: {notification.utid}
+                        <div style={{
+                          fontSize: "0.9rem",
+                          color: "#666",
+                          fontWeight: "600",
+                          marginBottom: "0.25rem",
+                          fontFamily: '"Montserrat", sans-serif',
+                        }}>
+                          UTID:
+                        </div>
+                        <div style={{
+                          fontSize: "1.5rem",
+                          color: "#2c2c2c",
+                          fontFamily: "monospace",
+                          fontWeight: "700",
+                          letterSpacing: "0.05em",
+                        }}>
+                          {notification.utid}
+                        </div>
                       </div>
                     )}
                   </div>

@@ -84,7 +84,7 @@ export const getDeliveriesPastSLA = query({
     const enriched = await Promise.all(
       pastDeadline.map(async (unit) => {
         const listing = await ctx.db.get(unit.listingId);
-        const farmer = listing ? await ctx.db.get(listing.farmerId) : null;
+        const farmer = listing && listing.farmerId ? await ctx.db.get(listing.farmerId) : null;
         const trader = unit.lockedBy ? await ctx.db.get(unit.lockedBy) : null;
 
         // Calculate hours overdue (server-side)

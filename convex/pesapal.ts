@@ -604,6 +604,34 @@ export const getUserPaymentTransactions = query({
 });
 
 /**
+ * Diagnostic query to check Pesapal configuration
+ * Use this to verify environment variables are set correctly
+ */
+export const checkPesapalConfig = query({
+  args: {},
+  handler: async (ctx) => {
+    const hasConsumerKey = !!process.env.PESAPAL_CONSUMER_KEY;
+    const hasConsumerSecret = !!process.env.PESAPAL_CONSUMER_SECRET;
+    const hasNotificationId = !!process.env.PESAPAL_NOTIFICATION_ID;
+    const env = process.env.PESAPAL_ENV || "sandbox";
+    
+    return {
+      environment: env,
+      hasConsumerKey,
+      hasConsumerSecret,
+      hasNotificationId,
+      notificationIdLength: process.env.PESAPAL_NOTIFICATION_ID?.length || 0,
+      notificationIdPreview: process.env.PESAPAL_NOTIFICATION_ID 
+        ? process.env.PESAPAL_NOTIFICATION_ID.substring(0, 20) + "..." 
+        : "NOT SET",
+      baseUrl: env === "production" 
+        ? "https://pay.pesapal.com/v3"
+        : "https://cybqa.pesapal.com/pesapalv3",
+    };
+  },
+});
+
+/**
  * Webhook handler for Pesapal payment notifications
  * This is called by Pesapal when payment status changes
  */

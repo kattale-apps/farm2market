@@ -76,11 +76,21 @@ This error indicates that Pesapal API v3 is expecting a `notification_id` (IPN U
    - Enter your Convex webhook URL: `https://your-deployment-name.convex.site/pesapal/webhook`
    - Save and copy the `notification_id` you receive (it will look like a UUID or alphanumeric string)
    
-   **Step 3: Add Notification ID to Convex**
-   - Go to **Convex Dashboard** → **Settings** → **Environment Variables**
-   - Add variable: `PESAPAL_NOTIFICATION_ID`
-   - Set value to the notification_id from Pesapal
-   - Save and wait for redeploy
+   **Step 3: Add Notification ID to Convex (NOT Vercel)**
+   
+   **IMPORTANT**: Add this to **Convex Dashboard**, NOT Vercel, because:
+   - Payment requests are initiated in Convex actions
+   - Convex functions run on Convex servers, not Vercel
+   - The webhook endpoint on Vercel only forwards to Convex
+   
+   Steps:
+   - Go to **Convex Dashboard** → Your Project → **Settings** → **Environment Variables**
+   - Click **Add Variable**
+   - Variable name: `PESAPAL_NOTIFICATION_ID`
+   - Variable value: (paste the notification_id from Pesapal)
+   - Click **Save** (Convex will auto-redeploy)
+   
+   **Do NOT add this to Vercel environment variables** - it won't work there!
 
 2. **Check if IPN is optional in sandbox**:
    - Some Pesapal sandbox environments may allow omitting `notification_id`

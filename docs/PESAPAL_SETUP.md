@@ -73,8 +73,13 @@ This error indicates that Pesapal API v3 is expecting a `notification_id` (IPN U
    - Log into your Pesapal dashboard (sandbox or production)
    - Navigate to **Settings** → **IPN (Instant Payment Notification)**
    - Click **Register IPN URL** or **Add IPN URL**
-   - Enter your Convex webhook URL: `https://your-deployment-name.convex.site/pesapal/webhook`
-   - Save and copy the `notification_id` you receive (it will look like a UUID or alphanumeric string)
+   - Enter:
+     - **Website Domain**: `https://farm2market-dev.vercel.app/`
+     - **IPN Listener Url**: `https://farm2market-dev.vercel.app/api/pesapal/webhook`
+   - Click **SAVE URL**
+   - **IMPORTANT**: After saving, Pesapal will show a `notification_id` - this is NOT the URL!
+   - The `notification_id` will look like: `abc123-def456-ghi789` or `550e8400-e29b-41d4-a716-446655440000` (UUID format)
+   - **DO NOT copy the URL** - copy the actual notification_id (alphanumeric string/UUID)
    
    **Step 3: Add Notification ID to Convex (NOT Vercel)**
    
@@ -85,10 +90,14 @@ This error indicates that Pesapal API v3 is expecting a `notification_id` (IPN U
    
    Steps:
    - Go to **Convex Dashboard** → Your Project → **Settings** → **Environment Variables**
-   - Click **Add Variable**
+   - Click **Add Variable** (or edit existing if it's already there)
    - Variable name: `PESAPAL_NOTIFICATION_ID`
-   - Variable value: (paste the notification_id from Pesapal)
+   - Variable value: (paste the **notification_id** from Pesapal - NOT the URL!)
+   - **IMPORTANT**: The value should be a UUID/alphanumeric string like `abc123-def456-ghi789`
+   - **NOT** a URL like `https://farm2market-dev.vercel.app/api/pesapal/webhook`
    - Click **Save** (Convex will auto-redeploy)
+   
+   **Common Mistake**: Setting the IPN URL as the notification_id value. The notification_id is a separate identifier that Pesapal provides after registering the URL.
    
    **Do NOT add this to Vercel environment variables** - it won't work there!
 

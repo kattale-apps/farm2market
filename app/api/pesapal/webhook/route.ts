@@ -3,20 +3,33 @@
  * 
  * This endpoint receives payment notifications from Pesapal.
  * 
- * IMPORTANT: This is a placeholder. You need to:
- * 1. Deploy your app to get a public URL
+ * IMPORTANT: Pesapal requires the IPN URL to be on the same domain as your website.
+ * Since your site is on Vercel (farm2market-dev.vercel.app), use this Next.js route
+ * instead of the Convex HTTP endpoint.
+ * 
+ * Webhook URL: https://farm2market-dev.vercel.app/api/pesapal/webhook
+ * 
+ * To set up:
+ * 1. Deploy this Next.js app to Vercel
  * 2. Register the webhook URL in Pesapal dashboard:
- *    https://your-domain.com/api/pesapal/webhook
+ *    - Website Domain: https://farm2market-dev.vercel.app/
+ *    - IPN Listener Url: https://farm2market-dev.vercel.app/api/pesapal/webhook
  * 3. Get the notification_id from Pesapal after registration
  * 4. Set PESAPAL_NOTIFICATION_ID in Convex Dashboard environment variables
- * 
- * Note: To properly integrate with Convex, you may need to:
- * - Use Convex HTTP actions (if available)
- * - Or set up a server-side Convex client to call actions
- * - Or use Convex webhooks feature (if available)
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { ConvexHttpClient } from "convex/browser";
+import { api } from "../../../convex/_generated/api";
+
+// Initialize Convex client for server-side use
+const getConvexClient = () => {
+  const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
+  if (!convexUrl) {
+    throw new Error("NEXT_PUBLIC_CONVEX_URL environment variable is not set");
+  }
+  return new ConvexHttpClient(convexUrl);
+};
 
 export async function POST(request: NextRequest) {
   try {
@@ -37,25 +50,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // TODO: Forward to Convex webhook handler
-    // You'll need to implement this based on your Convex setup
-    // Options:
-    // 1. Use Convex HTTP actions (if available)
-    // 2. Use server-side Convex client to call handlePesapalWebhook action
-    // 3. Use Convex webhooks feature (if available)
-    
-    console.log("Pesapal webhook received:", { orderTrackingId, body });
-
-    // For now, return success to acknowledge receipt
-    // You should implement the actual webhook processing
-    return NextResponse.json({ 
-      success: true, 
-      message: "Webhook received - processing" 
+    // Forward to Convex webhook handler
+    const convex = getConvexClient();
+    const result = await convex.action(api.pesapal.handlePesapalWebhook, {
+      orderTrackingId,
     });
+
+    console.log("Pesapal webhook processed:", { orderTrackingId, result });
+
+    return NextResponse.json(result);
   } catch (error: any) {
     console.error("Pesapal webhook error:", error);
     return NextResponse.json(
-      { error: error.message || "Webhook processing failed" },
+      { 
+        success: false,
+        error: error.message || "Webhook processing failed" 
+      },
       { status: 500 }
     );
   }

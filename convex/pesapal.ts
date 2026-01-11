@@ -26,6 +26,10 @@ const PESAPAL_BASE_URL = PESAPAL_ENV === "production"
 const PESAPAL_CONSUMER_KEY = process.env.PESAPAL_CONSUMER_KEY;
 const PESAPAL_CONSUMER_SECRET = process.env.PESAPAL_CONSUMER_SECRET;
 
+// Optional: IPN Notification ID (if you've registered an IPN URL with Pesapal)
+// Get this by registering an IPN URL in your Pesapal dashboard
+const PESAPAL_NOTIFICATION_ID = process.env.PESAPAL_NOTIFICATION_ID;
+
 // Fallback to defaults only if not in production (for development/testing)
 // In production, these MUST be set as environment variables
 const FALLBACK_CONSUMER_KEY = PESAPAL_ENV !== "production" ? "1DDecquMxaWUxGjWg+g3SQSkgRRmV3hs" : undefined;
@@ -154,16 +158,22 @@ export const initiatePesapalPayment = action({
     // Only add optional fields if they have values (Pesapal may reject empty strings)
     // For now, we'll keep the structure minimal as required fields are present
 
-    const paymentRequest = {
+    const paymentRequest: any = {
       id: orderTrackingId,
       currency: args.currency || "UGX",
       amount: args.amount,
       description: `Wallet deposit for ${args.userRole}`,
       callback_url: args.callbackUrl,
       cancellation_url: args.cancelUrl,
-      // notification_id is intentionally omitted - not required when using callback_url
       billing_address: billingAddress,
     };
+
+    // Add notification_id only if provided via environment variable
+    // This is required if Pesapal API v3 mandates IPN registration
+    // To get notification_id: Register an IPN URL in Pesapal dashboard and copy the ID
+    if (PESAPAL_NOTIFICATION_ID && PESAPAL_NOTIFICATION_ID.trim() !== "") {
+      paymentRequest.notification_id = PESAPAL_NOTIFICATION_ID.trim();
+    }
 
     // Log full request for debugging (to see exact structure being sent)
     console.log("Pesapal payment request (full):", JSON.stringify(paymentRequest, null, 2));

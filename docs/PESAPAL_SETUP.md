@@ -6,11 +6,12 @@ To use Pesapal payments, you must set the following environment variables in **C
 
 ### Required Variables
 
-| Variable Name | Description | Example |
-|--------------|-------------|---------|
-| `PESAPAL_CONSUMER_KEY` | Your Pesapal Consumer Key | `1DDecquMxaWUxGjWg+g3SQSkgRRmV3hs` |
-| `PESAPAL_CONSUMER_SECRET` | Your Pesapal Consumer Secret | `WpmXyvPsYE872GO7WY/wjpoSrm8=` |
-| `PESAPAL_ENV` | Environment: `sandbox` or `production` | `sandbox` |
+| Variable Name | Description | Example | Required |
+|--------------|-------------|---------|----------|
+| `PESAPAL_CONSUMER_KEY` | Your Pesapal Consumer Key | `1DDecquMxaWUxGjWg+g3SQSkgRRmV3hs` | Yes |
+| `PESAPAL_CONSUMER_SECRET` | Your Pesapal Consumer Secret | `WpmXyvPsYE872GO7WY/wjpoSrm8=` | Yes |
+| `PESAPAL_ENV` | Environment: `sandbox` or `production` | `sandbox` | No (defaults to sandbox) |
+| `PESAPAL_NOTIFICATION_ID` | IPN Notification ID (if registered with Pesapal) | `abc123-def456-ghi789` | No (only if IPN is required) |
 
 ### How to Set in Convex Dashboard
 
@@ -69,7 +70,19 @@ This error indicates that Pesapal API v3 is expecting a `notification_id` (IPN U
    - Request guidance on IPN URL registration
    - Verify if callback_url alone is sufficient
 
-**Note**: The current implementation omits `notification_id` and uses `callback_url` for payment confirmation. If the error persists after Convex redeploys, you may need to register an IPN URL and add the `notification_id` to the payment request.
+**Solution - Add Notification ID** (if required):
+
+If Pesapal requires `notification_id` and you've registered an IPN URL:
+
+1. **Get your notification_id** from Pesapal dashboard after registering IPN URL
+2. **Add environment variable** in Convex Dashboard:
+   - Variable name: `PESAPAL_NOTIFICATION_ID`
+   - Variable value: Your notification ID from Pesapal
+3. **Redeploy** Convex functions
+
+The code will automatically include `notification_id` in payment requests if this environment variable is set.
+
+**Note**: The current implementation uses `callback_url` for payment confirmation. If the "Invalid IPN URL ID" error persists after Convex redeploys and you've verified the request structure, you may need to register an IPN URL with Pesapal and add the `PESAPAL_NOTIFICATION_ID` environment variable.
 
 ## Testing
 

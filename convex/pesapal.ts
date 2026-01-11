@@ -203,7 +203,22 @@ export const initiatePesapalPayment = action({
       try {
         const errorData = JSON.parse(responseText);
         if (errorData.error) {
-          errorMessage = `Pesapal payment error: ${errorData.error.message || errorData.error.code || JSON.stringify(errorData.error)}`;
+          const errorCode = errorData.error.code || "";
+          const errorMsg = errorData.error.message || "";
+          
+          // Special handling for IPN URL ID errors
+          if (errorCode.includes("invalid_api_request_parameters") && 
+              errorMsg.includes("Invalid IPN URL ID")) {
+            errorMessage = `Pesapal requires an IPN (Instant Payment Notification) URL to be registered. ` +
+              `Error: ${errorMsg}. ` +
+              `To fix this: ` +
+              `1. Register an IPN URL in your Pesapal dashboard ` +
+              `2. Get the notification_id from Pesapal ` +
+              `3. Set PESAPAL_NOTIFICATION_ID environment variable in Convex Dashboard. ` +
+              `See docs/PESAPAL_SETUP.md for detailed instructions.`;
+          } else {
+            errorMessage = `Pesapal payment error: ${errorMsg || errorCode || JSON.stringify(errorData.error)}`;
+          }
         } else {
           errorMessage += ` - ${errorData.message || responseText}`;
         }

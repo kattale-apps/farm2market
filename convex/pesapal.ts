@@ -144,58 +144,29 @@ export const initiatePesapalPayment = action({
     // Prepare payment request according to Pesapal API v3 format
     // Note: notification_id is omitted - we use callback_url for payment confirmation
     // If IPN webhooks are needed in the future, register an IPN URL first and use its ID here
-    const paymentRequest: {
-      id: string;
-      currency: string;
-      amount: number;
-      description: string;
-      callback_url: string;
-      cancellation_url: string;
-      billing_address: {
-        email_address: string;
-        phone_number?: string;
-        country_code: string;
-        first_name: string;
-        middle_name?: string;
-        last_name?: string;
-        line_1?: string;
-        line_2?: string;
-        city?: string;
-        state?: string;
-        postal_code?: string;
-        zip_code?: string;
-      };
-    } = {
+    // Build billing address, only including non-empty fields
+    const billingAddress: any = {
+      email_address: user.email,
+      country_code: "UG",
+      first_name: user.alias || "User",
+    };
+    
+    // Only add optional fields if they have values (Pesapal may reject empty strings)
+    // For now, we'll keep the structure minimal as required fields are present
+
+    const paymentRequest = {
       id: orderTrackingId,
       currency: args.currency || "UGX",
       amount: args.amount,
       description: `Wallet deposit for ${args.userRole}`,
       callback_url: args.callbackUrl,
       cancellation_url: args.cancelUrl,
-      billing_address: {
-        email_address: user.email,
-        phone_number: "", // Optional
-        country_code: "UG",
-        first_name: user.alias || "User",
-        middle_name: "",
-        last_name: "",
-        line_1: "",
-        line_2: "",
-        city: "",
-        state: "",
-        postal_code: "",
-        zip_code: "",
-      },
+      // notification_id is intentionally omitted - not required when using callback_url
+      billing_address: billingAddress,
     };
 
-    // Log request for debugging (without sensitive data)
-    console.log("Pesapal payment request:", {
-      id: paymentRequest.id,
-      amount: paymentRequest.amount,
-      currency: paymentRequest.currency,
-      callback_url: paymentRequest.callback_url,
-      cancellation_url: paymentRequest.cancellation_url,
-    });
+    // Log full request for debugging (to see exact structure being sent)
+    console.log("Pesapal payment request (full):", JSON.stringify(paymentRequest, null, 2));
 
     // Validate token before using
     if (!token || typeof token !== "string" || token.trim() === "") {

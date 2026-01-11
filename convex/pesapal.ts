@@ -142,14 +142,36 @@ export const initiatePesapalPayment = action({
     const orderTrackingId = `F2M-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
     // Prepare payment request according to Pesapal API v3 format
-    const paymentRequest = {
+    // Note: notification_id is omitted - we use callback_url for payment confirmation
+    // If IPN webhooks are needed in the future, register an IPN URL first and use its ID here
+    const paymentRequest: {
+      id: string;
+      currency: string;
+      amount: number;
+      description: string;
+      callback_url: string;
+      cancellation_url: string;
+      billing_address: {
+        email_address: string;
+        phone_number?: string;
+        country_code: string;
+        first_name: string;
+        middle_name?: string;
+        last_name?: string;
+        line_1?: string;
+        line_2?: string;
+        city?: string;
+        state?: string;
+        postal_code?: string;
+        zip_code?: string;
+      };
+    } = {
       id: orderTrackingId,
       currency: args.currency || "UGX",
       amount: args.amount,
       description: `Wallet deposit for ${args.userRole}`,
       callback_url: args.callbackUrl,
       cancellation_url: args.cancelUrl,
-      notification_id: "", // Will be set up separately for webhooks
       billing_address: {
         email_address: user.email,
         phone_number: "", // Optional

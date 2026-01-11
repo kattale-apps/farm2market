@@ -248,24 +248,27 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
 
   return (
     <div style={{ padding: "1rem", maxWidth: "100%", boxSizing: "border-box" }}>
-      <div style={{ marginBottom: "1.5rem" }}>
-        <h2 style={{ 
-          fontSize: "clamp(1.5rem, 4vw, 1.8rem)", 
-          marginBottom: "0.5rem", 
-          color: "#2c2c2c",
-          fontFamily: '"Montserrat", sans-serif',
-          fontWeight: "700",
-          letterSpacing: "-0.02em"
-        }}>
-          Buyer Dashboard 🏢
-        </h2>
-        <p style={{ 
-          color: "#3d3d3d", 
-          fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)",
-          fontFamily: '"Montserrat", sans-serif'
-        }}>
-          Storage Location: Warehouse Name
-        </p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.5rem" }}>
+        <div>
+          <h2 style={{ 
+            fontSize: "clamp(1.5rem, 4vw, 1.8rem)", 
+            marginBottom: "0.5rem", 
+            color: "#2c2c2c",
+            fontFamily: '"Montserrat", sans-serif',
+            fontWeight: "700",
+            letterSpacing: "-0.02em"
+          }}>
+            Buyer Dashboard 🏢
+          </h2>
+          <p style={{ 
+            color: "#3d3d3d", 
+            fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)",
+            fontFamily: '"Montserrat", sans-serif'
+          }}>
+            Storage Location: Warehouse Name
+          </p>
+        </div>
+        <NotificationMailbox userId={userId} />
       </div>
 
       {/* Wallet & Deposit Section */}

@@ -8,6 +8,7 @@ import { CreateTraderListing } from "./CreateTraderListing";
 import { useState } from "react";
 import { exportToExcel, exportToPDF, formatUTIDDataForExport } from "../utils/exportUtils";
 import { exportUTIDsByCategory, exportUTIDsByCategoryPDF, exportInventoryVolume, exportCapitalVolume } from "../utils/traderReports";
+import { NotificationMailbox } from "./NotificationMailbox";
 import { formatUgandaDateTime, formatUgandaTimeOnly, getUgandaTime } from "../utils/timeUtils";
 
 interface TraderDashboardProps {
@@ -169,7 +170,7 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
   return (
     <div style={{ padding: "1rem", maxWidth: "100%", boxSizing: "border-box" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
-        <div>
+        <div style={{ flex: 1 }}>
           <h2 style={{ 
             fontSize: "clamp(1.5rem, 4vw, 1.8rem)", 
             marginBottom: "0.5rem", 
@@ -188,21 +189,24 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
             Location: District
           </p>
         </div>
-        <button
-          onClick={() => setProView(!proView)}
-          style={{
-            padding: "0.5rem 1rem",
-            background: proView ? "#1976d2" : "#f5f5f5",
-            color: proView ? "#fff" : "#333",
-            border: "1px solid #ddd",
-            borderRadius: "6px",
-            cursor: "pointer",
-            fontSize: "0.9rem",
-            fontWeight: "600"
-          }}
-        >
-          {proView ? "Simple View" : "Pro View"}
-        </button>
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+          <NotificationMailbox userId={userId} />
+          <button
+            onClick={() => setProView(!proView)}
+            style={{
+              padding: "0.5rem 1rem",
+              background: proView ? "#1976d2" : "#f5f5f5",
+              color: proView ? "#fff" : "#333",
+              border: "1px solid #ddd",
+              borderRadius: "6px",
+              cursor: "pointer",
+              fontSize: "0.9rem",
+              fontWeight: "600"
+            }}
+          >
+            {proView ? "Simple View" : "Pro View"}
+          </button>
+        </div>
       </div>
 
       {!proView ? (

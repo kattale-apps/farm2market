@@ -15,12 +15,24 @@ import { generateUTID, getUgandaTime } from "./utils";
 import { checkPilotMode } from "./pilotMode";
 
 // Pesapal API Configuration
-const PESAPAL_BASE_URL = process.env.PESAPAL_ENV === "production" 
+// Note: Environment variables must be set in Convex Dashboard → Settings → Environment Variables
+const PESAPAL_ENV = process.env.PESAPAL_ENV || "sandbox";
+const PESAPAL_BASE_URL = PESAPAL_ENV === "production" 
   ? "https://pay.pesapal.com/v3"
-  : "https://cybqa.pesapal.com/pesapalv3";
+  : "https://cybqa.pesapal.com/pesapalv3"; // Sandbox URL for Pesapal v3
 
-const PESAPAL_CONSUMER_KEY = process.env.PESAPAL_CONSUMER_KEY || "1DDecquMxaWUxGjWg+g3SQSkgRRmV3hs";
-const PESAPAL_CONSUMER_SECRET = process.env.PESAPAL_CONSUMER_SECRET || "WpmXyvPsYE872GO7WY/wjpoSrm8=";
+// Get credentials from environment variables (required)
+// Set these in Convex Dashboard → Settings → Environment Variables
+const PESAPAL_CONSUMER_KEY = process.env.PESAPAL_CONSUMER_KEY;
+const PESAPAL_CONSUMER_SECRET = process.env.PESAPAL_CONSUMER_SECRET;
+
+// Fallback to defaults only if not in production (for development/testing)
+// In production, these MUST be set as environment variables
+const FALLBACK_CONSUMER_KEY = PESAPAL_ENV !== "production" ? "1DDecquMxaWUxGjWg+g3SQSkgRRmV3hs" : undefined;
+const FALLBACK_CONSUMER_SECRET = PESAPAL_ENV !== "production" ? "WpmXyvPsYE872GO7WY/wjpoSrm8=" : undefined;
+
+const ACTUAL_CONSUMER_KEY = PESAPAL_CONSUMER_KEY || FALLBACK_CONSUMER_KEY;
+const ACTUAL_CONSUMER_SECRET = PESAPAL_CONSUMER_SECRET || FALLBACK_CONSUMER_SECRET;
 
 /**
  * Get Pesapal access token
@@ -31,6 +43,15 @@ export const getPesapalAccessToken = internalAction({
   args: {},
   handler: async (ctx) => {
     try {
+      // Validate credentials are present
+      if (!ACTUAL_CONSUMER_KEY || !ACTUAL_CONSUMER_SECRET) {
+        throw new Error(
+          "Pesapal credentials are missing. " +
+          "Please set PESAPAL_CONSUMER_KEY and PESAPAL_CONSUMER_SECRET environment variables in Convex Dashboard → Settings → Environment Variables. " +
+          `Current environment: ${PESAPAL_ENV}, Base URL: ${PESAPAL_BASE_URL}`
+        );
+      }
+
       const response = await fetch(`${PESAPAL_BASE_URL}/api/Auth/RequestToken`, {
         method: "POST",
         headers: {
@@ -38,20 +59,51 @@ export const getPesapalAccessToken = internalAction({
           "Accept": "application/json",
         },
         body: JSON.stringify({
-          consumer_key: PESAPAL_CONSUMER_KEY,
-          consumer_secret: PESAPAL_CONSUMER_SECRET,
+          consumer_key: ACTUAL_CONSUMER_KEY,
+          consumer_secret: ACTUAL_CONSUMER_SECRET,
         }),
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Pesapal authentication failed: ${response.status} ${errorText}`);
+        let errorMessage = `Pesapal authentication failed: ${response.status}`;
+        
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage += ` - ${errorData.error?.message || errorData.message || errorText}`;
+        } catch {
+          errorMessage += ` - ${errorText}`;
+        }
+        
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
+      
+      // Handle different possible response formats
+      // Pesapal v3 typically returns: { token: "...", expires_in: 3600 }
+      // But some versions might use: { access_token: "...", expires_in: 3600 }
+      const token = data.token || data.access_token || data.accessToken || data.access_token;
+      const expiresIn = data.expires_in || data.expiresIn || 3600;
+
+      if (!token) {
+        // Log the full response for debugging
+        console.error("Pesapal token response:", JSON.stringify(data, null, 2));
+        throw new Error(
+          `Invalid token response from Pesapal. Expected 'token' or 'access_token' field. ` +
+          `Received: ${Object.keys(data).join(", ")}. ` +
+          `Please check your Pesapal credentials and API endpoint.`
+        );
+      }
+
+      // Validate token is a non-empty string
+      if (typeof token !== "string" || token.trim().length === 0) {
+        throw new Error(`Invalid token format received from Pesapal: ${typeof token}`);
+      }
+
       return {
-        token: data.token,
-        expiresIn: data.expires_in || 3600,
+        token: token.trim(),
+        expiresIn: expiresIn,
       };
     } catch (error: any) {
       throw new Error(`Failed to get Pesapal access token: ${error.message}`);
@@ -114,6 +166,11 @@ export const initiatePesapalPayment = action({
       },
     };
 
+    // Validate token before using
+    if (!token || typeof token !== "string" || token.trim() === "") {
+      throw new Error("Invalid access token received from Pesapal authentication");
+    }
+
     // Submit payment request to Pesapal
     const response: Response = await fetch(`${PESAPAL_BASE_URL}/api/Transactions/SubmitOrderRequest`, {
       method: "POST",
@@ -127,7 +184,20 @@ export const initiatePesapalPayment = action({
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Pesapal payment initiation failed: ${response.status} ${errorText}`);
+      let errorMessage = `Pesapal payment initiation failed: ${response.status}`;
+      
+      try {
+        const errorData = JSON.parse(errorText);
+        if (errorData.error) {
+          errorMessage = `Pesapal payment error: ${errorData.error.message || errorData.error.code || JSON.stringify(errorData.error)}`;
+        } else {
+          errorMessage += ` - ${errorData.message || errorText}`;
+        }
+      } catch {
+        errorMessage += ` - ${errorText}`;
+      }
+      
+      throw new Error(errorMessage);
     }
 
     const paymentData: any = await response.json();
@@ -216,6 +286,11 @@ export const verifyPesapalPayment = action({
     // Get access token
     const { token }: { token: string; expiresIn: number } = await ctx.runAction(internal.pesapal.getPesapalAccessToken, {});
 
+    // Validate token
+    if (!token || typeof token !== "string" || token.trim() === "") {
+      throw new Error("Invalid access token received from Pesapal authentication");
+    }
+
     // Get payment status from Pesapal
     const response: Response = await fetch(
       `${PESAPAL_BASE_URL}/api/Transactions/GetTransactionStatus?orderTrackingId=${args.orderTrackingId}`,
@@ -230,7 +305,20 @@ export const verifyPesapalPayment = action({
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Pesapal payment verification failed: ${response.status} ${errorText}`);
+      let errorMessage = `Pesapal payment verification failed: ${response.status}`;
+      
+      try {
+        const errorData = JSON.parse(errorText);
+        if (errorData.error) {
+          errorMessage = `Pesapal verification error: ${errorData.error.message || errorData.error.code || JSON.stringify(errorData.error)}`;
+        } else {
+          errorMessage += ` - ${errorData.message || errorText}`;
+        }
+      } catch {
+        errorMessage += ` - ${errorText}`;
+      }
+      
+      throw new Error(errorMessage);
     }
 
     const paymentStatus: any = await response.json();

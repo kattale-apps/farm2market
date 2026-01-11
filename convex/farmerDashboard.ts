@@ -10,7 +10,7 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
-import { getUgandaTime } from "./utils";
+import { getUgandaTime, generateUTID } from "./utils";
 
 /**
  * Get farmer's listings
@@ -785,6 +785,150 @@ export const getSuccessfulTransactionsLedger = query({
       totalKilos,
       totalEarned,
       transactions: validTransactions,
+    };
+  },
+});
+
+/**
+ * Cancel overdue UTID (farmer only)
+ * 
+ * Allows farmers to cancel and delete overdue UTIDs from their account.
+ * This will:
+ * - Unlock the unit (make it available again)
+ * - Return locked capital to the trader
+ * - Mark the unit as cancelled
+ * - Remove it from the farmer's delivery deadlines view
+ * 
+ * Only works for overdue deliveries (past deadline).
+ */
+export const cancelOverdueUTID = mutation({
+  args: {
+    farmerId: v.id("users"),
+    unitId: v.id("listingUnits"),
+  },
+  handler: async (ctx, args) => {
+    // Verify user is a farmer
+    const user = await ctx.db.get(args.farmerId);
+    if (!user || user.role !== "farmer") {
+      throw new Error("User is not a farmer");
+    }
+
+    // Get the unit
+    const unit = await ctx.db.get(args.unitId);
+    if (!unit) {
+      throw new Error("Unit not found");
+    }
+
+    // Verify the unit belongs to this farmer's listing
+    const listing = await ctx.db.get(unit.listingId);
+    if (!listing || listing.farmerId !== args.farmerId) {
+      throw new Error("Unit does not belong to this farmer");
+    }
+
+    // Verify unit is locked
+    if (unit.status !== "locked") {
+      throw new Error("Unit is not locked");
+    }
+
+    // Verify unit has a delivery deadline
+    if (!unit.deliveryDeadline) {
+      throw new Error("Unit has no delivery deadline");
+    }
+
+    // Verify unit is overdue (past deadline)
+    const now = getUgandaTime();
+    if (now <= unit.deliveryDeadline) {
+      throw new Error("Unit is not overdue. Only overdue deliveries can be cancelled.");
+    }
+
+    // Verify unit has lock information
+    if (!unit.lockUtid || !unit.lockedBy) {
+      throw new Error("Unit has no lock information");
+    }
+
+    // Get the actual price from the wallet ledger entry
+    const walletEntry = await ctx.db
+      .query("walletLedger")
+      .withIndex("by_utid", (q: any) => q.eq("utid", unit.lockUtid))
+      .first();
+
+    if (!walletEntry || walletEntry.type !== "capital_lock") {
+      throw new Error("Wallet entry not found for this UTID");
+    }
+
+    const unitPrice = walletEntry.amount; // This is the actual amount that was locked
+    const traderId = unit.lockedBy;
+
+    // Generate UTID for cancellation
+    const cancellationUtid = generateUTID("farmer");
+
+    // ATOMIC OPERATION: Unlock unit and return capital to trader
+    // Step 1: Unlock the unit and mark as cancelled
+    await ctx.db.patch(unit._id, {
+      status: "available",
+      lockedBy: undefined,
+      lockedAt: undefined,
+      lockUtid: undefined,
+      deliveryDeadline: undefined,
+      deliveryStatus: "cancelled",
+      activeNegotiationId: undefined,
+    });
+
+    // Step 2: Return capital to trader (unlock capital)
+    const walletEntries = await ctx.db
+      .query("walletLedger")
+      .withIndex("by_user", (q: any) => q.eq("userId", traderId))
+      .order("desc")
+      .collect();
+
+    const currentBalance = walletEntries[0]?.balanceAfter || 0;
+    const balanceAfter = currentBalance + unitPrice;
+
+    await ctx.db.insert("walletLedger", {
+      userId: traderId,
+      type: "capital_unlock",
+      amount: unitPrice,
+      balanceBefore: currentBalance,
+      balanceAfter: balanceAfter,
+      utid: cancellationUtid,
+      timestamp: getUgandaTime(),
+      description: `Capital unlocked - Farmer cancelled overdue delivery (UTID: ${unit.lockUtid})`,
+      metadata: {
+        originalLockUtid: unit.lockUtid,
+        unitId: unit._id,
+        cancelledBy: "farmer",
+        farmerId: args.farmerId,
+      },
+    });
+
+    // Step 3: Update listing status if needed
+    const allUnits = await ctx.db
+      .query("listingUnits")
+      .withIndex("by_listing", (q) => q.eq("listingId", listing._id))
+      .collect();
+
+    const availableCount = allUnits.filter((u) => u.status === "available").length;
+    const lockedCount = allUnits.filter((u) => u.status === "locked").length;
+
+    if (lockedCount === 0 && availableCount > 0) {
+      // All units are available, listing is fully available
+      await ctx.db.patch(listing._id, {
+        status: "active",
+      });
+    } else if (lockedCount > 0 && availableCount > 0) {
+      // Some units locked, some available
+      await ctx.db.patch(listing._id, {
+        status: "partially_locked",
+      });
+    }
+
+    return {
+      success: true,
+      cancellationUtid,
+      unitId: unit._id,
+      lockUtid: unit.lockUtid,
+      capitalReturned: unitPrice,
+      message: "Overdue UTID cancelled successfully. Capital has been returned to trader.",
     };
   },
 });

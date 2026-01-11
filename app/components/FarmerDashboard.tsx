@@ -7,6 +7,7 @@ import { CreateListing } from "./CreateListing";
 import { useState } from "react";
 import { exportToExcel, exportToPDF, formatUTIDDataForExport } from "../utils/exportUtils";
 import { formatUgandaDateTime, getUgandaTime } from "../utils/timeUtils";
+import { NotificationMailbox } from "./NotificationMailbox";
 
 interface FarmerDashboardProps {
   userId: Id<"users">;
@@ -24,8 +25,10 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
   const rejectOffer = useMutation(api.negotiations.rejectOffer);
   const counterOffer = useMutation(api.negotiations.counterOffer);
   const archiveUTID = useMutation(api.farmerDashboard.archiveUTID);
+  const cancelOverdueUTID = useMutation(api.farmerDashboard.cancelOverdueUTID);
   
   const [countering, setCountering] = useState<Id<"negotiations"> | null>(null);
+  const [cancelling, setCancelling] = useState<Id<"listingUnits"> | null>(null);
   const [counterPrice, setCounterPrice] = useState<string>("");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [selectedListing, setSelectedListing] = useState<any | null>(null);
@@ -192,24 +195,27 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
 
   return (
     <div style={{ padding: "1rem", maxWidth: "100%", boxSizing: "border-box" }}>
-      <div style={{ marginBottom: "1.5rem" }}>
-        <h2 style={{ 
-          fontSize: "clamp(1.5rem, 4vw, 1.8rem)", 
-          marginBottom: "0.5rem", 
-          color: "#2c2c2c",
-          fontFamily: '"Montserrat", sans-serif',
-          fontWeight: "700",
-          letterSpacing: "-0.02em"
-        }}>
-          Hello, {user?.alias || "Farmer"} 👩🏾‍🌾
-        </h2>
-        <p style={{ 
-          color: "#3d3d3d", 
-          fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)",
-          fontFamily: '"Montserrat", sans-serif'
-        }}>
-          Location: District, Sub-county
-        </p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.5rem" }}>
+        <div>
+          <h2 style={{ 
+            fontSize: "clamp(1.5rem, 4vw, 1.8rem)", 
+            marginBottom: "0.5rem", 
+            color: "#2c2c2c",
+            fontFamily: '"Montserrat", sans-serif',
+            fontWeight: "700",
+            letterSpacing: "-0.02em"
+          }}>
+            Hello, {user?.alias || "Farmer"} 👩🏾‍🌾
+          </h2>
+          <p style={{ 
+            color: "#3d3d3d", 
+            fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)",
+            fontFamily: '"Montserrat", sans-serif'
+          }}>
+            Location: District, Sub-county
+          </p>
+        </div>
+        <NotificationMailbox userId={userId} />
       </div>
 
       {/* Create Listing */}
@@ -577,26 +583,73 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                 borderRadius: "8px",
                 border: `1px solid ${delivery.isPastDeadline ? "#ef5350" : "#4caf50"}`
               }}>
-                <div style={{ fontWeight: "600", marginBottom: "0.5rem" }}>
-                  {delivery.produceType} - 10 kg
-                </div>
-                <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.25rem" }}>
-                  Deadline: {formatDate(delivery.deliveryDeadline)}
-                </div>
-                <div style={{
-                  fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)",
-                  fontWeight: "600",
-                  color: delivery.isPastDeadline ? "#c62828" : "#2e7d32"
-                }}>
-                  {delivery.isPastDeadline 
-                    ? `OVERDUE by ${delivery.hoursOverdue.toFixed(1)} hours`
-                    : `${delivery.hoursRemaining.toFixed(1)} hours remaining (${delivery.minutesRemaining} minutes)`}
-                </div>
-                <div style={{ fontSize: "clamp(0.75rem, 2vw, 0.8rem)", color: "#666", marginTop: "0.25rem" }}>
-                  ⏰ Delivery countdown started from payment time. 6 hours deadline.
-                </div>
-                <div style={{ fontSize: "clamp(0.7rem, 2vw, 0.75rem)", color: "#999", marginTop: "0.5rem", fontFamily: "monospace", wordBreak: "break-all" }}>
-                  UTID: {delivery.lockUtid}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.5rem" }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: "600", marginBottom: "0.5rem" }}>
+                      {delivery.produceType} - 10 kg
+                    </div>
+                    <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.25rem" }}>
+                      Deadline: {formatDate(delivery.deliveryDeadline)}
+                    </div>
+                    <div style={{
+                      fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)",
+                      fontWeight: "600",
+                      color: delivery.isPastDeadline ? "#c62828" : "#2e7d32"
+                    }}>
+                      {delivery.isPastDeadline 
+                        ? `⏰ OVERDUE by ${delivery.hoursOverdue.toFixed(1)} hours`
+                        : `${delivery.hoursRemaining.toFixed(1)} hours remaining (${delivery.minutesRemaining} minutes)`}
+                    </div>
+                    <div style={{ fontSize: "clamp(0.75rem, 2vw, 0.8rem)", color: "#666", marginTop: "0.25rem" }}>
+                      ⏰ Delivery countdown started from payment time. 6 hours deadline.
+                    </div>
+                    <div style={{ fontSize: "clamp(0.7rem, 2vw, 0.75rem)", color: "#999", marginTop: "0.5rem", fontFamily: "monospace", wordBreak: "break-all" }}>
+                      UTID: {delivery.lockUtid}
+                    </div>
+                  </div>
+                  {delivery.isPastDeadline && (
+                    <button
+                      onClick={async () => {
+                        if (window.confirm("Are you sure you want to cancel and delete this overdue UTID? The trader's capital will be returned.")) {
+                          setCancelling(delivery.unitId);
+                          try {
+                            await cancelOverdueUTID({
+                              farmerId: userId,
+                              unitId: delivery.unitId,
+                            });
+                            setMessage({
+                              type: "success",
+                              text: "Overdue UTID cancelled successfully. Capital has been returned to trader.",
+                            });
+                            setTimeout(() => setMessage(null), 5000);
+                          } catch (error: any) {
+                            setMessage({
+                              type: "error",
+                              text: `Failed to cancel UTID: ${error.message}`,
+                            });
+                            setTimeout(() => setMessage(null), 5000);
+                          } finally {
+                            setCancelling(null);
+                          }
+                        }
+                      }}
+                      disabled={cancelling === delivery.unitId}
+                      style={{
+                        padding: "0.5rem 1rem",
+                        background: cancelling === delivery.unitId ? "#ccc" : "#d32f2f",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: "6px",
+                        cursor: cancelling === delivery.unitId ? "not-allowed" : "pointer",
+                        fontSize: "0.85rem",
+                        fontWeight: "600",
+                        whiteSpace: "nowrap",
+                        marginLeft: "0.5rem",
+                      }}
+                    >
+                      {cancelling === delivery.unitId ? "Cancelling..." : "Cancel & Delete"}
+                    </button>
+                  )}
                 </div>
               </div>
             ))}

@@ -18,6 +18,7 @@ import type * as authentication_types from "../authentication/types.js";
 import type * as buyerDashboard from "../buyerDashboard.js";
 import type * as buyers from "../buyers.js";
 import type * as constants from "../constants.js";
+import type * as crons from "../crons.js";
 import type * as demoData from "../demoData.js";
 import type * as errors from "../errors.js";
 import type * as errors_index from "../errors/index.js";
@@ -62,6 +63,7 @@ declare const fullApi: ApiFromModules<{
   buyerDashboard: typeof buyerDashboard;
   buyers: typeof buyers;
   constants: typeof constants;
+  crons: typeof crons;
   demoData: typeof demoData;
   errors: typeof errors;
   "errors/index": typeof errors_index;

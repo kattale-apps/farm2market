@@ -366,7 +366,7 @@ export function TraderListings({ userId }: TraderListingsProps) {
                 <div style={{ marginTop: "1rem", padding: "1rem", background: "#f5f5f5", borderRadius: "8px" }}>
                   {hasActiveNegotiation ? (
                     <p style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", color: "#666" }}>
-                      <strong>You have an active negotiation for this listing.</strong> Check "Your Active Negotiations" above.
+                      <strong>You have an active negotiation for this listing.</strong> Check &quot;Your Active Negotiations&quot; above.
                     </p>
                   ) : isOffering ? (
                     <div>
@@ -500,7 +500,7 @@ export function TraderListings({ userId }: TraderListingsProps) {
                   ) : (
                     <div>
                       <p style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", color: "#666" }}>
-                        <strong>How to negotiate:</strong> Click "Make Offer" to propose a price per kilo. Farmer can accept, reject, or counter-offer.
+                        <strong>How to negotiate:</strong> Click &quot;Make Offer&quot; to propose a price per kilo. Farmer can accept, reject, or counter-offer.
                       </p>
                       <button
                         onClick={() => {

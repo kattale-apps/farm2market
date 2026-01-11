@@ -175,7 +175,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           fontWeight: "600",
           letterSpacing: "-0.01em"
         }}>
-          System Metrics - Today's Activity
+          System Metrics - Today&apos;s Activity
         </h3>
         {todayMetrics === undefined ? (
           <p style={{ color: "#999" }}>Loading metrics...</p>
@@ -740,7 +740,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           }}>
             <div style={{ marginBottom: "1rem" }}>
               <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
-                Lock UTID (Farmer's Delivery UTID):
+                Lock UTID (Farmer&apos;s Delivery UTID):
               </label>
               <input
                 type="text"
@@ -877,10 +877,10 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                   }}
                 >
                   <option value="">-- Choose user --</option>
-                  {(allUsers?.users || [])
+                  {(allUsers || [])
                     .filter((u: any) => depositRole === "all" ? true : u.role === depositRole)
                     .map((u: any) => (
-                      <option key={u._id} value={u._id}>
+                      <option key={u.userId} value={u.userId}>
                         {u.alias} ({u.role})
                       </option>
                     ))}

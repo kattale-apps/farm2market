@@ -112,7 +112,7 @@ export default function ResetTransactionsPage() {
 
       <div style={{ marginBottom: "2rem" }}>
         <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600" }}>
-          Type "RESET" to confirm:
+          Type &quot;RESET&quot; to confirm:
         </label>
         <input
           type="text"

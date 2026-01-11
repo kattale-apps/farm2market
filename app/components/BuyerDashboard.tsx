@@ -6,6 +6,7 @@ import { Id } from "../../convex/_generated/dataModel";
 import { useState } from "react";
 import { exportToExcel, exportToPDF, formatUTIDDataForExport } from "../utils/exportUtils";
 import { formatUgandaDateTime, getUgandaTime } from "../utils/timeUtils";
+import { NotificationMailbox } from "./NotificationMailbox";
 
 interface BuyerDashboardProps {
   userId: Id<"users">;

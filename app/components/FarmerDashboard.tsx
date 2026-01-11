@@ -305,6 +305,9 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                 statusColor = "#2e7d32";
               }
 
+              // Check if listing can be cancelled (no locked or delivered units)
+              const canCancel = listing.units.locked === 0 && listing.units.delivered === 0 && listing.status !== "cancelled";
+
               return (
                 <div 
                   key={index} 
@@ -315,6 +318,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                     border: `2px solid ${statusColor}`,
                     cursor: "pointer",
                     transition: "transform 0.2s",
+                    position: "relative",
                   }}
                   onClick={() => setSelectedListing(listing)}
                   onMouseEnter={(e) => {
@@ -326,6 +330,52 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                     e.currentTarget.style.boxShadow = "none";
                   }}
                 >
+                  {canCancel && (
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation(); // Prevent opening the details modal
+                        if (window.confirm(`Are you sure you want to cancel this listing? This will cancel all ${listing.units.available} available unit(s) and cannot be undone.`)) {
+                          setCancellingListing(listing.listingId);
+                          try {
+                            await cancelListing({
+                              farmerId: userId,
+                              listingId: listing.listingId,
+                            });
+                            setMessage({
+                              type: "success",
+                              text: "Listing cancelled successfully.",
+                            });
+                            setTimeout(() => setMessage(null), 5000);
+                          } catch (error: any) {
+                            setMessage({
+                              type: "error",
+                              text: `Failed to cancel listing: ${error.message}`,
+                            });
+                            setTimeout(() => setMessage(null), 5000);
+                          } finally {
+                            setCancellingListing(null);
+                          }
+                        }
+                      }}
+                      disabled={cancellingListing === listing.listingId}
+                      style={{
+                        position: "absolute",
+                        top: "0.5rem",
+                        right: "0.5rem",
+                        padding: "0.4rem 0.8rem",
+                        background: cancellingListing === listing.listingId ? "#ccc" : "#d32f2f",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: "6px",
+                        cursor: cancellingListing === listing.listingId ? "not-allowed" : "pointer",
+                        fontSize: "0.75rem",
+                        fontWeight: "600",
+                        zIndex: 10,
+                      }}
+                    >
+                      {cancellingListing === listing.listingId ? "Cancelling..." : "✕ Cancel"}
+                    </button>
+                  )}
                   <div style={{ 
                     fontSize: "clamp(0.7rem, 2vw, 0.75rem)", 
                     color: "#999", 

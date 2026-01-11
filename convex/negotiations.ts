@@ -83,6 +83,10 @@ export const makeOffer = mutation({
     const negotiationUtid = generateUTID(user.role);
 
     // Create negotiation
+    if (!listing.farmerId) {
+      throw new Error("Listing has no farmer ID");
+    }
+    
     const negotiationId = await ctx.db.insert("negotiations", {
       unitId: args.unitId,
       listingId: listing._id,

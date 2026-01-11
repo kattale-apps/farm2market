@@ -53,12 +53,33 @@ This error indicates that Pesapal API v3 is expecting a `notification_id` (IPN U
 
 **Possible Solutions**:
 
-1. **Register an IPN URL with Pesapal** (Recommended):
-   - Log into your Pesapal dashboard
-   - Navigate to IPN (Instant Payment Notification) settings
-   - Register your IPN URL (e.g., `https://your-domain.com/api/pesapal/webhook`)
-   - Copy the `notification_id` you receive
-   - Add it to your payment request (code modification needed)
+1. **Register an IPN URL with Pesapal** (Required for API v3):
+   
+   **Step 1: Create a Webhook Endpoint**
+   
+   You need a publicly accessible HTTP endpoint that Pesapal can call. Since you're using Convex, you have a few options:
+   
+   **Option A: Use Vercel/Next.js API Route** (Recommended if using Vercel):
+   - Create an API route at `app/api/pesapal/webhook/route.ts` (or `pages/api/pesapal/webhook.ts` for Pages Router)
+   - This endpoint should accept POST requests from Pesapal
+   - It should call your Convex `handlePesapalWebhook` action
+   
+   **Option B: Use a Convex HTTP Action** (If Convex supports HTTP endpoints):
+   - Check if Convex supports HTTP endpoints for webhooks
+   - Configure the webhook handler to accept direct HTTP calls
+   
+   **Step 2: Register IPN URL in Pesapal Dashboard**
+   - Log into your Pesapal dashboard (sandbox or production)
+   - Navigate to **Settings** → **IPN (Instant Payment Notification)**
+   - Click **Register IPN URL**
+   - Enter your webhook URL (e.g., `https://your-domain.com/api/pesapal/webhook`)
+   - Save and copy the `notification_id` you receive
+   
+   **Step 3: Add Notification ID to Convex**
+   - Go to **Convex Dashboard** → **Settings** → **Environment Variables**
+   - Add variable: `PESAPAL_NOTIFICATION_ID`
+   - Set value to the notification_id from Pesapal
+   - Save and wait for redeploy
 
 2. **Check if IPN is optional in sandbox**:
    - Some Pesapal sandbox environments may allow omitting `notification_id`

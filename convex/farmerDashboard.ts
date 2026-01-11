@@ -35,7 +35,7 @@ export const getFarmerListings = query({
       .withIndex("by_farmer", (q) => q.eq("farmerId", args.farmerId))
       .collect();
 
-    // Enrich with unit status information
+    // Enrich with unit status information and additional details
     const enrichedListings = await Promise.all(
       listings.map(async (listing) => {
         const units = await ctx.db
@@ -48,16 +48,29 @@ export const getFarmerListings = query({
         const deliveredCount = units.filter((u) => u.status === "delivered").length;
         const cancelledCount = units.filter((u) => u.status === "cancelled").length;
 
+        // Get storage location details if available
+        const storageLocation = listing.storageLocationId
+          ? await ctx.db.get(listing.storageLocationId)
+          : null;
+
         return {
           listingId: listing._id,
           utid: listing.utid,
           produceType: listing.produceType,
           totalKilos: listing.totalKilos,
           pricePerKilo: listing.pricePerKilo,
+          unitSize: listing.unitSize,
           totalUnits: listing.totalUnits,
           status: listing.status,
           createdAt: listing.createdAt,
           deliverySLA: listing.deliverySLA,
+          qualityRating: listing.qualityRating || null,
+          qualityComment: listing.qualityComment || null,
+          storageLocation: storageLocation ? {
+            locationId: storageLocation._id,
+            districtName: storageLocation.districtName,
+            code: storageLocation.code,
+          } : null,
           // Unit breakdown
           units: {
             available: availableCount,

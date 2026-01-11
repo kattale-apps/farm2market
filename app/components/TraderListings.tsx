@@ -314,20 +314,24 @@ export function TraderListings({ userId }: TraderListingsProps) {
                     </h4>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))", gap: "0.75rem", fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", color: "#666", marginBottom: "0.5rem" }}>
                       <div>
-                        <strong>Total:</strong> {listing.totalKilos} kg ({listing.totalUnits} units)
+                        <strong>Total:</strong> {listing.totalKilos} kg ({listing.totalUnits} {listing.isTraderListing ? "block" : "units"})
                       </div>
                       <div>
                         <strong>Price:</strong> {formatUGX(listing.pricePerKilo)}/kg
                       </div>
                       <div>
-                        <strong>Unit:</strong> {formatUGX(listing.pricePerKilo * 10)} (10kg)
+                        <strong>Unit:</strong> {formatUGX(listing.pricePerKilo * (listing.unitSize || 10))} ({listing.unitSize || 10}kg)
                       </div>
                       <div>
-                        <strong>Available:</strong> {listing.availableUnits || listing.totalUnits} units
+                        <strong>Available:</strong> {listing.availableUnits || listing.totalUnits} {listing.isTraderListing ? "block" : "units"}
                       </div>
                     </div>
                     <div style={{ fontSize: "clamp(0.8rem, 2.5vw, 0.85rem)", color: "#999" }}>
-                      Farmer: {listing.farmerAlias} | Listed: {formatDate(listing.createdAt)}
+                      {listing.isTraderListing ? (
+                        <>Trader: {listing.traderAlias || "Unknown"} | Listed: {formatDate(listing.createdAt)} | 100kg Block</>
+                      ) : (
+                        <>Farmer: {listing.farmerAlias || "Unknown"} | Listed: {formatDate(listing.createdAt)}</>
+                      )}
                     </div>
                     <div style={{ fontSize: "clamp(0.7rem, 2vw, 0.75rem)", color: "#999", marginTop: "0.5rem", fontFamily: "monospace", wordBreak: "break-all" }}>
                       UTID: {listing.utid}

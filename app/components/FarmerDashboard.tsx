@@ -28,6 +28,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
   const [countering, setCountering] = useState<Id<"negotiations"> | null>(null);
   const [counterPrice, setCounterPrice] = useState<string>("");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [selectedListing, setSelectedListing] = useState<any | null>(null);
 
   const formatDate = (timestamp: number) => {
     // Timestamps are stored in Uganda time, convert for display
@@ -306,6 +307,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                     cursor: "pointer",
                     transition: "transform 0.2s",
                   }}
+                  onClick={() => setSelectedListing(listing)}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.transform = "translateY(-2px)";
                     e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)";
@@ -338,6 +340,13 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                     color: statusColor
                   }}>
                     Status: {status}
+                  </div>
+                  <div style={{ 
+                    fontSize: "clamp(0.7rem, 2vw, 0.75rem)", 
+                    color: "#666",
+                    marginTop: "0.5rem"
+                  }}>
+                    Click to view details →
                   </div>
                 </div>
               );
@@ -834,6 +843,222 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
           </div>
         )}
       </div>
+
+      {/* UTID Details Modal */}
+      {selectedListing && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: "1rem",
+          }}
+          onClick={() => setSelectedListing(null)}
+        >
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: "12px",
+              padding: "clamp(1.5rem, 4vw, 2rem)",
+              maxWidth: "600px",
+              width: "100%",
+              maxHeight: "90vh",
+              overflowY: "auto",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.3)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
+              <h3 style={{ 
+                margin: 0, 
+                fontSize: "clamp(1.2rem, 4vw, 1.5rem)", 
+                color: "#2c2c2c",
+                fontFamily: '"Montserrat", sans-serif',
+                fontWeight: "600"
+              }}>
+                UTID Details
+              </h3>
+              <button
+                onClick={() => setSelectedListing(null)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: "1.5rem",
+                  cursor: "pointer",
+                  color: "#666",
+                  padding: "0.5rem",
+                  lineHeight: 1,
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+              {/* UTID */}
+              <div>
+                <div style={{ fontSize: "clamp(0.75rem, 2vw, 0.8rem)", color: "#666", marginBottom: "0.25rem", fontWeight: "600" }}>
+                  Transaction UTID
+                </div>
+                <div style={{ 
+                  fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", 
+                  fontFamily: "monospace", 
+                  wordBreak: "break-all",
+                  color: "#1a1a1a",
+                  padding: "0.5rem",
+                  background: "#f5f5f5",
+                  borderRadius: "6px"
+                }}>
+                  {selectedListing.utid}
+                </div>
+              </div>
+
+              {/* Produce Type */}
+              <div>
+                <div style={{ fontSize: "clamp(0.75rem, 2vw, 0.8rem)", color: "#666", marginBottom: "0.25rem", fontWeight: "600" }}>
+                  Produce Type
+                </div>
+                <div style={{ fontSize: "clamp(0.9rem, 2.5vw, 1rem)", color: "#1a1a1a", fontWeight: "500" }}>
+                  {selectedListing.produceType}
+                </div>
+              </div>
+
+              {/* Quantity */}
+              <div>
+                <div style={{ fontSize: "clamp(0.75rem, 2vw, 0.8rem)", color: "#666", marginBottom: "0.25rem", fontWeight: "600" }}>
+                  Quantity
+                </div>
+                <div style={{ fontSize: "clamp(0.9rem, 2.5vw, 1rem)", color: "#1a1a1a", fontWeight: "500" }}>
+                  {selectedListing.totalKilos} kg ({selectedListing.totalUnits} units × {selectedListing.unitSize || 10} kg)
+                </div>
+              </div>
+
+              {/* Price */}
+              <div>
+                <div style={{ fontSize: "clamp(0.75rem, 2vw, 0.8rem)", color: "#666", marginBottom: "0.25rem", fontWeight: "600" }}>
+                  Price
+                </div>
+                <div style={{ fontSize: "clamp(0.9rem, 2.5vw, 1rem)", color: "#1a1a1a", fontWeight: "500" }}>
+                  {formatUGX(selectedListing.pricePerKilo)}/kg
+                </div>
+                <div style={{ fontSize: "clamp(0.8rem, 2vw, 0.85rem)", color: "#666", marginTop: "0.25rem" }}>
+                  Total Value: {formatUGX(selectedListing.pricePerKilo * selectedListing.totalKilos)}
+                </div>
+              </div>
+
+              {/* Quality Rating */}
+              {selectedListing.qualityRating && (
+                <div>
+                  <div style={{ fontSize: "clamp(0.75rem, 2vw, 0.8rem)", color: "#666", marginBottom: "0.25rem", fontWeight: "600" }}>
+                    Quality Rating
+                  </div>
+                  <div style={{ fontSize: "clamp(0.9rem, 2.5vw, 1rem)", color: "#1a1a1a", fontWeight: "500" }}>
+                    {selectedListing.qualityRating}
+                  </div>
+                </div>
+              )}
+
+              {/* Quality Comment */}
+              {selectedListing.qualityComment && (
+                <div>
+                  <div style={{ fontSize: "clamp(0.75rem, 2vw, 0.8rem)", color: "#666", marginBottom: "0.25rem", fontWeight: "600" }}>
+                    Quality Comment
+                  </div>
+                  <div style={{ 
+                    fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", 
+                    color: "#1a1a1a",
+                    padding: "0.75rem",
+                    background: "#f9f9f9",
+                    borderRadius: "6px",
+                    whiteSpace: "pre-wrap"
+                  }}>
+                    {selectedListing.qualityComment}
+                  </div>
+                </div>
+              )}
+
+              {/* Storage Location */}
+              {selectedListing.storageLocation && (
+                <div>
+                  <div style={{ fontSize: "clamp(0.75rem, 2vw, 0.8rem)", color: "#666", marginBottom: "0.25rem", fontWeight: "600" }}>
+                    Storage Location
+                  </div>
+                  <div style={{ fontSize: "clamp(0.9rem, 2.5vw, 1rem)", color: "#1a1a1a", fontWeight: "500" }}>
+                    {selectedListing.storageLocation.districtName} ({selectedListing.storageLocation.code})
+                  </div>
+                </div>
+              )}
+
+              {/* Status */}
+              <div>
+                <div style={{ fontSize: "clamp(0.75rem, 2vw, 0.8rem)", color: "#666", marginBottom: "0.25rem", fontWeight: "600" }}>
+                  Status
+                </div>
+                <div style={{ fontSize: "clamp(0.9rem, 2.5vw, 1rem)", color: "#1a1a1a", fontWeight: "500", textTransform: "capitalize" }}>
+                  {selectedListing.status.replace("_", " ")}
+                </div>
+              </div>
+
+              {/* Unit Breakdown */}
+              <div>
+                <div style={{ fontSize: "clamp(0.75rem, 2vw, 0.8rem)", color: "#666", marginBottom: "0.5rem", fontWeight: "600" }}>
+                  Unit Breakdown
+                </div>
+                <div style={{ 
+                  display: "grid", 
+                  gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", 
+                  gap: "0.5rem",
+                  padding: "0.75rem",
+                  background: "#f9f9f9",
+                  borderRadius: "6px"
+                }}>
+                  <div>
+                    <div style={{ fontSize: "clamp(0.7rem, 2vw, 0.75rem)", color: "#666" }}>Available</div>
+                    <div style={{ fontSize: "clamp(0.9rem, 2.5vw, 1rem)", fontWeight: "600", color: "#4caf50" }}>
+                      {selectedListing.units.available}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "clamp(0.7rem, 2vw, 0.75rem)", color: "#666" }}>Locked</div>
+                    <div style={{ fontSize: "clamp(0.9rem, 2.5vw, 1rem)", fontWeight: "600", color: "#2196f3" }}>
+                      {selectedListing.units.locked}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "clamp(0.7rem, 2vw, 0.75rem)", color: "#666" }}>Delivered</div>
+                    <div style={{ fontSize: "clamp(0.9rem, 2.5vw, 1rem)", fontWeight: "600", color: "#2e7d32" }}>
+                      {selectedListing.units.delivered}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "clamp(0.7rem, 2vw, 0.75rem)", color: "#666" }}>Cancelled</div>
+                    <div style={{ fontSize: "clamp(0.9rem, 2.5vw, 1rem)", fontWeight: "600", color: "#d32f2f" }}>
+                      {selectedListing.units.cancelled}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Created Date */}
+              <div>
+                <div style={{ fontSize: "clamp(0.75rem, 2vw, 0.8rem)", color: "#666", marginBottom: "0.25rem", fontWeight: "600" }}>
+                  Created Date
+                </div>
+                <div style={{ fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", color: "#1a1a1a" }}>
+                  {formatDate(selectedListing.createdAt)}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

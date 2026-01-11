@@ -65,13 +65,15 @@ export default defineSchema({
    * - Units lock only on successful payment
    */
   listings: defineTable({
-    farmerId: v.id("users"),
+    farmerId: v.optional(v.id("users")), // Optional - can be null for trader listings
+    traderId: v.optional(v.id("users")), // Optional - for trader listings (100kg blocks only)
+    inventoryId: v.optional(v.id("traderInventory")), // For trader listings, reference to the 100kg inventory block
     utid: v.string(), // Generated when listing is created
     produceType: v.string(),
     totalKilos: v.number(),
     pricePerKilo: v.number(), // In UGX
-    unitSize: v.number(), // Always 10kg
-    totalUnits: v.number(), // totalKilos / 10
+    unitSize: v.number(), // 10kg for farmer listings, 100kg for trader listings
+    totalUnits: v.number(), // totalKilos / unitSize
     status: v.union(
       v.literal("active"),
       v.literal("partially_locked"),
@@ -80,12 +82,13 @@ export default defineSchema({
       v.literal("cancelled")
     ),
     createdAt: v.number(),
-    deliverySLA: v.number(), // Timestamp: 6 hours after payment
+    deliverySLA: v.number(), // Timestamp: 6 hours after payment (for farmer listings)
     qualityRating: v.optional(v.string()), // Quality rating from admin-managed dropdown (e.g., "Premium", "Good", "Fair")
     qualityComment: v.optional(v.string()), // Farmer's text comment about produce quality
     storageLocationId: v.optional(v.id("storageLocations")), // Storage location (district) where produce will be delivered (optional for backward compatibility with existing data)
   })
     .index("by_farmer", ["farmerId"])
+    .index("by_trader", ["traderId"])
     .index("by_utid", ["utid"])
     .index("by_status", ["status"]),
 

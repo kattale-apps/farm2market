@@ -9,7 +9,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { generateUTID, getUgandaTime } from "./utils";
-import { LISTING_UNIT_SIZE_KG } from "./constants";
+import { LISTING_UNIT_SIZE_KG, BUYER_BLOCK_SIZE_KG } from "./constants";
 import { checkPilotMode } from "./pilotMode";
 import { checkRateLimit } from "./rateLimits";
 import {
@@ -140,10 +140,11 @@ export const getActiveListings = query({
       .withIndex("by_status", (q) => q.eq("status", "active"))
       .collect();
 
-    // Get farmer aliases (anonymity) and unit availability
+    // Get farmer/trader aliases (anonymity) and unit availability
     const listingsWithAliases = await Promise.all(
       listings.map(async (listing) => {
-        const farmer = await ctx.db.get(listing.farmerId);
+        const farmer = listing.farmerId ? await ctx.db.get(listing.farmerId) : null;
+        const trader = listing.traderId ? await ctx.db.get(listing.traderId) : null;
         const units = await ctx.db
           .query("listingUnits")
           .withIndex("by_listing", (q) => q.eq("listingId", listing._id))
@@ -158,10 +159,13 @@ export const getActiveListings = query({
           produceType: listing.produceType,
           totalKilos: listing.totalKilos,
           pricePerKilo: listing.pricePerKilo,
+          unitSize: listing.unitSize || LISTING_UNIT_SIZE_KG, // Include unitSize for accurate calculations
           totalUnits: listing.totalUnits,
           availableUnits,
           lockedUnits,
-          farmerAlias: farmer?.alias || "unknown",
+          farmerAlias: farmer?.alias || null,
+          traderAlias: trader?.alias || null,
+          isTraderListing: !!listing.traderId, // Flag to identify trader listings (100kg blocks)
           createdAt: listing.createdAt,
         };
       })
@@ -302,5 +306,169 @@ export const getActiveStorageLocations = query({
       districtName: loc.districtName,
       code: loc.code,
     }));
+  },
+});
+
+/**
+ * Create a trader listing from 100kg inventory block (trader only)
+ * Traders can only list in 100kg blocks
+ */
+export const createTraderListing = mutation({
+  args: {
+    traderId: v.id("users"),
+    inventoryId: v.id("traderInventory"),
+    pricePerKilo: v.number(), // In UGX - trader's asking price
+  },
+  handler: async (ctx, args) => {
+    await checkPilotMode(ctx);
+
+    // Verify user is a trader
+    const user = await ctx.db.get(args.traderId);
+    if (!user || user.role !== "trader") {
+      throwAppError(invalidRoleError("trader"));
+    }
+
+    // Rate limit check
+    await checkRateLimit(ctx, args.traderId, user.role, "create_trader_listing", {
+      inventoryId: args.inventoryId,
+      pricePerKilo: args.pricePerKilo,
+    });
+
+    if (args.pricePerKilo <= 0) {
+      throwAppError(invalidAmountError());
+    }
+
+    // Get the inventory block
+    const inventory = await ctx.db.get(args.inventoryId);
+    if (!inventory) {
+      throw new Error("Inventory block not found");
+    }
+
+    // Verify trader owns this inventory
+    if (inventory.traderId !== args.traderId) {
+      throw new Error("You can only create listings from your own inventory");
+    }
+
+    // Verify inventory is in_storage
+    if (inventory.status !== "in_storage") {
+      throw new Error("Inventory must be in storage to create a listing");
+    }
+
+    // CRITICAL: Traders can only list in 100kg blocks
+    if (!inventory.is100kgBlock || inventory.totalKilos !== BUYER_BLOCK_SIZE_KG) {
+      throw new Error(`Traders can only list in exactly ${BUYER_BLOCK_SIZE_KG}kg blocks. This inventory block is ${inventory.totalKilos}kg.`);
+    }
+
+    // Check if this inventory block already has an active listing
+    const existingListing = await ctx.db
+      .query("listings")
+      .withIndex("by_trader", (q) => q.eq("traderId", args.traderId))
+      .filter((q) => 
+        q.and(
+          q.eq(q.field("inventoryId"), args.inventoryId),
+          q.eq(q.field("status"), "active")
+        )
+      )
+      .first();
+
+    if (existingListing) {
+      throw new Error("This inventory block already has an active listing");
+    }
+
+    // Generate UTID
+    const utid = generateUTID(user.role);
+
+    // Create listing - traders list in 100kg blocks (1 unit = 100kg)
+    const listingId = await ctx.db.insert("listings", {
+      traderId: args.traderId,
+      inventoryId: args.inventoryId,
+      farmerId: undefined, // Not a farmer listing
+      utid,
+      produceType: inventory.produceType,
+      totalKilos: BUYER_BLOCK_SIZE_KG, // Exactly 100kg
+      pricePerKilo: args.pricePerKilo,
+      unitSize: BUYER_BLOCK_SIZE_KG, // 100kg per unit for trader listings
+      totalUnits: 1, // 1 unit = 100kg block
+      status: "active",
+      createdAt: getUgandaTime(),
+      deliverySLA: 0, // Not applicable for trader listings
+      qualityRating: inventory.qualityRating,
+      qualityComment: undefined,
+      storageLocationId: inventory.storageLocationId,
+    });
+
+    // Create a single listing unit representing the 100kg block
+    const unitId = await ctx.db.insert("listingUnits", {
+      listingId,
+      unitNumber: 1,
+      status: "available",
+    });
+
+    return { listingId, utid, totalUnits: 1, unitIds: [unitId] };
+  },
+});
+
+/**
+ * Get trader's available 100kg inventory blocks for listing
+ */
+export const getTraderAvailableInventoryForListing = query({
+  args: {
+    traderId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    // Verify user is a trader
+    const user = await ctx.db.get(args.traderId);
+    if (!user || user.role !== "trader") {
+      throw new Error("User is not a trader");
+    }
+
+    // Get all 100kg blocks in storage that don't have active listings
+    const inventory = await ctx.db
+      .query("traderInventory")
+      .withIndex("by_trader", (q) => q.eq("traderId", args.traderId))
+      .filter((q) => 
+        q.and(
+          q.eq(q.field("status"), "in_storage"),
+          q.eq(q.field("is100kgBlock"), true),
+          q.eq(q.field("totalKilos"), BUYER_BLOCK_SIZE_KG)
+        )
+      )
+      .collect();
+
+    // Check which inventory blocks already have active listings
+    const inventoryWithListings = await Promise.all(
+      inventory.map(async (inv) => {
+        const existingListing = await ctx.db
+          .query("listings")
+          .withIndex("by_trader", (q) => q.eq("traderId", args.traderId))
+          .filter((q) => 
+            q.and(
+              q.eq(q.field("inventoryId"), inv._id),
+              q.eq(q.field("status"), "active")
+            )
+          )
+          .first();
+
+        return {
+          inventoryId: inv._id,
+          utid: inv.utid,
+          produceType: inv.produceType,
+          totalKilos: inv.totalKilos,
+          unitPrice: inv.unitPrice, // Original purchase price per kilo
+          storageLocationId: inv.storageLocationId,
+          qualityRating: inv.qualityRating,
+          acquiredAt: inv.acquiredAt,
+          hasActiveListing: !!existingListing,
+        };
+      })
+    );
+
+    // Filter to only blocks without active listings
+    const available = inventoryWithListings.filter((inv) => !inv.hasActiveListing);
+
+    return {
+      availableBlocks: available,
+      total: available.length,
+    };
   },
 });

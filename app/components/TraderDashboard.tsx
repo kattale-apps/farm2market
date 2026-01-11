@@ -4,6 +4,7 @@ import { useQuery, useAction, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { TraderListings } from "./TraderListings";
+import { CreateTraderListing } from "./CreateTraderListing";
 import { useState } from "react";
 import { exportToExcel, exportToPDF, formatUTIDDataForExport } from "../utils/exportUtils";
 import { exportUTIDsByCategory, exportUTIDsByCategoryPDF, exportInventoryVolume, exportCapitalVolume } from "../utils/traderReports";
@@ -1321,6 +1322,9 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
           </div>
         </div>
       </div>
+
+          {/* Create Trader Listing from 100kg Blocks */}
+          <CreateTraderListing userId={userId} />
 
           {/* Available Listings for Negotiations */}
           <div style={{

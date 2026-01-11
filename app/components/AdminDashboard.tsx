@@ -1251,6 +1251,40 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
         )}
       </div>
 
+      {/* Demo Funds Deposit */}
+      <div style={{
+        marginBottom: "2rem",
+        padding: "1.5rem",
+        background: "#fff",
+        borderRadius: "12px",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        border: "1px solid #e0e0e0"
+      }}>
+        <h3 style={{ 
+          marginTop: 0, 
+          marginBottom: "1rem", 
+          fontSize: "1.3rem", 
+          color: "#2c2c2c",
+          fontFamily: '"Montserrat", sans-serif',
+          fontWeight: "600",
+          letterSpacing: "-0.01em"
+        }}>
+          Deposit Demo Funds
+        </h3>
+        <p style={{ marginBottom: "1rem", color: "#666" }}>
+          Deposit training funds into trader or buyer accounts for demo/learning purposes
+        </p>
+        {allUsers === undefined ? (
+          <p style={{ color: "#999" }}>Loading...</p>
+        ) : (
+          <DemoFundsForm
+            allUsers={allUsers}
+            adminDepositDemoFunds={useMutation(api.admin.adminDepositDemoFunds)}
+            adminId={userId}
+          />
+        )}
+      </div>
+
       {/* System Controls (Legacy) */}
       <div style={{
         padding: "1.5rem",
@@ -2120,6 +2154,186 @@ function NotificationForm({ allUsers, sendNotification, sendRoleBasedNotificatio
         }}
       >
         {loading ? "Sending..." : `Send Notification to ${selectedUserIds.size} User(s)`}
+      </button>
+    </div>
+  );
+}
+
+// Demo Funds Deposit Form Component
+function DemoFundsForm({ 
+  allUsers, 
+  adminDepositDemoFunds, 
+  adminId 
+}: { 
+  allUsers: any[]; 
+  adminDepositDemoFunds: any; 
+  adminId: Id<"users"> 
+}) {
+  const [selectedUserId, setSelectedUserId] = useState<string>("");
+  const [amount, setAmount] = useState<string>("");
+  const [reason, setReason] = useState<string>("");
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // Filter for traders and buyers only
+  const tradersAndBuyers = allUsers.filter(u => u.role === "trader" || u.role === "buyer");
+
+  const handleDeposit = async () => {
+    if (!selectedUserId) {
+      setMessage({ type: "error", text: "Please select a user" });
+      return;
+    }
+    if (!amount || parseFloat(amount) <= 0) {
+      setMessage({ type: "error", text: "Please enter a valid amount greater than 0" });
+      return;
+    }
+    if (!reason.trim()) {
+      setMessage({ type: "error", text: "Please provide a reason for this deposit" });
+      return;
+    }
+
+    setLoading(true);
+    setMessage(null);
+
+    try {
+      const result = await adminDepositDemoFunds({
+        adminId,
+        targetUserId: selectedUserId,
+        amount: parseFloat(amount),
+        reason: reason.trim(),
+      });
+
+      setMessage({ 
+        type: "success", 
+        text: `Successfully deposited ${parseFloat(amount).toLocaleString()} UGX to ${result.targetUserEmail}. New balance: ${result.newBalance.toLocaleString()} UGX. UTID: ${result.utid}` 
+      });
+      
+      // Reset form
+      setSelectedUserId("");
+      setAmount("");
+      setReason("");
+    } catch (error: any) {
+      setMessage({ type: "error", text: error.message || "Failed to deposit funds" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div>
+      {message && (
+        <div style={{
+          padding: "0.75rem",
+          marginBottom: "1rem",
+          borderRadius: "6px",
+          backgroundColor: message.type === "success" ? "#d4edda" : "#f8d7da",
+          color: message.type === "success" ? "#155724" : "#721c24",
+          border: `1px solid ${message.type === "success" ? "#c3e6cb" : "#f5c6cb"}`,
+          fontSize: "0.9rem"
+        }}>
+          {message.text}
+        </div>
+      )}
+
+      <div style={{ marginBottom: "1rem" }}>
+        <label style={{ 
+          display: "block", 
+          marginBottom: "0.5rem", 
+          fontWeight: "500",
+          color: "#444" 
+        }}>
+          Select Trader or Buyer:
+        </label>
+        <select
+          value={selectedUserId}
+          onChange={(e) => setSelectedUserId(e.target.value)}
+          disabled={loading}
+          style={{
+            width: "100%",
+            padding: "0.5rem",
+            border: "1px solid #ddd",
+            borderRadius: "6px",
+            fontSize: "0.9rem"
+          }}
+        >
+          <option value="">-- Select User --</option>
+          {tradersAndBuyers.map((user) => (
+            <option key={user._id} value={user._id}>
+              {user.email} ({user.role}) - {user.alias}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div style={{ marginBottom: "1rem" }}>
+        <label style={{ 
+          display: "block", 
+          marginBottom: "0.5rem", 
+          fontWeight: "500",
+          color: "#444" 
+        }}>
+          Amount (UGX):
+        </label>
+        <input
+          type="number"
+          min="0"
+          step="1000"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          disabled={loading}
+          placeholder="Enter amount in UGX"
+          style={{
+            width: "100%",
+            padding: "0.5rem",
+            border: "1px solid #ddd",
+            borderRadius: "6px",
+            fontSize: "0.9rem"
+          }}
+        />
+      </div>
+
+      <div style={{ marginBottom: "1rem" }}>
+        <label style={{ 
+          display: "block", 
+          marginBottom: "0.5rem", 
+          fontWeight: "500",
+          color: "#444" 
+        }}>
+          Reason:
+        </label>
+        <textarea
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          disabled={loading}
+          placeholder="Enter reason for this demo deposit (e.g., 'Training funds for new user')"
+          rows={3}
+          style={{
+            width: "100%",
+            padding: "0.5rem",
+            border: "1px solid #ddd",
+            borderRadius: "6px",
+            fontSize: "0.9rem",
+            fontFamily: "inherit",
+            resize: "vertical"
+          }}
+        />
+      </div>
+
+      <button
+        onClick={handleDeposit}
+        disabled={loading || !selectedUserId || !amount || !reason.trim()}
+        style={{
+          backgroundColor: loading || !selectedUserId || !amount || !reason.trim() ? "#ccc" : "#007bff",
+          color: "#fff",
+          padding: "0.75rem 1.5rem",
+          border: "none",
+          borderRadius: "6px",
+          fontSize: "0.9rem",
+          fontWeight: "600",
+          cursor: loading || !selectedUserId || !amount || !reason.trim() ? "not-allowed" : "pointer"
+        }}
+      >
+        {loading ? "Depositing..." : "Deposit Demo Funds"}
       </button>
     </div>
   );

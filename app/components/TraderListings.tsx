@@ -11,7 +11,9 @@ interface TraderListingsProps {
 }
 
 export function TraderListings({ userId }: TraderListingsProps) {
-  const [offering, setOffering] = useState<{ listingId: Id<"listings">; unitId: Id<"listingUnits"> | null } | null>(null);
+  const [offering, setOffering] = useState<{ listingId: Id<"listings"> } | null>(null);
+  const [selectedUnits, setSelectedUnits] = useState<Set<Id<"listingUnits">>>(new Set());
+  const [numUnits, setNumUnits] = useState<string>("1");
   const [offerPrice, setOfferPrice] = useState<string>("");
   const [locking, setLocking] = useState<Id<"listingUnits"> | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -23,12 +25,12 @@ export function TraderListings({ userId }: TraderListingsProps) {
   const acceptCounterOffer = useMutation(api.negotiations.acceptCounterOffer);
   const lockUnit = useMutation(api.payments.lockUnit);
   
-  // Get first available unit for the listing being offered on
+  // Get available units for the listing being offered on
   const listingDetails = useQuery(
     api.listings.getListingDetails,
     offering ? { listingId: offering.listingId } : "skip"
   );
-  const firstAvailableUnit = listingDetails?.units?.find((u: any) => u.status === "available");
+  const availableUnits = listingDetails?.units?.filter((u: any) => u.status === "available") || [];
 
   const formatUGX = (amount: number) => {
     return new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX" }).format(amount);
@@ -46,9 +48,28 @@ export function TraderListings({ userId }: TraderListingsProps) {
       return;
     }
 
-    // Get first available unit
-    if (!firstAvailableUnit || !firstAvailableUnit.unitId) {
-      setMessage({ type: "error", text: "No available units found for this listing" });
+    // Get selected units
+    let unitIdsToUse: Id<"listingUnits">[] = [];
+    
+    if (selectedUnits.size > 0) {
+      // Use manually selected units
+      unitIdsToUse = Array.from(selectedUnits);
+    } else {
+      // Use number input to select first N available units
+      const num = parseInt(numUnits);
+      if (isNaN(num) || num <= 0) {
+        setMessage({ type: "error", text: "Please enter a valid number of units" });
+        return;
+      }
+      if (num > availableUnits.length) {
+        setMessage({ type: "error", text: `Only ${availableUnits.length} units available. Please select fewer units.` });
+        return;
+      }
+      unitIdsToUse = availableUnits.slice(0, num).map((u: any) => u.unitId);
+    }
+
+    if (unitIdsToUse.length === 0) {
+      setMessage({ type: "error", text: "Please select at least one unit" });
       return;
     }
 
@@ -57,21 +78,24 @@ export function TraderListings({ userId }: TraderListingsProps) {
     try {
       const result = await makeOffer({
         traderId: userId,
-        unitId: firstAvailableUnit.unitId,
+        unitIds: unitIdsToUse,
         offerPricePerKilo: price,
       });
       
+      const utidsList = result.negotiations.map((n: any) => n.utid).join(", ");
       setMessage({
         type: "success",
-        text: `Offer made successfully! UTID: ${result.negotiationUtid}. Waiting for farmer's response.`,
+        text: `Offer made successfully on ${result.totalUnits} unit(s)! UTIDs: ${utidsList}. Waiting for farmer's response.`,
       });
       
       setOfferPrice("");
+      setNumUnits("1");
+      setSelectedUnits(new Set());
       setOffering(null);
       
       setTimeout(() => {
         setMessage(null);
-      }, 8000);
+      }, 10000);
     } catch (error: any) {
       setMessage({
         type: "error",
@@ -346,44 +370,118 @@ export function TraderListings({ userId }: TraderListingsProps) {
                     </p>
                   ) : isOffering ? (
                     <div>
-                      <p style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", color: "#666" }}>
-                        <strong>Make an offer:</strong> Enter your price per kilo below.
+                      <p style={{ margin: "0 0 0.75rem 0", fontSize: "0.9rem", color: "#666" }}>
+                        <strong>Make an offer:</strong> Select how many units you want and enter your price per kilo.
                       </p>
-                      <input
-                        type="number"
-                        value={offerPrice}
-                        onChange={(e) => setOfferPrice(e.target.value)}
-                        placeholder={`Current: ${formatUGX(listing.pricePerKilo)}/kg`}
-                        style={{
-                          padding: "0.5rem",
-                          width: "100%",
-                          marginBottom: "0.5rem",
-                          borderRadius: "6px",
-                          border: "1px solid #ccc",
-                          fontSize: "0.9rem",
-                        }}
-                      />
+                      
+                      {/* Unit Selection */}
+                      <div style={{ marginBottom: "1rem" }}>
+                        <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", fontSize: "0.9rem", color: "#1a1a1a" }}>
+                          Number of Units to Select:
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max={availableUnits.length}
+                          value={numUnits}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setNumUnits(val);
+                            // Auto-select first N units
+                            const num = parseInt(val);
+                            if (!isNaN(num) && num > 0 && num <= availableUnits.length) {
+                              const newSelected = new Set(availableUnits.slice(0, num).map((u: any) => u.unitId));
+                              setSelectedUnits(newSelected);
+                            } else {
+                              setSelectedUnits(new Set());
+                            }
+                          }}
+                          style={{
+                            padding: "0.5rem",
+                            width: "100%",
+                            borderRadius: "6px",
+                            border: "1px solid #ccc",
+                            fontSize: "0.9rem",
+                          }}
+                        />
+                        <div style={{ marginTop: "0.5rem", fontSize: "0.85rem", color: "#666" }}>
+                          {availableUnits.length} unit(s) available. Each unit is {listing.unitSize || 10}kg.
+                        </div>
+                        
+                        {/* Show selected units */}
+                        {selectedUnits.size > 0 && (
+                          <div style={{ 
+                            marginTop: "0.75rem", 
+                            padding: "0.75rem", 
+                            background: "#e3f2fd", 
+                            borderRadius: "6px",
+                            border: "1px solid #90caf9"
+                          }}>
+                            <div style={{ fontWeight: "600", marginBottom: "0.5rem", fontSize: "0.9rem", color: "#1976d2" }}>
+                              Selected: {selectedUnits.size} unit(s)
+                            </div>
+                            <div style={{ fontSize: "0.85rem", color: "#666" }}>
+                              Units: {Array.from(selectedUnits).map((unitId, idx) => {
+                                const unit = availableUnits.find((u: any) => u.unitId === unitId);
+                                return unit ? `#${unit.unitNumber}` : null;
+                              }).filter(Boolean).join(", ")}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Price Input */}
+                      <div style={{ marginBottom: "1rem" }}>
+                        <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", fontSize: "0.9rem", color: "#1a1a1a" }}>
+                          Your Offer Price per Kilo (UGX):
+                        </label>
+                        <input
+                          type="number"
+                          value={offerPrice}
+                          onChange={(e) => setOfferPrice(e.target.value)}
+                          placeholder={`Current listing price: ${formatUGX(listing.pricePerKilo)}/kg`}
+                          style={{
+                            padding: "0.5rem",
+                            width: "100%",
+                            borderRadius: "6px",
+                            border: "1px solid #ccc",
+                            fontSize: "0.9rem",
+                          }}
+                        />
+                        {offerPrice && !isNaN(parseFloat(offerPrice)) && selectedUnits.size > 0 && (
+                          <div style={{ marginTop: "0.5rem", fontSize: "0.85rem", color: "#666" }}>
+                            <div>Price per unit: {formatUGX(parseFloat(offerPrice) * (listing.unitSize || 10))} ({listing.unitSize || 10}kg)</div>
+                            <div style={{ fontWeight: "600", color: "#1976d2", marginTop: "0.25rem" }}>
+                              Total for {selectedUnits.size} unit(s): {formatUGX(parseFloat(offerPrice) * (listing.unitSize || 10) * selectedUnits.size)}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
                       <div style={{ display: "flex", gap: "0.5rem" }}>
                         <button
                           onClick={() => handleMakeOffer(listing.listingId)}
-                          disabled={!offerPrice || listingDetails === undefined || !firstAvailableUnit}
+                          disabled={!offerPrice || listingDetails === undefined || selectedUnits.size === 0 || isNaN(parseFloat(offerPrice)) || parseFloat(offerPrice) <= 0}
                           style={{
                             padding: "0.5rem 1rem",
-                            background: offerPrice && firstAvailableUnit ? "#1976d2" : "#ccc",
+                            background: (offerPrice && selectedUnits.size > 0 && !isNaN(parseFloat(offerPrice)) && parseFloat(offerPrice) > 0) ? "#1976d2" : "#ccc",
                             color: "#fff",
                             border: "none",
                             borderRadius: "6px",
-                            cursor: offerPrice && firstAvailableUnit ? "pointer" : "not-allowed",
+                            cursor: (offerPrice && selectedUnits.size > 0 && !isNaN(parseFloat(offerPrice)) && parseFloat(offerPrice) > 0) ? "pointer" : "not-allowed",
                             fontSize: "0.9rem",
                             fontWeight: "600",
+                            flex: 1,
                           }}
                         >
-                          {listingDetails === undefined ? "Loading..." : "Submit Offer"}
+                          {listingDetails === undefined ? "Loading..." : `Submit Offer (${selectedUnits.size} unit${selectedUnits.size !== 1 ? "s" : ""})`}
                         </button>
                         <button
                           onClick={() => {
                             setOffering(null);
                             setOfferPrice("");
+                            setNumUnits("1");
+                            setSelectedUnits(new Set());
                           }}
                           style={{
                             padding: "0.5rem 1rem",
@@ -406,8 +504,10 @@ export function TraderListings({ userId }: TraderListingsProps) {
                       </p>
                       <button
                         onClick={() => {
-                          setOffering({ listingId: listing.listingId, unitId: null });
+                          setOffering({ listingId: listing.listingId });
                           setOfferPrice(listing.pricePerKilo.toString());
+                          setNumUnits("1");
+                          setSelectedUnits(new Set());
                         }}
                         disabled={(listing.availableUnits || 0) === 0}
                         style={{

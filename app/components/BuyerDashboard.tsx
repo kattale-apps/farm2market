@@ -389,8 +389,32 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                       </span>
                     </div>
                     {tx.walletDepositUtid && (
-                      <div style={{ fontSize: "0.75rem", color: "#999", fontFamily: "monospace" }}>
-                        UTID: {tx.walletDepositUtid}
+                      <div style={{ 
+                        marginTop: "0.5rem",
+                        padding: "0.5rem",
+                        background: "#f5f5f5",
+                        borderRadius: "6px",
+                        border: "1px solid #e0e0e0",
+                      }}>
+                        <div style={{
+                          fontSize: "clamp(0.9rem, 2.5vw, 1rem)",
+                          color: "#666",
+                          fontWeight: "600",
+                          marginBottom: "0.25rem",
+                          fontFamily: '"Montserrat", sans-serif',
+                        }}>
+                          UTID:
+                        </div>
+                        <div style={{
+                          fontSize: "clamp(1.4rem, 4vw, 1.8rem)",
+                          color: "#2c2c2c",
+                          fontFamily: "monospace",
+                          fontWeight: "700",
+                          letterSpacing: "0.05em",
+                          wordBreak: "break-all",
+                        }}>
+                          {tx.walletDepositUtid}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -679,8 +703,17 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                             style={{ cursor: "pointer" }}
                           />
                         </td>
-                        <td style={{ padding: "0.75rem", fontFamily: "monospace", fontSize: "0.8rem", color: "#666" }}>
-                          {item.inventoryUtid}
+                        <td style={{ padding: "0.75rem" }}>
+                          <div style={{
+                            fontSize: "clamp(1rem, 3vw, 1.2rem)",
+                            fontFamily: "monospace",
+                            color: "#2c2c2c",
+                            fontWeight: "700",
+                            letterSpacing: "0.05em",
+                            wordBreak: "break-all",
+                          }}>
+                            {item.inventoryUtid}
+                          </div>
                         </td>
                         <td style={{ padding: "0.75rem" }}>{item.produceType}</td>
                         <td style={{ padding: "0.75rem" }}>
@@ -785,11 +818,30 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                         <div style={{ fontWeight: "600", color: "#1a1a1a", fontSize: "clamp(0.9rem, 3vw, 1rem)" }}>{item.traderAlias}</div>
                       </div>
                     </div>
-                    <div style={{ marginTop: "0.75rem", paddingTop: "0.75rem", borderTop: "1px solid #e0e0e0" }}>
-                      <div style={{ color: "#999", fontSize: "clamp(0.7rem, 2vw, 0.75rem)", marginBottom: "0.25rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                        Transaction UTID
+                    <div style={{ 
+                      marginTop: "0.75rem", 
+                      padding: "0.5rem",
+                      background: "#f5f5f5",
+                      borderRadius: "6px",
+                      border: "1px solid #e0e0e0",
+                    }}>
+                      <div style={{
+                        fontSize: "clamp(0.9rem, 2.5vw, 1rem)",
+                        color: "#666",
+                        fontWeight: "600",
+                        marginBottom: "0.25rem",
+                        fontFamily: '"Montserrat", sans-serif',
+                      }}>
+                        Transaction UTID:
                       </div>
-                      <div style={{ fontFamily: "monospace", fontSize: "clamp(0.75rem, 2.5vw, 0.85rem)", color: "#666", wordBreak: "break-all" }}>
+                      <div style={{ 
+                        fontFamily: "monospace", 
+                        fontSize: "clamp(1.4rem, 4vw, 1.8rem)", 
+                        color: "#2c2c2c", 
+                        fontWeight: "700",
+                        letterSpacing: "0.05em",
+                        wordBreak: "break-all" 
+                      }}>
                         {item.inventoryUtid}
                       </div>
                     </div>
@@ -971,8 +1023,32 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                 }}>
                   {order.isPastDeadline ? `${order.hoursOverdue.toFixed(1)}h overdue` : `${order.hoursRemaining.toFixed(1)}h remaining`}
                 </div>
-                <div style={{ fontSize: "clamp(0.7rem, 2vw, 0.75rem)", color: "#999", marginTop: "0.5rem", fontFamily: "monospace", wordBreak: "break-all" }}>
-                  UTID: {order.purchaseUtid}
+                <div style={{ 
+                  marginTop: "0.75rem",
+                  padding: "0.5rem",
+                  background: "#f5f5f5",
+                  borderRadius: "6px",
+                  border: "1px solid #e0e0e0",
+                }}>
+                  <div style={{
+                    fontSize: "clamp(0.9rem, 2.5vw, 1rem)",
+                    color: "#666",
+                    fontWeight: "600",
+                    marginBottom: "0.25rem",
+                    fontFamily: '"Montserrat", sans-serif',
+                  }}>
+                    UTID:
+                  </div>
+                  <div style={{
+                    fontSize: "clamp(1.4rem, 4vw, 1.8rem)",
+                    color: "#2c2c2c",
+                    fontFamily: "monospace",
+                    fontWeight: "700",
+                    letterSpacing: "0.05em",
+                    wordBreak: "break-all",
+                  }}>
+                    {order.purchaseUtid}
+                  </div>
                 </div>
               </div>
             ))}
@@ -1055,8 +1131,17 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                       <td style={{ padding: "0.75rem", textAlign: "right", fontWeight: "600", color: "#1976d2" }}>
                         {formatUGX(tx.totalCost)}
                       </td>
-                      <td style={{ padding: "0.75rem", fontFamily: "monospace", fontSize: "0.8rem", color: "#999" }}>
-                        {tx.utid}
+                      <td style={{ padding: "0.75rem" }}>
+                        <div style={{
+                          fontSize: "clamp(1rem, 3vw, 1.2rem)",
+                          fontFamily: "monospace",
+                          color: "#2c2c2c",
+                          fontWeight: "700",
+                          letterSpacing: "0.05em",
+                          wordBreak: "break-all",
+                        }}>
+                          {tx.utid}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -1140,8 +1225,17 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                             +{formatUGX(entry.amount)}
                           </td>
                           <td style={{ padding: "0.75rem", textAlign: "right" }}>{formatUGX(entry.balanceAfter)}</td>
-                          <td style={{ padding: "0.75rem", fontFamily: "monospace", fontSize: "0.8rem", color: "#999" }}>
-                            {entry.utid}
+                          <td style={{ padding: "0.75rem" }}>
+                            <div style={{
+                              fontSize: "clamp(1rem, 3vw, 1.2rem)",
+                              fontFamily: "monospace",
+                              color: "#2c2c2c",
+                              fontWeight: "700",
+                              letterSpacing: "0.05em",
+                              wordBreak: "break-all",
+                            }}>
+                              {entry.utid}
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -1179,8 +1273,17 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                             -{formatUGX(entry.amount)}
                           </td>
                           <td style={{ padding: "0.75rem", textAlign: "right" }}>{formatUGX(entry.balanceAfter)}</td>
-                          <td style={{ padding: "0.75rem", fontFamily: "monospace", fontSize: "0.8rem", color: "#999" }}>
-                            {entry.utid}
+                          <td style={{ padding: "0.75rem" }}>
+                            <div style={{
+                              fontSize: "clamp(1rem, 3vw, 1.2rem)",
+                              fontFamily: "monospace",
+                              color: "#2c2c2c",
+                              fontWeight: "700",
+                              letterSpacing: "0.05em",
+                              wordBreak: "break-all",
+                            }}>
+                              {entry.utid}
+                            </div>
                           </td>
                         </tr>
                       ))}

@@ -281,8 +281,32 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
                     <div style={{ fontWeight: "600", marginBottom: "0.25rem" }}>
                       {listing.produceType} - {listing.totalKilos}kg
                     </div>
-                    <div style={{ fontSize: "0.8rem", color: "#666", fontFamily: "monospace", wordBreak: "break-all" }}>
-                      UTID: {listing.utid}
+                    <div style={{ 
+                      marginTop: "0.5rem",
+                      padding: "0.5rem",
+                      background: "#f5f5f5",
+                      borderRadius: "6px",
+                      border: "1px solid #e0e0e0",
+                    }}>
+                      <div style={{
+                        fontSize: "clamp(0.9rem, 2.5vw, 1rem)",
+                        color: "#666",
+                        fontWeight: "600",
+                        marginBottom: "0.25rem",
+                        fontFamily: '"Montserrat", sans-serif',
+                      }}>
+                        UTID:
+                      </div>
+                      <div style={{
+                        fontSize: "clamp(1.2rem, 3.5vw, 1.5rem)",
+                        color: "#2c2c2c",
+                        fontFamily: "monospace",
+                        fontWeight: "700",
+                        letterSpacing: "0.05em",
+                        wordBreak: "break-all",
+                      }}>
+                        {listing.utid}
+                      </div>
                     </div>
                     <div style={{ fontSize: "0.8rem", color: "#999", marginTop: "0.25rem" }}>
                       {listing.availableUnits} units available | {listing.farmerAlias}
@@ -325,7 +349,14 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
                     fontSize: "0.85rem"
                   }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.25rem" }}>
-                      <div style={{ fontFamily: "monospace", wordBreak: "break-all", fontSize: "0.8rem" }}>
+                        <div style={{ 
+                          fontFamily: "monospace", 
+                          wordBreak: "break-all", 
+                          fontSize: "clamp(1rem, 3vw, 1.2rem)",
+                          fontWeight: "700",
+                          letterSpacing: "0.05em",
+                          color: "#2c2c2c",
+                        }}>
                         {utid.utid}
                       </div>
                       <div style={{
@@ -464,8 +495,33 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
                         <div style={{ fontWeight: "600", marginBottom: "0.25rem", fontSize: "1rem" }}>
                           {offer.produceType} - {offer.kilos}kg
                         </div>
-                        <div style={{ fontSize: "0.85rem", color: "#666", fontFamily: "monospace", wordBreak: "break-all", marginBottom: "0.25rem" }}>
-                          UTID: {offer.negotiationUtid}
+                        <div style={{ 
+                          marginTop: "0.5rem",
+                          padding: "0.5rem",
+                          background: "#f5f5f5",
+                          borderRadius: "6px",
+                          border: "1px solid #e0e0e0",
+                          marginBottom: "0.5rem",
+                        }}>
+                          <div style={{
+                            fontSize: "clamp(0.9rem, 2.5vw, 1rem)",
+                            color: "#666",
+                            fontWeight: "600",
+                            marginBottom: "0.25rem",
+                            fontFamily: '"Montserrat", sans-serif',
+                          }}>
+                            UTID:
+                          </div>
+                          <div style={{
+                            fontSize: "clamp(1.2rem, 3.5vw, 1.5rem)",
+                            color: "#2c2c2c",
+                            fontFamily: "monospace",
+                            fontWeight: "700",
+                            letterSpacing: "0.05em",
+                            wordBreak: "break-all",
+                          }}>
+                            {offer.negotiationUtid}
+                          </div>
                         </div>
                         <div style={{ fontSize: "0.85rem", color: "#666" }}>
                           Buyer: {offer.buyerAlias || "Unknown"}
@@ -688,8 +744,32 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
                         </span>
                       </div>
                       {tx.walletDepositUtid && (
-                        <div style={{ fontSize: "0.75rem", color: "#999", fontFamily: "monospace" }}>
-                          UTID: {tx.walletDepositUtid}
+                        <div style={{ 
+                          marginTop: "0.5rem",
+                          padding: "0.5rem",
+                          background: "#f5f5f5",
+                          borderRadius: "6px",
+                          border: "1px solid #e0e0e0",
+                        }}>
+                          <div style={{
+                            fontSize: "clamp(0.9rem, 2.5vw, 1rem)",
+                            color: "#666",
+                            fontWeight: "600",
+                            marginBottom: "0.25rem",
+                            fontFamily: '"Montserrat", sans-serif',
+                          }}>
+                            UTID:
+                          </div>
+                          <div style={{
+                            fontSize: "clamp(1.2rem, 3.5vw, 1.5rem)",
+                            color: "#2c2c2c",
+                            fontFamily: "monospace",
+                            fontWeight: "700",
+                            letterSpacing: "0.05em",
+                            wordBreak: "break-all",
+                          }}>
+                            {tx.walletDepositUtid}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -940,20 +1020,21 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
                     paddingBottom: "0.75rem", 
                     borderBottom: "1px solid #e0e0e0" 
                   }}>
-                    <div style={{ 
-                      fontSize: "clamp(0.7rem, 2vw, 0.75rem)", 
-                      color: "#666", 
+                    <div style={{
+                      fontSize: "clamp(0.9rem, 2.5vw, 1rem)",
+                      color: "#666",
+                      fontWeight: "600",
                       marginBottom: "0.25rem",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.5px"
+                      fontFamily: '"Montserrat", sans-serif',
                     }}>
-                      Transaction UTID
+                      Transaction UTID:
                     </div>
                     <div style={{ 
-                      fontSize: "clamp(0.8rem, 2.5vw, 0.9rem)", 
-                      color: "#1a1a1a", 
+                      fontSize: "clamp(1.4rem, 4vw, 1.8rem)", 
+                      color: "#2c2c2c", 
                       fontFamily: "monospace",
-                      fontWeight: "600",
+                      fontWeight: "700",
+                      letterSpacing: "0.05em",
                       wordBreak: "break-all"
                     }}>
                       {item.utid}
@@ -1126,21 +1207,22 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
                     gap: "0.5rem"
                   }}>
                     <div style={{ flex: 1, minWidth: "200px" }}>
-                      <div style={{ 
-                        fontSize: "clamp(0.7rem, 2vw, 0.75rem)", 
+                      <div style={{
+                        fontSize: "clamp(0.9rem, 2.5vw, 1rem)",
                         color: "#666",
+                        fontWeight: "600",
                         marginBottom: "0.25rem",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.5px",
-                        fontWeight: "600"
+                        fontFamily: '"Montserrat", sans-serif',
                       }}>
-                        Transaction UTID
+                        Transaction UTID:
                       </div>
                       <div style={{ 
-                        fontWeight: "600", 
+                        fontWeight: "700", 
                         fontFamily: "monospace",
-                        color: "#1a1a1a",
-                        fontSize: "clamp(0.8rem, 2.5vw, 0.9rem)"
+                        color: "#2c2c2c",
+                        fontSize: "clamp(1.4rem, 4vw, 1.8rem)",
+                        letterSpacing: "0.05em",
+                        wordBreak: "break-all"
                       }}>
                         {utid.utid}
                       </div>

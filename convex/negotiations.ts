@@ -10,6 +10,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { generateUTID, getUgandaTime } from "./utils";
+import { LISTING_UNIT_SIZE_KG } from "./constants";
 import { checkPilotMode } from "./pilotMode";
 import { checkRateLimit } from "./rateLimits";
 import {
@@ -23,16 +24,17 @@ import {
 import { Id } from "./_generated/dataModel";
 
 /**
- * Make an offer on a unit (trader only)
+ * Make an offer on one or more units (trader only)
  * 
- * Creates a negotiation where trader offers a price per kilo.
- * Farmer can then accept, reject, or counter-offer.
+ * Creates negotiations where trader offers a price per kilo.
+ * Each unit gets its own UTID and incoming_purchase ledger entries.
+ * Farmer can then accept, reject, or counter-offer each negotiation.
  */
 export const makeOffer = mutation({
   args: {
     traderId: v.id("users"),
-    unitId: v.id("listingUnits"),
-    offerPricePerKilo: v.number(), // Trader's offer price
+    unitIds: v.array(v.id("listingUnits")), // Array of unit IDs - trader can select multiple units
+    offerPricePerKilo: v.number(), // Trader's offer price (same for all units)
   },
   handler: async (ctx, args) => {
     // ============================================================
@@ -46,72 +48,163 @@ export const makeOffer = mutation({
       throwAppError(invalidRoleError("trader"));
     }
 
-    // Rate limit check
-    await checkRateLimit(ctx, args.traderId, user.role, "make_offer", {
-      unitId: args.unitId,
-    });
-
-    // Get unit and verify it's available
-    const unit = await ctx.db.get(args.unitId);
-    if (!unit) {
-      throwAppError(unitNotFoundError());
+    // Validate inputs
+    if (args.unitIds.length === 0) {
+      throw new Error("Please select at least one unit");
     }
-    if (unit.status !== "available") {
-      throwAppError(unitNotAvailableError());
-    }
-
-    // Check if unit already has an active negotiation
-    if (unit.activeNegotiationId) {
-      const existingNeg = await ctx.db.get(unit.activeNegotiationId);
-      if (existingNeg && (existingNeg.status === "pending" || existingNeg.status === "countered")) {
-        throw new Error("This unit already has an active negotiation. Please wait for the farmer's response.");
-      }
-    }
-
-    // Get listing to get farmer and original price
-    const listing = await ctx.db.get(unit.listingId);
-    if (!listing) {
-      throwAppError(listingNotFoundError());
-    }
-
-    // Verify offer price is positive
     if (args.offerPricePerKilo <= 0) {
       throwAppError(invalidAmountError());
     }
 
-    // Generate UTID for negotiation
-    const negotiationUtid = generateUTID(user.role);
+    // Rate limit check (based on number of units)
+    await checkRateLimit(ctx, args.traderId, user.role, "make_offer", {
+      unitCount: args.unitIds.length,
+    });
 
-    // Create negotiation
-    if (!listing.farmerId) {
-      throw new Error("Listing has no farmer ID");
-    }
+    // Validate all units and get listing info
+    const units = [];
+    const listings = new Map<Id<"listings">, any>();
     
-    const negotiationId = await ctx.db.insert("negotiations", {
-      unitId: args.unitId,
-      listingId: listing._id,
-      traderId: args.traderId,
-      farmerId: listing.farmerId,
-      status: "pending",
-      farmerPricePerKilo: listing.pricePerKilo,
-      traderOfferPricePerKilo: args.offerPricePerKilo,
-      currentPricePerKilo: args.offerPricePerKilo, // Start with trader's offer
-      createdAt: getUgandaTime(),
-      lastUpdatedAt: getUgandaTime(),
-      expiresAt: getUgandaTime() + (24 * 60 * 60 * 1000), // 24 hours expiration
-      negotiationUtid,
-    });
+    for (const unitId of args.unitIds) {
+      const unit = await ctx.db.get(unitId);
+      if (!unit) {
+        throwAppError(unitNotFoundError());
+      }
+      if (unit.status !== "available") {
+        throwAppError(unitNotAvailableError());
+      }
 
-    // Link negotiation to unit
-    await ctx.db.patch(args.unitId, {
-      activeNegotiationId: negotiationId,
-    });
+      // Check if unit already has an active negotiation
+      if (unit.activeNegotiationId) {
+        const existingNeg = await ctx.db.get(unit.activeNegotiationId);
+        if (existingNeg && (existingNeg.status === "pending" || existingNeg.status === "countered")) {
+          throw new Error(`Unit #${unit.unitNumber} already has an active negotiation. Please wait for the farmer's response.`);
+        }
+      }
+
+      // Get listing
+      if (!listings.has(unit.listingId)) {
+        const listing = await ctx.db.get(unit.listingId);
+        if (!listing) {
+          throwAppError(listingNotFoundError());
+        }
+        if (!listing.farmerId) {
+          throw new Error("Listing has no farmer ID");
+        }
+        listings.set(unit.listingId, listing);
+      }
+
+      units.push(unit);
+    }
+
+    // All units must be from the same listing
+    if (listings.size > 1) {
+      throw new Error("All selected units must be from the same listing");
+    }
+
+    const listing = Array.from(listings.values())[0];
+    const unitSize = listing.unitSize || LISTING_UNIT_SIZE_KG;
+    const unitPrice = args.offerPricePerKilo * unitSize;
+
+    // Create negotiations and ledger entries for each unit
+    const negotiations = [];
+    const utids = [];
+
+    for (const unit of units) {
+      // Generate unique UTID for each unit
+      const unitUtid = generateUTID(user.role);
+      utids.push(unitUtid);
+
+      // Create negotiation for this unit
+      const negotiationId = await ctx.db.insert("negotiations", {
+        unitId: unit._id,
+        listingId: listing._id,
+        traderId: args.traderId,
+        farmerId: listing.farmerId,
+        status: "pending",
+        farmerPricePerKilo: listing.pricePerKilo,
+        traderOfferPricePerKilo: args.offerPricePerKilo,
+        currentPricePerKilo: args.offerPricePerKilo, // Start with trader's offer
+        createdAt: getUgandaTime(),
+        lastUpdatedAt: getUgandaTime(),
+        expiresAt: getUgandaTime() + (24 * 60 * 60 * 1000), // 24 hours expiration
+        negotiationUtid: unitUtid, // Each unit gets its own UTID
+      });
+
+      // Link negotiation to unit
+      await ctx.db.patch(unit._id, {
+        activeNegotiationId: negotiationId,
+      });
+
+      negotiations.push({
+        negotiationId,
+        unitId: unit._id,
+        unitNumber: unit.unitNumber,
+        utid: unitUtid,
+      });
+
+      // Create incoming_purchase ledger entry for TRADER
+      const traderEntries = await ctx.db
+        .query("walletLedger")
+        .withIndex("by_user", (q) => q.eq("userId", args.traderId))
+        .order("desc")
+        .first();
+      const traderBalanceAfter = traderEntries?.balanceAfter || 0;
+
+      await ctx.db.insert("walletLedger", {
+        userId: args.traderId,
+        utid: unitUtid,
+        type: "incoming_purchase",
+        amount: unitPrice,
+        balanceAfter: traderBalanceAfter, // Balance doesn't change for incoming purchases
+        timestamp: getUgandaTime(),
+        metadata: {
+          unitId: unit._id,
+          listingId: listing._id,
+          produceType: listing.produceType,
+          unitSize: unitSize,
+          offerPricePerKilo: args.offerPricePerKilo,
+          status: "pending_negotiation",
+        },
+      });
+
+      // Create incoming_purchase ledger entry for FARMER
+      const farmerEntries = await ctx.db
+        .query("walletLedger")
+        .withIndex("by_user", (q) => q.eq("userId", listing.farmerId))
+        .order("desc")
+        .first();
+      const farmerBalanceAfter = farmerEntries?.balanceAfter || 0;
+
+      await ctx.db.insert("walletLedger", {
+        userId: listing.farmerId,
+        utid: unitUtid,
+        type: "incoming_purchase",
+        amount: unitPrice,
+        balanceAfter: farmerBalanceAfter, // Balance doesn't change for incoming purchases
+        timestamp: getUgandaTime(),
+        metadata: {
+          unitId: unit._id,
+          listingId: listing._id,
+          produceType: listing.produceType,
+          unitSize: unitSize,
+          offerPricePerKilo: args.offerPricePerKilo,
+          status: "pending_negotiation",
+        },
+      });
+    }
 
     return {
-      negotiationId,
-      negotiationUtid,
+      negotiations: negotiations.map(n => ({
+        negotiationId: n.negotiationId,
+        unitId: n.unitId,
+        unitNumber: n.unitNumber,
+        utid: n.utid,
+      })),
+      totalUnits: units.length,
+      totalPrice: unitPrice * units.length,
       status: "pending",
-      message: "Offer made. Waiting for farmer's response.",
+      message: `Offer made on ${units.length} unit(s). Waiting for farmer's response.`,
     };
   },
 });

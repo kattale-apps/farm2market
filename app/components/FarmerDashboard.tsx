@@ -377,13 +377,31 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                     </button>
                   )}
                   <div style={{ 
-                    fontSize: "clamp(0.7rem, 2vw, 0.75rem)", 
-                    color: "#999", 
                     marginBottom: "0.5rem",
-                    fontFamily: "monospace",
-                    wordBreak: "break-all"
+                    padding: "0.5rem",
+                    background: "#f5f5f5",
+                    borderRadius: "6px",
+                    border: "1px solid #e0e0e0",
                   }}>
-                    UTID: #{listing.utid.slice(-4)}
+                    <div style={{
+                      fontSize: "clamp(0.9rem, 2.5vw, 1rem)",
+                      color: "#666",
+                      fontWeight: "600",
+                      marginBottom: "0.25rem",
+                      fontFamily: '"Montserrat", sans-serif',
+                    }}>
+                      UTID:
+                    </div>
+                    <div style={{
+                      fontSize: "clamp(1.2rem, 3.5vw, 1.5rem)",
+                      color: "#2c2c2c",
+                      fontFamily: "monospace",
+                      fontWeight: "700",
+                      letterSpacing: "0.05em",
+                      wordBreak: "break-all",
+                    }}>
+                      {listing.utid}
+                    </div>
                   </div>
                   <div style={{ 
                     fontWeight: "600", 
@@ -680,8 +698,32 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                     <div style={{ fontSize: "clamp(0.75rem, 2vw, 0.8rem)", color: "#666", marginTop: "0.25rem" }}>
                       ⏰ Delivery countdown started from payment time. 6 hours deadline.
                     </div>
-                    <div style={{ fontSize: "clamp(0.7rem, 2vw, 0.75rem)", color: "#999", marginTop: "0.5rem", fontFamily: "monospace", wordBreak: "break-all" }}>
-                      UTID: {delivery.lockUtid}
+                    <div style={{ 
+                      marginTop: "0.75rem",
+                      padding: "0.5rem",
+                      background: "#f5f5f5",
+                      borderRadius: "6px",
+                      border: "1px solid #e0e0e0",
+                    }}>
+                      <div style={{
+                        fontSize: "clamp(0.9rem, 2.5vw, 1rem)",
+                        color: "#666",
+                        fontWeight: "600",
+                        marginBottom: "0.25rem",
+                        fontFamily: '"Montserrat", sans-serif',
+                      }}>
+                        UTID:
+                      </div>
+                      <div style={{
+                        fontSize: "clamp(1.4rem, 4vw, 1.8rem)",
+                        color: "#2c2c2c",
+                        fontFamily: "monospace",
+                        fontWeight: "700",
+                        letterSpacing: "0.05em",
+                        wordBreak: "break-all",
+                      }}>
+                        {delivery.lockUtid}
+                      </div>
                     </div>
                   </div>
                   {delivery.isPastDeadline && (
@@ -791,8 +833,32 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                     Archive
                   </button>
                 </div>
-                <div style={{ fontSize: "clamp(0.7rem, 2vw, 0.75rem)", color: "#999", marginTop: "0.5rem", fontFamily: "monospace", wordBreak: "break-all" }}>
-                  UTID: {expired.lockUtid}
+                <div style={{ 
+                  marginTop: "0.75rem",
+                  padding: "0.5rem",
+                  background: "#f5f5f5",
+                  borderRadius: "6px",
+                  border: "1px solid #e0e0e0",
+                }}>
+                  <div style={{
+                    fontSize: "clamp(0.9rem, 2.5vw, 1rem)",
+                    color: "#666",
+                    fontWeight: "600",
+                    marginBottom: "0.25rem",
+                    fontFamily: '"Montserrat", sans-serif',
+                  }}>
+                    UTID:
+                  </div>
+                  <div style={{
+                    fontSize: "clamp(1.4rem, 4vw, 1.8rem)",
+                    color: "#2c2c2c",
+                    fontFamily: "monospace",
+                    fontWeight: "700",
+                    letterSpacing: "0.05em",
+                    wordBreak: "break-all",
+                  }}>
+                    {expired.lockUtid}
+                  </div>
                 </div>
                 <div style={{ fontSize: "clamp(0.75rem, 2vw, 0.8rem)", color: "#666", marginTop: "0.25rem" }}>
                   Deadline: {formatDate(expired.deliveryDeadline)}
@@ -856,8 +922,32 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                       <div style={{ fontSize: "clamp(0.75rem, 2vw, 0.8rem)", color: "#666" }}>
                         Listed: {formatDate(listing.createdAt)} | Price: {formatUGX(listing.pricePerKilo)}/kg
                       </div>
-                      <div style={{ fontSize: "clamp(0.7rem, 2vw, 0.75rem)", color: "#999", fontFamily: "monospace", marginTop: "0.25rem" }}>
-                        Listing UTID: {listing.listingUtid}
+                      <div style={{ 
+                        marginTop: "0.5rem",
+                        padding: "0.5rem",
+                        background: "#f5f5f5",
+                        borderRadius: "6px",
+                        border: "1px solid #e0e0e0",
+                      }}>
+                        <div style={{
+                          fontSize: "clamp(0.9rem, 2.5vw, 1rem)",
+                          color: "#666",
+                          fontWeight: "600",
+                          marginBottom: "0.25rem",
+                          fontFamily: '"Montserrat", sans-serif',
+                        }}>
+                          Listing UTID:
+                        </div>
+                        <div style={{
+                          fontSize: "clamp(1.4rem, 4vw, 1.8rem)",
+                          color: "#2c2c2c",
+                          fontFamily: "monospace",
+                          fontWeight: "700",
+                          letterSpacing: "0.05em",
+                          wordBreak: "break-all",
+                        }}>
+                          {listing.listingUtid}
+                        </div>
                       </div>
                     </div>
                     <div style={{ textAlign: "right" }}>
@@ -934,8 +1024,32 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                             <td style={{ padding: "0.75rem", fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)" }}>
                               {unit.unitNumber}
                             </td>
-                            <td style={{ padding: "0.75rem", fontSize: "clamp(0.7rem, 2vw, 0.75rem)", fontFamily: "monospace", color: "#666", wordBreak: "break-all" }}>
-                              {unit.lockUtid || "-"}
+                            <td style={{ padding: "0.75rem" }}>
+                              {unit.lockUtid ? (
+                                <div>
+                                  <div style={{
+                                    fontSize: "clamp(0.9rem, 2.5vw, 1rem)",
+                                    color: "#666",
+                                    fontWeight: "600",
+                                    marginBottom: "0.25rem",
+                                    fontFamily: '"Montserrat", sans-serif',
+                                  }}>
+                                    UTID:
+                                  </div>
+                                  <div style={{
+                                    fontSize: "clamp(1.2rem, 3.5vw, 1.5rem)",
+                                    fontFamily: "monospace",
+                                    color: "#2c2c2c",
+                                    fontWeight: "700",
+                                    letterSpacing: "0.05em",
+                                    wordBreak: "break-all",
+                                  }}>
+                                    {unit.lockUtid}
+                                  </div>
+                                </div>
+                              ) : (
+                                <span style={{ color: "#999" }}>-</span>
+                              )}
                             </td>
                             <td style={{ padding: "0.75rem", textAlign: "center" }}>
                               <span style={{
@@ -1071,17 +1185,26 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
             <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
               {/* UTID */}
               <div>
-                <div style={{ fontSize: "clamp(0.75rem, 2vw, 0.8rem)", color: "#666", marginBottom: "0.25rem", fontWeight: "600" }}>
+                <div style={{ 
+                  fontSize: "clamp(1rem, 3vw, 1.2rem)", 
+                  color: "#666", 
+                  marginBottom: "0.5rem", 
+                  fontWeight: "600",
+                  fontFamily: '"Montserrat", sans-serif',
+                }}>
                   Transaction UTID
                 </div>
                 <div style={{ 
-                  fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", 
+                  fontSize: "clamp(1.6rem, 5vw, 2rem)", 
                   fontFamily: "monospace", 
                   wordBreak: "break-all",
-                  color: "#1a1a1a",
-                  padding: "0.5rem",
+                  color: "#2c2c2c",
+                  padding: "0.75rem",
                   background: "#f5f5f5",
-                  borderRadius: "6px"
+                  borderRadius: "8px",
+                  fontWeight: "700",
+                  letterSpacing: "0.05em",
+                  border: "2px solid #e0e0e0"
                 }}>
                   {selectedListing.utid}
                 </div>

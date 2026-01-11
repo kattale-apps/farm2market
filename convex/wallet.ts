@@ -291,7 +291,8 @@ export const getLedgerBreakdown = query({
       if (
         entry.type === "capital_deposit" ||
         entry.type === "capital_lock" ||
-        entry.type === "capital_unlock"
+        entry.type === "capital_unlock" ||
+        entry.type === "incoming_purchase"
       ) {
         if (entry.type === "capital_deposit") {
           capital.balance += entry.amount;
@@ -302,6 +303,7 @@ export const getLedgerBreakdown = query({
           capital.balance += entry.amount;
           capital.locked -= entry.amount;
         }
+        // incoming_purchase doesn't affect balance - it's just a record of pending purchase
 
         capital.entries.push({
           entryId: entry._id,

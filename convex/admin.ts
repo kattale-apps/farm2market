@@ -1922,3 +1922,88 @@ export const deleteProduceOption = mutation({
     return { utid, optionId: args.optionId };
   },
 });
+
+/**
+ * Admin deposits demo funds into trader or buyer account
+ * For training/demo purposes - allows users to learn before depositing real money
+ */
+export const adminDepositDemoFunds = mutation({
+  args: {
+    adminId: v.id("users"),
+    targetUserId: v.id("users"),
+    amount: v.number(),
+    reason: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await verifyAdmin(ctx, args.adminId);
+
+    // Verify target user is trader or buyer
+    const targetUser = await ctx.db.get(args.targetUserId);
+    if (!targetUser) {
+      throw new Error("Target user not found");
+    }
+
+    if (targetUser.role !== "trader" && targetUser.role !== "buyer") {
+      throw new Error("Can only deposit demo funds to traders or buyers");
+    }
+
+    if (args.amount <= 0) {
+      throw new Error("Amount must be greater than zero");
+    }
+
+    // Get current balance
+    const entries = await ctx.db
+      .query("walletLedger")
+      .withIndex("by_user", (q: any) => q.eq("userId", args.targetUserId))
+      .order("desc")
+      .collect();
+
+    const currentBalance = entries[0]?.balanceAfter || 0;
+    const balanceAfter = currentBalance + args.amount;
+
+    // Generate UTID
+    const utid = generateUTID("admin_demo_deposit");
+
+    // Log admin action
+    await logAdminAction(
+      ctx,
+      args.adminId,
+      "demo_fund_deposit",
+      args.reason,
+      utid,
+      {
+        targetUserId: args.targetUserId,
+        targetUserEmail: targetUser.email,
+        targetUserRole: targetUser.role,
+        amount: args.amount,
+        previousBalance: currentBalance,
+        newBalance: balanceAfter,
+      }
+    );
+
+    // Create wallet entry
+    await ctx.db.insert("walletLedger", {
+      userId: args.targetUserId,
+      utid,
+      type: "capital_deposit",
+      amount: args.amount,
+      balanceAfter,
+      timestamp: getUgandaTime(),
+      metadata: {
+        source: "admin_demo_deposit",
+        adminId: args.adminId,
+        reason: args.reason,
+      },
+    });
+
+    return {
+      utid,
+      targetUserId: args.targetUserId,
+      targetUserEmail: targetUser.email,
+      targetUserRole: targetUser.role,
+      amount: args.amount,
+      previousBalance: currentBalance,
+      newBalance: balanceAfter,
+    };
+  },
+});

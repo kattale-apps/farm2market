@@ -48,7 +48,8 @@ export default defineSchema({
       v.literal("capital_lock"),
       v.literal("capital_unlock"),
       v.literal("profit_credit"),
-      v.literal("profit_withdrawal")
+      v.literal("profit_withdrawal"),
+      v.literal("incoming_purchase") // Created when trader makes offer on unit(s) - not inventory, just a pending purchase record
     ),
     amount: v.number(), // Amount in UGX
     balanceAfter: v.number(), // Running balance after this entry

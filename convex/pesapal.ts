@@ -218,12 +218,22 @@ export const initiatePesapalPayment = action({
           // Special handling for IPN URL ID errors
           if (errorCode.includes("invalid_api_request_parameters") && 
               errorMsg.includes("Invalid IPN URL ID")) {
-            errorMessage = `Pesapal requires an IPN (Instant Payment Notification) URL to be registered. ` +
+            const hasNotificationId = PESAPAL_NOTIFICATION_ID && PESAPAL_NOTIFICATION_ID.trim() !== "";
+            const notificationIdInfo = hasNotificationId 
+              ? `Current value length: ${PESAPAL_NOTIFICATION_ID.trim().length}, preview: ${PESAPAL_NOTIFICATION_ID.trim().substring(0, 20)}...`
+              : "NOT SET in Convex environment variables";
+            
+            errorMessage = `Pesapal rejected the IPN URL ID. ` +
               `Error: ${errorMsg}. ` +
-              `To fix this: ` +
-              `1. Register an IPN URL in your Pesapal dashboard ` +
-              `2. Get the notification_id from Pesapal ` +
-              `3. Set PESAPAL_NOTIFICATION_ID environment variable in Convex Dashboard. ` +
+              `Diagnosis: PESAPAL_NOTIFICATION_ID is ${hasNotificationId ? "SET" : "NOT SET"}. ` +
+              `${hasNotificationId ? notificationIdInfo : ""} ` +
+              `\n\nTo fix this:\n` +
+              `1. Verify IPN URL is registered in Pesapal dashboard: https://farm2market-dev.vercel.app/api/pesapal/webhook\n` +
+              `2. Get the EXACT notification_id from Pesapal (copy it carefully, no spaces)\n` +
+              `3. Set PESAPAL_NOTIFICATION_ID in Convex Dashboard → Settings → Environment Variables\n` +
+              `4. Verify the notification_id matches exactly what Pesapal shows\n` +
+              `5. Redeploy Convex functions\n` +
+              `6. Test the webhook endpoint is accessible: https://farm2market-dev.vercel.app/api/pesapal/webhook\n` +
               `See docs/PESAPAL_SETUP.md for detailed instructions.`;
           } else {
             errorMessage = `Pesapal payment error: ${errorMsg || errorCode || JSON.stringify(errorData.error)}`;

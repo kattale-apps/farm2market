@@ -42,6 +42,35 @@ This means the environment variables are not set in Convex.
 - Set `PESAPAL_CONSUMER_KEY` and `PESAPAL_CONSUMER_SECRET` in Convex Dashboard
 - Ensure variables are set for the correct environment (development/production)
 
+### Error: "Invalid IPN URL ID provided" or "Invalid IPN URL ID provided.Check format and try again"
+
+This error indicates that Pesapal API v3 is expecting a `notification_id` (IPN URL ID) in the payment request.
+
+**Understanding IPN vs Callback URLs**:
+- **Callback URL**: Used for redirecting users back to your site after payment (we use this)
+- **IPN (Instant Payment Notification)**: Server-to-server webhook notifications (may be required by Pesapal v3)
+
+**Possible Solutions**:
+
+1. **Register an IPN URL with Pesapal** (Recommended):
+   - Log into your Pesapal dashboard
+   - Navigate to IPN (Instant Payment Notification) settings
+   - Register your IPN URL (e.g., `https://your-domain.com/api/pesapal/webhook`)
+   - Copy the `notification_id` you receive
+   - Add it to your payment request (code modification needed)
+
+2. **Check if IPN is optional in sandbox**:
+   - Some Pesapal sandbox environments may allow omitting `notification_id`
+   - Try testing with the current code after Convex redeploys
+   - Check Convex logs to see the exact request being sent
+
+3. **Contact Pesapal Support**:
+   - Ask if `notification_id` is required for sandbox testing
+   - Request guidance on IPN URL registration
+   - Verify if callback_url alone is sufficient
+
+**Note**: The current implementation omits `notification_id` and uses `callback_url` for payment confirmation. If the error persists after Convex redeploys, you may need to register an IPN URL and add the `notification_id` to the payment request.
+
 ## Testing
 
 ### Sandbox Mode (Default)

@@ -16,13 +16,17 @@ const http = httpRouter();
  * 
  * This endpoint receives payment notifications from Pesapal.
  * 
- * URL: https://your-convex-deployment.convex.site/pesapal/webhook
+ * URL Format: https://your-deployment.convex.site/pesapal/webhook
  * 
- * To use this:
- * 1. Deploy your Convex functions
- * 2. Get your Convex deployment URL (e.g., https://xxx.convex.site)
- * 3. Register the webhook URL in Pesapal dashboard:
- *    https://xxx.convex.site/pesapal/webhook
+ * To find your actual webhook URL:
+ * 1. Go to Convex Dashboard → Your Project → Settings
+ * 2. Look for "Site URL" or check your deployment URL
+ * 3. Your webhook will be: {your-site-url}/pesapal/webhook
+ * 
+ * Example: If your Convex URL is https://chatty-camel-373.convex.cloud
+ *          Your webhook URL is: https://chatty-camel-373.convex.site/pesapal/webhook
+ * 
+ * Note: Convex HTTP endpoints use .convex.site domain (different from .convex.cloud)
  * 4. Get the notification_id from Pesapal after registration
  * 5. Set PESAPAL_NOTIFICATION_ID in Convex Dashboard environment variables
  */

@@ -24,6 +24,7 @@ import type * as errors from "../errors.js";
 import type * as errors_index from "../errors/index.js";
 import type * as errors_types from "../errors/types.js";
 import type * as farmerDashboard from "../farmerDashboard.js";
+import type * as http from "../http.js";
 import type * as introspection from "../introspection.js";
 import type * as inventoryBlocks from "../inventoryBlocks.js";
 import type * as listings from "../listings.js";
@@ -69,6 +70,7 @@ declare const fullApi: ApiFromModules<{
   "errors/index": typeof errors_index;
   "errors/types": typeof errors_types;
   farmerDashboard: typeof farmerDashboard;
+  http: typeof http;
   introspection: typeof introspection;
   inventoryBlocks: typeof inventoryBlocks;
   listings: typeof listings;

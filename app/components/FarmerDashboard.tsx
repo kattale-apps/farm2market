@@ -27,9 +27,11 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
   const counterOffer = useMutation(api.negotiations.counterOffer);
   const archiveUTID = useMutation(api.farmerDashboard.archiveUTID);
   const cancelOverdueUTID = useMutation(api.farmerDashboard.cancelOverdueUTID);
+  const cancelListing = useMutation(api.farmerDashboard.cancelListing);
   
   const [countering, setCountering] = useState<Id<"negotiations"> | null>(null);
   const [cancelling, setCancelling] = useState<Id<"listingUnits"> | null>(null);
+  const [cancellingListing, setCancellingListing] = useState<Id<"listings"> | null>(null);
   const [counterPrice, setCounterPrice] = useState<string>("");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [selectedListing, setSelectedListing] = useState<any | null>(null);

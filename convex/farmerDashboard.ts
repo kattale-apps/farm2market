@@ -1081,3 +1081,92 @@ export const getAllUnitsLedger = query({
     };
   },
 });
+
+/**
+ * Cancel/Close listing (farmer only)
+ * 
+ * Allows farmers to cancel listings that have no locked units.
+ * This is for cases where the farmer changes their mind before
+ * any units are purchased.
+ * 
+ * Requirements:
+ * - Listing must belong to the farmer
+ * - No units can be locked (to protect trader interests)
+ * - Only available/open units can be cancelled
+ */
+export const cancelListing = mutation({
+  args: {
+    farmerId: v.id("users"),
+    listingId: v.id("listings"),
+  },
+  handler: async (ctx, args) => {
+    // Verify user is a farmer
+    const user = await ctx.db.get(args.farmerId);
+    if (!user || user.role !== "farmer") {
+      throw new Error("User is not a farmer");
+    }
+
+    // Get the listing
+    const listing = await ctx.db.get(args.listingId);
+    if (!listing) {
+      throw new Error("Listing not found");
+    }
+
+    // Verify the listing belongs to this farmer
+    if (listing.farmerId !== args.farmerId) {
+      throw new Error("Listing does not belong to this farmer");
+    }
+
+    // Verify listing is not already cancelled
+    if (listing.status === "cancelled") {
+      throw new Error("Listing is already cancelled");
+    }
+
+    // Get all units for this listing
+    const allUnits = await ctx.db
+      .query("listingUnits")
+      .withIndex("by_listing", (q) => q.eq("listingId", args.listingId))
+      .collect();
+
+    // Check if any units are locked
+    const lockedUnits = allUnits.filter((u) => u.status === "locked");
+    if (lockedUnits.length > 0) {
+      throw new Error(
+        `Cannot cancel listing: ${lockedUnits.length} unit(s) are locked. Only listings with no locked units can be cancelled.`
+      );
+    }
+
+    // Check if any units are delivered
+    const deliveredUnits = allUnits.filter((u) => u.status === "delivered");
+    if (deliveredUnits.length > 0) {
+      throw new Error(
+        `Cannot cancel listing: ${deliveredUnits.length} unit(s) have been delivered. Only listings with no delivered units can be cancelled.`
+      );
+    }
+
+    // Generate UTID for cancellation
+    const cancellationUtid = generateUTID("farmer");
+
+    // Cancel all available units
+    const availableUnits = allUnits.filter((u) => u.status === "available");
+    for (const unit of availableUnits) {
+      await ctx.db.patch(unit._id, {
+        status: "cancelled",
+      });
+    }
+
+    // Mark listing as cancelled
+    await ctx.db.patch(args.listingId, {
+      status: "cancelled",
+    });
+
+    return {
+      success: true,
+      cancellationUtid,
+      listingId: listing._id,
+      listingUtid: listing.utid,
+      unitsCancelled: availableUnits.length,
+      message: `Listing cancelled successfully. ${availableUnits.length} unit(s) have been cancelled.`,
+    };
+  },
+});

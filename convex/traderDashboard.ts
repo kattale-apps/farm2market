@@ -219,25 +219,54 @@ export const getTraderActiveUTIDs = query({
       .withIndex("by_status", (q) => q.eq("status", "locked"))
       .collect();
 
+    // Get all inventory to check if units have been converted to inventory
+    const allInventory = await ctx.db
+      .query("traderInventory")
+      .withIndex("by_trader", (q) => q.eq("traderId", args.traderId))
+      .collect();
+    
+    // Create a map of unit IDs to inventory status for quick lookup
+    const unitToInventoryMap = new Map<Id<"listingUnits">, { status: string; utid: string }>();
+    for (const inv of allInventory) {
+      for (const unitId of inv.listingUnitIds) {
+        unitToInventoryMap.set(unitId, { status: inv.status, utid: inv.utid });
+      }
+    }
+
     for (const unit of lockedUnits) {
       if (unit.lockedBy === args.traderId && unit.lockUtid) {
         if (!utidMap.has(unit.lockUtid)) {
           // Determine state: if deliveryStatus is "pending", it's "Locked-In (In Transit)"
-          // Once delivered, it becomes inventory (handled separately)
+          // If delivered and converted to inventory, show "Inventory"
+          // Otherwise show appropriate state
           const deliveryStatus = unit.deliveryStatus || "pending";
-          const state = deliveryStatus === "pending" 
-            ? "Locked-In (In Transit)" 
-            : deliveryStatus === "delivered"
-            ? "Delivered (Awaiting Inventory)"
-            : deliveryStatus === "late"
-            ? "Locked-In (Late Delivery)"
-            : "Locked-In (Cancelled)";
+          const inventoryInfo = unitToInventoryMap.get(unit._id);
+          
+          let state: string;
+          if (inventoryInfo) {
+            // Unit has been converted to inventory - show inventory state
+            state = inventoryInfo.status === "in_storage"
+              ? "Inventory"
+              : inventoryInfo.status === "sold"
+              ? "Inventory (Sold)"
+              : inventoryInfo.status === "pending_delivery"
+              ? "Inventory (Pending Delivery)"
+              : "Inventory (Expired)";
+          } else if (deliveryStatus === "pending") {
+            state = "Locked-In (In Transit)";
+          } else if (deliveryStatus === "delivered") {
+            state = "Delivered (Awaiting Inventory)";
+          } else if (deliveryStatus === "late") {
+            state = "Locked-In (Late Delivery)";
+          } else {
+            state = "Locked-In (Cancelled)";
+          }
           
           utidMap.set(unit.lockUtid, {
             utid: unit.lockUtid,
             type: "unit_lock",
             timestamp: unit.lockedAt || 0,
-            status: deliveryStatus,
+            status: inventoryInfo ? inventoryInfo.status : deliveryStatus,
             state: state,
             entities: [],
           });
@@ -264,10 +293,7 @@ export const getTraderActiveUTIDs = query({
     }
 
     // 3. Trader inventory UTIDs (inventory owned by this trader)
-    const inventory = await ctx.db
-      .query("traderInventory")
-      .withIndex("by_trader", (q) => q.eq("traderId", args.traderId))
-      .collect();
+    const inventory = allInventory;
 
     for (const inv of inventory) {
       if (!utidMap.has(inv.utid)) {
@@ -436,5 +462,73 @@ export const getTraderStorageFeeRate = query({
 
     const rate = await getStorageFeeRate({ db: ctx.db });
     return { rateKgPerDay: rate };
+  },
+});
+
+/**
+ * Get trader's sales (buyer purchases from trader's inventory)
+ * 
+ * Returns all buyer purchases from this trader's inventory with:
+ * - Purchase UTID
+ * - Produce type and kilos
+ * - Buyer alias (anonymity preserved)
+ * - Purchase timestamp
+ * - Status (pending_pickup, picked_up, expired)
+ */
+export const getTraderSales = query({
+  args: {
+    traderId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    // Verify user is a trader
+    const user = await ctx.db.get(args.traderId);
+    if (!user || user.role !== "trader") {
+      throw new Error("User is not a trader");
+    }
+
+    // Get all inventory owned by this trader
+    const traderInventory = await ctx.db
+      .query("traderInventory")
+      .withIndex("by_trader", (q) => q.eq("traderId", args.traderId))
+      .collect();
+
+    const inventoryIds = traderInventory.map((inv) => inv._id);
+
+    // Get all buyer purchases from this trader's inventory
+    const allPurchases = await ctx.db
+      .query("buyerPurchases")
+      .collect();
+
+    const traderSales = allPurchases.filter((purchase) =>
+      inventoryIds.includes(purchase.inventoryId)
+    );
+
+    // Enrich with inventory and buyer information
+    const enriched = await Promise.all(
+      traderSales.map(async (purchase) => {
+        const inventory = await ctx.db.get(purchase.inventoryId);
+        const buyer = await ctx.db.get(purchase.buyerId);
+
+        return {
+          purchaseId: purchase._id,
+          purchaseUtid: purchase.utid,
+          inventoryId: purchase.inventoryId,
+          inventoryUtid: inventory?.utid || null,
+          produceType: inventory?.produceType || null,
+          kilos: purchase.kilos,
+          buyerAlias: buyer?.alias || null,
+          purchasedAt: purchase.purchasedAt,
+          status: purchase.status,
+        };
+      })
+    );
+
+    // Sort by most recent first
+    enriched.sort((a, b) => b.purchasedAt - a.purchasedAt);
+
+    return {
+      sales: enriched,
+      total: enriched.length,
+    };
   },
 });

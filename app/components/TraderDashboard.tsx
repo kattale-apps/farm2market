@@ -24,6 +24,7 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
   const initiateDeposit = useAction(api.pesapal.initiateTraderDeposit);
   const paymentTransactions = useQuery(api.pesapal.getUserPaymentTransactions, { userId });
   const buyOffers = useQuery(api.traderBuyerNegotiations.getTraderBuyOffers, { traderId: userId });
+  const traderSales = useQuery(api.traderDashboard.getTraderSales, { traderId: userId });
   const acceptBuyerOffer = useMutation(api.traderBuyerNegotiations.acceptBuyerOffer);
   const rejectBuyerOffer = useMutation(api.traderBuyerNegotiations.rejectBuyerOffer);
   const counterBuyerOffer = useMutation(api.traderBuyerNegotiations.counterBuyerOffer);
@@ -144,28 +145,67 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
   // Get open listings (from farmers)
   const openListings = useQuery(api.listings.getActiveListings);
 
-  // Calculate today's activity with UTIDs and status
-  const todayActivity = activeUTIDs?.utids.filter((utid: any) => {
-    const today = Date.now();
-    const dayStart = today - (today % (24 * 60 * 60 * 1000));
-    return utid.timestamp && utid.timestamp >= dayStart;
+  // Calculate today's activity with UTIDs and Purchase/Sell status
+  const today = Date.now();
+  const dayStart = today - (today % (24 * 60 * 60 * 1000));
+  
+  // Get today's purchases (from farmers - unit locks)
+  const todayPurchases = activeUTIDs?.utids.filter((utid: any) => {
+    return utid.timestamp && utid.timestamp >= dayStart && utid.type === "unit_lock";
   }).map((utid: any) => {
-    // Determine status: Confirmed or Pending Acceptance/Rejection
-    let activityStatus = "Confirmed";
-    if (utid.type === "unit_lock" && utid.status === "pending") {
-      activityStatus = "Pending Delivery";
-    } else if (utid.type === "negotiation") {
-      if (utid.status === "pending" || utid.status === "countered") {
-        activityStatus = "Pending Acceptance/Rejection";
-      } else {
-        activityStatus = "Confirmed";
-      }
+    let purchaseStatus = "Confirmed";
+    if (utid.status === "pending") {
+      purchaseStatus = "Pending Delivery";
+    } else if (utid.status === "delivered") {
+      purchaseStatus = "Confirmed";
     }
     return {
       ...utid,
-      activityStatus
+      transactionType: "Purchase",
+      status: purchaseStatus,
     };
   }) || [];
+
+  // Get today's sales (to buyers - buyer purchases from trader inventory)
+  const todaySales = traderSales?.sales.filter((sale: any) => {
+    return sale.purchasedAt && sale.purchasedAt >= dayStart;
+  }).map((sale: any) => {
+    return {
+      utid: sale.purchaseUtid,
+      timestamp: sale.purchasedAt,
+      transactionType: "Sell",
+      status: "Confirmed", // Sales are always confirmed once purchase is made
+      type: "buyer_purchase",
+      produceType: sale.produceType,
+      kilos: sale.kilos,
+      buyerAlias: sale.buyerAlias,
+    };
+  }) || [];
+
+  // Get today's trader-buyer negotiations (pending offers)
+  const todayNegotiations = buyOffers?.negotiations.filter((neg: any) => {
+    return neg.lastUpdatedAt && neg.lastUpdatedAt >= dayStart;
+  }).map((neg: any) => {
+    let sellStatus = "Pending Acceptance/Rejection";
+    if (neg.status === "accepted") {
+      sellStatus = "Confirmed";
+    } else if (neg.status === "pending" || neg.status === "countered") {
+      sellStatus = "Pending Acceptance/Rejection";
+    }
+    return {
+      utid: neg.negotiationUtid,
+      timestamp: neg.lastUpdatedAt,
+      transactionType: "Sell",
+      status: sellStatus,
+      type: "trader_buyer_negotiation",
+      produceType: neg.produceType,
+      kilos: neg.kilos,
+      buyerAlias: neg.buyerAlias,
+    };
+  }) || [];
+
+  // Combine all activities
+  const todayActivity = [...todayPurchases, ...todaySales, ...todayNegotiations].sort((a, b) => b.timestamp - a.timestamp);
 
   return (
     <div style={{ padding: "1rem", maxWidth: "100%", boxSizing: "border-box" }}>
@@ -221,8 +261,19 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
             boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
             border: "1px solid #e0e0e0"
           }}>
+            <h3 style={{ 
+              marginTop: 0, 
+              marginBottom: "0.75rem", 
+              fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", 
+              color: "#2c2c2c",
+              fontFamily: '"Montserrat", sans-serif',
+              fontWeight: "600",
+              letterSpacing: "-0.01em"
+            }}>
+              Wallet Investment
+            </h3>
             <div style={{ marginBottom: "0.5rem", fontSize: "clamp(0.9rem, 2.5vw, 1rem)", color: "#666" }}>
-              Capital Invested: {ledger ? formatUGX(exposure?.exposure.lockedCapital || 0) : "Loading..."} ({capitalInvestedPercentage.toFixed(1)}%)
+              Capital Invested: {ledger ? formatUGX(exposure?.exposure.lockedCapital || 0) : "Loading..."} ({capitalInvestedPercentage.toFixed(1)}% of capital)
             </div>
             <div style={{
               width: "100%",
@@ -341,7 +392,7 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
               <p style={{ color: "#666" }}>No activity today</p>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                {todayActivity.map((utid: any, idx: number) => (
+                {todayActivity.map((activity: any, idx: number) => (
                   <div key={idx} style={{
                     padding: "0.75rem",
                     background: "#f5f5f5",
@@ -357,21 +408,33 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
                           letterSpacing: "0.05em",
                           color: "#2c2c2c",
                         }}>
-                        {utid.utid}
+                        {activity.utid}
                       </div>
                       <div style={{
                         padding: "0.25rem 0.5rem",
-                        background: utid.activityStatus === "Confirmed" ? "#d4edda" : "#fff3cd",
-                        color: utid.activityStatus === "Confirmed" ? "#155724" : "#856404",
+                        background: activity.status === "Confirmed" ? "#d4edda" : "#fff3cd",
+                        color: activity.status === "Confirmed" ? "#155724" : "#856404",
                         borderRadius: "4px",
                         fontSize: "0.75rem",
                         fontWeight: "600"
                       }}>
-                        {utid.activityStatus}
+                        {activity.status}
                       </div>
                     </div>
-                    <div style={{ fontSize: "0.75rem", color: "#666" }}>
-                      Type: {utid.type} | {utid.state || utid.status || "Active"}
+                    <div style={{ fontSize: "0.75rem", color: "#666", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                      <span><strong>{activity.transactionType}</strong></span>
+                      {activity.produceType && (
+                        <span>| {activity.produceType}</span>
+                      )}
+                      {activity.kilos && (
+                        <span>| {activity.kilos}kg</span>
+                      )}
+                      {activity.buyerAlias && (
+                        <span>| Buyer: {activity.buyerAlias}</span>
+                      )}
+                      {activity.type && (
+                        <span>| Type: {activity.type}</span>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -1188,6 +1251,7 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
               };
               
               const state = utid.state || (utid.type === "unit_lock" ? "Locked-In" : utid.type === "inventory" ? "Inventory" : "Active");
+              const isInTransit = state.includes("Locked-In (In Transit)");
               
               return (
                 <div key={index} style={{
@@ -1196,8 +1260,32 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
                   borderRadius: "8px",
                   border: `2px solid ${getStateBorderColor(state)}`,
                   fontSize: "clamp(0.8rem, 2.5vw, 0.85rem)",
-                  wordBreak: "break-all"
+                  wordBreak: "break-all",
+                  position: "relative",
+                  ...(isInTransit ? {
+                    boxShadow: "0 0 0 2px rgba(255, 152, 0, 0.2)"
+                  } : {})
                 }}>
+                  {isInTransit && (
+                    <div style={{
+                      position: "absolute",
+                      top: "-8px",
+                      right: "-8px",
+                      background: "#ff9800",
+                      color: "#fff",
+                      borderRadius: "50%",
+                      width: "24px",
+                      height: "24px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: "14px",
+                      fontWeight: "bold",
+                      boxShadow: "0 2px 4px rgba(0,0,0,0.2)"
+                    }}>
+                      ⚠
+                    </div>
+                  )}
                   <div style={{ 
                     display: "flex", 
                     justifyContent: "space-between", 
@@ -1214,12 +1302,12 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
                         marginBottom: "0.25rem",
                         fontFamily: '"Montserrat", sans-serif',
                       }}>
-                        Transaction UTID:
+                        {isInTransit ? "🔒 Locked-In UTID (In Transit to Delivery):" : "Transaction UTID:"}
                       </div>
                       <div style={{ 
                         fontWeight: "700", 
                         fontFamily: "monospace",
-                        color: "#2c2c2c",
+                        color: isInTransit ? "#ff6f00" : "#2c2c2c",
                         fontSize: "clamp(1.4rem, 4vw, 1.8rem)",
                         letterSpacing: "0.05em",
                         wordBreak: "break-all"
@@ -1244,6 +1332,19 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
                       {state}
                     </div>
                   </div>
+                  {isInTransit && (
+                    <div style={{
+                      padding: "0.5rem",
+                      background: "rgba(255, 152, 0, 0.1)",
+                      borderRadius: "4px",
+                      marginBottom: "0.5rem",
+                      fontSize: "clamp(0.75rem, 2vw, 0.8rem)",
+                      color: "#856404",
+                      fontWeight: "500"
+                    }}>
+                      ⏳ Awaiting farmer delivery to storage. Admin will mark as delivered once produce arrives.
+                    </div>
+                  )}
                   <div style={{ 
                     fontSize: "clamp(0.7rem, 2vw, 0.75rem)", 
                     color: "#666",
@@ -1282,7 +1383,7 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
         {/* UTID Reports by Category */}
         <div style={{ marginBottom: "1.5rem" }}>
           <h4 style={{ marginTop: 0, marginBottom: "0.75rem", fontSize: "clamp(1rem, 3vw, 1.1rem)", color: "#666" }}>
-            UTID Reports by Category
+            UTID Reports by Category (Separate Report for Each Category)
           </h4>
           {activeUTIDs && activeUTIDs.utids && activeUTIDs.utids.length > 0 ? (
             <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.5rem" }}>
@@ -1333,7 +1434,7 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
         {/* Inventory Volume Report */}
         <div style={{ marginBottom: "1.5rem" }}>
           <h4 style={{ marginTop: 0, marginBottom: "0.75rem", fontSize: "clamp(1rem, 3vw, 1.1rem)", color: "#666" }}>
-            Inventory Volume Report (Produce In & Out)
+            Inventory Volume Report (Separate Report: Produce In & Out)
           </h4>
           <div style={{ display: "flex", gap: "0.5rem" }}>
             <button
@@ -1372,7 +1473,7 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
         {/* Capital Volume Report */}
         <div>
           <h4 style={{ marginTop: 0, marginBottom: "0.75rem", fontSize: "clamp(1rem, 3vw, 1.1rem)", color: "#666" }}>
-            Capital Volume Report (Capital Exposed & Revenue Earned)
+            Capital Volume Report (Separate Report: Capital Exposed & Revenue Earned)
           </h4>
           <div style={{ display: "flex", gap: "0.5rem" }}>
             <button

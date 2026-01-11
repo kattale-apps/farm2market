@@ -83,9 +83,10 @@ export function TraderListings({ userId }: TraderListingsProps) {
       });
       
       const utidsList = result.negotiations.map((n: any) => n.utid).join(", ");
+      const unitNumbers = result.negotiations.map((n: any) => `#${n.unitNumber}`).join(", ");
       setMessage({
         type: "success",
-        text: `Offer made successfully on ${result.totalUnits} unit(s)! UTIDs: ${utidsList}. Waiting for farmer's response.`,
+        text: `✅ Offer made successfully on ${result.totalUnits} unit(s) (Units: ${unitNumbers})! Each unit has been recorded in your incoming purchase ledger with its own UTID. UTIDs: ${utidsList}. Waiting for farmer's response.`,
       });
       
       setOfferPrice("");
@@ -295,7 +296,9 @@ export function TraderListings({ userId }: TraderListingsProps) {
         <p style={{ color: "#666" }}>No active listings available. Farmers need to create listings first.</p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-          {listings.map((listing: any) => {
+          {listings
+            .filter((listing: any) => !listing.isTraderListing) // Traders can only make offers on farmer listings (10kg units), not trader listings (100kg blocks)
+            .map((listing: any) => {
             // Check if trader has an active negotiation for this listing
             const hasActiveNegotiation = traderNegotiations?.negotiations.some(
               (neg: any) => neg.listingId === listing.listingId && (neg.status === "pending" || neg.status === "countered")
@@ -344,7 +347,7 @@ export function TraderListings({ userId }: TraderListingsProps) {
                         <strong>Price:</strong> {formatUGX(listing.pricePerKilo)}/kg
                       </div>
                       <div>
-                        <strong>Unit:</strong> {formatUGX(listing.pricePerKilo * (listing.unitSize || 10))} ({listing.unitSize || 10}kg)
+                        <strong>Unit:</strong> {formatUGX(listing.pricePerKilo * listing.unitSize)} ({listing.unitSize}kg)
                       </div>
                       <div>
                         <strong>Available:</strong> {listing.availableUnits || listing.totalUnits} {listing.isTraderListing ? "block" : "units"}
@@ -377,7 +380,7 @@ export function TraderListings({ userId }: TraderListingsProps) {
                       {/* Unit Selection */}
                       <div style={{ marginBottom: "1rem" }}>
                         <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", fontSize: "0.9rem", color: "#1a1a1a" }}>
-                          Number of Units to Select:
+                          Select Number of Units:
                         </label>
                         <input
                           type="number"
@@ -397,34 +400,83 @@ export function TraderListings({ userId }: TraderListingsProps) {
                             }
                           }}
                           style={{
-                            padding: "0.5rem",
+                            padding: "0.75rem",
                             width: "100%",
                             borderRadius: "6px",
-                            border: "1px solid #ccc",
-                            fontSize: "0.9rem",
+                            border: "2px solid #1976d2",
+                            fontSize: "1rem",
+                            fontWeight: "600",
+                            textAlign: "center"
                           }}
                         />
-                        <div style={{ marginTop: "0.5rem", fontSize: "0.85rem", color: "#666" }}>
-                          {availableUnits.length} unit(s) available. Each unit is {listing.unitSize || 10}kg.
+                        <div style={{ marginTop: "0.5rem", fontSize: "0.85rem", color: "#666", textAlign: "center" }}>
+                          {availableUnits.length} unit(s) available • Each unit = {listing.unitSize}kg
                         </div>
                         
-                        {/* Show selected units */}
+                        {/* Show selected units with detailed information */}
                         {selectedUnits.size > 0 && (
                           <div style={{ 
-                            marginTop: "0.75rem", 
-                            padding: "0.75rem", 
+                            marginTop: "1rem", 
+                            padding: "1rem", 
                             background: "#e3f2fd", 
-                            borderRadius: "6px",
-                            border: "1px solid #90caf9"
+                            borderRadius: "8px",
+                            border: "2px solid #1976d2"
                           }}>
-                            <div style={{ fontWeight: "600", marginBottom: "0.5rem", fontSize: "0.9rem", color: "#1976d2" }}>
-                              Selected: {selectedUnits.size} unit(s)
+                            <div style={{ 
+                              fontWeight: "700", 
+                              marginBottom: "0.75rem", 
+                              fontSize: "1rem", 
+                              color: "#1976d2",
+                              textAlign: "center",
+                              padding: "0.5rem",
+                              background: "#fff",
+                              borderRadius: "6px"
+                            }}>
+                              ✓ {selectedUnits.size} Unit{selectedUnits.size !== 1 ? "s" : ""} Selected
                             </div>
-                            <div style={{ fontSize: "0.85rem", color: "#666" }}>
-                              Units: {Array.from(selectedUnits).map((unitId, idx) => {
+                            
+                            {/* List each selected unit */}
+                            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                              {Array.from(selectedUnits).map((unitId, idx) => {
                                 const unit = availableUnits.find((u: any) => u.unitId === unitId);
-                                return unit ? `#${unit.unitNumber}` : null;
-                              }).filter(Boolean).join(", ")}
+                                if (!unit) return null;
+                                return (
+                                  <div key={unitId} style={{
+                                    padding: "0.75rem",
+                                    background: "#fff",
+                                    borderRadius: "6px",
+                                    border: "1px solid #90caf9",
+                                    fontSize: "0.85rem"
+                                  }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.25rem" }}>
+                                      <span style={{ fontWeight: "600", color: "#1976d2" }}>
+                                        Unit #{unit.unitNumber}
+                                      </span>
+                                      <span style={{ color: "#666" }}>
+                                        {listing.unitSize}kg
+                                      </span>
+                                    </div>
+                                    <div style={{ fontSize: "0.75rem", color: "#999", fontFamily: "monospace" }}>
+                                      UTID will be generated when offer is submitted
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            
+                            {/* Summary */}
+                            <div style={{ 
+                              padding: "0.75rem", 
+                              background: "#fff", 
+                              borderRadius: "6px",
+                              border: "1px solid #90caf9"
+                            }}>
+                              <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.25rem" }}>
+                                <strong>Total Selection:</strong>
+                              </div>
+                              <div style={{ fontSize: "0.9rem", color: "#1976d2", fontWeight: "600" }}>
+                                {selectedUnits.size} unit{selectedUnits.size !== 1 ? "s" : ""} × {listing.unitSize}kg = {selectedUnits.size * listing.unitSize}kg total
+                              </div>
                             </div>
                           </div>
                         )}
@@ -449,10 +501,53 @@ export function TraderListings({ userId }: TraderListingsProps) {
                           }}
                         />
                         {offerPrice && !isNaN(parseFloat(offerPrice)) && selectedUnits.size > 0 && (
-                          <div style={{ marginTop: "0.5rem", fontSize: "0.85rem", color: "#666" }}>
-                            <div>Price per unit: {formatUGX(parseFloat(offerPrice) * (listing.unitSize || 10))} ({listing.unitSize || 10}kg)</div>
-                            <div style={{ fontWeight: "600", color: "#1976d2", marginTop: "0.25rem" }}>
-                              Total for {selectedUnits.size} unit(s): {formatUGX(parseFloat(offerPrice) * (listing.unitSize || 10) * selectedUnits.size)}
+                          <div style={{ 
+                            marginTop: "0.75rem", 
+                            padding: "0.75rem", 
+                            background: "#f5f5f5", 
+                            borderRadius: "6px",
+                            border: "1px solid #e0e0e0"
+                          }}>
+                            <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.5rem" }}>
+                              <strong>Offer Summary:</strong>
+                            </div>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", fontSize: "0.85rem", marginBottom: "0.5rem" }}>
+                              <div>
+                                <div style={{ color: "#999" }}>Price per kg:</div>
+                                <div style={{ fontWeight: "600", color: "#2c2c2c" }}>{formatUGX(parseFloat(offerPrice))}</div>
+                              </div>
+                              <div>
+                                <div style={{ color: "#999" }}>Price per unit:</div>
+                                <div style={{ fontWeight: "600", color: "#2c2c2c" }}>{formatUGX(parseFloat(offerPrice) * listing.unitSize)}</div>
+                              </div>
+                            </div>
+                            <div style={{ 
+                              padding: "0.75rem", 
+                              background: "#1976d2", 
+                              color: "#fff", 
+                              borderRadius: "6px",
+                              textAlign: "center"
+                            }}>
+                              <div style={{ fontSize: "0.75rem", marginBottom: "0.25rem", opacity: 0.9 }}>
+                                Total Offer Amount
+                              </div>
+                              <div style={{ fontSize: "1.2rem", fontWeight: "700" }}>
+                                {formatUGX(parseFloat(offerPrice) * listing.unitSize * selectedUnits.size)}
+                              </div>
+                              <div style={{ fontSize: "0.75rem", marginTop: "0.25rem", opacity: 0.9 }}>
+                                for {selectedUnits.size} unit{selectedUnits.size !== 1 ? "s" : ""} ({selectedUnits.size * listing.unitSize}kg)
+                              </div>
+                            </div>
+                            <div style={{ 
+                              marginTop: "0.5rem", 
+                              padding: "0.5rem", 
+                              background: "#fff3cd", 
+                              borderRadius: "4px",
+                              fontSize: "0.75rem", 
+                              color: "#856404",
+                              textAlign: "center"
+                            }}>
+                              ⚠️ Each unit will get its own UTID in your incoming purchase ledger
                             </div>
                           </div>
                         )}

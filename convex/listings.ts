@@ -159,7 +159,7 @@ export const getActiveListings = query({
           produceType: listing.produceType,
           totalKilos: listing.totalKilos,
           pricePerKilo: listing.pricePerKilo,
-          unitSize: listing.unitSize || LISTING_UNIT_SIZE_KG, // Include unitSize for accurate calculations
+          unitSize: listing.unitSize || (listing.traderId ? BUYER_BLOCK_SIZE_KG : LISTING_UNIT_SIZE_KG), // Traders list in 100kg, farmers in 10kg
           totalUnits: listing.totalUnits,
           availableUnits,
           lockedUnits,

@@ -49,7 +49,7 @@ export function exportUTIDsByCategory(
     { wch: 50 }, // Details
   ];
 
-  XLSX.utils.book_append_sheet(workbook, worksheet, `${category} UTIDs`);
+  XLSX.utils.book_append_sheet(workbook, worksheet, `${category}`);
 
   const summaryData = [
     { Metric: "Category", Value: category },

@@ -172,8 +172,11 @@ export const initiatePesapalPayment = action({
     // This is required if Pesapal API v3 mandates IPN registration
     // To get notification_id: Register an IPN URL in Pesapal dashboard and copy the ID
     if (PESAPAL_NOTIFICATION_ID && PESAPAL_NOTIFICATION_ID.trim() !== "") {
-      paymentRequest.notification_id = PESAPAL_NOTIFICATION_ID.trim();
+      const notificationId = PESAPAL_NOTIFICATION_ID.trim();
+      paymentRequest.notification_id = notificationId;
       console.log("✅ PESAPAL_NOTIFICATION_ID is set, including in request");
+      console.log("📋 Notification ID (first 20 chars):", notificationId.substring(0, 20) + "...");
+      console.log("📋 Notification ID length:", notificationId.length);
     } else {
       console.warn("⚠️ PESAPAL_NOTIFICATION_ID is NOT set in Convex environment variables!");
       console.warn("⚠️ This will cause 'Invalid IPN URL ID' error if Pesapal requires it.");

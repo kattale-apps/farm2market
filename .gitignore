@@ -36,6 +36,10 @@ next-env.d.ts
 # Convex
 .convex/
 
+# Firebase / Service Accounts (sensitive - DO NOT COMMIT)
+**/firebase-adminsdk-*.json
+android/app/google-services.json
+
 # IDE
 .idea/
 .vscode/

@@ -99,14 +99,106 @@ export const sendPushNotification = internalAction({
     data: v.optional(v.any()), // Additional data payload
   },
   handler: async (ctx, args) => {
-    // TODO: Re-enable when pushNotifications internal API is properly generated
-    // Push notifications are temporarily disabled until the internal API is available
-    // This requires running `npx convex dev` to regenerate the API types
-    return {
-      success: false,
-      tokensSent: 0,
-      message: "Push notifications temporarily disabled - internal API not generated",
-    };
+    // Get all active device tokens for the user
+    const tokens = await ctx.runQuery(internal.pushNotifications.getUserDeviceTokensInternal, {
+      userId: args.userId,
+    });
+
+    if (tokens.length === 0) {
+      return { success: false, message: "No device tokens found for user" };
+    }
+
+    // Filter to Android tokens (FCM)
+    const androidTokens = tokens.filter((t) => t.platform === "android");
+
+    if (androidTokens.length === 0) {
+      return { success: false, message: "No Android device tokens found" };
+    }
+
+    // Get Cloud Function URL from environment
+    const CLOUD_FUNCTION_URL = process.env.FCM_CLOUD_FUNCTION_URL;
+    
+    if (!CLOUD_FUNCTION_URL) {
+      console.warn("FCM_CLOUD_FUNCTION_URL not configured. Push notifications will not be sent.");
+      console.log(`Would send push notification to ${androidTokens.length} devices for user ${args.userId}`);
+      console.log(`Title: ${args.title}, Body: ${args.body}`);
+      return {
+        success: false,
+        tokensSent: 0,
+        message: "FCM_CLOUD_FUNCTION_URL not configured. Please set it in Convex environment variables.",
+      };
+    }
+
+    // Prepare tokens array
+    const deviceTokens = androidTokens.map(t => t.token);
+
+    try {
+      // Call Cloud Function
+      const response = await fetch(CLOUD_FUNCTION_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          tokens: deviceTokens,
+          title: args.title,
+          body: args.body,
+          data: args.data || {},
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Cloud Function error: ${response.status} ${errorText}`);
+        return {
+          success: false,
+          tokensSent: 0,
+          tokensFailed: androidTokens.length,
+          totalTokens: androidTokens.length,
+          message: `Cloud Function error: ${response.status}`,
+        };
+      }
+
+      const result = await response.json();
+      
+      // Handle individual token failures
+      if (result.responses) {
+        for (let i = 0; i < result.responses.length; i++) {
+          const resp = result.responses[i];
+          if (!resp.success && resp.error) {
+            // Mark invalid tokens as inactive
+            const errorCode = resp.error.code;
+            if (errorCode === 'messaging/invalid-registration-token' || 
+                errorCode === 'messaging/registration-token-not-registered' ||
+                errorCode === 'messaging/invalid-argument') {
+              await ctx.runMutation(internal.pushNotifications.deactivateTokenInternal, {
+                tokenId: androidTokens[i].tokenId,
+              });
+            }
+          }
+        }
+      }
+
+      return {
+        success: result.success !== false,
+        tokensSent: result.successCount || 0,
+        tokensFailed: result.failureCount || 0,
+        totalTokens: androidTokens.length,
+        message: result.success !== false
+          ? `Sent ${result.successCount || 0} push notification(s) successfully`
+          : "Failed to send push notifications",
+      };
+      
+    } catch (error: any) {
+      console.error("Error calling Cloud Function:", error);
+      return {
+        success: false,
+        tokensSent: 0,
+        tokensFailed: androidTokens.length,
+        totalTokens: androidTokens.length,
+        message: `Error calling Cloud Function: ${error.message || error}`,
+      };
+    }
   },
 });
 
@@ -140,11 +232,9 @@ export const deactivateToken = internalAction({
     tokenId: v.id("deviceTokens"),
   },
   handler: async (ctx, args) => {
-    // TODO: Re-enable when pushNotifications internal API is properly generated
-    // await ctx.runMutation(internal.pushNotifications.deactivateTokenInternal, {
-    //   tokenId: args.tokenId,
-    // });
-    console.log(`Would deactivate token ${args.tokenId} - internal API not available`);
+    await ctx.runMutation(internal.pushNotifications.deactivateTokenInternal, {
+      tokenId: args.tokenId,
+    });
   },
 });
 

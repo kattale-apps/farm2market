@@ -1,0 +1,10 @@
+{
+  "name": "fcm-sender",
+  "version": "1.0.0",
+  "description": "Google Cloud Function to send FCM v1 push notifications",
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/functions-framework": "^3.3.0",
+    "firebase-admin": "^12.0.0"
+  }
+}

@@ -274,11 +274,15 @@ export const getAllActiveUTIDs = query({
           } else if (entity.listingId) {
             // Get location from listing
             const listing = await ctx.db.get(entity.listingId);
-            locationId = listing?.storageLocationId || null;
+            if (listing && "storageLocationId" in listing) {
+              locationId = listing.storageLocationId || null;
+            }
           } else if (entity.inventoryId) {
             // Get location from inventory
             const inventory = await ctx.db.get(entity.inventoryId);
-            locationId = inventory?.storageLocationId || null;
+            if (inventory && "storageLocationId" in inventory) {
+              locationId = inventory.storageLocationId || null;
+            }
           } else if (entity.storageLocation?.code) {
             // Find location by code
             const location = await ctx.db

@@ -1301,7 +1301,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                 onClick={() => exportTransactionLedgerToExcel()}
                 style={{
                   padding: "0.5rem 1rem",
-                  background: "#2e7d32",
+                  background: "#000000",
                   color: "#fff",
                   border: "none",
                   borderRadius: "6px",
@@ -1316,8 +1316,8 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                 onClick={() => exportTransactionLedgerToPDF()}
                 style={{
                   padding: "0.5rem 1rem",
-                  background: "#d32f2f",
-                  color: "#fff",
+                  background: "#ffc107",
+                  color: "#000",
                   border: "none",
                   borderRadius: "6px",
                   cursor: "pointer",
@@ -1432,7 +1432,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                 onClick={() => exportWalletReportToExcel()}
                 style={{
                   padding: "0.5rem 1rem",
-                  background: "#2e7d32",
+                  background: "#000000",
                   color: "#fff",
                   border: "none",
                   borderRadius: "6px",
@@ -1447,8 +1447,8 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                 onClick={() => exportWalletReportToPDF()}
                 style={{
                   padding: "0.5rem 1rem",
-                  background: "#d32f2f",
-                  color: "#fff",
+                  background: "#ffc107",
+                  color: "#000",
                   border: "none",
                   borderRadius: "6px",
                   cursor: "pointer",

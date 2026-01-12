@@ -265,7 +265,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                 onClick={() => handleExportUTIDs("excel")}
                 style={{
                   padding: "0.5rem 1rem",
-                  background: "#2e7d32",
+                  background: "#000000",
                   color: "#fff",
                   border: "none",
                   borderRadius: "6px",
@@ -280,8 +280,8 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                 onClick={() => handleExportUTIDs("pdf")}
                 style={{
                   padding: "0.5rem 1rem",
-                  background: "#d32f2f",
-                  color: "#fff",
+                  background: "#ffc107",
+                  color: "#000",
                   border: "none",
                   borderRadius: "6px",
                   cursor: "pointer",

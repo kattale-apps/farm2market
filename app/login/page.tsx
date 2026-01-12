@@ -18,6 +18,8 @@ export default function LoginPage() {
   const [role, setRole] = useState<"farmer" | "trader" | "buyer">("farmer");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const router = useRouter();
   
   const login = useMutation(api.auth.login);
@@ -219,21 +221,43 @@ export default function LoginPage() {
             <label style={{ display: "block", marginBottom: "0.5rem", color: "#333", fontWeight: "500" }}>
               Password
             </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              style={{
-                width: "100%",
-                padding: "0.75rem",
-                border: "1px solid #ddd",
-                borderRadius: "6px",
-                fontSize: "1rem"
-              }}
-              placeholder={isSignup ? "Create a password (min. 6 characters)" : "Enter your password"}
-              minLength={isSignup ? 6 : undefined}
-            />
+            <div style={{ position: "relative" }}>
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  paddingRight: "2.5rem",
+                  border: "1px solid #ddd",
+                  borderRadius: "6px",
+                  fontSize: "1rem"
+                }}
+                placeholder={isSignup ? "Create a password (min. 6 characters)" : "Enter your password"}
+                minLength={isSignup ? 6 : undefined}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                style={{
+                  position: "absolute",
+                  right: "0.5rem",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  fontSize: "1rem",
+                  padding: "0.25rem",
+                  color: "#666"
+                }}
+                title={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? "👁️" : "👁️‍🗨️"}
+              </button>
+            </div>
             {isSignup && (
               <p style={{ marginTop: "0.5rem", fontSize: "0.85rem", color: "#666" }}>
                 Password must be at least 6 characters long
@@ -246,20 +270,42 @@ export default function LoginPage() {
               <label style={{ display: "block", marginBottom: "0.5rem", color: "#333", fontWeight: "500" }}>
                 Confirm Password
               </label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  border: "1px solid #ddd",
-                  borderRadius: "6px",
-                  fontSize: "1rem"
-                }}
-                placeholder="Confirm your password"
-              />
+              <div style={{ position: "relative" }}>
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "0.75rem",
+                    paddingRight: "2.5rem",
+                    border: "1px solid #ddd",
+                    borderRadius: "6px",
+                    fontSize: "1rem"
+                  }}
+                  placeholder="Confirm your password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  style={{
+                    position: "absolute",
+                    right: "0.5rem",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    fontSize: "1rem",
+                    padding: "0.25rem",
+                    color: "#666"
+                  }}
+                  title={showConfirmPassword ? "Hide password" : "Show password"}
+                >
+                  {showConfirmPassword ? "👁️" : "👁️‍🗨️"}
+                </button>
+              </div>
             </div>
           )}
 

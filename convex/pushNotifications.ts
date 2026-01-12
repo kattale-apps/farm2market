@@ -113,7 +113,14 @@ export const sendPushNotification = internalAction({
     }
 
     // Filter to Android tokens (FCM)
-    const androidTokens = tokens.filter((t) => t.platform === "android");
+    // Type assertion needed until Convex regenerates types with pushNotifications module
+    type DeviceToken = {
+      tokenId: Id<"deviceTokens">;
+      token: string;
+      platform: "android" | "ios" | "web";
+      lastUsedAt: number;
+    };
+    const androidTokens = (tokens as DeviceToken[]).filter((t: DeviceToken) => t.platform === "android");
 
     if (androidTokens.length === 0) {
       return { success: false, message: "No Android device tokens found" };
@@ -134,7 +141,7 @@ export const sendPushNotification = internalAction({
     }
 
     // Prepare tokens array
-    const deviceTokens = androidTokens.map(t => t.token);
+    const deviceTokens = androidTokens.map((t: DeviceToken) => t.token);
 
     try {
       // Call Cloud Function

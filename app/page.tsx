@@ -7,9 +7,9 @@ import { TraderDashboard } from "./components/TraderDashboard";
 import { FarmerDashboard } from "./components/FarmerDashboard";
 import { BuyerDashboard } from "./components/BuyerDashboard";
 import { Id } from "../convex/_generated/dataModel";
-import { useMutation } from "convex/react";
-import { api } from "../convex/_generated/api";
-import { initializePushNotifications } from "./utils/pushNotifications";
+// import { useMutation } from "convex/react";
+// import { api } from "../convex/_generated/api";
+// import { initializePushNotifications } from "./utils/pushNotifications";
 
 /**
  * Farm2Market Uganda - Live Dashboard
@@ -23,7 +23,6 @@ export default function Home() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [isMobile, setIsMobile] = useState(false);
-  const registerDeviceToken = useMutation(api.pushNotifications.registerDeviceToken);
   
   useEffect(() => {
     const checkMobile = () => {
@@ -34,36 +33,13 @@ export default function Home() {
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
   
-  // Initialize push notifications when user is logged in
-  useEffect(() => {
-    if (user?.userId) {
-      initializePushNotifications(
-        async (token) => {
-          // Register device token with backend
-          try {
-            await registerDeviceToken({
-              userId: user.userId as Id<"users">,
-              token: token.token,
-              platform: token.platform,
-            });
-            console.log('Device token registered successfully');
-          } catch (error) {
-            console.error('Failed to register device token:', error);
-          }
-        },
-        (notification) => {
-          // Handle notification received while app is open
-          console.log('Notification received:', notification);
-          // You can show an in-app notification here
-        },
-        (action) => {
-          // Handle notification action (when user taps notification)
-          console.log('Notification action:', action);
-          // Navigate to relevant screen if needed
-        }
-      );
-    }
-  }, [user?.userId, registerDeviceToken]);
+  // TODO: Initialize push notifications when pushNotifications API is available
+  // Push notifications will be enabled once the API is properly generated
+  // useEffect(() => {
+  //   if (user?.userId && typeof window !== "undefined") {
+  //     // Initialize push notifications here
+  //   }
+  // }, [user?.userId]);
   
   // Check if user is logged in (pilot mode)
   useEffect(() => {

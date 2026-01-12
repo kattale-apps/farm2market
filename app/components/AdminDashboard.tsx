@@ -76,15 +76,22 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   };
 
   return (
-    <div>
-      <div style={{ marginBottom: "1.5rem" }}>
+    <div style={{ 
+      width: "100%", 
+      maxWidth: "100%", 
+      boxSizing: "border-box",
+      overflowX: "hidden",
+      padding: "clamp(0.5rem, 2vw, 1rem)"
+    }}>
+      <div style={{ marginBottom: "1.5rem", width: "100%", boxSizing: "border-box" }}>
         <h2 style={{ 
-          fontSize: "1.8rem", 
+          fontSize: "clamp(1.4rem, 4vw, 1.8rem)", 
           marginBottom: "0.5rem", 
           color: "#2c2c2c",
           fontFamily: '"Montserrat", sans-serif',
           fontWeight: "700",
-          letterSpacing: "-0.02em"
+          letterSpacing: "-0.02em",
+          wordWrap: "break-word"
         }}>
           Admin Console 🛡️
         </h2>
@@ -101,16 +108,21 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
       {/* Red Flags Summary */}
       <div style={{
         marginBottom: "2rem",
-        padding: "1.5rem",
+        padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
         borderRadius: "12px",
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        border: "1px solid #e0e0e0"
+        border: "1px solid #e0e0e0",
+        width: "100%",
+        maxWidth: "100%",
+        boxSizing: "border-box",
+        overflowX: "auto"
       }}>
         <h3 style={{ 
           marginTop: 0, 
           marginBottom: "1rem", 
-          fontSize: "1.3rem", 
+          fontSize: "clamp(1.1rem, 3vw, 1.3rem)",
+          wordWrap: "break-word", 
           color: "#2c2c2c",
           fontFamily: '"Montserrat", sans-serif',
           fontWeight: "600",
@@ -121,7 +133,13 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
         {redFlags === undefined ? (
           <p style={{ color: "#999" }}>Loading...</p>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1rem" }}>
+          <div style={{ 
+            display: "grid", 
+            gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))", 
+            gap: "1rem",
+            width: "100%",
+            boxSizing: "border-box"
+          }}>
             <div style={{ padding: "1rem", background: "#ffebee", borderRadius: "8px", border: "1px solid #ef5350" }}>
               <div style={{ fontSize: "2rem", fontWeight: "600", color: "#c62828" }}>
                 {redFlags?.deliveriesPastSLA || 0}
@@ -153,20 +171,25 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
       {/* System Metrics - Today's Listings */}
       <div style={{
         marginBottom: "2rem",
-        padding: "1.5rem",
+        padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
         borderRadius: "12px",
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        border: "1px solid #e0e0e0"
+        border: "1px solid #e0e0e0",
+        width: "100%",
+        maxWidth: "100%",
+        boxSizing: "border-box",
+        overflowX: "auto"
       }}>
         <h3 style={{ 
           marginTop: 0, 
           marginBottom: "1rem", 
-          fontSize: "1.3rem", 
+          fontSize: "clamp(1.1rem, 3vw, 1.3rem)", 
           color: "#2c2c2c",
           fontFamily: '"Montserrat", sans-serif',
           fontWeight: "600",
-          letterSpacing: "-0.01em"
+          letterSpacing: "-0.01em",
+          wordWrap: "break-word"
         }}>
           System Metrics - Today&apos;s Activity
         </h3>
@@ -175,7 +198,13 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
         ) : !todayMetrics ? (
           <p style={{ color: "#666" }}>No metrics available</p>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "1rem" }}>
+          <div style={{ 
+            display: "grid", 
+            gridTemplateColumns: "repeat(auto-fit, minmax(min(250px, 100%), 1fr))", 
+            gap: "1rem",
+            width: "100%",
+            boxSizing: "border-box"
+          }}>
             {/* Open Listings */}
             <div 
               style={{ 
@@ -402,16 +431,21 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
       {/* System UTIDs */}
       <div style={{
         marginBottom: "2rem",
-        padding: "1.5rem",
+        padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
         borderRadius: "12px",
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        border: "1px solid #e0e0e0"
+        border: "1px solid #e0e0e0",
+        width: "100%",
+        maxWidth: "100%",
+        boxSizing: "border-box",
+        overflowX: "auto"
       }}>
         <h3 style={{ 
           marginTop: 0, 
           marginBottom: "1rem", 
-          fontSize: "1.3rem", 
+          fontSize: "clamp(1.1rem, 3vw, 1.3rem)",
+          wordWrap: "break-word", 
           color: "#2c2c2c",
           fontFamily: '"Montserrat", sans-serif',
           fontWeight: "600",
@@ -455,23 +489,32 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
         )}
       </div>
 
-      {/* Purchase Window Control */}
+      {/* Purchase Window Control - Super Admin Only */}
+      {isSuperAdmin && (
       <div style={{
         marginBottom: "2rem",
-        padding: "1.5rem",
+        padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
         borderRadius: "12px",
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        border: "1px solid #e0e0e0"
+        border: "1px solid #e0e0e0",
+        width: "100%",
+        maxWidth: "100%",
+        boxSizing: "border-box",
+        overflowX: "auto",
+        width: "100%",
+        maxWidth: "100%",
+        boxSizing: "border-box"
       }}>
         <h3 style={{ 
           marginTop: 0, 
           marginBottom: "1rem", 
-          fontSize: "1.3rem", 
+          fontSize: "clamp(1.1rem, 3vw, 1.3rem)", 
           color: "#2c2c2c",
           fontFamily: '"Montserrat", sans-serif',
           fontWeight: "600",
-          letterSpacing: "-0.01em"
+          letterSpacing: "-0.01em",
+          wordWrap: "break-word"
         }}>
           Purchase Window Control
         </h3>
@@ -535,7 +578,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                 </div>
               )}
               
-              <div style={{ marginTop: "1rem", display: "flex", gap: "0.75rem" }}>
+              <div style={{ marginTop: "1rem", display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
                 {!purchaseWindowStatus.isOpen ? (
                   <button
                     onClick={async () => {
@@ -566,7 +609,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                     }}
                     disabled={windowActionLoading}
                     style={{
-                      padding: "0.75rem 1.5rem",
+                      padding: "clamp(0.6rem, 2vw, 0.75rem) clamp(1rem, 3vw, 1.5rem)",
                       background: windowActionLoading ? "#ccc" : "#4caf50",
                       color: "#fff",
                       border: "none",
@@ -608,7 +651,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                     }}
                     disabled={windowActionLoading}
                     style={{
-                      padding: "0.75rem 1.5rem",
+                      padding: "clamp(0.6rem, 2vw, 0.75rem) clamp(1rem, 3vw, 1.5rem)",
                       background: windowActionLoading ? "#ccc" : "#ef5350",
                       color: "#fff",
                       border: "none",
@@ -626,20 +669,26 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           </div>
         )}
       </div>
+      )}
 
       {/* System Metrics */}
       <div style={{
         marginBottom: "2rem",
-        padding: "1.5rem",
+        padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
         borderRadius: "12px",
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        border: "1px solid #e0e0e0"
+        border: "1px solid #e0e0e0",
+        width: "100%",
+        maxWidth: "100%",
+        boxSizing: "border-box",
+        overflowX: "auto"
       }}>
         <h3 style={{ 
           marginTop: 0, 
           marginBottom: "1rem", 
-          fontSize: "1.3rem", 
+          fontSize: "clamp(1.1rem, 3vw, 1.3rem)",
+          wordWrap: "break-word", 
           color: "#2c2c2c",
           fontFamily: '"Montserrat", sans-serif',
           fontWeight: "600",
@@ -672,16 +721,21 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
       {/* Live Timeline */}
       <div style={{
         marginBottom: "2rem",
-        padding: "1.5rem",
+        padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
         borderRadius: "12px",
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        border: "1px solid #e0e0e0"
+        border: "1px solid #e0e0e0",
+        width: "100%",
+        maxWidth: "100%",
+        boxSizing: "border-box",
+        overflowX: "auto"
       }}>
         <h3 style={{ 
           marginTop: 0, 
           marginBottom: "1rem", 
-          fontSize: "1.3rem", 
+          fontSize: "clamp(1.1rem, 3vw, 1.3rem)",
+          wordWrap: "break-word", 
           color: "#2c2c2c",
           fontFamily: '"Montserrat", sans-serif',
           fontWeight: "600",
@@ -739,16 +793,21 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
 
       {/* System Controls - Maintenance Mode */}
       <div style={{
-        padding: "1.5rem",
+        padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
         borderRadius: "12px",
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        border: "1px solid #e0e0e0"
+        border: "1px solid #e0e0e0",
+        width: "100%",
+        maxWidth: "100%",
+        boxSizing: "border-box",
+        overflowX: "auto"
       }}>
         <h3 style={{ 
           marginTop: 0, 
           marginBottom: "1rem", 
-          fontSize: "1.3rem", 
+          fontSize: "clamp(1.1rem, 3vw, 1.3rem)",
+          wordWrap: "break-word", 
           color: "#2c2c2c",
           fontFamily: '"Montserrat", sans-serif',
           fontWeight: "600",
@@ -853,7 +912,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                     }}
                     disabled={pilotModeLoading}
                     style={{
-                      padding: "0.75rem 1.5rem",
+                      padding: "clamp(0.6rem, 2vw, 0.75rem) clamp(1rem, 3vw, 1.5rem)",
                       background: pilotModeLoading ? "#ccc" : "#4caf50",
                       color: "#fff",
                       border: "none",
@@ -896,7 +955,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                     }}
                     disabled={pilotModeLoading}
                     style={{
-                      padding: "0.75rem 1.5rem",
+                      padding: "clamp(0.6rem, 2vw, 0.75rem) clamp(1rem, 3vw, 1.5rem)",
                       background: pilotModeLoading ? "#ccc" : "#ef5350",
                       color: "#fff",
                       border: "none",
@@ -918,16 +977,21 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
       {/* Kilo-Shaving Rate Management */}
       <div style={{
         marginBottom: "2rem",
-        padding: "1.5rem",
+        padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
         borderRadius: "12px",
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        border: "1px solid #e0e0e0"
+        border: "1px solid #e0e0e0",
+        width: "100%",
+        maxWidth: "100%",
+        boxSizing: "border-box",
+        overflowX: "auto"
       }}>
         <h3 style={{ 
           marginTop: 0, 
           marginBottom: "1rem", 
-          fontSize: "1.3rem", 
+          fontSize: "clamp(1.1rem, 3vw, 1.3rem)",
+          wordWrap: "break-word", 
           color: "#2c2c2c",
           fontFamily: '"Montserrat", sans-serif',
           fontWeight: "600",
@@ -957,16 +1021,21 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
       {/* Buyer Service Fee Management */}
       <div style={{
         marginBottom: "2rem",
-        padding: "1.5rem",
+        padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
         borderRadius: "12px",
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        border: "1px solid #e0e0e0"
+        border: "1px solid #e0e0e0",
+        width: "100%",
+        maxWidth: "100%",
+        boxSizing: "border-box",
+        overflowX: "auto"
       }}>
         <h3 style={{ 
           marginTop: 0, 
           marginBottom: "1rem", 
-          fontSize: "1.3rem", 
+          fontSize: "clamp(1.1rem, 3vw, 1.3rem)",
+          wordWrap: "break-word", 
           color: "#2c2c2c",
           fontFamily: '"Montserrat", sans-serif',
           fontWeight: "600",
@@ -999,16 +1068,21 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
       {/* Trader Spend Cap Management */}
       <div style={{
         marginBottom: "2rem",
-        padding: "1.5rem",
+        padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
         borderRadius: "12px",
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        border: "1px solid #e0e0e0"
+        border: "1px solid #e0e0e0",
+        width: "100%",
+        maxWidth: "100%",
+        boxSizing: "border-box",
+        overflowX: "auto"
       }}>
         <h3 style={{ 
           marginTop: 0, 
           marginBottom: "1rem", 
-          fontSize: "1.3rem", 
+          fontSize: "clamp(1.1rem, 3vw, 1.3rem)",
+          wordWrap: "break-word", 
           color: "#2c2c2c",
           fontFamily: '"Montserrat", sans-serif',
           fontWeight: "600",
@@ -1033,16 +1107,21 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
       {/* Produce Options Management */}
       <div style={{
         marginBottom: "2rem",
-        padding: "1.5rem",
+        padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
         borderRadius: "12px",
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        border: "1px solid #e0e0e0"
+        border: "1px solid #e0e0e0",
+        width: "100%",
+        maxWidth: "100%",
+        boxSizing: "border-box",
+        overflowX: "auto"
       }}>
         <h3 style={{ 
           marginTop: 0, 
           marginBottom: "1rem", 
-          fontSize: "1.3rem", 
+          fontSize: "clamp(1.1rem, 3vw, 1.3rem)",
+          wordWrap: "break-word", 
           color: "#2c2c2c",
           fontFamily: '"Montserrat", sans-serif',
           fontWeight: "600",
@@ -1069,16 +1148,21 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
       {/* Quality Options Management */}
       <div style={{
         marginBottom: "2rem",
-        padding: "1.5rem",
+        padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
         borderRadius: "12px",
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        border: "1px solid #e0e0e0"
+        border: "1px solid #e0e0e0",
+        width: "100%",
+        maxWidth: "100%",
+        boxSizing: "border-box",
+        overflowX: "auto"
       }}>
         <h3 style={{ 
           marginTop: 0, 
           marginBottom: "1rem", 
-          fontSize: "1.3rem", 
+          fontSize: "clamp(1.1rem, 3vw, 1.3rem)",
+          wordWrap: "break-word", 
           color: "#2c2c2c",
           fontFamily: '"Montserrat", sans-serif',
           fontWeight: "600",
@@ -1105,16 +1189,21 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
       {/* Storage Locations Management */}
       <div style={{
         marginBottom: "2rem",
-        padding: "1.5rem",
+        padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
         borderRadius: "12px",
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        border: "1px solid #e0e0e0"
+        border: "1px solid #e0e0e0",
+        width: "100%",
+        maxWidth: "100%",
+        boxSizing: "border-box",
+        overflowX: "auto"
       }}>
         <h3 style={{ 
           marginTop: 0, 
           marginBottom: "1rem", 
-          fontSize: "1.3rem", 
+          fontSize: "clamp(1.1rem, 3vw, 1.3rem)",
+          wordWrap: "break-word", 
           color: "#2c2c2c",
           fontFamily: '"Montserrat", sans-serif',
           fontWeight: "600",
@@ -1138,16 +1227,21 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
       {/* Send Notifications */}
       <div style={{
         marginBottom: "2rem",
-        padding: "1.5rem",
+        padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
         borderRadius: "12px",
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        border: "1px solid #e0e0e0"
+        border: "1px solid #e0e0e0",
+        width: "100%",
+        maxWidth: "100%",
+        boxSizing: "border-box",
+        overflowX: "auto"
       }}>
         <h3 style={{ 
           marginTop: 0, 
           marginBottom: "1rem", 
-          fontSize: "1.3rem", 
+          fontSize: "clamp(1.1rem, 3vw, 1.3rem)",
+          wordWrap: "break-word", 
           color: "#2c2c2c",
           fontFamily: '"Montserrat", sans-serif',
           fontWeight: "600",
@@ -1170,16 +1264,21 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
       {/* Demo Funds Deposit */}
       <div style={{
         marginBottom: "2rem",
-        padding: "1.5rem",
+        padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
         borderRadius: "12px",
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        border: "1px solid #e0e0e0"
+        border: "1px solid #e0e0e0",
+        width: "100%",
+        maxWidth: "100%",
+        boxSizing: "border-box",
+        overflowX: "auto"
       }}>
         <h3 style={{ 
           marginTop: 0, 
           marginBottom: "1rem", 
-          fontSize: "1.3rem", 
+          fontSize: "clamp(1.1rem, 3vw, 1.3rem)",
+          wordWrap: "break-word", 
           color: "#2c2c2c",
           fontFamily: '"Montserrat", sans-serif',
           fontWeight: "600",
@@ -1214,7 +1313,8 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           <h3 style={{ 
             marginTop: 0, 
             marginBottom: "1rem", 
-            fontSize: "1.3rem", 
+            fontSize: "clamp(1.1rem, 3vw, 1.3rem)",
+          wordWrap: "break-word", 
             color: "#2c2c2c",
             fontFamily: '"Montserrat", sans-serif',
             fontWeight: "600",
@@ -1232,16 +1332,21 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
 
       {/* System Controls (Legacy) */}
       <div style={{
-        padding: "1.5rem",
+        padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
         borderRadius: "12px",
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        border: "1px solid #e0e0e0"
+        border: "1px solid #e0e0e0",
+        width: "100%",
+        maxWidth: "100%",
+        boxSizing: "border-box",
+        overflowX: "auto"
       }}>
         <h3 style={{ 
           marginTop: 0, 
           marginBottom: "1rem", 
-          fontSize: "1.3rem", 
+          fontSize: "clamp(1.1rem, 3vw, 1.3rem)",
+          wordWrap: "break-word", 
           color: "#2c2c2c",
           fontFamily: '"Montserrat", sans-serif',
           fontWeight: "600",
@@ -2907,7 +3012,7 @@ function QualityOptionsManager({
                         Edit
                       </button>
                       {deletingId === option.optionId ? (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", minWidth: "200px" }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", minWidth: "min(200px, 100%)" }}>
                           <input
                             type="text"
                             value={deleteReason}
@@ -3515,7 +3620,7 @@ function ProduceOptionsManager({
                         Edit
                       </button>
                       {deletingId === option.optionId ? (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", minWidth: "200px" }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", minWidth: "min(200px, 100%)" }}>
                           <input
                             type="text"
                             value={deleteReason}

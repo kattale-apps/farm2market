@@ -90,7 +90,12 @@ export const openPurchaseWindow = mutation({
     reason: v.string(),
   },
   handler: async (ctx, args) => {
-    await verifyAdmin(ctx, args.adminId);
+    const adminUser = await verifyAdmin(ctx, args.adminId);
+    
+    // Only super admins can open purchase windows
+    if (!(await isSuperAdmin(adminUser))) {
+      throw new Error("Only super admins can open purchase windows");
+    }
 
     // Close any existing open window
     const existing = await ctx.db
@@ -134,7 +139,12 @@ export const closePurchaseWindow = mutation({
     reason: v.string(),
   },
   handler: async (ctx, args) => {
-    await verifyAdmin(ctx, args.adminId);
+    const adminUser = await verifyAdmin(ctx, args.adminId);
+    
+    // Only super admins can close purchase windows
+    if (!(await isSuperAdmin(adminUser))) {
+      throw new Error("Only super admins can close purchase windows");
+    }
 
     const existing = await ctx.db
       .query("purchaseWindows")

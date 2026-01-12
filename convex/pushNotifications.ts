@@ -115,25 +115,24 @@ export const sendPushNotification = internalAction({
       return { success: false, message: "No Android device tokens found" };
     }
 
-    // TODO: Implement FCM push notification sending
-    // For now, we'll just log that we would send notifications
-    // In production, you'll need to:
-    // 1. Get FCM server key from environment
-    // 2. Make HTTP POST to https://fcm.googleapis.com/fcm/send
-    // 3. Include Authorization header with server key
-    // 4. Send to each device token
-
-    console.log(`Would send push notification to ${androidTokens.length} devices for user ${args.userId}`);
-    console.log(`Title: ${args.title}, Body: ${args.body}`);
-
-    // For production implementation, uncomment and configure:
-    /*
+    // Get FCM server key from environment
     const FCM_SERVER_KEY = process.env.FCM_SERVER_KEY;
+    
     if (!FCM_SERVER_KEY) {
-      throw new Error("FCM_SERVER_KEY not configured");
+      console.warn("FCM_SERVER_KEY not configured. Push notifications will not be sent.");
+      console.log(`Would send push notification to ${androidTokens.length} devices for user ${args.userId}`);
+      console.log(`Title: ${args.title}, Body: ${args.body}`);
+      return {
+        success: false,
+        tokensSent: 0,
+        message: "FCM_SERVER_KEY not configured. Please set it in Convex environment variables.",
+      };
     }
 
+    // Send push notifications via FCM
     const fcmUrl = "https://fcm.googleapis.com/fcm/send";
+    let successCount = 0;
+    let failureCount = 0;
     
     for (const deviceToken of androidTokens) {
       try {
@@ -150,31 +149,46 @@ export const sendPushNotification = internalAction({
               body: args.body,
               sound: "default",
               badge: "1",
+              click_action: "FLUTTER_NOTIFICATION_CLICK", // Opens app when tapped
             },
-            data: args.data || {},
+            data: {
+              ...(args.data || {}),
+              click_action: "FLUTTER_NOTIFICATION_CLICK",
+            },
             priority: "high",
+            time_to_live: 86400, // 24 hours
           }),
         });
 
         if (!response.ok) {
-          console.error(`Failed to send push to token ${deviceToken.token}: ${response.statusText}`);
-          // Mark token as inactive if it's invalid
+          const errorText = await response.text();
+          console.error(`Failed to send push to token ${deviceToken.token}: ${response.status} ${errorText}`);
+          failureCount++;
+          
+          // Mark token as inactive if it's invalid (400 = bad request, 404 = not found)
           if (response.status === 400 || response.status === 404) {
-            await ctx.runMutation(internal.pushNotifications.deactivateToken, {
+            await ctx.runMutation(internal.pushNotifications.deactivateTokenInternal, {
               tokenId: deviceToken.tokenId,
             });
           }
+        } else {
+          successCount++;
+          console.log(`Successfully sent push notification to token ${deviceToken.token}`);
         }
       } catch (error) {
         console.error(`Error sending push to token ${deviceToken.token}:`, error);
+        failureCount++;
       }
     }
-    */
 
     return {
-      success: true,
-      tokensSent: androidTokens.length,
-      message: "Push notifications queued (FCM not configured yet)",
+      success: successCount > 0,
+      tokensSent: successCount,
+      tokensFailed: failureCount,
+      totalTokens: androidTokens.length,
+      message: successCount > 0 
+        ? `Sent ${successCount} push notification(s) successfully`
+        : "Failed to send push notifications",
     };
   },
 });

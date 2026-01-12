@@ -3125,7 +3125,7 @@ function QualityOptionsManager({
                           }}
                           title="Delete"
                         >
-                          🗑️
+                          ✕
                         </button>
                       )}
                     </div>
@@ -3745,7 +3745,7 @@ function ProduceOptionsManager({
                           }}
                           title="Delete"
                         >
-                          🗑️
+                          ✕
                         </button>
                       )}
                     </div>

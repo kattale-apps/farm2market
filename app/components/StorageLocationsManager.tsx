@@ -531,7 +531,7 @@ export function StorageLocationsManager({
                           }}
                           title="Delete"
                         >
-                          🗑️
+                          ✕
                         </button>
                       )}
                     </div>

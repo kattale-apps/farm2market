@@ -8,6 +8,7 @@ import { useState } from "react";
 import { exportToExcel, exportToPDF, formatUTIDDataForExport } from "../utils/exportUtils";
 import { StorageLocationsManager } from "./StorageLocationsManager";
 import { DeliveryConfirmationForm } from "./DeliveryConfirmationForm";
+import { ContactUs } from "./ContactUs";
 
 interface AdminDashboardProps {
   userId: Id<"users">;
@@ -3136,6 +3137,11 @@ function QualityOptionsManager({
           </div>
         )}
       </div>
+
+      {/* Contact Us Section */}
+      <div style={{ marginTop: "2rem" }}>
+        <ContactUs isMobile={false} />
+      </div>
     </div>
   );
 }
@@ -3858,6 +3864,11 @@ function ProduceOptionsManager({
             ))}
           </div>
         )}
+      </div>
+
+      {/* Contact Us Section */}
+      <div style={{ marginTop: "2rem" }}>
+        <ContactUs isMobile={false} />
       </div>
     </div>
   );

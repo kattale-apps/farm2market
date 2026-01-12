@@ -306,6 +306,7 @@ export const getActiveStorageLocations = query({
       locationId: loc._id,
       districtName: loc.districtName,
       code: loc.code,
+      active: loc.active,
     }));
   },
 });

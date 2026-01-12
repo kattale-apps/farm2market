@@ -7,6 +7,7 @@ import { useState } from "react";
 import { exportToExcel, exportToPDF, formatUTIDDataForExport } from "../utils/exportUtils";
 import { formatUgandaDateTime, getUgandaTime } from "../utils/timeUtils";
 import { NotificationMailbox } from "./NotificationMailbox";
+import { ContactUs } from "./ContactUs";
 
 interface BuyerDashboardProps {
   userId: Id<"users">;
@@ -1592,6 +1593,9 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
           </>
         )}
       </div>
+
+      {/* Contact Us Section */}
+      <ContactUs isMobile={false} />
     </div>
   );
 }

@@ -131,6 +131,56 @@ export default function Home() {
           }}>
             Farm. Trade. Grow.
           </p>
+          <div style={{
+            marginTop: "1rem",
+            display: "flex",
+            gap: "0.75rem",
+            flexWrap: "wrap"
+          }}>
+            <a
+              href="/contact"
+              style={{
+                display: "inline-block",
+                padding: "0.5rem 1rem",
+                background: "#2e7d32",
+                color: "white",
+                textDecoration: "none",
+                borderRadius: "6px",
+                fontSize: isMobile ? "0.85rem" : "0.9rem",
+                fontWeight: "600",
+                transition: "background 0.3s"
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = "#1b5e20"}
+              onMouseLeave={(e) => e.currentTarget.style.background = "#2e7d32"}
+            >
+              Contact Us
+            </a>
+            <a
+              href="/privacy-policy"
+              style={{
+                display: "inline-block",
+                padding: "0.5rem 1rem",
+                background: "transparent",
+                color: "#2e7d32",
+                textDecoration: "none",
+                borderRadius: "6px",
+                fontSize: isMobile ? "0.85rem" : "0.9rem",
+                fontWeight: "600",
+                border: "1px solid #2e7d32",
+                transition: "background 0.3s"
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "#2e7d32";
+                e.currentTarget.style.color = "white";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "transparent";
+                e.currentTarget.style.color = "#2e7d32";
+              }}
+            >
+              Privacy Policy
+            </a>
+          </div>
         </div>
         <div style={{ 
           textAlign: isMobile ? "left" : "right",

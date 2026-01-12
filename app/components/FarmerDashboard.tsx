@@ -8,6 +8,7 @@ import { useState } from "react";
 import { exportToExcel, exportToPDF, formatUTIDDataForExport } from "../utils/exportUtils";
 import { formatUgandaDateTime, getUgandaTime } from "../utils/timeUtils";
 import { NotificationMailbox } from "./NotificationMailbox";
+import { ContactUs } from "./ContactUs";
 
 interface FarmerDashboardProps {
   userId: Id<"users">;
@@ -1442,6 +1443,9 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
           </div>
         </div>
       )}
+
+      {/* Contact Us Section */}
+      <ContactUs isMobile={false} />
     </div>
   );
 }

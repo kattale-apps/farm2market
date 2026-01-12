@@ -10,6 +10,7 @@ import { exportToExcel, exportToPDF, formatUTIDDataForExport } from "../utils/ex
 import { exportUTIDsByCategory, exportUTIDsByCategoryPDF, exportInventoryVolume, exportCapitalVolume } from "../utils/traderReports";
 import { NotificationMailbox } from "./NotificationMailbox";
 import { formatUgandaDateTime, formatUgandaTimeOnly, getUgandaTime } from "../utils/timeUtils";
+import { ContactUs } from "./ContactUs";
 
 interface TraderDashboardProps {
   userId: Id<"users">;
@@ -1689,6 +1690,9 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
           </div>
         </>
       )}
+
+      {/* Contact Us Section */}
+      <ContactUs isMobile={false} />
     </div>
   );
 }

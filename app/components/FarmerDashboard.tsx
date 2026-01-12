@@ -39,6 +39,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [selectedListing, setSelectedListing] = useState<any | null>(null);
   const [expandedListings, setExpandedListings] = useState<Set<string>>(new Set());
+  const [cancelledUnitIds, setCancelledUnitIds] = useState<Set<string>>(new Set());
 
   const formatDate = (timestamp: number) => {
     // Timestamps are stored in Uganda time, convert for display
@@ -685,7 +686,9 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
           <p style={{ color: "#666" }}>No pending deliveries</p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            {[...deliveryDeadlines.overdue.deadlines, ...deliveryDeadlines.pending.deadlines].map((delivery: any, index: number) => (
+            {[...deliveryDeadlines.overdue.deadlines, ...deliveryDeadlines.pending.deadlines]
+              .filter((delivery: any) => !cancelledUnitIds.has(delivery.unitId))
+              .map((delivery: any, index: number) => (
               <div key={index} style={{
                 padding: "1rem",
                 background: delivery.isPastDeadline ? "#ffebee" : "#e8f5e9",
@@ -801,6 +804,8 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                       <button
                         onClick={async () => {
                           if (window.confirm("Are you sure you want to cancel and delete this overdue UTID? The trader's capital will be returned.")) {
+                            // Optimistically remove from UI
+                            setCancelledUnitIds(prev => new Set(prev).add(delivery.unitId));
                             setCancelling(delivery.unitId);
                             try {
                               await cancelOverdueUTID({
@@ -812,7 +817,14 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                                 text: "Overdue UTID cancelled successfully. Capital has been returned to trader.",
                               });
                               setTimeout(() => setMessage(null), 5000);
+                              // Keep it removed - query will refetch and confirm
                             } catch (error: any) {
+                              // Revert optimistic update on error
+                              setCancelledUnitIds(prev => {
+                                const newSet = new Set(prev);
+                                newSet.delete(delivery.unitId);
+                                return newSet;
+                              });
                               setMessage({
                                 type: "error",
                                 text: `Failed to cancel UTID: ${error.message}`,

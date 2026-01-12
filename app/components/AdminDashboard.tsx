@@ -2648,6 +2648,7 @@ function QualityOptionsManager({
   const [editMessage, setEditMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [deleteReason, setDeleteReason] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deletedOptionIds, setDeletedOptionIds] = useState<Set<string>>(new Set());
 
   const handleAdd = async () => {
     if (!newLabel.trim() || !newValue.trim()) {
@@ -2721,16 +2722,26 @@ function QualityOptionsManager({
       return;
     }
 
+    // Optimistically remove from UI
+    setDeletedOptionIds(prev => new Set(prev).add(optionId));
+    setDeletingId(null);
+    setDeleteReason("");
+
     try {
       const result = await deleteQualityOption({
         adminId,
         optionId: optionId as Id<"qualityOptions">,
         reason: deleteReason.trim(),
       });
-      setDeletingId(null);
-      setDeleteReason("");
       alert(`Quality option deleted successfully! UTID: ${result.utid}`);
+      // Keep it removed - query will refetch and confirm
     } catch (error: any) {
+      // Revert optimistic update on error
+      setDeletedOptionIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(optionId);
+        return newSet;
+      });
       alert(`Failed to delete option: ${error.message}`);
     }
   };
@@ -2905,7 +2916,7 @@ function QualityOptionsManager({
           <p style={{ color: "#666", fontSize: "0.9rem" }}>No quality options defined yet.</p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-            {qualityOptions.map((option) => (
+            {qualityOptions.filter((option) => !deletedOptionIds.has(option.optionId)).map((option) => (
               <div
                 key={option.optionId}
                 style={{
@@ -3180,6 +3191,7 @@ function ProduceOptionsManager({
   const [editMessage, setEditMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [deleteReason, setDeleteReason] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deletedProduceOptionIds, setDeletedProduceOptionIds] = useState<Set<string>>(new Set());
   const [newAllowedLocations, setNewAllowedLocations] = useState<string[]>([]);
   const [editingAllowedLocations, setEditingAllowedLocations] = useState<string[]>([]);
 
@@ -3264,16 +3276,26 @@ function ProduceOptionsManager({
       return;
     }
 
+    // Optimistically remove from UI
+    setDeletedProduceOptionIds(prev => new Set(prev).add(optionId));
+    setDeletingId(null);
+    setDeleteReason("");
+
     try {
       const result = await deleteProduceOption({
         adminId,
         optionId: optionId as Id<"produceOptions">,
         reason: deleteReason.trim(),
       });
-      setDeletingId(null);
-      setDeleteReason("");
       alert(`Produce option deleted successfully! UTID: ${result.utid}`);
+      // Keep it removed - query will refetch and confirm
     } catch (error: any) {
+      // Revert optimistic update on error
+      setDeletedProduceOptionIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(optionId);
+        return newSet;
+      });
       alert(`Failed to delete option: ${error.message}`);
     }
   };
@@ -3542,7 +3564,7 @@ function ProduceOptionsManager({
           <p style={{ color: "#666", fontSize: "0.9rem" }}>No produce options defined yet. Add options to enable farmers to create listings.</p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-            {produceOptions.map((option) => (
+            {produceOptions.filter((option) => !deletedProduceOptionIds.has(option.optionId)).map((option) => (
               <div
                 key={option.optionId}
                 style={{

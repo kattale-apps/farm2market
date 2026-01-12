@@ -35,6 +35,7 @@ export function StorageLocationsManager({
   const [editMessage, setEditMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [deleteReason, setDeleteReason] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
 
   const handleAdd = async () => {
     if (!newDistrictName.trim() || !newCode.trim()) {
@@ -109,15 +110,25 @@ export function StorageLocationsManager({
       return;
     }
 
+    // Optimistically remove from UI
+    setDeletedIds(prev => new Set(prev).add(locationId));
+    setDeletingId(null);
+    setDeleteReason("");
+
     try {
       const result = await deleteStorageLocation({
         adminId,
         locationId: locationId as Id<"storageLocations">,
         reason: deleteReason.trim(),
       });
-      setDeletingId(null);
-      setDeleteReason("");
+      // Keep it removed - query will refetch and confirm
     } catch (error: any) {
+      // Revert optimistic update on error
+      setDeletedIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(locationId);
+        return newSet;
+      });
       alert(`Failed to delete location: ${error.message}`);
     }
   };
@@ -294,7 +305,7 @@ export function StorageLocationsManager({
           <p style={{ color: "#666", fontSize: "0.9rem" }}>No storage locations defined yet.</p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-            {storageLocations.map((location) => (
+            {storageLocations.filter((location) => !deletedIds.has(location._id)).map((location) => (
               <div
                 key={location._id}
                 style={{

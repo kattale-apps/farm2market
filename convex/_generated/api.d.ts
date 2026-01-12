@@ -34,6 +34,7 @@ import type * as payments from "../payments.js";
 import type * as pesapal from "../pesapal.js";
 import type * as pilotMode from "../pilotMode.js";
 import type * as pilotSetup from "../pilotSetup.js";
+import type * as pushNotifications from "../pushNotifications.js";
 import type * as rateLimits from "../rateLimits.js";
 import type * as rateLimits_index from "../rateLimits/index.js";
 import type * as rateLimits_types from "../rateLimits/types.js";
@@ -80,6 +81,7 @@ declare const fullApi: ApiFromModules<{
   pesapal: typeof pesapal;
   pilotMode: typeof pilotMode;
   pilotSetup: typeof pilotSetup;
+  pushNotifications: typeof pushNotifications;
   rateLimits: typeof rateLimits;
   "rateLimits/index": typeof rateLimits_index;
   "rateLimits/types": typeof rateLimits_types;

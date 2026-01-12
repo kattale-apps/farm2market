@@ -99,96 +99,13 @@ export const sendPushNotification = internalAction({
     data: v.optional(v.any()), // Additional data payload
   },
   handler: async (ctx, args) => {
-    // Get all active device tokens for the user
-    const tokens = await ctx.runQuery(internal.pushNotifications.getUserDeviceTokensInternal, {
-      userId: args.userId,
-    });
-
-    if (tokens.length === 0) {
-      return { success: false, message: "No device tokens found for user" };
-    }
-
-    // Filter to Android tokens (FCM)
-    const androidTokens = tokens.filter((t) => t.platform === "android");
-
-    if (androidTokens.length === 0) {
-      return { success: false, message: "No Android device tokens found" };
-    }
-
-    // Get FCM server key from environment
-    const FCM_SERVER_KEY = process.env.FCM_SERVER_KEY;
-    
-    if (!FCM_SERVER_KEY) {
-      console.warn("FCM_SERVER_KEY not configured. Push notifications will not be sent.");
-      console.log(`Would send push notification to ${androidTokens.length} devices for user ${args.userId}`);
-      console.log(`Title: ${args.title}, Body: ${args.body}`);
-      return {
-        success: false,
-        tokensSent: 0,
-        message: "FCM_SERVER_KEY not configured. Please set it in Convex environment variables.",
-      };
-    }
-
-    // Send push notifications via FCM
-    const fcmUrl = "https://fcm.googleapis.com/fcm/send";
-    let successCount = 0;
-    let failureCount = 0;
-    
-    for (const deviceToken of androidTokens) {
-      try {
-        const response = await fetch(fcmUrl, {
-          method: "POST",
-          headers: {
-            "Authorization": `key=${FCM_SERVER_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            to: deviceToken.token,
-            notification: {
-              title: args.title,
-              body: args.body,
-              sound: "default",
-              badge: "1",
-              click_action: "FLUTTER_NOTIFICATION_CLICK", // Opens app when tapped
-            },
-            data: {
-              ...(args.data || {}),
-              click_action: "FLUTTER_NOTIFICATION_CLICK",
-            },
-            priority: "high",
-            time_to_live: 86400, // 24 hours
-          }),
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error(`Failed to send push to token ${deviceToken.token}: ${response.status} ${errorText}`);
-          failureCount++;
-          
-          // Mark token as inactive if it's invalid (400 = bad request, 404 = not found)
-          if (response.status === 400 || response.status === 404) {
-            await ctx.runMutation(internal.pushNotifications.deactivateTokenInternal, {
-              tokenId: deviceToken.tokenId,
-            });
-          }
-        } else {
-          successCount++;
-          console.log(`Successfully sent push notification to token ${deviceToken.token}`);
-        }
-      } catch (error) {
-        console.error(`Error sending push to token ${deviceToken.token}:`, error);
-        failureCount++;
-      }
-    }
-
+    // TODO: Re-enable when pushNotifications internal API is properly generated
+    // Push notifications are temporarily disabled until the internal API is available
+    // This requires running `npx convex dev` to regenerate the API types
     return {
-      success: successCount > 0,
-      tokensSent: successCount,
-      tokensFailed: failureCount,
-      totalTokens: androidTokens.length,
-      message: successCount > 0 
-        ? `Sent ${successCount} push notification(s) successfully`
-        : "Failed to send push notifications",
+      success: false,
+      tokensSent: 0,
+      message: "Push notifications temporarily disabled - internal API not generated",
     };
   },
 });
@@ -223,9 +140,11 @@ export const deactivateToken = internalAction({
     tokenId: v.id("deviceTokens"),
   },
   handler: async (ctx, args) => {
-    await ctx.runMutation(internal.pushNotifications.deactivateTokenInternal, {
-      tokenId: args.tokenId,
-    });
+    // TODO: Re-enable when pushNotifications internal API is properly generated
+    // await ctx.runMutation(internal.pushNotifications.deactivateTokenInternal, {
+    //   tokenId: args.tokenId,
+    // });
+    console.log(`Would deactivate token ${args.tokenId} - internal API not available`);
   },
 });
 

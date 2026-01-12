@@ -1856,10 +1856,8 @@ export const deleteQualityOption = mutation({
       }
     );
 
-    // Soft delete - set active to false
-    await ctx.db.patch(args.optionId, {
-      active: false,
-    });
+    // Hard delete - permanently remove from database
+    await ctx.db.delete(args.optionId);
 
     return { utid, optionId: args.optionId };
   },
@@ -1913,7 +1911,7 @@ export const addProduceOption = mutation({
     label: v.string(),
     value: v.string(),
     icon: v.string(), // Emoji icon
-    order: v.number(),
+    order: v.float64(),
     allowedStorageLocationIds: v.optional(v.array(v.id("storageLocations"))),
     reason: v.string(),
   },
@@ -1954,16 +1952,21 @@ export const addProduceOption = mutation({
       }
     );
 
-    const optionId = await ctx.db.insert("produceOptions", {
+    const insertData: any = {
       label: args.label.trim(),
       value: args.value.trim(),
       icon: args.icon.trim(),
       order: args.order,
       active: true,
-      allowedStorageLocationIds: args.allowedStorageLocationIds || [],
       createdAt: getUgandaTime(),
       createdBy: args.adminId,
-    });
+    };
+    
+    if (args.allowedStorageLocationIds && args.allowedStorageLocationIds.length > 0) {
+      insertData.allowedStorageLocationIds = args.allowedStorageLocationIds;
+    }
+    
+    const optionId = await ctx.db.insert("produceOptions", insertData);
 
     return { utid, optionId, label: args.label.trim(), value: args.value.trim(), icon: args.icon.trim() };
   },
@@ -2043,7 +2046,7 @@ export const updateProduceOption = mutation({
 
 /**
  * Delete produce option (admin only)
- * Note: This is a soft delete - sets active to false
+ * Permanently removes the option from the database
  */
 export const deleteProduceOption = mutation({
   args: {
@@ -2072,10 +2075,8 @@ export const deleteProduceOption = mutation({
       }
     );
 
-    // Soft delete - set active to false
-    await ctx.db.patch(args.optionId, {
-      active: false,
-    });
+    // Hard delete - permanently remove from database
+    await ctx.db.delete(args.optionId);
 
     return { utid, optionId: args.optionId };
   },

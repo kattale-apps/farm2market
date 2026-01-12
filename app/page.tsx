@@ -73,8 +73,16 @@ export default function Home() {
   // Show loading if checking auth
   if (!user || !user.userId || !user.role || !user.alias) {
     return (
-      <main style={{ padding: "2rem", textAlign: "center" }}>
-        <p>Loading...</p>
+      <main style={{ 
+        padding: "2rem", 
+        textAlign: "center",
+        background: "rgba(255, 255, 255, 0.95)",
+        borderRadius: "12px",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        margin: "2rem auto",
+        maxWidth: "400px"
+      }}>
+        <p style={{ color: "#2c2c2c", fontSize: "1rem", fontWeight: "500" }}>Loading...</p>
       </main>
     );
   }

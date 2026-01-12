@@ -40,6 +40,11 @@ next-env.d.ts
 **/firebase-adminsdk-*.json
 android/app/google-services.json
 
+# Android Keystore (sensitive - DO NOT COMMIT)
+android/keystore.properties
+android/app/*.keystore
+android/app/farm2market-release.keystore
+
 # IDE
 .idea/
 .vscode/

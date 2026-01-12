@@ -3433,7 +3433,7 @@ function ProduceOptionsManager({
                   background: "#fff"
                 }}>
                   {storageLocations.filter((loc: any) => loc.active).map((loc: any) => (
-                    <label key={loc.locationId} style={{ 
+                    <label key={loc._id} style={{ 
                       display: "flex", 
                       alignItems: "center", 
                       gap: "0.5rem",
@@ -3442,12 +3442,12 @@ function ProduceOptionsManager({
                     }}>
                       <input
                         type="checkbox"
-                        checked={newAllowedLocations.includes(loc.locationId)}
+                        checked={newAllowedLocations.includes(loc._id)}
                         onChange={(e) => {
                           if (e.target.checked) {
-                            setNewAllowedLocations([...newAllowedLocations, loc.locationId]);
+                            setNewAllowedLocations([...newAllowedLocations, loc._id]);
                           } else {
-                            setNewAllowedLocations(newAllowedLocations.filter(id => id !== loc.locationId));
+                            setNewAllowedLocations(newAllowedLocations.filter(id => id !== loc._id));
                           }
                         }}
                       />
@@ -3637,6 +3637,50 @@ function ProduceOptionsManager({
                         Active (available to farmers)
                       </label>
                     </div>
+                    {storageLocations && storageLocations.length > 0 && (
+                      <div>
+                        <label style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.9rem", fontWeight: "600" }}>
+                          Allowed Storage Locations:
+                        </label>
+                        <p style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.5rem" }}>
+                          Select which storage locations can accept this produce type. Leave empty to allow all locations.
+                        </p>
+                        <div style={{ 
+                          display: "grid", 
+                          gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", 
+                          gap: "0.5rem",
+                          maxHeight: "200px",
+                          overflowY: "auto",
+                          padding: "0.5rem",
+                          border: "1px solid #ddd",
+                          borderRadius: "6px",
+                          background: "#fff"
+                        }}>
+                          {storageLocations.filter((loc: any) => loc.active).map((loc: any) => (
+                            <label key={loc._id} style={{ 
+                              display: "flex", 
+                              alignItems: "center", 
+                              gap: "0.5rem",
+                              cursor: "pointer",
+                              fontSize: "0.9rem"
+                            }}>
+                              <input
+                                type="checkbox"
+                                checked={editingAllowedLocations.includes(loc._id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setEditingAllowedLocations([...editingAllowedLocations, loc._id]);
+                                  } else {
+                                    setEditingAllowedLocations(editingAllowedLocations.filter(id => id !== loc._id));
+                                  }
+                                }}
+                              />
+                              <span>{loc.districtName} ({loc.code})</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     <div>
                       <label style={{ display: "block", marginBottom: "0.25rem", fontSize: "0.9rem", fontWeight: "600" }}>
                         Reason (required):
@@ -3687,6 +3731,7 @@ function ProduceOptionsManager({
                           setEditingId(null);
                           setEditReason("");
                           setEditMessage(null);
+                          setEditingAllowedLocations([]);
                         }}
                         style={{
                           padding: "0.5rem 1rem",

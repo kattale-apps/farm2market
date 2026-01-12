@@ -66,7 +66,7 @@ strong, b {
   color: #2c2c2c;
 }
 
-/* Overlay for better text readability - semi-transparent white */
+/* Overlay for better text readability - lighter overlay to show background image better */
 body::before {
   content: '';
   position: fixed;
@@ -74,7 +74,7 @@ body::before {
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(255, 255, 255, 0.50);
+  background: rgba(255, 255, 255, 0.25);
   z-index: -1;
   pointer-events: none;
 }

@@ -17,6 +17,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { generateUTID, getUgandaTime } from "./utils";
 import { Id } from "./_generated/dataModel";
+import { internal } from "./_generated/api";
 
 /**
  * Verify user is admin
@@ -278,7 +279,7 @@ export const sendRoleBasedNotification = mutation({
     const now = getUgandaTime();
     const notificationUtid = generateUTID("admin");
 
-    // Create notification for each user
+    // Create notification for each user and send push notifications
     const notificationIds = [];
     for (const user of users) {
       const notificationId = await ctx.db.insert("notifications", {
@@ -291,6 +292,18 @@ export const sendRoleBasedNotification = mutation({
         createdAt: getUgandaTime(),
       });
       notificationIds.push(notificationId);
+      
+      // Send push notification (non-blocking, scheduled)
+      try {
+        await ctx.scheduler.runAfter(0, internal.pushNotifications.sendPushNotification, {
+          userId: user._id,
+          title: args.title,
+          body: args.message,
+          data: { utid: notificationUtid, type: "role_based", role: args.role },
+        });
+      } catch (error) {
+        console.error(`Failed to schedule push notification for user ${user._id}:`, error);
+      }
     }
 
     // Log admin action
@@ -351,7 +364,7 @@ export const sendUTIDSpecificNotification = mutation({
     const now = getUgandaTime();
     const notificationUtid = generateUTID("admin");
 
-    // Create notification for each related user
+    // Create notification for each related user and send push notifications
     const notificationIds = [];
     for (const { userId } of relatedUsers) {
       const notificationId = await ctx.db.insert("notifications", {
@@ -364,6 +377,18 @@ export const sendUTIDSpecificNotification = mutation({
         createdAt: getUgandaTime(),
       });
       notificationIds.push(notificationId);
+      
+      // Send push notification (non-blocking, scheduled)
+      try {
+        await ctx.scheduler.runAfter(0, internal.pushNotifications.sendPushNotification, {
+          userId,
+          title: args.title,
+          body: args.message,
+          data: { utid: args.targetUtid, type: "utid_specific" },
+        });
+      } catch (error) {
+        console.error(`Failed to schedule push notification for user ${userId}:`, error);
+      }
     }
 
     // Log admin action

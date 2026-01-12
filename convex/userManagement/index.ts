@@ -229,6 +229,58 @@ export async function createUser(
     return createError("NOT_AUTHORIZED", "Only admin users can create user accounts");
   }
   
+  // If creating an admin account, verify creator is a super admin
+  if (input.role === "admin") {
+    // Get the creator's user record to check adminLevel
+    const creatorUser = await (ctx.db as DatabaseWriter).get(actionContext.actingUserId as Id<"users">);
+    if (!creatorUser) {
+      return createError("OPERATION_FAILED", "Creator user not found");
+    }
+    
+    // Check if creator is super admin (adminLevel === "super" or undefined for backward compatibility)
+    const isCreatorSuperAdmin = creatorUser.adminLevel === "super" || creatorUser.adminLevel === undefined;
+    if (!isCreatorSuperAdmin) {
+      return createError("NOT_AUTHORIZED", "Only super admins can create admin accounts");
+    }
+    
+    // Validate adminLevel
+    if (input.adminLevel !== undefined && input.adminLevel !== "super" && input.adminLevel !== "junior") {
+      return createError("VALIDATION_FAILED", "Invalid adminLevel. Must be 'super' or 'junior'");
+    }
+    
+    // If creating junior admin, allowedStorageLocationIds must be provided and non-empty
+    if (input.adminLevel === "junior") {
+      if (!input.allowedStorageLocationIds || input.allowedStorageLocationIds.length === 0) {
+        return createError("VALIDATION_FAILED", "Junior admins must have at least one assigned storage location");
+      }
+      
+      // Validate that all location IDs exist and are active
+      for (const locationId of input.allowedStorageLocationIds) {
+        const location = await (ctx.db as DatabaseWriter).get(locationId as Id<"storageLocations">);
+        if (!location) {
+          return createError("VALIDATION_FAILED", `Storage location ${locationId} not found`);
+        }
+        if (!location.active) {
+          return createError("VALIDATION_FAILED", `Storage location ${locationId} is not active`);
+        }
+      }
+    }
+    
+    // If creating super admin, allowedStorageLocationIds should be ignored/not set
+    if (input.adminLevel === "super" || input.adminLevel === undefined) {
+      // Clear any provided allowedStorageLocationIds for super admins
+      // (They have access to all locations)
+    }
+  } else {
+    // For non-admin roles, adminLevel and allowedStorageLocationIds should not be set
+    if (input.adminLevel !== undefined) {
+      return createError("VALIDATION_FAILED", "adminLevel can only be set for admin role");
+    }
+    if (input.allowedStorageLocationIds !== undefined && input.allowedStorageLocationIds.length > 0) {
+      return createError("VALIDATION_FAILED", "allowedStorageLocationIds can only be set for junior admin role");
+    }
+  }
+  
   // Validate input
   if (input === null || input === undefined) {
     return createError("VALIDATION_FAILED", "Missing required parameter: input");
@@ -305,15 +357,28 @@ export async function createUser(
     return createError("OPERATION_FAILED", `UTID generation failed: ${utidError instanceof Error ? utidError.message : String(utidError)}`);
   }
   
-  // Create user
-  const userId = await (ctx.db as DatabaseWriter).insert("users", {
+  // Prepare user data
+  const userData: any = {
     email: input.email,
     role: input.role,
     alias: alias,
     state: "active", // Initial state
     createdAt: ctx.now,
     lastActiveAt: ctx.now,
-  });
+  };
+  
+  // Add adminLevel and allowedStorageLocationIds for admin accounts
+  if (input.role === "admin") {
+    if (input.adminLevel !== undefined) {
+      userData.adminLevel = input.adminLevel;
+    }
+    if (input.adminLevel === "junior" && input.allowedStorageLocationIds) {
+      userData.allowedStorageLocationIds = input.allowedStorageLocationIds as Id<"storageLocations">[];
+    }
+  }
+  
+  // Create user
+  const userId = await (ctx.db as DatabaseWriter).insert("users", userData);
   
   const createdUser = await (ctx.db as DatabaseWriter).get(userId);
   if (!createdUser) {

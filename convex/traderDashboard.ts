@@ -277,6 +277,18 @@ export const getTraderActiveUTIDs = query({
         // Get listing info (no farmer identity exposed)
         const listing = await ctx.db.get(unit.listingId);
         const farmer = listing && listing.farmerId ? await ctx.db.get(listing.farmerId) : null;
+        
+        // Get storage location for delivery
+        let storageLocation = null;
+        if (listing?.storageLocationId) {
+          const location = await ctx.db.get(listing.storageLocationId);
+          if (location) {
+            storageLocation = {
+              districtName: location.districtName,
+              code: location.code,
+            };
+          }
+        }
 
         utidData.entities.push({
           table: "listingUnits",
@@ -289,6 +301,7 @@ export const getTraderActiveUTIDs = query({
           deliveryStatus: unit.deliveryStatus,
           deliveryDeadline: unit.deliveryDeadline,
           lockedAt: unit.lockedAt,
+          storageLocation: storageLocation,
         });
       }
     }
@@ -317,6 +330,19 @@ export const getTraderActiveUTIDs = query({
         });
       }
       const utidData = utidMap.get(inv.utid)!;
+      
+      // Get storage location for inventory
+      let storageLocation = null;
+      if (inv.storageLocationId) {
+        const location = await ctx.db.get(inv.storageLocationId);
+        if (location) {
+          storageLocation = {
+            districtName: location.districtName,
+            code: location.code,
+          };
+        }
+      }
+      
       utidData.entities.push({
         table: "traderInventory",
         inventoryId: inv._id,
@@ -325,6 +351,7 @@ export const getTraderActiveUTIDs = query({
         produceType: inv.produceType,
         acquiredAt: inv.acquiredAt,
         storageStartTime: inv.storageStartTime,
+        storageLocation: storageLocation,
       });
     }
 
@@ -396,6 +423,18 @@ export const getInventoryWithProjectedLoss = query({
           }
         }
 
+        // Get storage location
+        let storageLocation = null;
+        if (inv.storageLocationId) {
+          const location = await ctx.db.get(inv.storageLocationId);
+          if (location) {
+            storageLocation = {
+              districtName: location.districtName,
+              code: location.code,
+            };
+          }
+        }
+
         return {
           inventoryId: inv._id,
           utid: inv.utid,
@@ -413,6 +452,8 @@ export const getInventoryWithProjectedLoss = query({
           storageFeeRate: storageFeeRate,
           // Original price (for context, no farmer identity)
           originalPricePerKilo: originalPricePerKilo,
+          // Storage location
+          storageLocation: storageLocation,
         };
       })
     );

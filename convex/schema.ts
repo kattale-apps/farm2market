@@ -29,6 +29,8 @@ export default defineSchema({
     lastActiveAt: v.number(),
     passwordHash: v.optional(v.string()), // Secure password hash (bcrypt/argon2). Required for production authentication.
     customSpendCap: v.optional(v.number()), // Admin-set custom spend cap for traders (in UGX). If not set, uses default MAX_TRADER_EXPOSURE_UGX.
+    adminLevel: v.optional(v.union(v.literal("super"), v.literal("junior"))), // Admin hierarchy level. undefined means super admin (backward compatible).
+    allowedStorageLocationIds: v.optional(v.array(v.id("storageLocations"))), // Storage locations junior admin can access. Only applies to junior admins.
   })
     .index("by_email", ["email"])
     .index("by_role", ["role"])
@@ -115,6 +117,7 @@ export default defineSchema({
     deliveryDeadline: v.optional(v.number()), // Timestamp: lockedAt + 6 hours
     deliveryStatus: v.optional(v.union(
       v.literal("pending"),
+      v.literal("farmer_confirmed"),
       v.literal("delivered"),
       v.literal("late"),
       v.literal("cancelled")
@@ -318,6 +321,23 @@ export default defineSchema({
    * - Internal only (no SMS/email in v1.x)
    * - Admin broadcast, role-based, UTID-specific
    */
+  /**
+   * Device tokens for push notifications
+   * - Stores FCM/APNS tokens for each user's devices
+   * - Multiple devices per user supported
+   */
+  deviceTokens: defineTable({
+    userId: v.id("users"),
+    token: v.string(), // FCM token (Android) or APNS token (iOS)
+    platform: v.union(v.literal("android"), v.literal("ios"), v.literal("web")),
+    createdAt: v.number(),
+    lastUsedAt: v.number(), // Updated when token is used
+    active: v.boolean(), // Set to false when token is invalidated
+  })
+    .index("by_user", ["userId"])
+    .index("by_token", ["token"])
+    .index("by_user_active", ["userId", "active"]),
+
   notifications: defineTable({
     userId: v.id("users"),
     type: v.union(

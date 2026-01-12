@@ -208,7 +208,7 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
   const todayActivity = [...todayPurchases, ...todaySales, ...todayNegotiations].sort((a, b) => b.timestamp - a.timestamp);
 
   return (
-    <div style={{ padding: "1rem", maxWidth: "100%", boxSizing: "border-box" }}>
+    <div style={{ padding: "clamp(0.75rem, 2vw, 1rem)", maxWidth: "100%", boxSizing: "border-box" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
         <div style={{ flex: 1 }}>
           <h2 style={{ 
@@ -1102,6 +1102,36 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
                     }}>
                       {item.utid}
                     </div>
+                    {/* Delivery Location - Prominently Displayed */}
+                    {item.storageLocation && (
+                      <div style={{
+                        marginTop: "0.75rem",
+                        padding: "0.75rem",
+                        background: "#e3f2fd",
+                        borderRadius: "8px",
+                        border: "2px solid #1976d2",
+                      }}>
+                        <div style={{
+                          fontSize: "clamp(0.85rem, 2.5vw, 0.95rem)",
+                          color: "#1565c0",
+                          fontWeight: "700",
+                          marginBottom: "0.25rem",
+                          fontFamily: '"Montserrat", sans-serif',
+                          textTransform: "uppercase",
+                          letterSpacing: "0.5px"
+                        }}>
+                          📍 Delivery Location:
+                        </div>
+                        <div style={{
+                          fontSize: "clamp(1rem, 3vw, 1.2rem)",
+                          color: "#1976d2",
+                          fontWeight: "700",
+                          fontFamily: '"Montserrat", sans-serif',
+                        }}>
+                          {item.storageLocation.districtName} ({item.storageLocation.code})
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Produce Type and Quantity */}
@@ -1345,7 +1375,38 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
                       ⏳ Awaiting farmer delivery to storage. Admin will mark as delivered once produce arrives.
                     </div>
                   )}
+                  {/* Delivery Location - Prominently Displayed */}
+                  {utid.entities && utid.entities.length > 0 && utid.entities[0].storageLocation && (
+                    <div style={{
+                      marginTop: "0.75rem",
+                      padding: "0.75rem",
+                      background: "#e3f2fd",
+                      borderRadius: "8px",
+                      border: "2px solid #1976d2",
+                    }}>
+                      <div style={{
+                        fontSize: "clamp(0.85rem, 2.5vw, 0.95rem)",
+                        color: "#1565c0",
+                        fontWeight: "700",
+                        marginBottom: "0.25rem",
+                        fontFamily: '"Montserrat", sans-serif',
+                        textTransform: "uppercase",
+                        letterSpacing: "0.5px"
+                      }}>
+                        📍 Delivery Location:
+                      </div>
+                      <div style={{
+                        fontSize: "clamp(1rem, 3vw, 1.2rem)",
+                        color: "#1976d2",
+                        fontWeight: "700",
+                        fontFamily: '"Montserrat", sans-serif',
+                      }}>
+                        {utid.entities[0].storageLocation.districtName} ({utid.entities[0].storageLocation.code})
+                      </div>
+                    </div>
+                  )}
                   <div style={{ 
+                    marginTop: "0.5rem",
                     fontSize: "clamp(0.7rem, 2vw, 0.75rem)", 
                     color: "#666",
                     display: "flex",

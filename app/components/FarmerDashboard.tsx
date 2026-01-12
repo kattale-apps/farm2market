@@ -28,13 +28,16 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
   const archiveUTID = useMutation(api.farmerDashboard.archiveUTID);
   const cancelOverdueUTID = useMutation(api.farmerDashboard.cancelOverdueUTID);
   const cancelListing = useMutation(api.farmerDashboard.cancelListing);
+  const farmerConfirmDelivery = useMutation(api.farmerDashboard.farmerConfirmDelivery);
   
   const [countering, setCountering] = useState<Id<"negotiations"> | null>(null);
   const [cancelling, setCancelling] = useState<Id<"listingUnits"> | null>(null);
+  const [confirmingDelivery, setConfirmingDelivery] = useState<Id<"listingUnits"> | null>(null);
   const [cancellingListing, setCancellingListing] = useState<Id<"listings"> | null>(null);
   const [counterPrice, setCounterPrice] = useState<string>("");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [selectedListing, setSelectedListing] = useState<any | null>(null);
+  const [expandedListings, setExpandedListings] = useState<Set<string>>(new Set());
 
   const formatDate = (timestamp: number) => {
     // Timestamps are stored in Uganda time, convert for display
@@ -725,50 +728,107 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                         {delivery.lockUtid}
                       </div>
                     </div>
-                  </div>
-                  {delivery.isPastDeadline && (
-                    <button
-                      onClick={async () => {
-                        if (window.confirm("Are you sure you want to cancel and delete this overdue UTID? The trader's capital will be returned.")) {
-                          setCancelling(delivery.unitId);
-                          try {
-                            await cancelOverdueUTID({
-                              farmerId: userId,
-                              unitId: delivery.unitId,
-                            });
-                            setMessage({
-                              type: "success",
-                              text: "Overdue UTID cancelled successfully. Capital has been returned to trader.",
-                            });
-                            setTimeout(() => setMessage(null), 5000);
-                          } catch (error: any) {
-                            setMessage({
-                              type: "error",
-                              text: `Failed to cancel UTID: ${error.message}`,
-                            });
-                            setTimeout(() => setMessage(null), 5000);
-                          } finally {
-                            setCancelling(null);
-                          }
-                        }
-                      }}
-                      disabled={cancelling === delivery.unitId}
-                      style={{
-                        padding: "0.5rem 1rem",
-                        background: cancelling === delivery.unitId ? "#ccc" : "#d32f2f",
-                        color: "#fff",
-                        border: "none",
+                    {delivery.deliveryStatus === "farmer_confirmed" && (
+                      <div style={{
+                        marginTop: "0.75rem",
+                        padding: "0.5rem",
+                        background: "#fff3cd",
                         borderRadius: "6px",
-                        cursor: cancelling === delivery.unitId ? "not-allowed" : "pointer",
+                        border: "1px solid #ffc107",
                         fontSize: "0.85rem",
+                        color: "#856404",
                         fontWeight: "600",
-                        whiteSpace: "nowrap",
-                        marginLeft: "0.5rem",
-                      }}
-                    >
-                      {cancelling === delivery.unitId ? "Cancelling..." : "Cancel & Delete"}
-                    </button>
-                  )}
+                      }}>
+                        ✅ Delivery confirmed. Awaiting admin confirmation.
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginLeft: "0.5rem" }}>
+                    {!delivery.isPastDeadline && delivery.deliveryStatus === "pending" && (
+                      <button
+                        onClick={async () => {
+                          if (window.confirm("Confirm that you have delivered this produce to the storage location?")) {
+                            setConfirmingDelivery(delivery.unitId);
+                            try {
+                              await farmerConfirmDelivery({
+                                farmerId: userId,
+                                unitId: delivery.unitId,
+                              });
+                              setMessage({
+                                type: "success",
+                                text: "Delivery confirmed! Admin will now verify and complete the process.",
+                              });
+                              setTimeout(() => setMessage(null), 5000);
+                            } catch (error: any) {
+                              setMessage({
+                                type: "error",
+                                text: `Failed to confirm delivery: ${error.message}`,
+                              });
+                              setTimeout(() => setMessage(null), 5000);
+                            } finally {
+                              setConfirmingDelivery(null);
+                            }
+                          }
+                        }}
+                        disabled={confirmingDelivery === delivery.unitId}
+                        style={{
+                          padding: "0.5rem 1rem",
+                          background: confirmingDelivery === delivery.unitId ? "#ccc" : "#4caf50",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: "6px",
+                          cursor: confirmingDelivery === delivery.unitId ? "not-allowed" : "pointer",
+                          fontSize: "0.85rem",
+                          fontWeight: "600",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {confirmingDelivery === delivery.unitId ? "Confirming..." : "Mark as Delivered"}
+                      </button>
+                    )}
+                    {delivery.isPastDeadline && (
+                      <button
+                        onClick={async () => {
+                          if (window.confirm("Are you sure you want to cancel and delete this overdue UTID? The trader's capital will be returned.")) {
+                            setCancelling(delivery.unitId);
+                            try {
+                              await cancelOverdueUTID({
+                                farmerId: userId,
+                                unitId: delivery.unitId,
+                              });
+                              setMessage({
+                                type: "success",
+                                text: "Overdue UTID cancelled successfully. Capital has been returned to trader.",
+                              });
+                              setTimeout(() => setMessage(null), 5000);
+                            } catch (error: any) {
+                              setMessage({
+                                type: "error",
+                                text: `Failed to cancel UTID: ${error.message}`,
+                              });
+                              setTimeout(() => setMessage(null), 5000);
+                            } finally {
+                              setCancelling(null);
+                            }
+                          }
+                        }}
+                        disabled={cancelling === delivery.unitId}
+                        style={{
+                          padding: "0.5rem 1rem",
+                          background: cancelling === delivery.unitId ? "#ccc" : "#d32f2f",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: "6px",
+                          cursor: cancelling === delivery.unitId ? "not-allowed" : "pointer",
+                          fontSize: "0.85rem",
+                          fontWeight: "600",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {cancelling === delivery.unitId ? "Cancelling..." : "Cancel & Delete"}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
@@ -896,41 +956,61 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
         ) : allUnitsLedger.listings.length === 0 ? (
           <p style={{ color: "#666" }}>No listings yet. Create a listing to start tracking units.</p>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
-            {allUnitsLedger.listings.map((listing: any, listingIndex: number) => (
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            {allUnitsLedger.listings.map((listing: any, listingIndex: number) => {
+              const listingKey = listing.listingId || `listing-${listingIndex}`;
+              const isExpanded = expandedListings.has(listingKey);
+              
+              return (
               <div key={listingIndex} style={{
                 border: "1px solid #e0e0e0",
                 borderRadius: "8px",
                 overflow: "hidden"
               }}>
-                {/* Listing Header */}
-                <div style={{
-                  padding: "1rem",
-                  background: "#f5f5f5",
-                  borderBottom: "2px solid #e0e0e0"
-                }}>
+                {/* Listing Header - Clickable to Expand/Collapse */}
+                <div 
+                  onClick={() => {
+                    const newExpanded = new Set(expandedListings);
+                    if (isExpanded) {
+                      newExpanded.delete(listingKey);
+                    } else {
+                      newExpanded.add(listingKey);
+                    }
+                    setExpandedListings(newExpanded);
+                  }}
+                  style={{
+                    padding: "1rem",
+                    background: "#f5f5f5",
+                    borderBottom: isExpanded ? "2px solid #e0e0e0" : "none",
+                    cursor: "pointer",
+                    userSelect: "none"
+                  }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem" }}>
-                    <div>
-                      <h4 style={{ 
-                        margin: "0 0 0.5rem 0", 
-                        fontSize: "clamp(1rem, 3vw, 1.1rem)", 
-                        color: "#2c2c2c",
-                        fontWeight: "600"
-                      }}>
-                        {listing.produceType} - {listing.totalKilos} kg ({listing.totalUnits} units)
-                      </h4>
-                      <div style={{ fontSize: "clamp(0.75rem, 2vw, 0.8rem)", color: "#666" }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
+                        <span style={{ fontSize: "clamp(1rem, 3vw, 1.1rem)", fontWeight: "600" }}>
+                          {isExpanded ? "▼" : "▶"}
+                        </span>
+                        <h4 style={{ 
+                          margin: 0, 
+                          fontSize: "clamp(1rem, 3vw, 1.1rem)", 
+                          color: "#2c2c2c",
+                          fontWeight: "600"
+                        }}>
+                          {listing.produceType} - {listing.totalKilos} kg ({listing.totalUnits} units)
+                        </h4>
+                      </div>
+                      <div style={{ fontSize: "clamp(0.75rem, 2vw, 0.8rem)", color: "#666", marginBottom: "0.5rem" }}>
                         Listed: {formatDate(listing.createdAt)} | Price: {formatUGX(listing.pricePerKilo)}/kg
                       </div>
                       <div style={{ 
-                        marginTop: "0.5rem",
                         padding: "0.5rem",
-                        background: "#f5f5f5",
+                        background: "#fff",
                         borderRadius: "6px",
                         border: "1px solid #e0e0e0",
                       }}>
                         <div style={{
-                          fontSize: "clamp(0.9rem, 2.5vw, 1rem)",
+                          fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)",
                           color: "#666",
                           fontWeight: "600",
                           marginBottom: "0.25rem",
@@ -939,7 +1019,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                           Listing UTID:
                         </div>
                         <div style={{
-                          fontSize: "clamp(1.4rem, 4vw, 1.8rem)",
+                          fontSize: "clamp(1.1rem, 3.5vw, 1.4rem)",
                           color: "#2c2c2c",
                           fontFamily: "monospace",
                           fontWeight: "700",
@@ -966,7 +1046,8 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                   </div>
                 </div>
 
-                {/* Units Table */}
+                {/* Units Table - Collapsible */}
+                {isExpanded && (
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse" }}>
                     <thead>
@@ -1088,8 +1169,10 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                     </tfoot>
                   </table>
                 </div>
+                )}
               </div>
-            ))}
+              );
+            })}
 
             {/* Grand Totals */}
             {allUnitsLedger.listings.length > 0 && (

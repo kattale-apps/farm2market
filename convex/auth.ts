@@ -43,6 +43,7 @@ function simpleHash(password: string): string {
  * - Exactly one role per user (enforced by schema)
  * - Auto-generates alias for anonymity
  * - Sets shared pilot password hash
+ * - For admin accounts: requires super admin creator and supports adminLevel and location assignment
  */
 export const createUser = mutation({
   args: {
@@ -53,6 +54,9 @@ export const createUser = mutation({
       v.literal("buyer"),
       v.literal("admin")
     ),
+    adminLevel: v.optional(v.union(v.literal("super"), v.literal("junior"))),
+    allowedStorageLocationIds: v.optional(v.array(v.id("storageLocations"))),
+    creatorAdminId: v.optional(v.id("users")), // Admin creating this user (for permission check)
   },
   handler: async (ctx, args) => {
     // Check if user already exists
@@ -65,14 +69,63 @@ export const createUser = mutation({
       throw new Error("User with this email already exists");
     }
 
+    // If creating an admin account, verify creator is a super admin
+    if (args.role === "admin") {
+      if (!args.creatorAdminId) {
+        throw new Error("creatorAdminId is required when creating admin accounts");
+      }
+      
+      const creatorUser = await ctx.db.get(args.creatorAdminId);
+      if (!creatorUser || creatorUser.role !== "admin") {
+        throw new Error("Creator must be an admin");
+      }
+      
+      // Check if creator is super admin (adminLevel === "super" or undefined for backward compatibility)
+      const isCreatorSuperAdmin = creatorUser.adminLevel === "super" || creatorUser.adminLevel === undefined;
+      if (!isCreatorSuperAdmin) {
+        throw new Error("Only super admins can create admin accounts");
+      }
+      
+      // Validate adminLevel
+      if (args.adminLevel !== undefined && args.adminLevel !== "super" && args.adminLevel !== "junior") {
+        throw new Error("Invalid adminLevel. Must be 'super' or 'junior'");
+      }
+      
+      // If creating junior admin, allowedStorageLocationIds must be provided and non-empty
+      if (args.adminLevel === "junior") {
+        if (!args.allowedStorageLocationIds || args.allowedStorageLocationIds.length === 0) {
+          throw new Error("Junior admins must have at least one assigned storage location");
+        }
+        
+        // Validate that all location IDs exist and are active
+        for (const locationId of args.allowedStorageLocationIds) {
+          const location = await ctx.db.get(locationId);
+          if (!location) {
+            throw new Error(`Storage location ${locationId} not found`);
+          }
+          if (!location.active) {
+            throw new Error(`Storage location ${locationId} is not active`);
+          }
+        }
+      }
+    } else {
+      // For non-admin roles, adminLevel and allowedStorageLocationIds should not be set
+      if (args.adminLevel !== undefined) {
+        throw new Error("adminLevel can only be set for admin role");
+      }
+      if (args.allowedStorageLocationIds !== undefined && args.allowedStorageLocationIds.length > 0) {
+        throw new Error("allowedStorageLocationIds can only be set for junior admin role");
+      }
+    }
+
     // Generate alias
     const alias = generateAlias(args.role);
 
     // Hash the shared pilot password
     const passwordHash = simpleHash(PILOT_SHARED_PASSWORD);
 
-    // Create user
-    const userId = await ctx.db.insert("users", {
+    // Prepare user data
+    const userData: any = {
       email: args.email,
       role: args.role,
       alias,
@@ -80,7 +133,20 @@ export const createUser = mutation({
       createdAt: getUgandaTime(),
       lastActiveAt: getUgandaTime(),
       passwordHash,
-    });
+    };
+    
+    // Add adminLevel and allowedStorageLocationIds for admin accounts
+    if (args.role === "admin") {
+      if (args.adminLevel !== undefined) {
+        userData.adminLevel = args.adminLevel;
+      }
+      if (args.adminLevel === "junior" && args.allowedStorageLocationIds) {
+        userData.allowedStorageLocationIds = args.allowedStorageLocationIds;
+      }
+    }
+
+    // Create user
+    const userId = await ctx.db.insert("users", userData);
 
     return { userId, alias };
   },

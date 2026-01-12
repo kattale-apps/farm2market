@@ -31,7 +31,6 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   const sendNotificationToSelectedUsers = useMutation(api.notifications.sendNotificationToSelectedUsers);
   const sendRoleBasedNotification = useMutation(api.notifications.sendRoleBasedNotification);
   const confirmDeliveryToStorageByUTID = useMutation(api.admin.confirmDeliveryToStorageByUTID);
-  const depositDemoFunds = useMutation(api.admin.depositDemoFunds);
   const adminDepositDemoFunds = useMutation(api.admin.adminDepositDemoFunds);
   const allUsers = useQuery(api.introspection.getAllUsers, { adminId: userId });
   const qualityOptions = useQuery(api.admin.getQualityOptions, { adminId: userId, activeOnly: false });
@@ -47,7 +46,9 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   const updateStorageLocation = useMutation(api.admin.updateStorageLocation);
   const deleteStorageLocation = useMutation(api.admin.deleteStorageLocation);
   const todayMetrics = useQuery(api.admin.getTodaySystemMetrics, { adminId: userId });
-  const markFarmerUTIDAsDelivered = useMutation(api.admin.markFarmerUTIDAsDelivered);
+  const createUser = useMutation(api.auth.createUser);
+  const currentUser = allUsers?.find((u: any) => u.userId === userId);
+  const isSuperAdmin = currentUser?.role === "admin" && (currentUser?.adminLevel === "super" || currentUser?.adminLevel === undefined);
   
   const [reason, setReason] = useState("");
   const [windowActionLoading, setWindowActionLoading] = useState(false);
@@ -56,14 +57,6 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   const [pilotModeLoading, setPilotModeLoading] = useState(false);
   const [pilotModeMessage, setPilotModeMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [expandedMetric, setExpandedMetric] = useState<string | null>(null); // Track which metric card is expanded
-  const [selectedLockUtid, setSelectedLockUtid] = useState<string>("");
-  const [deliveryReason, setDeliveryReason] = useState<string>("");
-  const [markingDelivery, setMarkingDelivery] = useState(false);
-  const [depositUserId, setDepositUserId] = useState<string>("");
-  const [depositRole, setDepositRole] = useState<"all" | "trader" | "buyer">("trader");
-  const [depositAmount, setDepositAmount] = useState<string>("");
-  const [depositReason, setDepositReason] = useState<string>("");
-  const [depositMessage, setDepositMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const handleExportUTIDs = (format: "excel" | "pdf") => {
     if (!allUTIDs || !allUTIDs.utids || allUTIDs.utids.length === 0) {
@@ -729,258 +722,18 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
         )}
         <div style={{ marginTop: "1.5rem", paddingTop: "1.5rem", borderTop: "2px solid #e0e0e0" }}>
           <h4 style={{ marginBottom: "1rem", fontSize: "1.1rem", color: "#1a1a1a" }}>
-            Mark Farmer UTID as Delivered
-          </h4>
-          <div style={{ 
-            padding: "1.5rem", 
-            background: "#f9f9f9", 
-            borderRadius: "8px", 
-            border: "1px solid #ddd",
-            marginBottom: "1.5rem"
-          }}>
-            <div style={{ marginBottom: "1rem" }}>
-              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
-                Lock UTID (Farmer&apos;s Delivery UTID):
-              </label>
-              <input
-                type="text"
-                value={selectedLockUtid}
-                onChange={(e) => setSelectedLockUtid(e.target.value)}
-                placeholder="Enter lockUtid (e.g., 20240110-143022-tra-a3k9x2)"
-                style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  border: "1px solid #ccc",
-                  borderRadius: "6px",
-                  fontSize: "0.9rem"
-                }}
-              />
-            </div>
-            <div style={{ marginBottom: "1rem" }}>
-              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
-                Reason:
-              </label>
-              <textarea
-                value={deliveryReason}
-                onChange={(e) => setDeliveryReason(e.target.value)}
-                placeholder="Enter reason for marking as delivered..."
-                rows={3}
-                style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  border: "1px solid #ccc",
-                  borderRadius: "6px",
-                  fontSize: "0.9rem",
-                  fontFamily: "inherit"
-                }}
-              />
-            </div>
-            <button
-              onClick={async () => {
-                if (!selectedLockUtid.trim() || !deliveryReason.trim()) {
-                  alert("Please enter both UTID and reason");
-                  return;
-                }
-                setMarkingDelivery(true);
-                try {
-                  await markFarmerUTIDAsDelivered({
-                    adminId: userId,
-                    lockUtid: selectedLockUtid.trim(),
-                    reason: deliveryReason.trim(),
-                  });
-                  alert("Successfully marked UTID as delivered!");
-                  setSelectedLockUtid("");
-                  setDeliveryReason("");
-                } catch (error: any) {
-                  alert(`Error: ${error.message || "Failed to mark UTID as delivered"}`);
-                } finally {
-                  setMarkingDelivery(false);
-                }
-              }}
-              disabled={markingDelivery || !selectedLockUtid.trim() || !deliveryReason.trim()}
-              style={{
-                padding: "0.75rem 1.5rem",
-                background: markingDelivery ? "#ccc" : "#4caf50",
-                color: "#fff",
-                border: "none",
-                borderRadius: "6px",
-                fontSize: "0.9rem",
-                fontWeight: "600",
-                cursor: markingDelivery ? "not-allowed" : "pointer"
-              }}
-            >
-              {markingDelivery ? "Marking..." : "Mark as Delivered"}
-            </button>
-          </div>
-
-          <h4 style={{ marginBottom: "1rem", fontSize: "1.1rem", color: "#1a1a1a", marginTop: "2rem" }}>
             Confirm Delivery to Storage by UTID
           </h4>
           {allUTIDs === undefined ? (
             <p style={{ color: "#999" }}>Loading UTIDs...</p>
           ) : (
-            <DeliveryConfirmationForm
-              allUTIDs={allUTIDs}
-              confirmDelivery={confirmDeliveryToStorageByUTID}
-              adminId={userId}
-            />
+          <DeliveryConfirmationForm
+            allUTIDs={allUTIDs}
+            confirmDelivery={confirmDeliveryToStorageByUTID}
+            adminId={userId}
+            isSuperAdmin={isSuperAdmin}
+          />
           )}
-        </div>
-
-        {/* Demo Deposit to Trader/Buyer */}
-        <div style={{ marginTop: "1.5rem", paddingTop: "1.5rem", borderTop: "2px solid #e0e0e0" }}>
-          <h4 style={{ marginBottom: "1rem", fontSize: "1.1rem", color: "#1a1a1a" }}>
-            Demo Deposit to Trader/Buyer
-          </h4>
-          <div style={{
-            padding: "1.5rem",
-            background: "#f9f9f9",
-            borderRadius: "8px",
-            border: "1px solid #ddd",
-            marginBottom: "1.5rem"
-          }}>
-            <div style={{ display: "flex", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" }}>
-              <div style={{ minWidth: "160px" }}>
-                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
-                  Role Filter
-                </label>
-                <select
-                  value={depositRole}
-                  onChange={(e) => setDepositRole(e.target.value as "all" | "trader" | "buyer")}
-                  style={{
-                    width: "100%",
-                    padding: "0.6rem",
-                    border: "1px solid #ccc",
-                    borderRadius: "6px",
-                    fontSize: "0.9rem"
-                  }}
-                >
-                  <option value="all">All</option>
-                  <option value="trader">Traders</option>
-                  <option value="buyer">Buyers</option>
-                </select>
-              </div>
-
-              <div style={{ flex: 1, minWidth: "220px" }}>
-                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
-                  Select User
-                </label>
-                <select
-                  value={depositUserId}
-                  onChange={(e) => setDepositUserId(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "0.6rem",
-                    border: "1px solid #ccc",
-                    borderRadius: "6px",
-                    fontSize: "0.9rem"
-                  }}
-                >
-                  <option value="">-- Choose user --</option>
-                  {(allUsers || [])
-                    .filter((u: any) => depositRole === "all" ? true : u.role === depositRole)
-                    .map((u: any) => (
-                      <option key={u.userId} value={u.userId}>
-                        {u.alias} ({u.role})
-                      </option>
-                    ))}
-                </select>
-              </div>
-
-              <div style={{ minWidth: "160px" }}>
-                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
-                  Amount (UGX)
-                </label>
-                <input
-                  type="number"
-                  value={depositAmount}
-                  onChange={(e) => setDepositAmount(e.target.value)}
-                  placeholder="e.g., 500000"
-                  style={{
-                    width: "100%",
-                    padding: "0.6rem",
-                    border: "1px solid #ccc",
-                    borderRadius: "6px",
-                    fontSize: "0.9rem"
-                  }}
-                />
-              </div>
-            </div>
-
-            <div style={{ marginBottom: "1rem" }}>
-              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
-                Reason
-              </label>
-              <textarea
-                value={depositReason}
-                onChange={(e) => setDepositReason(e.target.value)}
-                placeholder="Enter reason for demo deposit..."
-                rows={3}
-                style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  border: "1px solid #ccc",
-                  borderRadius: "6px",
-                  fontSize: "0.9rem",
-                  fontFamily: "inherit"
-                }}
-              />
-            </div>
-
-            {depositMessage && (
-              <div style={{
-                marginBottom: "1rem",
-                padding: "0.75rem",
-                borderRadius: "6px",
-                background: depositMessage.type === "success" ? "#e8f5e9" : "#ffebee",
-                border: depositMessage.type === "success" ? "1px solid #4caf50" : "1px solid #ef5350",
-                color: depositMessage.type === "success" ? "#2e7d32" : "#c62828",
-                fontSize: "0.9rem"
-              }}>
-                {depositMessage.text}
-              </div>
-            )}
-
-            <button
-              onClick={async () => {
-                const amountNumber = Number(depositAmount);
-                if (!depositUserId || isNaN(amountNumber) || amountNumber <= 0 || !depositReason.trim()) {
-                  setDepositMessage({ type: "error", text: "Select user, enter positive amount, and add a reason." });
-                  return;
-                }
-                setDepositMessage(null);
-                try {
-                  const result = await depositDemoFunds({
-                    adminId: userId,
-                    targetUserId: depositUserId as Id<"users">,
-                    amount: amountNumber,
-                    reason: depositReason.trim(),
-                  });
-                  setDepositMessage({
-                    type: "success",
-                    text: `Deposited UGX ${amountNumber.toLocaleString()} to user. New balance: UGX ${result.balanceAfter.toLocaleString()}. UTID: ${result.utid}`,
-                  });
-                  setDepositAmount("");
-                  setDepositReason("");
-                  setDepositUserId("");
-                } catch (error: any) {
-                  setDepositMessage({ type: "error", text: error.message || "Failed to deposit demo funds" });
-                }
-              }}
-              style={{
-                padding: "0.75rem 1.5rem",
-                background: "#1976d2",
-                color: "#fff",
-                border: "none",
-                borderRadius: "6px",
-                fontSize: "0.95rem",
-                fontWeight: "600",
-                cursor: "pointer"
-              }}
-            >
-              Deposit Demo Funds
-            </button>
-          </div>
         </div>
       </div>
 
@@ -1448,6 +1201,35 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
         )}
       </div>
 
+      {/* Admin Account Creation (Super Admin Only) */}
+      {isSuperAdmin && (
+        <div style={{
+          marginBottom: "2rem",
+          padding: "1.5rem",
+          background: "#fff",
+          borderRadius: "12px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+          border: "1px solid #e0e0e0"
+        }}>
+          <h3 style={{ 
+            marginTop: 0, 
+            marginBottom: "1rem", 
+            fontSize: "1.3rem", 
+            color: "#2c2c2c",
+            fontFamily: '"Montserrat", sans-serif',
+            fontWeight: "600",
+            letterSpacing: "-0.01em"
+          }}>
+            Create Admin Account
+          </h3>
+          <CreateAdminAccountForm
+            createUser={createUser}
+            storageLocations={storageLocations}
+            adminId={userId}
+          />
+        </div>
+      )}
+
       {/* System Controls (Legacy) */}
       <div style={{
         padding: "1.5rem",
@@ -1529,6 +1311,194 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           </a>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Create Admin Account Form Component
+function CreateAdminAccountForm({ createUser, storageLocations, adminId }: { createUser: any; storageLocations: any; adminId: Id<"users"> }) {
+  const [email, setEmail] = useState("");
+  const [adminLevel, setAdminLevel] = useState<"super" | "junior" | "">("");
+  const [selectedLocationIds, setSelectedLocationIds] = useState<Id<"storageLocations">[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const handleSubmit = async () => {
+    if (!email.trim()) {
+      setMessage({ type: "error", text: "Please enter an email address" });
+      return;
+    }
+    if (!adminLevel) {
+      setMessage({ type: "error", text: "Please select admin level" });
+      return;
+    }
+    if (adminLevel === "junior" && selectedLocationIds.length === 0) {
+      setMessage({ type: "error", text: "Junior admins must have at least one assigned storage location" });
+      return;
+    }
+
+    setLoading(true);
+    setMessage(null);
+
+    try {
+      const result = await createUser({
+        email: email.trim(),
+        role: "admin",
+        adminLevel: adminLevel,
+        allowedStorageLocationIds: adminLevel === "junior" ? selectedLocationIds : undefined,
+        creatorAdminId: adminId,
+      });
+
+      setMessage({
+        type: "success",
+        text: `Admin account created successfully! User ID: ${result.userId}, Alias: ${result.alias}`,
+      });
+
+      // Reset form
+      setEmail("");
+      setAdminLevel("");
+      setSelectedLocationIds([]);
+      setTimeout(() => setMessage(null), 5000);
+    } catch (error: any) {
+      setMessage({
+        type: "error",
+        text: `Failed to create admin account: ${error.message}`,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleLocation = (locationId: Id<"storageLocations">) => {
+    setSelectedLocationIds((prev) =>
+      prev.includes(locationId)
+        ? prev.filter((id) => id !== locationId)
+        : [...prev, locationId]
+    );
+  };
+
+  return (
+    <div>
+      <div style={{ marginBottom: "1rem" }}>
+        <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#1a1a1a" }}>
+          Email Address:
+        </label>
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="admin@example.com"
+          disabled={loading}
+          style={{
+            width: "100%",
+            padding: "0.75rem",
+            border: "1px solid #ddd",
+            borderRadius: "6px",
+            fontSize: "0.9rem",
+            fontFamily: "inherit"
+          }}
+        />
+      </div>
+
+      <div style={{ marginBottom: "1rem" }}>
+        <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#1a1a1a" }}>
+          Admin Level:
+        </label>
+        <select
+          value={adminLevel}
+          onChange={(e) => {
+            setAdminLevel(e.target.value as "super" | "junior" | "");
+            if (e.target.value !== "junior") {
+              setSelectedLocationIds([]);
+            }
+          }}
+          disabled={loading}
+          style={{
+            width: "100%",
+            padding: "0.75rem",
+            border: "1px solid #ddd",
+            borderRadius: "6px",
+            fontSize: "0.9rem",
+            fontFamily: "inherit"
+          }}
+        >
+          <option value="">Select admin level...</option>
+          <option value="super">Super Admin (Full Access)</option>
+          <option value="junior">Junior Admin (Limited to Assigned Locations)</option>
+        </select>
+      </div>
+
+      {adminLevel === "junior" && storageLocations && (
+        <div style={{ marginBottom: "1rem" }}>
+          <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#1a1a1a" }}>
+            Assigned Storage Locations (Select at least one):
+          </label>
+          <div style={{
+            maxHeight: "200px",
+            overflowY: "auto",
+            border: "1px solid #ddd",
+            borderRadius: "6px",
+            padding: "0.5rem"
+          }}>
+            {storageLocations.filter((loc: any) => loc.active).map((location: any) => (
+              <label
+                key={location._id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  padding: "0.5rem",
+                  cursor: "pointer",
+                  borderRadius: "4px",
+                  marginBottom: "0.25rem",
+                  background: selectedLocationIds.includes(location._id) ? "#e3f2fd" : "transparent"
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedLocationIds.includes(location._id)}
+                  onChange={() => toggleLocation(location._id)}
+                  disabled={loading}
+                  style={{ marginRight: "0.5rem" }}
+                />
+                <span style={{ fontSize: "0.9rem" }}>
+                  {location.districtName} ({location.code})
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {message && (
+        <div style={{
+          marginBottom: "1rem",
+          padding: "0.75rem",
+          background: message.type === "success" ? "#e8f5e9" : "#ffebee",
+          border: `1px solid ${message.type === "success" ? "#4caf50" : "#ef5350"}`,
+          borderRadius: "6px",
+          color: message.type === "success" ? "#2e7d32" : "#c62828",
+          fontSize: "0.9rem"
+        }}>
+          {message.text}
+        </div>
+      )}
+
+      <button
+        onClick={handleSubmit}
+        disabled={loading}
+        style={{
+          padding: "0.75rem 1.5rem",
+          background: loading ? "#ccc" : "#1976d2",
+          color: "#fff",
+          border: "none",
+          borderRadius: "6px",
+          fontSize: "0.9rem",
+          fontWeight: "600",
+          cursor: loading ? "not-allowed" : "pointer"
+        }}
+      >
+        {loading ? "Creating..." : "Create Admin Account"}
+      </button>
     </div>
   );
 }

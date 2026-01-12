@@ -26,6 +26,37 @@ async function verifyAdmin(ctx: any, adminId: string) {
 }
 
 /**
+ * Check if admin user is a super admin
+ * - Super admin if adminLevel === "super" or adminLevel === undefined (backward compatibility)
+ */
+function isSuperAdmin(user: { adminLevel?: "super" | "junior" }): boolean {
+  return user.adminLevel === "super" || user.adminLevel === undefined;
+}
+
+/**
+ * Check if admin can access a specific storage location
+ * - Super admins can access all locations
+ * - Junior admins can only access locations in their allowedStorageLocationIds
+ */
+function canAdminAccessLocation(
+  adminUser: { adminLevel?: "super" | "junior"; allowedStorageLocationIds?: Id<"storageLocations">[] },
+  locationId: Id<"storageLocations">
+): boolean {
+  // Super admins can access all locations
+  if (isSuperAdmin(adminUser)) {
+    return true;
+  }
+  
+  // Junior admins can only access assigned locations
+  if (adminUser.adminLevel === "junior") {
+    return adminUser.allowedStorageLocationIds?.includes(locationId) ?? false;
+  }
+  
+  // Default: deny access (should not happen for valid admin users)
+  return false;
+}
+
+/**
  * Log an admin action
  */
 async function logAdminAction(
@@ -359,7 +390,7 @@ export const confirmDeliveryToStorageByUTID = mutation({
     reason: v.string(),
   },
   handler: async (ctx, args) => {
-    await verifyAdmin(ctx, args.adminId);
+    const adminUser = await verifyAdmin(ctx, args.adminId);
 
     // Find all units locked with this UTID
     const allUnits = await ctx.db.query("listingUnits").collect();
@@ -369,6 +400,39 @@ export const confirmDeliveryToStorageByUTID = mutation({
 
     if (lockedUnits.length === 0) {
       throw new Error(`No locked units found with UTID: ${args.lockUtid}`);
+    }
+
+    // Verify all units have been confirmed by farmer (deliveryStatus === "farmer_confirmed")
+    const notConfirmedUnits = lockedUnits.filter(
+      (u) => u.deliveryStatus !== "farmer_confirmed"
+    );
+    if (notConfirmedUnits.length > 0) {
+      const statuses = notConfirmedUnits.map((u) => u.deliveryStatus || "pending").join(", ");
+      throw new Error(
+        `Cannot confirm delivery: ${notConfirmedUnits.length} unit(s) have not been confirmed by farmer. ` +
+        `Current status(es): ${statuses}. Farmers must self-confirm delivery before admin can confirm.`
+      );
+    }
+
+    // If admin is junior admin, verify they have access to all locations in this UTID
+    if (!isSuperAdmin(adminUser)) {
+      // Check each unit's listing location
+      for (const unit of lockedUnits) {
+        const listing = await ctx.db.get(unit.listingId);
+        if (!listing || !listing.storageLocationId) {
+          continue; // Skip if listing or location missing (will be handled later)
+        }
+        
+        // Check if junior admin can access this location
+        if (!canAdminAccessLocation(adminUser, listing.storageLocationId)) {
+          const location = await ctx.db.get(listing.storageLocationId);
+          const locationName = location ? location.districtName : listing.storageLocationId;
+          throw new Error(
+            `You do not have permission to confirm deliveries for location: ${locationName}. ` +
+            `This delivery is outside your assigned storage locations.`
+          );
+        }
+      }
     }
 
     // Group units by trader, produce type, and storage location

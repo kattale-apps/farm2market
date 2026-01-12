@@ -38,7 +38,8 @@ export const getAllActiveUTIDs = query({
     adminId: v.id("users"),
   },
   handler: async (ctx, args) => {
-    await verifyAdmin(ctx, args.adminId);
+    const adminUser = await verifyAdmin(ctx, args.adminId);
+    const isAdminSuper = adminUser.adminLevel === "super" || adminUser.adminLevel === undefined;
 
     const now = Date.now();
     const utidMap = new Map<string, any>();
@@ -128,6 +129,10 @@ export const getAllActiveUTIDs = query({
         const utidData = utidMap.get(unit.lockUtid)!;
         // Get listing to show farmer's offered price
         const listing = await ctx.db.get(unit.listingId);
+        // Get storage location details (if available)
+        const storageLocation = listing?.storageLocationId 
+          ? await ctx.db.get(listing.storageLocationId)
+          : null;
         // Get negotiation to show actual negotiated price (if exists)
         let negotiatedPricePerKilo = listing?.pricePerKilo || null;
         if (unit.activeNegotiationId) {
@@ -147,6 +152,12 @@ export const getAllActiveUTIDs = query({
           deliveryStatus: unit.deliveryStatus,
           farmerOfferedPricePerKilo: listing?.pricePerKilo || null, // Farmer's original asking price
           negotiatedPricePerKilo: negotiatedPricePerKilo, // Actual negotiated price (if negotiation happened)
+          produceType: listing?.produceType || null,
+          quantity: listing?.unitSize || 10, // Unit size in kg
+          storageLocation: storageLocation ? {
+            districtName: storageLocation.districtName,
+            code: storageLocation.code,
+          } : null,
         });
       }
     }
@@ -241,9 +252,76 @@ export const getAllActiveUTIDs = query({
     // Convert to array and sort by timestamp
     const utids = Array.from(utidMap.values()).sort((a, b) => b.timestamp - a.timestamp);
 
+    // Filter UTIDs based on admin's viewing permissions
+    let filteredUtids = utids;
+    
+    if (!isAdminSuper) {
+      // Junior admins: only see UTIDs for their assigned locations
+      const allowedLocationIds = adminUser.allowedStorageLocationIds || [];
+      
+      filteredUtids = [];
+      
+      for (const utidData of utids) {
+        let canView = false;
+        
+        // Check entities for storage location references
+        for (const entity of utidData.entities || []) {
+          let locationId: Id<"storageLocations"> | null = null;
+          
+          // Try to get location ID from entity
+          if (entity.storageLocationId) {
+            locationId = entity.storageLocationId;
+          } else if (entity.listingId) {
+            // Get location from listing
+            const listing = await ctx.db.get(entity.listingId);
+            locationId = listing?.storageLocationId || null;
+          } else if (entity.inventoryId) {
+            // Get location from inventory
+            const inventory = await ctx.db.get(entity.inventoryId);
+            locationId = inventory?.storageLocationId || null;
+          } else if (entity.storageLocation?.code) {
+            // Find location by code
+            const location = await ctx.db
+              .query("storageLocations")
+              .withIndex("by_code", (q) => q.eq("code", entity.storageLocation.code))
+              .first();
+            locationId = location?._id || null;
+          }
+          
+          // Check if admin can view this location
+          if (locationId && allowedLocationIds.includes(locationId)) {
+            canView = true;
+            break;
+          }
+        }
+        
+        // If no location found in entities, include it (for UTIDs without location context like wallet entries)
+        // But only if admin has at least one location assigned (otherwise they see nothing)
+        if (!canView && (!utidData.entities || utidData.entities.length === 0)) {
+          if (allowedLocationIds.length > 0) {
+            // Skip UTIDs without location context if admin has location restrictions
+            canView = false;
+          } else {
+            // If no locations assigned, show all (shouldn't happen, but handle gracefully)
+            canView = true;
+          }
+        }
+        
+        if (canView) {
+          utidData.canAccess = true; // If they can view it, they can access it
+          filteredUtids.push(utidData);
+        }
+      }
+    } else {
+      // Super admins: see all UTIDs, all accessible
+      for (const utidData of filteredUtids) {
+        utidData.canAccess = true;
+      }
+    }
+
     return {
-      totalUTIDs: utids.length,
-      utids: utids,
+      totalUTIDs: filteredUtids.length,
+      utids: filteredUtids,
       currentTime: now,
     };
   },
@@ -643,6 +721,33 @@ export const getAllUsers = query({
       alias: user.alias,
       state: user.state,
       customSpendCap: user.customSpendCap,
+      adminLevel: user.adminLevel,
+      allowedStorageLocationIds: user.allowedStorageLocationIds,
     }));
+  },
+});
+
+/**
+ * Get user by ID (admin only)
+ */
+export const getUserById = query({
+  args: {
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      return null;
+    }
+    
+    return {
+      userId: user._id,
+      email: user.email,
+      role: user.role,
+      alias: user.alias,
+      state: user.state,
+      adminLevel: user.adminLevel,
+      allowedStorageLocationIds: user.allowedStorageLocationIds,
+    };
   },
 });

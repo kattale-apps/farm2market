@@ -7,20 +7,39 @@ interface DeliveryConfirmationFormProps {
   allUTIDs: any;
   confirmDelivery: any;
   adminId: Id<"users">;
+  isSuperAdmin?: boolean;
 }
 
 export function DeliveryConfirmationForm({
   allUTIDs,
   confirmDelivery,
   adminId,
+  isSuperAdmin = true,
 }: DeliveryConfirmationFormProps) {
   const [selectedUtid, setSelectedUtid] = useState<string>("");
   const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  // Filter UTIDs to only show unit_lock type UTIDs (these are the ones that can be confirmed for delivery)
-  const lockUtids = allUTIDs?.utids?.filter((utid: any) => utid.type === "unit_lock") || [];
+  // Filter UTIDs to only show unit_lock type UTIDs with deliveryStatus === "farmer_confirmed"
+  // These are deliveries that farmers have self-confirmed and are awaiting admin confirmation
+  const lockUtids = allUTIDs?.utids?.filter((utid: any) => {
+    if (utid.type !== "unit_lock") return false;
+    // Check if any entity has deliveryStatus === "farmer_confirmed"
+    return utid.entities?.some((entity: any) => entity.deliveryStatus === "farmer_confirmed");
+  }) || [];
+  
+  // For junior admins, check which UTIDs they can access
+  const getUtidAccess = (utid: any) => {
+    if (isSuperAdmin) return true;
+    return utid.canAccess !== false; // Default to true if not set
+  };
+  
+  // For junior admins, check which UTIDs they can access
+  const getUtidAccess = (utid: any) => {
+    if (isSuperAdmin) return true;
+    return utid.canAccess !== false; // Default to true if not set
+  };
 
   const handleConfirm = async () => {
     if (!selectedUtid) {
@@ -65,10 +84,14 @@ export function DeliveryConfirmationForm({
     <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
       <div>
         <label style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.9rem", fontWeight: "600" }}>
-          Select Lock UTID:
+          Select Farmer-Confirmed Delivery UTID:
         </label>
+        <p style={{ fontSize: "0.8rem", color: "#666", marginBottom: "0.5rem" }}>
+          Only deliveries that farmers have self-confirmed are shown here. Location information is displayed for each UTID.
+          {!isSuperAdmin && " Only UTIDs from your assigned storage locations are visible."}
+        </p>
         {lockUtids.length === 0 ? (
-          <p style={{ color: "#666", fontSize: "0.85rem" }}>No lock UTIDs available for confirmation.</p>
+          <p style={{ color: "#666", fontSize: "0.85rem" }}>No deliveries available for confirmation. Farmers must self-confirm deliveries first.</p>
         ) : (
           <select
             value={selectedUtid}
@@ -83,13 +106,39 @@ export function DeliveryConfirmationForm({
             }}
           >
             <option value="">-- Select a lock UTID --</option>
-            {lockUtids.map((utid: any) => (
-              <option key={utid.utid} value={utid.utid}>
-                {utid.utid} - {utid.entities?.[0]?.produceType || "Produce"} ({utid.entities?.[0]?.quantity || "10"}kg)
-              </option>
-            ))}
+            {lockUtids.map((utid: any) => {
+              const entity = utid.entities?.find((e: any) => e.deliveryStatus === "farmer_confirmed") || utid.entities?.[0];
+              const location = entity?.storageLocation;
+              const locationText = location ? ` - ${location.districtName} (${location.code})` : "";
+              return (
+                <option key={utid.utid} value={utid.utid}>
+                  {utid.utid} - {entity?.produceType || "Produce"} ({entity?.quantity || "10"}kg){locationText}
+                </option>
+              );
+            })}
           </select>
         )}
+        {selectedUtid && (() => {
+          const selectedUtidData = lockUtids.find((u: any) => u.utid === selectedUtid);
+          const entity = selectedUtidData?.entities?.find((e: any) => e.deliveryStatus === "farmer_confirmed") || selectedUtidData?.entities?.[0];
+          const location = entity?.storageLocation;
+          return location ? (
+            <div style={{
+              marginTop: "0.75rem",
+              padding: "0.75rem",
+              background: "#e3f2fd",
+              borderRadius: "6px",
+              border: "1px solid #90caf9",
+            }}>
+              <div style={{ fontSize: "0.85rem", fontWeight: "600", color: "#1565c0", marginBottom: "0.25rem" }}>
+                Delivery Location:
+              </div>
+              <div style={{ fontSize: "0.9rem", color: "#1976d2" }}>
+                {location.districtName} ({location.code})
+              </div>
+            </div>
+          ) : null;
+        })()}
       </div>
 
       <div>

@@ -344,6 +344,8 @@ export const getDeliveryDeadlines = query({
           lockedAt: unit.lockedAt,
           // Delivery deadline
           deliveryDeadline: unit.deliveryDeadline,
+          // Delivery status
+          deliveryStatus: unit.deliveryStatus || "pending",
           // Server-calculated countdown
           isPastDeadline,
           hoursRemaining: Math.round(hoursRemaining * 100) / 100,
@@ -928,6 +930,118 @@ export const cancelOverdueUTID = mutation({
       lockUtid: unit.lockUtid,
       capitalReturned: unitPrice,
       message: "Overdue UTID cancelled successfully. Capital has been returned to trader.",
+    };
+  },
+});
+
+/**
+ * Farmer confirms delivery (farmer only)
+ * 
+ * Allows farmers to self-confirm that they have delivered the produce to storage.
+ * This changes deliveryStatus from "pending" to "farmer_confirmed".
+ * Admin must then confirm to complete the delivery and create inventory.
+ */
+export const farmerConfirmDelivery = mutation({
+  args: {
+    farmerId: v.id("users"),
+    unitId: v.id("listingUnits"),
+  },
+  handler: async (ctx, args) => {
+    // Verify user is a farmer
+    const user = await ctx.db.get(args.farmerId);
+    if (!user || user.role !== "farmer") {
+      throw new Error("User is not a farmer");
+    }
+
+    // Get the unit
+    const unit = await ctx.db.get(args.unitId);
+    if (!unit) {
+      throw new Error("Unit not found");
+    }
+
+    // Verify the unit belongs to this farmer's listing
+    const listing = await ctx.db.get(unit.listingId);
+    if (!listing || listing.farmerId !== args.farmerId) {
+      throw new Error("Unit does not belong to this farmer");
+    }
+
+    // Verify unit is locked
+    if (unit.status !== "locked") {
+      throw new Error("Unit is not locked");
+    }
+
+    // Verify unit has deliveryStatus of "pending"
+    if (unit.deliveryStatus !== "pending") {
+      throw new Error(`Unit delivery status is "${unit.deliveryStatus}". Only pending deliveries can be confirmed by farmer.`);
+    }
+
+    // Update deliveryStatus to "farmer_confirmed"
+    await ctx.db.patch(unit._id, {
+      deliveryStatus: "farmer_confirmed",
+    });
+
+    // Send notifications to relevant admins
+    // Find all admins who should be notified:
+    // 1. Super admins (adminLevel === "super" or undefined)
+    // 2. Junior admins assigned to this storage location
+    const adminUsers = await ctx.db
+      .query("users")
+      .withIndex("by_role", (q) => q.eq("role", "admin"))
+      .collect();
+
+    const locationId = listing.storageLocationId;
+    const adminsToNotify: Id<"users">[] = [];
+
+    for (const adminUser of adminUsers) {
+      // Check if super admin
+      const isSuperAdmin = adminUser.adminLevel === "super" || adminUser.adminLevel === undefined;
+      
+      if (isSuperAdmin) {
+        // Super admins always get notified
+        adminsToNotify.push(adminUser._id);
+      } else if (adminUser.adminLevel === "junior" && locationId) {
+        // Junior admins only if they have access to this location
+        const hasLocationAccess = adminUser.allowedStorageLocationIds?.includes(locationId) ?? false;
+        if (hasLocationAccess) {
+          adminsToNotify.push(adminUser._id);
+        }
+      }
+    }
+
+    // Get storage location name for notification
+    let locationName = "storage location";
+    if (locationId) {
+      const storageLocation = await ctx.db.get(locationId);
+      if (storageLocation) {
+        locationName = `${storageLocation.districtName} (${storageLocation.code})`;
+      }
+    }
+
+    // Get produce type and unit size for notification
+    const produceType = listing.produceType || "produce";
+    const unitSize = listing.unitSize || 10; // Unit size in kg
+
+    // Send notifications to all relevant admins
+    const now = getUgandaTime();
+
+    for (const adminId of adminsToNotify) {
+      await ctx.db.insert("notifications", {
+        userId: adminId,
+        type: "system",
+        title: "Farmer Delivery Confirmation",
+        message: `Farmer has confirmed delivery of ${unitSize}kg ${produceType} to ${locationName}. UTID: ${unit.lockUtid}. Please verify and complete the delivery confirmation.`,
+        utid: unit.lockUtid, // Reference to the lock UTID
+        read: false,
+        createdAt: now,
+      });
+    }
+
+    return {
+      success: true,
+      unitId: unit._id,
+      lockUtid: unit.lockUtid,
+      message: "Delivery confirmed. Awaiting admin confirmation.",
+      notificationsSent: adminsToNotify.length,
     };
   },
 });

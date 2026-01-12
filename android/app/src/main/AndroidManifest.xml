@@ -38,4 +38,15 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    
+    <!-- Push Notifications Receiver -->
+    <receiver android:name="com.getcapacitor.plugin.pushnotifications.PushNotificationsReceiver"
+        android:exported="true">
+        <intent-filter>
+            <action android:name="com.getcapacitor.plugin.pushnotifications.ACTION" />
+        </intent-filter>
+    </receiver>
 </manifest>

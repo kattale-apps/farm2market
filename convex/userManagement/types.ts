@@ -165,15 +165,21 @@ export type UserActionContext = {
  * Requirements:
  * - email: Required email address (must be valid format)
  * - role: Required user role (explicit, not inferred)
+ * - adminLevel: Optional admin hierarchy level (only for admin role)
+ * - allowedStorageLocationIds: Optional storage location IDs (required for junior admin)
  *
  * Constraints:
  * - Role must be explicit (not inferred from email prefix)
  * - Email must be validated (server-side only)
+ * - If role is "admin" and adminLevel is "junior", allowedStorageLocationIds must be provided and non-empty
+ * - If role is "admin" and adminLevel is "super" or undefined, allowedStorageLocationIds should be ignored
  * - No default values
  */
 export type CreateUserInput = {
   readonly email: string;
   readonly role: UserRole;
+  readonly adminLevel?: "super" | "junior";
+  readonly allowedStorageLocationIds?: readonly string[];
 };
 
 /**

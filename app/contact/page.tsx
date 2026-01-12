@@ -136,7 +136,7 @@ export default function ContactPage() {
             lineHeight: "1.8",
             color: "#333"
           }}>
-            Have a question, suggestion, or need support? We're here to help! Fill out the form or contact us directly.
+            Have a question, suggestion, or need support? We&apos;re here to help! Fill out the form or contact us directly.
           </p>
 
           <div style={{

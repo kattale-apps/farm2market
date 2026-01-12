@@ -71,7 +71,7 @@ export default function PrivacyPolicyPage() {
             Introduction
           </h2>
           <p style={{ marginBottom: "1rem" }}>
-            Farm2Market Uganda ("we", "our", or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our mobile application.
+            Farm2Market Uganda (&quot;we&quot;, &quot;our&quot;, or &quot;us&quot;) is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our mobile application.
           </p>
         </section>
 
@@ -260,7 +260,7 @@ export default function PrivacyPolicyPage() {
             marginBottom: "1rem",
             fontFamily: '"Montserrat", sans-serif'
           }}>
-            Children's Privacy
+            Children&apos;s Privacy
           </h2>
           <p>
             Our app is not intended for users under 18 years of age. We do not knowingly collect information from children.
@@ -278,7 +278,7 @@ export default function PrivacyPolicyPage() {
             Changes to This Policy
           </h2>
           <p>
-            We may update this Privacy Policy from time to time. We will notify you of any changes by updating the "Last Updated" date and posting the new Privacy Policy in the app.
+            We may update this Privacy Policy from time to time. We will notify you of any changes by updating the &quot;Last Updated&quot; date and posting the new Privacy Policy in the app.
           </p>
         </section>
 

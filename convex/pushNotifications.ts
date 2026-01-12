@@ -6,7 +6,7 @@
  */
 
 import { v } from "convex/values";
-import { mutation, query, action, internalAction } from "./_generated/server";
+import { mutation, query, action, internalAction, internalQuery, internalMutation } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 
@@ -205,7 +205,7 @@ export const sendPushNotification = internalAction({
 /**
  * Internal query to get device tokens
  */
-export const getUserDeviceTokensInternal = query({
+export const getUserDeviceTokensInternal = internalQuery({
   args: {
     userId: v.id("users"),
   },
@@ -241,7 +241,7 @@ export const deactivateToken = internalAction({
 /**
  * Deactivate a device token (internal mutation)
  */
-export const deactivateTokenInternal = mutation({
+export const deactivateTokenInternal = internalMutation({
   args: {
     tokenId: v.id("deviceTokens"),
   },

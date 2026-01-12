@@ -123,7 +123,7 @@ export function StorageLocationsManager({
   };
 
   const startEdit = (location: any) => {
-    setEditingId(location.locationId);
+    setEditingId(location._id);
     setEditDistrictName(location.districtName);
     setEditCode(location.code);
     setEditOrder(String(location.order));
@@ -296,7 +296,7 @@ export function StorageLocationsManager({
           <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
             {storageLocations.map((location) => (
               <div
-                key={location.locationId}
+                key={location._id}
                 style={{
                   padding: "1rem",
                   background: location.active ? "#fff" : "#f5f5f5",
@@ -305,7 +305,7 @@ export function StorageLocationsManager({
                   opacity: location.active ? 1 : 0.6
                 }}
               >
-                {editingId === location.locationId ? (
+                {editingId === location._id ? (
                   <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
                     <div>
                       <label style={{ display: "block", marginBottom: "0.25rem", fontSize: "0.9rem", fontWeight: "600" }}>
@@ -401,7 +401,7 @@ export function StorageLocationsManager({
                     )}
                     <div style={{ display: "flex", gap: "0.5rem" }}>
                       <button
-                        onClick={() => handleEdit(location.locationId)}
+                        onClick={() => handleEdit(location._id)}
                         disabled={editLoading}
                         style={{
                           padding: "0.5rem 1rem",
@@ -459,7 +459,7 @@ export function StorageLocationsManager({
                       >
                         Edit
                       </button>
-                      {deletingId === location.locationId ? (
+                      {deletingId === location._id ? (
                         <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", minWidth: "200px" }}>
                           <input
                             type="text"
@@ -475,7 +475,7 @@ export function StorageLocationsManager({
                           />
                           <div style={{ display: "flex", gap: "0.25rem" }}>
                             <button
-                              onClick={() => handleDelete(location.locationId)}
+                              onClick={() => handleDelete(location._id)}
                               style={{
                                 padding: "0.25rem 0.5rem",
                                 background: "#d32f2f",
@@ -508,7 +508,7 @@ export function StorageLocationsManager({
                         </div>
                       ) : (
                         <button
-                          onClick={() => setDeletingId(location.locationId)}
+                          onClick={() => setDeletingId(location._id)}
                           style={{
                             padding: "0.5rem 1rem",
                             background: "#d32f2f",

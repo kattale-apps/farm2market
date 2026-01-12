@@ -91,6 +91,14 @@ export const getUserDeviceTokens = query({
  * 3. Store it securely (e.g., in Convex environment variables)
  * 4. Use it to send notifications via FCM REST API
  */
+type PushNotificationResult = {
+  success: boolean;
+  tokensSent?: number;
+  tokensFailed?: number;
+  totalTokens?: number;
+  message: string;
+};
+
 export const sendPushNotification = internalAction({
   args: {
     userId: v.id("users"),
@@ -98,10 +106,10 @@ export const sendPushNotification = internalAction({
     body: v.string(),
     data: v.optional(v.any()), // Additional data payload
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<PushNotificationResult> => {
     // Get all active device tokens for the user
     // Type assertion needed until Convex regenerates types with pushNotifications module
-    const tokens = await ctx.runQuery(
+    const tokens: any[] = await ctx.runQuery(
       (internal as any).pushNotifications.getUserDeviceTokensInternal,
       {
         userId: args.userId,
@@ -120,7 +128,7 @@ export const sendPushNotification = internalAction({
       platform: "android" | "ios" | "web";
       lastUsedAt: number;
     };
-    const androidTokens = (tokens as DeviceToken[]).filter((t: DeviceToken) => t.platform === "android");
+    const androidTokens: DeviceToken[] = (tokens as DeviceToken[]).filter((t: DeviceToken) => t.platform === "android");
 
     if (androidTokens.length === 0) {
       return { success: false, message: "No Android device tokens found" };

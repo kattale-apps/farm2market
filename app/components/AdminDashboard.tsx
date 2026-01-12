@@ -1179,6 +1179,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
             addProduceOption={addProduceOption}
             updateProduceOption={updateProduceOption}
             deleteProduceOption={deleteProduceOption}
+            storageLocations={storageLocations}
             adminId={userId}
           />
         )}
@@ -3145,12 +3146,14 @@ function ProduceOptionsManager({
   addProduceOption, 
   updateProduceOption, 
   deleteProduceOption, 
+  storageLocations,
   adminId 
 }: { 
   produceOptions: any[]; 
   addProduceOption: any; 
   updateProduceOption: any; 
   deleteProduceOption: any; 
+  storageLocations: any;
   adminId: Id<"users"> 
 }) {
   const [showAddForm, setShowAddForm] = useState(false);
@@ -3171,6 +3174,8 @@ function ProduceOptionsManager({
   const [editMessage, setEditMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [deleteReason, setDeleteReason] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [newAllowedLocations, setNewAllowedLocations] = useState<string[]>([]);
+  const [editingAllowedLocations, setEditingAllowedLocations] = useState<string[]>([]);
 
   const handleAdd = async () => {
     if (!newLabel.trim() || !newValue.trim() || !newIcon.trim()) {
@@ -3191,6 +3196,9 @@ function ProduceOptionsManager({
         value: newValue.trim(),
         icon: newIcon.trim(),
         order: parseInt(newOrder) || 0,
+        allowedStorageLocationIds: newAllowedLocations.length > 0 
+          ? newAllowedLocations.map(id => id as Id<"storageLocations">)
+          : undefined,
         reason: addReason.trim(),
       });
       setAddMessage({
@@ -3226,6 +3234,9 @@ function ProduceOptionsManager({
         icon: editIcon.trim(),
         order: parseInt(editOrder) || 0,
         active: editActive,
+        allowedStorageLocationIds: editingAllowedLocations.length > 0 
+          ? editingAllowedLocations.map(id => id as Id<"storageLocations">)
+          : undefined,
         reason: editReason.trim(),
       });
       setEditMessage({
@@ -3267,6 +3278,7 @@ function ProduceOptionsManager({
     setEditIcon(option.icon);
     setEditOrder(option.order.toString());
     setEditActive(option.active);
+    setEditingAllowedLocations(option.allowedStorageLocationIds || []);
     setEditReason("");
     setEditMessage(null);
   };
@@ -3401,6 +3413,50 @@ function ProduceOptionsManager({
                 }}
               />
             </div>
+            {storageLocations && storageLocations.length > 0 && (
+              <div>
+                <label style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.9rem", fontWeight: "600" }}>
+                  Allowed Storage Locations (optional):
+                </label>
+                <p style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.5rem" }}>
+                  Select which storage locations can accept this produce type. Leave empty to allow all locations.
+                </p>
+                <div style={{ 
+                  display: "grid", 
+                  gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", 
+                  gap: "0.5rem",
+                  maxHeight: "200px",
+                  overflowY: "auto",
+                  padding: "0.5rem",
+                  border: "1px solid #ddd",
+                  borderRadius: "6px",
+                  background: "#fff"
+                }}>
+                  {storageLocations.filter((loc: any) => loc.active).map((loc: any) => (
+                    <label key={loc.locationId} style={{ 
+                      display: "flex", 
+                      alignItems: "center", 
+                      gap: "0.5rem",
+                      cursor: "pointer",
+                      fontSize: "0.9rem"
+                    }}>
+                      <input
+                        type="checkbox"
+                        checked={newAllowedLocations.includes(loc.locationId)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setNewAllowedLocations([...newAllowedLocations, loc.locationId]);
+                          } else {
+                            setNewAllowedLocations(newAllowedLocations.filter(id => id !== loc.locationId));
+                          }
+                        }}
+                      />
+                      <span>{loc.districtName} ({loc.code})</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
             <div>
               <label style={{ display: "block", marginBottom: "0.25rem", fontSize: "0.9rem", fontWeight: "600" }}>
                 Reason (required):
@@ -3455,6 +3511,7 @@ function ProduceOptionsManager({
                   setNewOrder("0");
                   setAddReason("");
                   setAddMessage(null);
+                  setNewAllowedLocations([]);
                 }}
                 style={{
                   padding: "0.5rem 1rem",

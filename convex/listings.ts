@@ -282,6 +282,7 @@ export const getActiveProduceOptions = query({
       value: opt.value,
       label: opt.label,
       icon: opt.icon,
+      allowedStorageLocationIds: opt.allowedStorageLocationIds || [],
     }));
   },
 });

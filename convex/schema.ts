@@ -431,6 +431,7 @@ export default defineSchema({
     icon: v.string(), // Emoji icon (e.g., "🍌", "🌽", "🫘")
     order: v.number(), // Display order (lower numbers appear first)
     active: v.boolean(), // Whether this option is currently active/available
+    allowedStorageLocationIds: v.optional(v.array(v.id("storageLocations"))), // Storage locations where this produce can be delivered
     createdAt: v.number(),
     createdBy: v.id("users"), // Admin who created this option
   })

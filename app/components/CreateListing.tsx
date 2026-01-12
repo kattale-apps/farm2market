@@ -3,7 +3,7 @@
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 
 interface CreateListingProps {
   userId: Id<"users">;
@@ -30,6 +30,24 @@ export function CreateListing({ userId }: CreateListingProps) {
   const formatUGX = (amount: number) => {
     return new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX" }).format(amount);
   };
+
+  // Filter produce types based on selected location
+  const filteredProduceOptions = useMemo(() => {
+    if (!formData.storageLocationId || !produceOptions || !storageLocations) {
+      return [];
+    }
+    
+    // Find produce types that allow this location
+    return produceOptions.filter((produce: any) => {
+      // If produce has no location restrictions, it's allowed everywhere
+      if (!produce.allowedStorageLocationIds || produce.allowedStorageLocationIds.length === 0) {
+        return true;
+      }
+      
+      // Check if this location is in the allowed list
+      return produce.allowedStorageLocationIds.includes(formData.storageLocationId);
+    });
+  }, [formData.storageLocationId, produceOptions, storageLocations]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -175,16 +193,62 @@ export function CreateListing({ userId }: CreateListingProps) {
 
       <form onSubmit={handleSubmit}>
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          {/* Icon-based Produce Selection */}
+          
+          {/* STEP 1: Storage Location Selection (FIRST) */}
+          <div>
+            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+              Select Delivery Location (District) *
+            </label>
+            <p style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.75rem" }}>
+              Choose the storage location where you will deliver your produce
+            </p>
+            {storageLocations === undefined ? (
+              <p style={{ color: "#999", fontSize: "0.9rem" }}>Loading storage locations...</p>
+            ) : storageLocations.length === 0 ? (
+              <p style={{ color: "#666", fontSize: "0.9rem", padding: "1rem", background: "#fff3cd", borderRadius: "6px" }}>
+                No storage locations available. Please contact admin to add storage locations.
+              </p>
+            ) : (
+              <select
+                value={formData.storageLocationId}
+                onChange={(e) => {
+                  // Clear produce type when location changes
+                  setFormData({ ...formData, storageLocationId: e.target.value, produceType: "" });
+                }}
+                required
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  border: "1px solid #ddd",
+                  borderRadius: "6px",
+                  fontSize: "1rem",
+                  background: "#fff",
+                }}
+              >
+                <option value="">-- Select storage location --</option>
+                {storageLocations.filter((loc: any) => loc.active).map((location) => (
+                  <option key={location.locationId} value={location.locationId}>
+                    {location.districtName} ({location.code})
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {/* STEP 2: Produce Type Selection (filtered by location) */}
           <div>
             <label style={{ display: "block", marginBottom: "0.75rem", fontWeight: "600", color: "#333" }}>
               Select Produce Type *
             </label>
-            {produceOptions === undefined ? (
-              <p style={{ color: "#999", fontSize: "0.9rem" }}>Loading produce options...</p>
-            ) : produceOptions.length === 0 ? (
+            {!formData.storageLocationId ? (
               <p style={{ color: "#666", fontSize: "0.9rem", padding: "1rem", background: "#fff3cd", borderRadius: "6px" }}>
-                No produce options available. Please contact admin to enable produce types.
+                Please select a storage location first to see available produce types.
+              </p>
+            ) : produceOptions === undefined ? (
+              <p style={{ color: "#999", fontSize: "0.9rem" }}>Loading produce options...</p>
+            ) : filteredProduceOptions.length === 0 ? (
+              <p style={{ color: "#d32f2f", fontSize: "0.9rem", padding: "1rem", background: "#ffebee", borderRadius: "6px" }}>
+                No produce types available for the selected location. Please contact admin or select a different location.
               </p>
             ) : (
               <>
@@ -194,7 +258,7 @@ export function CreateListing({ userId }: CreateListingProps) {
                   gap: "1rem",
                   marginBottom: "1rem"
                 }}>
-                  {produceOptions.map((produce) => (
+                  {filteredProduceOptions.map((produce) => (
                     <button
                       key={produce.value}
                       type="button"
@@ -218,7 +282,7 @@ export function CreateListing({ userId }: CreateListingProps) {
                     </button>
                   ))}
                 </div>
-                {/* Fallback text input for other produce types (if admin allows) */}
+                {/* Fallback text input for other produce types */}
                 <input
                   type="text"
                   value={formData.produceType}
@@ -233,6 +297,11 @@ export function CreateListing({ userId }: CreateListingProps) {
                     fontSize: "1rem",
                   }}
                 />
+                {formData.storageLocationId && filteredProduceOptions.length > 0 && (
+                  <p style={{ fontSize: "0.85rem", color: "#666", marginTop: "0.5rem" }}>
+                    {filteredProduceOptions.length} produce type(s) available for selected location
+                  </p>
+                )}
               </>
             )}
           </div>
@@ -289,40 +358,6 @@ export function CreateListing({ userId }: CreateListingProps) {
             )}
           </div>
 
-          {/* Storage Location Dropdown */}
-          <div>
-            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
-              Storage Location (District) *
-            </label>
-            {storageLocations === undefined ? (
-              <p style={{ color: "#999", fontSize: "0.9rem" }}>Loading storage locations...</p>
-            ) : storageLocations.length === 0 ? (
-              <p style={{ color: "#666", fontSize: "0.9rem", padding: "1rem", background: "#fff3cd", borderRadius: "6px" }}>
-                No storage locations available. Please contact admin to add storage locations.
-              </p>
-            ) : (
-              <select
-                value={formData.storageLocationId}
-                onChange={(e) => setFormData({ ...formData, storageLocationId: e.target.value })}
-                required
-                style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  border: "1px solid #ddd",
-                  borderRadius: "6px",
-                  fontSize: "1rem",
-                  background: "#fff",
-                }}
-              >
-                <option value="">-- Select storage location --</option>
-                {storageLocations.map((location) => (
-                  <option key={location.locationId} value={location.locationId}>
-                    {location.districtName} ({location.code})
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
 
           {/* Quality Rating Dropdown */}
           {qualityOptions && qualityOptions.length > 0 && (
@@ -380,14 +415,14 @@ export function CreateListing({ userId }: CreateListingProps) {
           <div style={{ display: "flex", gap: "1rem", marginTop: "0.5rem" }}>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !formData.storageLocationId || !formData.produceType}
               style={{
                 padding: "0.75rem 1.5rem",
-                background: loading ? "#ccc" : "#4caf50",
+                background: loading || !formData.storageLocationId || !formData.produceType ? "#ccc" : "#4caf50",
                 color: "#fff",
                 border: "none",
                 borderRadius: "6px",
-                cursor: loading ? "not-allowed" : "pointer",
+                cursor: loading || !formData.storageLocationId || !formData.produceType ? "not-allowed" : "pointer",
                 fontSize: "1rem",
                 fontWeight: "600",
               }}

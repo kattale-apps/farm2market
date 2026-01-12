@@ -1897,6 +1897,7 @@ export const getProduceOptions = query({
       icon: opt.icon,
       order: opt.order,
       active: opt.active,
+      allowedStorageLocationIds: opt.allowedStorageLocationIds || [],
       createdAt: opt.createdAt,
       createdBy: opt.createdBy,
     }));
@@ -1913,6 +1914,7 @@ export const addProduceOption = mutation({
     value: v.string(),
     icon: v.string(), // Emoji icon
     order: v.number(),
+    allowedStorageLocationIds: v.optional(v.array(v.id("storageLocations"))),
     reason: v.string(),
   },
   handler: async (ctx, args) => {
@@ -1958,6 +1960,7 @@ export const addProduceOption = mutation({
       icon: args.icon.trim(),
       order: args.order,
       active: true,
+      allowedStorageLocationIds: args.allowedStorageLocationIds || [],
       createdAt: getUgandaTime(),
       createdBy: args.adminId,
     });
@@ -1977,6 +1980,7 @@ export const updateProduceOption = mutation({
     icon: v.optional(v.string()),
     order: v.optional(v.number()),
     active: v.optional(v.boolean()),
+    allowedStorageLocationIds: v.optional(v.array(v.id("storageLocations"))),
     reason: v.string(),
   },
   handler: async (ctx, args) => {
@@ -1992,6 +1996,7 @@ export const updateProduceOption = mutation({
       icon: option.icon,
       order: option.order,
       active: option.active,
+      allowedStorageLocationIds: option.allowedStorageLocationIds || [],
     };
 
     const updates: any = {};
@@ -2012,6 +2017,9 @@ export const updateProduceOption = mutation({
     }
     if (args.active !== undefined) {
       updates.active = args.active;
+    }
+    if (args.allowedStorageLocationIds !== undefined) {
+      updates.allowedStorageLocationIds = args.allowedStorageLocationIds;
     }
 
     const utid = await logAdminAction(

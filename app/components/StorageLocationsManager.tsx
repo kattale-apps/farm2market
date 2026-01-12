@@ -458,8 +458,9 @@ export function StorageLocationsManager({
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
-                          minWidth: "36px",
-                          height: "36px"
+                          width: "36px",
+                          height: "36px",
+                          boxSizing: "border-box"
                         }}
                         title="Edit"
                       >
@@ -526,8 +527,9 @@ export function StorageLocationsManager({
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
-                            minWidth: "36px",
-                            height: "36px"
+                            width: "36px",
+                            height: "36px",
+                            boxSizing: "border-box"
                           }}
                           title="Delete"
                         >

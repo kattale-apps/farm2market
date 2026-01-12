@@ -3052,8 +3052,9 @@ function QualityOptionsManager({
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
-                          minWidth: "36px",
-                          height: "36px"
+                          width: "36px",
+                          height: "36px",
+                          boxSizing: "border-box"
                         }}
                         title="Edit"
                       >
@@ -3120,8 +3121,9 @@ function QualityOptionsManager({
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
-                            minWidth: "36px",
-                            height: "36px"
+                            width: "36px",
+                            height: "36px",
+                            boxSizing: "border-box"
                           }}
                           title="Delete"
                         >
@@ -3672,8 +3674,9 @@ function ProduceOptionsManager({
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
-                          minWidth: "36px",
-                          height: "36px"
+                          width: "36px",
+                          height: "36px",
+                          boxSizing: "border-box"
                         }}
                         title="Edit"
                       >
@@ -3740,8 +3743,9 @@ function ProduceOptionsManager({
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
-                            minWidth: "36px",
-                            height: "36px"
+                            width: "36px",
+                            height: "36px",
+                            boxSizing: "border-box"
                           }}
                           title="Delete"
                         >

@@ -1182,6 +1182,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
             deleteProduceOption={deleteProduceOption}
             storageLocations={storageLocations}
             adminId={userId}
+            isSuperAdmin={isSuperAdmin}
           />
         )}
       </div>
@@ -1223,6 +1224,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
             updateQualityOption={updateQualityOption}
             deleteQualityOption={deleteQualityOption}
             adminId={userId}
+            isSuperAdmin={isSuperAdmin}
           />
         )}
       </div>
@@ -2624,13 +2626,15 @@ function QualityOptionsManager({
   addQualityOption, 
   updateQualityOption, 
   deleteQualityOption, 
-  adminId 
+  adminId,
+  isSuperAdmin
 }: { 
   qualityOptions: any[]; 
   addQualityOption: any; 
   updateQualityOption: any; 
   deleteQualityOption: any; 
-  adminId: Id<"users"> 
+  adminId: Id<"users">;
+  isSuperAdmin: boolean;
 }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newLabel, setNewLabel] = useState("");
@@ -3149,10 +3153,12 @@ function QualityOptionsManager({
         )}
       </div>
 
-      {/* Contact Us Section */}
-      <div style={{ marginTop: "2rem" }}>
-        <ContactUs isMobile={false} />
-      </div>
+      {/* Contact Us Section - Hidden for super admin */}
+      {!isSuperAdmin && (
+        <div style={{ marginTop: "2rem" }}>
+          <ContactUs isMobile={false} />
+        </div>
+      )}
     </div>
   );
 }
@@ -3164,14 +3170,16 @@ function ProduceOptionsManager({
   updateProduceOption, 
   deleteProduceOption, 
   storageLocations,
-  adminId 
+  adminId,
+  isSuperAdmin
 }: { 
   produceOptions: any[]; 
   addProduceOption: any; 
   updateProduceOption: any; 
   deleteProduceOption: any; 
   storageLocations: any;
-  adminId: Id<"users"> 
+  adminId: Id<"users">;
+  isSuperAdmin: boolean;
 }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newLabel, setNewLabel] = useState("");
@@ -3888,10 +3896,12 @@ function ProduceOptionsManager({
         )}
       </div>
 
-      {/* Contact Us Section */}
-      <div style={{ marginTop: "2rem" }}>
-        <ContactUs isMobile={false} />
-      </div>
+      {/* Contact Us Section - Hidden for super admin */}
+      {!isSuperAdmin && (
+        <div style={{ marginTop: "2rem" }}>
+          <ContactUs isMobile={false} />
+        </div>
+      )}
     </div>
   );
 }

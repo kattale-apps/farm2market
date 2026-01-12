@@ -444,23 +444,29 @@ export function StorageLocationsManager({
                         Order: {location.order}
                       </div>
                     </div>
-                    <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                       <button
                         onClick={() => startEdit(location)}
                         style={{
-                          padding: "0.5rem 1rem",
+                          padding: "0.5rem",
                           background: "#1976d2",
                           color: "#fff",
                           border: "none",
                           borderRadius: "4px",
-                          fontSize: "0.85rem",
-                          cursor: "pointer"
+                          fontSize: "1.2rem",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          minWidth: "36px",
+                          height: "36px"
                         }}
+                        title="Edit"
                       >
-                        Edit
+                        ✏️
                       </button>
                       {deletingId === location._id ? (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", minWidth: "200px" }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", minWidth: "min(200px, 100%)", width: "100%", maxWidth: "100%", boxSizing: "border-box" }}>
                           <input
                             type="text"
                             value={deleteReason}
@@ -510,16 +516,22 @@ export function StorageLocationsManager({
                         <button
                           onClick={() => setDeletingId(location._id)}
                           style={{
-                            padding: "0.5rem 1rem",
+                            padding: "0.5rem",
                             background: "#d32f2f",
                             color: "#fff",
                             border: "none",
                             borderRadius: "4px",
-                            fontSize: "0.85rem",
-                            cursor: "pointer"
+                            fontSize: "1.2rem",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            minWidth: "36px",
+                            height: "36px"
                           }}
+                          title="Delete"
                         >
-                          Delete
+                          🗑️
                         </button>
                       )}
                     </div>

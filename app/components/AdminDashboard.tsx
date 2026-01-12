@@ -459,10 +459,52 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           <p style={{ color: "#666" }}>No UTIDs available</p>
         ) : (
           <div>
-            <p style={{ color: "#666" }}>
-              Total active UTIDs: <strong>{allUTIDs.totalUTIDs || 0}</strong>
-            </p>
-            <div style={{ marginTop: "1rem", maxHeight: "400px", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.5rem" }}>
+              <p style={{ color: "#666", margin: 0 }}>
+                Total active UTIDs: <strong>{allUTIDs.totalUTIDs || 0}</strong>
+              </p>
+              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                <button
+                  onClick={() => handleExportUTIDs("excel")}
+                  style={{
+                    padding: "clamp(0.5rem, 2vw, 0.75rem) clamp(0.75rem, 3vw, 1rem)",
+                    background: "#000000",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: "6px",
+                    fontSize: "clamp(0.8rem, 2.5vw, 0.9rem)",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem"
+                  }}
+                  title="Export to Excel"
+                >
+                  📊 Excel
+                </button>
+                <button
+                  onClick={() => handleExportUTIDs("pdf")}
+                  style={{
+                    padding: "clamp(0.5rem, 2vw, 0.75rem) clamp(0.75rem, 3vw, 1rem)",
+                    background: "#ffc107",
+                    color: "#000",
+                    border: "none",
+                    borderRadius: "6px",
+                    fontSize: "clamp(0.8rem, 2.5vw, 0.9rem)",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem"
+                  }}
+                  title="Export to PDF"
+                >
+                  📄 PDF
+                </button>
+              </div>
+            </div>
+            <div style={{ marginTop: "1rem", maxHeight: "400px", overflowY: "auto", overflowX: "hidden" }}>
               {allUTIDs.utids.slice(0, 20).map((utidData: any, index: number) => (
                 <div key={index} style={{
                   padding: "0.75rem",
@@ -2996,23 +3038,29 @@ function QualityOptionsManager({
                         Value: <code>{option.value}</code> | Order: {option.order}
                       </div>
                     </div>
-                    <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                       <button
                         onClick={() => startEdit(option)}
                         style={{
-                          padding: "0.5rem 1rem",
+                          padding: "0.5rem",
                           background: "#1976d2",
                           color: "#fff",
                           border: "none",
                           borderRadius: "4px",
-                          fontSize: "0.85rem",
-                          cursor: "pointer"
+                          fontSize: "1.2rem",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          minWidth: "36px",
+                          height: "36px"
                         }}
+                        title="Edit"
                       >
-                        Edit
+                        ✏️
                       </button>
                       {deletingId === option.optionId ? (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", minWidth: "min(200px, 100%)" }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", minWidth: "min(200px, 100%)", width: "100%", maxWidth: "100%", boxSizing: "border-box" }}>
                           <input
                             type="text"
                             value={deleteReason}
@@ -3062,16 +3110,22 @@ function QualityOptionsManager({
                         <button
                           onClick={() => setDeletingId(option.optionId)}
                           style={{
-                            padding: "0.5rem 1rem",
+                            padding: "0.5rem",
                             background: "#d32f2f",
                             color: "#fff",
                             border: "none",
                             borderRadius: "4px",
-                            fontSize: "0.85rem",
-                            cursor: "pointer"
+                            fontSize: "1.2rem",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            minWidth: "36px",
+                            height: "36px"
                           }}
+                          title="Delete"
                         >
-                          Delete
+                          🗑️
                         </button>
                       )}
                     </div>
@@ -3604,23 +3658,29 @@ function ProduceOptionsManager({
                         </div>
                       </div>
                     </div>
-                    <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                       <button
                         onClick={() => startEdit(option)}
                         style={{
-                          padding: "0.5rem 1rem",
+                          padding: "0.5rem",
                           background: "#1976d2",
                           color: "#fff",
                           border: "none",
                           borderRadius: "4px",
-                          fontSize: "0.85rem",
-                          cursor: "pointer"
+                          fontSize: "1.2rem",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          minWidth: "36px",
+                          height: "36px"
                         }}
+                        title="Edit"
                       >
-                        Edit
+                        ✏️
                       </button>
                       {deletingId === option.optionId ? (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", minWidth: "min(200px, 100%)" }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", minWidth: "min(200px, 100%)", width: "100%", maxWidth: "100%", boxSizing: "border-box" }}>
                           <input
                             type="text"
                             value={deleteReason}
@@ -3670,16 +3730,22 @@ function ProduceOptionsManager({
                         <button
                           onClick={() => setDeletingId(option.optionId)}
                           style={{
-                            padding: "0.5rem 1rem",
+                            padding: "0.5rem",
                             background: "#d32f2f",
                             color: "#fff",
                             border: "none",
                             borderRadius: "4px",
-                            fontSize: "0.85rem",
-                            cursor: "pointer"
+                            fontSize: "1.2rem",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            minWidth: "36px",
+                            height: "36px"
                           }}
+                          title="Delete"
                         >
-                          Delete
+                          🗑️
                         </button>
                       )}
                     </div>

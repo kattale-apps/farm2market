@@ -28,18 +28,6 @@ export function DeliveryConfirmationForm({
     // Check if any entity has deliveryStatus === "farmer_confirmed"
     return utid.entities?.some((entity: any) => entity.deliveryStatus === "farmer_confirmed");
   }) || [];
-  
-  // For junior admins, check which UTIDs they can access
-  const getUtidAccess = (utid: any) => {
-    if (isSuperAdmin) return true;
-    return utid.canAccess !== false; // Default to true if not set
-  };
-  
-  // For junior admins, check which UTIDs they can access
-  const getUtidAccess = (utid: any) => {
-    if (isSuperAdmin) return true;
-    return utid.canAccess !== false; // Default to true if not set
-  };
 
   const handleConfirm = async () => {
     if (!selectedUtid) {

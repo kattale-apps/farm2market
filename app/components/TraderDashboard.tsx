@@ -322,7 +322,7 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
             ) : openListings.length === 0 ? (
               <p style={{ color: "#666" }}>No open listings available</p>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
                 {openListings.slice(0, 5).map((listing: any, idx: number) => (
                   <div key={idx} style={{
                     padding: "0.75rem",
@@ -392,7 +392,7 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
             {todayActivity.length === 0 ? (
               <p style={{ color: "#666" }}>No activity today</p>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
                 {todayActivity.map((activity: any, idx: number) => (
                   <div key={idx} style={{
                     padding: "0.75rem",
@@ -468,7 +468,7 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
             ) : buyOffers.negotiations.length === 0 ? (
               <p style={{ color: "#666" }}>No buy-offers from buyers</p>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
                 {buyOffers.negotiations.map((offer: any) => {
                   const offerId = offer.negotiationId;
                   const counterPrice = counterPrices[offerId] || "";
@@ -541,7 +541,8 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
                       padding: "1rem",
                       background: offer.status === "countered" ? "#fff3cd" : "#f5f5f5",
                       borderRadius: "8px",
-                      border: offer.status === "countered" ? "2px solid #ffc107" : "1px solid #e0e0e0"
+                      border: offer.status === "countered" ? "2px solid #ffc107" : "1px solid #e0e0e0",
+                      marginBottom: "0.5rem"
                     }}>
                       {message && (
                         <div style={{
@@ -847,7 +848,7 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
         /* Pro View */
         <>
           {/* Wallet & Exposure */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", gap: "1rem", marginBottom: "1.5rem" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", gap: "1.5rem", marginBottom: "1.5rem" }}>
         {/* Ledger Summary */}
         <div style={{
           padding: "clamp(1rem, 3vw, 1.5rem)",
@@ -1066,7 +1067,7 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
         ) : inventory.inventory.length === 0 ? (
           <p style={{ color: "#666" }}>No inventory in storage</p>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
             {inventory.inventory.map((item: any, index: number) => {
               const totalPrice = item.originalPricePerKilo * item.totalKilos;
               const projectedRemainingPrice = item.originalPricePerKilo * item.projectedKilosRemaining;
@@ -1076,7 +1077,8 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
                   padding: "clamp(1rem, 3vw, 1.5rem)",
                   background: "#f9f9f9",
                   borderRadius: "8px",
-                  border: "1px solid #e0e0e0"
+                  border: "1px solid #e0e0e0",
+                  marginBottom: "0.5rem"
                 }}>
                   {/* Header with UTID */}
                   <div style={{ 
@@ -1264,7 +1266,7 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
         ) : activeUTIDs.utids.length === 0 ? (
           <p style={{ color: "#666" }}>No active transactions</p>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
             {activeUTIDs.utids.map((utid: any, index: number) => {
               // Determine background color based on state
               const getStateColor = (state: string) => {
@@ -1293,6 +1295,7 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
                   fontSize: "clamp(0.8rem, 2.5vw, 0.85rem)",
                   wordBreak: "break-all",
                   position: "relative",
+                  marginBottom: "0.5rem",
                   ...(isInTransit ? {
                     boxShadow: "0 0 0 2px rgba(255, 152, 0, 0.2)"
                   } : {})
@@ -1577,6 +1580,7 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
 
           {/* Available Listings for Negotiations */}
           <div style={{
+            marginBottom: "1.5rem",
             padding: "clamp(1rem, 3vw, 1.5rem)",
             background: "#fff",
             borderRadius: "12px",
@@ -1640,7 +1644,7 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
           <div style={{
             display: "grid",
             gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))",
-            gap: "1rem",
+            gap: "1.5rem",
             marginBottom: "1.5rem"
           }}>
             <div style={{

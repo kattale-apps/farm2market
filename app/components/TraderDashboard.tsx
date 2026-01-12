@@ -349,7 +349,7 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
                         UTID:
                       </div>
                       <div style={{
-                        fontSize: "clamp(1.2rem, 3.5vw, 1.5rem)",
+                        fontSize: "clamp(0.84rem, 2.45vw, 1.05rem)",
                         color: "#2c2c2c",
                         fontFamily: "monospace",
                         fontWeight: "700",
@@ -1093,7 +1093,7 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
                       Transaction UTID:
                     </div>
                     <div style={{ 
-                      fontSize: "clamp(1.4rem, 4vw, 1.8rem)", 
+                      fontSize: "clamp(0.98rem, 2.8vw, 1.26rem)", 
                       color: "#2c2c2c", 
                       fontFamily: "monospace",
                       fontWeight: "700",
@@ -1308,7 +1308,7 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
                         fontWeight: "700", 
                         fontFamily: "monospace",
                         color: isInTransit ? "#ff6f00" : "#2c2c2c",
-                        fontSize: "clamp(1.4rem, 4vw, 1.8rem)",
+                        fontSize: "clamp(0.98rem, 2.8vw, 1.26rem)",
                         letterSpacing: "0.05em",
                         wordBreak: "break-all"
                       }}>

@@ -393,7 +393,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                       UTID:
                     </div>
                     <div style={{
-                      fontSize: "clamp(1.2rem, 3.5vw, 1.5rem)",
+                      fontSize: "clamp(0.84rem, 2.45vw, 1.05rem)",
                       color: "#2c2c2c",
                       fontFamily: "monospace",
                       fontWeight: "700",
@@ -715,7 +715,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                         UTID:
                       </div>
                       <div style={{
-                        fontSize: "clamp(1.4rem, 4vw, 1.8rem)",
+                        fontSize: "clamp(0.98rem, 2.8vw, 1.26rem)",
                         color: "#2c2c2c",
                         fontFamily: "monospace",
                         fontWeight: "700",
@@ -1195,7 +1195,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                   Transaction UTID
                 </div>
                 <div style={{ 
-                  fontSize: "clamp(1.6rem, 5vw, 2rem)", 
+                  fontSize: "clamp(1.12rem, 3.5vw, 1.4rem)", 
                   fontFamily: "monospace", 
                   wordBreak: "break-all",
                   color: "#2c2c2c",

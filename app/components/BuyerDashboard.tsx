@@ -1061,7 +1061,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                       </div>
                       <div style={{ 
                         fontFamily: "monospace", 
-                        fontSize: "clamp(1.4rem, 4vw, 1.8rem)", 
+                        fontSize: "clamp(0.98rem, 2.8vw, 1.26rem)", 
                         color: "#2c2c2c", 
                         fontWeight: "700",
                         letterSpacing: "0.05em",

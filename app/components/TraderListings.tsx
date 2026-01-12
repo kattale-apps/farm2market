@@ -360,7 +360,7 @@ export function TraderListings({ userId }: TraderListingsProps) {
                         <>Farmer: {listing.farmerAlias || "Unknown"} | Listed: {formatDate(listing.createdAt)}</>
                       )}
                     </div>
-                    <div style={{ fontSize: "clamp(0.7rem, 2vw, 0.75rem)", color: "#999", marginTop: "0.5rem", fontFamily: "monospace", wordBreak: "break-all" }}>
+                    <div style={{ fontSize: "clamp(0.49rem, 1.4vw, 0.525rem)", color: "#999", marginTop: "0.5rem", fontFamily: "monospace", wordBreak: "break-all" }}>
                       UTID: {listing.utid}
                     </div>
                   </div>

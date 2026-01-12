@@ -370,7 +370,7 @@ export function NotificationMailbox({ userId }: NotificationMailboxProps) {
                           UTID:
                         </div>
                         <div style={{
-                          fontSize: "1.5rem",
+                          fontSize: "1.05rem",
                           color: "#2c2c2c",
                           fontFamily: "monospace",
                           fontWeight: "700",

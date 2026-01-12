@@ -100,9 +100,13 @@ export const sendPushNotification = internalAction({
   },
   handler: async (ctx, args) => {
     // Get all active device tokens for the user
-    const tokens = await ctx.runQuery(internal.pushNotifications.getUserDeviceTokensInternal, {
-      userId: args.userId,
-    });
+    // Type assertion needed until Convex regenerates types with pushNotifications module
+    const tokens = await ctx.runQuery(
+      (internal as any).pushNotifications.getUserDeviceTokensInternal,
+      {
+        userId: args.userId,
+      }
+    );
 
     if (tokens.length === 0) {
       return { success: false, message: "No device tokens found for user" };
@@ -171,9 +175,13 @@ export const sendPushNotification = internalAction({
             if (errorCode === 'messaging/invalid-registration-token' || 
                 errorCode === 'messaging/registration-token-not-registered' ||
                 errorCode === 'messaging/invalid-argument') {
-              await ctx.runMutation(internal.pushNotifications.deactivateTokenInternal, {
-                tokenId: androidTokens[i].tokenId,
-              });
+              // Type assertion needed until Convex regenerates types with pushNotifications module
+              await ctx.runMutation(
+                (internal as any).pushNotifications.deactivateTokenInternal,
+                {
+                  tokenId: androidTokens[i].tokenId,
+                }
+              );
             }
           }
         }
@@ -232,9 +240,13 @@ export const deactivateToken = internalAction({
     tokenId: v.id("deviceTokens"),
   },
   handler: async (ctx, args) => {
-    await ctx.runMutation(internal.pushNotifications.deactivateTokenInternal, {
-      tokenId: args.tokenId,
-    });
+    // Type assertion needed until Convex regenerates types with pushNotifications module
+    await ctx.runMutation(
+      (internal as any).pushNotifications.deactivateTokenInternal,
+      {
+        tokenId: args.tokenId,
+      }
+    );
   },
 });
 

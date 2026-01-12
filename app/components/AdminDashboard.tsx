@@ -543,10 +543,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
         width: "100%",
         maxWidth: "100%",
         boxSizing: "border-box",
-        overflowX: "auto",
-        width: "100%",
-        maxWidth: "100%",
-        boxSizing: "border-box"
+        overflowX: "auto"
       }}>
         <h3 style={{ 
           marginTop: 0, 

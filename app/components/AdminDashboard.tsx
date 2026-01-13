@@ -2450,12 +2450,12 @@ function DemoFundsForm({
   adminDepositDemoFunds: any; 
   adminId: Id<"users"> 
 }) {
-  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [selectedUserIds, setSelectedUserIds] = useState<Id<"users">[]>([]);
   const [amount, setAmount] = useState<string>("");
   const [reason, setReason] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [depositResults, setDepositResults] = useState<Array<{userId: string, success: boolean, message: string}>>([]);
+  const [depositResults, setDepositResults] = useState<Array<{userId: Id<"users">, success: boolean, message: string}>>([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [expandedCategory, setExpandedCategory] = useState<"traders" | "buyers" | null>(null);
   const [filterMode, setFilterMode] = useState<"all" | "firstTimers">("firstTimers"); // Default to first-timers only
@@ -2494,7 +2494,7 @@ function DemoFundsForm({
     setMessage(null);
     setDepositResults([]);
 
-    const results: Array<{userId: string, success: boolean, message: string}> = [];
+    const results: Array<{userId: Id<"users">, success: boolean, message: string}> = [];
     const depositAmount = parseFloat(amount);
 
     // Process deposits for each selected user
@@ -2502,7 +2502,7 @@ function DemoFundsForm({
       try {
         const result = await adminDepositDemoFunds({
           adminId,
-          targetUserId: userId as Id<"users">,
+          targetUserId: userId,
           amount: depositAmount,
           reason: reason.trim(),
         });
@@ -2550,7 +2550,7 @@ function DemoFundsForm({
     setLoading(false);
   };
 
-  const handleUserSelection = (userId: string, checked: boolean) => {
+  const handleUserSelection = (userId: Id<"users">, checked: boolean) => {
     if (checked) {
       setSelectedUserIds(prev => [...prev, userId]);
     } else {

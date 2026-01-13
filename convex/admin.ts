@@ -2166,3 +2166,71 @@ export const adminDepositDemoFunds = mutation({
     };
   },
 });
+
+/**
+ * Get users with demo fund status (admin only)
+ * Returns traders and buyers with information about whether they've received demo funds
+ */
+export const getUsersWithDemoFundStatus = query({
+  args: {
+    adminId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    await verifyAdmin(ctx, args.adminId);
+
+    // Get all traders and buyers
+    const traders = await ctx.db
+      .query("users")
+      .withIndex("by_role", (q: any) => q.eq("role", "trader"))
+      .collect();
+    
+    const buyers = await ctx.db
+      .query("users")
+      .withIndex("by_role", (q: any) => q.eq("role", "buyer"))
+      .collect();
+
+    // Check demo fund status for each user
+    const checkDemoFundStatus = async (userId: Id<"users">) => {
+      const entries = await ctx.db
+        .query("walletLedger")
+        .withIndex("by_user", (q: any) => q.eq("userId", userId))
+        .collect();
+      
+      const hasDemoFunds = entries.some(
+        (entry) => entry.metadata?.source === "admin_demo_deposit" || entry.metadata?.source === "demo_seed"
+      );
+      
+      const latestEntry = entries[0];
+      const currentBalance = latestEntry?.balanceAfter || 0;
+      const lastDemoDeposit = entries.find(
+        (entry) => entry.metadata?.source === "admin_demo_deposit" || entry.metadata?.source === "demo_seed"
+      );
+      
+      return {
+        hasDemoFunds,
+        currentBalance,
+        lastDemoDepositAmount: lastDemoDeposit?.amount || 0,
+        lastDemoDepositDate: lastDemoDeposit?.timestamp || null,
+      };
+    };
+
+    const tradersWithStatus = await Promise.all(
+      traders.map(async (trader) => ({
+        ...trader,
+        demoFundStatus: await checkDemoFundStatus(trader._id),
+      }))
+    );
+
+    const buyersWithStatus = await Promise.all(
+      buyers.map(async (buyer) => ({
+        ...buyer,
+        demoFundStatus: await checkDemoFundStatus(buyer._id),
+      }))
+    );
+
+    return {
+      traders: tradersWithStatus,
+      buyers: buyersWithStatus,
+    };
+  },
+});

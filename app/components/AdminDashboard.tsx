@@ -4,7 +4,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { formatUgandaDateTime, formatUgandaTimeOnly, getUgandaTime } from "../utils/timeUtils";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { exportToExcel, exportToPDF, formatUTIDDataForExport } from "../utils/exportUtils";
 import { StorageLocationsManager } from "./StorageLocationsManager";
 import { DeliveryConfirmationForm } from "./DeliveryConfirmationForm";
@@ -2450,18 +2450,35 @@ function DemoFundsForm({
   adminDepositDemoFunds: any; 
   adminId: Id<"users"> 
 }) {
-  const [selectedUserId, setSelectedUserId] = useState<string>("");
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [amount, setAmount] = useState<string>("");
   const [reason, setReason] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [depositResults, setDepositResults] = useState<Array<{userId: string, success: boolean, message: string}>>([]);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [expandedCategory, setExpandedCategory] = useState<"traders" | "buyers" | null>(null);
+  const [filterMode, setFilterMode] = useState<"all" | "firstTimers">("firstTimers"); // Default to first-timers only
 
-  // Filter for traders and buyers only
-  const tradersAndBuyers = allUsers.filter(u => u.role === "trader" || u.role === "buyer");
+  // Query users with demo fund status
+  const usersWithStatus = useQuery(api.admin.getUsersWithDemoFundStatus, { adminId });
+
+  // Separate traders and buyers
+  const allTraders = usersWithStatus?.traders || [];
+  const allBuyers = usersWithStatus?.buyers || [];
+
+  // Filter based on mode
+  const traders = filterMode === "firstTimers" 
+    ? allTraders.filter(t => !t.demoFundStatus?.hasDemoFunds)
+    : allTraders;
+  
+  const buyers = filterMode === "firstTimers"
+    ? allBuyers.filter(b => !b.demoFundStatus?.hasDemoFunds)
+    : allBuyers;
 
   const handleDeposit = async () => {
-    if (!selectedUserId) {
-      setMessage({ type: "error", text: "Please select a user" });
+    if (selectedUserIds.length === 0) {
+      setMessage({ type: "error", text: "Please select at least one user" });
       return;
     }
     if (!amount || parseFloat(amount) <= 0) {
@@ -2475,30 +2492,151 @@ function DemoFundsForm({
 
     setLoading(true);
     setMessage(null);
+    setDepositResults([]);
 
-    try {
-      const result = await adminDepositDemoFunds({
-        adminId,
-        targetUserId: selectedUserId,
-        amount: parseFloat(amount),
-        reason: reason.trim(),
-      });
+    const results: Array<{userId: string, success: boolean, message: string}> = [];
+    const depositAmount = parseFloat(amount);
 
+    // Process deposits for each selected user
+    for (const userId of selectedUserIds) {
+      try {
+        const result = await adminDepositDemoFunds({
+          adminId,
+          targetUserId: userId as Id<"users">,
+          amount: depositAmount,
+          reason: reason.trim(),
+        });
+
+        const allUsersList = [...allTraders, ...allBuyers];
+        const user = allUsersList.find(u => u._id === userId);
+        results.push({
+          userId,
+          success: true,
+          message: `✓ ${user?.email || userId}: Deposited ${depositAmount.toLocaleString()} UGX. New balance: ${result.newBalance.toLocaleString()} UGX. UTID: ${result.utid}`
+        });
+      } catch (error: any) {
+        const allUsersList = [...allTraders, ...allBuyers];
+        const user = allUsersList.find(u => u._id === userId);
+        results.push({
+          userId,
+          success: false,
+          message: `✗ ${user?.email || userId}: ${error.message || "Failed to deposit funds"}`
+        });
+      }
+    }
+
+    setDepositResults(results);
+    
+    const successCount = results.filter(r => r.success).length;
+    const failCount = results.filter(r => !r.success).length;
+    
+    if (failCount === 0) {
       setMessage({ 
         type: "success", 
-        text: `Successfully deposited ${parseFloat(amount).toLocaleString()} UGX to ${result.targetUserEmail}. New balance: ${result.newBalance.toLocaleString()} UGX. UTID: ${result.utid}` 
+        text: `Successfully deposited ${depositAmount.toLocaleString()} UGX to ${successCount} user(s).` 
       });
       
-      // Reset form
-      setSelectedUserId("");
+      // Auto-deselect successful deposits and refresh filter
+      setSelectedUserIds([]);
       setAmount("");
       setReason("");
-    } catch (error: any) {
-      setMessage({ type: "error", text: error.message || "Failed to deposit funds" });
-    } finally {
-      setLoading(false);
+    } else {
+      setMessage({ 
+        type: "error", 
+        text: `Deposited to ${successCount} user(s), failed for ${failCount} user(s). See details below.` 
+      });
+    }
+    
+    setLoading(false);
+  };
+
+  const handleUserSelection = (userId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedUserIds(prev => [...prev, userId]);
+    } else {
+      setSelectedUserIds(prev => prev.filter(id => id !== userId));
     }
   };
+
+  const selectAllFirstTimers = () => {
+    const firstTimerIds = [...traders.map(t => t._id), ...buyers.map(b => b._id)];
+    setSelectedUserIds(firstTimerIds);
+  };
+
+  const selectAllTraders = () => {
+    const traderIds = traders.map(t => t._id);
+    setSelectedUserIds(prev => {
+      const newIds = [...prev];
+      traderIds.forEach(id => {
+        if (!newIds.includes(id)) newIds.push(id);
+      });
+      return newIds;
+    });
+  };
+
+  const deselectAllTraders = () => {
+    const traderIds = traders.map(t => t._id);
+    setSelectedUserIds(prev => prev.filter(id => !traderIds.includes(id)));
+  };
+
+  const selectAllBuyers = () => {
+    const buyerIds = buyers.map(b => b._id);
+    setSelectedUserIds(prev => {
+      const newIds = [...prev];
+      buyerIds.forEach(id => {
+        if (!newIds.includes(id)) newIds.push(id);
+      });
+      return newIds;
+    });
+  };
+
+  const deselectAllBuyers = () => {
+    const buyerIds = buyers.map(b => b._id);
+    setSelectedUserIds(prev => prev.filter(id => !buyerIds.includes(id)));
+  };
+
+  const deselectAll = () => {
+    setSelectedUserIds([]);
+  };
+
+  const getSelectedUsersText = () => {
+    if (selectedUserIds.length === 0) return "Select users...";
+    const traderCount = selectedUserIds.filter(id => allTraders.some(t => t._id === id)).length;
+    const buyerCount = selectedUserIds.filter(id => allBuyers.some(b => b._id === id)).length;
+    
+    const parts = [];
+    if (traderCount > 0) parts.push(`${traderCount} trader${traderCount > 1 ? 's' : ''}`);
+    if (buyerCount > 0) parts.push(`${buyerCount} buyer${buyerCount > 1 ? 's' : ''}`);
+    
+    return parts.join(", ") || `${selectedUserIds.length} user(s) selected`;
+  };
+
+  const formatDate = (timestamp: number | null) => {
+    if (!timestamp) return "Never";
+    return new Date(timestamp).toLocaleDateString();
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (dropdownOpen && !target.closest('[data-dropdown-container]')) {
+        setDropdownOpen(false);
+      }
+    };
+
+    if (dropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [dropdownOpen]);
+
+  if (!usersWithStatus) {
+    return <div style={{ padding: "1rem", color: "#666" }}>Loading users...</div>;
+  }
+
+  const firstTimerTradersCount = allTraders.filter(t => !t.demoFundStatus?.hasDemoFunds).length;
+  const firstTimerBuyersCount = allBuyers.filter(b => !b.demoFundStatus?.hasDemoFunds).length;
 
   return (
     <div>
@@ -2516,35 +2654,569 @@ function DemoFundsForm({
         </div>
       )}
 
-      <div style={{ marginBottom: "1rem" }}>
+      {/* Filter Toggle */}
+      <div style={{ 
+        marginBottom: "1rem", 
+        padding: "0.75rem",
+        backgroundColor: "#f8f9fa",
+        borderRadius: "6px",
+        border: "1px solid #dee2e6"
+      }}>
+        <label style={{ 
+          display: "block", 
+          marginBottom: "0.5rem", 
+          fontWeight: "600",
+          color: "#444",
+          fontSize: "0.9rem"
+        }}>
+          Filter Users:
+        </label>
+        <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+          <label style={{ 
+            display: "flex", 
+            alignItems: "center", 
+            cursor: "pointer",
+            fontSize: "0.9rem"
+          }}>
+            <input
+              type="radio"
+              name="filterMode"
+              value="firstTimers"
+              checked={filterMode === "firstTimers"}
+              onChange={(e) => {
+                setFilterMode("firstTimers");
+                setSelectedUserIds([]); // Clear selection when changing filter
+              }}
+              style={{ marginRight: "0.5rem" }}
+            />
+            <span>
+              First-Timers Only 
+              <span style={{ 
+                marginLeft: "0.5rem",
+                padding: "0.15rem 0.4rem",
+                backgroundColor: "#fff3cd",
+                color: "#856404",
+                borderRadius: "12px",
+                fontSize: "0.75rem",
+                fontWeight: "600"
+              }}>
+                {firstTimerTradersCount + firstTimerBuyersCount} users
+              </span>
+            </span>
+          </label>
+          <label style={{ 
+            display: "flex", 
+            alignItems: "center", 
+            cursor: "pointer",
+            fontSize: "0.9rem"
+          }}>
+            <input
+              type="radio"
+              name="filterMode"
+              value="all"
+              checked={filterMode === "all"}
+              onChange={(e) => {
+                setFilterMode("all");
+                setSelectedUserIds([]); // Clear selection when changing filter
+              }}
+              style={{ marginRight: "0.5rem" }}
+            />
+            <span>All Users ({allTraders.length + allBuyers.length})</span>
+          </label>
+        </div>
+        {filterMode === "firstTimers" && (
+          <div style={{ 
+            marginTop: "0.5rem", 
+            padding: "0.5rem",
+            backgroundColor: "#fff3cd",
+            borderRadius: "4px",
+            fontSize: "0.85rem",
+            color: "#856404"
+          }}>
+            💡 Showing only users who have <strong>never received demo funds</strong>. Perfect for onboarding new signups!
+          </div>
+        )}
+      </div>
+
+      <div style={{ marginBottom: "1rem", position: "relative" }} data-dropdown-container>
         <label style={{ 
           display: "block", 
           marginBottom: "0.5rem", 
           fontWeight: "500",
           color: "#444" 
         }}>
-          Select Trader or Buyer:
+          Select Users:
         </label>
-        <select
-          value={selectedUserId}
-          onChange={(e) => setSelectedUserId(e.target.value)}
-          disabled={loading}
+        
+        {/* Dropdown Button */}
+        <div
+          onClick={() => !loading && setDropdownOpen(!dropdownOpen)}
           style={{
             width: "100%",
             padding: "0.5rem",
             border: "1px solid #ddd",
             borderRadius: "6px",
-            fontSize: "0.9rem"
+            fontSize: "0.9rem",
+            backgroundColor: "#fff",
+            cursor: loading ? "not-allowed" : "pointer",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            minHeight: "38px",
+            boxSizing: "border-box"
           }}
         >
-          <option value="">-- Select User --</option>
-          {tradersAndBuyers.map((user) => (
-            <option key={user._id} value={user._id}>
-              {user.email} ({user.role}) - {user.alias}
-            </option>
-          ))}
-        </select>
+          <span style={{ 
+            color: selectedUserIds.length === 0 ? "#999" : "#333",
+            flex: 1,
+            textAlign: "left"
+          }}>
+            {getSelectedUsersText()}
+          </span>
+          <span style={{ 
+            fontSize: "0.8rem",
+            color: "#666",
+            marginLeft: "0.5rem"
+          }}>
+            {dropdownOpen ? "▲" : "▼"}
+          </span>
+        </div>
+
+        {/* Dropdown Menu */}
+        {dropdownOpen && (
+          <div style={{
+            position: "absolute",
+            top: "100%",
+            left: 0,
+            right: 0,
+            marginTop: "0.25rem",
+            backgroundColor: "#fff",
+            border: "1px solid #ddd",
+            borderRadius: "6px",
+            boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
+            zIndex: 1000,
+            maxHeight: "400px",
+            overflowY: "auto"
+          }}>
+            {/* Quick Select First-Timers Button */}
+            {filterMode === "firstTimers" && traders.length + buyers.length > 0 && (
+              <div style={{
+                padding: "0.75rem",
+                borderBottom: "2px solid #ffc107",
+                backgroundColor: "#fff3cd",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center"
+              }}>
+                <div>
+                  <strong style={{ fontSize: "0.9rem", color: "#856404" }}>
+                    🎯 Quick Batch: Select All First-Timers
+                  </strong>
+                  <div style={{ fontSize: "0.75rem", color: "#856404", marginTop: "0.25rem" }}>
+                    {traders.length} traders + {buyers.length} buyers = {traders.length + buyers.length} total
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    selectAllFirstTimers();
+                  }}
+                  style={{
+                    padding: "0.5rem 1rem",
+                    background: "#ffc107",
+                    color: "#000",
+                    border: "none",
+                    borderRadius: "4px",
+                    fontSize: "0.85rem",
+                    cursor: "pointer",
+                    fontWeight: "600"
+                  }}
+                >
+                  Select All
+                </button>
+              </div>
+            )}
+
+            {/* Global Deselect All */}
+            {selectedUserIds.length > 0 && (
+              <div style={{
+                padding: "0.5rem",
+                borderBottom: "1px solid #eee",
+                display: "flex",
+                justifyContent: "flex-end",
+                backgroundColor: "#f8f9fa"
+              }}>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deselectAll();
+                  }}
+                  style={{
+                    padding: "0.25rem 0.5rem",
+                    background: "#6c757d",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: "4px",
+                    fontSize: "0.8rem",
+                    cursor: "pointer",
+                    fontWeight: "500"
+                  }}
+                >
+                  Deselect All
+                </button>
+              </div>
+            )}
+
+            {/* TRADERS SECTION */}
+            {traders.length > 0 && (
+              <div style={{
+                borderBottom: "2px solid #e0e0e0",
+                backgroundColor: "#f0f7ff"
+              }}>
+                <div
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExpandedCategory(expandedCategory === "traders" ? null : "traders");
+                  }}
+                  style={{
+                    padding: "0.75rem",
+                    cursor: "pointer",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    fontWeight: "600",
+                    color: "#1976d2",
+                    borderBottom: expandedCategory === "traders" ? "1px solid #e0e0e0" : "none"
+                  }}
+                >
+                  <span>
+                    👔 Traders ({traders.length}) - {selectedUserIds.filter(id => traders.some(t => t._id === id)).length} selected
+                  </span>
+                  <span style={{ fontSize: "0.8rem" }}>
+                    {expandedCategory === "traders" ? "▼" : "▶"}
+                  </span>
+                </div>
+                
+                {expandedCategory === "traders" && (
+                  <>
+                    <div style={{
+                      padding: "0.5rem",
+                      display: "flex",
+                      gap: "0.5rem",
+                      backgroundColor: "#e3f2fd",
+                      borderBottom: "1px solid #ddd"
+                    }}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          selectAllTraders();
+                        }}
+                        style={{
+                          padding: "0.25rem 0.5rem",
+                          background: "#1976d2",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: "4px",
+                          fontSize: "0.75rem",
+                          cursor: "pointer"
+                        }}
+                      >
+                        Select All Traders
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deselectAllTraders();
+                        }}
+                        style={{
+                          padding: "0.25rem 0.5rem",
+                          background: "#6c757d",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: "4px",
+                          fontSize: "0.75rem",
+                          cursor: "pointer"
+                        }}
+                      >
+                        Deselect All Traders
+                      </button>
+                    </div>
+                    
+                    {traders.map((trader) => {
+                      const hasDemoFunds = trader.demoFundStatus?.hasDemoFunds || false;
+                      const isSelected = selectedUserIds.includes(trader._id);
+                      const isFirstTimer = !hasDemoFunds;
+                      
+                      return (
+                        <label
+                          key={trader._id}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            padding: "0.75rem",
+                            cursor: "pointer",
+                            borderBottom: "1px solid #f0f0f0",
+                            backgroundColor: isSelected ? "#e3f2fd" : "transparent",
+                            transition: "background-color 0.2s"
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!isSelected) {
+                              e.currentTarget.style.backgroundColor = "#f5f5f5";
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!isSelected) {
+                              e.currentTarget.style.backgroundColor = "transparent";
+                            }
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => handleUserSelection(trader._id, e.target.checked)}
+                            disabled={loading}
+                            style={{
+                              marginRight: "0.75rem",
+                              cursor: loading ? "not-allowed" : "pointer",
+                              width: "18px",
+                              height: "18px"
+                            }}
+                          />
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                              <span style={{ fontSize: "0.9rem", fontWeight: "500", color: "#333" }}>
+                                {trader.email}
+                              </span>
+                              {isFirstTimer ? (
+                                <span style={{
+                                  fontSize: "0.7rem",
+                                  padding: "0.15rem 0.4rem",
+                                  backgroundColor: "#fff3cd",
+                                  color: "#856404",
+                                  borderRadius: "12px",
+                                  fontWeight: "600"
+                                }}>
+                                  🆕 First-Timer
+                                </span>
+                              ) : (
+                                <span style={{
+                                  fontSize: "0.7rem",
+                                  padding: "0.15rem 0.4rem",
+                                  backgroundColor: "#d4edda",
+                                  color: "#155724",
+                                  borderRadius: "12px",
+                                  fontWeight: "600"
+                                }}>
+                                  ✓ Has Demo Funds
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.25rem" }}>
+                              {trader.alias} • Balance: {trader.demoFundStatus?.currentBalance?.toLocaleString() || 0} UGX
+                              {!isFirstTimer && trader.demoFundStatus?.lastDemoDepositDate && (
+                                <span> • Last: {formatDate(trader.demoFundStatus.lastDemoDepositDate)}</span>
+                              )}
+                            </div>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* BUYERS SECTION */}
+            {buyers.length > 0 && (
+              <div style={{
+                backgroundColor: "#fff5f0"
+              }}>
+                <div
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExpandedCategory(expandedCategory === "buyers" ? null : "buyers");
+                  }}
+                  style={{
+                    padding: "0.75rem",
+                    cursor: "pointer",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    fontWeight: "600",
+                    color: "#d32f2f",
+                    borderTop: traders.length > 0 ? "2px solid #e0e0e0" : "none"
+                  }}
+                >
+                  <span>
+                    🛒 Buyers ({buyers.length}) - {selectedUserIds.filter(id => buyers.some(b => b._id === id)).length} selected
+                  </span>
+                  <span style={{ fontSize: "0.8rem" }}>
+                    {expandedCategory === "buyers" ? "▼" : "▶"}
+                  </span>
+                </div>
+                
+                {expandedCategory === "buyers" && (
+                  <>
+                    <div style={{
+                      padding: "0.5rem",
+                      display: "flex",
+                      gap: "0.5rem",
+                      backgroundColor: "#ffe0e0",
+                      borderBottom: "1px solid #ddd"
+                    }}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          selectAllBuyers();
+                        }}
+                        style={{
+                          padding: "0.25rem 0.5rem",
+                          background: "#d32f2f",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: "4px",
+                          fontSize: "0.75rem",
+                          cursor: "pointer"
+                        }}
+                      >
+                        Select All Buyers
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deselectAllBuyers();
+                        }}
+                        style={{
+                          padding: "0.25rem 0.5rem",
+                          background: "#6c757d",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: "4px",
+                          fontSize: "0.75rem",
+                          cursor: "pointer"
+                        }}
+                      >
+                        Deselect All Buyers
+                      </button>
+                    </div>
+                    
+                    {buyers.map((buyer) => {
+                      const hasDemoFunds = buyer.demoFundStatus?.hasDemoFunds || false;
+                      const isSelected = selectedUserIds.includes(buyer._id);
+                      const isFirstTimer = !hasDemoFunds;
+                      
+                      return (
+                        <label
+                          key={buyer._id}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            padding: "0.75rem",
+                            cursor: "pointer",
+                            borderBottom: "1px solid #f0f0f0",
+                            backgroundColor: isSelected ? "#ffe0e0" : "transparent",
+                            transition: "background-color 0.2s"
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!isSelected) {
+                              e.currentTarget.style.backgroundColor = "#f5f5f5";
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!isSelected) {
+                              e.currentTarget.style.backgroundColor = "transparent";
+                            }
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => handleUserSelection(buyer._id, e.target.checked)}
+                            disabled={loading}
+                            style={{
+                              marginRight: "0.75rem",
+                              cursor: loading ? "not-allowed" : "pointer",
+                              width: "18px",
+                              height: "18px"
+                            }}
+                          />
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                              <span style={{ fontSize: "0.9rem", fontWeight: "500", color: "#333" }}>
+                                {buyer.email}
+                              </span>
+                              {isFirstTimer ? (
+                                <span style={{
+                                  fontSize: "0.7rem",
+                                  padding: "0.15rem 0.4rem",
+                                  backgroundColor: "#fff3cd",
+                                  color: "#856404",
+                                  borderRadius: "12px",
+                                  fontWeight: "600"
+                                }}>
+                                  🆕 First-Timer
+                                </span>
+                              ) : (
+                                <span style={{
+                                  fontSize: "0.7rem",
+                                  padding: "0.15rem 0.4rem",
+                                  backgroundColor: "#d4edda",
+                                  color: "#155724",
+                                  borderRadius: "12px",
+                                  fontWeight: "600"
+                                }}>
+                                  ✓ Has Demo Funds
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.25rem" }}>
+                              {buyer.alias} • Balance: {buyer.demoFundStatus?.currentBalance?.toLocaleString() || 0} UGX
+                              {!isFirstTimer && buyer.demoFundStatus?.lastDemoDepositDate && (
+                                <span> • Last: {formatDate(buyer.demoFundStatus.lastDemoDepositDate)}</span>
+                              )}
+                            </div>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Empty State */}
+            {traders.length === 0 && buyers.length === 0 && (
+              <div style={{ padding: "2rem", textAlign: "center", color: "#666" }}>
+                {filterMode === "firstTimers" 
+                  ? "🎉 All users have received demo funds! No first-timers remaining."
+                  : "No users available"}
+              </div>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* Selected Users Summary */}
+      {!dropdownOpen && selectedUserIds.length > 0 && (
+        <div style={{
+          marginBottom: "1rem",
+          padding: "0.5rem",
+          backgroundColor: "#e3f2fd",
+          borderRadius: "6px",
+          fontSize: "0.85rem",
+          color: "#1565c0"
+        }}>
+          <strong>Selected:</strong> {getSelectedUsersText()}
+        </div>
+      )}
 
       <div style={{ marginBottom: "1rem" }}>
         <label style={{ 
@@ -2586,7 +3258,7 @@ function DemoFundsForm({
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           disabled={loading}
-          placeholder="Enter reason for this demo deposit (e.g., 'Training funds for new user')"
+          placeholder="Enter reason (e.g., 'Welcome demo funds for new signups')"
           rows={3}
           style={{
             width: "100%",
@@ -2600,21 +3272,50 @@ function DemoFundsForm({
         />
       </div>
 
+      {depositResults.length > 0 && (
+        <div style={{
+          marginBottom: "1rem",
+          padding: "0.75rem",
+          backgroundColor: "#f8f9fa",
+          borderRadius: "6px",
+          border: "1px solid #dee2e6",
+          maxHeight: "200px",
+          overflowY: "auto"
+        }}>
+          <strong style={{ fontSize: "0.9rem", marginBottom: "0.5rem", display: "block" }}>Deposit Results:</strong>
+          {depositResults.map((result, index) => (
+            <div
+              key={index}
+              style={{
+                padding: "0.5rem",
+                marginBottom: "0.25rem",
+                fontSize: "0.85rem",
+                color: result.success ? "#155724" : "#721c24",
+                backgroundColor: result.success ? "#d4edda" : "#f8d7da",
+                borderRadius: "4px"
+              }}
+            >
+              {result.message}
+            </div>
+          ))}
+        </div>
+      )}
+
       <button
         onClick={handleDeposit}
-        disabled={loading || !selectedUserId || !amount || !reason.trim()}
+        disabled={loading || selectedUserIds.length === 0 || !amount || !reason.trim()}
         style={{
-          backgroundColor: loading || !selectedUserId || !amount || !reason.trim() ? "#ccc" : "#007bff",
+          backgroundColor: loading || selectedUserIds.length === 0 || !amount || !reason.trim() ? "#ccc" : "#007bff",
           color: "#fff",
           padding: "0.75rem 1.5rem",
           border: "none",
           borderRadius: "6px",
           fontSize: "0.9rem",
           fontWeight: "600",
-          cursor: loading || !selectedUserId || !amount || !reason.trim() ? "not-allowed" : "pointer"
+          cursor: loading || selectedUserIds.length === 0 || !amount || !reason.trim() ? "not-allowed" : "pointer"
         }}
       >
-        {loading ? "Depositing..." : "Deposit Demo Funds"}
+        {loading ? `Depositing to ${selectedUserIds.length} user(s)...` : `Deposit Demo Funds to ${selectedUserIds.length} User(s)`}
       </button>
     </div>
   );

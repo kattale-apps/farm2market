@@ -21,7 +21,8 @@ export default defineSchema({
    * - System-generated aliases for anonymity
    */
   users: defineTable({
-    email: v.string(), // Unique per user (enforced at mutation level, not schema level)
+    email: v.optional(v.string()), // Optional - user can use email or phone number
+    phoneNumber: v.optional(v.string()), // Optional - user can use email or phone number
     role: v.union(v.literal("farmer"), v.literal("trader"), v.literal("buyer"), v.literal("admin")),
     alias: v.string(), // System-generated, stable, non-identifying
     state: v.union(v.literal("active"), v.literal("suspended"), v.literal("deleted")), // User account state
@@ -33,6 +34,7 @@ export default defineSchema({
     allowedStorageLocationIds: v.optional(v.array(v.id("storageLocations"))), // Storage locations junior admin can access. Only applies to junior admins.
   })
     .index("by_email", ["email"])
+    .index("by_phone", ["phoneNumber"])
     .index("by_role", ["role"])
     .index("by_alias", ["alias"]),
 

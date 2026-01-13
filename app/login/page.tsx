@@ -13,6 +13,8 @@ import { useRouter } from "next/navigation";
 export default function LoginPage() {
   const [isSignup, setIsSignup] = useState(false);
   const [email, setEmail] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [usePhone, setUsePhone] = useState(false); // Toggle between email and phone
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [role, setRole] = useState<"farmer" | "trader" | "buyer">("farmer");
@@ -32,8 +34,13 @@ export default function LoginPage() {
 
     try {
       // Validate inputs
-      if (!email.trim()) {
+      if (!usePhone && !email.trim()) {
         setError("Email is required");
+        setLoading(false);
+        return;
+      }
+      if (usePhone && !phoneNumber.trim()) {
+        setError("Phone number is required");
         setLoading(false);
         return;
       }
@@ -58,7 +65,8 @@ export default function LoginPage() {
 
         // Signup
         const result = await signup({
-          email: email.trim(),
+          email: usePhone ? undefined : email.trim(),
+          phoneNumber: usePhone ? phoneNumber.trim() : undefined,
           password: password.trim(),
           role: role,
         });
@@ -71,7 +79,8 @@ export default function LoginPage() {
       } else {
         // Login
         const result = await login({
-          email: email.trim(),
+          email: usePhone ? undefined : email.trim(),
+          phoneNumber: usePhone ? phoneNumber.trim() : undefined,
           password: password.trim(),
         });
 
@@ -172,25 +181,97 @@ export default function LoginPage() {
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: "1rem" }}>
-            <label style={{ display: "block", marginBottom: "0.5rem", color: "#333", fontWeight: "500" }}>
-              Email
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              style={{
-                width: "100%",
-                padding: "0.75rem",
-                border: "1px solid #ddd",
-                borderRadius: "6px",
-                fontSize: "1rem"
+          {/* Toggle between email and phone */}
+          <div style={{ marginBottom: "1rem", display: "flex", gap: "0.5rem" }}>
+            <button
+              type="button"
+              onClick={() => {
+                setUsePhone(false);
+                setError(null);
               }}
-              placeholder="your@email.com"
-            />
+              style={{
+                flex: 1,
+                padding: "0.5rem",
+                background: !usePhone ? "#e3f2fd" : "transparent",
+                border: "1px solid",
+                borderColor: !usePhone ? "#1976d2" : "#ddd",
+                borderRadius: "6px",
+                color: !usePhone ? "#1976d2" : "#666",
+                cursor: "pointer",
+                fontSize: "0.9rem",
+                fontWeight: !usePhone ? "600" : "400"
+              }}
+            >
+              Email
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setUsePhone(true);
+                setError(null);
+              }}
+              style={{
+                flex: 1,
+                padding: "0.5rem",
+                background: usePhone ? "#e3f2fd" : "transparent",
+                border: "1px solid",
+                borderColor: usePhone ? "#1976d2" : "#ddd",
+                borderRadius: "6px",
+                color: usePhone ? "#1976d2" : "#666",
+                cursor: "pointer",
+                fontSize: "0.9rem",
+                fontWeight: usePhone ? "600" : "400"
+              }}
+            >
+              Phone
+            </button>
           </div>
+
+          {/* Email or Phone input */}
+          {!usePhone ? (
+            <div style={{ marginBottom: "1rem" }}>
+              <label style={{ display: "block", marginBottom: "0.5rem", color: "#333", fontWeight: "500" }}>
+                Email
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required={!usePhone}
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  border: "1px solid #ddd",
+                  borderRadius: "6px",
+                  fontSize: "1rem"
+                }}
+                placeholder="your@email.com"
+              />
+            </div>
+          ) : (
+            <div style={{ marginBottom: "1rem" }}>
+              <label style={{ display: "block", marginBottom: "0.5rem", color: "#333", fontWeight: "500" }}>
+                Phone Number
+              </label>
+              <input
+                type="tel"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                required={usePhone}
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  border: "1px solid #ddd",
+                  borderRadius: "6px",
+                  fontSize: "1rem"
+                }}
+                placeholder="+256 7XX XXX XXX or 07XX XXX XXX"
+              />
+              <p style={{ marginTop: "0.5rem", fontSize: "0.85rem", color: "#666" }}>
+                Enter your phone number with country code (+256) or local format (07XX)
+              </p>
+            </div>
+          )}
 
           {isSignup && (
             <div style={{ marginBottom: "1rem" }}>

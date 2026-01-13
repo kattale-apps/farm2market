@@ -39,6 +39,42 @@ function simpleHash(password: string): string {
 }
 
 /**
+ * Normalize phone number to a consistent format
+ * Removes spaces, dashes, and ensures it starts with country code
+ */
+function normalizePhoneNumber(phone: string): string {
+  // Remove all non-digit characters
+  let cleaned = phone.replace(/\D/g, '');
+  
+  // If it doesn't start with country code, assume Uganda (+256)
+  // Uganda format: +256 7XX XXX XXX (remove leading 0 from local format)
+  if (cleaned.startsWith('0')) {
+    cleaned = '256' + cleaned.substring(1);
+  } else if (!cleaned.startsWith('256')) {
+    cleaned = '256' + cleaned;
+  }
+  
+  return cleaned;
+}
+
+/**
+ * Validate phone number format
+ */
+function isValidPhoneNumber(phone: string): boolean {
+  const normalized = normalizePhoneNumber(phone);
+  // Uganda phone numbers: 256 + 9 digits = 12 digits total
+  // Or allow 10 digits if starting with 0 (local format)
+  return /^(256\d{9}|\d{10})$/.test(normalized) || /^256\d{9}$/.test(phone.replace(/\D/g, ''));
+}
+
+/**
+ * Validate email format
+ */
+function isValidEmail(email: string): boolean {
+  return email.includes("@") && email.includes(".");
+}
+
+/**
  * Create a new user with a role
  * - Exactly one role per user (enforced by schema)
  * - Auto-generates alias for anonymity
@@ -168,13 +204,14 @@ function inferRoleFromEmail(email: string): "farmer" | "trader" | "buyer" | "adm
  * Signup - Create a new user account
  * 
  * Behavior:
- * - Validates email and password
+ * - Validates email OR phone number (at least one required)
  * - Creates user with specified role
  * - Returns user info on success
  */
 export const signup = mutation({
   args: {
-    email: v.string(),
+    email: v.optional(v.string()),
+    phoneNumber: v.optional(v.string()),
     password: v.string(),
     role: v.union(
       v.literal("farmer"),
@@ -183,9 +220,23 @@ export const signup = mutation({
     ),
   },
   handler: async (ctx, args) => {
-    // Validate email format
-    if (!args.email.includes("@") || !args.email.includes(".")) {
-      throw new Error("Invalid email format");
+    // At least one of email or phone must be provided
+    if (!args.email && !args.phoneNumber) {
+      throw new Error("Either email or phone number is required");
+    }
+
+    // Validate email if provided
+    if (args.email) {
+      if (!isValidEmail(args.email)) {
+        throw new Error("Invalid email format");
+      }
+    }
+
+    // Validate phone number if provided
+    if (args.phoneNumber) {
+      if (!isValidPhoneNumber(args.phoneNumber)) {
+        throw new Error("Invalid phone number format. Please use format: +256 7XX XXX XXX or 07XX XXX XXX");
+      }
     }
 
     // Validate password length
@@ -193,14 +244,32 @@ export const signup = mutation({
       throw new Error("Password must be at least 6 characters long");
     }
 
-    // Check if user already exists
-    const existing = await ctx.db
-      .query("users")
-      .withIndex("by_email", (q) => q.eq("email", args.email.trim().toLowerCase()))
-      .first();
+    // Normalize phone number if provided
+    const normalizedPhone = args.phoneNumber ? normalizePhoneNumber(args.phoneNumber) : undefined;
+    const normalizedEmail = args.email ? args.email.trim().toLowerCase() : undefined;
 
-    if (existing) {
-      throw new Error("User with this email already exists");
+    // Check if user already exists by email
+    if (normalizedEmail) {
+      const existingByEmail = await ctx.db
+        .query("users")
+        .withIndex("by_email", (q) => q.eq("email", normalizedEmail))
+        .first();
+
+      if (existingByEmail) {
+        throw new Error("User with this email already exists");
+      }
+    }
+
+    // Check if user already exists by phone
+    if (normalizedPhone) {
+      const existingByPhone = await ctx.db
+        .query("users")
+        .withIndex("by_phone", (q) => q.eq("phoneNumber", normalizedPhone))
+        .first();
+
+      if (existingByPhone) {
+        throw new Error("User with this phone number already exists");
+      }
     }
 
     // Generate alias
@@ -211,7 +280,8 @@ export const signup = mutation({
 
     // Create user
     const userId = await ctx.db.insert("users", {
-      email: args.email.trim().toLowerCase(),
+      email: normalizedEmail,
+      phoneNumber: normalizedPhone,
       role: args.role,
       alias,
       state: "active",
@@ -236,32 +306,52 @@ export const signup = mutation({
 });
 
 /**
- * Login with email and password
+ * Login with email/phone and password
  * 
  * Behavior:
+ * - Accepts either email or phone number
  * - Validates password against stored hash
  * - Returns user info on success
  */
 export const login = mutation({
   args: {
-    email: v.string(),
+    email: v.optional(v.string()),
+    phoneNumber: v.optional(v.string()),
     password: v.string(),
   },
   handler: async (ctx, args) => {
-    // Find user by email
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_email", (q) => q.eq("email", args.email.trim().toLowerCase()))
-      .first();
+    // At least one of email or phone must be provided
+    if (!args.email && !args.phoneNumber) {
+      throw new Error("Either email or phone number is required");
+    }
+
+    let user = null;
+
+    // Try to find user by email
+    if (args.email) {
+      user = await ctx.db
+        .query("users")
+        .withIndex("by_email", (q) => q.eq("email", args.email.trim().toLowerCase()))
+        .first();
+    }
+
+    // If not found by email, try phone number
+    if (!user && args.phoneNumber) {
+      const normalizedPhone = normalizePhoneNumber(args.phoneNumber);
+      user = await ctx.db
+        .query("users")
+        .withIndex("by_phone", (q) => q.eq("phoneNumber", normalizedPhone))
+        .first();
+    }
 
     if (!user) {
-      throw new Error("Invalid email or password");
+      throw new Error("Invalid email/phone or password");
     }
 
     // Validate password
     const passwordHash = simpleHash(args.password.trim());
     if (user.passwordHash !== passwordHash) {
-      throw new Error("Invalid email or password");
+      throw new Error("Invalid email/phone or password");
     }
 
     // Check if user is active

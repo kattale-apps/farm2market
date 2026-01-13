@@ -5,6 +5,15 @@ import { Providers } from "./providers";
 export const metadata: Metadata = {
   title: "Farm2Market Uganda",
   description: "Controlled, negotiation-driven agricultural trading platform",
+  icons: {
+    icon: [
+      { url: "/icon.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon.ico", sizes: "any" },
+    ],
+    apple: [
+      { url: "/apple-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
 };
 
 export const viewport: Viewport = {

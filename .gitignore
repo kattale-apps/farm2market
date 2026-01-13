@@ -38,7 +38,10 @@ next-env.d.ts
 
 # Firebase / Service Accounts (sensitive - DO NOT COMMIT)
 **/firebase-adminsdk-*.json
+**/*firebase-adminsdk*.json
 android/app/google-services.json
+android/google-services.json
+cloud-functions/env-vars.yaml
 
 # Android Keystore (sensitive - DO NOT COMMIT)
 android/keystore.properties

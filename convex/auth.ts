@@ -329,9 +329,10 @@ export const login = mutation({
 
     // Try to find user by email
     if (args.email) {
+      const normalizedEmail = args.email.trim().toLowerCase();
       user = await ctx.db
         .query("users")
-        .withIndex("by_email", (q) => q.eq("email", args.email.trim().toLowerCase()))
+        .withIndex("by_email", (q) => q.eq("email", normalizedEmail))
         .first();
     }
 

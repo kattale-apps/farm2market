@@ -133,13 +133,18 @@ export const initiatePesapalPayment = action({
     const { token }: { token: string; expiresIn: number } = await ctx.runAction(internal.pesapal.getPesapalAccessToken, {});
 
     // Get user details
-    const user: { id: any; email: string; role: string; alias: string } | null = await ctx.runQuery(api.pesapal.getUserDetails, { userId: args.userId });
+    const user: { id: any; email: string | undefined; role: string; alias: string } | null = await ctx.runQuery(api.pesapal.getUserDetails, { userId: args.userId });
     if (!user) {
       throw new Error("User not found");
     }
 
     if (user.role !== args.userRole) {
       throw new Error(`User role mismatch. Expected ${args.userRole}, got ${user.role}`);
+    }
+
+    // Pesapal requires an email address for payment processing
+    if (!user.email) {
+      throw new Error("Email address is required for payment processing. Please add an email to your account.");
     }
 
     // Generate unique order tracking ID

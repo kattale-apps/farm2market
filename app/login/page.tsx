@@ -429,7 +429,7 @@ export default function LoginPage() {
               onClick={(e) => {
                 e.preventDefault();
                 // TODO: Implement forgot password functionality
-                alert("Forgot password functionality will be available soon. Please contact support.");
+                alert("Forgot password functionality will be available soon. Please contact support at kattaleglobal@gmail.com");
               }}
               style={{
                 color: "#1976d2",

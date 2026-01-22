@@ -1429,9 +1429,26 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
               borderRadius: "6px",
               fontSize: "0.9rem",
               fontWeight: "600",
+              marginRight: "0.5rem",
             }}
           >
             Seed Demo Data →
+          </a>
+          <a
+            href="/admin/seed-locations"
+            style={{
+              display: "inline-block",
+              marginTop: "0.5rem",
+              padding: "0.5rem 1rem",
+              background: "#4CAF50",
+              color: "#fff",
+              textDecoration: "none",
+              borderRadius: "6px",
+              fontSize: "0.9rem",
+              fontWeight: "600",
+            }}
+          >
+            Seed Uganda Locations →
           </a>
         </div>
         <div style={{ padding: "1rem", background: "#ffebee", borderRadius: "6px", border: "1px solid #d32f2f", marginTop: "1rem" }}>

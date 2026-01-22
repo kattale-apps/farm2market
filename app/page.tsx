@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery } from "convex/react";
+import { api } from "../convex/_generated/api";
 import { AdminDashboard } from "./components/AdminDashboard";
 import { TraderDashboard } from "./components/TraderDashboard";
 import { FarmerDashboard } from "./components/FarmerDashboard";
 import { BuyerDashboard } from "./components/BuyerDashboard";
 import { Id } from "../convex/_generated/dataModel";
 // import { useMutation } from "convex/react";
-// import { api } from "../convex/_generated/api";
 // import { initializePushNotifications } from "./utils/pushNotifications";
 
 /**
@@ -69,6 +70,20 @@ export default function Home() {
     }
   }, [router]);
 
+  // Check if farmer needs onboarding (hooks must be called unconditionally)
+  const onboardingStatus = useQuery(
+    api.farmerOnboarding.checkOnboardingStatus,
+    user?.role === "farmer" && user?.userId 
+      ? { farmerId: user.userId as Id<"users"> } 
+      : "skip"
+  );
+
+  // Redirect farmers to onboarding if not completed
+  useEffect(() => {
+    if (user?.role === "farmer" && onboardingStatus !== undefined && !onboardingStatus.completed) {
+      router.push("/onboarding/farmer");
+    }
+  }, [user?.role, onboardingStatus, router]);
   
   // Show loading if checking auth
   if (!user || !user.userId || !user.role || !user.alias) {

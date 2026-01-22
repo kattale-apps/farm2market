@@ -9,6 +9,7 @@ import { exportToExcel, exportToPDF, formatUTIDDataForExport } from "../utils/ex
 import { formatUgandaDateTime, getUgandaTime } from "../utils/timeUtils";
 import { NotificationMailbox } from "./NotificationMailbox";
 import { ContactUs } from "./ContactUs";
+import Link from "next/link";
 
 interface FarmerDashboardProps {
   userId: Id<"users">;
@@ -200,6 +201,14 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
   };
 
   const user = useQuery(api.auth.getUser, { userId });
+  const profile = useQuery(api.farmerProfile.getFarmerProfile, { farmerId: userId });
+
+  // Format location display
+  const locationDisplay = profile
+    ? [profile.districtName, profile.subcountyName, profile.parishName]
+        .filter(Boolean)
+        .join(", ") || "Location not set"
+    : "Loading...";
 
   return (
     <div style={{ padding: "1rem", maxWidth: "100%", boxSizing: "border-box" }}>
@@ -214,24 +223,52 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
         border: "1px solid #e0e0e0"
       }}>
-        <div>
-          <h2 style={{ 
-            fontSize: "clamp(1.5rem, 4vw, 1.8rem)", 
-            marginBottom: "0.5rem", 
-            color: "#2c2c2c",
-            fontFamily: '"Montserrat", sans-serif',
-            fontWeight: "700",
-            letterSpacing: "-0.02em"
-          }}>
-            Hello, {user?.alias || "Farmer"} 👩🏾‍🌾
-          </h2>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.5rem" }}>
+            <h2 style={{ 
+              fontSize: "clamp(1.5rem, 4vw, 1.8rem)", 
+              margin: 0, 
+              color: "#2c2c2c",
+              fontFamily: '"Montserrat", sans-serif',
+              fontWeight: "700",
+              letterSpacing: "-0.02em"
+            }}>
+              Hello, {user?.alias || "Farmer"} 👩🏾‍🌾
+            </h2>
+            <Link
+              href="/farmer/profile"
+              style={{
+                padding: "0.5rem 1rem",
+                background: "#4CAF50",
+                color: "white",
+                textDecoration: "none",
+                borderRadius: "8px",
+                fontSize: "0.9rem",
+                fontWeight: "500",
+                marginLeft: "1rem",
+              }}
+            >
+              Profile
+            </Link>
+          </div>
           <p style={{ 
             color: "#3d3d3d", 
             fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)",
-            fontFamily: '"Montserrat", sans-serif'
+            fontFamily: '"Montserrat", sans-serif',
+            margin: 0
           }}>
-            Location: District, Sub-county
+            Location: {locationDisplay}
           </p>
+          {profile?.farmSizeAcres && (
+            <p style={{ 
+              color: "#666", 
+              fontSize: "clamp(0.8rem, 2vw, 0.85rem)",
+              fontFamily: '"Montserrat", sans-serif',
+              margin: "0.25rem 0 0 0"
+            }}>
+              Farm Size: {profile.farmSizeAcres.toFixed(4)} acres
+            </p>
+          )}
         </div>
         <NotificationMailbox userId={userId} />
       </div>

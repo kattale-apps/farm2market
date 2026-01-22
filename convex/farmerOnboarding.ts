@@ -12,7 +12,7 @@ import { generateUTID, getUgandaTime } from "./utils";
 /**
  * Calculate farm size in acres from various input formats
  */
-function calculateFarmSizeAcres(input: {
+export function calculateFarmSizeAcres(input: {
   unit?: "ft" | "m";
   length?: number;
   width?: number;

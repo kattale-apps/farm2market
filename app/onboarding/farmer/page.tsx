@@ -221,28 +221,51 @@ export default function FarmerOnboardingPage() {
               }}>
                 District *
               </label>
-              <select
-                value={selectedDistrictId}
-                onChange={(e) => setSelectedDistrictId(e.target.value as Id<"districts"> | "")}
-                required
-                style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  fontSize: "1rem",
-                  border: "1px solid #ddd",
-                  borderRadius: "8px",
-                  background: "#fff",
-                  color: "#2c2c2c",
-                }}
-              >
-              <option value="">Select District</option>
-              {districts?.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-          </div>
+              {districts === undefined ? (
+                <div style={{ padding: "0.75rem", background: "#f8f9fa", borderRadius: "8px", color: "#666" }}>
+                  Loading districts...
+                </div>
+              ) : districts.length === 0 ? (
+                <div style={{ 
+                  padding: "1rem", 
+                  background: "#fff3cd", 
+                  borderRadius: "8px", 
+                  border: "1px solid #ffc107",
+                  color: "#856404"
+                }}>
+                  <strong>No districts available.</strong> Please contact SuperAdmin to seed Uganda administrative units.
+                  <br />
+                  <a 
+                    href="/admin/seed-locations" 
+                    style={{ color: "#856404", textDecoration: "underline", marginTop: "0.5rem", display: "inline-block" }}
+                  >
+                    Go to Seed Locations Page →
+                  </a>
+                </div>
+              ) : (
+                <select
+                  value={selectedDistrictId}
+                  onChange={(e) => setSelectedDistrictId(e.target.value as Id<"districts"> | "")}
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "0.75rem",
+                    fontSize: "1rem",
+                    border: "1px solid #ddd",
+                    borderRadius: "8px",
+                    background: "#fff",
+                    color: "#2c2c2c",
+                  }}
+                >
+                  <option value="">Select District</option>
+                  {districts.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
 
             {selectedDistrictId && (
               <div style={{ marginBottom: "1rem" }}>

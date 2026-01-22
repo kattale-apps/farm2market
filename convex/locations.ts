@@ -16,11 +16,19 @@ import { verifyAdminRole } from "./auth";
 export const getActiveDistricts = query({
   args: {},
   handler: async (ctx) => {
+    // Query all districts (index by active)
     const districts = await ctx.db
       .query("districts")
       .withIndex("by_active", (q) => q.eq("active", true))
-      .order("asc")
       .collect();
+
+    // Sort by order, then by name
+    districts.sort((a, b) => {
+      if (a.order !== b.order) {
+        return a.order - b.order;
+      }
+      return a.name.localeCompare(b.name);
+    });
 
     return districts.map((d) => ({
       id: d._id,

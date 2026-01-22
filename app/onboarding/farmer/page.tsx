@@ -148,50 +148,93 @@ export default function FarmerOnboardingPage() {
 
   return (
     <div style={{ padding: "clamp(1rem, 4vw, 2rem)", maxWidth: "800px", margin: "0 auto" }}>
-      <h1 style={{ fontSize: "clamp(1.5rem, 4vw, 2rem)", marginBottom: "1.5rem" }}>
-        Complete Your Profile
-      </h1>
-      <p style={{ marginBottom: "2rem", color: "#666" }}>
-        Please provide your location and farm size to continue. This information is required before you can create listings.
-      </p>
+      <div style={{
+        background: "#fff",
+        padding: "clamp(1.5rem, 4vw, 2rem)",
+        borderRadius: "12px",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        border: "1px solid #e0e0e0"
+      }}>
+        <h1 style={{ 
+          fontSize: "clamp(1.5rem, 4vw, 2rem)", 
+          marginBottom: "1rem",
+          color: "#2c2c2c",
+          fontFamily: '"Montserrat", sans-serif',
+          fontWeight: "700"
+        }}>
+          Complete Your Profile
+        </h1>
+        <p style={{ 
+          marginBottom: "2rem", 
+          color: "#666",
+          fontSize: "clamp(0.9rem, 2.5vw, 1rem)",
+          lineHeight: "1.6",
+          background: "#f8f9fa",
+          padding: "1rem",
+          borderRadius: "8px",
+          border: "1px solid #e9ecef"
+        }}>
+          Please provide your location and farm size to continue. This information is required before you can create listings.
+        </p>
 
-      {message && (
-        <div
-          style={{
-            padding: "1rem",
-            marginBottom: "1.5rem",
+        {message && (
+          <div
+            style={{
+              padding: "1rem",
+              marginBottom: "1.5rem",
+              borderRadius: "8px",
+              background: message.type === "success" ? "#d4edda" : "#f8d7da",
+              color: message.type === "success" ? "#155724" : "#721c24",
+              border: `1px solid ${message.type === "success" ? "#c3e6cb" : "#f5c6cb"}`,
+            }}
+          >
+            {message.text}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit}>
+          {/* Location Selection */}
+          <div style={{ 
+            marginBottom: "2rem",
+            background: "#f8f9fa",
+            padding: "1.5rem",
             borderRadius: "8px",
-            background: message.type === "success" ? "#d4edda" : "#f8d7da",
-            color: message.type === "success" ? "#155724" : "#721c24",
-          }}
-        >
-          {message.text}
-        </div>
-      )}
+            border: "1px solid #e9ecef"
+          }}>
+            <h2 style={{ 
+              fontSize: "clamp(1.2rem, 3vw, 1.5rem)", 
+              marginBottom: "1rem",
+              color: "#2c2c2c",
+              fontFamily: '"Montserrat", sans-serif',
+              fontWeight: "600"
+            }}>
+              Location
+            </h2>
 
-      <form onSubmit={handleSubmit}>
-        {/* Location Selection */}
-        <div style={{ marginBottom: "2rem" }}>
-          <h2 style={{ fontSize: "clamp(1.2rem, 3vw, 1.5rem)", marginBottom: "1rem" }}>
-            Location
-          </h2>
-
-          <div style={{ marginBottom: "1rem" }}>
-            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600" }}>
-              District *
-            </label>
-            <select
-              value={selectedDistrictId}
-              onChange={(e) => setSelectedDistrictId(e.target.value as Id<"districts"> | "")}
-              required
-              style={{
-                width: "100%",
-                padding: "0.75rem",
-                fontSize: "1rem",
-                border: "1px solid #ddd",
-                borderRadius: "4px",
-              }}
-            >
+            <div style={{ marginBottom: "1rem" }}>
+              <label style={{ 
+                display: "block", 
+                marginBottom: "0.5rem", 
+                fontWeight: "600",
+                color: "#2c2c2c",
+                fontSize: "0.95rem"
+              }}>
+                District *
+              </label>
+              <select
+                value={selectedDistrictId}
+                onChange={(e) => setSelectedDistrictId(e.target.value as Id<"districts"> | "")}
+                required
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  fontSize: "1rem",
+                  border: "1px solid #ddd",
+                  borderRadius: "8px",
+                  background: "#fff",
+                  color: "#2c2c2c",
+                }}
+              >
               <option value="">Select District</option>
               {districts?.map((d) => (
                 <option key={d.id} value={d.id}>
@@ -201,23 +244,31 @@ export default function FarmerOnboardingPage() {
             </select>
           </div>
 
-          {selectedDistrictId && (
-            <div style={{ marginBottom: "1rem" }}>
-              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600" }}>
-                Subcounty *
-              </label>
-              <select
-                value={selectedSubcountyId}
-                onChange={(e) => setSelectedSubcountyId(e.target.value as Id<"subcounties"> | "")}
-                required
-                style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  fontSize: "1rem",
-                  border: "1px solid #ddd",
-                  borderRadius: "4px",
-                }}
-              >
+            {selectedDistrictId && (
+              <div style={{ marginBottom: "1rem" }}>
+                <label style={{ 
+                  display: "block", 
+                  marginBottom: "0.5rem", 
+                  fontWeight: "600",
+                  color: "#2c2c2c",
+                  fontSize: "0.95rem"
+                }}>
+                  Subcounty *
+                </label>
+                <select
+                  value={selectedSubcountyId}
+                  onChange={(e) => setSelectedSubcountyId(e.target.value as Id<"subcounties"> | "")}
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "0.75rem",
+                    fontSize: "1rem",
+                    border: "1px solid #ddd",
+                    borderRadius: "8px",
+                    background: "#fff",
+                    color: "#2c2c2c",
+                  }}
+                >
                 <option value="">Select Subcounty</option>
                 {subcounties?.map((s) => (
                   <option key={s.id} value={s.id}>
@@ -228,23 +279,31 @@ export default function FarmerOnboardingPage() {
             </div>
           )}
 
-          {selectedSubcountyId && (
-            <div style={{ marginBottom: "1rem" }}>
-              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600" }}>
-                Parish *
-              </label>
-              <select
-                value={selectedParishId}
-                onChange={(e) => setSelectedParishId(e.target.value as Id<"parishes"> | "")}
-                required
-                style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  fontSize: "1rem",
-                  border: "1px solid #ddd",
-                  borderRadius: "4px",
-                }}
-              >
+            {selectedSubcountyId && (
+              <div style={{ marginBottom: "1rem" }}>
+                <label style={{ 
+                  display: "block", 
+                  marginBottom: "0.5rem", 
+                  fontWeight: "600",
+                  color: "#2c2c2c",
+                  fontSize: "0.95rem"
+                }}>
+                  Parish *
+                </label>
+                <select
+                  value={selectedParishId}
+                  onChange={(e) => setSelectedParishId(e.target.value as Id<"parishes"> | "")}
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "0.75rem",
+                    fontSize: "1rem",
+                    border: "1px solid #ddd",
+                    borderRadius: "8px",
+                    background: "#fff",
+                    color: "#2c2c2c",
+                  }}
+                >
                 <option value="">Select Parish</option>
                 {parishes?.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -262,22 +321,30 @@ export default function FarmerOnboardingPage() {
             Farm Size
           </h2>
 
-          <div style={{ marginBottom: "1rem" }}>
-            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600" }}>
-              Measurement Unit *
-            </label>
-            <select
-              value={farmSizeUnit}
-              onChange={(e) => setFarmSizeUnit(e.target.value as "ft" | "m" | "omwigo" | "emiigo")}
-              required
-              style={{
-                width: "100%",
-                padding: "0.75rem",
-                fontSize: "1rem",
-                border: "1px solid #ddd",
-                borderRadius: "4px",
-              }}
-            >
+            <div style={{ marginBottom: "1rem" }}>
+              <label style={{ 
+                display: "block", 
+                marginBottom: "0.5rem", 
+                fontWeight: "600",
+                color: "#2c2c2c",
+                fontSize: "0.95rem"
+              }}>
+                Measurement Unit *
+              </label>
+              <select
+                value={farmSizeUnit}
+                onChange={(e) => setFarmSizeUnit(e.target.value as "ft" | "m" | "omwigo" | "emiigo")}
+                required
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  fontSize: "1rem",
+                  border: "1px solid #ddd",
+                  borderRadius: "8px",
+                  background: "#fff",
+                  color: "#2c2c2c",
+                }}
+              >
               <option value="ft">Feet × Feet</option>
               <option value="m">Meters × Meters</option>
               <option value="omwigo">Omwigo (10×100 ft)</option>
@@ -285,118 +352,166 @@ export default function FarmerOnboardingPage() {
             </select>
           </div>
 
-          {farmSizeUnit === "ft" || farmSizeUnit === "m" ? (
-            <>
+            {farmSizeUnit === "ft" || farmSizeUnit === "m" ? (
+              <>
+                <div style={{ marginBottom: "1rem" }}>
+                  <label style={{ 
+                    display: "block", 
+                    marginBottom: "0.5rem", 
+                    fontWeight: "600",
+                    color: "#2c2c2c",
+                    fontSize: "0.95rem"
+                  }}>
+                    Length ({farmSizeUnit === "ft" ? "ft" : "m"}) *
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={farmSizeLength}
+                    onChange={(e) => setFarmSizeLength(e.target.value)}
+                    required
+                    style={{
+                      width: "100%",
+                      padding: "0.75rem",
+                      fontSize: "1rem",
+                      border: "1px solid #ddd",
+                      borderRadius: "8px",
+                      background: "#fff",
+                      color: "#2c2c2c",
+                    }}
+                  />
+                </div>
+                <div style={{ marginBottom: "1rem" }}>
+                  <label style={{ 
+                    display: "block", 
+                    marginBottom: "0.5rem", 
+                    fontWeight: "600",
+                    color: "#2c2c2c",
+                    fontSize: "0.95rem"
+                  }}>
+                    Width ({farmSizeUnit === "ft" ? "ft" : "m"}) *
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={farmSizeWidth}
+                    onChange={(e) => setFarmSizeWidth(e.target.value)}
+                    required
+                    style={{
+                      width: "100%",
+                      padding: "0.75rem",
+                      fontSize: "1rem",
+                      border: "1px solid #ddd",
+                      borderRadius: "8px",
+                      background: "#fff",
+                      color: "#2c2c2c",
+                    }}
+                  />
+                </div>
+              </>
+            ) : farmSizeUnit === "omwigo" ? (
               <div style={{ marginBottom: "1rem" }}>
-                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600" }}>
-                  Length ({farmSizeUnit === "ft" ? "ft" : "m"}) *
+                <label style={{ 
+                  display: "block", 
+                  marginBottom: "0.5rem", 
+                  fontWeight: "600",
+                  color: "#2c2c2c",
+                  fontSize: "0.95rem"
+                }}>
+                  Number of Omwigo *
                 </label>
                 <input
                   type="number"
                   step="0.01"
                   min="0.01"
-                  value={farmSizeLength}
-                  onChange={(e) => setFarmSizeLength(e.target.value)}
+                  value={farmSizeOmwigo}
+                  onChange={(e) => setFarmSizeOmwigo(e.target.value)}
                   required
                   style={{
                     width: "100%",
                     padding: "0.75rem",
                     fontSize: "1rem",
                     border: "1px solid #ddd",
-                    borderRadius: "4px",
+                    borderRadius: "8px",
+                    background: "#fff",
+                    color: "#2c2c2c",
                   }}
                 />
+                <p style={{ 
+                  fontSize: "0.9rem", 
+                  color: "#666", 
+                  marginTop: "0.5rem",
+                  background: "#f8f9fa",
+                  padding: "0.5rem",
+                  borderRadius: "4px"
+                }}>
+                  1 Omwigo = 10 × 100 ft = 1000 sq ft
+                </p>
               </div>
+            ) : (
               <div style={{ marginBottom: "1rem" }}>
-                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600" }}>
-                  Width ({farmSizeUnit === "ft" ? "ft" : "m"}) *
+                <label style={{ 
+                  display: "block", 
+                  marginBottom: "0.5rem", 
+                  fontWeight: "600",
+                  color: "#2c2c2c",
+                  fontSize: "0.95rem"
+                }}>
+                  Number of Emiigo *
                 </label>
                 <input
                   type="number"
                   step="0.01"
                   min="0.01"
-                  value={farmSizeWidth}
-                  onChange={(e) => setFarmSizeWidth(e.target.value)}
+                  value={farmSizeEmiigo}
+                  onChange={(e) => setFarmSizeEmiigo(e.target.value)}
                   required
                   style={{
                     width: "100%",
                     padding: "0.75rem",
                     fontSize: "1rem",
                     border: "1px solid #ddd",
-                    borderRadius: "4px",
+                    borderRadius: "8px",
+                    background: "#fff",
+                    color: "#2c2c2c",
                   }}
                 />
+                <p style={{ 
+                  fontSize: "0.9rem", 
+                  color: "#666", 
+                  marginTop: "0.5rem",
+                  background: "#f8f9fa",
+                  padding: "0.5rem",
+                  borderRadius: "4px"
+                }}>
+                  Emiigo = Multiple Omwigo (1 Omwigo = 10 × 100 ft)
+                </p>
               </div>
-            </>
-          ) : farmSizeUnit === "omwigo" ? (
-            <div style={{ marginBottom: "1rem" }}>
-              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600" }}>
-                Number of Omwigo *
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                min="0.01"
-                value={farmSizeOmwigo}
-                onChange={(e) => setFarmSizeOmwigo(e.target.value)}
-                required
-                style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  fontSize: "1rem",
-                  border: "1px solid #ddd",
-                  borderRadius: "4px",
-                }}
-              />
-              <p style={{ fontSize: "0.9rem", color: "#666", marginTop: "0.5rem" }}>
-                1 Omwigo = 10 × 100 ft = 1000 sq ft
-              </p>
-            </div>
-          ) : (
-            <div style={{ marginBottom: "1rem" }}>
-              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600" }}>
-                Number of Emiigo *
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                min="0.01"
-                value={farmSizeEmiigo}
-                onChange={(e) => setFarmSizeEmiigo(e.target.value)}
-                required
-                style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  fontSize: "1rem",
-                  border: "1px solid #ddd",
-                  borderRadius: "4px",
-                }}
-              />
-              <p style={{ fontSize: "0.9rem", color: "#666", marginTop: "0.5rem" }}>
-                Emiigo = Multiple Omwigo (1 Omwigo = 10 × 100 ft)
-              </p>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
 
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            width: "100%",
-            padding: "1rem",
-            fontSize: "1.1rem",
-            fontWeight: "600",
-            background: loading ? "#ccc" : "#28a745",
-            color: "white",
-            border: "none",
-            borderRadius: "8px",
-            cursor: loading ? "not-allowed" : "pointer",
-          }}
-        >
-          {loading ? "Completing..." : "Complete Onboarding"}
-        </button>
-      </form>
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              width: "100%",
+              padding: "1rem",
+              fontSize: "1.1rem",
+              fontWeight: "600",
+              background: loading ? "#ccc" : "#4CAF50",
+              color: "white",
+              border: "none",
+              borderRadius: "8px",
+              cursor: loading ? "not-allowed" : "pointer",
+              boxShadow: loading ? "none" : "0 2px 4px rgba(0,0,0,0.1)",
+            }}
+          >
+            {loading ? "Completing..." : "Complete Onboarding"}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

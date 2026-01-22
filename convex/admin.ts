@@ -10,7 +10,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { generateUTID, getStorageFeeRate, getBuyerServiceFeePercentage, getUgandaTime } from "./utils";
+import { generateUTID, getStorageFeeRate, getBuyerServiceFeePercentage, getTraderCommissionPercentage, getUgandaTime } from "./utils";
 import { MAX_TRADER_EXPOSURE_UGX, DEFAULT_STORAGE_FEE_RATE_KG_PER_DAY, DEFAULT_BUYER_SERVICE_FEE_PERCENTAGE } from "./constants";
 import { Id } from "./_generated/dataModel";
 
@@ -1511,6 +1511,79 @@ export const getBuyerServiceFeePercentageQuery = query({
     await verifyAdmin(ctx, args.adminId);
     const fee = await getBuyerServiceFeePercentage({ db: ctx.db });
     return { serviceFeePercentage: fee };
+  },
+});
+
+/**
+ * Update trader commission percentage (SuperAdmin only)
+ * Changes the commission percentage deducted from trader sales
+ */
+export const updateTraderCommissionPercentage = mutation({
+  args: {
+    adminId: v.id("users"),
+    commissionPercentage: v.number(), // New commission percentage (e.g., 2 for 2%)
+    reason: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const adminUser = await verifyAdmin(ctx, args.adminId);
+    
+    // Only SuperAdmin can update commission
+    if (!isSuperAdmin(adminUser)) {
+      throw new Error("Only SuperAdmin can update trader commission percentage");
+    }
+
+    if (args.commissionPercentage < 0 || args.commissionPercentage > 100) {
+      throw new Error("Commission percentage must be between 0 and 100");
+    }
+
+    const previousCommission = await getTraderCommissionPercentage({ db: ctx.db });
+
+    const utid = await logAdminAction(
+      ctx,
+      args.adminId,
+      "update_trader_commission_percentage",
+      args.reason,
+      undefined,
+      {
+        previousCommission,
+        newCommission: args.commissionPercentage,
+      }
+    );
+
+    // Get or create system settings
+    let settings = await ctx.db.query("systemSettings").first();
+    if (!settings) {
+      // Create initial settings record
+      await ctx.db.insert("systemSettings", {
+        pilotMode: false,
+        setBy: args.adminId,
+        setAt: getUgandaTime(),
+        reason: "Initial system settings",
+        utid: generateUTID("admin"),
+        traderCommissionPercentage: args.commissionPercentage,
+      });
+    } else {
+      // Update existing settings
+      await ctx.db.patch(settings._id, {
+        traderCommissionPercentage: args.commissionPercentage,
+      });
+    }
+
+    return { utid, commissionPercentage: args.commissionPercentage };
+  },
+});
+
+/**
+ * Get current trader commission percentage (admin only)
+ */
+export const getTraderCommissionPercentageQuery = query({
+  args: {
+    adminId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    await verifyAdmin(ctx, args.adminId);
+    const commission = await getTraderCommissionPercentage({ db: ctx.db });
+    return { commissionPercentage: commission };
   },
 });
 

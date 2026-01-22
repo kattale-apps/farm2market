@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Farm2Market Uganda</string>
-    <string name="title_activity_main">Farm2Market Uganda</string>
+    <string name="app_name">FarmCoin</string>
+    <string name="title_activity_main">FarmCoin</string>
     <string name="package_name">com.farm2market.uganda</string>
     <string name="custom_url_scheme">com.farm2market.uganda</string>
 </resources>

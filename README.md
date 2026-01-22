@@ -195,6 +195,26 @@ All business logic lives in `convex/`:
 - Server-side role enforcement (never trust client)
 - Atomic operations for critical paths (pay-to-lock)
 
+## 🛡️ Cursor AI Rules
+
+This project uses **Cursor rules** to guide AI-assisted development and ensure system integrity.
+
+- **`.cursorrules`** - Active rules file that Cursor reads automatically
+- **`CURSOR_RULES.md`** - Detailed documentation of all rules and invariants
+
+**Key Principles**:
+- Preserve invariants above all else
+- File-scope changes only (ask before modifying multiple files)
+- Planning first, coding second
+- No "helpful" refactors without explicit request
+- Reference existing documentation (`INVARIANTS.md`, `architecture.md`, etc.)
+
+**Admin Hierarchy**:
+- **StoreAdmin** (`adminLevel === "junior"`): Confirms delivery for assigned storage locations only
+- **SuperAdmin** (`adminLevel === "super"` or `undefined`): Full governance and oversight powers
+
+See `CURSOR_RULES.md` for complete rules and guidelines.
+
 ## Current Status
 
 - Status: Project restructured for Convex backend

@@ -14,6 +14,7 @@ interface ContactUsProps {
 
 export function ContactUs({ isMobile = false }: ContactUsProps) {
   const [showContact, setShowContact] = useState(false);
+  const [contactMethod, setContactMethod] = useState<"email" | "whatsapp">("whatsapp");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [subject, setSubject] = useState("");
@@ -21,8 +22,18 @@ export function ContactUs({ isMobile = false }: ContactUsProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const mailtoLink = `mailto:kattaleglobal@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(`Name: ${name}\nEmail: ${email}\n\nMessage:\n${message}`)}`;
-    window.location.href = mailtoLink;
+    
+    if (contactMethod === "whatsapp") {
+      // WhatsApp Web API - format message
+      const whatsappMessage = `*Contact from Farm2Market Platform*\n\nName: ${name || "Anonymous"}\nEmail: ${email || "N/A"}\nSubject: ${subject || "General Inquiry"}\n\nMessage:\n${message}`;
+      const whatsappUrl = `https://wa.me/256700000000?text=${encodeURIComponent(whatsappMessage)}`; // Replace with actual SuperAdmin WhatsApp number
+      window.open(whatsappUrl, "_blank");
+    } else {
+      // Email fallback
+      const mailtoLink = `mailto:kattaleglobal@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(`Name: ${name}\nEmail: ${email}\n\nMessage:\n${message}`)}`;
+      window.location.href = mailtoLink;
+    }
+    
     setShowContact(false);
     setName("");
     setEmail("");
@@ -57,7 +68,7 @@ export function ContactUs({ isMobile = false }: ContactUsProps) {
           onMouseEnter={(e) => e.currentTarget.style.background = "#1b5e20"}
           onMouseLeave={(e) => e.currentTarget.style.background = "#2e7d32"}
         >
-          📧 Contact Us
+          💬 Contact Us
         </button>
         <p style={{
           marginTop: "0.5rem",
@@ -65,13 +76,7 @@ export function ContactUs({ isMobile = false }: ContactUsProps) {
           color: "#666",
           textAlign: "center"
         }}>
-          Need help? Email us at{" "}
-          <a 
-            href="mailto:kattaleglobal@gmail.com" 
-            style={{ color: "#2e7d32", textDecoration: "none" }}
-          >
-            kattaleglobal@gmail.com
-          </a>
+          Need help? Contact SuperAdmin via WhatsApp or Email
         </p>
       </div>
     );
@@ -121,6 +126,40 @@ export function ContactUs({ isMobile = false }: ContactUsProps) {
       </div>
 
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+        <div>
+          <label style={{
+            display: "block",
+            marginBottom: "0.5rem",
+            fontWeight: "600",
+            color: "#2c2c2c",
+            fontSize: isMobile ? "0.9rem" : "1rem"
+          }}>
+            Contact Method
+          </label>
+          <div style={{ display: "flex", gap: "1rem" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
+              <input
+                type="radio"
+                name="contactMethod"
+                value="whatsapp"
+                checked={contactMethod === "whatsapp"}
+                onChange={(e) => setContactMethod(e.target.value as "whatsapp" | "email")}
+              />
+              <span>WhatsApp</span>
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
+              <input
+                type="radio"
+                name="contactMethod"
+                value="email"
+                checked={contactMethod === "email"}
+                onChange={(e) => setContactMethod(e.target.value as "whatsapp" | "email")}
+              />
+              <span>Email</span>
+            </label>
+          </div>
+        </div>
+
         <div>
           <label style={{
             display: "block",

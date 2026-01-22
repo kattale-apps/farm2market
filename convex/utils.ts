@@ -197,6 +197,19 @@ export async function getBuyerServiceFeePercentage(
 }
 
 /**
+ * Get trader commission percentage
+ * Returns the current commission percentage for trader sales
+ * @param ctx - Database context
+ * @returns Commission percentage (e.g., 2 for 2%)
+ */
+export async function getTraderCommissionPercentage(
+  ctx: { db: DatabaseReader | DatabaseWriter }
+): Promise<number> {
+  const settings = await ctx.db.query("systemSettings").first();
+  return settings?.traderCommissionPercentage ?? 0; // Default: 0% (no commission)
+}
+
+/**
  * Calculate price per kilo from inventory
  * Gets the average price per kilo from the listing units that make up the inventory
  * @param ctx - Database context

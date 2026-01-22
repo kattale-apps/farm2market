@@ -2,7 +2,7 @@ import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.farm2market.uganda',
-  appName: 'Farm2Market Uganda',
+  appName: 'FarmCoin',
   webDir: 'out', // Will be ignored when using server.url
   server: {
     url: 'https://farm2market-dev.vercel.app', // Your Vercel deployment URL

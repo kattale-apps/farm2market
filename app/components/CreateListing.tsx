@@ -3,21 +3,25 @@
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 interface CreateListingProps {
   userId: Id<"users">;
 }
 
 export function CreateListing({ userId }: CreateListingProps) {
+  const router = useRouter();
   const createListing = useMutation(api.listings.createListing);
   const qualityOptions = useQuery(api.listings.getActiveQualityOptions, {});
   const produceOptions = useQuery(api.listings.getActiveProduceOptions, {});
   const storageLocations = useQuery(api.listings.getActiveStorageLocations, {});
+  const onboardingStatus = useQuery(api.farmerOnboarding.checkOnboardingStatus, { farmerId: userId });
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   
+  const [listingMode, setListingMode] = useState<"unit" | "garden">("unit");
   const [formData, setFormData] = useState({
     produceType: "",
     totalKilos: "",
@@ -25,7 +29,22 @@ export function CreateListing({ userId }: CreateListingProps) {
     qualityRating: "",
     qualityComment: "",
     storageLocationId: "" as string | "",
+    // Garden mode fields
+    gardenSize: "",
+    gardenLength: "",
+    gardenWidth: "",
+    totalPrice: "",
   });
+
+  // Check onboarding status
+  useEffect(() => {
+    if (onboardingStatus && !onboardingStatus.completed) {
+      setMessage({
+        type: "error",
+        text: "Please complete your profile onboarding first. Click here to go to onboarding.",
+      });
+    }
+  }, [onboardingStatus]);
 
   const formatUGX = (amount: number) => {
     return new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX" }).format(amount);
@@ -51,25 +70,20 @@ export function CreateListing({ userId }: CreateListingProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Check onboarding
+    if (!onboardingStatus?.completed) {
+      setMessage({
+        type: "error",
+        text: "Please complete your profile onboarding first.",
+      });
+      return;
+    }
+
     setLoading(true);
     setMessage(null);
 
     try {
-      const totalKilos = parseFloat(formData.totalKilos);
-      const pricePerKilo = parseFloat(formData.pricePerKilo);
-
-      if (isNaN(totalKilos) || totalKilos <= 0) {
-        setMessage({ type: "error", text: "Total kilos must be a positive number" });
-        setLoading(false);
-        return;
-      }
-
-      if (isNaN(pricePerKilo) || pricePerKilo <= 0) {
-        setMessage({ type: "error", text: "Price per kilo must be a positive number" });
-        setLoading(false);
-        return;
-      }
-
       if (!formData.produceType.trim()) {
         setMessage({ type: "error", text: "Produce type is required" });
         setLoading(false);
@@ -82,6 +96,54 @@ export function CreateListing({ userId }: CreateListingProps) {
         return;
       }
 
+      const totalKilos = parseFloat(formData.totalKilos);
+      if (isNaN(totalKilos) || totalKilos <= 0) {
+        setMessage({ type: "error", text: "Total kilos must be a positive number" });
+        setLoading(false);
+        return;
+      }
+
+      let pricePerKilo: number;
+      let totalPrice: number | undefined;
+      let gardenSize: number | undefined;
+      let gardenDimensions: any | undefined;
+
+      if (listingMode === "garden") {
+        // Garden mode validation
+        totalPrice = parseFloat(formData.totalPrice);
+        if (isNaN(totalPrice) || totalPrice <= 0) {
+          setMessage({ type: "error", text: "Total price is required for garden sale mode" });
+          setLoading(false);
+          return;
+        }
+
+        gardenSize = parseFloat(formData.gardenSize);
+        if (isNaN(gardenSize) || gardenSize <= 0) {
+          setMessage({ type: "error", text: "Garden size (acres) is required" });
+          setLoading(false);
+          return;
+        }
+
+        // Calculate price per kilo from total price
+        pricePerKilo = totalPrice / totalKilos;
+
+        // Store garden dimensions
+        if (formData.gardenLength && formData.gardenWidth) {
+          gardenDimensions = {
+            length: parseFloat(formData.gardenLength),
+            width: parseFloat(formData.gardenWidth),
+          };
+        }
+      } else {
+        // Unit mode validation
+        pricePerKilo = parseFloat(formData.pricePerKilo);
+        if (isNaN(pricePerKilo) || pricePerKilo <= 0) {
+          setMessage({ type: "error", text: "Price per kilo must be a positive number" });
+          setLoading(false);
+          return;
+        }
+      }
+
       const result = await createListing({
         farmerId: userId,
         produceType: formData.produceType.trim(),
@@ -90,6 +152,10 @@ export function CreateListing({ userId }: CreateListingProps) {
         qualityRating: formData.qualityRating || undefined,
         qualityComment: formData.qualityComment.trim() || undefined,
         storageLocationId: formData.storageLocationId as any,
+        listingMode,
+        gardenSize,
+        gardenDimensions,
+        totalPrice,
       });
 
       setMessage({
@@ -105,7 +171,12 @@ export function CreateListing({ userId }: CreateListingProps) {
         qualityRating: "",
         qualityComment: "",
         storageLocationId: "",
+        gardenSize: "",
+        gardenLength: "",
+        gardenWidth: "",
+        totalPrice: "",
       });
+      setListingMode("unit");
 
       // Hide form after success
       setTimeout(() => {
@@ -161,7 +232,19 @@ export function CreateListing({ userId }: CreateListingProps) {
           onClick={() => {
             setShowForm(false);
             setMessage(null);
-            setFormData({ produceType: "", totalKilos: "", pricePerKilo: "", qualityRating: "", qualityComment: "", storageLocationId: "" });
+            setFormData({
+              produceType: "",
+              totalKilos: "",
+              pricePerKilo: "",
+              qualityRating: "",
+              qualityComment: "",
+              storageLocationId: "",
+              gardenSize: "",
+              gardenLength: "",
+              gardenWidth: "",
+              totalPrice: "",
+            });
+            setListingMode("unit");
           }}
           style={{
             padding: "0.5rem 1rem",
@@ -191,9 +274,67 @@ export function CreateListing({ userId }: CreateListingProps) {
         </div>
       )}
 
+      {!onboardingStatus?.completed && (
+        <div
+          style={{
+            padding: "1rem",
+            marginBottom: "1rem",
+            background: "#fff3cd",
+            borderRadius: "8px",
+            border: "1px solid #ffc107",
+          }}
+        >
+          <p style={{ margin: 0, color: "#856404" }}>
+            Please complete your profile onboarding before creating listings.{" "}
+            <button
+              type="button"
+              onClick={() => router.push("/onboarding/farmer")}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#0066cc",
+                textDecoration: "underline",
+                cursor: "pointer",
+              }}
+            >
+              Go to onboarding
+            </button>
+          </p>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit}>
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
           
+          {/* Listing Mode Selection */}
+          <div>
+            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+              Listing Mode *
+            </label>
+            <div style={{ display: "flex", gap: "1rem" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
+                <input
+                  type="radio"
+                  name="listingMode"
+                  value="unit"
+                  checked={listingMode === "unit"}
+                  onChange={(e) => setListingMode(e.target.value as "unit" | "garden")}
+                />
+                <span>Unit Sale (10kg units)</span>
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
+                <input
+                  type="radio"
+                  name="listingMode"
+                  value="garden"
+                  checked={listingMode === "garden"}
+                  onChange={(e) => setListingMode(e.target.value as "unit" | "garden")}
+                />
+                <span>Garden/Musiri Sale (Entire Plot)</span>
+              </label>
+            </div>
+          </div>
+
           {/* STEP 1: Storage Location Selection (FIRST) */}
           <div>
             <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
@@ -327,36 +468,127 @@ export function CreateListing({ userId }: CreateListingProps) {
               }}
             />
             <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.85rem", color: "#666" }}>
-              You can list any amount of kilos. Units will be created automatically (10kg each, or less if total is under 10kg).
+              {listingMode === "garden"
+                ? "Total weight of produce from your entire garden plot."
+                : "You can list any amount of kilos. Units will be created automatically (10kg each, or less if total is under 10kg)."}
             </p>
           </div>
 
-          <div>
-            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
-              Price Per Kilo (UGX) *
-            </label>
-            <input
-              type="number"
-              value={formData.pricePerKilo}
-              onChange={(e) => setFormData({ ...formData, pricePerKilo: e.target.value })}
-              placeholder="e.g., 2000, 3000, 5000"
-              min="1"
-              step="1"
-              required
-              style={{
-                width: "100%",
-                padding: "0.75rem",
-                border: "1px solid #ddd",
-                borderRadius: "6px",
-                fontSize: "1rem",
-              }}
-            />
-            {formData.totalKilos && formData.pricePerKilo && (
-              <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.85rem", color: "#666" }}>
-                Total Value: {formatUGX(parseFloat(formData.totalKilos || "0") * parseFloat(formData.pricePerKilo || "0"))}
-              </p>
-            )}
-          </div>
+          {listingMode === "garden" ? (
+            <>
+              <div>
+                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                  Garden Size (Acres) *
+                </label>
+                <input
+                  type="number"
+                  value={formData.gardenSize}
+                  onChange={(e) => setFormData({ ...formData, gardenSize: e.target.value })}
+                  placeholder="e.g., 0.5, 1.0, 2.5"
+                  min="0.01"
+                  step="0.01"
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "0.75rem",
+                    border: "1px solid #ddd",
+                    borderRadius: "6px",
+                    fontSize: "1rem",
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                  Garden Dimensions (Optional)
+                </label>
+                <div style={{ display: "flex", gap: "1rem" }}>
+                  <input
+                    type="number"
+                    value={formData.gardenLength}
+                    onChange={(e) => setFormData({ ...formData, gardenLength: e.target.value })}
+                    placeholder="Length"
+                    min="0.01"
+                    step="0.01"
+                    style={{
+                      flex: 1,
+                      padding: "0.75rem",
+                      border: "1px solid #ddd",
+                      borderRadius: "6px",
+                      fontSize: "1rem",
+                    }}
+                  />
+                  <input
+                    type="number"
+                    value={formData.gardenWidth}
+                    onChange={(e) => setFormData({ ...formData, gardenWidth: e.target.value })}
+                    placeholder="Width"
+                    min="0.01"
+                    step="0.01"
+                    style={{
+                      flex: 1,
+                      padding: "0.75rem",
+                      border: "1px solid #ddd",
+                      borderRadius: "6px",
+                      fontSize: "1rem",
+                    }}
+                  />
+                </div>
+              </div>
+              <div>
+                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                  Total Price for Entire Garden (UGX) *
+                </label>
+                <input
+                  type="number"
+                  value={formData.totalPrice}
+                  onChange={(e) => setFormData({ ...formData, totalPrice: e.target.value })}
+                  placeholder="e.g., 500000, 1000000"
+                  min="1"
+                  step="1"
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "0.75rem",
+                    border: "1px solid #ddd",
+                    borderRadius: "6px",
+                    fontSize: "1rem",
+                  }}
+                />
+                {formData.totalPrice && formData.totalKilos && (
+                  <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.85rem", color: "#666" }}>
+                    Price per kilo: {formatUGX(parseFloat(formData.totalPrice) / parseFloat(formData.totalKilos))}
+                  </p>
+                )}
+              </div>
+            </>
+          ) : (
+            <div>
+              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                Price Per Kilo (UGX) *
+              </label>
+              <input
+                type="number"
+                value={formData.pricePerKilo}
+                onChange={(e) => setFormData({ ...formData, pricePerKilo: e.target.value })}
+                placeholder="e.g., 2000, 3000, 5000"
+                min="1"
+                step="1"
+                required
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  border: "1px solid #ddd",
+                  borderRadius: "6px",
+                  fontSize: "1rem",
+                }}
+              />
+              {formData.totalKilos && formData.pricePerKilo && (
+                <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.85rem", color: "#666" }}>
+                  Total Value: {formatUGX(parseFloat(formData.totalKilos || "0") * parseFloat(formData.pricePerKilo || "0"))}
+                </p>
+              )}
+            </div>
+          )}
 
 
           {/* Quality Rating Dropdown */}
@@ -415,26 +647,38 @@ export function CreateListing({ userId }: CreateListingProps) {
           <div style={{ display: "flex", gap: "1rem", marginTop: "0.5rem" }}>
             <button
               type="submit"
-              disabled={loading || !formData.storageLocationId || !formData.produceType}
+              disabled={loading || !formData.storageLocationId || !formData.produceType || !onboardingStatus?.completed}
               style={{
                 padding: "0.75rem 1.5rem",
-                background: loading || !formData.storageLocationId || !formData.produceType ? "#ccc" : "#4caf50",
+                background: loading || !formData.storageLocationId || !formData.produceType || !onboardingStatus?.completed ? "#ccc" : "#4caf50",
                 color: "#fff",
                 border: "none",
                 borderRadius: "6px",
-                cursor: loading || !formData.storageLocationId || !formData.produceType ? "not-allowed" : "pointer",
+                cursor: loading || !formData.storageLocationId || !formData.produceType || !onboardingStatus?.completed ? "not-allowed" : "pointer",
                 fontSize: "1rem",
                 fontWeight: "600",
               }}
             >
-              {loading ? "Creating..." : "Create Listing"}
+              {loading ? "Creating..." : listingMode === "garden" ? "Create Garden Listing" : "Create Listing"}
             </button>
             <button
               type="button"
               onClick={() => {
                 setShowForm(false);
                 setMessage(null);
-                setFormData({ produceType: "", totalKilos: "", pricePerKilo: "", qualityRating: "", qualityComment: "", storageLocationId: "" });
+                setFormData({
+                  produceType: "",
+                  totalKilos: "",
+                  pricePerKilo: "",
+                  qualityRating: "",
+                  qualityComment: "",
+                  storageLocationId: "",
+                  gardenSize: "",
+                  gardenLength: "",
+                  gardenWidth: "",
+                  totalPrice: "",
+                });
+                setListingMode("unit");
               }}
               style={{
                 padding: "0.75rem 1.5rem",

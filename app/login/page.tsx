@@ -442,6 +442,75 @@ export default function LoginPage() {
           </div>
         )}
 
+        {/* Android App Download Section */}
+        <div
+          style={{
+            marginTop: "2rem",
+            padding: "1.5rem",
+            background: "#e8f5e9",
+            borderRadius: "12px",
+            border: "2px solid #4caf50",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>📱</div>
+          <h3 style={{ fontSize: "1.2rem", marginBottom: "0.5rem", color: "#2e7d32", fontWeight: "600" }}>
+            Download Our Android App
+          </h3>
+          <p style={{ fontSize: "0.9rem", color: "#666", marginBottom: "1rem" }}>
+            Get the full mobile experience on your Android device
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+            <a
+              href="/downloads/farm2market.apk"
+              download
+              style={{
+                display: "inline-block",
+                padding: "0.75rem 1.5rem",
+                background: "#4caf50",
+                color: "white",
+                textDecoration: "none",
+                borderRadius: "8px",
+                fontWeight: "600",
+                fontSize: "0.95rem",
+                transition: "background 0.3s",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "#2e7d32")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "#4caf50")}
+            >
+              📥 Download APK
+            </a>
+            <a
+              href="https://play.google.com/store/apps/details?id=com.farm2market.uganda"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "inline-block",
+                padding: "0.75rem 1.5rem",
+                background: "#fff",
+                color: "#4caf50",
+                textDecoration: "none",
+                borderRadius: "8px",
+                fontWeight: "600",
+                fontSize: "0.95rem",
+                border: "2px solid #4caf50",
+                transition: "background 0.3s",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "#f1f8f4";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "#fff";
+              }}
+            >
+              🏪 Get on Google Play
+            </a>
+          </div>
+          <p style={{ fontSize: "0.8rem", color: "#666", marginTop: "1rem" }}>
+            Version 1.2.0 • Android 5.0+
+          </p>
+        </div>
+
       </div>
     </main>
   );

@@ -194,6 +194,20 @@ export const makeOffer = mutation({
       });
     }
 
+    // Notify farmer about new offer (always send)
+    const farmer = await ctx.db.get(listing.farmerId);
+    if (farmer) {
+      await ctx.db.insert("notifications", {
+        userId: listing.farmerId,
+        type: "utid_specific",
+        title: "New Offer Received",
+        message: `Trader made an offer of ${new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX" }).format(args.offerPricePerKilo)}/kg on your ${listing.produceType} listing. UTID: ${utids[0]}`,
+        utid: utids[0],
+        read: false,
+        createdAt: getUgandaTime(),
+      });
+    }
+
     return {
       negotiations: negotiations.map(n => ({
         negotiationId: n.negotiationId,
@@ -253,6 +267,20 @@ export const acceptOffer = mutation({
       acceptedUtid,
       lastUpdatedAt: getUgandaTime(),
     });
+
+    // Notify trader about acceptance (always send)
+    const trader = await ctx.db.get(negotiation.traderId);
+    if (trader) {
+      await ctx.db.insert("notifications", {
+        userId: negotiation.traderId,
+        type: "utid_specific",
+        title: "Offer Accepted",
+        message: `Your offer of ${new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX" }).format(negotiation.currentPricePerKilo)}/kg has been accepted. You can now proceed to pay-to-lock. UTID: ${acceptedUtid}`,
+        utid: acceptedUtid,
+        read: false,
+        createdAt: getUgandaTime(),
+      });
+    }
 
     return {
       negotiationId: args.negotiationId,
@@ -362,6 +390,21 @@ export const counterOffer = mutation({
       lastUpdatedAt: getUgandaTime(),
     });
 
+    // Notify trader about counter-offer (always send)
+    const trader = await ctx.db.get(negotiation.traderId);
+    if (trader) {
+      const listing = await ctx.db.get(negotiation.listingId);
+      await ctx.db.insert("notifications", {
+        userId: negotiation.traderId,
+        type: "utid_specific",
+        title: "Counter-Offer Received",
+        message: `Farmer made a counter-offer of ${new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX" }).format(args.counterPricePerKilo)}/kg on your negotiation. UTID: ${negotiation.negotiationUtid}`,
+        utid: negotiation.negotiationUtid,
+        read: false,
+        createdAt: getUgandaTime(),
+      });
+    }
+
     return {
       negotiationId: args.negotiationId,
       counterPricePerKilo: args.counterPricePerKilo,
@@ -414,6 +457,20 @@ export const acceptCounterOffer = mutation({
       acceptedUtid,
       lastUpdatedAt: getUgandaTime(),
     });
+
+    // Notify farmer about counter-offer acceptance (always send)
+    const farmer = await ctx.db.get(negotiation.farmerId);
+    if (farmer) {
+      await ctx.db.insert("notifications", {
+        userId: negotiation.farmerId,
+        type: "utid_specific",
+        title: "Counter-Offer Accepted",
+        message: `Trader accepted your counter-offer of ${new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX" }).format(negotiation.currentPricePerKilo)}/kg. UTID: ${acceptedUtid}`,
+        utid: acceptedUtid,
+        read: false,
+        createdAt: getUgandaTime(),
+      });
+    }
 
     return {
       negotiationId: args.negotiationId,

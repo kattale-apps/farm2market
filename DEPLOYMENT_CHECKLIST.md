@@ -1,116 +1,112 @@
-# FCM Push Notifications Deployment Checklist
+# Deployment Checklist
 
-## ✅ Code Implementation Complete
+Use this checklist to ensure a smooth deployment process.
 
-1. ✅ Google Cloud Function created (`cloud-functions/fcm-sender/`)
-2. ✅ Convex code updated to call Cloud Function
-3. ✅ Deployment script created (`cloud-functions/deploy.ps1`)
-4. ✅ Service account JSON file downloaded
+## Pre-Deployment
 
-## 🚀 Deployment Steps
+- [ ] All code changes committed to Git
+- [ ] No linting errors: `npm run lint`
+- [ ] Build succeeds locally: `npm run build`
+- [ ] Convex dev mode works: `npx convex dev`
+- [ ] All environment variables documented
+- [ ] `.gitignore` properly configured
+- [ ] No sensitive data in code (API keys, passwords, etc.)
 
-### Step 1: Install Google Cloud CLI
+## GitHub Setup
 
-```powershell
-# Check if installed
-gcloud --version
+- [ ] GitHub repository created
+- [ ] Git remote configured
+- [ ] All files committed
+- [ ] Code pushed to GitHub
+- [ ] Repository is private (if needed)
+- [ ] README.md is up to date
 
-# If not installed:
-# Download from: https://cloud.google.com/sdk/docs/install
-# Or use: winget install Google.CloudSDK
-```
+## Convex Deployment
 
-### Step 2: Authenticate
+- [ ] Convex CLI installed: `npm install -g convex`
+- [ ] Logged in to Convex: `npx convex login`
+- [ ] Convex project initialized
+- [ ] Schema deployed successfully
+- [ ] All functions deployed
+- [ ] Convex deployment URL saved
+- [ ] Dashboard accessible
+- [ ] Test query executed successfully
 
-```powershell
-gcloud auth login
-gcloud config set project farm2market-uganda
-```
+## Vercel Deployment
 
-### Step 3: Deploy Cloud Function
+- [ ] Vercel account created
+- [ ] GitHub repository connected
+- [ ] Project imported to Vercel
+- [ ] Build settings configured
+- [ ] Environment variables added:
+  - [ ] `NEXT_PUBLIC_CONVEX_URL`
+  - [ ] `NEXT_PUBLIC_DEPLOYMENT_MODE`
+- [ ] Initial deployment successful
+- [ ] Production URL accessible
+- [ ] No build errors in logs
 
-```powershell
-cd cloud-functions
-.\deploy.ps1
-```
+## Post-Deployment Verification
 
-**Expected output:**
-- Function URL will be displayed
-- Example: `https://sendfcmnotification-XXXXX-uc.a.run.app`
+- [ ] Frontend loads without errors
+- [ ] Login page accessible
+- [ ] Can create user account
+- [ ] Can log in successfully
+- [ ] Dashboard loads for each role
+- [ ] Convex queries work
+- [ ] Convex mutations work
+- [ ] No console errors in browser
 
-### Step 4: Configure Convex
+## Initial Data Setup
 
-```powershell
-# Set the Cloud Function URL (use the URL from Step 3)
-npx convex env set FCM_CLOUD_FUNCTION_URL "https://sendfcmnotification-XXXXX-uc.a.run.app"
+- [ ] SuperAdmin user created
+- [ ] At least one district created
+- [ ] At least one subcounty created
+- [ ] At least one parish created
+- [ ] Storage locations created
+- [ ] Produce options created
+- [ ] System settings configured:
+  - [ ] Trader commission percentage
+  - [ ] Storage fee rate
+  - [ ] Buyer service fee
+  - [ ] Pilot mode disabled (if production)
 
-# Verify it's set
-npx convex env list
-```
+## Security
 
-### Step 5: Verify google-services.json
+- [ ] Environment variables secured
+- [ ] No secrets in code
+- [ ] HTTPS enabled (automatic on Vercel)
+- [ ] CORS configured (if needed)
+- [ ] Authentication working
+- [ ] Authorization checks in place
 
-Make sure `google-services.json` is in the correct location:
-- ✅ Should be at: `android/app/google-services.json`
-- ❌ NOT at: `android/google-services.json`
+## Monitoring
 
-If missing:
-1. Go to Firebase Console
-2. Project Settings → Your apps
-3. Download `google-services.json`
-4. Place in `android/app/` folder
+- [ ] Error tracking set up (optional)
+- [ ] Analytics configured (optional)
+- [ ] Monitoring dashboard accessible
+- [ ] Alerts configured (optional)
 
-### Step 6: Rebuild APK
+## Documentation
 
-```powershell
-cd android
-$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
-.\gradlew.bat clean assembleDebug
-```
+- [ ] Deployment guide reviewed
+- [ ] README.md updated
+- [ ] Environment variables documented
+- [ ] API endpoints documented (if needed)
+- [ ] User guide created (if needed)
 
-### Step 7: Test
+## Final Checks
 
-1. Install APK on device
-2. Log in to app
-3. Grant notification permission
-4. Send test notification from admin dashboard
-5. Close app completely
-6. Verify notification appears
+- [ ] All features tested in production
+- [ ] Performance acceptable
+- [ ] Mobile responsiveness verified
+- [ ] Cross-browser compatibility checked
+- [ ] Backup strategy in place
+- [ ] Rollback plan documented
 
-## ✅ Verification Checklist
+---
 
-- [ ] Google Cloud CLI installed and authenticated
-- [ ] Cloud Function deployed successfully
-- [ ] Function URL obtained and set in Convex
-- [ ] `google-services.json` in `android/app/` folder
-- [ ] APK rebuilt successfully
-- [ ] App installed on device
-- [ ] Notification permission granted
-- [ ] Device token registered in Convex
-- [ ] Test notification sent and received
-
-## 🔍 Troubleshooting
-
-### Cloud Function deployment fails
-- Check: `gcloud auth login`
-- Verify project: `gcloud config get-value project`
-- Check billing is enabled
-- Try: `gcloud services enable cloudfunctions.googleapis.com`
-
-### "FCM_CLOUD_FUNCTION_URL not configured"
-- Run: `npx convex env set FCM_CLOUD_FUNCTION_URL "YOUR_URL"`
-- Verify: `npx convex env list`
-- Redeploy Convex: `npx convex deploy`
-
-### Notifications not appearing
-- Check Cloud Function logs: `gcloud functions logs read sendFCMNotification --gen2 --region=us-central1`
-- Verify device token in Convex dashboard
-- Check notification permission on device
-- Verify `google-services.json` is correct
-
-## 📝 Next Steps After Deployment
-
-1. Monitor Cloud Function logs for any errors
-2. Test with multiple devices
-3. Set up monitoring/alerts if needed
-4. Document any custom notification handling
+**Deployment Date**: _______________
+**Deployed By**: _______________
+**Production URL**: _______________
+**Convex URL**: _______________
+**GitHub Repo**: _______________

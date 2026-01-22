@@ -14,6 +14,21 @@ import { PILOT_SHARED_PASSWORD } from "./constants";
 import { getUgandaTime } from "./utils";
 
 /**
+ * Verify admin role - helper function for authorization checks
+ * Returns authorization decision
+ */
+export async function verifyAdminRole(context: {
+  userId: Id<"users">;
+  db: any;
+}): Promise<{ authorized: boolean; user?: any }> {
+  const user = await context.db.get(context.userId);
+  if (!user || user.role !== "admin") {
+    return { authorized: false };
+  }
+  return { authorized: true, user };
+}
+
+/**
  * Generate a stable, non-identifying alias for a user
  * Format: role_prefix_randomstring (e.g., "farmer_a3k9x2", "trader_m7p4q1")
  */

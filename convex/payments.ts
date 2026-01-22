@@ -10,7 +10,7 @@
 
 import { v } from "convex/values";
 import { mutation } from "./_generated/server";
-import { generateUTID, calculateTraderExposureInternal, getUgandaTime } from "./utils";
+import { generateUTID, calculateTraderExposureInternal, getUgandaTime, getTraderCommissionPercentage } from "./utils";
 import { calculateDeliverySLA } from "./utils";
 import { MAX_TRADER_EXPOSURE_UGX, LISTING_UNIT_SIZE_KG } from "./constants";
 import { checkPilotMode } from "./pilotMode";
@@ -89,9 +89,14 @@ async function lockUnitInternal(
   const unitSize = listing.unitSize || LISTING_UNIT_SIZE_KG;
   const unitPrice = negotiation.currentPricePerKilo * unitSize;
 
-  // Spend cap enforcement
+  // Calculate trader commission (if enabled)
+  const commissionPercentage = await getTraderCommissionPercentage({ db: ctx.db });
+  const commission = commissionPercentage > 0 ? (unitPrice * commissionPercentage) / 100 : 0;
+  const totalAmount = unitPrice + commission; // Total amount to deduct (purchase + commission)
+
+  // Spend cap enforcement (commission counts toward exposure)
   const exposure = await calculateTraderExposureInternal(ctx, traderId);
-  const newExposure = exposure.totalExposure + unitPrice;
+  const newExposure = exposure.totalExposure + totalAmount; // Include commission in exposure
 
   if (newExposure > MAX_TRADER_EXPOSURE_UGX) {
     throwAppError(spendCapExceededError());
@@ -107,15 +112,18 @@ async function lockUnitInternal(
   const currentBalance = walletEntries?.balanceAfter || 0;
   const availableCapital = currentBalance - exposure.lockedCapital;
 
-  if (availableCapital < unitPrice) {
+  // Verify wallet has sufficient funds (purchase + commission)
+  if (availableCapital < totalAmount) {
     throwAppError(insufficientCapitalError());
   }
 
   // Generate UTID
   const utid = generateUTID(user.role);
 
-  // ATOMIC OPERATION: Lock capital and unit together
-  const balanceAfter = currentBalance - unitPrice;
+  // ATOMIC OPERATION: Lock capital, deduct commission, and lock unit together
+  let balanceAfter = currentBalance - unitPrice; // First deduct purchase price
+  
+  // Deduct purchase price
   await ctx.db.insert("walletLedger", {
     userId: traderId,
     utid,
@@ -127,8 +135,30 @@ async function lockUnitInternal(
       unitId: unitId,
       listingId: listing._id,
       produceType: listing.produceType,
+      commissionPercentage,
+      commission,
     },
   });
+
+  // Deduct commission if applicable (atomic with purchase)
+  if (commission > 0) {
+    balanceAfter = balanceAfter - commission;
+    await ctx.db.insert("walletLedger", {
+      userId: traderId,
+      utid: `${utid}-COMM`, // Commission UTID (linked to main UTID)
+      type: "trader_commission_deduction",
+      amount: commission,
+      balanceAfter,
+      timestamp: getUgandaTime(),
+      metadata: {
+        mainUtid: utid,
+        unitId: unitId,
+        listingId: listing._id,
+        commissionPercentage,
+        purchaseAmount: unitPrice,
+      },
+    });
+  }
 
   // Lock the unit
   const paymentTime = getUgandaTime();
@@ -170,6 +200,9 @@ async function lockUnitInternal(
     unitId: unitId,
     listingId: listing._id,
     unitPrice,
+    commission,
+    commissionPercentage,
+    totalAmount,
     balanceAfter,
     newExposure,
   };

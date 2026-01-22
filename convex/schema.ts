@@ -32,11 +32,23 @@ export default defineSchema({
     customSpendCap: v.optional(v.number()), // Admin-set custom spend cap for traders (in UGX). If not set, uses default MAX_TRADER_EXPOSURE_UGX.
     adminLevel: v.optional(v.union(v.literal("super"), v.literal("junior"))), // Admin hierarchy level. undefined means super admin (backward compatible).
     allowedStorageLocationIds: v.optional(v.array(v.id("storageLocations"))), // Storage locations junior admin can access. Only applies to junior admins.
+    // Location and farm profile (for farmers)
+    districtId: v.optional(v.id("districts")), // District where farmer is located
+    subcountyId: v.optional(v.id("subcounties")), // Subcounty where farmer is located
+    parishId: v.optional(v.id("parishes")), // Parish where farmer is located
+    farmSizeAcres: v.optional(v.number()), // Farm size in acres (calculated)
+    farmSizeRaw: v.optional(v.any()), // Raw farm size input: {unit, length, width, omwigo, emiigo}
+    onboardingCompleted: v.optional(v.boolean()), // Whether farmer has completed onboarding
+    // Notification preferences
+    notificationPreferences: v.optional(v.any()), // { newListings: boolean, offers: boolean, etc. }
   })
     .index("by_email", ["email"])
     .index("by_phone", ["phoneNumber"])
     .index("by_role", ["role"])
-    .index("by_alias", ["alias"]),
+    .index("by_alias", ["alias"])
+    .index("by_district", ["districtId"])
+    .index("by_subcounty", ["subcountyId"])
+    .index("by_parish", ["parishId"]),
 
   /**
    * Wallet ledger entries
@@ -53,7 +65,8 @@ export default defineSchema({
       v.literal("capital_unlock"),
       v.literal("profit_credit"),
       v.literal("profit_withdrawal"),
-      v.literal("incoming_purchase") // Created when trader makes offer on unit(s) - not inventory, just a pending purchase record
+      v.literal("incoming_purchase"), // Created when trader makes offer on unit(s) - not inventory, just a pending purchase record
+      v.literal("trader_commission_deduction") // Trader commission deducted from wallet
     ),
     amount: v.number(), // Amount in UGX
     balanceAfter: v.number(), // Running balance after this entry
@@ -91,6 +104,11 @@ export default defineSchema({
     qualityRating: v.optional(v.string()), // Quality rating from admin-managed dropdown (e.g., "Premium", "Good", "Fair")
     qualityComment: v.optional(v.string()), // Farmer's text comment about produce quality
     storageLocationId: v.optional(v.id("storageLocations")), // Storage location (district) where produce will be delivered (optional for backward compatibility with existing data)
+    // Garden sale mode
+    listingMode: v.optional(v.union(v.literal("unit"), v.literal("garden"))), // Listing mode: unit-based (default) or entire garden plot
+    gardenSize: v.optional(v.number()), // Garden size in acres (for garden mode)
+    gardenDimensions: v.optional(v.any()), // Raw garden dimensions (for garden mode)
+    totalPrice: v.optional(v.number()), // Total price for entire garden (for garden mode, in UGX)
   })
     .index("by_farmer", ["farmerId"])
     .index("by_trader", ["traderId"])
@@ -129,6 +147,10 @@ export default defineSchema({
     // Archive tracking
     archived: v.optional(v.boolean()), // Whether this UTID has been archived by farmer
     archivedAt: v.optional(v.number()), // When this UTID was archived
+    // Delivery verification (StoreAdmin)
+    deliveryComment: v.optional(v.string()), // StoreAdmin comment about delivery condition
+    deliveryPhotos: v.optional(v.array(v.string())), // Array of photo storage IDs (3 photos: weighing, checking, in-storage)
+    deliveryPdfId: v.optional(v.string()), // PDF document ID (stored in Convex file storage or external)
   })
     .index("by_listing", ["listingId"])
     .index("by_status", ["status"])
@@ -403,6 +425,7 @@ export default defineSchema({
     utid: v.string(), // Admin action UTID
     storageFeeRateKgPerDay: v.optional(v.number()), // Kilo-shaving rate (kilos per day per 100kg block). Default: 0.5
     buyerServiceFeePercentage: v.optional(v.number()), // Service fee percentage added to purchase price for buyers. Default: 3
+    traderCommissionPercentage: v.optional(v.number()), // Trader commission percentage on sales. Default: 0
   }),
 
   /**
@@ -521,4 +544,109 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_token_hash", ["tokenHash"])
     .index("by_expiresAt", ["expiresAt"]),
+
+  /**
+   * Location hierarchy (Uganda administrative divisions)
+   * - Districts → Subcounties → Parishes
+   * - Used for farmer onboarding and geo-locking communities
+   */
+  districts: defineTable({
+    name: v.string(), // District name (e.g., "Kampala", "Wakiso")
+    code: v.string(), // Unique code identifier (e.g., "KLA", "WKS")
+    active: v.boolean(), // Whether this district is currently active
+    order: v.number(), // Display order (lower numbers appear first)
+    createdAt: v.number(),
+    createdBy: v.id("users"), // Admin who created this district
+    utid: v.string(), // Admin action UTID
+  })
+    .index("by_active", ["active"])
+    .index("by_code", ["code"])
+    .index("by_order", ["order"]),
+
+  subcounties: defineTable({
+    districtId: v.id("districts"), // Parent district
+    name: v.string(), // Subcounty name
+    code: v.string(), // Unique code identifier
+    active: v.boolean(), // Whether this subcounty is currently active
+    order: v.number(), // Display order (lower numbers appear first)
+    createdAt: v.number(),
+    createdBy: v.id("users"), // Admin who created this subcounty
+    utid: v.string(), // Admin action UTID
+  })
+    .index("by_district", ["districtId"])
+    .index("by_active", ["active"])
+    .index("by_code", ["code"])
+    .index("by_order", ["order"]),
+
+  parishes: defineTable({
+    subcountyId: v.id("subcounties"), // Parent subcounty
+    name: v.string(), // Parish name
+    code: v.string(), // Unique code identifier
+    active: v.boolean(), // Whether this parish is currently active
+    order: v.number(), // Display order (lower numbers appear first)
+    createdAt: v.number(),
+    createdBy: v.id("users"), // Admin who created this parish
+    utid: v.string(), // Admin action UTID
+  })
+    .index("by_subcounty", ["subcountyId"])
+    .index("by_active", ["active"])
+    .index("by_code", ["code"])
+    .index("by_order", ["order"]),
+
+  /**
+   * Messages (UTID-linked)
+   * - Users can message SuperAdmin
+   * - SuperAdmin can message any user
+   * - All messages must link to a UTID
+   */
+  messages: defineTable({
+    fromUserId: v.id("users"), // Sender
+    toUserId: v.id("users"), // Recipient
+    utid: v.string(), // UTID this message is linked to (required)
+    message: v.string(), // Message content
+    read: v.boolean(), // Whether message has been read
+    createdAt: v.number(),
+  })
+    .index("by_utid", ["utid"])
+    .index("by_users", ["fromUserId", "toUserId"])
+    .index("by_to_user_unread", ["toUserId", "read"])
+    .index("by_from_user", ["fromUserId"]),
+
+  /**
+   * Grower Communities
+   * - SuperAdmin creates communities
+   * - Can be global or geo-locked
+   * - Farmers can join communities
+   * - Listings can be tagged to communities
+   */
+  communities: defineTable({
+    name: v.string(), // Community name
+    description: v.optional(v.string()), // Community description
+    isGlobal: v.boolean(), // Whether community is global (not geo-locked)
+    geoLocked: v.boolean(), // Whether community is geo-locked
+    districtIds: v.optional(v.array(v.id("districts"))), // Districts for geo-locking
+    subcountyIds: v.optional(v.array(v.id("subcounties"))), // Subcounties for geo-locking
+    parishIds: v.optional(v.array(v.id("parishes"))), // Parishes for geo-locking
+    createdBy: v.id("users"), // SuperAdmin who created this community
+    createdAt: v.number(),
+    utid: v.string(), // Admin action UTID
+  })
+    .index("by_active", ["isGlobal", "geoLocked"])
+    .index("by_created_by", ["createdBy"]),
+
+  communityMemberships: defineTable({
+    communityId: v.id("communities"),
+    userId: v.id("users"), // Farmer who joined
+    joinedAt: v.number(),
+  })
+    .index("by_community", ["communityId"])
+    .index("by_user", ["userId"])
+    .index("by_community_user", ["communityId", "userId"]),
+
+  communityListingTags: defineTable({
+    listingId: v.id("listings"),
+    communityId: v.id("communities"),
+  })
+    .index("by_listing", ["listingId"])
+    .index("by_community", ["communityId"]),
 });

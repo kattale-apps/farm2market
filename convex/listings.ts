@@ -28,10 +28,15 @@ export const createListing = mutation({
     farmerId: v.id("users"),
     produceType: v.string(),
     totalKilos: v.number(),
-    pricePerKilo: v.number(), // In UGX
+    pricePerKilo: v.number(), // In UGX (for unit mode)
     qualityRating: v.optional(v.string()), // Quality rating from dropdown
     qualityComment: v.optional(v.string()), // Farmer's text comment about produce quality
     storageLocationId: v.id("storageLocations"), // Storage location (district) where produce will be delivered
+    // Garden mode fields
+    listingMode: v.optional(v.union(v.literal("unit"), v.literal("garden"))), // Default: "unit"
+    gardenSize: v.optional(v.number()), // Garden size in acres (for garden mode)
+    gardenDimensions: v.optional(v.any()), // Raw garden dimensions (for garden mode)
+    totalPrice: v.optional(v.number()), // Total price for entire garden (for garden mode, in UGX)
   },
   handler: async (ctx, args) => {
     // ============================================================
@@ -47,6 +52,11 @@ export const createListing = mutation({
       throwAppError(invalidRoleError("farmer"));
     }
 
+    // Check onboarding completion
+    if (!user.onboardingCompleted) {
+      throw new Error("Please complete your profile onboarding before creating listings. Go to the onboarding page to provide your location and farm size.");
+    }
+
     // ============================================================
     // RATE LIMIT CHECK (BEFORE OPERATIONS)
     // ============================================================
@@ -57,27 +67,56 @@ export const createListing = mutation({
       totalKilos: args.totalKilos,
     });
 
-    if (args.totalKilos <= 0) {
-      throwAppError(invalidKilosError());
-    }
-    if (args.pricePerKilo <= 0) {
-      throwAppError(invalidAmountError());
+    const listingMode = args.listingMode || "unit"; // Default to unit mode
+
+    // Validate based on mode
+    if (listingMode === "garden") {
+      // Garden mode: requires totalPrice and gardenSize
+      if (!args.totalPrice || args.totalPrice <= 0) {
+        throw new Error("Total price is required for garden sale mode");
+      }
+      if (!args.gardenSize || args.gardenSize <= 0) {
+        throw new Error("Garden size is required for garden sale mode");
+      }
+      if (args.totalKilos <= 0) {
+        throwAppError(invalidKilosError());
+      }
+      // For garden mode, pricePerKilo is calculated from totalPrice / totalKilos
+      // But we still validate it's provided for consistency
+      if (!args.pricePerKilo || args.pricePerKilo <= 0) {
+        // Calculate from totalPrice
+        args.pricePerKilo = args.totalPrice / args.totalKilos;
+      }
+    } else {
+      // Unit mode: standard validation
+      if (args.totalKilos <= 0) {
+        throwAppError(invalidKilosError());
+      }
+      if (args.pricePerKilo <= 0) {
+        throwAppError(invalidAmountError());
+      }
     }
 
     // Generate UTID
     const utid = generateUTID(user.role);
 
-    // Calculate units (10kg each, but allow any positive number of kilos)
-    // If totalKilos < 10kg, create 1 unit with the actual weight
-    // Otherwise, create units of 10kg each
-    const totalUnits = args.totalKilos < LISTING_UNIT_SIZE_KG 
-      ? 1 
-      : Math.floor(args.totalKilos / LISTING_UNIT_SIZE_KG);
+    // Calculate units based on mode
+    let totalUnits: number;
+    let actualUnitSize: number;
     
-    // Unit size: use actual weight if < 10kg, otherwise 10kg
-    const actualUnitSize = args.totalKilos < LISTING_UNIT_SIZE_KG 
-      ? args.totalKilos 
-      : LISTING_UNIT_SIZE_KG;
+    if (listingMode === "garden") {
+      // Garden mode: entire plot is 1 unit
+      totalUnits = 1;
+      actualUnitSize = args.totalKilos; // Entire garden weight
+    } else {
+      // Unit mode: split into 10kg units
+      totalUnits = args.totalKilos < LISTING_UNIT_SIZE_KG 
+        ? 1 
+        : Math.floor(args.totalKilos / LISTING_UNIT_SIZE_KG);
+      actualUnitSize = args.totalKilos < LISTING_UNIT_SIZE_KG 
+        ? args.totalKilos 
+        : LISTING_UNIT_SIZE_KG;
+    }
 
     // Verify storage location exists and is active
     const storageLocation = await ctx.db.get(args.storageLocationId);
@@ -95,7 +134,7 @@ export const createListing = mutation({
       produceType: args.produceType,
       totalKilos: args.totalKilos,
       pricePerKilo: args.pricePerKilo,
-      unitSize: actualUnitSize, // Store actual unit size (10kg or less)
+      unitSize: actualUnitSize, // Store actual unit size (10kg or entire garden)
       totalUnits,
       status: "active",
       createdAt: getUgandaTime(),
@@ -103,6 +142,11 @@ export const createListing = mutation({
       qualityRating: args.qualityRating?.trim() || undefined,
       qualityComment: args.qualityComment?.trim() || undefined,
       storageLocationId: args.storageLocationId,
+      // Garden mode fields
+      listingMode,
+      gardenSize: args.gardenSize,
+      gardenDimensions: args.gardenDimensions,
+      totalPrice: args.totalPrice,
     });
 
     // Create individual units

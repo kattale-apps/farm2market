@@ -232,6 +232,79 @@ export const markMessagesAsRead = mutation({
 });
 
 /**
+ * Get all message threads for SuperAdmin
+ * Returns UTID threads with last message and participant details
+ */
+export const getAdminMessageThreads = query({
+  args: { adminId: v.id("users") },
+  handler: async (ctx, args) => {
+    const admin = await ctx.db.get(args.adminId);
+    if (!admin || admin.role !== "admin" || !isSuperAdmin(admin)) {
+      throw new Error("Only SuperAdmin can view all message threads");
+    }
+
+    const messages = await ctx.db.query("messages").collect();
+    const threads = new Map<string, any>();
+
+    for (const msg of messages) {
+      const existing = threads.get(msg.utid);
+      if (!existing || msg.createdAt > existing.lastMessageAt) {
+        threads.set(msg.utid, {
+          utid: msg.utid,
+          lastMessageAt: msg.createdAt,
+          lastMessage: msg.message,
+          lastFromUserId: msg.fromUserId,
+          lastToUserId: msg.toUserId,
+        });
+      }
+      if (msg.toUserId === args.adminId && !msg.read) {
+        const current = threads.get(msg.utid);
+        current.unreadCount = (current.unreadCount || 0) + 1;
+        threads.set(msg.utid, current);
+      }
+    }
+
+    const threadList = Array.from(threads.values()).sort(
+      (a, b) => b.lastMessageAt - a.lastMessageAt
+    );
+
+    const userCache = new Map<Id<"users">, { alias: string; email?: string; phoneNumber?: string }>();
+    const resolveUser = async (userId: Id<"users">) => {
+      if (userCache.has(userId)) return userCache.get(userId)!;
+      const user = await ctx.db.get(userId);
+      const payload = {
+        alias: user?.alias || "Unknown",
+        email: user?.email,
+        phoneNumber: user?.phoneNumber,
+      };
+      userCache.set(userId, payload);
+      return payload;
+    };
+
+    const enriched = [];
+    for (const thread of threadList) {
+      const otherUserId =
+        thread.lastFromUserId === args.adminId
+          ? thread.lastToUserId
+          : thread.lastFromUserId;
+      const otherUser = await resolveUser(otherUserId);
+      enriched.push({
+        utid: thread.utid,
+        unreadCount: thread.unreadCount || 0,
+        lastMessageAt: thread.lastMessageAt,
+        lastMessage: thread.lastMessage,
+        otherUserId,
+        otherUserAlias: otherUser.alias,
+        otherUserEmail: otherUser.email,
+        otherUserPhoneNumber: otherUser.phoneNumber,
+      });
+    }
+
+    return enriched;
+  },
+});
+
+/**
  * Helper function to validate UTID exists
  * Checks if UTID is referenced in listings, negotiations, walletLedger, etc.
  */

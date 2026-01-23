@@ -9,6 +9,7 @@ import Image from "next/image";
 import { exportToExcel, exportToPDF, formatUTIDDataForExport } from "../utils/exportUtils";
 import { StorageLocationsManager } from "./StorageLocationsManager";
 import { DeliveryConfirmationForm } from "./DeliveryConfirmationForm";
+import { ThreadView } from "./messages/ThreadView";
 import { ContactUs } from "./ContactUs";
 
 interface AdminDashboardProps {
@@ -77,6 +78,11 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
       ? { adminId: userId, lockUtid: selectedDeliveryUtid }
       : "skip"
   );
+  const adminMessageThreads = useQuery(
+    api.messages.getAdminMessageThreads,
+    isSuperAdmin ? { adminId: userId } : "skip"
+  );
+  const [selectedMessageUtid, setSelectedMessageUtid] = useState<string | null>(null);
   
   const [reason, setReason] = useState("");
   const [windowActionLoading, setWindowActionLoading] = useState(false);
@@ -820,6 +826,100 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                   )}
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* SuperAdmin Inbox */}
+      {isSuperAdmin && (
+        <div style={{
+          marginBottom: "2rem",
+          padding: "clamp(1rem, 3vw, 1.5rem)",
+          background: "#fff",
+          borderRadius: "12px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+          border: "1px solid #e0e0e0",
+          width: "100%",
+          maxWidth: "100%",
+          boxSizing: "border-box",
+          overflowX: "auto"
+        }}>
+          <h3 style={{
+            marginTop: 0,
+            marginBottom: "1rem",
+            fontSize: "clamp(1.1rem, 3vw, 1.3rem)",
+            wordWrap: "break-word",
+            color: "#2c2c2c",
+            fontFamily: '"Montserrat", sans-serif',
+            fontWeight: "600",
+            letterSpacing: "-0.01em"
+          }}>
+            SuperAdmin Inbox
+          </h3>
+          {adminMessageThreads === undefined ? (
+            <p style={{ color: "#999" }}>Loading message threads...</p>
+          ) : adminMessageThreads.length === 0 ? (
+            <p style={{ color: "#666" }}>No messages yet.</p>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(220px, 1fr) 2fr", gap: "1rem" }}>
+              <div style={{
+                border: "1px solid #e0e0e0",
+                borderRadius: "8px",
+                overflow: "hidden",
+                maxHeight: "500px",
+                overflowY: "auto"
+              }}>
+                {adminMessageThreads.map((thread: any) => {
+                  const isSelected = selectedMessageUtid === thread.utid;
+                  const contact = thread.otherUserEmail || thread.otherUserPhoneNumber;
+                  return (
+                    <button
+                      key={thread.utid}
+                      onClick={() => setSelectedMessageUtid(thread.utid)}
+                      style={{
+                        width: "100%",
+                        textAlign: "left",
+                        padding: "0.75rem",
+                        border: "none",
+                        borderBottom: "1px solid #e0e0e0",
+                        background: isSelected ? "#e3f2fd" : "#fff",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <div style={{ fontWeight: "600", color: "#2c2c2c" }}>
+                        {thread.otherUserAlias}{contact ? ` (${contact})` : ""}
+                      </div>
+                      <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.25rem" }}>
+                        UTID: {thread.utid}
+                      </div>
+                      <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.25rem" }}>
+                        {thread.lastMessage}
+                      </div>
+                      {thread.unreadCount > 0 && (
+                        <div style={{ marginTop: "0.35rem", fontSize: "0.75rem", color: "#d32f2f", fontWeight: "600" }}>
+                          {thread.unreadCount} unread
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              <div>
+                {selectedMessageUtid ? (
+                  <ThreadView userId={userId} utid={selectedMessageUtid} />
+                ) : (
+                  <div style={{
+                    padding: "2rem",
+                    border: "1px dashed #ddd",
+                    borderRadius: "8px",
+                    textAlign: "center",
+                    color: "#666"
+                  }}>
+                    Select a thread to view messages.
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

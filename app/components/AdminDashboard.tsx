@@ -1530,6 +1530,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
             sendNotification={sendNotificationToSelectedUsers}
             sendRoleBasedNotification={sendRoleBasedNotification}
             adminId={userId}
+            isSuperAdmin={isSuperAdmin}
           />
         )}
       </div>
@@ -1569,6 +1570,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
             allUsers={allUsers}
             adminDepositDemoFunds={adminDepositDemoFunds}
             adminId={userId}
+            isSuperAdmin={isSuperAdmin}
           />
         )}
       </div>
@@ -2424,7 +2426,19 @@ function TraderSpendCapForm({ traders, updateTraderSpendCap, updateAllTradersSpe
 }
 
 // Notification Form Component
-function NotificationForm({ allUsers, sendNotification, sendRoleBasedNotification, adminId }: { allUsers: any[]; sendNotification: any; sendRoleBasedNotification: any; adminId: Id<"users"> }) {
+function NotificationForm({
+  allUsers,
+  sendNotification,
+  sendRoleBasedNotification,
+  adminId,
+  isSuperAdmin,
+}: {
+  allUsers: any[];
+  sendNotification: any;
+  sendRoleBasedNotification: any;
+  adminId: Id<"users">;
+  isSuperAdmin: boolean;
+}) {
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
@@ -2542,7 +2556,10 @@ function NotificationForm({ allUsers, sendNotification, sendRoleBasedNotificatio
                 <div style={{ fontWeight: "600", marginBottom: "0.5rem", textTransform: "capitalize", color: "#666" }}>
                   {role}s ({users.length})
                 </div>
-                {users.map((user: any) => (
+                {users.map((user: any) => {
+                  const contact = user.email || user.phoneNumber;
+                  const label = isSuperAdmin && contact ? `${user.alias} (${contact})` : user.alias;
+                  return (
                   <label
                     key={user.userId}
                     style={{
@@ -2561,9 +2578,10 @@ function NotificationForm({ allUsers, sendNotification, sendRoleBasedNotificatio
                       onChange={() => toggleUser(user.userId)}
                       style={{ marginRight: "0.5rem" }}
                     />
-                    <span>{user.alias} ({user.email})</span>
+                    <span>{label}</span>
                   </label>
-                ))}
+                );
+                })}
               </div>
             )
           ))}
@@ -2726,11 +2744,13 @@ function NotificationForm({ allUsers, sendNotification, sendRoleBasedNotificatio
 function DemoFundsForm({ 
   allUsers, 
   adminDepositDemoFunds, 
-  adminId 
+  adminId,
+  isSuperAdmin,
 }: { 
   allUsers: any[]; 
   adminDepositDemoFunds: any; 
-  adminId: Id<"users"> 
+  adminId: Id<"users">;
+  isSuperAdmin: boolean;
 }) {
   const [selectedUserIds, setSelectedUserIds] = useState<Id<"users">[]>([]);
   const [amount, setAmount] = useState<string>("");
@@ -2741,6 +2761,13 @@ function DemoFundsForm({
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [expandedCategory, setExpandedCategory] = useState<"traders" | "buyers" | null>(null);
   const [filterMode, setFilterMode] = useState<"all" | "firstTimers">("firstTimers"); // Default to first-timers only
+  const formatContactLabel = (user?: { alias?: string; email?: string; phoneNumber?: string }) => {
+    const contact = user?.email || user?.phoneNumber;
+    if (isSuperAdmin && contact) {
+      return `${user?.alias || "Unknown"} (${contact})`;
+    }
+    return user?.alias || "Unknown";
+  };
 
   // Query users with demo fund status
   const usersWithStatus = useQuery(api.admin.getUsersWithDemoFundStatus, { adminId });
@@ -2794,7 +2821,7 @@ function DemoFundsForm({
         results.push({
           userId,
           success: true,
-          message: `✓ ${user?.email || userId}: Deposited ${depositAmount.toLocaleString()} UGX. New balance: ${result.newBalance.toLocaleString()} UGX. UTID: ${result.utid}`
+          message: `✓ ${formatContactLabel(user)}: Deposited ${depositAmount.toLocaleString()} UGX. New balance: ${result.newBalance.toLocaleString()} UGX. UTID: ${result.utid}`
         });
       } catch (error: any) {
         const allUsersList = [...allTraders, ...allBuyers];
@@ -2802,7 +2829,7 @@ function DemoFundsForm({
         results.push({
           userId,
           success: false,
-          message: `✗ ${user?.email || userId}: ${error.message || "Failed to deposit funds"}`
+          message: `✗ ${formatContactLabel(user)}: ${error.message || "Failed to deposit funds"}`
         });
       }
     }
@@ -3272,7 +3299,7 @@ function DemoFundsForm({
                           <div style={{ flex: 1 }}>
                             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
                               <span style={{ fontSize: "0.9rem", fontWeight: "500", color: "#333" }}>
-                                {trader.email}
+                                {formatContactLabel(trader)}
                               </span>
                               {isFirstTimer ? (
                                 <span style={{
@@ -3433,7 +3460,7 @@ function DemoFundsForm({
                           <div style={{ flex: 1 }}>
                             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
                               <span style={{ fontSize: "0.9rem", fontWeight: "500", color: "#333" }}>
-                                {buyer.email}
+                                {formatContactLabel(buyer)}
                               </span>
                               {isFirstTimer ? (
                                 <span style={{

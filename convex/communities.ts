@@ -98,10 +98,12 @@ export const getActiveCommunities = query({
     let userDistrictId: Id<"districts"> | undefined;
     let userSubcountyId: Id<"subcounties"> | undefined;
     let userParishId: Id<"parishes"> | undefined;
+    let isAdmin = false;
 
     if (args.userId) {
       const user = await ctx.db.get(args.userId);
       if (user) {
+        isAdmin = user.role === "admin";
         userDistrictId = user.districtId;
         userSubcountyId = user.subcountyId;
         userParishId = user.parishId;
@@ -110,6 +112,7 @@ export const getActiveCommunities = query({
 
     // Filter communities user can see
     const accessibleCommunities = communities.filter((c) => {
+      if (isAdmin) return true;
       if (c.isGlobal) return true;
       if (!c.geoLocked) return true;
 
@@ -120,6 +123,8 @@ export const getActiveCommunities = query({
 
       return false;
     });
+
+    const isSuperAdmin = isAdmin && user?.adminLevel !== "junior";
 
     // Get membership status for each community
     const communitiesWithMembership = await Promise.all(
@@ -141,6 +146,21 @@ export const getActiveCommunities = query({
           .withIndex("by_community", (q) => q.eq("communityId", c._id))
           .collect();
 
+        let memberDetails: Array<{ userId: Id<"users">; alias: string; email?: string; phoneNumber?: string }> | undefined;
+        if (isSuperAdmin) {
+          memberDetails = await Promise.all(
+            memberships.map(async (membership) => {
+              const member = await ctx.db.get(membership.userId);
+              return {
+                userId: membership.userId,
+                alias: member?.alias || "Unknown",
+                email: member?.email,
+                phoneNumber: member?.phoneNumber,
+              };
+            })
+          );
+        }
+
         return {
           id: c._id,
           name: c.name,
@@ -149,6 +169,7 @@ export const getActiveCommunities = query({
           geoLocked: c.geoLocked,
           isMember,
           memberCount: memberships.length,
+          members: memberDetails,
         };
       })
     );

@@ -725,13 +725,15 @@ export const getAllUsers = query({
     adminId: v.id("users"),
   },
   handler: async (ctx, args) => {
-    await verifyAdmin(ctx, args.adminId);
+    const adminUser = await verifyAdmin(ctx, args.adminId);
+    const isSuperAdmin = adminUser.adminLevel === "super" || adminUser.adminLevel === undefined;
 
     const users = await ctx.db.query("users").collect();
 
     return users.map((user) => ({
       userId: user._id,
-      email: user.email,
+      email: isSuperAdmin ? user.email : undefined,
+      phoneNumber: isSuperAdmin ? user.phoneNumber : undefined,
       role: user.role,
       alias: user.alias,
       state: user.state,

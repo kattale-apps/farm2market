@@ -20,6 +20,72 @@ function isSuperAdmin(user: { adminLevel?: "super" | "junior" }): boolean {
   return user.adminLevel === "super" || user.adminLevel === undefined;
 }
 
+const normalizeName = (name: string) => name.trim().toLowerCase();
+
+const REGION_GROUPS: { key: string; districts: string[] }[] = [
+  {
+    key: "central_buganda",
+    districts: [
+      "Kampala", "Wakiso", "Mukono", "Buikwe", "Kayunga",
+      "Luweero", "Nakaseke", "Nakasongola", "Mityana", "Kiboga",
+      "Mpigi", "Butambala", "Gomba", "Masaka",
+      "Lwengo", "Kalungu", "Bukomansimbi", "Sembabule", "Lyantonde",
+      "Rakai", "Kyotera", "Mubende", "Kassanda"
+    ],
+  },
+  {
+    key: "eastern_busoga",
+    districts: [
+      "Jinja", "Mayuge", "Iganga", "Bugiri", "Namayingo", "Buyende",
+      "Kaliro", "Kamuli", "Luuka", "Namutumba"
+    ],
+  },
+  {
+    key: "eastern_teso",
+    districts: ["Soroti", "Kaberamaido", "Serere", "Kalaki", "Amuria", "Katakwi", "Kumi", "Bukedea", "Ngora", "Kapelebyong"],
+  },
+  {
+    key: "eastern_elgon",
+    districts: ["Mbale", "Manafwa", "Bududa", "Sironko", "Bulambuli", "Bungokho"],
+  },
+  {
+    key: "eastern_other",
+    districts: ["Tororo", "Busia", "Butaleja", "Budaka", "Pallisa", "Kibuku", "Butebo"],
+  },
+  {
+    key: "northern_acholi",
+    districts: ["Gulu", "Nwoya", "Amuru", "Pader", "Kitgum", "Lamwo", "Agago", "Omoro"],
+  },
+  {
+    key: "northern_lango",
+    districts: ["Lira", "Dokolo", "Alebtong", "Oyam", "Apac", "Kole", "Amolatar", "Kwania"],
+  },
+  {
+    key: "northern_westnile",
+    districts: ["Arua", "Moyo", "Adjumani", "Yumbe", "Koboko", "Maracha", "Terego", "Zombo", "Nebbi", "Pakwach"],
+  },
+  {
+    key: "northern_karamoja",
+    districts: ["Moroto", "Kotido", "Kaabong", "Abim", "Nakapiripirit", "Napak", "Amudat", "Nabilatuk", "Karenga"],
+  },
+  {
+    key: "western_tooro",
+    districts: ["Fort Portal", "Kabarole", "Kamwenge", "Kyenjojo", "Kyegegwa", "Bunyangabu"],
+  },
+  {
+    key: "western_bunyoro",
+    districts: ["Hoima", "Kikuube", "Masindi", "Kiryandongo", "Buliisa", "Kagadi", "Kakumiro", "Kyankwanzi"],
+  },
+  {
+    key: "western_ankole",
+    districts: ["Mbarara", "Isingiro", "Ntungamo", "Bushenyi", "Sheema", "Mitooma", "Rubirizi", "Buhweju", "Rukungiri", "Kanungu"],
+  },
+  {
+    key: "western_kigezi",
+    districts: ["Kabale", "Kisoro", "Rukiga"],
+  },
+];
+
 /**
  * Get all communities (for farmers to browse and join)
  */
@@ -101,6 +167,7 @@ export const createCommunity = mutation({
     description: v.optional(v.string()),
     isGlobal: v.boolean(),
     geoLocked: v.boolean(),
+    regionKey: v.optional(v.string()),
     districtIds: v.optional(v.array(v.id("districts"))),
     subcountyIds: v.optional(v.array(v.id("subcounties"))),
     parishIds: v.optional(v.array(v.id("parishes"))),
@@ -134,14 +201,44 @@ export const createCommunity = mutation({
       throw new Error("Community cannot be both global and geo-locked");
     }
 
+    let resolvedDistrictIds = args.districtIds;
+    let resolvedSubcountyIds = args.subcountyIds;
+    let resolvedParishIds = args.parishIds;
+
     if (args.geoLocked) {
+      const hasExplicitLocation =
+        (resolvedDistrictIds && resolvedDistrictIds.length > 0) ||
+        (resolvedSubcountyIds && resolvedSubcountyIds.length > 0) ||
+        (resolvedParishIds && resolvedParishIds.length > 0);
+
+      if (!hasExplicitLocation && args.regionKey) {
+        const regionGroup = REGION_GROUPS.find((group) => group.key === args.regionKey);
+        if (!regionGroup) {
+          throw new Error("Selected region is not recognized");
+        }
+
+        const allDistricts = await ctx.db.query("districts").collect();
+        const regionDistrictIds = allDistricts
+          .filter((district) =>
+            district.active &&
+            regionGroup.districts.some((name) => normalizeName(name) === normalizeName(district.name))
+          )
+          .map((district) => district._id);
+
+        if (regionDistrictIds.length === 0) {
+          throw new Error("Selected region has no active districts");
+        }
+
+        resolvedDistrictIds = regionDistrictIds;
+      }
+
       const hasLocation =
-        (args.districtIds && args.districtIds.length > 0) ||
-        (args.subcountyIds && args.subcountyIds.length > 0) ||
-        (args.parishIds && args.parishIds.length > 0);
+        (resolvedDistrictIds && resolvedDistrictIds.length > 0) ||
+        (resolvedSubcountyIds && resolvedSubcountyIds.length > 0) ||
+        (resolvedParishIds && resolvedParishIds.length > 0);
 
       if (!hasLocation) {
-        throw new Error("Geo-locked communities must have at least one location");
+        throw new Error("Geo-locked communities must include a region or at least one location");
       }
     }
 
@@ -154,9 +251,9 @@ export const createCommunity = mutation({
       description: args.description?.trim(),
       isGlobal: args.isGlobal,
       geoLocked: args.geoLocked,
-      districtIds: args.districtIds,
-      subcountyIds: args.subcountyIds,
-      parishIds: args.parishIds,
+      districtIds: resolvedDistrictIds,
+      subcountyIds: resolvedSubcountyIds,
+      parishIds: resolvedParishIds,
       createdBy: args.adminId,
       createdAt: getUgandaTime(),
       utid,

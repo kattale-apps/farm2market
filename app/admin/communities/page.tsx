@@ -13,9 +13,25 @@ export default function CommunitiesPage() {
     description: "",
     isGlobal: false,
     geoLocked: false,
+    regionKey: "",
   });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const regionOptions = [
+    { key: "central_buganda", label: "Central (Buganda)" },
+    { key: "eastern_busoga", label: "Eastern (Busoga)" },
+    { key: "eastern_teso", label: "Eastern (Teso)" },
+    { key: "eastern_elgon", label: "Eastern (Elgon)" },
+    { key: "eastern_other", label: "Eastern (Other)" },
+    { key: "northern_acholi", label: "Northern (Acholi)" },
+    { key: "northern_lango", label: "Northern (Lango)" },
+    { key: "northern_westnile", label: "Northern (West Nile)" },
+    { key: "northern_karamoja", label: "Northern (Karamoja)" },
+    { key: "western_tooro", label: "Western (Tooro)" },
+    { key: "western_bunyoro", label: "Western (Bunyoro)" },
+    { key: "western_ankole", label: "Western (Ankole)" },
+    { key: "western_kigezi", label: "Western (Kigezi)" },
+  ];
 
   const communities = useQuery(api.communities.getActiveCommunities, userId ? { userId } : "skip");
   const user = useQuery(api.auth.getUser, userId ? { userId } : "skip");
@@ -48,15 +64,20 @@ export default function CommunitiesPage() {
     setMessage(null);
 
     try {
+      if (formData.geoLocked && !formData.regionKey) {
+        setMessage({ type: "error", text: "Please select a region for geo-locked communities" });
+        return;
+      }
       await createCommunity({
         adminId: userId,
         name: formData.name.trim(),
         description: formData.description.trim() || undefined,
         isGlobal: formData.isGlobal,
         geoLocked: formData.geoLocked,
+        regionKey: formData.geoLocked ? formData.regionKey : undefined,
       });
       setMessage({ type: "success", text: "Community created successfully!" });
-      setFormData({ name: "", description: "", isGlobal: false, geoLocked: false });
+      setFormData({ name: "", description: "", isGlobal: false, geoLocked: false, regionKey: "" });
       setShowCreateForm(false);
     } catch (error: any) {
       setMessage({ type: "error", text: error.message || "Failed to create community" });
@@ -204,11 +225,43 @@ export default function CommunitiesPage() {
                 <input
                   type="checkbox"
                   checked={formData.geoLocked}
-                  onChange={(e) => setFormData({ ...formData, geoLocked: e.target.checked, isGlobal: e.target.checked ? false : formData.isGlobal })}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    geoLocked: e.target.checked,
+                    isGlobal: e.target.checked ? false : formData.isGlobal,
+                    regionKey: e.target.checked ? formData.regionKey : "",
+                  })}
                 />
                 <span>Geo-Locked (restricted to specific locations)</span>
               </label>
             </div>
+            {formData.geoLocked && !formData.isGlobal && (
+              <div style={{ marginBottom: "1rem" }}>
+                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600" }}>
+                  Region *
+                </label>
+                <select
+                  value={formData.regionKey}
+                  onChange={(e) => setFormData({ ...formData, regionKey: e.target.value })}
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "0.75rem",
+                    border: "1px solid #ddd",
+                    borderRadius: "6px",
+                    fontSize: "1rem",
+                    background: "#fff",
+                  }}
+                >
+                  <option value="">Select region...</option>
+                  {regionOptions.map((option) => (
+                    <option key={option.key} value={option.key}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div style={{ display: "flex", gap: "1rem" }}>
               <button
                 type="submit"

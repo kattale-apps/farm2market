@@ -18,7 +18,10 @@ export default function CommunitiesPage() {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const communities = useQuery(api.communities.getActiveCommunities, userId ? { userId } : "skip");
+  const user = useQuery(api.auth.getUser, userId ? { userId } : "skip");
   const createCommunity = useMutation(api.communities.createCommunity);
+  const adminLevel = (user as any)?.adminLevel;
+  const isSuperAdmin = user?.role === "admin" && (adminLevel === "super" || adminLevel === undefined);
 
   // Get current user from localStorage (pilot mode)
   useEffect(() => {
@@ -72,24 +75,35 @@ export default function CommunitiesPage() {
 
   return (
     <div style={{ padding: "clamp(1rem, 4vw, 2rem)", maxWidth: "1200px", margin: "0 auto" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2rem" }}>
+      <div style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: "2rem",
+        padding: "1rem",
+        background: "#f9f9f9",
+        borderRadius: "10px",
+        border: "1px solid #e0e0e0",
+      }}>
         <h1 style={{ fontSize: "clamp(1.5rem, 4vw, 2rem)", margin: 0 }}>
           Grower Communities
         </h1>
-        <button
-          onClick={() => setShowCreateForm(!showCreateForm)}
-          style={{
-            padding: "0.75rem 1.5rem",
-            background: "#4caf50",
-            color: "white",
-            border: "none",
-            borderRadius: "8px",
-            cursor: "pointer",
-            fontWeight: "600",
-          }}
-        >
-          + Create Community
-        </button>
+        {isSuperAdmin && (
+          <button
+            onClick={() => setShowCreateForm(!showCreateForm)}
+            style={{
+              padding: "0.75rem 1.5rem",
+              background: "#4caf50",
+              color: "white",
+              border: "none",
+              borderRadius: "8px",
+              cursor: "pointer",
+              fontWeight: "600",
+            }}
+          >
+            + Create Community
+          </button>
+        )}
       </div>
 
       {message && (
@@ -106,7 +120,7 @@ export default function CommunitiesPage() {
         </div>
       )}
 
-      {showCreateForm && (
+      {isSuperAdmin && showCreateForm && (
         <div
           style={{
             padding: "1.5rem",
@@ -215,7 +229,7 @@ export default function CommunitiesPage() {
         <p>Loading communities...</p>
       ) : communities.length === 0 ? (
         <p style={{ color: "#666", padding: "2rem", textAlign: "center" }}>
-          No communities yet. Create one to get started!
+          No communities yet. Please check back soon.
         </p>
       ) : (
         <div style={{ display: "grid", gap: "1.5rem" }}>

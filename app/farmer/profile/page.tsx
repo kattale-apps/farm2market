@@ -3,7 +3,7 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
-import { useCallback, useState, useEffect } from "react";
+import { useCallback, useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -29,7 +29,7 @@ export default function FarmerProfilePage() {
     emiigo?: number;
   }>({});
 
-  const regionGroups = [
+  const regionGroups = useMemo(() => [
     {
       key: "central_buganda",
       label: "Central (Buganda)",
@@ -109,7 +109,7 @@ export default function FarmerProfilePage() {
       label: "Western (Kigezi)",
       districts: ["Kabale", "Kisoro", "Rukiga"],
     },
-  ];
+  ], []);
 
   const normalizeName = (name: string) => name.trim().toLowerCase();
 

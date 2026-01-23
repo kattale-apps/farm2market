@@ -398,6 +398,7 @@ export const confirmDeliveryToStorageByUTID = mutation({
     adminId: v.id("users"),
     lockUtid: v.string(), // The UTID from the lock transaction
     reason: v.string(),
+    deliveryPhotos: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     const adminUser = await verifyAdmin(ctx, args.adminId);
@@ -501,6 +502,10 @@ export const confirmDeliveryToStorageByUTID = mutation({
       errors: [] as string[],
     };
 
+    const deliveryPhotos = args.deliveryPhotos
+      ? args.deliveryPhotos.map((photo) => photo.trim()).filter(Boolean)
+      : undefined;
+
     // Create inventory for each trader/produce/location combination
     for (const [key, group] of unitsByTraderProduceLocation.entries()) {
       try {
@@ -536,8 +541,12 @@ export const confirmDeliveryToStorageByUTID = mutation({
 
         // Update units to delivered status
         for (const unit of group.units) {
+          const patch: any = { deliveryStatus: "delivered" };
+          if (deliveryPhotos && deliveryPhotos.length > 0 && (!unit.deliveryPhotos || unit.deliveryPhotos.length === 0)) {
+            patch.deliveryPhotos = deliveryPhotos;
+          }
           await ctx.db.patch(unit._id, {
-            deliveryStatus: "delivered",
+            ...patch,
           });
           results.unitsUpdated++;
         }
@@ -580,6 +589,7 @@ export const confirmDeliveryToStorageByUTID = mutation({
         lockUtid: args.lockUtid,
         inventoryCreated: results.inventoryCreated.length,
         unitsUpdated: results.unitsUpdated,
+        photoCount: deliveryPhotos?.length || 0,
       }
     );
 

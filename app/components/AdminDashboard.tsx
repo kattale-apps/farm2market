@@ -19,6 +19,8 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   const redFlags = useQuery(api.adminRedFlags.getRedFlagsSummary, { adminId: userId });
   const [utidPageOffset, setUtidPageOffset] = useState(0);
   const [utidPageSize, setUtidPageSize] = useState(200);
+  const [timelineOffset, setTimelineOffset] = useState(0);
+  const timelinePageSize = 10;
   const allUTIDs = useQuery(api.introspection.getAllActiveUTIDs, {
     adminId: userId,
     limit: utidPageSize,
@@ -83,6 +85,45 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   const [pilotModeLoading, setPilotModeLoading] = useState(false);
   const [pilotModeMessage, setPilotModeMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [expandedMetric, setExpandedMetric] = useState<string | null>(null); // Track which metric card is expanded
+
+  const storageLocationsById = new Map<string, any>();
+  if (storageLocations) {
+    storageLocations.forEach((location: any) => {
+      storageLocationsById.set(location._id, location);
+    });
+  }
+  const formatStoreAdminLocations = (admin: any) => {
+    if (admin?.storageLocationNames?.length) {
+      return admin.storageLocationNames.join(", ");
+    }
+    if (admin?.allowedStorageLocationIds?.length) {
+      const names = admin.allowedStorageLocationIds
+        .map((id: string) => storageLocationsById.get(id)?.districtName)
+        .filter(Boolean);
+      return names.length > 0 ? names.join(", ") : "No locations";
+    }
+    return "No locations";
+  };
+
+  const totalUtidCount = allUTIDs?.totalUTIDs || 0;
+  const utidRangeOptions = Array.from(
+    { length: Math.ceil(totalUtidCount / utidPageSize) || 0 },
+    (_, index) => {
+      const start = index * utidPageSize + 1;
+      const end = Math.min((index + 1) * utidPageSize, totalUtidCount);
+      return { start, end, offset: (index * utidPageSize) };
+    }
+  );
+
+  const timelineTotal = allUTIDs?.utids?.length || 0;
+  const timelineRangeOptions = Array.from(
+    { length: Math.ceil(timelineTotal / timelinePageSize) || 0 },
+    (_, index) => {
+      const start = index * timelinePageSize + 1;
+      const end = Math.min((index + 1) * timelinePageSize, timelineTotal);
+      return { start, end, offset: (index * timelinePageSize) };
+    }
+  );
 
   const handleExportUTIDs = (format: "excel" | "pdf") => {
     if (!allUTIDs || !allUTIDs.utids || allUTIDs.utids.length === 0) {
@@ -490,6 +531,28 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                 Total active UTIDs: <strong>{allUTIDs.totalUTIDs || 0}</strong>
               </p>
               <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
+                {utidRangeOptions.length > 0 && (
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <span style={{ fontSize: "0.85rem", color: "#666" }}>Range:</span>
+                    <select
+                      value={utidPageOffset}
+                      onChange={(e) => setUtidPageOffset(Number(e.target.value))}
+                      style={{
+                        padding: "0.35rem 0.5rem",
+                        border: "1px solid #ddd",
+                        borderRadius: "6px",
+                        fontSize: "0.85rem",
+                        background: "#fff",
+                      }}
+                    >
+                      {utidRangeOptions.map((range) => (
+                        <option key={range.offset} value={range.offset}>
+                          {range.start}-{range.end}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                   <span style={{ fontSize: "0.85rem", color: "#666" }}>Page size:</span>
                   <select
@@ -667,7 +730,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                 <option value="">-- Select StoreAdmin --</option>
                 {storeAdmins.map((admin: any) => (
                   <option key={admin.id} value={admin.id}>
-                    {admin.alias}
+                    {admin.alias} — {formatStoreAdminLocations(admin)}
                   </option>
                 ))}
               </select>
@@ -1019,7 +1082,31 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           <p style={{ color: "#666" }}>No recent activity</p>
         ) : (
           <div style={{ maxHeight: "300px", overflowY: "auto" }}>
-            {allUTIDs.utids.slice(0, 10).map((utidData: any, index: number) => {
+            {timelineRangeOptions.length > 0 && (
+              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "0.75rem" }}>
+                <label style={{ fontSize: "0.85rem", color: "#666", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  Range:
+                  <select
+                    value={timelineOffset}
+                    onChange={(e) => setTimelineOffset(Number(e.target.value))}
+                    style={{
+                      padding: "0.35rem 0.5rem",
+                      border: "1px solid #ddd",
+                      borderRadius: "6px",
+                      fontSize: "0.85rem",
+                      background: "#fff",
+                    }}
+                  >
+                    {timelineRangeOptions.map((range) => (
+                      <option key={range.offset} value={range.offset}>
+                        {range.start}-{range.end}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            )}
+            {allUTIDs.utids.slice(timelineOffset, timelineOffset + timelinePageSize).map((utidData: any, index: number) => {
               const { formatUgandaTimeOnly, getUgandaTime } = require("../utils/timeUtils");
               const timestamp = utidData.timestamp || getUgandaTime();
               const time = formatUgandaTimeOnly(timestamp);
@@ -1042,6 +1129,11 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                 </div>
               );
             })}
+            {timelineTotal > 0 && (
+              <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.5rem" }}>
+                Showing {timelineTotal === 0 ? 0 : timelineOffset + 1}-{Math.min(timelineOffset + timelinePageSize, timelineTotal)} of {timelineTotal}
+              </div>
+            )}
           </div>
         )}
         <div style={{ marginTop: "1.5rem", paddingTop: "1.5rem", borderTop: "2px solid #e0e0e0" }}>

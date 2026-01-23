@@ -18,14 +18,19 @@ export function DeliveryConfirmationForm({
 }: DeliveryConfirmationFormProps) {
   const [selectedUtid, setSelectedUtid] = useState<string>("");
   const [reason, setReason] = useState("");
+  const [photoBefore, setPhotoBefore] = useState("");
+  const [photoDuring, setPhotoDuring] = useState("");
+  const [photoInStorage, setPhotoInStorage] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  // Filter UTIDs to only show unit_lock type UTIDs with deliveryStatus === "farmer_confirmed"
-  // These are deliveries that farmers have self-confirmed and are awaiting admin confirmation
+  // Filter UTIDs to show delivery-eligible unit_lock UTIDs.
+  // SuperAdmin can view all farmer UTIDs, but only farmer-confirmed deliveries can be confirmed.
   const lockUtids = allUTIDs?.utids?.filter((utid: any) => {
     if (utid.type !== "unit_lock") return false;
-    // Check if any entity has deliveryStatus === "farmer_confirmed"
+    if (isSuperAdmin) {
+      return utid.entities?.some((entity: any) => entity.deliveryStatus !== "delivered");
+    }
     return utid.entities?.some((entity: any) => entity.deliveryStatus === "farmer_confirmed");
   }) || [];
 
@@ -43,10 +48,12 @@ export function DeliveryConfirmationForm({
     setMessage(null);
 
     try {
+      const deliveryPhotos = [photoBefore, photoDuring, photoInStorage].map((v) => v.trim()).filter(Boolean);
       const result = await confirmDelivery({
         adminId,
         lockUtid: selectedUtid,
         reason: reason.trim(),
+        deliveryPhotos: deliveryPhotos.length > 0 ? deliveryPhotos : undefined,
       });
 
       setMessage({
@@ -57,6 +64,9 @@ export function DeliveryConfirmationForm({
       // Reset form
       setSelectedUtid("");
       setReason("");
+      setPhotoBefore("");
+      setPhotoDuring("");
+      setPhotoInStorage("");
       setTimeout(() => setMessage(null), 5000);
     } catch (error: any) {
       setMessage({
@@ -68,14 +78,24 @@ export function DeliveryConfirmationForm({
     }
   };
 
+  const selectedUtidData = selectedUtid
+    ? lockUtids.find((u: any) => u.utid === selectedUtid)
+    : null;
+  const selectedEntity =
+    selectedUtidData?.entities?.find((e: any) => e.deliveryStatus === "farmer_confirmed") ||
+    selectedUtidData?.entities?.[0];
+  const isConfirmable = selectedEntity?.deliveryStatus === "farmer_confirmed";
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
       <div>
         <label style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.9rem", fontWeight: "600" }}>
-          Select Farmer-Confirmed Delivery UTID:
+          Select Delivery UTID:
         </label>
         <p style={{ fontSize: "0.8rem", color: "#666", marginBottom: "0.5rem" }}>
-          Only deliveries that farmers have self-confirmed are shown here. Location information is displayed for each UTID.
+          {isSuperAdmin
+            ? "SuperAdmin can view all farmer UTIDs. Only farmer-confirmed deliveries can be confirmed here."
+            : "Only deliveries that farmers have self-confirmed are shown here. Location information is displayed for each UTID."}
           {!isSuperAdmin && " Only UTIDs from your assigned storage locations are visible."}
         </p>
         {lockUtids.length === 0 ? (
@@ -98,17 +118,17 @@ export function DeliveryConfirmationForm({
               const entity = utid.entities?.find((e: any) => e.deliveryStatus === "farmer_confirmed") || utid.entities?.[0];
               const location = entity?.storageLocation;
               const locationText = location ? ` - ${location.districtName} (${location.code})` : "";
+              const statusText = entity?.deliveryStatus ? ` [${entity.deliveryStatus}]` : "";
               return (
                 <option key={utid.utid} value={utid.utid}>
-                  {utid.utid} - {entity?.produceType || "Produce"} ({entity?.quantity || "10"}kg){locationText}
+                  {utid.utid} - {entity?.produceType || "Produce"} ({entity?.quantity || "10"}kg){locationText}{statusText}
                 </option>
               );
             })}
           </select>
         )}
         {selectedUtid && (() => {
-          const selectedUtidData = lockUtids.find((u: any) => u.utid === selectedUtid);
-          const entity = selectedUtidData?.entities?.find((e: any) => e.deliveryStatus === "farmer_confirmed") || selectedUtidData?.entities?.[0];
+          const entity = selectedEntity;
           const location = entity?.storageLocation;
           return location ? (
             <div style={{
@@ -127,6 +147,19 @@ export function DeliveryConfirmationForm({
             </div>
           ) : null;
         })()}
+        {selectedUtid && !isConfirmable && (
+          <div style={{
+            marginTop: "0.75rem",
+            padding: "0.75rem",
+            background: "#fff3cd",
+            borderRadius: "6px",
+            border: "1px solid #ffeeba",
+            fontSize: "0.85rem",
+            color: "#856404",
+          }}>
+            This UTID is not yet farmer-confirmed. SuperAdmin can view it, but confirmation requires farmer confirmation.
+          </div>
+        )}
       </div>
 
       <div>
@@ -149,6 +182,53 @@ export function DeliveryConfirmationForm({
         />
       </div>
 
+      {isSuperAdmin && (
+        <div style={{ display: "grid", gap: "0.75rem" }}>
+          <div style={{ fontSize: "0.85rem", fontWeight: "600", color: "#1a1a1a" }}>
+            Optional Delivery Photos (URLs)
+          </div>
+          <input
+            type="text"
+            value={photoBefore}
+            onChange={(e) => setPhotoBefore(e.target.value)}
+            placeholder="Before delivery (optional)"
+            style={{
+              width: "100%",
+              padding: "0.75rem",
+              border: "1px solid #ddd",
+              borderRadius: "6px",
+              fontSize: "0.9rem",
+            }}
+          />
+          <input
+            type="text"
+            value={photoDuring}
+            onChange={(e) => setPhotoDuring(e.target.value)}
+            placeholder="During delivery (optional)"
+            style={{
+              width: "100%",
+              padding: "0.75rem",
+              border: "1px solid #ddd",
+              borderRadius: "6px",
+              fontSize: "0.9rem",
+            }}
+          />
+          <input
+            type="text"
+            value={photoInStorage}
+            onChange={(e) => setPhotoInStorage(e.target.value)}
+            placeholder="In storage (optional)"
+            style={{
+              width: "100%",
+              padding: "0.75rem",
+              border: "1px solid #ddd",
+              borderRadius: "6px",
+              fontSize: "0.9rem",
+            }}
+          />
+        </div>
+      )}
+
       {message && (
         <div
           style={{
@@ -166,10 +246,10 @@ export function DeliveryConfirmationForm({
 
       <button
         onClick={handleConfirm}
-        disabled={loading || !selectedUtid || !reason.trim() || lockUtids.length === 0}
+        disabled={loading || !selectedUtid || !reason.trim() || lockUtids.length === 0 || !isConfirmable}
         style={{
           padding: "0.75rem 1.5rem",
-          background: loading || !selectedUtid || !reason.trim() || lockUtids.length === 0 ? "#ccc" : "#4caf50",
+          background: loading || !selectedUtid || !reason.trim() || lockUtids.length === 0 || !isConfirmable ? "#ccc" : "#4caf50",
           color: "#fff",
           border: "none",
           borderRadius: "6px",

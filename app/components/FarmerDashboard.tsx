@@ -65,7 +65,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
     if (listingUtid) return listingUtid;
     const negotiationUtid = (negotiations as any)?.negotiations?.[0]?.negotiationUtid;
     if (negotiationUtid) return negotiationUtid;
-    const ledgerUtid = transactionsLedger?.[0]?.lockUtid;
+    const ledgerUtid = transactionsLedger?.transactions?.[0]?.lockUtid;
     if (ledgerUtid) return ledgerUtid;
     return "";
   }, [listings, negotiations, transactionsLedger]);

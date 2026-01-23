@@ -24,6 +24,7 @@ export default function Home() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const isSuperAdmin = user?.role === "admin" && user?.adminLevel !== "junior";
   
   useEffect(() => {
     const checkMobile = () => {
@@ -195,29 +196,31 @@ export default function Home() {
             >
               Privacy Policy
             </a>
-            <a
-              href="/admin/communities"
-              style={{
-                display: "inline-block",
-                padding: "0.5rem 1rem",
-                background: "#fbc02d",
-                color: "#1a1a1a",
-                textDecoration: "none",
-                borderRadius: "6px",
-                fontSize: isMobile ? "0.85rem" : "0.9rem",
-                fontWeight: "700",
-                border: "1px solid #f9a825",
-                transition: "background 0.3s"
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#f9a825";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "#fbc02d";
-              }}
-            >
-              Join A Growers Community
-            </a>
+            {(user?.role === "farmer" || isSuperAdmin) && (
+              <a
+                href="/admin/communities"
+                style={{
+                  display: "inline-block",
+                  padding: "0.5rem 1rem",
+                  background: "#1976d2",
+                  color: "#ffffff",
+                  textDecoration: "none",
+                  borderRadius: "6px",
+                  fontSize: isMobile ? "0.85rem" : "0.9rem",
+                  fontWeight: "700",
+                  border: "1px solid #1565c0",
+                  transition: "background 0.3s"
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "#1565c0";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "#1976d2";
+                }}
+              >
+                {isSuperAdmin ? "Create A Growers Community" : "Join A Growers Community"}
+              </a>
+            )}
           </div>
         </div>
         <div style={{ 

@@ -1714,6 +1714,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
 function CreateAdminAccountForm({ createUser, storageLocations, adminId }: { createUser: any; storageLocations: any; adminId: Id<"users"> }) {
   const [email, setEmail] = useState("");
   const [adminLevel, setAdminLevel] = useState<"super" | "junior" | "">("");
+  const [adminCategory, setAdminCategory] = useState<"store" | "message" | "">("");
   const [selectedLocationIds, setSelectedLocationIds] = useState<Id<"storageLocations">[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -1725,6 +1726,10 @@ function CreateAdminAccountForm({ createUser, storageLocations, adminId }: { cre
     }
     if (!adminLevel) {
       setMessage({ type: "error", text: "Please select admin level" });
+      return;
+    }
+    if (adminLevel === "junior" && !adminCategory) {
+      setMessage({ type: "error", text: "Please select admin category for junior admin" });
       return;
     }
     if (adminLevel === "junior" && selectedLocationIds.length === 0) {
@@ -1740,6 +1745,7 @@ function CreateAdminAccountForm({ createUser, storageLocations, adminId }: { cre
         email: email.trim(),
         role: "admin",
         adminLevel: adminLevel,
+        adminCategory: adminLevel === "junior" ? adminCategory : undefined,
         allowedStorageLocationIds: adminLevel === "junior" ? selectedLocationIds : undefined,
         creatorAdminId: adminId,
       });
@@ -1752,6 +1758,7 @@ function CreateAdminAccountForm({ createUser, storageLocations, adminId }: { cre
       // Reset form
       setEmail("");
       setAdminLevel("");
+      setAdminCategory("");
       setSelectedLocationIds([]);
       setTimeout(() => setMessage(null), 5000);
     } catch (error: any) {
@@ -1804,6 +1811,9 @@ function CreateAdminAccountForm({ createUser, storageLocations, adminId }: { cre
           onChange={(e) => {
             setAdminLevel(e.target.value as "super" | "junior" | "");
             if (e.target.value !== "junior") {
+              setAdminCategory("");
+            }
+            if (e.target.value !== "junior") {
               setSelectedLocationIds([]);
             }
           }}
@@ -1822,6 +1832,31 @@ function CreateAdminAccountForm({ createUser, storageLocations, adminId }: { cre
           <option value="junior">Junior Admin (Limited to Assigned Locations)</option>
         </select>
       </div>
+
+      {adminLevel === "junior" && (
+        <div style={{ marginBottom: "1rem" }}>
+          <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#1a1a1a" }}>
+            Admin Category:
+          </label>
+          <select
+            value={adminCategory}
+            onChange={(e) => setAdminCategory(e.target.value as "store" | "message" | "")}
+            disabled={loading}
+            style={{
+              width: "100%",
+              padding: "0.75rem",
+              border: "1px solid #ddd",
+              borderRadius: "6px",
+              fontSize: "0.9rem",
+              fontFamily: "inherit"
+            }}
+          >
+            <option value="">Select admin category...</option>
+            <option value="store">Store Admin (Delivery Confirmations)</option>
+            <option value="message">Message Admin (Inbox Support)</option>
+          </select>
+        </div>
+      )}
 
       {adminLevel === "junior" && storageLocations && (
         <div style={{ marginBottom: "1rem" }}>

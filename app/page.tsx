@@ -195,6 +195,29 @@ export default function Home() {
             >
               Privacy Policy
             </a>
+            <a
+              href="/admin/communities"
+              style={{
+                display: "inline-block",
+                padding: "0.5rem 1rem",
+                background: "#fbc02d",
+                color: "#1a1a1a",
+                textDecoration: "none",
+                borderRadius: "6px",
+                fontSize: isMobile ? "0.85rem" : "0.9rem",
+                fontWeight: "700",
+                border: "1px solid #f9a825",
+                transition: "background 0.3s"
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "#f9a825";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "#fbc02d";
+              }}
+            >
+              Join A Growers Community
+            </a>
           </div>
         </div>
         <div style={{ 

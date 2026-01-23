@@ -45,6 +45,7 @@ export const getFarmerProfile = query({
       alias: farmer.alias,
       email: farmer.email,
       phoneNumber: farmer.phoneNumber,
+      sex: farmer.sex,
       districtId: farmer.districtId,
       districtName,
       subcountyId: farmer.subcountyId,
@@ -70,6 +71,8 @@ export const updateFarmerProfile = mutation({
     subcountyId: v.optional(v.id("subcounties")),
     parishId: v.optional(v.id("parishes")),
     farmSizeInput: v.optional(v.any()), // {unit, length, width, omwigo, emiigo}
+    phoneNumber: v.optional(v.string()),
+    sex: v.optional(v.union(v.literal("M"), v.literal("F"))),
   },
   handler: async (ctx, args) => {
     const farmer = await ctx.db.get(args.farmerId);
@@ -113,6 +116,12 @@ export const updateFarmerProfile = mutation({
     }
     if (args.parishId !== undefined) {
       updates.parishId = args.parishId;
+    }
+    if (args.phoneNumber !== undefined) {
+      updates.phoneNumber = args.phoneNumber.trim() || undefined;
+    }
+    if (args.sex !== undefined) {
+      updates.sex = args.sex;
     }
     if (farmSizeAcres !== undefined) {
       updates.farmSizeAcres = farmSizeAcres;

@@ -41,10 +41,6 @@ export default function DeliveryVerificationPage() {
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const files = Array.from(e.target.files);
-      if (files.length !== 3) {
-        setMessage({ type: "error", text: "Please select exactly 3 photos" });
-        return;
-      }
       setPhotos(files);
       setMessage(null);
     }
@@ -87,24 +83,21 @@ export default function DeliveryVerificationPage() {
       return;
     }
 
-    if (photos.length !== 3) {
-      setMessage({ type: "error", text: "Exactly 3 photos are required (weighing, checking, in-storage)" });
-      return;
-    }
-
     setLoading(true);
     setMessage(null);
 
     try {
       // Convert photos to base64 (in production, upload to Convex file storage)
       const photoIds: string[] = [];
-      for (const photo of photos) {
-        const reader = new FileReader();
-        const base64 = await new Promise<string>((resolve) => {
-          reader.onload = () => resolve(reader.result as string);
-          reader.readAsDataURL(photo);
-        });
-        photoIds.push(base64); // In production, upload to Convex and get file ID
+      if (photos.length > 0) {
+        for (const photo of photos) {
+          const reader = new FileReader();
+          const base64 = await new Promise<string>((resolve) => {
+            reader.onload = () => resolve(reader.result as string);
+            reader.readAsDataURL(photo);
+          });
+          photoIds.push(base64); // In production, upload to Convex and get file ID
+        }
       }
 
       // Verify delivery
@@ -112,7 +105,7 @@ export default function DeliveryVerificationPage() {
         adminId: userId,
         lockUtid: selectedUtid,
         comment: comment.trim(),
-        photoIds,
+        photoIds: photoIds.length > 0 ? photoIds : undefined,
         reason: `Delivery verification for UTID: ${selectedUtid}`,
       });
 
@@ -156,7 +149,7 @@ export default function DeliveryVerificationPage() {
         Delivery Verification
       </h1>
       <p style={{ marginBottom: "2rem", color: "#666" }}>
-        Verify deliveries for UTIDs from your assigned storage locations. Provide comment and 3 photos (weighing, checking, in-storage).
+        Verify deliveries for UTIDs from your assigned storage locations. Provide a comment; photos are optional.
       </p>
 
       {message && (
@@ -230,17 +223,16 @@ export default function DeliveryVerificationPage() {
 
         <div style={{ marginBottom: "1.5rem" }}>
           <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600" }}>
-            Photos (3 required) *
+            Photos (optional)
           </label>
           <p style={{ fontSize: "0.9rem", color: "#666", marginBottom: "0.5rem" }}>
-            Upload exactly 3 photos: weighing, checking quality, and in-storage
+            Upload photos (weighing, checking quality, in-storage) if available
           </p>
           <input
             type="file"
             accept="image/*"
             multiple
             onChange={handlePhotoChange}
-            required
             style={{
               width: "100%",
               padding: "0.75rem",
@@ -251,7 +243,7 @@ export default function DeliveryVerificationPage() {
           />
           {photos.length > 0 && (
             <p style={{ marginTop: "0.5rem", fontSize: "0.9rem", color: photos.length === 3 ? "#28a745" : "#dc3545" }}>
-              {photos.length} photo(s) selected {photos.length !== 3 && "(Need 3 photos)"}
+              {photos.length} photo(s) selected
             </p>
           )}
         </div>

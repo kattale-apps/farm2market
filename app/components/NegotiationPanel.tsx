@@ -22,8 +22,11 @@ export function NegotiationPanel({
   const acceptCounterOffer = useMutation(api.negotiations.acceptCounterOffer);
   const rejectOffer = useMutation(api.negotiations.rejectOffer);
   const counterOffer = useMutation(api.negotiations.counterOffer);
+  const traderCounterOffer = useMutation(api.negotiations.traderCounterOffer);
+  const cancelNegotiation = useMutation(api.negotiations.cancelNegotiation);
   const [counterPrice, setCounterPrice] = useState("");
   const [showCounter, setShowCounter] = useState(false);
+  const [showTraderCounter, setShowTraderCounter] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
@@ -111,6 +114,57 @@ export function NegotiationPanel({
       onUpdate?.();
     } catch (error: any) {
       setMessage({ type: "error", text: error.message || "Failed to accept counter-offer" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleTraderCounter = async () => {
+    if (userRole !== "trader") return;
+
+    const price = parseFloat(counterPrice);
+    if (isNaN(price) || price <= 0) {
+      setMessage({ type: "error", text: "Please enter a valid price" });
+      return;
+    }
+
+    setLoading(true);
+    setMessage(null);
+    try {
+      await traderCounterOffer({
+        negotiationId: negotiation.negotiationId || negotiation._id,
+        traderId: userId,
+        counterPricePerKilo: price,
+      });
+      setMessage({ type: "success", text: `Counter-offer sent: ${formatUGX(price)}/kg` });
+      setCounterPrice("");
+      setShowTraderCounter(false);
+      onUpdate?.();
+    } catch (error: any) {
+      setMessage({ type: "error", text: error.message || "Failed to send counter-offer" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancelNegotiation = async () => {
+    if (userRole !== "trader") return;
+
+    if (!window.confirm("Cancel this negotiation? This cannot be undone.")) {
+      return;
+    }
+
+    setLoading(true);
+    setMessage(null);
+    try {
+      await cancelNegotiation({
+        negotiationId: negotiation.negotiationId || negotiation._id,
+        traderId: userId,
+      });
+      setMessage({ type: "success", text: "Negotiation cancelled." });
+      onUpdate?.();
+    } catch (error: any) {
+      setMessage({ type: "error", text: error.message || "Failed to cancel negotiation" });
     } finally {
       setLoading(false);
     }
@@ -249,7 +303,7 @@ export function NegotiationPanel({
       )}
 
       {userRole === "trader" && negotiation.status === "countered" && (
-        <div style={{ display: "flex", gap: "1rem" }}>
+        <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
           <button
             onClick={handleAcceptCounter}
             disabled={loading}
@@ -264,6 +318,56 @@ export function NegotiationPanel({
             }}
           >
             Accept Counter-Offer
+          </button>
+          <button
+            onClick={() => setShowTraderCounter(!showTraderCounter)}
+            disabled={loading}
+            style={{
+              padding: "0.75rem 1.5rem",
+              background: "#1976d2",
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              cursor: loading ? "not-allowed" : "pointer",
+              fontWeight: "600",
+            }}
+          >
+            Counter-Offer
+          </button>
+          <button
+            onClick={handleCancelNegotiation}
+            disabled={loading}
+            style={{
+              padding: "0.75rem 1.5rem",
+              background: "#dc3545",
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              cursor: loading ? "not-allowed" : "pointer",
+              fontWeight: "600",
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {userRole === "trader" && negotiation.status === "pending" && (
+        <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+          <button
+            onClick={handleCancelNegotiation}
+            disabled={loading}
+            style={{
+              padding: "0.75rem 1.5rem",
+              background: "#dc3545",
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              cursor: loading ? "not-allowed" : "pointer",
+              fontWeight: "600",
+            }}
+          >
+            Cancel
           </button>
         </div>
       )}
@@ -307,6 +411,61 @@ export function NegotiationPanel({
             <button
               onClick={() => {
                 setShowCounter(false);
+                setCounterPrice("");
+              }}
+              style={{
+                padding: "0.75rem 1.5rem",
+                background: "#f5f5f5",
+                border: "1px solid #ddd",
+                borderRadius: "6px",
+                cursor: "pointer",
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showTraderCounter && userRole === "trader" && (
+        <div style={{ marginTop: "1rem", padding: "1rem", background: "#f5f5f5", borderRadius: "6px" }}>
+          <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600" }}>
+            Your Counter-Offer Price (UGX/kg)
+          </label>
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <input
+              type="number"
+              value={counterPrice}
+              onChange={(e) => setCounterPrice(e.target.value)}
+              placeholder="Enter your price"
+              min="1"
+              step="1"
+              style={{
+                flex: 1,
+                padding: "0.75rem",
+                border: "1px solid #ddd",
+                borderRadius: "6px",
+                fontSize: "1rem",
+              }}
+            />
+            <button
+              onClick={handleTraderCounter}
+              disabled={loading}
+              style={{
+                padding: "0.75rem 1.5rem",
+                background: "#1976d2",
+                color: "white",
+                border: "none",
+                borderRadius: "6px",
+                cursor: loading ? "not-allowed" : "pointer",
+                fontWeight: "600",
+              }}
+            >
+              Submit
+            </button>
+            <button
+              onClick={() => {
+                setShowTraderCounter(false);
                 setCounterPrice("");
               }}
               style={{

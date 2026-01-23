@@ -4,7 +4,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { CreateListing } from "./CreateListing";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { exportToExcel, exportToPDF, formatUTIDDataForExport } from "../utils/exportUtils";
 import { formatUgandaDateTime, getUgandaTime } from "../utils/timeUtils";
 import { NotificationMailbox } from "./NotificationMailbox";
@@ -33,6 +33,8 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
   const farmerConfirmDelivery = useMutation(api.farmerDashboard.farmerConfirmDelivery);
   
   const [countering, setCountering] = useState<Id<"negotiations"> | null>(null);
+  const [counteringBatch, setCounteringBatch] = useState<string | null>(null);
+  const [expandedBatchUtids, setExpandedBatchUtids] = useState<Set<string>>(new Set());
   const [cancelling, setCancelling] = useState<Id<"listingUnits"> | null>(null);
   const [confirmingDelivery, setConfirmingDelivery] = useState<Id<"listingUnits"> | null>(null);
   const [cancellingListing, setCancellingListing] = useState<Id<"listings"> | null>(null);
@@ -41,6 +43,19 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
   const [selectedListing, setSelectedListing] = useState<any | null>(null);
   const [expandedListings, setExpandedListings] = useState<Set<string>>(new Set());
   const [cancelledUnitIds, setCancelledUnitIds] = useState<Set<string>>(new Set());
+  const [transactionsView, setTransactionsView] = useState<"list" | "card">("list");
+  const [transactionsPage, setTransactionsPage] = useState(0);
+  const [activeNegotiationsView, setActiveNegotiationsView] = useState<"list" | "card">("list");
+  const [activeNegotiationsPage, setActiveNegotiationsPage] = useState(0);
+  const [concludedNegotiationsView, setConcludedNegotiationsView] = useState<"list" | "card">("list");
+  const [concludedNegotiationsPage, setConcludedNegotiationsPage] = useState(0);
+  const [deliveryDeadlinesView, setDeliveryDeadlinesView] = useState<"list" | "card">("list");
+  const [deliveryDeadlinesPage, setDeliveryDeadlinesPage] = useState(0);
+  const [expiredUtidsView, setExpiredUtidsView] = useState<"list" | "card">("list");
+  const [expiredUtidsPage, setExpiredUtidsPage] = useState(0);
+  const [ledgerView, setLedgerView] = useState<"list" | "card">("list");
+  const [ledgerPage, setLedgerPage] = useState(0);
+  const ITEMS_PER_PAGE = 5;
 
   const formatDate = (timestamp: number) => {
     // Timestamps are stored in Uganda time, convert for display
@@ -60,6 +75,43 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
   const formatUGX = (amount: number) => {
     return new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX" }).format(amount);
   };
+
+  const getProduceEmoji = (produceType?: string) => {
+    const key = (produceType || "").toLowerCase();
+    if (key.includes("maize")) return "🌽";
+    if (key.includes("rice")) return "🍚";
+    if (key.includes("cassava")) return "🌿";
+    if (key.includes("cocoa")) return "🍫";
+    if (key.includes("coffee") || key.includes("arabica")) return "☕";
+    if (key.includes("banana") || key.includes("matooke") || key.includes("plantain")) return "🍌";
+    if (key.includes("beans") || key.includes("soy")) return "🫘";
+    if (key.includes("groundnut") || key.includes("peanut")) return "🥜";
+    if (key.includes("millet") || key.includes("sorghum")) return "🌾";
+    if (key.includes("sunflower")) return "🌻";
+    if (key.includes("sweet potato") || key.includes("potato")) return "🥔";
+    if (key.includes("tomato")) return "🍅";
+    if (key.includes("onion")) return "🧅";
+    if (key.includes("cabbage")) return "🥬";
+    if (key.includes("avocado")) return "🥑";
+    if (key.includes("mango")) return "🥭";
+    if (key.includes("pineapple")) return "🍍";
+    if (key.includes("watermelon")) return "🍉";
+    return "🌾";
+  };
+
+  const getTotalPages = (items: any[]) => Math.max(1, Math.ceil(items.length / ITEMS_PER_PAGE));
+  const getPageItems = (items: any[], page: number) =>
+    items.slice(page * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE + ITEMS_PER_PAGE);
+
+  const listingsById = useMemo(() => {
+    const map = new Map<string, any>();
+    if (listings?.listings) {
+      listings.listings.forEach((listing: any) => {
+        map.set(listing.listingId || listing._id, listing);
+      });
+    }
+    return map;
+  }, [listings]);
 
   const handleExportUTIDs = (format: "excel" | "pdf") => {
     if (!listings || !listings.listings || listings.listings.length === 0) {
@@ -200,6 +252,129 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
     }
   };
 
+  const handleAcceptOfferBatch = async (negotiationIds: Id<"negotiations">[]) => {
+    setMessage(null);
+    try {
+      for (const negotiationId of negotiationIds) {
+        await acceptOffer({ farmerId: userId, negotiationId });
+      }
+      setMessage({
+        type: "success",
+        text: `Accepted ${negotiationIds.length} offer(s). Trader can now proceed to pay-to-lock.`,
+      });
+      setTimeout(() => setMessage(null), 8000);
+    } catch (error: any) {
+      setMessage({ type: "error", text: `Failed to accept offers: ${error.message}` });
+    }
+  };
+
+  const handleRejectOfferBatch = async (negotiationIds: Id<"negotiations">[]) => {
+    setMessage(null);
+    try {
+      for (const negotiationId of negotiationIds) {
+        await rejectOffer({ farmerId: userId, negotiationId });
+      }
+      setMessage({ type: "success", text: `Rejected ${negotiationIds.length} offer(s).` });
+      setTimeout(() => setMessage(null), 5000);
+    } catch (error: any) {
+      setMessage({ type: "error", text: `Failed to reject offers: ${error.message}` });
+    }
+  };
+
+  const handleCounterOfferBatch = async (negotiationIds: Id<"negotiations">[]) => {
+    const price = parseFloat(counterPrice);
+    if (isNaN(price) || price <= 0) {
+      setMessage({ type: "error", text: "Please enter a valid price per kilo" });
+      return;
+    }
+    setMessage(null);
+    try {
+      for (const negotiationId of negotiationIds) {
+        await counterOffer({ farmerId: userId, negotiationId, counterPricePerKilo: price });
+      }
+      setMessage({
+        type: "success",
+        text: `Counter-offer sent to ${negotiationIds.length} unit(s): ${formatUGX(price)}/kg.`,
+      });
+      setCounteringBatch(null);
+      setCounterPrice("");
+      setTimeout(() => setMessage(null), 8000);
+    } catch (error: any) {
+      setMessage({ type: "error", text: `Failed to counter-offer: ${error.message}` });
+    }
+  };
+
+  const activeNegotiations = useMemo(() => {
+    if (!negotiations) return [];
+    return negotiations.negotiations.filter(
+      (neg: any) => neg.status === "pending" || neg.status === "countered"
+    );
+  }, [negotiations]);
+
+  const batchedActiveNegotiations = useMemo(() => {
+    const batches = new Map<string, any>();
+    activeNegotiations.forEach((neg: any) => {
+      const bucket = Math.floor((neg.createdAt || 0) / (5 * 60 * 1000));
+      const key = [
+        neg.traderId || neg.traderAlias || "unknown",
+        neg.listingId || "listing",
+        neg.status,
+        neg.farmerPricePerKilo,
+        neg.traderOfferPricePerKilo,
+        neg.currentPricePerKilo,
+        bucket,
+      ].join("|");
+
+      if (!batches.has(key)) {
+        batches.set(key, {
+          key,
+          produceType: neg.produceType,
+          traderAlias: neg.traderAlias || "Unknown",
+          status: neg.status,
+          farmerPricePerKilo: neg.farmerPricePerKilo,
+          traderOfferPricePerKilo: neg.traderOfferPricePerKilo,
+          currentPricePerKilo: neg.currentPricePerKilo,
+          items: [],
+        });
+      }
+      batches.get(key).items.push(neg);
+    });
+
+    return Array.from(batches.values());
+  }, [activeNegotiations]);
+
+  const transactionItems = listings?.listings || [];
+  const pagedTransactions = getPageItems(transactionItems, transactionsPage);
+  const transactionTotalPages = getTotalPages(transactionItems);
+
+  const pagedBatchedActiveNegotiations = getPageItems(
+    batchedActiveNegotiations,
+    activeNegotiationsPage
+  );
+  const activeNegotiationsTotalPages = getTotalPages(batchedActiveNegotiations);
+
+  const concludedNegotiations = negotiations?.negotiations.filter(
+    (neg: any) => neg.status === "accepted" || neg.status === "rejected" || neg.status === "cancelled"
+  ) || [];
+  const pagedConcludedNegotiations = getPageItems(concludedNegotiations, concludedNegotiationsPage);
+  const concludedTotalPages = getTotalPages(concludedNegotiations);
+
+  const deliveryItems = deliveryDeadlines
+    ? [...deliveryDeadlines.overdue.deadlines, ...deliveryDeadlines.pending.deadlines].filter(
+        (delivery: any) => !cancelledUnitIds.has(delivery.unitId)
+      )
+    : [];
+  const pagedDeliveryItems = getPageItems(deliveryItems, deliveryDeadlinesPage);
+  const deliveryTotalPages = getTotalPages(deliveryItems);
+
+  const expiredItems = expiredUTIDs?.expiredUTIDs || [];
+  const pagedExpiredItems = getPageItems(expiredItems, expiredUtidsPage);
+  const expiredTotalPages = getTotalPages(expiredItems);
+
+  const ledgerItems = allUnitsLedger?.listings || [];
+  const pagedLedgerItems = getPageItems(ledgerItems, ledgerPage);
+  const ledgerTotalPages = getTotalPages(ledgerItems);
+
   const user = useQuery(api.auth.getUser, { userId });
   const profile = useQuery(api.farmerProfile.getFarmerProfile, { farmerId: userId });
 
@@ -224,7 +399,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
         border: "1px solid #e0e0e0"
       }}>
         <div style={{ flex: 1 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.5rem" }}>
+          <div style={{ marginBottom: "0.5rem" }}>
             <h2 style={{ 
               fontSize: "clamp(1.5rem, 4vw, 1.8rem)", 
               margin: 0, 
@@ -233,23 +408,8 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
               fontWeight: "700",
               letterSpacing: "-0.02em"
             }}>
-              Hello, {user?.alias || "Farmer"} 👩🏾‍🌾
+              Hello, Farmer 👩🏾‍🌾
             </h2>
-            <Link
-              href="/farmer/profile"
-              style={{
-                padding: "0.5rem 1rem",
-                background: "#4CAF50",
-                color: "white",
-                textDecoration: "none",
-                borderRadius: "8px",
-                fontSize: "0.9rem",
-                fontWeight: "500",
-                marginLeft: "1rem",
-              }}
-            >
-              Profile
-            </Link>
           </div>
           <p style={{ 
             color: "#3d3d3d", 
@@ -270,7 +430,30 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
             </p>
           )}
         </div>
-        <NotificationMailbox userId={userId} />
+        <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-start" }}>
+          <Link
+            href="/farmer/profile"
+            style={{
+              padding: "1rem 1.25rem",
+              background: "#4CAF50",
+              color: "white",
+              textDecoration: "none",
+              borderRadius: "12px",
+              fontSize: "1rem",
+              fontWeight: "600",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              minHeight: "64px",
+              minWidth: "96px",
+            }}
+          >
+            Profile
+          </Link>
+          <div id="notification-inbox">
+            <NotificationMailbox userId={userId} />
+          </div>
+        </div>
       </div>
 
       {/* Create Listing */}
@@ -285,7 +468,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
         border: "1px solid #e0e0e0"
       }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", gap: "1rem", flexWrap: "wrap" }}>
           <h3 style={{ 
             marginTop: 0, 
             marginBottom: 0, 
@@ -298,7 +481,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
             Your Transactions
           </h3>
           {listings && listings.listings && listings.listings.length > 0 && (
-            <div style={{ display: "flex", gap: "0.5rem" }}>
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
               <button
                 onClick={() => handleExportUTIDs("excel")}
                 style={{
@@ -329,6 +512,36 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
               >
                 📄 PDF
               </button>
+              <button
+                onClick={() => setTransactionsView("list")}
+                style={{
+                  padding: "0.5rem 0.75rem",
+                  background: transactionsView === "list" ? "#1976d2" : "#f5f5f5",
+                  color: transactionsView === "list" ? "#fff" : "#333",
+                  border: "1px solid #ddd",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontSize: "0.85rem",
+                  fontWeight: "500"
+                }}
+              >
+                List
+              </button>
+              <button
+                onClick={() => setTransactionsView("card")}
+                style={{
+                  padding: "0.5rem 0.75rem",
+                  background: transactionsView === "card" ? "#1976d2" : "#f5f5f5",
+                  color: transactionsView === "card" ? "#fff" : "#333",
+                  border: "1px solid #ddd",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontSize: "0.85rem",
+                  fontWeight: "500"
+                }}
+              >
+                Card
+              </button>
             </div>
           )}
         </div>
@@ -337,12 +550,64 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
         ) : listings.listings.length === 0 ? (
           <p style={{ color: "#666" }}>No transactions yet. Create your first listing to get started.</p>
         ) : (
-          <div style={{ 
-            display: "grid", 
-            gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 200px), 1fr))", 
-            gap: "1rem" 
-          }}>
-            {listings.listings.map((listing: any, index: number) => {
+          <div>
+            {transactionsView === "list" ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                {pagedTransactions.map((listing: any, index: number) => {
+                  let status = "Available";
+                  let statusColor = "#4caf50";
+                  if (listing.units.locked > 0 && listing.units.available > 0) {
+                    status = "Partially Locked";
+                    statusColor = "#ff9800";
+                  } else if (listing.units.locked === listing.totalUnits) {
+                    status = "Locked";
+                    statusColor = "#2196f3";
+                  } else if (listing.units.delivered > 0) {
+                    status = "Sold";
+                    statusColor = "#2e7d32";
+                  }
+
+                  return (
+                    <div
+                      key={index}
+                      onClick={() => setSelectedListing(listing)}
+                      style={{
+                        padding: "0.75rem 1rem",
+                        background: "#f9f9f9",
+                        borderRadius: "8px",
+                        border: `1px solid ${statusColor}`,
+                        cursor: "pointer",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                        <div style={{ fontWeight: "600", color: "#2c2c2c" }}>
+                          {getProduceEmoji(listing.produceType)} {listing.produceType} • {listing.totalUnits} units
+                        </div>
+                        <span style={{
+                          padding: "0.2rem 0.6rem",
+                          borderRadius: "999px",
+                          fontSize: "0.75rem",
+                          fontWeight: "600",
+                          background: statusColor,
+                          color: "#fff",
+                        }}>
+                          {status}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.35rem", fontFamily: "monospace" }}>
+                        UTID: {listing.utid}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div style={{ 
+                display: "grid", 
+                gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 200px), 1fr))", 
+                gap: "1rem" 
+              }}>
+                {pagedTransactions.map((listing: any, index: number) => {
               // Determine status based on unit counts
               let status = "Available";
               let statusColor = "#4caf50";
@@ -461,7 +726,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                     fontSize: "clamp(1rem, 3vw, 1.1rem)",
                     color: "#1a1a1a"
                   }}>
-                    {listing.totalKilos}kg {listing.produceType}
+                    {getProduceEmoji(listing.produceType)} {listing.totalKilos}kg {listing.produceType}
                   </div>
                   <div style={{ 
                     fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", 
@@ -479,7 +744,42 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                   </div>
                 </div>
               );
-            })}
+                })}
+              </div>
+            )}
+            {transactionTotalPages > 1 && (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "1rem" }}>
+                <button
+                  onClick={() => setTransactionsPage((p) => Math.max(0, p - 1))}
+                  disabled={transactionsPage === 0}
+                  style={{
+                    padding: "0.4rem 0.75rem",
+                    background: transactionsPage === 0 ? "#eee" : "#f5f5f5",
+                    border: "1px solid #ddd",
+                    borderRadius: "6px",
+                    cursor: transactionsPage === 0 ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Prev
+                </button>
+                <div style={{ fontSize: "0.85rem", color: "#666" }}>
+                  Page {transactionsPage + 1} of {transactionTotalPages}
+                </div>
+                <button
+                  onClick={() => setTransactionsPage((p) => Math.min(transactionTotalPages - 1, p + 1))}
+                  disabled={transactionsPage >= transactionTotalPages - 1}
+                  style={{
+                    padding: "0.4rem 0.75rem",
+                    background: transactionsPage >= transactionTotalPages - 1 ? "#eee" : "#f5f5f5",
+                    border: "1px solid #ddd",
+                    borderRadius: "6px",
+                    cursor: transactionsPage >= transactionTotalPages - 1 ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Next
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -493,17 +793,51 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
         border: "1px solid #e0e0e0"
       }}>
-        <h3 style={{ 
-          marginTop: 0, 
-          marginBottom: "1rem", 
-          fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", 
-          color: "#2c2c2c",
-          fontFamily: '"Montserrat", sans-serif',
-          fontWeight: "600",
-          letterSpacing: "-0.01em"
-        }}>
-          Active Negotiations
-        </h3>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", gap: "0.75rem", flexWrap: "wrap" }}>
+          <h3 style={{ 
+            marginTop: 0, 
+            marginBottom: 0, 
+            fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", 
+            color: "#2c2c2c",
+            fontFamily: '"Montserrat", sans-serif',
+            fontWeight: "600",
+            letterSpacing: "-0.01em"
+          }}>
+            Active Negotiations
+          </h3>
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <button
+              onClick={() => setActiveNegotiationsView("list")}
+              style={{
+                padding: "0.4rem 0.7rem",
+                background: activeNegotiationsView === "list" ? "#1976d2" : "#f5f5f5",
+                color: activeNegotiationsView === "list" ? "#fff" : "#333",
+                border: "1px solid #ddd",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "0.8rem",
+                fontWeight: "500"
+              }}
+            >
+              List
+            </button>
+            <button
+              onClick={() => setActiveNegotiationsView("card")}
+              style={{
+                padding: "0.4rem 0.7rem",
+                background: activeNegotiationsView === "card" ? "#1976d2" : "#f5f5f5",
+                color: activeNegotiationsView === "card" ? "#fff" : "#333",
+                border: "1px solid #ddd",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "0.8rem",
+                fontWeight: "500"
+              }}
+            >
+              Card
+            </button>
+          </div>
+        </div>
         
         {message && (
           <div
@@ -522,27 +856,115 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
 
         {negotiations === undefined ? (
           <p style={{ color: "#999" }}>Loading...</p>
-        ) : negotiations.negotiations.length === 0 ? (
+        ) : activeNegotiations.length === 0 ? (
           <p style={{ color: "#666" }}>No active negotiations. Traders can make offers on your listings.</p>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            {negotiations.negotiations.map((neg: any) => (
-              <div key={neg.negotiationId} style={{
+          <div>
+            {activeNegotiationsView === "list" ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                {pagedBatchedActiveNegotiations.map((batch: any) => (
+                  <div key={batch.key} style={{
+                    padding: "0.75rem 1rem",
+                    background: "#f9f9f9",
+                    borderRadius: "8px",
+                    border: "1px solid #e0e0e0",
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                      <div style={{ fontWeight: "600", color: "#2c2c2c" }}>
+                        {getProduceEmoji(batch.produceType)} {batch.produceType} • {batch.items.length} unit{batch.items.length !== 1 ? "s" : ""}
+                      </div>
+                      <span style={{
+                        padding: "0.2rem 0.6rem",
+                        borderRadius: "999px",
+                        fontSize: "0.75rem",
+                        fontWeight: "600",
+                        background: "#ffc107",
+                        color: "#000",
+                      }}>
+                        {batch.status.toUpperCase()}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.35rem" }}>
+                      Trader: {batch.traderAlias} • Offer: {formatUGX(batch.traderOfferPricePerKilo)}/kg
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                {pagedBatchedActiveNegotiations.map((batch: any) => {
+              const negotiationIds = batch.items.map((item: any) => item.negotiationId);
+              const utids = batch.items.map((item: any) => item.negotiationUtid).filter(Boolean);
+              const isExpanded = expandedBatchUtids.has(batch.key);
+
+              return (
+              <div key={batch.key} style={{
                 padding: "1rem",
-                background: neg.status === "accepted" ? "#d4edda" : "#fff3cd",
+                background: batch.status === "accepted" ? "#d4edda" : "#fff3cd",
                 borderRadius: "8px",
-                border: `1px solid ${neg.status === "accepted" ? "#28a745" : "#ffc107"}`
+                border: `1px solid ${batch.status === "accepted" ? "#28a745" : "#ffc107"}`
               }}>
                 <div style={{ fontWeight: "600", marginBottom: "0.5rem", fontSize: "clamp(0.9rem, 3vw, 1rem)" }}>
-                  {neg.produceType} - Unit #{neg.unitNumber}
+                  {getProduceEmoji(batch.produceType)} {batch.produceType} - {batch.items.length} unit{batch.items.length !== 1 ? "s" : ""}
                 </div>
                 <div style={{ fontSize: "clamp(0.8rem, 2.5vw, 0.85rem)", color: "#666", marginBottom: "0.5rem" }}>
-                  Trader: {neg.traderAlias || "Unknown"}
+                  Trader: {batch.traderAlias}
                 </div>
-                <div style={{ fontSize: "clamp(0.8rem, 2.5vw, 0.85rem)", color: "#666", marginBottom: "0.5rem" }}>
-                  Your Price: {formatUGX(neg.farmerPricePerKilo)}/kg | 
-                  Trader Offer: {formatUGX(neg.traderOfferPricePerKilo)}/kg | 
-                  Current: {formatUGX(neg.currentPricePerKilo)}/kg
+                <div style={{ marginBottom: "0.75rem" }}>
+                  {(() => {
+                    const listingForBatch = listingsById.get(batch.items[0]?.listingId);
+                    const fallbackUnitSize =
+                      listingForBatch?.totalKilos && listingForBatch?.totalUnits
+                        ? listingForBatch.totalKilos / listingForBatch.totalUnits
+                        : 10;
+                    const unitSize = listingForBatch?.unitSize || fallbackUnitSize || 10;
+                    const totalKg = unitSize * batch.items.length;
+                    const totalTraderOffer = batch.traderOfferPricePerKilo * totalKg;
+                    const totalCurrentOffer = batch.currentPricePerKilo * totalKg;
+
+                    return (
+                      <div>
+                        <div
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.5rem",
+                            padding: "0.4rem 0.75rem",
+                            background: "#e8f5e9",
+                            borderRadius: "999px",
+                            border: "1px solid #4caf50",
+                            color: "#2e7d32",
+                            fontWeight: "700",
+                            fontSize: "clamp(0.85rem, 2.5vw, 0.95rem)",
+                          }}
+                        >
+                          Total Trader Offer: {formatUGX(totalTraderOffer)}
+                        </div>
+                        {totalCurrentOffer !== totalTraderOffer && (
+                          <div
+                            style={{
+                              marginTop: "0.4rem",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.5rem",
+                              padding: "0.35rem 0.7rem",
+                              background: "#fff3cd",
+                              borderRadius: "999px",
+                              border: "1px solid #ffc107",
+                              color: "#856404",
+                              fontWeight: "700",
+                              fontSize: "clamp(0.8rem, 2.3vw, 0.9rem)",
+                            }}
+                          >
+                            Current Offer: {formatUGX(totalCurrentOffer)}
+                          </div>
+                        )}
+                        <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.35rem" }}>
+                          {batch.items.length} unit{batch.items.length !== 1 ? "s" : ""} × {unitSize}kg each
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div style={{ 
                   marginTop: "0.75rem",
@@ -558,27 +980,63 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                     marginBottom: "0.25rem",
                     fontFamily: '"Montserrat", sans-serif',
                   }}>
-                    UTID:
+                    UTIDs:
                   </div>
                   <div style={{
-                    fontSize: "clamp(1.4rem, 4vw, 1.8rem)",
+                    fontSize: "clamp(0.95rem, 2.5vw, 1.1rem)",
                     color: "#2c2c2c",
                     fontFamily: "monospace",
                     fontWeight: "700",
-                    letterSpacing: "0.05em",
-                    wordBreak: "break-all",
+                    letterSpacing: "0.02em",
                   }}>
-                    {neg.negotiationUtid}
+                    {utids.length} UTID{utids.length !== 1 ? "s" : ""}{" "}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExpandedBatchUtids((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(batch.key)) {
+                            next.delete(batch.key);
+                          } else {
+                            next.add(batch.key);
+                          }
+                          return next;
+                        });
+                      }}
+                      style={{
+                        marginLeft: "0.5rem",
+                        background: "transparent",
+                        border: "none",
+                        color: "#1976d2",
+                        cursor: "pointer",
+                        textDecoration: "underline",
+                        fontSize: "0.85rem",
+                        padding: 0,
+                      }}
+                    >
+                      {isExpanded ? "Hide list" : "View list"}
+                    </button>
                   </div>
+                  {isExpanded && (
+                    <div style={{ marginTop: "0.5rem", maxHeight: "120px", overflowY: "auto" }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+                        {utids.map((utid: string) => (
+                          <div key={utid} style={{ fontSize: "0.85rem", color: "#666", wordBreak: "break-all" }}>
+                            {utid}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div style={{ fontSize: "clamp(0.8rem, 2.5vw, 0.85rem)", fontWeight: "600", marginBottom: "0.75rem", color: neg.status === "accepted" ? "#155724" : "#856404" }}>
-                  Status: {neg.status.toUpperCase()}
+                <div style={{ fontSize: "clamp(0.8rem, 2.5vw, 0.85rem)", fontWeight: "600", marginBottom: "0.75rem", color: batch.status === "accepted" ? "#155724" : "#856404" }}>
+                  Status: {batch.status.toUpperCase()}
                 </div>
                 
-                {neg.status === "pending" && (
+                {batch.status === "pending" && (
                   <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                     <button
-                      onClick={() => handleAcceptOffer(neg.negotiationId)}
+                      onClick={() => handleAcceptOfferBatch(negotiationIds)}
                       style={{
                         padding: "0.5rem 1rem",
                         background: "#28a745",
@@ -590,10 +1048,10 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                         fontWeight: "600",
                       }}
                     >
-                      Accept Offer
+                      Accept All
                     </button>
                     <button
-                      onClick={() => handleRejectOffer(neg.negotiationId)}
+                      onClick={() => handleRejectOfferBatch(negotiationIds)}
                       style={{
                         padding: "0.5rem 1rem",
                         background: "#dc3545",
@@ -605,12 +1063,12 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                         fontWeight: "600",
                       }}
                     >
-                      Reject
+                      Reject All
                     </button>
                     <button
                       onClick={() => {
-                        setCountering(neg.negotiationId);
-                        setCounterPrice(neg.currentPricePerKilo.toString());
+                        setCounteringBatch(batch.key);
+                        setCounterPrice(batch.currentPricePerKilo.toString());
                       }}
                       style={{
                         padding: "0.5rem 1rem",
@@ -623,24 +1081,24 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                         fontWeight: "600",
                       }}
                     >
-                      Counter-Offer
+                      Counter-Offer All
                     </button>
                   </div>
                 )}
                 
-                {neg.status === "countered" && (
+                {batch.status === "countered" && (
                   <div style={{ fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", color: "#856404" }}>
                     Waiting for trader to accept your counter-offer...
                   </div>
                 )}
                 
-                {neg.status === "accepted" && (
+                {batch.status === "accepted" && (
                   <div style={{ fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", color: "#155724" }}>
                     ✅ Offer accepted! Trader can now proceed to pay-to-lock. Delivery deadline will start 6 hours after payment.
                   </div>
                 )}
                 
-                {countering === neg.negotiationId && (
+                {counteringBatch === batch.key && (
                   <div style={{ marginTop: "0.75rem", padding: "0.75rem", background: "#fff", borderRadius: "6px", border: "1px solid #ffc107" }}>
                     <input
                       type="number"
@@ -658,7 +1116,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                     />
                     <div style={{ display: "flex", gap: "0.5rem" }}>
                       <button
-                        onClick={() => handleCounterOffer(neg.negotiationId)}
+                        onClick={() => handleCounterOfferBatch(negotiationIds)}
                         style={{
                           padding: "0.5rem 1rem",
                           background: "#ffc107",
@@ -674,7 +1132,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                       </button>
                       <button
                         onClick={() => {
-                          setCountering(null);
+                          setCounteringBatch(null);
                           setCounterPrice("");
                         }}
                         style={{
@@ -692,8 +1150,230 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                     </div>
                   </div>
                 )}
+                </div>
+              )})}
               </div>
-            ))}
+            )}
+            {activeNegotiationsTotalPages > 1 && (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "1rem" }}>
+                <button
+                  onClick={() => setActiveNegotiationsPage((p) => Math.max(0, p - 1))}
+                  disabled={activeNegotiationsPage === 0}
+                  style={{
+                    padding: "0.4rem 0.75rem",
+                    background: activeNegotiationsPage === 0 ? "#eee" : "#f5f5f5",
+                    border: "1px solid #ddd",
+                    borderRadius: "6px",
+                    cursor: activeNegotiationsPage === 0 ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Prev
+                </button>
+                <div style={{ fontSize: "0.85rem", color: "#666" }}>
+                  Page {activeNegotiationsPage + 1} of {activeNegotiationsTotalPages}
+                </div>
+                <button
+                  onClick={() => setActiveNegotiationsPage((p) => Math.min(activeNegotiationsTotalPages - 1, p + 1))}
+                  disabled={activeNegotiationsPage >= activeNegotiationsTotalPages - 1}
+                  style={{
+                    padding: "0.4rem 0.75rem",
+                    background: activeNegotiationsPage >= activeNegotiationsTotalPages - 1 ? "#eee" : "#f5f5f5",
+                    border: "1px solid #ddd",
+                    borderRadius: "6px",
+                    cursor: activeNegotiationsPage >= activeNegotiationsTotalPages - 1 ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Concluded Negotiations */}
+      <div style={{
+        marginBottom: "1.5rem",
+        padding: "clamp(1rem, 3vw, 1.5rem)",
+        background: "#fff",
+        borderRadius: "12px",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        border: "1px solid #e0e0e0"
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", gap: "0.75rem", flexWrap: "wrap" }}>
+          <h3 style={{ 
+            marginTop: 0, 
+            marginBottom: 0, 
+            fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", 
+            color: "#2c2c2c",
+            fontFamily: '"Montserrat", sans-serif',
+            fontWeight: "600",
+            letterSpacing: "-0.01em"
+          }}>
+            Concluded Negotiations
+          </h3>
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <button
+              onClick={() => setConcludedNegotiationsView("list")}
+              style={{
+                padding: "0.4rem 0.7rem",
+                background: concludedNegotiationsView === "list" ? "#1976d2" : "#f5f5f5",
+                color: concludedNegotiationsView === "list" ? "#fff" : "#333",
+                border: "1px solid #ddd",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "0.8rem",
+                fontWeight: "500"
+              }}
+            >
+              List
+            </button>
+            <button
+              onClick={() => setConcludedNegotiationsView("card")}
+              style={{
+                padding: "0.4rem 0.7rem",
+                background: concludedNegotiationsView === "card" ? "#1976d2" : "#f5f5f5",
+                color: concludedNegotiationsView === "card" ? "#fff" : "#333",
+                border: "1px solid #ddd",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "0.8rem",
+                fontWeight: "500"
+              }}
+            >
+              Card
+            </button>
+          </div>
+        </div>
+
+        {negotiations === undefined ? (
+          <p style={{ color: "#999" }}>Loading...</p>
+        ) : concludedNegotiations.length === 0 ? (
+          <p style={{ color: "#666" }}>No concluded negotiations yet.</p>
+        ) : (
+          <div>
+            {concludedNegotiationsView === "list" ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                {pagedConcludedNegotiations.map((neg: any) => {
+                  const isDeliveryCancelled = (neg.deliveryStatus || "").toLowerCase() === "cancelled";
+                  const pillText = isDeliveryCancelled ? "CANCELLED" : neg.status.toUpperCase();
+                  const pillColor = isDeliveryCancelled
+                    ? "#dc3545"
+                    : neg.status === "accepted"
+                      ? "#4caf50"
+                      : "#9e9e9e";
+                  return (
+                    <div key={neg.negotiationId} style={{
+                      padding: "0.75rem 1rem",
+                      background: "#f9f9f9",
+                      borderRadius: "8px",
+                      border: "1px solid #e0e0e0"
+                    }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                        <div style={{ fontWeight: "600" }}>
+                          {getProduceEmoji(neg.produceType)} {neg.produceType} • Unit #{neg.unitNumber}
+                        </div>
+                        <span style={{
+                          padding: "0.2rem 0.6rem",
+                          borderRadius: "999px",
+                          fontSize: "0.75rem",
+                          fontWeight: "600",
+                          background: pillColor,
+                          color: "white",
+                        }}>
+                          {pillText}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.35rem", fontFamily: "monospace" }}>
+                        UTID: {neg.negotiationUtid}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                {pagedConcludedNegotiations.map((neg: any) => (
+                  <div key={neg.negotiationId} style={{
+                    padding: "1rem",
+                    background: "#f8f9fa",
+                    borderRadius: "8px",
+                    border: "1px solid #e0e0e0"
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                      <div style={{ fontWeight: "600" }}>
+                        {getProduceEmoji(neg.produceType)} {neg.produceType} - Unit #{neg.unitNumber}
+                      </div>
+                      {(() => {
+                        const isDeliveryCancelled = (neg.deliveryStatus || "").toLowerCase() === "cancelled";
+                        const pillText = isDeliveryCancelled ? "CANCELLED" : neg.status.toUpperCase();
+                        const pillColor = isDeliveryCancelled
+                          ? "#dc3545"
+                          : neg.status === "accepted"
+                            ? "#4caf50"
+                            : "#9e9e9e";
+                        return (
+                          <span style={{
+                            padding: "0.25rem 0.75rem",
+                            borderRadius: "12px",
+                            fontSize: "0.8rem",
+                            fontWeight: "600",
+                            background: pillColor,
+                            color: "white",
+                          }}>
+                            {pillText}
+                          </span>
+                        );
+                      })()}
+                    </div>
+                    <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.25rem" }}>
+                      UTID: {neg.negotiationUtid}
+                    </div>
+                    <div style={{ fontSize: "0.85rem", color: "#666" }}>
+                      Delivery: {neg.deliveryStatus || "Pending"}
+                    </div>
+                    {neg.deliveryDeadline && (
+                      <div style={{ fontSize: "0.85rem", color: "#666" }}>
+                        Delivery deadline: {new Date(neg.deliveryDeadline).toLocaleString()}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            {concludedTotalPages > 1 && (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "1rem" }}>
+                <button
+                  onClick={() => setConcludedNegotiationsPage((p) => Math.max(0, p - 1))}
+                  disabled={concludedNegotiationsPage === 0}
+                  style={{
+                    padding: "0.4rem 0.75rem",
+                    background: concludedNegotiationsPage === 0 ? "#eee" : "#f5f5f5",
+                    border: "1px solid #ddd",
+                    borderRadius: "6px",
+                    cursor: concludedNegotiationsPage === 0 ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Prev
+                </button>
+                <div style={{ fontSize: "0.85rem", color: "#666" }}>
+                  Page {concludedNegotiationsPage + 1} of {concludedTotalPages}
+                </div>
+                <button
+                  onClick={() => setConcludedNegotiationsPage((p) => Math.min(concludedTotalPages - 1, p + 1))}
+                  disabled={concludedNegotiationsPage >= concludedTotalPages - 1}
+                  style={{
+                    padding: "0.4rem 0.75rem",
+                    background: concludedNegotiationsPage >= concludedTotalPages - 1 ? "#eee" : "#f5f5f5",
+                    border: "1px solid #ddd",
+                    borderRadius: "6px",
+                    cursor: concludedNegotiationsPage >= concludedTotalPages - 1 ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Next
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -706,36 +1386,100 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
         border: "1px solid #e0e0e0"
       }}>
-        <h3 style={{ 
-          marginTop: 0, 
-          marginBottom: "1rem", 
-          fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", 
-          color: "#2c2c2c",
-          fontFamily: '"Montserrat", sans-serif',
-          fontWeight: "600",
-          letterSpacing: "-0.01em"
-        }}>
-          Delivery Deadlines
-        </h3>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", gap: "0.75rem", flexWrap: "wrap" }}>
+          <h3 style={{ 
+            marginTop: 0, 
+            marginBottom: 0, 
+            fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", 
+            color: "#2c2c2c",
+            fontFamily: '"Montserrat", sans-serif',
+            fontWeight: "600",
+            letterSpacing: "-0.01em"
+          }}>
+            Delivery Deadlines
+          </h3>
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <button
+              onClick={() => setDeliveryDeadlinesView("list")}
+              style={{
+                padding: "0.4rem 0.7rem",
+                background: deliveryDeadlinesView === "list" ? "#1976d2" : "#f5f5f5",
+                color: deliveryDeadlinesView === "list" ? "#fff" : "#333",
+                border: "1px solid #ddd",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "0.8rem",
+                fontWeight: "500"
+              }}
+            >
+              List
+            </button>
+            <button
+              onClick={() => setDeliveryDeadlinesView("card")}
+              style={{
+                padding: "0.4rem 0.7rem",
+                background: deliveryDeadlinesView === "card" ? "#1976d2" : "#f5f5f5",
+                color: deliveryDeadlinesView === "card" ? "#fff" : "#333",
+                border: "1px solid #ddd",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "0.8rem",
+                fontWeight: "500"
+              }}
+            >
+              Card
+            </button>
+          </div>
+        </div>
         {deliveryDeadlines === undefined ? (
           <p style={{ color: "#999" }}>Loading...</p>
-        ) : deliveryDeadlines.pending.deadlines.length === 0 && deliveryDeadlines.overdue.deadlines.length === 0 ? (
+        ) : deliveryItems.length === 0 ? (
           <p style={{ color: "#666" }}>No pending deliveries</p>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            {[...deliveryDeadlines.overdue.deadlines, ...deliveryDeadlines.pending.deadlines]
-              .filter((delivery: any) => !cancelledUnitIds.has(delivery.unitId))
-              .map((delivery: any, index: number) => (
-              <div key={index} style={{
-                padding: "1rem",
-                background: delivery.isPastDeadline ? "#ffebee" : "#e8f5e9",
-                borderRadius: "8px",
-                border: `1px solid ${delivery.isPastDeadline ? "#ef5350" : "#4caf50"}`
-              }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.5rem" }}>
-                  <div style={{ flex: 1 }}>
+          <div>
+            {deliveryDeadlinesView === "list" ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                {pagedDeliveryItems.map((delivery: any, index: number) => (
+                  <div key={index} style={{
+                    padding: "0.75rem 1rem",
+                    background: "#f9f9f9",
+                    borderRadius: "8px",
+                    border: `1px solid ${delivery.isPastDeadline ? "#ef5350" : "#4caf50"}`
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                      <div style={{ fontWeight: "600" }}>
+                        {getProduceEmoji(delivery.produceType)} {delivery.produceType} • {delivery.kilos} kg
+                      </div>
+                      <span style={{
+                        padding: "0.2rem 0.6rem",
+                        borderRadius: "999px",
+                        fontSize: "0.75rem",
+                        fontWeight: "600",
+                        background: delivery.isPastDeadline ? "#dc3545" : "#4caf50",
+                        color: "#fff",
+                      }}>
+                        {delivery.isPastDeadline ? "OVERDUE" : "PENDING"}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.35rem" }}>
+                      Deadline: {formatDate(delivery.deliveryDeadline)} • {formatTimeRemaining(delivery.deliveryDeadline)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                {pagedDeliveryItems.map((delivery: any, index: number) => (
+                <div key={index} style={{
+                  padding: "1rem",
+                  background: delivery.isPastDeadline ? "#ffebee" : "#e8f5e9",
+                  borderRadius: "8px",
+                  border: `1px solid ${delivery.isPastDeadline ? "#ef5350" : "#4caf50"}`
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.5rem" }}>
+                    <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: "600", marginBottom: "0.5rem" }}>
-                      {delivery.produceType} - 10 kg
+                      {getProduceEmoji(delivery.produceType)} {delivery.produceType} - {delivery.kilos} kg
                     </div>
                     <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.25rem" }}>
                       Deadline: {formatDate(delivery.deliveryDeadline)}
@@ -889,9 +1633,44 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                       </button>
                     )}
                   </div>
+                  </div>
                 </div>
+              ))}
               </div>
-            ))}
+            )}
+            {deliveryTotalPages > 1 && (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "1rem" }}>
+                <button
+                  onClick={() => setDeliveryDeadlinesPage((p) => Math.max(0, p - 1))}
+                  disabled={deliveryDeadlinesPage === 0}
+                  style={{
+                    padding: "0.4rem 0.75rem",
+                    background: deliveryDeadlinesPage === 0 ? "#eee" : "#f5f5f5",
+                    border: "1px solid #ddd",
+                    borderRadius: "6px",
+                    cursor: deliveryDeadlinesPage === 0 ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Prev
+                </button>
+                <div style={{ fontSize: "0.85rem", color: "#666" }}>
+                  Page {deliveryDeadlinesPage + 1} of {deliveryTotalPages}
+                </div>
+                <button
+                  onClick={() => setDeliveryDeadlinesPage((p) => Math.min(deliveryTotalPages - 1, p + 1))}
+                  disabled={deliveryDeadlinesPage >= deliveryTotalPages - 1}
+                  style={{
+                    padding: "0.4rem 0.75rem",
+                    background: deliveryDeadlinesPage >= deliveryTotalPages - 1 ? "#eee" : "#f5f5f5",
+                    border: "1px solid #ddd",
+                    borderRadius: "6px",
+                    cursor: deliveryDeadlinesPage >= deliveryTotalPages - 1 ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Next
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -904,90 +1683,191 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
         border: "1px solid #e0e0e0"
       }}>
-        <h3 style={{ 
-          marginTop: 0, 
-          marginBottom: "1rem", 
-          fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", 
-          color: "#2c2c2c",
-          fontFamily: '"Montserrat", sans-serif',
-          fontWeight: "600",
-          letterSpacing: "-0.01em"
-        }}>
-          Expired UTIDs
-        </h3>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", gap: "0.75rem", flexWrap: "wrap" }}>
+          <h3 style={{ 
+            marginTop: 0, 
+            marginBottom: 0, 
+            fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", 
+            color: "#2c2c2c",
+            fontFamily: '"Montserrat", sans-serif',
+            fontWeight: "600",
+            letterSpacing: "-0.01em"
+          }}>
+            Expired UTIDs
+          </h3>
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <button
+              onClick={() => setExpiredUtidsView("list")}
+              style={{
+                padding: "0.4rem 0.7rem",
+                background: expiredUtidsView === "list" ? "#1976d2" : "#f5f5f5",
+                color: expiredUtidsView === "list" ? "#fff" : "#333",
+                border: "1px solid #ddd",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "0.8rem",
+                fontWeight: "500"
+              }}
+            >
+              List
+            </button>
+            <button
+              onClick={() => setExpiredUtidsView("card")}
+              style={{
+                padding: "0.4rem 0.7rem",
+                background: expiredUtidsView === "card" ? "#1976d2" : "#f5f5f5",
+                color: expiredUtidsView === "card" ? "#fff" : "#333",
+                border: "1px solid #ddd",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "0.8rem",
+                fontWeight: "500"
+              }}
+            >
+              Card
+            </button>
+          </div>
+        </div>
         {expiredUTIDs === undefined ? (
           <p style={{ color: "#999" }}>Loading...</p>
-        ) : expiredUTIDs.expiredUTIDs.length === 0 ? (
+        ) : expiredItems.length === 0 ? (
           <p style={{ color: "#666" }}>No expired UTIDs. All deliveries are on time!</p>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            {expiredUTIDs.expiredUTIDs.map((expired: any, index: number) => (
-              <div key={index} style={{
-                padding: "1rem",
-                background: "#fff3cd",
-                borderRadius: "8px",
-                border: "1px solid #ffc107"
-              }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.5rem" }}>
-                  <div>
-                    <div style={{ fontWeight: "600", marginBottom: "0.25rem" }}>
-                      {expired.produceType} - {expired.kilos} kg
-                    </div>
-                    <div style={{ fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", color: "#c62828", fontWeight: "600" }}>
-                      ⚠️ EXPIRED - {expired.hoursExpired.toFixed(1)} hours ago ({expired.daysExpired.toFixed(1)} days)
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => handleArchiveUTID(expired.unitId)}
-                    style={{
-                      padding: "0.5rem 1rem",
-                      background: "#6c757d",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: "6px",
-                      cursor: "pointer",
-                      fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)",
-                      fontWeight: "500"
-                    }}
-                  >
-                    Archive
-                  </button>
-                </div>
-                <div style={{ 
-                  marginTop: "0.75rem",
-                  padding: "0.5rem",
-                  background: "#f5f5f5",
-                  borderRadius: "6px",
-                  border: "1px solid #e0e0e0",
-                }}>
-                  <div style={{
-                    fontSize: "clamp(0.9rem, 2.5vw, 1rem)",
-                    color: "#666",
-                    fontWeight: "600",
-                    marginBottom: "0.25rem",
-                    fontFamily: '"Montserrat", sans-serif',
+          <div>
+            {expiredUtidsView === "list" ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                {pagedExpiredItems.map((expired: any, index: number) => (
+                  <div key={index} style={{
+                    padding: "0.75rem 1rem",
+                    background: "#f9f9f9",
+                    borderRadius: "8px",
+                    border: "1px solid #ffc107"
                   }}>
-                    UTID:
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                      <div style={{ fontWeight: "600" }}>
+                        {getProduceEmoji(expired.produceType)} {expired.produceType} • {expired.kilos} kg
+                      </div>
+                      <span style={{
+                        padding: "0.2rem 0.6rem",
+                        borderRadius: "999px",
+                        fontSize: "0.75rem",
+                        fontWeight: "600",
+                        background: "#dc3545",
+                        color: "#fff",
+                      }}>
+                        EXPIRED
+                      </span>
+                    </div>
+                    <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.35rem", fontFamily: "monospace" }}>
+                      UTID: {expired.lockUtid}
+                    </div>
                   </div>
-                  <div style={{
-                    fontSize: "clamp(1.4rem, 4vw, 1.8rem)",
-                    color: "#2c2c2c",
-                    fontFamily: "monospace",
-                    fontWeight: "700",
-                    letterSpacing: "0.05em",
-                    wordBreak: "break-all",
-                  }}>
-                    {expired.lockUtid}
-                  </div>
-                </div>
-                <div style={{ fontSize: "clamp(0.75rem, 2vw, 0.8rem)", color: "#666", marginTop: "0.25rem" }}>
-                  Deadline: {formatDate(expired.deliveryDeadline)}
-                </div>
-                <div style={{ fontSize: "clamp(0.75rem, 2vw, 0.8rem)", color: "#666", marginTop: "0.25rem" }}>
-                  Status: {expired.deliveryStatus}
-                </div>
+                ))}
               </div>
-            ))}
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                {pagedExpiredItems.map((expired: any, index: number) => (
+                  <div key={index} style={{
+                    padding: "1rem",
+                    background: "#fff3cd",
+                    borderRadius: "8px",
+                    border: "1px solid #ffc107"
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.5rem" }}>
+                      <div>
+                        <div style={{ fontWeight: "600", marginBottom: "0.25rem" }}>
+                          {getProduceEmoji(expired.produceType)} {expired.produceType} - {expired.kilos} kg
+                        </div>
+                        <div style={{ fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", color: "#c62828", fontWeight: "600" }}>
+                          ⚠️ EXPIRED - {expired.hoursExpired.toFixed(1)} hours ago ({expired.daysExpired.toFixed(1)} days)
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleArchiveUTID(expired.unitId)}
+                        style={{
+                          padding: "0.5rem 1rem",
+                          background: "#6c757d",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: "6px",
+                          cursor: "pointer",
+                          fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)",
+                          fontWeight: "500"
+                        }}
+                      >
+                        Archive
+                      </button>
+                    </div>
+                    <div style={{ 
+                      marginTop: "0.75rem",
+                      padding: "0.5rem",
+                      background: "#f5f5f5",
+                      borderRadius: "6px",
+                      border: "1px solid #e0e0e0",
+                    }}>
+                      <div style={{
+                        fontSize: "clamp(0.9rem, 2.5vw, 1rem)",
+                        color: "#666",
+                        fontWeight: "600",
+                        marginBottom: "0.25rem",
+                        fontFamily: '"Montserrat", sans-serif',
+                      }}>
+                        UTID:
+                      </div>
+                      <div style={{
+                        fontSize: "clamp(1.4rem, 4vw, 1.8rem)",
+                        color: "#2c2c2c",
+                        fontFamily: "monospace",
+                        fontWeight: "700",
+                        letterSpacing: "0.05em",
+                        wordBreak: "break-all",
+                      }}>
+                        {expired.lockUtid}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: "clamp(0.75rem, 2vw, 0.8rem)", color: "#666", marginTop: "0.25rem" }}>
+                      Deadline: {formatDate(expired.deliveryDeadline)}
+                    </div>
+                    <div style={{ fontSize: "clamp(0.75rem, 2vw, 0.8rem)", color: "#666", marginTop: "0.25rem" }}>
+                      Status: {expired.deliveryStatus}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {expiredTotalPages > 1 && (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "1rem" }}>
+                <button
+                  onClick={() => setExpiredUtidsPage((p) => Math.max(0, p - 1))}
+                  disabled={expiredUtidsPage === 0}
+                  style={{
+                    padding: "0.4rem 0.75rem",
+                    background: expiredUtidsPage === 0 ? "#eee" : "#f5f5f5",
+                    border: "1px solid #ddd",
+                    borderRadius: "6px",
+                    cursor: expiredUtidsPage === 0 ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Prev
+                </button>
+                <div style={{ fontSize: "0.85rem", color: "#666" }}>
+                  Page {expiredUtidsPage + 1} of {expiredTotalPages}
+                </div>
+                <button
+                  onClick={() => setExpiredUtidsPage((p) => Math.min(expiredTotalPages - 1, p + 1))}
+                  disabled={expiredUtidsPage >= expiredTotalPages - 1}
+                  style={{
+                    padding: "0.4rem 0.75rem",
+                    background: expiredUtidsPage >= expiredTotalPages - 1 ? "#eee" : "#f5f5f5",
+                    border: "1px solid #ddd",
+                    borderRadius: "6px",
+                    cursor: expiredUtidsPage >= expiredTotalPages - 1 ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Next
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1000,24 +1880,83 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
         border: "1px solid #e0e0e0"
       }}>
-        <h3 style={{ 
-          marginTop: 0, 
-          marginBottom: "1rem", 
-          fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", 
-          color: "#2c2c2c",
-          fontFamily: '"Montserrat", sans-serif',
-          fontWeight: "600",
-          letterSpacing: "-0.01em"
-        }}>
-          Transactions Ledger
-        </h3>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", gap: "0.75rem", flexWrap: "wrap" }}>
+          <h3 style={{ 
+            marginTop: 0, 
+            marginBottom: 0, 
+            fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", 
+            color: "#2c2c2c",
+            fontFamily: '"Montserrat", sans-serif',
+            fontWeight: "600",
+            letterSpacing: "-0.01em"
+          }}>
+            Transactions Ledger
+          </h3>
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <button
+              onClick={() => setLedgerView("list")}
+              style={{
+                padding: "0.4rem 0.7rem",
+                background: ledgerView === "list" ? "#1976d2" : "#f5f5f5",
+                color: ledgerView === "list" ? "#fff" : "#333",
+                border: "1px solid #ddd",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "0.8rem",
+                fontWeight: "500"
+              }}
+            >
+              List
+            </button>
+            <button
+              onClick={() => setLedgerView("card")}
+              style={{
+                padding: "0.4rem 0.7rem",
+                background: ledgerView === "card" ? "#1976d2" : "#f5f5f5",
+                color: ledgerView === "card" ? "#fff" : "#333",
+                border: "1px solid #ddd",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "0.8rem",
+                fontWeight: "500"
+              }}
+            >
+              Card
+            </button>
+          </div>
+        </div>
         {allUnitsLedger === undefined ? (
           <p style={{ color: "#999" }}>Loading...</p>
-        ) : allUnitsLedger.listings.length === 0 ? (
+        ) : ledgerItems.length === 0 ? (
           <p style={{ color: "#666" }}>No listings yet. Create a listing to start tracking units.</p>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            {allUnitsLedger.listings.map((listing: any, listingIndex: number) => {
+          <div>
+            {ledgerView === "list" ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                {pagedLedgerItems.map((listing: any, listingIndex: number) => (
+                  <div key={listingIndex} style={{
+                    padding: "0.75rem 1rem",
+                    background: "#f9f9f9",
+                    borderRadius: "8px",
+                    border: "1px solid #e0e0e0"
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                      <div style={{ fontWeight: "600" }}>
+                        {getProduceEmoji(listing.produceType)} {listing.produceType} • {listing.totalKilos} kg ({listing.totalUnits} units)
+                      </div>
+                      <div style={{ fontSize: "0.8rem", color: "#666" }}>
+                        Open: {listing.totals.open} | Locked: {listing.totals.locked} | Delivered: {listing.totals.delivered}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.35rem", fontFamily: "monospace" }}>
+                      UTID: {listing.listingUtid}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                {pagedLedgerItems.map((listing: any, listingIndex: number) => {
               const listingKey = listing.listingId || `listing-${listingIndex}`;
               const isExpanded = expandedListings.has(listingKey);
               
@@ -1057,7 +1996,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                           color: "#2c2c2c",
                           fontWeight: "600"
                         }}>
-                          {listing.produceType} - {listing.totalKilos} kg ({listing.totalUnits} units)
+                          {getProduceEmoji(listing.produceType)} {listing.produceType} - {listing.totalKilos} kg ({listing.totalUnits} units)
                         </h4>
                       </div>
                       <div style={{ fontSize: "clamp(0.75rem, 2vw, 0.8rem)", color: "#666", marginBottom: "0.5rem" }}>
@@ -1233,6 +2172,41 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
               </div>
               );
             })}
+              </div>
+            )}
+            {ledgerTotalPages > 1 && (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "1rem" }}>
+                <button
+                  onClick={() => setLedgerPage((p) => Math.max(0, p - 1))}
+                  disabled={ledgerPage === 0}
+                  style={{
+                    padding: "0.4rem 0.75rem",
+                    background: ledgerPage === 0 ? "#eee" : "#f5f5f5",
+                    border: "1px solid #ddd",
+                    borderRadius: "6px",
+                    cursor: ledgerPage === 0 ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Prev
+                </button>
+                <div style={{ fontSize: "0.85rem", color: "#666" }}>
+                  Page {ledgerPage + 1} of {ledgerTotalPages}
+                </div>
+                <button
+                  onClick={() => setLedgerPage((p) => Math.min(ledgerTotalPages - 1, p + 1))}
+                  disabled={ledgerPage >= ledgerTotalPages - 1}
+                  style={{
+                    padding: "0.4rem 0.75rem",
+                    background: ledgerPage >= ledgerTotalPages - 1 ? "#eee" : "#f5f5f5",
+                    border: "1px solid #ddd",
+                    borderRadius: "6px",
+                    cursor: ledgerPage >= ledgerTotalPages - 1 ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Next
+                </button>
+              </div>
+            )}
 
             {/* Grand Totals */}
             {allUnitsLedger.listings.length > 0 && (
@@ -1359,7 +2333,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                   Produce Type
                 </div>
                 <div style={{ fontSize: "clamp(0.9rem, 2.5vw, 1rem)", color: "#1a1a1a", fontWeight: "500" }}>
-                  {selectedListing.produceType}
+                  {getProduceEmoji(selectedListing.produceType)} {selectedListing.produceType}
                 </div>
               </div>
 
@@ -1493,8 +2467,40 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
         </div>
       )}
 
-      {/* Contact Us Section */}
-      <ContactUs isMobile={false} />
+      {/* In-app Help */}
+      <div style={{
+        marginTop: "1.5rem",
+        padding: "1rem",
+        background: "#f9f9f9",
+        borderRadius: "10px",
+        border: "1px solid #e0e0e0",
+        textAlign: "center"
+      }}>
+        <p style={{ margin: 0, fontSize: "0.9rem", color: "#666" }}>
+          Need help? Contact Admin in-app.
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            if (typeof document !== "undefined") {
+              document.getElementById("notification-inbox")?.scrollIntoView({ behavior: "smooth" });
+            }
+          }}
+          style={{
+            marginTop: "0.5rem",
+            padding: "0.5rem 0.9rem",
+            background: "#1976d2",
+            color: "#fff",
+            border: "none",
+            borderRadius: "8px",
+            cursor: "pointer",
+            fontSize: "0.85rem",
+            fontWeight: "600",
+          }}
+        >
+          Open Inbox
+        </button>
+      </div>
     </div>
   );
 }

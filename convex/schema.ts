@@ -23,6 +23,7 @@ export default defineSchema({
   users: defineTable({
     email: v.optional(v.string()), // Optional - user can use email or phone number
     phoneNumber: v.optional(v.string()), // Optional - user can use email or phone number
+    sex: v.optional(v.union(v.literal("M"), v.literal("F"))), // Optional - farmer profile field
     role: v.union(v.literal("farmer"), v.literal("trader"), v.literal("buyer"), v.literal("admin")),
     alias: v.string(), // System-generated, stable, non-identifying
     state: v.union(v.literal("active"), v.literal("suspended"), v.literal("deleted")), // User account state

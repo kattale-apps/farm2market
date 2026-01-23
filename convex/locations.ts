@@ -22,13 +22,10 @@ export const getActiveDistricts = query({
       .withIndex("by_active", (q) => q.eq("active", true))
       .collect();
 
-    // Sort by order, then by name
-    districts.sort((a, b) => {
-      if (a.order !== b.order) {
-        return a.order - b.order;
-      }
-      return a.name.localeCompare(b.name);
-    });
+    // Sort alphabetically by name (case-insensitive)
+    districts.sort((a, b) =>
+      a.name.localeCompare(b.name, "en", { sensitivity: "base" })
+    );
 
     return districts.map((d) => ({
       id: d._id,

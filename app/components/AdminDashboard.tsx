@@ -5,6 +5,7 @@ import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { formatUgandaDateTime, formatUgandaTimeOnly, getUgandaTime } from "../utils/timeUtils";
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { exportToExcel, exportToPDF, formatUTIDDataForExport } from "../utils/exportUtils";
 import { StorageLocationsManager } from "./StorageLocationsManager";
 import { DeliveryConfirmationForm } from "./DeliveryConfirmationForm";
@@ -16,7 +17,13 @@ interface AdminDashboardProps {
 
 export function AdminDashboard({ userId }: AdminDashboardProps) {
   const redFlags = useQuery(api.adminRedFlags.getRedFlagsSummary, { adminId: userId });
-  const allUTIDs = useQuery(api.introspection.getAllActiveUTIDs, { adminId: userId });
+  const [utidPageOffset, setUtidPageOffset] = useState(0);
+  const [utidPageSize, setUtidPageSize] = useState(200);
+  const allUTIDs = useQuery(api.introspection.getAllActiveUTIDs, {
+    adminId: userId,
+    limit: utidPageSize,
+    offset: utidPageOffset,
+  });
   const pilotMode = useQuery(api.pilotMode.getPilotMode);
   const purchaseWindowStatus = useQuery(api.admin.getPurchaseWindowStatus, { adminId: userId });
   
@@ -50,6 +57,24 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   const createUser = useMutation(api.auth.createUser);
   const currentUser = allUsers?.find((u: any) => u.userId === userId);
   const isSuperAdmin = currentUser?.role === "admin" && (currentUser?.adminLevel === "super" || currentUser?.adminLevel === undefined);
+  const storeAdmins = useQuery(
+    api.adminAudit.getStoreAdmins,
+    isSuperAdmin ? { adminId: userId } : "skip"
+  );
+  const [selectedStoreAdminId, setSelectedStoreAdminId] = useState<Id<"users"> | null>(null);
+  const [selectedDeliveryUtid, setSelectedDeliveryUtid] = useState<string | null>(null);
+  const storeAdminAudit = useQuery(
+    api.adminAudit.getStoreAdminUTIDs,
+    isSuperAdmin && selectedStoreAdminId
+      ? { adminId: userId, storeAdminId: selectedStoreAdminId }
+      : "skip"
+  );
+  const deliveryProof = useQuery(
+    api.adminAudit.getDeliveryPDF,
+    isSuperAdmin && selectedDeliveryUtid
+      ? { adminId: userId, lockUtid: selectedDeliveryUtid }
+      : "skip"
+  );
   
   const [reason, setReason] = useState("");
   const [windowActionLoading, setWindowActionLoading] = useState(false);
@@ -464,7 +489,28 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
               <p style={{ color: "#666", margin: 0 }}>
                 Total active UTIDs: <strong>{allUTIDs.totalUTIDs || 0}</strong>
               </p>
-              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <span style={{ fontSize: "0.85rem", color: "#666" }}>Page size:</span>
+                  <select
+                    value={utidPageSize}
+                    onChange={(e) => {
+                      setUtidPageSize(Number(e.target.value));
+                      setUtidPageOffset(0);
+                    }}
+                    style={{
+                      padding: "0.35rem 0.5rem",
+                      border: "1px solid #ddd",
+                      borderRadius: "6px",
+                      fontSize: "0.85rem",
+                      background: "#fff",
+                    }}
+                  >
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                    <option value={200}>200</option>
+                  </select>
+                </div>
                 <button
                   onClick={() => handleExportUTIDs("excel")}
                   style={{
@@ -506,7 +552,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
               </div>
             </div>
             <div style={{ marginTop: "1rem", maxHeight: "400px", overflowY: "auto", overflowX: "hidden" }}>
-              {allUTIDs.utids.slice(0, 20).map((utidData: any, index: number) => (
+              {allUTIDs.utids.map((utidData: any, index: number) => (
                 <div key={index} style={{
                   padding: "0.75rem",
                   marginBottom: "0.5rem",
@@ -522,15 +568,199 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                   </div>
                 </div>
               ))}
-              {allUTIDs.utids.length > 20 && (
-                <p style={{ color: "#999", fontSize: "0.85rem", marginTop: "0.5rem" }}>
-                  ... and {allUTIDs.utids.length - 20} more
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
+                <p style={{ color: "#666", fontSize: "0.85rem", margin: 0 }}>
+                  Showing {allUTIDs.utids.length === 0 ? 0 : utidPageOffset + 1}-{utidPageOffset + allUTIDs.utids.length} of {allUTIDs.totalUTIDs || 0}
                 </p>
-              )}
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <button
+                    onClick={() => setUtidPageOffset(Math.max(0, utidPageOffset - utidPageSize))}
+                    disabled={utidPageOffset === 0}
+                    style={{
+                      padding: "0.4rem 0.75rem",
+                      background: utidPageOffset === 0 ? "#e0e0e0" : "#f5f5f5",
+                      border: "1px solid #ddd",
+                      borderRadius: "6px",
+                      fontSize: "0.8rem",
+                      cursor: utidPageOffset === 0 ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    ← Previous
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (allUTIDs.nextOffset !== null && allUTIDs.nextOffset !== undefined) {
+                        setUtidPageOffset(allUTIDs.nextOffset);
+                      }
+                    }}
+                    disabled={allUTIDs.nextOffset === null || allUTIDs.nextOffset === undefined}
+                    style={{
+                      padding: "0.4rem 0.75rem",
+                      background: allUTIDs.nextOffset === null || allUTIDs.nextOffset === undefined ? "#e0e0e0" : "#f5f5f5",
+                      border: "1px solid #ddd",
+                      borderRadius: "6px",
+                      fontSize: "0.8rem",
+                      cursor: allUTIDs.nextOffset === null || allUTIDs.nextOffset === undefined ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    Next →
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
       </div>
+
+      {/* Delivery Confirmations (SuperAdmin only) */}
+      {isSuperAdmin && (
+        <div style={{
+          marginBottom: "2rem",
+          padding: "clamp(1rem, 3vw, 1.5rem)",
+          background: "#fff",
+          borderRadius: "12px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+          border: "1px solid #e0e0e0",
+          width: "100%",
+          maxWidth: "100%",
+          boxSizing: "border-box",
+          overflowX: "auto"
+        }}>
+          <h3 style={{
+            marginTop: 0,
+            marginBottom: "1rem",
+            fontSize: "clamp(1.1rem, 3vw, 1.3rem)",
+            wordWrap: "break-word",
+            color: "#2c2c2c",
+            fontFamily: '"Montserrat", sans-serif',
+            fontWeight: "600",
+            letterSpacing: "-0.01em"
+          }}>
+            Delivery Confirmations (StoreAdmin)
+          </h3>
+
+          {storeAdmins === undefined ? (
+            <p style={{ color: "#999" }}>Loading StoreAdmins...</p>
+          ) : storeAdmins.length === 0 ? (
+            <p style={{ color: "#666" }}>No StoreAdmins found.</p>
+          ) : (
+            <div style={{ marginBottom: "1rem" }}>
+              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                Select StoreAdmin
+              </label>
+              <select
+                value={selectedStoreAdminId || ""}
+                onChange={(e) => {
+                  const next = e.target.value || "";
+                  setSelectedStoreAdminId(next ? (next as Id<"users">) : null);
+                  setSelectedDeliveryUtid(null);
+                }}
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  border: "1px solid #ddd",
+                  borderRadius: "6px",
+                  fontSize: "0.95rem",
+                  background: "#fff",
+                }}
+              >
+                <option value="">-- Select StoreAdmin --</option>
+                {storeAdmins.map((admin: any) => (
+                  <option key={admin.id} value={admin.id}>
+                    {admin.alias}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {storeAdminAudit === undefined ? (
+            <p style={{ color: "#999" }}>Select a StoreAdmin to view confirmations.</p>
+          ) : storeAdminAudit.utids.length === 0 ? (
+            <p style={{ color: "#666" }}>No delivery confirmations recorded yet.</p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+              {storeAdminAudit.utids.map((item: any) => (
+                <div
+                  key={item.utid}
+                  style={{
+                    padding: "1rem",
+                    background: "#f8f9fa",
+                    borderRadius: "8px",
+                    border: "1px solid #e0e0e0",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                    <div style={{ fontWeight: "600" }}>UTID: {item.targetUtid}</div>
+                    <span style={{
+                      padding: "0.25rem 0.75rem",
+                      borderRadius: "12px",
+                      fontSize: "0.8rem",
+                      fontWeight: "600",
+                      background: "#4caf50",
+                      color: "white",
+                    }}>
+                      DELIVERED
+                    </span>
+                  </div>
+                  <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.25rem" }}>
+                    Verified by: {storeAdminAudit.storeAdminAlias}
+                  </div>
+                  <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.25rem" }}>
+                    Verified at: {formatUgandaDateTime(item.timestamp)}
+                  </div>
+                  {item.metadata?.comment && (
+                    <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.25rem" }}>
+                      Comment: {item.metadata.comment}
+                    </div>
+                  )}
+                  <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.5rem" }}>
+                    Photos: {item.metadata?.photoCount || 0}
+                  </div>
+                  {item.metadata?.photoCount > 0 && (
+                    <button
+                      onClick={() => setSelectedDeliveryUtid(item.targetUtid)}
+                      style={{
+                        padding: "0.5rem 1rem",
+                        background: "#1976d2",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: "6px",
+                        cursor: "pointer",
+                        fontSize: "0.85rem",
+                        fontWeight: "600",
+                      }}
+                    >
+                      View Photos
+                    </button>
+                  )}
+                  {selectedDeliveryUtid === item.targetUtid && deliveryProof && (
+                    <div style={{ marginTop: "0.75rem" }}>
+                      {deliveryProof.deliveryPhotos && deliveryProof.deliveryPhotos.length > 0 ? (
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "0.5rem" }}>
+                          {deliveryProof.deliveryPhotos.map((photo: string, idx: number) => (
+                            <Image
+                              key={`${item.targetUtid}-${idx}`}
+                              src={photo}
+                              alt={`Delivery photo ${idx + 1}`}
+                              width={400}
+                              height={300}
+                              unoptimized
+                              style={{ width: "100%", height: "auto", borderRadius: "6px", border: "1px solid #ddd" }}
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        <p style={{ fontSize: "0.85rem", color: "#666" }}>No photos provided.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Purchase Window Control - Super Admin Only */}
       {isSuperAdmin && (

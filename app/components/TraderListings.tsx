@@ -3,7 +3,7 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { formatUgandaDateTime } from "../utils/timeUtils";
 
 interface TraderListingsProps {
@@ -17,6 +17,8 @@ export function TraderListings({ userId }: TraderListingsProps) {
   const [offerPrice, setOfferPrice] = useState<string>("");
   const [locking, setLocking] = useState<Id<"listingUnits"> | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [offeringListingMode, setOfferingListingMode] = useState<"unit" | "garden">("unit");
+  const [showSelectedUnits, setShowSelectedUnits] = useState(false);
 
   const listings = useQuery(api.listings.getActiveListings);
   const traderNegotiations = useQuery(api.negotiations.getTraderNegotiations, { traderId: userId });
@@ -30,7 +32,35 @@ export function TraderListings({ userId }: TraderListingsProps) {
     api.listings.getListingDetails,
     offering ? { listingId: offering.listingId } : "skip"
   );
-  const availableUnits = listingDetails?.units?.filter((u: any) => u.status === "available") || [];
+  const availableUnits = useMemo(
+    () => listingDetails?.units?.filter((u: any) => u.status === "available") || [],
+    [listingDetails?.units]
+  );
+  const listingsById = useMemo(() => {
+    const map = new Map<string, any>();
+    (listings || []).forEach((listing: any) => {
+      map.set(listing.listingId, listing);
+    });
+    return map;
+  }, [listings]);
+
+  useEffect(() => {
+    if (!offering || availableUnits.length === 0) return;
+
+    setShowSelectedUnits(false);
+
+    if (offeringListingMode === "garden") {
+      const newSelected = new Set(availableUnits.map((u: any) => u.unitId));
+      setSelectedUnits(newSelected);
+      setNumUnits("1");
+      return;
+    }
+
+    const maxUnits = availableUnits.length;
+    const newSelected = new Set(availableUnits.map((u: any) => u.unitId));
+    setSelectedUnits(newSelected);
+    setNumUnits(String(maxUnits));
+  }, [offering, offeringListingMode, availableUnits]);
 
   const formatUGX = (amount: number) => {
     return new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX" }).format(amount);
@@ -193,43 +223,60 @@ export function TraderListings({ userId }: TraderListingsProps) {
             Your Active Negotiations
           </h4>
           <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-            {traderNegotiations.negotiations.map((neg: any) => (
-              <div key={neg.negotiationId} style={{
-                padding: "0.75rem",
-                background: "#fff",
-                borderRadius: "8px",
-                border: "1px solid #e0e0e0"
-              }}>
-                <div style={{ fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", marginBottom: "0.5rem" }}>
-                  <strong>{neg.produceType}</strong> - Unit #{neg.unitNumber}
+            {traderNegotiations.negotiations.map((neg: any) => {
+              const listingForNeg = listingsById.get(neg.listingId);
+              const isGardenNegotiation =
+                listingForNeg?.listingMode === "garden" ||
+                listingForNeg?.gardenSize != null ||
+                listingForNeg?.gardenDimensions != null ||
+                listingForNeg?.totalPrice != null;
+              const gardenTotalKilos = listingForNeg?.totalKilos || listingForNeg?.unitSize || 1;
+              const offerTotal = neg.traderOfferPricePerKilo * gardenTotalKilos;
+              const currentTotal = neg.currentPricePerKilo * gardenTotalKilos;
+              const currentGardenPrice = listingForNeg?.totalPrice ?? currentTotal;
+
+              return (
+                <div key={neg.negotiationId} style={{
+                  padding: "0.75rem",
+                  background: "#fff",
+                  borderRadius: "8px",
+                  border: "1px solid #e0e0e0"
+                }}>
+                  <div style={{ fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", marginBottom: "0.5rem" }}>
+                    <strong>{neg.produceType}</strong>{" "}
+                    {isGardenNegotiation ? "- 🌿 Garden Sale" : `- ⚖️ Unit #${neg.unitNumber}`}
+                  </div>
+                  <div style={{ fontSize: "clamp(0.8rem, 2.5vw, 0.85rem)", color: "#666", marginBottom: "0.5rem" }}>
+                    {isGardenNegotiation
+                      ? `Your Offer: ${formatUGX(offerTotal)} | Current Garden Price: ${formatUGX(currentGardenPrice)} | Status: `
+                      : `Your Offer: ${formatUGX(neg.traderOfferPricePerKilo)}/kg | Current Price: ${formatUGX(neg.currentPricePerKilo)}/kg | Status: `}
+                    <strong>{neg.status}</strong>
+                  </div>
+                  <div style={{ fontSize: "clamp(0.7rem, 2vw, 0.75rem)", color: "#999", fontFamily: "monospace", wordBreak: "break-all", marginBottom: "0.5rem" }}>
+                    UTID: {neg.negotiationUtid}
+                  </div>
+                  {neg.status === "countered" && (
+                    <button
+                      onClick={() => handleAcceptCounterOffer(neg.negotiationId)}
+                      style={{
+                        padding: "0.5rem 1rem",
+                        background: "#1976d2",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: "6px",
+                        cursor: "pointer",
+                        fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)",
+                        fontWeight: "600",
+                      }}
+                    >
+                      {isGardenNegotiation
+                        ? `Accept Counter-Offer (${formatUGX(currentGardenPrice)})`
+                        : `Accept Counter-Offer (${formatUGX(neg.currentPricePerKilo)}/kg)`}
+                    </button>
+                  )}
                 </div>
-                <div style={{ fontSize: "clamp(0.8rem, 2.5vw, 0.85rem)", color: "#666", marginBottom: "0.5rem" }}>
-                  Your Offer: {formatUGX(neg.traderOfferPricePerKilo)}/kg | 
-                  Current Price: {formatUGX(neg.currentPricePerKilo)}/kg | 
-                  Status: <strong>{neg.status}</strong>
-                </div>
-                <div style={{ fontSize: "clamp(0.7rem, 2vw, 0.75rem)", color: "#999", fontFamily: "monospace", wordBreak: "break-all", marginBottom: "0.5rem" }}>
-                  UTID: {neg.negotiationUtid}
-                </div>
-                {neg.status === "countered" && (
-                  <button
-                    onClick={() => handleAcceptCounterOffer(neg.negotiationId)}
-                    style={{
-                      padding: "0.5rem 1rem",
-                      background: "#1976d2",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: "6px",
-                      cursor: "pointer",
-                      fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)",
-                      fontWeight: "600",
-                    }}
-                  >
-                    Accept Counter-Offer ({formatUGX(neg.currentPricePerKilo)}/kg)
-                  </button>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -247,44 +294,60 @@ export function TraderListings({ userId }: TraderListingsProps) {
             Accepted Offers - Ready to Lock
           </h4>
           <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-            {acceptedNegotiations.negotiations.map((neg: any) => (
-              <div key={neg.negotiationId} style={{
-                padding: "0.75rem",
-                background: "#fff",
-                borderRadius: "8px",
-                border: "1px solid #e0e0e0"
-              }}>
-                <div style={{ fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", marginBottom: "0.5rem" }}>
-                  <strong>{neg.produceType}</strong> - Unit #{neg.unitNumber} ({neg.unitSize}kg)
+            {acceptedNegotiations.negotiations.map((neg: any) => {
+              const listingForNeg = listingsById.get(neg.listingId);
+              const isGardenNegotiation =
+                listingForNeg?.listingMode === "garden" ||
+                listingForNeg?.gardenSize != null ||
+                listingForNeg?.gardenDimensions != null ||
+                listingForNeg?.totalPrice != null;
+              const gardenTotalKilos = listingForNeg?.totalKilos || listingForNeg?.unitSize || 1;
+              const finalGardenTotal =
+                listingForNeg?.totalPrice ?? (neg.finalPricePerKilo * gardenTotalKilos);
+
+              return (
+                <div key={neg.negotiationId} style={{
+                  padding: "0.75rem",
+                  background: "#fff",
+                  borderRadius: "8px",
+                  border: "1px solid #e0e0e0"
+                }}>
+                  <div style={{ fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", marginBottom: "0.5rem" }}>
+                    <strong>{neg.produceType}</strong>{" "}
+                    {isGardenNegotiation ? "- 🌿 Garden Sale" : `- ⚖️ Unit #${neg.unitNumber} (${neg.unitSize}kg)`}
+                  </div>
+                  <div style={{ fontSize: "clamp(0.8rem, 2.5vw, 0.85rem)", color: "#666", marginBottom: "0.5rem" }}>
+                    {isGardenNegotiation
+                      ? `Final Offer: ${formatUGX(finalGardenTotal)}`
+                      : `Final Price: ${formatUGX(neg.finalPricePerKilo)}/kg | Total: ${formatUGX(neg.totalPrice)}`}
+                  </div>
+                  <div style={{ fontSize: "clamp(0.7rem, 2vw, 0.75rem)", color: "#999", fontFamily: "monospace", wordBreak: "break-all", marginBottom: "0.5rem" }}>
+                    UTID: {neg.acceptedUtid}
+                  </div>
+                  <button
+                    onClick={() => handleLockUnit(neg.unitId)}
+                    disabled={locking === neg.unitId}
+                    style={{
+                      padding: "0.5rem 1rem",
+                      background: locking === neg.unitId ? "#ccc" : "#28a745",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: "6px",
+                      cursor: locking === neg.unitId ? "not-allowed" : "pointer",
+                      fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)",
+                      fontWeight: "600",
+                    }}
+                  >
+                    {locking === neg.unitId
+                      ? "Locking..."
+                      : `Pay-to-Lock (${formatUGX(isGardenNegotiation ? finalGardenTotal : neg.totalPrice)})`}
+                  </button>
+                  <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.75rem", color: "#666" }}>
+                    ⚠️ After payment, farmer must deliver within 6 hours. Delivery countdown starts from payment time.
+                  </p>
                 </div>
-                <div style={{ fontSize: "clamp(0.8rem, 2.5vw, 0.85rem)", color: "#666", marginBottom: "0.5rem" }}>
-                  Final Price: {formatUGX(neg.finalPricePerKilo)}/kg | 
-                  Total: {formatUGX(neg.totalPrice)}
-                </div>
-                <div style={{ fontSize: "clamp(0.7rem, 2vw, 0.75rem)", color: "#999", fontFamily: "monospace", wordBreak: "break-all", marginBottom: "0.5rem" }}>
-                  UTID: {neg.acceptedUtid}
-                </div>
-                <button
-                  onClick={() => handleLockUnit(neg.unitId)}
-                  disabled={locking === neg.unitId}
-                  style={{
-                    padding: "0.5rem 1rem",
-                    background: locking === neg.unitId ? "#ccc" : "#28a745",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: "6px",
-                    cursor: locking === neg.unitId ? "not-allowed" : "pointer",
-                    fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)",
-                    fontWeight: "600",
-                  }}
-                >
-                  {locking === neg.unitId ? "Locking..." : `Pay-to-Lock (${formatUGX(neg.totalPrice)})`}
-                </button>
-                <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.75rem", color: "#666" }}>
-                  ⚠️ After payment, farmer must deliver within 6 hours. Delivery countdown starts from payment time.
-                </p>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -305,15 +368,21 @@ export function TraderListings({ userId }: TraderListingsProps) {
             );
             const isOffering = offering?.listingId === listing.listingId;
 
+            const isGardenListing = listing.listingMode === "garden" || Boolean(listing.gardenSize || listing.gardenDimensions || listing.totalPrice);
+
             return (
               <div
                 key={listing.listingId}
                 style={{
                   padding: "clamp(1rem, 3vw, 1.5rem)",
-                  background: "#fff",
+                  background: isGardenListing ? "#f1f8e9" : "#fff",
                   borderRadius: "12px",
                   boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-                  border: hasActiveNegotiation ? "2px solid #ff9800" : "1px solid #e0e0e0",
+                  border: hasActiveNegotiation
+                    ? "2px solid #ff9800"
+                    : isGardenListing
+                      ? "2px solid #7cb342"
+                      : "1px solid #e0e0e0",
                   position: "relative",
                 }}
               >
@@ -336,21 +405,47 @@ export function TraderListings({ userId }: TraderListingsProps) {
                 )}
                 <div style={{ marginBottom: "1rem" }}>
                   <div style={{ flex: 1 }}>
-                    <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "clamp(1rem, 3.5vw, 1.2rem)", color: "#1a1a1a" }}>
-                      {listing.produceType}
-                    </h4>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                      <h4 style={{ margin: 0, fontSize: "clamp(1rem, 3.5vw, 1.2rem)", color: "#1a1a1a" }}>
+                        {listing.produceType}
+                      </h4>
+                      <span
+                        style={{
+                          padding: "0.2rem 0.5rem",
+                          borderRadius: "999px",
+                          fontSize: "0.75rem",
+                          fontWeight: "600",
+                          background: isGardenListing ? "#7cb342" : "#1976d2",
+                          color: "#fff",
+                        }}
+                      >
+                        {isGardenListing ? "🌿 Garden Sale" : "⚖️ Kilo Sale"}
+                      </span>
+                    </div>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))", gap: "0.75rem", fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", color: "#666", marginBottom: "0.5rem" }}>
                       <div>
-                        <strong>Total:</strong> {listing.totalKilos} kg ({listing.totalUnits} {listing.isTraderListing ? "block" : "units"})
+                        <strong>Total:</strong>{" "}
+                        {isGardenListing
+                          ? `Garden • ${listing.gardenSize || "N/A"} acres`
+                          : `${listing.totalKilos} kg (${listing.totalUnits} ${listing.isTraderListing ? "block" : "units"})`}
                       </div>
                       <div>
-                        <strong>Price:</strong> {formatUGX(listing.pricePerKilo)}/kg
+                        <strong>Price:</strong>{" "}
+                        {isGardenListing
+                          ? formatUGX(listing.totalPrice || 0)
+                          : `${formatUGX(listing.pricePerKilo)}/kg`}
                       </div>
                       <div>
-                        <strong>Unit:</strong> {formatUGX(listing.pricePerKilo * listing.unitSize)} ({listing.unitSize}kg)
+                        <strong>Unit:</strong>{" "}
+                        {isGardenListing
+                          ? "Garden sale"
+                          : `${formatUGX(listing.pricePerKilo * listing.unitSize)} (${listing.unitSize}kg)`}
                       </div>
                       <div>
-                        <strong>Available:</strong> {listing.availableUnits || listing.totalUnits} {listing.isTraderListing ? "block" : "units"}
+                        <strong>Available:</strong>{" "}
+                        {isGardenListing
+                          ? "1 garden"
+                          : `${listing.availableUnits || listing.totalUnits} ${listing.isTraderListing ? "block" : "units"}`}
                       </div>
                     </div>
                     <div style={{ fontSize: "clamp(0.8rem, 2.5vw, 0.85rem)", color: "#999" }}>
@@ -374,124 +469,135 @@ export function TraderListings({ userId }: TraderListingsProps) {
                   ) : isOffering ? (
                     <div>
                       <p style={{ margin: "0 0 0.75rem 0", fontSize: "0.9rem", color: "#666" }}>
-                        <strong>Make an offer:</strong> Select how many units you want and enter your price per kilo.
+                        <strong>Make an offer:</strong>{" "}
+                        {isGardenListing
+                          ? "Garden sale (1 unit). Enter your offer for the garden."
+                          : "Select how many units you want and enter your price per kilo."}
                       </p>
-                      
-                      {/* Unit Selection */}
-                      <div style={{ marginBottom: "1rem" }}>
-                        <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", fontSize: "0.9rem", color: "#1a1a1a" }}>
-                          Select Number of Units:
-                        </label>
-                        <input
-                          type="number"
-                          min="1"
-                          max={availableUnits.length}
-                          value={numUnits}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setNumUnits(val);
-                            // Auto-select first N units
-                            const num = parseInt(val);
-                            if (!isNaN(num) && num > 0 && num <= availableUnits.length) {
-                              const newSelected = new Set(availableUnits.slice(0, num).map((u: any) => u.unitId));
-                              setSelectedUnits(newSelected);
-                            } else {
-                              setSelectedUnits(new Set());
-                            }
-                          }}
-                          style={{
-                            padding: "0.75rem",
-                            width: "100%",
-                            borderRadius: "6px",
-                            border: "2px solid #1976d2",
-                            fontSize: "1rem",
-                            fontWeight: "600",
-                            textAlign: "center"
-                          }}
-                        />
-                        <div style={{ marginTop: "0.5rem", fontSize: "0.85rem", color: "#666", textAlign: "center" }}>
-                          {availableUnits.length} unit(s) available • Each unit = {listing.unitSize}kg
-                        </div>
-                        
-                        {/* Show selected units with detailed information */}
+
+                      {!isGardenListing && (
+                        <>
+                          {/* Unit Selection */}
+                          <div style={{ marginBottom: "1rem" }}>
+                            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", fontSize: "0.9rem", color: "#1a1a1a" }}>
+                              Select Number of Units (max {availableUnits.length}):
+                            </label>
+                            <input
+                              type="number"
+                              min="1"
+                              max={availableUnits.length}
+                              value={numUnits}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setNumUnits(val);
+                                // Auto-select first N units
+                                const num = parseInt(val);
+                                if (!isNaN(num) && num > 0 && num <= availableUnits.length) {
+                                  const newSelected = new Set(availableUnits.slice(0, num).map((u: any) => u.unitId));
+                                  setSelectedUnits(newSelected);
+                                } else {
+                                  setSelectedUnits(new Set());
+                                }
+                              }}
+                              style={{
+                                padding: "0.75rem",
+                                width: "100%",
+                                borderRadius: "6px",
+                                border: "2px solid #1976d2",
+                                fontSize: "1rem",
+                                fontWeight: "600",
+                                textAlign: "center"
+                              }}
+                            />
+                            <div style={{ marginTop: "0.5rem", fontSize: "0.85rem", color: "#666", textAlign: "center" }}>
+                              {availableUnits.length} unit(s) available • Each unit = {listing.unitSize}kg • Defaulting to max, you can edit.
+                            </div>
+
+                        {/* Show selected units (minimal view) */}
                         {selectedUnits.size > 0 && (
                           <div style={{ 
                             marginTop: "1rem", 
-                            padding: "1rem", 
+                            padding: "0.75rem", 
                             background: "#e3f2fd", 
                             borderRadius: "8px",
-                            border: "2px solid #1976d2"
+                            border: "1px solid #90caf9"
                           }}>
                             <div style={{ 
-                              fontWeight: "700", 
-                              marginBottom: "0.75rem", 
-                              fontSize: "1rem", 
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              gap: "0.5rem",
+                              fontSize: "0.9rem",
                               color: "#1976d2",
-                              textAlign: "center",
-                              padding: "0.5rem",
-                              background: "#fff",
-                              borderRadius: "6px"
+                              fontWeight: "600"
                             }}>
-                              ✓ {selectedUnits.size} Unit{selectedUnits.size !== 1 ? "s" : ""} Selected
+                              <span>
+                                ✓ {selectedUnits.size} Unit{selectedUnits.size !== 1 ? "s" : ""} Selected • {selectedUnits.size * listing.unitSize}kg total
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setShowSelectedUnits((prev) => !prev)}
+                                style={{
+                                  background: "transparent",
+                                  border: "none",
+                                  color: "#1976d2",
+                                  cursor: "pointer",
+                                  fontSize: "0.85rem",
+                                  textDecoration: "underline",
+                                  padding: 0,
+                                }}
+                              >
+                                {showSelectedUnits ? "Hide units" : "View units"}
+                              </button>
                             </div>
-                            
-                            {/* List each selected unit */}
-                            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginBottom: "0.75rem" }}>
-                              {Array.from(selectedUnits).map((unitId, idx) => {
-                                const unit = availableUnits.find((u: any) => u.unitId === unitId);
-                                if (!unit) return null;
-                                return (
-                                  <div key={unitId} style={{
-                                    padding: "0.75rem",
-                                    background: "#fff",
-                                    borderRadius: "6px",
-                                    border: "1px solid #90caf9",
-                                    fontSize: "0.85rem"
-                                  }}>
-                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.25rem" }}>
-                                      <span style={{ fontWeight: "600", color: "#1976d2" }}>
-                                        Unit #{unit.unitNumber}
-                                      </span>
-                                      <span style={{ color: "#666" }}>
-                                        {listing.unitSize}kg
-                                      </span>
+
+                            {showSelectedUnits && (
+                              <div style={{ marginTop: "0.75rem", maxHeight: "160px", overflowY: "auto" }}>
+                                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                                  {Array.from(selectedUnits).slice(0, 5).map((unitId) => {
+                                    const unit = availableUnits.find((u: any) => u.unitId === unitId);
+                                    if (!unit) return null;
+                                    return (
+                                      <div key={unitId} style={{
+                                        padding: "0.5rem 0.75rem",
+                                        background: "#fff",
+                                        borderRadius: "6px",
+                                        border: "1px solid #cfe1ff",
+                                        fontSize: "0.8rem",
+                                        color: "#2c2c2c"
+                                      }}>
+                                        Unit #{unit.unitNumber} • {listing.unitSize}kg
+                                      </div>
+                                    );
+                                  })}
+                                  {selectedUnits.size > 5 && (
+                                    <div style={{ fontSize: "0.8rem", color: "#666", textAlign: "center" }}>
+                                      +{selectedUnits.size - 5} more
                                     </div>
-                                    <div style={{ fontSize: "0.75rem", color: "#999", fontFamily: "monospace" }}>
-                                      UTID will be generated when offer is submitted
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                            
-                            {/* Summary */}
-                            <div style={{ 
-                              padding: "0.75rem", 
-                              background: "#fff", 
-                              borderRadius: "6px",
-                              border: "1px solid #90caf9"
-                            }}>
-                              <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.25rem" }}>
-                                <strong>Total Selection:</strong>
+                                  )}
+                                </div>
                               </div>
-                              <div style={{ fontSize: "0.9rem", color: "#1976d2", fontWeight: "600" }}>
-                                {selectedUnits.size} unit{selectedUnits.size !== 1 ? "s" : ""} × {listing.unitSize}kg = {selectedUnits.size * listing.unitSize}kg total
-                              </div>
-                            </div>
+                            )}
                           </div>
                         )}
-                      </div>
+                          </div>
+                        </>
+                      )}
 
                       {/* Price Input */}
                       <div style={{ marginBottom: "1rem" }}>
                         <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", fontSize: "0.9rem", color: "#1a1a1a" }}>
-                          Your Offer Price per Kilo (UGX):
+                          {isGardenListing ? "Offer for Garden (UGX):" : "Your Offer Price per Kilo (UGX):"}
                         </label>
                         <input
                           type="number"
                           value={offerPrice}
                           onChange={(e) => setOfferPrice(e.target.value)}
-                          placeholder={`Current listing price: ${formatUGX(listing.pricePerKilo)}/kg`}
+                          placeholder={
+                            isGardenListing
+                              ? `Current garden price: ${formatUGX(listing.totalPrice || 0)}`
+                              : `Current listing price: ${formatUGX(listing.pricePerKilo)}/kg`
+                          }
                           style={{
                             padding: "0.5rem",
                             width: "100%",
@@ -511,16 +617,23 @@ export function TraderListings({ userId }: TraderListingsProps) {
                             <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.5rem" }}>
                               <strong>Offer Summary:</strong>
                             </div>
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", fontSize: "0.85rem", marginBottom: "0.5rem" }}>
-                              <div>
-                                <div style={{ color: "#999" }}>Price per kg:</div>
+                            {isGardenListing ? (
+                              <div style={{ fontSize: "0.85rem", marginBottom: "0.5rem" }}>
+                                <div style={{ color: "#999" }}>Price per unit (garden):</div>
                                 <div style={{ fontWeight: "600", color: "#2c2c2c" }}>{formatUGX(parseFloat(offerPrice))}</div>
                               </div>
-                              <div>
-                                <div style={{ color: "#999" }}>Price per unit:</div>
-                                <div style={{ fontWeight: "600", color: "#2c2c2c" }}>{formatUGX(parseFloat(offerPrice) * listing.unitSize)}</div>
+                            ) : (
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", fontSize: "0.85rem", marginBottom: "0.5rem" }}>
+                                <div>
+                                  <div style={{ color: "#999" }}>Price per kg:</div>
+                                  <div style={{ fontWeight: "600", color: "#2c2c2c" }}>{formatUGX(parseFloat(offerPrice))}</div>
+                                </div>
+                                <div>
+                                  <div style={{ color: "#999" }}>Price per unit:</div>
+                                  <div style={{ fontWeight: "600", color: "#2c2c2c" }}>{formatUGX(parseFloat(offerPrice) * listing.unitSize)}</div>
+                                </div>
                               </div>
-                            </div>
+                            )}
                             <div style={{ 
                               padding: "0.75rem", 
                               background: "#1976d2", 
@@ -532,10 +645,14 @@ export function TraderListings({ userId }: TraderListingsProps) {
                                 Total Offer Amount
                               </div>
                               <div style={{ fontSize: "1.2rem", fontWeight: "700" }}>
-                                {formatUGX(parseFloat(offerPrice) * listing.unitSize * selectedUnits.size)}
+                                {isGardenListing
+                                  ? formatUGX(parseFloat(offerPrice))
+                                  : formatUGX(parseFloat(offerPrice) * listing.unitSize * selectedUnits.size)}
                               </div>
                               <div style={{ fontSize: "0.75rem", marginTop: "0.25rem", opacity: 0.9 }}>
-                                for {selectedUnits.size} unit{selectedUnits.size !== 1 ? "s" : ""} ({selectedUnits.size * listing.unitSize}kg)
+                                {isGardenListing
+                                  ? "for this garden unit"
+                                  : `for ${selectedUnits.size} unit${selectedUnits.size !== 1 ? "s" : ""} (${selectedUnits.size * listing.unitSize}kg)`}
                               </div>
                             </div>
                             <div style={{ 
@@ -595,11 +712,15 @@ export function TraderListings({ userId }: TraderListingsProps) {
                   ) : (
                     <div>
                       <p style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", color: "#666" }}>
-                        <strong>How to negotiate:</strong> Click &quot;Make Offer&quot; to propose a price per kilo. Farmer can accept, reject, or counter-offer.
+                        <strong>How to negotiate:</strong>{" "}
+                        {isGardenListing
+                          ? "Click \"Make Offer\" to propose a total price for the garden. Farmer can accept, reject, or counter-offer."
+                          : "Click \"Make Offer\" to propose a price per kilo. Farmer can accept, reject, or counter-offer."}
                       </p>
                       <button
                         onClick={() => {
                           setOffering({ listingId: listing.listingId });
+                          setOfferingListingMode(isGardenListing ? "garden" : "unit");
                           setOfferPrice(listing.pricePerKilo.toString());
                           setNumUnits("1");
                           setSelectedUnits(new Set());

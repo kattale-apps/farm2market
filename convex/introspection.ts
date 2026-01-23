@@ -36,6 +36,8 @@ async function verifyAdmin(ctx: any, adminId: string) {
 export const getAllActiveUTIDs = query({
   args: {
     adminId: v.id("users"),
+    limit: v.optional(v.number()),
+    offset: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const adminUser = await verifyAdmin(ctx, args.adminId);
@@ -250,10 +252,10 @@ export const getAllActiveUTIDs = query({
     }
 
     // Convert to array and sort by timestamp
-    const utids = Array.from(utidMap.values()).sort((a, b) => b.timestamp - a.timestamp);
+    const allUtids = Array.from(utidMap.values()).sort((a, b) => b.timestamp - a.timestamp);
 
     // Filter UTIDs based on admin's viewing permissions
-    let filteredUtids = utids;
+    let filteredUtids = allUtids;
     
     if (!isAdminSuper) {
       // Junior admins: only see UTIDs for their assigned locations
@@ -261,7 +263,7 @@ export const getAllActiveUTIDs = query({
       
       filteredUtids = [];
       
-      for (const utidData of utids) {
+      for (const utidData of allUtids) {
         let canView = false;
         
         // Check entities for storage location references
@@ -323,9 +325,18 @@ export const getAllActiveUTIDs = query({
       }
     }
 
+    const totalUTIDs = filteredUtids.length;
+    const limit = Math.min(args.limit ?? 200, 500);
+    const offset = Math.max(args.offset ?? 0, 0);
+    const utids = filteredUtids.slice(offset, offset + limit);
+    const nextOffset = offset + utids.length < totalUTIDs ? offset + utids.length : null;
+
     return {
-      totalUTIDs: filteredUtids.length,
-      utids: filteredUtids,
+      totalUTIDs,
+      utids,
+      offset,
+      limit,
+      nextOffset,
       currentTime: now,
     };
   },

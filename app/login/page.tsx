@@ -480,31 +480,6 @@ export default function LoginPage() {
             >
               📥 Download APK
             </a>
-            <a
-              href="https://play.google.com/store/apps/details?id=com.farm2market.uganda"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: "inline-block",
-                padding: "0.75rem 1.5rem",
-                background: "#fff",
-                color: "#4caf50",
-                textDecoration: "none",
-                borderRadius: "8px",
-                fontWeight: "600",
-                fontSize: "0.95rem",
-                border: "2px solid #4caf50",
-                transition: "background 0.3s",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#f1f8f4";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "#fff";
-              }}
-            >
-              🏪 Get on Google Play
-            </a>
           </div>
           <p style={{ fontSize: "0.8rem", color: "#666", marginTop: "1rem" }}>
             Version 1.2.0 • Android 5.0+

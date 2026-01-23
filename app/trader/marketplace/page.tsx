@@ -1,9 +1,10 @@
 "use client";
 
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { useState, useEffect, useMemo } from "react";
+import { NegotiationPanel } from "../../components/NegotiationPanel";
 
 export default function TraderMarketplacePage() {
   const [userId, setUserId] = useState<Id<"users"> | null>(null);
@@ -20,6 +21,7 @@ export default function TraderMarketplacePage() {
     api.negotiations.getTraderNegotiations,
     userId ? { traderId: userId } : "skip"
   );
+  const cancelNegotiation = useMutation(api.negotiations.cancelNegotiation);
 
   // Get current user from localStorage (pilot mode)
   useEffect(() => {
@@ -40,6 +42,29 @@ export default function TraderMarketplacePage() {
 
   const formatUGX = (amount: number) => {
     return new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX" }).format(amount);
+  };
+
+  const handleCancel = async (negotiationId: string) => {
+    if (!userId) return;
+    if (!window.confirm("Cancel this negotiation? This cannot be undone.")) return;
+    try {
+      await cancelNegotiation({
+        traderId: userId,
+        negotiationId: negotiationId as Id<"negotiations">,
+      });
+    } catch (error: any) {
+      console.error("Failed to cancel negotiation:", error);
+      alert(error.message || "Failed to cancel negotiation.");
+    }
+  };
+
+  const formatCountdown = (deadline?: number) => {
+    if (!deadline) return "Delivery deadline not set";
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return "Delivery overdue";
+    const hours = Math.floor(remaining / (60 * 60 * 1000));
+    const minutes = Math.floor((remaining % (60 * 60 * 1000)) / (60 * 1000));
+    return `Due in ${hours}h ${minutes}m`;
   };
 
   // Filter and group transactions
@@ -160,6 +185,87 @@ export default function TraderMarketplacePage() {
         </div>
       </div>
 
+      {/* Active Negotiations */}
+      <div
+        style={{
+          padding: "1.5rem",
+          background: "#fff",
+          borderRadius: "12px",
+          marginBottom: "2rem",
+          border: "2px solid #e0e0e0",
+        }}
+      >
+        <h2 style={{ fontSize: "1.3rem", marginBottom: "1rem" }}>Active Negotiations</h2>
+        {negotiations === undefined ? (
+          <p>Loading...</p>
+        ) : negotiations.negotiations.filter((n: any) => n.status === "pending" || n.status === "countered").length === 0 ? (
+          <p style={{ color: "#666" }}>No active negotiations.</p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            {negotiations.negotiations
+              .filter((n: any) => n.status === "pending" || n.status === "countered")
+              .map((negotiation: any) => (
+                <NegotiationPanel
+                  key={negotiation.negotiationId}
+                  negotiation={negotiation}
+                  userId={userId}
+                  userRole="trader"
+                />
+              ))}
+          </div>
+        )}
+      </div>
+
+      {/* Locked Payments (Paid & Locked) */}
+      <div
+        style={{
+          padding: "1.5rem",
+          background: "#e8f5e9",
+          borderRadius: "12px",
+          marginBottom: "2rem",
+          border: "2px solid #4caf50",
+        }}
+      >
+        <h2 style={{ fontSize: "1.3rem", marginBottom: "1rem" }}>Locked Payments</h2>
+        <p style={{ color: "#666", marginBottom: "1rem" }}>
+          Payments that have been successfully locked
+        </p>
+        {negotiations === undefined ? (
+          <p>Loading...</p>
+        ) : negotiations.negotiations.filter((n: any) => n.status === "accepted" && n.unitStatus === "locked").length === 0 ? (
+          <p style={{ color: "#666" }}>No locked payments yet.</p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            {negotiations.negotiations
+              .filter((n: any) => n.status === "accepted" && n.unitStatus === "locked")
+              .map((negotiation: any) => (
+                <div
+                  key={negotiation.negotiationId}
+                  style={{
+                    padding: "1rem",
+                    background: "#fff",
+                    borderRadius: "8px",
+                    border: "1px solid #4caf50",
+                  }}
+                >
+                  <div style={{ fontWeight: "600", marginBottom: "0.25rem" }}>
+                    {negotiation.produceType} - Unit #{negotiation.unitNumber}
+                  </div>
+                  <div style={{ fontSize: "0.9rem", color: "#666" }}>
+                    UTID: {negotiation.negotiationUtid}
+                  </div>
+                  <div style={{ fontSize: "0.9rem", color: "#666", marginTop: "0.25rem" }}>
+                    Delivery: {negotiation.deliveryStatus || "Pending"}
+                  </div>
+                  <div style={{ fontSize: "0.9rem", color: "#666" }}>
+                    {formatCountdown(negotiation.deliveryDeadline)}
+                  </div>
+                </div>
+              ))}
+          </div>
+        )}
+      </div>
+
       {/* Pay-to-Lock Section */}
       <div
         style={{
@@ -192,7 +298,7 @@ export default function TraderMarketplacePage() {
                     border: "1px solid #ffc107",
                   }}
                 >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem" }}>
                     <div>
                       <div style={{ fontWeight: "600", marginBottom: "0.25rem" }}>
                         {negotiation.produceType} - Unit #{negotiation.unitNumber}
@@ -204,23 +310,100 @@ export default function TraderMarketplacePage() {
                         {formatUGX(negotiation.currentPricePerKilo)}/kg
                       </div>
                     </div>
-                    <button
-                      style={{
-                        padding: "0.75rem 1.5rem",
-                        background: "#4caf50",
-                        color: "white",
-                        border: "none",
-                        borderRadius: "6px",
-                        cursor: "pointer",
-                        fontWeight: "600",
-                      }}
-                      onClick={() => {
-                        // Navigate to payment or trigger pay-to-lock
-                        alert("Pay-to-lock functionality - integrate with payments.ts lockUnit mutation");
-                      }}
-                    >
-                      Pay to Lock
-                    </button>
+                    <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                      <button
+                        style={{
+                          padding: "0.75rem 1.5rem",
+                          background: "#4caf50",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "6px",
+                          cursor: "pointer",
+                          fontWeight: "600",
+                        }}
+                        onClick={() => {
+                          // Navigate to payment or trigger pay-to-lock
+                          alert("Pay-to-lock functionality - integrate with payments.ts lockUnit mutation");
+                        }}
+                      >
+                        Pay to Lock
+                      </button>
+                      <button
+                        style={{
+                          padding: "0.75rem 1.5rem",
+                          background: "#dc3545",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "6px",
+                          cursor: "pointer",
+                          fontWeight: "600",
+                        }}
+                        onClick={() => handleCancel(negotiation.negotiationId)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+          </div>
+        )}
+      </div>
+
+      {/* Concluded Negotiations */}
+      <div
+        style={{
+          padding: "1.5rem",
+          background: "#f8f9fa",
+          borderRadius: "12px",
+          marginBottom: "2rem",
+          border: "2px solid #e0e0e0",
+        }}
+      >
+        <h2 style={{ fontSize: "1.3rem", marginBottom: "1rem" }}>Concluded Negotiations</h2>
+        {negotiations === undefined ? (
+          <p>Loading...</p>
+        ) : negotiations.negotiations.filter((n: any) => n.status === "accepted" || n.status === "rejected" || n.status === "cancelled").length === 0 ? (
+          <p style={{ color: "#666" }}>No concluded negotiations.</p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            {negotiations.negotiations
+              .filter((n: any) => n.status === "accepted" || n.status === "rejected" || n.status === "cancelled")
+              .map((negotiation: any) => (
+                <div
+                  key={negotiation.negotiationId}
+                  style={{
+                    padding: "1rem",
+                    background: "#fff",
+                    borderRadius: "8px",
+                    border: "1px solid #e0e0e0",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontWeight: "600", marginBottom: "0.25rem" }}>
+                        {negotiation.produceType} - Unit #{negotiation.unitNumber}
+                      </div>
+                      <div style={{ fontSize: "0.9rem", color: "#666" }}>
+                        UTID: {negotiation.negotiationUtid}
+                      </div>
+                    </div>
+                    <span style={{
+                      padding: "0.25rem 0.75rem",
+                      borderRadius: "12px",
+                      fontSize: "0.8rem",
+                      fontWeight: "600",
+                      background: negotiation.status === "accepted" ? "#4caf50" : "#9e9e9e",
+                      color: "white",
+                    }}>
+                      {negotiation.status.toUpperCase()}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: "0.9rem", color: "#666", marginTop: "0.5rem" }}>
+                    Delivery: {negotiation.deliveryStatus || "Pending"}
+                  </div>
+                  <div style={{ fontSize: "0.9rem", color: "#666" }}>
+                    {formatCountdown(negotiation.deliveryDeadline)}
                   </div>
                 </div>
               ))}

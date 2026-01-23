@@ -63,6 +63,7 @@ export const makeOffer = mutation({
 
     // Validate all units and get listing info
     const units = [];
+    const skippedUnits: { unitId: Id<"listingUnits">; unitNumber: number }[] = [];
     const listings = new Map<Id<"listings">, any>();
     
     for (const unitId of args.unitIds) {
@@ -78,7 +79,8 @@ export const makeOffer = mutation({
       if (unit.activeNegotiationId) {
         const existingNeg = await ctx.db.get(unit.activeNegotiationId);
         if (existingNeg && (existingNeg.status === "pending" || existingNeg.status === "countered")) {
-          throw new Error(`Unit #${unit.unitNumber} already has an active negotiation. Please wait for the farmer's response.`);
+          skippedUnits.push({ unitId: unit._id, unitNumber: unit.unitNumber });
+          continue;
         }
       }
 
@@ -95,6 +97,10 @@ export const makeOffer = mutation({
       }
 
       units.push(unit);
+    }
+
+    if (units.length === 0) {
+      throw new Error("All selected units already have active negotiations. Please wait for the farmer's response.");
     }
 
     // All units must be from the same listing
@@ -219,6 +225,7 @@ export const makeOffer = mutation({
       totalPrice: unitPrice * units.length,
       status: "pending",
       message: `Offer made on ${units.length} unit(s). Waiting for farmer's response.`,
+      skippedUnits,
     };
   },
 });
@@ -482,6 +489,138 @@ export const acceptCounterOffer = mutation({
 });
 
 /**
+ * Counter-offer by trader (trader only)
+ *
+ * Trader counters farmer's counter-offer with a new price.
+ */
+export const traderCounterOffer = mutation({
+  args: {
+    traderId: v.id("users"),
+    negotiationId: v.id("negotiations"),
+    counterPricePerKilo: v.number(), // Trader's counter price
+  },
+  handler: async (ctx, args) => {
+    await checkPilotMode(ctx);
+
+    const user = await ctx.db.get(args.traderId);
+    if (!user || user.role !== "trader") {
+      throwAppError(invalidRoleError("trader"));
+    }
+
+    const negotiation = await ctx.db.get(args.negotiationId);
+    if (!negotiation) {
+      throw new Error("Negotiation not found");
+    }
+
+    if (negotiation.traderId !== args.traderId) {
+      throw new Error("You can only counter-offer on your own negotiations");
+    }
+
+    if (negotiation.status !== "countered") {
+      throw new Error(`Cannot counter-offer in status: ${negotiation.status}`);
+    }
+
+    if (args.counterPricePerKilo <= 0) {
+      throwAppError(invalidAmountError());
+    }
+
+    await ctx.db.patch(args.negotiationId, {
+      status: "countered",
+      traderOfferPricePerKilo: args.counterPricePerKilo,
+      currentPricePerKilo: args.counterPricePerKilo,
+      lastUpdatedAt: getUgandaTime(),
+    });
+
+    const farmer = await ctx.db.get(negotiation.farmerId);
+    if (farmer) {
+      await ctx.db.insert("notifications", {
+        userId: negotiation.farmerId,
+        type: "utid_specific",
+        title: "Trader Counter-Offer",
+        message: `Trader countered with ${new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX" }).format(args.counterPricePerKilo)}/kg. UTID: ${negotiation.negotiationUtid}`,
+        utid: negotiation.negotiationUtid,
+        read: false,
+        createdAt: getUgandaTime(),
+      });
+    }
+
+    return {
+      negotiationId: args.negotiationId,
+      counterPricePerKilo: args.counterPricePerKilo,
+      message: "Counter-offer sent to farmer.",
+    };
+  },
+});
+
+/**
+ * Cancel negotiation (trader only)
+ *
+ * Allowed before pay-to-lock, including accepted negotiations
+ * if the unit has not been locked.
+ */
+export const cancelNegotiation = mutation({
+  args: {
+    traderId: v.id("users"),
+    negotiationId: v.id("negotiations"),
+    reason: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await checkPilotMode(ctx);
+
+    const user = await ctx.db.get(args.traderId);
+    if (!user || user.role !== "trader") {
+      throwAppError(invalidRoleError("trader"));
+    }
+
+    const negotiation = await ctx.db.get(args.negotiationId);
+    if (!negotiation) {
+      throw new Error("Negotiation not found");
+    }
+
+    if (negotiation.traderId !== args.traderId) {
+      throw new Error("You can only cancel your own negotiations");
+    }
+
+    if (negotiation.status === "rejected" || negotiation.status === "cancelled") {
+      throw new Error(`Negotiation already ${negotiation.status}`);
+    }
+
+    const unit = await ctx.db.get(negotiation.unitId);
+    if (unit && unit.status === "locked") {
+      throw new Error("Cannot cancel after pay-to-lock");
+    }
+
+    await ctx.db.patch(args.negotiationId, {
+      status: "cancelled",
+      lastUpdatedAt: getUgandaTime(),
+    });
+
+    await ctx.db.patch(negotiation.unitId, {
+      activeNegotiationId: undefined,
+    });
+
+    const farmer = await ctx.db.get(negotiation.farmerId);
+    if (farmer) {
+      await ctx.db.insert("notifications", {
+        userId: negotiation.farmerId,
+        type: "utid_specific",
+        title: "Negotiation Cancelled",
+        message: `Trader cancelled the negotiation. UTID: ${negotiation.negotiationUtid}`,
+        utid: negotiation.negotiationUtid,
+        read: false,
+        createdAt: getUgandaTime(),
+      });
+    }
+
+    return {
+      negotiationId: args.negotiationId,
+      status: "cancelled",
+      message: "Negotiation cancelled.",
+    };
+  },
+});
+
+/**
  * Get active negotiations for a trader
  */
 export const getTraderNegotiations = query({
@@ -501,9 +640,14 @@ export const getTraderNegotiations = query({
       .withIndex("by_trader_status", (q) => q.eq("traderId", args.traderId))
       .collect();
 
-    // Filter to active negotiations (pending, countered, accepted)
+    // Include all negotiation statuses for UI separation (active vs concluded)
     const activeNegotiations = negotiations.filter(
-      (n) => n.status === "pending" || n.status === "countered" || n.status === "accepted"
+      (n) =>
+        n.status === "pending" ||
+        n.status === "countered" ||
+        n.status === "accepted" ||
+        n.status === "rejected" ||
+        n.status === "cancelled"
     );
 
     // Enrich with listing and unit information
@@ -518,6 +662,9 @@ export const getTraderNegotiations = query({
           negotiationUtid: neg.negotiationUtid,
           unitId: neg.unitId,
           unitNumber: unit?.unitNumber || 0,
+          unitStatus: unit?.status,
+          deliveryStatus: unit?.deliveryStatus,
+          deliveryDeadline: unit?.deliveryDeadline,
           listingId: neg.listingId,
           listingUtid: listing?.utid,
           produceType: listing?.produceType,
@@ -564,9 +711,14 @@ export const getFarmerNegotiations = query({
       .withIndex("by_farmer_status", (q) => q.eq("farmerId", args.farmerId))
       .collect();
 
-    // Filter to active negotiations (pending, countered, accepted)
+    // Include all negotiation statuses for UI separation (active vs concluded)
     const activeNegotiations = negotiations.filter(
-      (n) => n.status === "pending" || n.status === "countered" || n.status === "accepted"
+      (n) =>
+        n.status === "pending" ||
+        n.status === "countered" ||
+        n.status === "accepted" ||
+        n.status === "rejected" ||
+        n.status === "cancelled"
     );
 
     // Enrich with listing and unit information
@@ -581,6 +733,9 @@ export const getFarmerNegotiations = query({
           negotiationUtid: neg.negotiationUtid,
           unitId: neg.unitId,
           unitNumber: unit?.unitNumber || 0,
+          unitStatus: unit?.status,
+          deliveryStatus: unit?.deliveryStatus,
+          deliveryDeadline: unit?.deliveryDeadline,
           listingId: neg.listingId,
           listingUtid: listing?.utid,
           produceType: listing?.produceType,

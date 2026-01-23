@@ -2,7 +2,7 @@
  * StoreAdmin Functions
  * 
  * - StoreAdmins (junior admins) can verify deliveries for their assigned locations
- * - Must provide comment and 3 photos (weighing, checking, in-storage)
+ * - Must provide comment; photos are optional (weighing, checking, in-storage)
  * - PDF generation for delivery proof
  */
 
@@ -114,7 +114,7 @@ export const verifyDeliveryWithProof = mutation({
     adminId: v.id("users"),
     lockUtid: v.string(),
     comment: v.string(),
-    photoIds: v.array(v.string()), // Array of 3 photo storage IDs
+    photoIds: v.optional(v.array(v.string())), // Optional photo storage IDs
     reason: v.string(),
   },
   handler: async (ctx, args) => {
@@ -135,10 +135,6 @@ export const verifyDeliveryWithProof = mutation({
     // Validate inputs
     if (!args.comment.trim()) {
       throw new Error("Comment is required");
-    }
-
-    if (args.photoIds.length !== 3) {
-      throw new Error("Exactly 3 photos are required (weighing, checking, in-storage)");
     }
 
     if (!args.reason.trim()) {
@@ -177,11 +173,13 @@ export const verifyDeliveryWithProof = mutation({
     const verificationUtid = generateUTID(adminUser.role);
 
     // Update units with delivery verification info
+    const photoIds = args.photoIds ?? [];
+
     for (const unit of lockedUnits) {
       await ctx.db.patch(unit._id, {
         deliveryStatus: "delivered",
         deliveryComment: args.comment.trim(),
-        deliveryPhotos: args.photoIds,
+        deliveryPhotos: photoIds,
         // PDF will be generated separately and linked via deliveryPdfId
       });
     }
@@ -195,7 +193,7 @@ export const verifyDeliveryWithProof = mutation({
       targetUtid: args.lockUtid,
       metadata: {
         comment: args.comment.trim(),
-        photoCount: args.photoIds.length,
+        photoCount: photoIds.length,
       },
       timestamp: getUgandaTime(),
     });

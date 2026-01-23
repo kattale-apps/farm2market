@@ -27,7 +27,7 @@ export const createListing = mutation({
   args: {
     farmerId: v.id("users"),
     produceType: v.string(),
-    totalKilos: v.number(),
+    totalKilos: v.optional(v.number()),
     pricePerKilo: v.number(), // In UGX (for unit mode)
     qualityRating: v.optional(v.string()), // Quality rating from dropdown
     qualityComment: v.optional(v.string()), // Farmer's text comment about produce quality
@@ -62,12 +62,15 @@ export const createListing = mutation({
     // ============================================================
     // Check if farmer has exceeded listing creation rate limit.
     // This prevents spam and manipulation attempts.
+    const listingMode = args.listingMode || "unit"; // Default to unit mode
+    const normalizedTotalKilos = listingMode === "garden"
+      ? Math.max(args.totalKilos || 1, 1)
+      : args.totalKilos || 0;
+
     await checkRateLimit(ctx, args.farmerId, user.role, "create_listing", {
       produceType: args.produceType,
-      totalKilos: args.totalKilos,
+      totalKilos: normalizedTotalKilos,
     });
-
-    const listingMode = args.listingMode || "unit"; // Default to unit mode
 
     // Validate based on mode
     if (listingMode === "garden") {
@@ -78,18 +81,15 @@ export const createListing = mutation({
       if (!args.gardenSize || args.gardenSize <= 0) {
         throw new Error("Garden size is required for garden sale mode");
       }
-      if (args.totalKilos <= 0) {
-        throwAppError(invalidKilosError());
-      }
       // For garden mode, pricePerKilo is calculated from totalPrice / totalKilos
       // But we still validate it's provided for consistency
       if (!args.pricePerKilo || args.pricePerKilo <= 0) {
         // Calculate from totalPrice
-        args.pricePerKilo = args.totalPrice / args.totalKilos;
+        args.pricePerKilo = args.totalPrice / normalizedTotalKilos;
       }
     } else {
       // Unit mode: standard validation
-      if (args.totalKilos <= 0) {
+      if (!args.totalKilos || args.totalKilos <= 0) {
         throwAppError(invalidKilosError());
       }
       if (args.pricePerKilo <= 0) {
@@ -107,14 +107,14 @@ export const createListing = mutation({
     if (listingMode === "garden") {
       // Garden mode: entire plot is 1 unit
       totalUnits = 1;
-      actualUnitSize = args.totalKilos; // Entire garden weight
+      actualUnitSize = normalizedTotalKilos; // Entire garden represented as one unit
     } else {
       // Unit mode: split into 10kg units
-      totalUnits = args.totalKilos < LISTING_UNIT_SIZE_KG 
+      totalUnits = normalizedTotalKilos < LISTING_UNIT_SIZE_KG 
         ? 1 
-        : Math.floor(args.totalKilos / LISTING_UNIT_SIZE_KG);
-      actualUnitSize = args.totalKilos < LISTING_UNIT_SIZE_KG 
-        ? args.totalKilos 
+        : Math.floor(normalizedTotalKilos / LISTING_UNIT_SIZE_KG);
+      actualUnitSize = normalizedTotalKilos < LISTING_UNIT_SIZE_KG 
+        ? normalizedTotalKilos 
         : LISTING_UNIT_SIZE_KG;
     }
 
@@ -132,7 +132,7 @@ export const createListing = mutation({
       farmerId: args.farmerId,
       utid,
       produceType: args.produceType,
-      totalKilos: args.totalKilos,
+      totalKilos: normalizedTotalKilos,
       pricePerKilo: args.pricePerKilo,
       unitSize: actualUnitSize, // Store actual unit size (10kg or entire garden)
       totalUnits,
@@ -151,7 +151,7 @@ export const createListing = mutation({
 
     // Create individual units
     const unitIds = [];
-    let remainingKilos = args.totalKilos;
+    let remainingKilos = normalizedTotalKilos;
     
     for (let i = 1; i <= totalUnits; i++) {
       // Calculate unit size: last unit gets remaining kilos if not exactly divisible
@@ -196,6 +196,11 @@ export const getActiveListings = query({
         
         const availableUnits = units.filter((u) => u.status === "available").length;
         const lockedUnits = units.filter((u) => u.status === "locked").length;
+        const derivedListingMode =
+          listing.listingMode ||
+          (listing.gardenSize != null || listing.gardenDimensions != null || listing.totalPrice != null
+            ? "garden"
+            : "unit");
 
         return {
           listingId: listing._id,
@@ -211,6 +216,11 @@ export const getActiveListings = query({
           traderAlias: trader?.alias || null,
           isTraderListing: !!listing.traderId, // Flag to identify trader listings (100kg blocks)
           createdAt: listing.createdAt,
+          // Garden sale fields (optional for older listings)
+          listingMode: derivedListingMode,
+          gardenSize: listing.gardenSize,
+          gardenDimensions: listing.gardenDimensions,
+          totalPrice: listing.totalPrice,
         };
       })
     );
@@ -239,6 +249,12 @@ export const getListingDetails = query({
     const availableUnits = units.filter((u) => u.status === "available").length;
     const lockedUnits = units.filter((u) => u.status === "locked").length;
 
+    const derivedListingMode =
+      listing.listingMode ||
+      (listing.gardenSize != null || listing.gardenDimensions != null || listing.totalPrice != null
+        ? "garden"
+        : "unit");
+
     return {
       listingId: listing._id,
       utid: listing.utid,
@@ -251,6 +267,11 @@ export const getListingDetails = query({
       status: listing.status,
       farmerAlias: farmer?.alias || "unknown",
       createdAt: listing.createdAt,
+      // Garden sale fields (optional for older listings)
+      listingMode: derivedListingMode,
+      gardenSize: listing.gardenSize,
+      gardenDimensions: listing.gardenDimensions,
+      totalPrice: listing.totalPrice,
       units: units.map((u) => ({
         unitId: u._id,
         unitNumber: u.unitNumber,

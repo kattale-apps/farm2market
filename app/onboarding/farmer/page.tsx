@@ -12,6 +12,9 @@ export default function FarmerOnboardingPage() {
   
   // Location data
   const districts = useQuery(api.locations.getActiveDistricts, {});
+  const sortedDistricts = (districts ?? [])
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name));
   const [selectedDistrictId, setSelectedDistrictId] = useState<Id<"districts"> | "">("");
   const subcounties = useQuery(
     api.locations.getSubcountiesByDistrict,
@@ -258,7 +261,7 @@ export default function FarmerOnboardingPage() {
                   }}
                 >
                   <option value="">Select District</option>
-                  {districts.map((d) => (
+                  {sortedDistricts.map((d) => (
                     <option key={d.id} value={d.id}>
                       {d.name}
                     </option>

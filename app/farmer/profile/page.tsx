@@ -1,9 +1,9 @@
-"use client";
+ "use client";
 
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
-import { useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -18,6 +18,9 @@ export default function FarmerProfilePage() {
   const [selectedDistrictId, setSelectedDistrictId] = useState<string>("");
   const [selectedSubcountyId, setSelectedSubcountyId] = useState<string>("");
   const [selectedParishId, setSelectedParishId] = useState<string>("");
+  const [selectedRegionKey, setSelectedRegionKey] = useState<string>("");
+  const [phoneNumber, setPhoneNumber] = useState<string>("");
+  const [sex, setSex] = useState<"M" | "F" | "">("");
   const [farmSizeInput, setFarmSizeInput] = useState<{
     unit?: "ft" | "m";
     length?: number;
@@ -25,6 +28,99 @@ export default function FarmerProfilePage() {
     omwigo?: number;
     emiigo?: number;
   }>({});
+
+  const regionGroups = [
+    {
+      key: "central_buganda",
+      label: "Central (Buganda)",
+      districts: [
+        "Kampala", "Wakiso", "Mukono", "Buikwe", "Kayunga",
+        "Luweero", "Nakaseke", "Nakasongola", "Mityana", "Kiboga",
+        "Mpigi", "Butambala", "Gomba", "Masaka",
+        "Lwengo", "Kalungu", "Bukomansimbi", "Sembabule", "Lyantonde",
+        "Rakai", "Kyotera", "Mubende", "Kassanda"
+      ],
+    },
+    {
+      key: "eastern_busoga",
+      label: "Eastern (Busoga)",
+      districts: [
+        "Jinja", "Mayuge", "Iganga", "Bugiri", "Namayingo", "Buyende",
+        "Kaliro", "Kamuli", "Luuka", "Namutumba"
+      ],
+    },
+    {
+      key: "eastern_teso",
+      label: "Eastern (Teso)",
+      districts: ["Soroti", "Kaberamaido", "Serere", "Kalaki", "Amuria", "Katakwi", "Kumi", "Bukedea", "Ngora", "Kapelebyong"],
+    },
+    {
+      key: "eastern_elgon",
+      label: "Eastern (Elgon)",
+      districts: ["Mbale", "Manafwa", "Bududa", "Sironko", "Bulambuli", "Bungokho"],
+    },
+    {
+      key: "eastern_other",
+      label: "Eastern (Other)",
+      districts: ["Tororo", "Busia", "Butaleja", "Budaka", "Pallisa", "Kibuku", "Butebo"],
+    },
+    {
+      key: "northern_acholi",
+      label: "Northern (Acholi)",
+      districts: ["Gulu", "Nwoya", "Amuru", "Pader", "Kitgum", "Lamwo", "Agago", "Omoro"],
+    },
+    {
+      key: "northern_lango",
+      label: "Northern (Lango)",
+      districts: ["Lira", "Dokolo", "Alebtong", "Oyam", "Apac", "Kole", "Amolatar", "Kwania"],
+    },
+    {
+      key: "northern_westnile",
+      label: "Northern (West Nile)",
+      districts: ["Arua", "Moyo", "Adjumani", "Yumbe", "Koboko", "Maracha", "Terego", "Zombo", "Nebbi", "Pakwach"],
+    },
+    {
+      key: "northern_karamoja",
+      label: "Northern (Karamoja)",
+      districts: ["Moroto", "Kotido", "Kaabong", "Abim", "Nakapiripirit", "Napak", "Amudat", "Nabilatuk", "Karenga"],
+    },
+    {
+      key: "northern_other",
+      label: "Northern (Other)",
+      districts: ["Gomba"], // placeholder to keep structure; removed in filter by name.
+    },
+    {
+      key: "western_tooro",
+      label: "Western (Tooro)",
+      districts: ["Fort Portal", "Kabarole", "Kamwenge", "Kyenjojo", "Kyegegwa", "Bunyangabu"],
+    },
+    {
+      key: "western_bunyoro",
+      label: "Western (Bunyoro)",
+      districts: ["Hoima", "Kikuube", "Masindi", "Kiryandongo", "Buliisa", "Kagadi", "Kakumiro", "Kyankwanzi"],
+    },
+    {
+      key: "western_ankole",
+      label: "Western (Ankole)",
+      districts: ["Mbarara", "Isingiro", "Ntungamo", "Bushenyi", "Sheema", "Mitooma", "Rubirizi", "Buhweju", "Rukungiri", "Kanungu"],
+    },
+    {
+      key: "western_kigezi",
+      label: "Western (Kigezi)",
+      districts: ["Kabale", "Kisoro", "Rukiga"],
+    },
+  ];
+
+  const normalizeName = (name: string) => name.trim().toLowerCase();
+
+  const regionForDistrictName = useCallback((districtName?: string) => {
+    if (!districtName) return "";
+    const name = normalizeName(districtName);
+    const match = regionGroups.find((group) =>
+      group.districts.some((d) => normalizeName(d) === name)
+    );
+    return match?.key || "";
+  }, [regionGroups]);
 
   // Get user from localStorage
   useEffect(() => {
@@ -70,11 +166,14 @@ export default function FarmerProfilePage() {
       setSelectedDistrictId(profile.districtId || "");
       setSelectedSubcountyId(profile.subcountyId || "");
       setSelectedParishId(profile.parishId || "");
+      setSelectedRegionKey(regionForDistrictName(profile.districtName));
+      setPhoneNumber(profile.phoneNumber || "");
+      setSex(profile.sex || "");
       if (profile.farmSizeRaw) {
         setFarmSizeInput(profile.farmSizeRaw as any);
       }
     }
-  }, [profile, isEditing]);
+  }, [profile, isEditing, regionForDistrictName]);
 
   const updateProfile = useMutation(api.farmerProfile.updateFarmerProfile);
 
@@ -92,6 +191,8 @@ export default function FarmerProfilePage() {
         subcountyId: selectedSubcountyId ? (selectedSubcountyId as Id<"subcounties">) : undefined,
         parishId: selectedParishId ? (selectedParishId as Id<"parishes">) : undefined,
         farmSizeInput: Object.keys(farmSizeInput).length > 0 ? farmSizeInput : undefined,
+        phoneNumber: phoneNumber.trim() || undefined,
+        sex: sex || undefined,
       });
 
       setMessage({ type: "success", text: "Profile updated successfully!" });
@@ -173,6 +274,11 @@ export default function FarmerProfilePage() {
                   <strong>Phone:</strong> {profile.phoneNumber}
                 </div>
               )}
+              {profile.sex && (
+                <div>
+                  <strong>Sex:</strong> {profile.sex === "M" ? "Male" : "Female"}
+                </div>
+              )}
             </div>
           </div>
 
@@ -181,6 +287,12 @@ export default function FarmerProfilePage() {
             <div style={{ display: "grid", gap: "1rem" }}>
               {profile.districtName ? (
                 <>
+                  {regionForDistrictName(profile.districtName) && (
+                    <div>
+                      <strong>Region:</strong>{" "}
+                      {regionGroups.find((g) => g.key === regionForDistrictName(profile.districtName))?.label}
+                    </div>
+                  )}
                   <div>
                     <strong>District:</strong> {profile.districtName}
                   </div>
@@ -249,12 +361,13 @@ export default function FarmerProfilePage() {
             <div style={{ display: "grid", gap: "1rem" }}>
               <div>
                 <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
-                  District *
+                  Region *
                 </label>
                 <select
-                  value={selectedDistrictId}
+                  value={selectedRegionKey}
                   onChange={(e) => {
-                    setSelectedDistrictId(e.target.value);
+                    setSelectedRegionKey(e.target.value);
+                    setSelectedDistrictId("");
                     setSelectedSubcountyId("");
                     setSelectedParishId("");
                   }}
@@ -267,12 +380,53 @@ export default function FarmerProfilePage() {
                     fontSize: "1rem",
                   }}
                 >
-                  <option value="">Select District</option>
-                  {districts?.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name}
+                  <option value="">Select Region</option>
+                  {regionGroups.map((group) => (
+                    <option key={group.key} value={group.key}>
+                      {group.label}
                     </option>
                   ))}
+                </select>
+                <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.85rem", color: "#666" }}>
+                  If your district appears in the wrong region, contact SuperAdmin to update the mapping.
+                </p>
+              </div>
+
+              <div>
+                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+                  District *
+                </label>
+                <select
+                  value={selectedDistrictId}
+                  onChange={(e) => {
+                    setSelectedDistrictId(e.target.value);
+                    setSelectedSubcountyId("");
+                    setSelectedParishId("");
+                  }}
+                  required
+                  disabled={!selectedRegionKey}
+                  style={{
+                    width: "100%",
+                    padding: "0.75rem",
+                    border: "1px solid #ddd",
+                    borderRadius: "8px",
+                    fontSize: "1rem",
+                  }}
+                >
+                  <option value="">
+                    {selectedRegionKey ? "Select District" : "Select Region first"}
+                  </option>
+                  {districts
+                    ?.filter((d) => {
+                      if (!selectedRegionKey) return false;
+                      const region = regionForDistrictName(d.name);
+                      return region === selectedRegionKey;
+                    })
+                    .map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name}
+                      </option>
+                    ))}
                 </select>
               </div>
 
@@ -332,6 +486,53 @@ export default function FarmerProfilePage() {
                   </select>
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Contact Details */}
+          <div style={{ marginBottom: "2rem" }}>
+            <h3 style={{ fontSize: "1rem", marginBottom: "1rem", color: "#2c2c2c" }}>Contact Details</h3>
+            <div style={{ display: "grid", gap: "1rem" }}>
+              <div>
+                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+                  Phone Number *
+                </label>
+                <input
+                  type="tel"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  placeholder="e.g., 0700000000"
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "0.75rem",
+                    border: "1px solid #ddd",
+                    borderRadius: "8px",
+                    fontSize: "1rem",
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
+                  Sex (M/F) *
+                </label>
+                <select
+                  value={sex}
+                  onChange={(e) => setSex(e.target.value as "M" | "F" | "")}
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "0.75rem",
+                    border: "1px solid #ddd",
+                    borderRadius: "8px",
+                    fontSize: "1rem",
+                  }}
+                >
+                  <option value="">Select Sex</option>
+                  <option value="M">Male</option>
+                  <option value="F">Female</option>
+                </select>
+              </div>
             </div>
           </div>
 

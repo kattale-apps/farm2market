@@ -11,7 +11,12 @@ import { mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { verifyAdminRole } from "./auth";
 import { generateUTID, getUgandaTime } from "./utils";
-import { UGANDA_DISTRICTS, UGANDA_SUBCOUNTIES, UGANDA_PARISHES } from "./ugandaLocationsData";
+import {
+  UG_DISTRICTS,
+  UG_COUNTIES,
+  UG_SUBCOUNTIES,
+  UG_PARISHES,
+} from "./ugandaLocationsData";
 import { Id } from "./_generated/dataModel";
 
 /**
@@ -22,6 +27,9 @@ export const seedUgandaLocations = mutation({
   args: {
     adminId: v.id("users"),
     skipExisting: v.optional(v.boolean()), // If true, skip districts/subcounties/parishes that already exist
+    stage: v.optional(v.union(v.literal("districts"), v.literal("subcounties"), v.literal("parishes"))),
+    offset: v.optional(v.number()),
+    limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     // Verify admin role
@@ -50,86 +58,166 @@ export const seedUgandaLocations = mutation({
 
     const districtMap = new Map<string, Id<"districts">>();
     const subcountyMap = new Map<string, Id<"subcounties">>();
+    const stage = args.stage ?? "districts";
+    const offset = args.offset ?? 0;
+    const limit = args.limit ?? 500;
 
-    // Step 1: Create all districts
-    for (const district of UGANDA_DISTRICTS) {
-      try {
-        // Check if district already exists
-        const existing = await ctx.db
-          .query("districts")
-          .withIndex("by_code", (q) => q.eq("code", district.code))
-          .first();
+    const normalizeName = (name: string) => name.trim().toLowerCase();
 
-        if (existing) {
-          if (args.skipExisting) {
-            results.districtsSkipped++;
-            districtMap.set(district.code, existing._id);
-            continue;
-          } else {
-            throw new Error(`District ${district.name} (${district.code}) already exists`);
-          }
-        }
-
-        // Create district
-        const utid = generateUTID(adminUser.role);
-        const districtId = await ctx.db.insert("districts", {
-          name: district.name,
-          code: district.code,
-          active: true,
-          order: district.order,
-          createdAt: getUgandaTime(),
-          createdBy: args.adminId,
-          utid,
-        });
-
-        districtMap.set(district.code, districtId);
-        results.districtsCreated++;
-
-        // Log admin action
-        await ctx.db.insert("adminActions", {
-          adminId: args.adminId,
-          actionType: "create_district",
-          utid,
-          reason: `Seeded district: ${district.name} (${district.code})`,
-          timestamp: getUgandaTime(),
-        });
-      } catch (error: any) {
-        results.errors.push(`District ${district.name}: ${error.message}`);
-      }
+    const existingDistricts = await ctx.db.query("districts").collect();
+    const existingDistrictByName = new Map<string, Id<"districts">>();
+    for (const district of existingDistricts) {
+      existingDistrictByName.set(normalizeName(district.name), district._id);
     }
 
-    // Step 2: Create subcounties
-    for (const [districtCode, subcounties] of Object.entries(UGANDA_SUBCOUNTIES)) {
-      const districtId = districtMap.get(districtCode);
-      if (!districtId) {
-        results.errors.push(`District ${districtCode} not found for subcounties`);
+    const existingSubcounties = await ctx.db.query("subcounties").collect();
+    const existingSubcountyByKey = new Map<string, Id<"subcounties">>();
+    for (const subcounty of existingSubcounties) {
+      const key = `${subcounty.districtId}:${normalizeName(subcounty.name)}`;
+      existingSubcountyByKey.set(key, subcounty._id);
+    }
+
+    const existingParishes = await ctx.db.query("parishes").collect();
+    const existingParishByKey = new Map<string, Id<"parishes">>();
+    for (const parish of existingParishes) {
+      const key = `${parish.subcountyId}:${normalizeName(parish.name)}`;
+      existingParishByKey.set(key, parish._id);
+    }
+
+    const countyToDistrictDataId = new Map<string, string>();
+    for (const county of UG_COUNTIES) {
+      countyToDistrictDataId.set(county.id, county.district);
+    }
+
+    const subcountiesByDistrictDataId = new Map<string, Array<{ id: string; name: string }>>();
+    for (const subcounty of UG_SUBCOUNTIES) {
+      const districtDataId = countyToDistrictDataId.get(subcounty.county);
+      if (!districtDataId) {
+        results.errors.push(`County ${subcounty.county} missing district for subcounty ${subcounty.name}`);
         continue;
       }
+      const list = subcountiesByDistrictDataId.get(districtDataId) || [];
+      list.push({ id: subcounty.id, name: subcounty.name });
+      subcountiesByDistrictDataId.set(districtDataId, list);
+    }
 
-      for (const subcounty of subcounties) {
+    const parishesBySubcountyDataId = new Map<string, Array<{ id: string; name: string }>>();
+    for (const parish of UG_PARISHES) {
+      const list = parishesBySubcountyDataId.get(parish.subcounty) || [];
+      list.push({ id: parish.id, name: parish.name });
+      parishesBySubcountyDataId.set(parish.subcounty, list);
+    }
+
+    // Step 1: Create all districts (alphabetical order)
+    const sortedDistricts = [...UG_DISTRICTS].sort((a, b) =>
+      a.name.localeCompare(b.name, "en", { sensitivity: "base" })
+    );
+    let districtOrder = 1;
+    if (stage === "districts") {
+      for (const district of sortedDistricts) {
         try {
-          // Check if subcounty already exists
-          const existing = await ctx.db
-            .query("subcounties")
-            .withIndex("by_code", (q) => q.eq("code", subcounty.code))
-            .first();
+          const existingByName = existingDistrictByName.get(normalizeName(district.name));
 
-          if (existing) {
+          if (existingByName) {
             if (args.skipExisting) {
-              results.subcountiesSkipped++;
-              subcountyMap.set(subcounty.code, existing._id);
+              results.districtsSkipped++;
+              districtMap.set(district.id, existingByName);
               continue;
             } else {
-              throw new Error(`Subcounty ${subcounty.name} (${subcounty.code}) already exists`);
+              throw new Error(`District ${district.name} already exists`);
             }
           }
 
-          // Create subcounty
+          // Create district
           const utid = generateUTID(adminUser.role);
+          const code = `UGD-${district.id}`;
+          const districtId = await ctx.db.insert("districts", {
+            name: district.name,
+            code,
+            active: true,
+            order: districtOrder++,
+            createdAt: getUgandaTime(),
+            createdBy: args.adminId,
+            utid,
+          });
+
+          districtMap.set(district.id, districtId);
+          results.districtsCreated++;
+
+          // Log admin action
+          await ctx.db.insert("adminActions", {
+            adminId: args.adminId,
+            actionType: "create_district",
+            utid,
+            reason: `Seeded district: ${district.name} (${code})`,
+            timestamp: getUgandaTime(),
+          });
+        } catch (error: any) {
+          results.errors.push(`District ${district.name}: ${error.message}`);
+        }
+      }
+
+      return {
+        success: true,
+        message: `District seeding completed. Created: ${results.districtsCreated}, Skipped: ${results.districtsSkipped}.`,
+        ...results,
+      };
+    }
+
+    for (const district of sortedDistricts) {
+      const existingByName = existingDistrictByName.get(normalizeName(district.name));
+      if (existingByName) {
+        districtMap.set(district.id, existingByName);
+      } else {
+        results.errors.push(`District ${district.name} missing. Seed districts first.`);
+      }
+    }
+
+    if (stage === "subcounties") {
+      const subcountyItems: Array<{ id: string; name: string; districtDataId: string; order: number }> = [];
+      for (const [districtDataId, subcounties] of subcountiesByDistrictDataId.entries()) {
+        const sortedSubcounties = [...subcounties].sort((a, b) =>
+          a.name.localeCompare(b.name, "en", { sensitivity: "base" })
+        );
+        let subcountyOrder = 1;
+        for (const subcounty of sortedSubcounties) {
+          subcountyItems.push({
+            id: subcounty.id,
+            name: subcounty.name,
+            districtDataId,
+            order: subcountyOrder++,
+          });
+        }
+      }
+
+      const batch = subcountyItems.slice(offset, offset + limit);
+      for (const subcounty of batch) {
+        const districtId = districtMap.get(subcounty.districtDataId);
+        if (!districtId) {
+          results.errors.push(`District ${subcounty.districtDataId} not found for subcounty ${subcounty.name}`);
+          continue;
+        }
+
+        try {
+          const existingKey = `${districtId}:${normalizeName(subcounty.name)}`;
+          const existingId = existingSubcountyByKey.get(existingKey);
+
+          if (existingId) {
+            if (args.skipExisting) {
+              results.subcountiesSkipped++;
+              subcountyMap.set(subcounty.id, existingId);
+              continue;
+            } else {
+              throw new Error(`Subcounty ${subcounty.name} already exists`);
+            }
+          }
+
+          const utid = generateUTID(adminUser.role);
+          const code = `UGSC-${subcounty.id}`;
           const subcountyId = await ctx.db.insert("subcounties", {
             districtId,
             name: subcounty.name,
-            code: subcounty.code,
+            code,
             active: true,
             order: subcounty.order,
             createdAt: getUgandaTime(),
@@ -137,54 +225,95 @@ export const seedUgandaLocations = mutation({
             utid,
           });
 
-          subcountyMap.set(subcounty.code, subcountyId);
+          subcountyMap.set(subcounty.id, subcountyId);
           results.subcountiesCreated++;
 
-          // Log admin action
           await ctx.db.insert("adminActions", {
             adminId: args.adminId,
             actionType: "create_subcounty",
             utid,
-            reason: `Seeded subcounty: ${subcounty.name} (${subcounty.code})`,
+            reason: `Seeded subcounty: ${subcounty.name} (${code})`,
             timestamp: getUgandaTime(),
           });
         } catch (error: any) {
           results.errors.push(`Subcounty ${subcounty.name}: ${error.message}`);
         }
       }
+
+      const nextOffset = offset + batch.length < subcountyItems.length ? offset + batch.length : null;
+
+      return {
+        success: true,
+        message: `Subcounty seeding batch completed. Created: ${results.subcountiesCreated}, Skipped: ${results.subcountiesSkipped}.`,
+        nextOffset,
+        total: subcountyItems.length,
+        ...results,
+      };
     }
 
-    // Step 3: Create parishes
-    for (const [subcountyCode, parishes] of Object.entries(UGANDA_PARISHES)) {
-      const subcountyId = subcountyMap.get(subcountyCode);
-      if (!subcountyId) {
-        results.errors.push(`Subcounty ${subcountyCode} not found for parishes`);
-        continue;
+    if (stage === "parishes") {
+      const subcountyItems: Array<{ id: string; name: string; districtDataId: string }> = [];
+      for (const [districtDataId, subcounties] of subcountiesByDistrictDataId.entries()) {
+        for (const subcounty of subcounties) {
+          subcountyItems.push({ id: subcounty.id, name: subcounty.name, districtDataId });
+        }
       }
 
-      for (const parish of parishes) {
-        try {
-          // Check if parish already exists
-          const existing = await ctx.db
-            .query("parishes")
-            .withIndex("by_code", (q) => q.eq("code", parish.code))
-            .first();
+      for (const subcounty of subcountyItems) {
+        const districtId = districtMap.get(subcounty.districtDataId);
+        if (!districtId) {
+          continue;
+        }
+        const key = `${districtId}:${normalizeName(subcounty.name)}`;
+        const existingId = existingSubcountyByKey.get(key);
+        if (existingId) {
+          subcountyMap.set(subcounty.id, existingId);
+        }
+      }
 
-          if (existing) {
+      const parishItems: Array<{ id: string; name: string; subcountyDataId: string; order: number }> = [];
+      for (const [subcountyDataId, parishes] of parishesBySubcountyDataId.entries()) {
+        const sortedParishes = [...parishes].sort((a, b) =>
+          a.name.localeCompare(b.name, "en", { sensitivity: "base" })
+        );
+        let parishOrder = 1;
+        for (const parish of sortedParishes) {
+          parishItems.push({
+            id: parish.id,
+            name: parish.name,
+            subcountyDataId,
+            order: parishOrder++,
+          });
+        }
+      }
+
+      const batch = parishItems.slice(offset, offset + limit);
+      for (const parish of batch) {
+        const subcountyId = subcountyMap.get(parish.subcountyDataId);
+        if (!subcountyId) {
+          results.errors.push(`Subcounty ${parish.subcountyDataId} not found for parish ${parish.name}`);
+          continue;
+        }
+
+        try {
+          const existingKey = `${subcountyId}:${normalizeName(parish.name)}`;
+          const existingId = existingParishByKey.get(existingKey);
+
+          if (existingId) {
             if (args.skipExisting) {
               results.parishesSkipped++;
               continue;
             } else {
-              throw new Error(`Parish ${parish.name} (${parish.code}) already exists`);
+              throw new Error(`Parish ${parish.name} already exists`);
             }
           }
 
-          // Create parish
           const utid = generateUTID(adminUser.role);
+          const code = `UGP-${parish.id}`;
           await ctx.db.insert("parishes", {
             subcountyId,
             name: parish.name,
-            code: parish.code,
+            code,
             active: true,
             order: parish.order,
             createdAt: getUgandaTime(),
@@ -194,18 +323,27 @@ export const seedUgandaLocations = mutation({
 
           results.parishesCreated++;
 
-          // Log admin action
           await ctx.db.insert("adminActions", {
             adminId: args.adminId,
             actionType: "create_parish",
             utid,
-            reason: `Seeded parish: ${parish.name} (${parish.code})`,
+            reason: `Seeded parish: ${parish.name} (${code})`,
             timestamp: getUgandaTime(),
           });
         } catch (error: any) {
           results.errors.push(`Parish ${parish.name}: ${error.message}`);
         }
       }
+
+      const nextOffset = offset + batch.length < parishItems.length ? offset + batch.length : null;
+
+      return {
+        success: true,
+        message: `Parish seeding batch completed. Created: ${results.parishesCreated}, Skipped: ${results.parishesSkipped}.`,
+        nextOffset,
+        total: parishItems.length,
+        ...results,
+      };
     }
 
     return {

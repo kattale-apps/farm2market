@@ -14,6 +14,7 @@ export default function SeedLocationsPage() {
   const [results, setResults] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [skipExisting, setSkipExisting] = useState(true);
+  const [batchSize, setBatchSize] = useState(200);
 
   // Get current user from localStorage (pilot mode)
   useEffect(() => {
@@ -37,6 +38,39 @@ export default function SeedLocationsPage() {
     }
   }, [router]);
 
+  const runBatchStage = async (stage: "subcounties" | "parishes") => {
+    if (!userId) return { created: 0, skipped: 0, errors: [] as string[] };
+
+    let offset: number | null = 0;
+    let totalCreated = 0;
+    let totalSkipped = 0;
+    const totalErrors: string[] = [];
+    let total: number | undefined;
+
+    while (offset !== null) {
+      setStatus(
+        `Seeding ${stage}... ${total ? `${Math.min(offset + batchSize, total)}/${total}` : `batch starting at ${offset}`}`
+      );
+      const res: any = await seedLocations({
+        adminId: userId,
+        skipExisting,
+        stage,
+        offset,
+        limit: batchSize,
+      });
+
+      totalCreated += res.subcountiesCreated || res.parishesCreated || 0;
+      totalSkipped += res.subcountiesSkipped || res.parishesSkipped || 0;
+      if (res.errors?.length) {
+        totalErrors.push(...res.errors);
+      }
+      total = res.total ?? total;
+      offset = res.nextOffset ?? null;
+    }
+
+    return { created: totalCreated, skipped: totalSkipped, errors: totalErrors };
+  };
+
   const handleSeed = async () => {
     if (!userId) return;
 
@@ -45,16 +79,32 @@ export default function SeedLocationsPage() {
     setResults(null);
 
     try {
-      const res = await seedLocations({
+      const districtRes = await seedLocations({
         adminId: userId,
         skipExisting,
+        stage: "districts",
       });
-      setResults(res);
-      if (res.success) {
-        setStatus("✅ Uganda locations seeded successfully!");
-      } else {
-        setStatus(`❌ Error: ${res.message || "Unknown error"}`);
-      }
+
+      const subcountyRes = await runBatchStage("subcounties");
+      const parishRes = await runBatchStage("parishes");
+
+      const combinedResults = {
+        districtsCreated: districtRes.districtsCreated || 0,
+        districtsSkipped: districtRes.districtsSkipped || 0,
+        subcountiesCreated: subcountyRes.created,
+        subcountiesSkipped: subcountyRes.skipped,
+        parishesCreated: parishRes.created,
+        parishesSkipped: parishRes.skipped,
+        errors: [
+          ...(districtRes.errors || []),
+          ...subcountyRes.errors,
+          ...parishRes.errors,
+        ],
+        success: true,
+      };
+
+      setResults(combinedResults);
+      setStatus("✅ Uganda locations seeded successfully!");
     } catch (error: any) {
       setStatus(`❌ Error: ${error.message}`);
       setResults(null);
@@ -117,6 +167,27 @@ export default function SeedLocationsPage() {
           </label>
           <p style={{ fontSize: "0.9rem", color: "#666", marginLeft: "1.75rem" }}>
             If checked, locations that already exist will be skipped. If unchecked, the operation will fail if duplicates are found.
+          </p>
+          <label style={{ display: "block", marginTop: "1rem", fontSize: "0.9rem", color: "#2c2c2c", fontWeight: 600 }}>
+            Batch size
+          </label>
+          <input
+            type="number"
+            min={50}
+            max={500}
+            step={50}
+            value={batchSize}
+            onChange={(e) => setBatchSize(Number(e.target.value))}
+            style={{
+              width: "140px",
+              marginTop: "0.5rem",
+              padding: "0.5rem",
+              border: "1px solid #ddd",
+              borderRadius: "6px",
+            }}
+          />
+          <p style={{ fontSize: "0.85rem", color: "#666", marginTop: "0.5rem" }}>
+            Recommended: 200. Larger batches may time out.
           </p>
         </div>
 
@@ -187,9 +258,7 @@ export default function SeedLocationsPage() {
         <div style={{ marginTop: "2rem", padding: "1rem", background: "#fff3cd", borderRadius: "8px", border: "1px solid #ffc107" }}>
           <h4 style={{ fontSize: "1rem", marginBottom: "0.5rem", color: "#856404" }}>Note:</h4>
           <p style={{ fontSize: "0.9rem", color: "#856404", margin: 0, lineHeight: "1.6" }}>
-            This operation will create all districts in Uganda (135+ districts). 
-            Subcounties and parishes are included for major districts as examples. 
-            For complete subcounty and parish data, you may need to import additional data from UBOS or other official sources.
+            This uses the full Uganda administrative hierarchy (districts, subcounties, parishes) and runs in batches to avoid timeouts.
           </p>
         </div>
       </div>

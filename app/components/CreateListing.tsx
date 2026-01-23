@@ -22,6 +22,7 @@ export function CreateListing({ userId }: CreateListingProps) {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   
   const [listingMode, setListingMode] = useState<"unit" | "garden">("unit");
+  const [gardenSizeMode, setGardenSizeMode] = useState<"acres" | "emiigo">("acres");
   const [formData, setFormData] = useState({
     produceType: "",
     totalKilos: "",
@@ -48,6 +49,19 @@ export function CreateListing({ userId }: CreateListingProps) {
 
   const formatUGX = (amount: number) => {
     return new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX" }).format(amount);
+  };
+
+  const getGardenSizeAcres = () => {
+    if (gardenSizeMode === "acres") {
+      return parseFloat(formData.gardenSize);
+    }
+    const length = parseFloat(formData.gardenLength);
+    const width = parseFloat(formData.gardenWidth);
+    if (isNaN(length) || isNaN(width)) {
+      return NaN;
+    }
+    const sqftPerAcre = 43560;
+    return (length * width) / sqftPerAcre;
   };
 
   // Filter produce types based on selected location
@@ -96,11 +110,16 @@ export function CreateListing({ userId }: CreateListingProps) {
         return;
       }
 
-      const totalKilos = parseFloat(formData.totalKilos);
-      if (isNaN(totalKilos) || totalKilos <= 0) {
-        setMessage({ type: "error", text: "Total kilos must be a positive number" });
-        setLoading(false);
-        return;
+      let totalKilos: number;
+      if (listingMode === "garden") {
+        totalKilos = 1;
+      } else {
+        totalKilos = parseFloat(formData.totalKilos);
+        if (isNaN(totalKilos) || totalKilos <= 0) {
+          setMessage({ type: "error", text: "Total kilos must be a positive number" });
+          setLoading(false);
+          return;
+        }
       }
 
       let pricePerKilo: number;
@@ -117,21 +136,27 @@ export function CreateListing({ userId }: CreateListingProps) {
           return;
         }
 
-        gardenSize = parseFloat(formData.gardenSize);
+        gardenSize = getGardenSizeAcres();
         if (isNaN(gardenSize) || gardenSize <= 0) {
-          setMessage({ type: "error", text: "Garden size (acres) is required" });
+          setMessage({
+            type: "error",
+            text: gardenSizeMode === "acres"
+              ? "Garden size (acres) is required"
+              : "Garden dimensions are required to calculate acres",
+          });
           setLoading(false);
           return;
         }
 
-        // Calculate price per kilo from total price
+        // Calculate price per kilo from total price (garden mode uses 1 unit)
         pricePerKilo = totalPrice / totalKilos;
 
-        // Store garden dimensions
-        if (formData.gardenLength && formData.gardenWidth) {
+        // Store garden dimensions when provided (emiigo mode)
+        if (gardenSizeMode === "emiigo" && formData.gardenLength && formData.gardenWidth) {
           gardenDimensions = {
             length: parseFloat(formData.gardenLength),
             width: parseFloat(formData.gardenWidth),
+            unit: "ft",
           };
         }
       } else {
@@ -177,6 +202,7 @@ export function CreateListing({ userId }: CreateListingProps) {
         totalPrice: "",
       });
       setListingMode("unit");
+      setGardenSizeMode("acres");
 
       // Hide form after success
       setTimeout(() => {
@@ -199,17 +225,21 @@ export function CreateListing({ userId }: CreateListingProps) {
         <button
           onClick={() => setShowForm(true)}
           style={{
-            padding: "0.75rem 1.5rem",
-            background: "#4caf50",
-            color: "#fff",
-            border: "none",
-            borderRadius: "8px",
+            padding: "0.85rem 1.5rem",
+            background: "#fbc02d",
+            color: "#1a1a1a",
+            border: "2px solid #000",
+            borderRadius: "10px",
             cursor: "pointer",
-            fontSize: "1rem",
-            fontWeight: "600",
+            fontSize: "1.05rem",
+            fontWeight: "700",
+            width: "100%",
+            textAlign: "center",
+            boxShadow: "0 0 12px rgba(251, 192, 45, 0.7)",
+            textTransform: "none",
           }}
         >
-          + Create New Listing
+          Tunda Ebirime • Create New Listing
         </button>
       </div>
     );
@@ -245,6 +275,7 @@ export function CreateListing({ userId }: CreateListingProps) {
               totalPrice: "",
             });
             setListingMode("unit");
+            setGardenSizeMode("acres");
           }}
           style={{
             padding: "0.5rem 1rem",
@@ -447,85 +478,84 @@ export function CreateListing({ userId }: CreateListingProps) {
             )}
           </div>
 
-          <div>
-            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
-              Total Kilos *
-            </label>
-            <input
-              type="number"
-              value={formData.totalKilos}
-              onChange={(e) => setFormData({ ...formData, totalKilos: e.target.value })}
-              placeholder="e.g., 50, 100, 150"
-              min="0.1"
-              step="0.1"
-              required
-              style={{
-                width: "100%",
-                padding: "0.75rem",
-                border: "1px solid #ddd",
-                borderRadius: "6px",
-                fontSize: "1rem",
-              }}
-            />
-            <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.85rem", color: "#666" }}>
-              {listingMode === "garden"
-                ? "Total weight of produce from your entire garden plot."
-                : "You can list any amount of kilos. Units will be created automatically (10kg each, or less if total is under 10kg)."}
-            </p>
-          </div>
+          {listingMode !== "garden" && (
+            <div>
+              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                Total Kilos *
+              </label>
+              <input
+                type="number"
+                value={formData.totalKilos}
+                onChange={(e) => setFormData({ ...formData, totalKilos: e.target.value })}
+                placeholder="e.g., 50, 100, 150"
+                min="0.1"
+                step="0.1"
+                required
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  border: "1px solid #ddd",
+                  borderRadius: "6px",
+                  fontSize: "1rem",
+                }}
+              />
+              <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.85rem", color: "#666" }}>
+                You can list any amount of kilos. Units will be created automatically (10kg each, or less if total is under 10kg).
+              </p>
+            </div>
+          )}
 
           {listingMode === "garden" ? (
             <>
               <div>
                 <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
-                  Garden Size (Acres) *
+                  Measurement Mode *
                 </label>
-                <input
-                  type="number"
-                  value={formData.gardenSize}
-                  onChange={(e) => setFormData({ ...formData, gardenSize: e.target.value })}
-                  placeholder="e.g., 0.5, 1.0, 2.5"
-                  min="0.01"
-                  step="0.01"
-                  required
-                  style={{
-                    width: "100%",
-                    padding: "0.75rem",
-                    border: "1px solid #ddd",
-                    borderRadius: "6px",
-                    fontSize: "1rem",
-                  }}
-                />
+                <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
+                    <input
+                      type="radio"
+                      name="gardenSizeMode"
+                      value="acres"
+                      checked={gardenSizeMode === "acres"}
+                      onChange={() => {
+                        setGardenSizeMode("acres");
+                        setFormData({ ...formData, gardenLength: "", gardenWidth: "" });
+                      }}
+                    />
+                    <span>Acres (standard)</span>
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
+                    <input
+                      type="radio"
+                      name="gardenSizeMode"
+                      value="emiigo"
+                      checked={gardenSizeMode === "emiigo"}
+                      onChange={() => {
+                        setGardenSizeMode("emiigo");
+                        setFormData({ ...formData, gardenSize: "" });
+                      }}
+                    />
+                    <span>Emiigo (Length × Width)</span>
+                  </label>
+                </div>
               </div>
-              <div>
-                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
-                  Garden Dimensions (Optional)
-                </label>
-                <div style={{ display: "flex", gap: "1rem" }}>
+
+              {gardenSizeMode === "acres" ? (
+                <div>
+                  <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                    Garden Size (Acres) *
+                  </label>
                   <input
                     type="number"
-                    value={formData.gardenLength}
-                    onChange={(e) => setFormData({ ...formData, gardenLength: e.target.value })}
-                    placeholder="Length"
+                    value={formData.gardenSize}
+                    onChange={(e) => setFormData({ ...formData, gardenSize: e.target.value })}
+                    placeholder="e.g., 0.5, 1.0, 2.5"
                     min="0.01"
                     step="0.01"
+                    required={gardenSizeMode === "acres"}
                     style={{
-                      flex: 1,
-                      padding: "0.75rem",
-                      border: "1px solid #ddd",
-                      borderRadius: "6px",
-                      fontSize: "1rem",
-                    }}
-                  />
-                  <input
-                    type="number"
-                    value={formData.gardenWidth}
-                    onChange={(e) => setFormData({ ...formData, gardenWidth: e.target.value })}
-                    placeholder="Width"
-                    min="0.01"
-                    step="0.01"
-                    style={{
-                      flex: 1,
+                      width: "100%",
                       padding: "0.75rem",
                       border: "1px solid #ddd",
                       borderRadius: "6px",
@@ -533,7 +563,48 @@ export function CreateListing({ userId }: CreateListingProps) {
                     }}
                   />
                 </div>
-              </div>
+              ) : (
+                <div>
+                  <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                    Garden Dimensions (Emiigo) *
+                  </label>
+                  <div style={{ display: "flex", gap: "1rem" }}>
+                    <input
+                      type="number"
+                      value={formData.gardenLength}
+                      onChange={(e) => setFormData({ ...formData, gardenLength: e.target.value })}
+                      placeholder="Length (ft)"
+                      min="0.01"
+                      step="0.01"
+                      style={{
+                        flex: 1,
+                        padding: "0.75rem",
+                        border: "1px solid #ddd",
+                        borderRadius: "6px",
+                        fontSize: "1rem",
+                      }}
+                    />
+                    <input
+                      type="number"
+                      value={formData.gardenWidth}
+                      onChange={(e) => setFormData({ ...formData, gardenWidth: e.target.value })}
+                      placeholder="Width (ft)"
+                      min="0.01"
+                      step="0.01"
+                      style={{
+                        flex: 1,
+                        padding: "0.75rem",
+                        border: "1px solid #ddd",
+                        borderRadius: "6px",
+                        fontSize: "1rem",
+                      }}
+                    />
+                  </div>
+                  <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.85rem", color: "#666" }}>
+                    Estimated size: {isNaN(getGardenSizeAcres()) ? "—" : `${getGardenSizeAcres().toFixed(2)} acres`}
+                  </p>
+                </div>
+              )}
               <div>
                 <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
                   Total Price for Entire Garden (UGX) *
@@ -554,9 +625,9 @@ export function CreateListing({ userId }: CreateListingProps) {
                     fontSize: "1rem",
                   }}
                 />
-                {formData.totalPrice && formData.totalKilos && (
+                {formData.totalPrice && (
                   <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.85rem", color: "#666" }}>
-                    Price per kilo: {formatUGX(parseFloat(formData.totalPrice) / parseFloat(formData.totalKilos))}
+                    Total price: {formatUGX(parseFloat(formData.totalPrice))}
                   </p>
                 )}
               </div>

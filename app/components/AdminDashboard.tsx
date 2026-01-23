@@ -82,9 +82,14 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
     api.messages.getAdminMessageThreads,
     isSuperAdmin ? { adminId: userId } : "skip"
   );
+  const userMessageThreads = useQuery(
+    api.messages.getUserMessageThreads,
+    userId ? { userId } : "skip"
+  );
   const [selectedMessageUtid, setSelectedMessageUtid] = useState<string | null>(null);
-  const inboxUnreadCount = adminMessageThreads
-    ? adminMessageThreads.reduce((sum: number, thread: any) => sum + (thread.unreadCount || 0), 0)
+  const inboxThreads = isSuperAdmin ? adminMessageThreads : userMessageThreads;
+  const inboxUnreadCount = inboxThreads
+    ? inboxThreads.reduce((sum: number, thread: any) => sum + (thread.unreadCount || 0), 0)
     : 0;
   
   const [reason, setReason] = useState("");
@@ -179,34 +184,32 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
         }}>
           System Status: {pilotMode === undefined ? "Connecting..." : pilotMode.pilotMode ? "MAINTENANCE" : "LIVE"}
         </p>
-        {isSuperAdmin && (
-          <div style={{ marginTop: "0.75rem", display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-            <button
-              type="button"
-              onClick={() => {
-                const inbox = document.getElementById("superadmin-inbox");
-                if (inbox) {
-                  inbox.scrollIntoView({ behavior: "smooth" });
-                }
-              }}
-              style={{
-                padding: "0.6rem 1rem",
-                background: "#1976d2",
-                color: "#fff",
-                border: "none",
-                borderRadius: "8px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "0.9rem",
-              }}
-            >
-              📬 Inbox {inboxUnreadCount > 0 ? `(${inboxUnreadCount})` : ""}
-            </button>
-            <span style={{ fontSize: "0.85rem", color: "#2e7d32", fontWeight: "600" }}>
-              ● Live
-            </span>
-          </div>
-        )}
+        <div style={{ marginTop: "0.75rem", display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={() => {
+              const inbox = document.getElementById("admin-inbox");
+              if (inbox) {
+                inbox.scrollIntoView({ behavior: "smooth" });
+              }
+            }}
+            style={{
+              padding: "0.6rem 1rem",
+              background: "#1976d2",
+              color: "#fff",
+              border: "none",
+              borderRadius: "8px",
+              cursor: "pointer",
+              fontWeight: "600",
+              fontSize: "0.9rem",
+            }}
+          >
+            📬 Inbox {inboxUnreadCount > 0 ? `(${inboxUnreadCount})` : ""}
+          </button>
+          <span style={{ fontSize: "0.85rem", color: "#2e7d32", fontWeight: "600" }}>
+            ● Live
+          </span>
+        </div>
       </div>
 
       {/* Red Flags Summary */}
@@ -864,9 +867,10 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
         </div>
       )}
 
-      {/* SuperAdmin Inbox */}
-      {isSuperAdmin && (
-        <div style={{
+      {/* Admin Inbox */}
+      <div
+        id="admin-inbox"
+        style={{
           marginBottom: "2rem",
           padding: "clamp(1rem, 3vw, 1.5rem)",
           background: "#fff",
@@ -888,11 +892,11 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
             fontWeight: "600",
             letterSpacing: "-0.01em"
           }}>
-            SuperAdmin Inbox
+            Admin Inbox
           </h3>
-          {adminMessageThreads === undefined ? (
+          {inboxThreads === undefined ? (
             <p style={{ color: "#999" }}>Loading message threads...</p>
-          ) : adminMessageThreads.length === 0 ? (
+          ) : inboxThreads.length === 0 ? (
             <p style={{ color: "#666" }}>No messages yet.</p>
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "minmax(220px, 1fr) 2fr", gap: "1rem" }}>
@@ -903,9 +907,12 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                 maxHeight: "500px",
                 overflowY: "auto"
               }}>
-                {adminMessageThreads.map((thread: any) => {
+                {inboxThreads.map((thread: any) => {
                   const isSelected = selectedMessageUtid === thread.utid;
                   const contact = thread.otherUserEmail || thread.otherUserPhoneNumber;
+                  const title = isSuperAdmin
+                    ? `${thread.otherUserAlias}${contact ? ` (${contact})` : ""}`
+                    : "Conversation";
                   return (
                     <button
                       key={thread.utid}
@@ -921,14 +928,16 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                       }}
                     >
                       <div style={{ fontWeight: "600", color: "#2c2c2c" }}>
-                        {thread.otherUserAlias}{contact ? ` (${contact})` : ""}
+                        {title}
                       </div>
                       <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.25rem" }}>
                         UTID: {thread.utid}
                       </div>
-                      <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.25rem" }}>
-                        {thread.lastMessage}
-                      </div>
+                      {thread.lastMessage && (
+                        <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.25rem" }}>
+                          {thread.lastMessage}
+                        </div>
+                      )}
                       {thread.unreadCount > 0 && (
                         <div style={{ marginTop: "0.35rem", fontSize: "0.75rem", color: "#d32f2f", fontWeight: "600" }}>
                           {thread.unreadCount} unread
@@ -956,7 +965,6 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
             </div>
           )}
         </div>
-      )}
 
       {/* Purchase Window Control - Super Admin Only */}
       {isSuperAdmin && (

@@ -83,6 +83,9 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
     isSuperAdmin ? { adminId: userId } : "skip"
   );
   const [selectedMessageUtid, setSelectedMessageUtid] = useState<string | null>(null);
+  const inboxUnreadCount = adminMessageThreads
+    ? adminMessageThreads.reduce((sum: number, thread: any) => sum + (thread.unreadCount || 0), 0)
+    : 0;
   
   const [reason, setReason] = useState("");
   const [windowActionLoading, setWindowActionLoading] = useState(false);
@@ -176,6 +179,34 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
         }}>
           System Status: {pilotMode === undefined ? "Connecting..." : pilotMode.pilotMode ? "MAINTENANCE" : "LIVE"}
         </p>
+        {isSuperAdmin && (
+          <div style={{ marginTop: "0.75rem", display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={() => {
+                const inbox = document.getElementById("superadmin-inbox");
+                if (inbox) {
+                  inbox.scrollIntoView({ behavior: "smooth" });
+                }
+              }}
+              style={{
+                padding: "0.6rem 1rem",
+                background: "#1976d2",
+                color: "#fff",
+                border: "none",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "0.9rem",
+              }}
+            >
+              📬 Inbox {inboxUnreadCount > 0 ? `(${inboxUnreadCount})` : ""}
+            </button>
+            <span style={{ fontSize: "0.85rem", color: "#2e7d32", fontWeight: "600" }}>
+              ● Live
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Red Flags Summary */}
@@ -683,7 +714,9 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
 
       {/* Delivery Confirmations (SuperAdmin only) */}
       {isSuperAdmin && (
-        <div style={{
+        <div
+          id="superadmin-inbox"
+          style={{
           marginBottom: "2rem",
           padding: "clamp(1rem, 3vw, 1.5rem)",
           background: "#fff",

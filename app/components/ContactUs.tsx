@@ -10,12 +10,18 @@ import { useState } from "react";
 
 interface ContactUsProps {
   isMobile?: boolean;
+  onOpenInbox?: () => void;
 }
 
-export function ContactUs({ isMobile = false }: ContactUsProps) {
+export function ContactUs({ isMobile = false, onOpenInbox }: ContactUsProps) {
   const [showContact, setShowContact] = useState(false);
   const [accountLabel, setAccountLabel] = useState("");
   const handleOpenInbox = () => {
+    if (onOpenInbox) {
+      onOpenInbox();
+      setShowContact(false);
+      return;
+    }
     const inboxHeading = Array.from(document.querySelectorAll("h3")).find((el) => {
       const text = el.textContent || "";
       return text.includes("Messages Inbox") || text.includes("Admin Inbox");

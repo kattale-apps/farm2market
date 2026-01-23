@@ -60,6 +60,15 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
   const [ledgerView, setLedgerView] = useState<"list" | "card">("list");
   const [ledgerPage, setLedgerPage] = useState(0);
   const ITEMS_PER_PAGE = 5;
+  const defaultSupportUtid = useMemo(() => {
+    const listingUtid = listings?.listings?.[0]?.utid;
+    if (listingUtid) return listingUtid;
+    const negotiationUtid = (negotiations as any)?.negotiations?.[0]?.negotiationUtid;
+    if (negotiationUtid) return negotiationUtid;
+    const ledgerUtid = transactionsLedger?.[0]?.lockUtid;
+    if (ledgerUtid) return ledgerUtid;
+    return "";
+  }, [listings, negotiations, transactionsLedger]);
 
   const formatDate = (timestamp: number) => {
     // Timestamps are stored in Uganda time, convert for display
@@ -459,7 +468,13 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
           </div>
           <button
             type="button"
-            onClick={() => setMessageInboxOpen(!messageInboxOpen)}
+            onClick={() => {
+              const nextOpen = !messageInboxOpen;
+              setMessageInboxOpen(nextOpen);
+              if (nextOpen && (!messageThreads || messageThreads.length === 0) && defaultSupportUtid) {
+                setSelectedMessageUtid(defaultSupportUtid);
+              }
+            }}
             style={{
               padding: "1rem 1.25rem",
               background: messageInboxOpen ? "#1976d2" : "#f5f5f5",
@@ -484,7 +499,9 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
       </div>
 
       {messageInboxOpen && (
-        <div style={{
+        <div
+          id="message-inbox"
+          style={{
           marginBottom: "1.5rem",
           padding: "clamp(1rem, 3vw, 1.5rem)",
           background: "#fff",
@@ -508,7 +525,18 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
           {messageThreads === undefined ? (
             <p style={{ color: "#999" }}>Loading message threads...</p>
           ) : messageThreads.length === 0 ? (
-            <p style={{ color: "#666" }}>No messages yet. Start a conversation via Contact Us.</p>
+            defaultSupportUtid ? (
+              <div>
+                <p style={{ color: "#666", marginBottom: "0.75rem" }}>
+                  No messages yet. We will start a new conversation linked to UTID: {defaultSupportUtid}.
+                </p>
+                <ThreadView userId={userId} utid={defaultSupportUtid} />
+              </div>
+            ) : (
+              <p style={{ color: "#666" }}>
+                No messages yet. Create a listing or complete a transaction first to open a UTID‑linked thread.
+              </p>
+            )
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "minmax(220px, 1fr) 2fr", gap: "1rem" }}>
               <div style={{
@@ -2592,8 +2620,12 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
         <button
           type="button"
           onClick={() => {
+            setMessageInboxOpen(true);
+            if ((!messageThreads || messageThreads.length === 0) && defaultSupportUtid) {
+              setSelectedMessageUtid(defaultSupportUtid);
+            }
             if (typeof document !== "undefined") {
-              document.getElementById("notification-inbox")?.scrollIntoView({ behavior: "smooth" });
+              document.getElementById("message-inbox")?.scrollIntoView({ behavior: "smooth" });
             }
           }}
           style={{

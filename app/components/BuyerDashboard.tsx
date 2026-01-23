@@ -520,7 +520,9 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       </div>
 
       {messageInboxOpen && (
-        <div style={{
+        <div
+          id="message-inbox"
+          style={{
           marginBottom: "1.5rem",
           padding: "clamp(1rem, 3vw, 1.5rem)",
           background: "#fff",
@@ -1702,7 +1704,21 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       </div>
 
       {/* Contact Us Section */}
-      <ContactUs isMobile={false} />
+      <ContactUs
+        isMobile={false}
+        onOpenInbox={() => {
+          setMessageInboxOpen(true);
+          if ((!messageThreads || messageThreads.length === 0) && selectedMessageUtid === null) {
+            const fallbackUtid = orders?.[0]?.utid || "";
+            if (fallbackUtid) {
+              setSelectedMessageUtid(fallbackUtid);
+            }
+          }
+          if (typeof document !== "undefined") {
+            document.getElementById("message-inbox")?.scrollIntoView({ behavior: "smooth" });
+          }
+        }}
+      />
     </div>
   );
 }

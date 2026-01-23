@@ -14,31 +14,16 @@ interface ContactUsProps {
 
 export function ContactUs({ isMobile = false }: ContactUsProps) {
   const [showContact, setShowContact] = useState(false);
-  const [contactMethod, setContactMethod] = useState<"email" | "whatsapp">("whatsapp");
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [subject, setSubject] = useState("");
-  const [message, setMessage] = useState("");
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (contactMethod === "whatsapp") {
-      // WhatsApp Web API - format message
-      const whatsappMessage = `*Contact from Farm2Market Platform*\n\nName: ${name || "Anonymous"}\nEmail: ${email || "N/A"}\nSubject: ${subject || "General Inquiry"}\n\nMessage:\n${message}`;
-      const whatsappUrl = `https://wa.me/256700000000?text=${encodeURIComponent(whatsappMessage)}`; // Replace with actual SuperAdmin WhatsApp number
-      window.open(whatsappUrl, "_blank");
-    } else {
-      // Email fallback
-      const mailtoLink = `mailto:kattaleglobal@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(`Name: ${name}\nEmail: ${email}\n\nMessage:\n${message}`)}`;
-      window.location.href = mailtoLink;
+  const handleOpenInbox = () => {
+    const inboxTargets = ["message-inbox", "notification-inbox", "admin-inbox"];
+    const targetId = inboxTargets.find((id) => document.getElementById(id));
+    if (targetId) {
+      document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth" });
+      setShowContact(false);
+      return;
     }
-    
+    alert("Inbox panel not found. Please open your inbox from the dashboard.");
     setShowContact(false);
-    setName("");
-    setEmail("");
-    setSubject("");
-    setMessage("");
   };
 
   if (!showContact) {
@@ -76,7 +61,7 @@ export function ContactUs({ isMobile = false }: ContactUsProps) {
           color: "#666",
           textAlign: "center"
         }}>
-          Need help? Contact SuperAdmin via WhatsApp or Email
+          Need help? Contact Admin in-app.
         </p>
       </div>
     );
@@ -125,151 +110,16 @@ export function ContactUs({ isMobile = false }: ContactUsProps) {
         </button>
       </div>
 
-      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-        <div>
-          <label style={{
-            display: "block",
-            marginBottom: "0.5rem",
-            fontWeight: "600",
-            color: "#2c2c2c",
-            fontSize: isMobile ? "0.9rem" : "1rem"
-          }}>
-            Contact Method
-          </label>
-          <div style={{ display: "flex", gap: "1rem" }}>
-            <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
-              <input
-                type="radio"
-                name="contactMethod"
-                value="whatsapp"
-                checked={contactMethod === "whatsapp"}
-                onChange={(e) => setContactMethod(e.target.value as "whatsapp" | "email")}
-              />
-              <span>WhatsApp</span>
-            </label>
-            <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
-              <input
-                type="radio"
-                name="contactMethod"
-                value="email"
-                checked={contactMethod === "email"}
-                onChange={(e) => setContactMethod(e.target.value as "whatsapp" | "email")}
-              />
-              <span>Email</span>
-            </label>
-          </div>
-        </div>
-
-        <div>
-          <label style={{
-            display: "block",
-            marginBottom: "0.5rem",
-            fontWeight: "600",
-            color: "#2c2c2c",
-            fontSize: isMobile ? "0.9rem" : "1rem"
-          }}>
-            Name
-          </label>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            style={{
-              width: "100%",
-              padding: "0.75rem",
-              border: "1px solid #ddd",
-              borderRadius: "6px",
-              fontSize: isMobile ? "0.9rem" : "1rem",
-              fontFamily: '"Montserrat", sans-serif',
-              boxSizing: "border-box"
-            }}
-          />
-        </div>
-
-        <div>
-          <label style={{
-            display: "block",
-            marginBottom: "0.5rem",
-            fontWeight: "600",
-            color: "#2c2c2c",
-            fontSize: isMobile ? "0.9rem" : "1rem"
-          }}>
-            Email
-          </label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            style={{
-              width: "100%",
-              padding: "0.75rem",
-              border: "1px solid #ddd",
-              borderRadius: "6px",
-              fontSize: isMobile ? "0.9rem" : "1rem",
-              fontFamily: '"Montserrat", sans-serif',
-              boxSizing: "border-box"
-            }}
-          />
-        </div>
-
-        <div>
-          <label style={{
-            display: "block",
-            marginBottom: "0.5rem",
-            fontWeight: "600",
-            color: "#2c2c2c",
-            fontSize: isMobile ? "0.9rem" : "1rem"
-          }}>
-            Subject
-          </label>
-          <input
-            type="text"
-            value={subject}
-            onChange={(e) => setSubject(e.target.value)}
-            style={{
-              width: "100%",
-              padding: "0.75rem",
-              border: "1px solid #ddd",
-              borderRadius: "6px",
-              fontSize: isMobile ? "0.9rem" : "1rem",
-              fontFamily: '"Montserrat", sans-serif',
-              boxSizing: "border-box"
-            }}
-          />
-        </div>
-
-        <div>
-          <label style={{
-            display: "block",
-            marginBottom: "0.5rem",
-            fontWeight: "600",
-            color: "#2c2c2c",
-            fontSize: isMobile ? "0.9rem" : "1rem"
-          }}>
-            Message
-          </label>
-          <textarea
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            rows={4}
-            style={{
-              width: "100%",
-              padding: "0.75rem",
-              border: "1px solid #ddd",
-              borderRadius: "6px",
-              fontSize: isMobile ? "0.9rem" : "1rem",
-              fontFamily: '"Montserrat", sans-serif',
-              resize: "vertical",
-              boxSizing: "border-box"
-            }}
-          />
-        </div>
-
+      <div style={{ display: "grid", gap: "1rem" }}>
+        <p style={{ margin: 0, color: "#555", fontSize: isMobile ? "0.9rem" : "1rem" }}>
+          Use the in-app inbox to contact Admin. This keeps your messages secure and UTID-linked.
+        </p>
         <button
-          type="submit"
+          type="button"
+          onClick={handleOpenInbox}
           style={{
             padding: "0.75rem 1.5rem",
-            background: "#2e7d32",
+            background: "#1976d2",
             color: "white",
             border: "none",
             borderRadius: "6px",
@@ -279,12 +129,12 @@ export function ContactUs({ isMobile = false }: ContactUsProps) {
             transition: "background 0.3s",
             fontFamily: '"Montserrat", sans-serif'
           }}
-          onMouseEnter={(e) => e.currentTarget.style.background = "#1b5e20"}
-          onMouseLeave={(e) => e.currentTarget.style.background = "#2e7d32"}
+          onMouseEnter={(e) => e.currentTarget.style.background = "#1565c0"}
+          onMouseLeave={(e) => e.currentTarget.style.background = "#1976d2"}
         >
-          Send Message
+          Open Inbox
         </button>
-      </form>
+      </div>
     </div>
   );
 }

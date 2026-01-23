@@ -7,6 +7,7 @@ import { useState } from "react";
 import { exportToExcel, exportToPDF, formatUTIDDataForExport } from "../utils/exportUtils";
 import { formatUgandaDateTime, getUgandaTime } from "../utils/timeUtils";
 import { NotificationMailbox } from "./NotificationMailbox";
+import { ThreadView } from "./messages/ThreadView";
 import { ContactUs } from "./ContactUs";
 
 interface BuyerDashboardProps {
@@ -24,6 +25,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   const walletReport = useQuery(api.buyerDashboard.getBuyerWalletReport, { buyerId: userId });
   const createPurchase = useMutation(api.buyers.createBuyerPurchase);
   const makeBuyerOffer = useMutation(api.traderBuyerNegotiations.makeBuyerOffer);
+  const messageThreads = useQuery(api.messages.getUserMessageThreads, { userId });
   
   const [selectedInventoryUtids, setSelectedInventoryUtids] = useState<Set<string>>(new Set());
   const [bulkOfferPrice, setBulkOfferPrice] = useState<string>("");
@@ -39,6 +41,8 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   const [depositAmount, setDepositAmount] = useState<string>("");
   const [isDepositing, setIsDepositing] = useState(false);
   const [depositMessage, setDepositMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [messageInboxOpen, setMessageInboxOpen] = useState(false);
+  const [selectedMessageUtid, setSelectedMessageUtid] = useState<string | null>(null);
 
   const formatUGX = (amount: number) => {
     return new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX" }).format(amount);
@@ -492,8 +496,111 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
             Storage Location: Warehouse Name
           </p>
         </div>
-        <NotificationMailbox userId={userId} />
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+          <NotificationMailbox userId={userId} />
+          <button
+            type="button"
+            onClick={() => setMessageInboxOpen(!messageInboxOpen)}
+            style={{
+              padding: "0.5rem 1rem",
+              background: messageInboxOpen ? "#1976d2" : "#f5f5f5",
+              color: messageInboxOpen ? "#fff" : "#333",
+              border: "1px solid #ddd",
+              borderRadius: "6px",
+              cursor: "pointer",
+              fontSize: "0.9rem",
+              fontWeight: "600"
+            }}
+          >
+            📩 Inbox {messageThreads && messageThreads.length > 0
+              ? `(${messageThreads.reduce((sum, t) => sum + (t.unreadCount || 0), 0)})`
+              : ""}
+          </button>
+        </div>
       </div>
+
+      {messageInboxOpen && (
+        <div style={{
+          marginBottom: "1.5rem",
+          padding: "clamp(1rem, 3vw, 1.5rem)",
+          background: "#fff",
+          borderRadius: "12px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+          border: "1px solid #e0e0e0"
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.75rem" }}>
+            <h3 style={{
+              margin: 0,
+              fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)",
+              color: "#2c2c2c",
+              fontFamily: '"Montserrat", sans-serif',
+              fontWeight: "600",
+              letterSpacing: "-0.01em"
+            }}>
+              Messages Inbox
+            </h3>
+            <span style={{ fontSize: "0.85rem", color: "#2e7d32", fontWeight: "600" }}>● Live</span>
+          </div>
+          {messageThreads === undefined ? (
+            <p style={{ color: "#999" }}>Loading message threads...</p>
+          ) : messageThreads.length === 0 ? (
+            <p style={{ color: "#666" }}>No messages yet. Start a conversation via Contact Us.</p>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(220px, 1fr) 2fr", gap: "1rem" }}>
+              <div style={{
+                border: "1px solid #e0e0e0",
+                borderRadius: "8px",
+                overflow: "hidden",
+                maxHeight: "420px",
+                overflowY: "auto"
+              }}>
+                {messageThreads.map((thread) => {
+                  const isSelected = selectedMessageUtid === thread.utid;
+                  return (
+                    <button
+                      key={thread.utid}
+                      onClick={() => setSelectedMessageUtid(thread.utid)}
+                      style={{
+                        width: "100%",
+                        textAlign: "left",
+                        padding: "0.75rem",
+                        border: "none",
+                        borderBottom: "1px solid #e0e0e0",
+                        background: isSelected ? "#e3f2fd" : "#fff",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <div style={{ fontWeight: "600", color: "#2c2c2c" }}>
+                        UTID: {thread.utid}
+                      </div>
+                      {thread.unreadCount > 0 && (
+                        <div style={{ marginTop: "0.35rem", fontSize: "0.75rem", color: "#d32f2f", fontWeight: "600" }}>
+                          {thread.unreadCount} unread
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              <div>
+                {selectedMessageUtid ? (
+                  <ThreadView userId={userId} utid={selectedMessageUtid} />
+                ) : (
+                  <div style={{
+                    padding: "2rem",
+                    border: "1px dashed #ddd",
+                    borderRadius: "8px",
+                    textAlign: "center",
+                    color: "#666"
+                  }}>
+                    Select a thread to view messages.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Wallet & Deposit Section */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", gap: "1rem", marginBottom: "1.5rem" }}>

@@ -1709,7 +1709,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
         onOpenInbox={() => {
           setMessageInboxOpen(true);
           if ((!messageThreads || messageThreads.length === 0) && selectedMessageUtid === null) {
-            const fallbackUtid = orders?.[0]?.utid || "";
+            const fallbackUtid = orders?.orders?.[0]?.purchaseUtid || "";
             if (fallbackUtid) {
               setSelectedMessageUtid(fallbackUtid);
             }

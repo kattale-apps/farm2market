@@ -296,6 +296,130 @@ export const createCommunity = mutation({
 });
 
 /**
+ * Update a community (SuperAdmin only)
+ */
+export const updateCommunity = mutation({
+  args: {
+    adminId: v.id("users"),
+    communityId: v.id("communities"),
+    name: v.optional(v.string()),
+    description: v.optional(v.string()),
+    isGlobal: v.optional(v.boolean()),
+    geoLocked: v.optional(v.boolean()),
+    regionKey: v.optional(v.string()),
+    districtIds: v.optional(v.array(v.id("districts"))),
+    subcountyIds: v.optional(v.array(v.id("subcounties"))),
+    parishIds: v.optional(v.array(v.id("parishes"))),
+  },
+  handler: async (ctx, args) => {
+    const adminCheck = await verifyAdminRole({
+      userId: args.adminId,
+      db: ctx.db,
+    });
+    if (!adminCheck.authorized) {
+      throw new Error("Only admins can update communities");
+    }
+
+    const adminUser = await ctx.db.get(args.adminId);
+    if (!adminUser || adminUser.role !== "admin") {
+      throw new Error("User is not an admin");
+    }
+    if (!isSuperAdmin(adminUser)) {
+      throw new Error("Only SuperAdmin can update communities");
+    }
+
+    const community = await ctx.db.get(args.communityId);
+    if (!community) {
+      throw new Error("Community not found");
+    }
+
+    const nextIsGlobal = args.isGlobal ?? community.isGlobal;
+    const nextGeoLocked = args.geoLocked ?? community.geoLocked;
+
+    if (nextGeoLocked && nextIsGlobal) {
+      throw new Error("Community cannot be both global and geo-locked");
+    }
+
+    let resolvedDistrictIds = args.districtIds ?? community.districtIds;
+    let resolvedSubcountyIds = args.subcountyIds ?? community.subcountyIds;
+    let resolvedParishIds = args.parishIds ?? community.parishIds;
+
+    if (nextGeoLocked) {
+      const hasExplicitLocation =
+        (resolvedDistrictIds && resolvedDistrictIds.length > 0) ||
+        (resolvedSubcountyIds && resolvedSubcountyIds.length > 0) ||
+        (resolvedParishIds && resolvedParishIds.length > 0);
+
+      if (!hasExplicitLocation && args.regionKey) {
+        const regionGroup = REGION_GROUPS.find((group) => group.key === args.regionKey);
+        if (!regionGroup) {
+          throw new Error("Selected region is not recognized");
+        }
+
+        const allDistricts = await ctx.db.query("districts").collect();
+        const regionDistrictIds = allDistricts
+          .filter((district) =>
+            district.active &&
+            regionGroup.districts.some((name) => normalizeName(name) === normalizeName(district.name))
+          )
+          .map((district) => district._id);
+
+        if (regionDistrictIds.length === 0) {
+          throw new Error("Selected region has no active districts");
+        }
+
+        resolvedDistrictIds = regionDistrictIds;
+      }
+
+      const hasLocation =
+        (resolvedDistrictIds && resolvedDistrictIds.length > 0) ||
+        (resolvedSubcountyIds && resolvedSubcountyIds.length > 0) ||
+        (resolvedParishIds && resolvedParishIds.length > 0);
+
+      if (!hasLocation) {
+        throw new Error("Geo-locked communities must include a region or at least one location");
+      }
+    }
+
+    const updates: any = {};
+    if (args.name !== undefined) {
+      updates.name = args.name.trim();
+    }
+    if (args.description !== undefined) {
+      updates.description = args.description.trim();
+    }
+    if (args.isGlobal !== undefined) {
+      updates.isGlobal = args.isGlobal;
+    }
+    if (args.geoLocked !== undefined) {
+      updates.geoLocked = args.geoLocked;
+    }
+    if (resolvedDistrictIds !== undefined) {
+      updates.districtIds = resolvedDistrictIds;
+    }
+    if (resolvedSubcountyIds !== undefined) {
+      updates.subcountyIds = resolvedSubcountyIds;
+    }
+    if (resolvedParishIds !== undefined) {
+      updates.parishIds = resolvedParishIds;
+    }
+
+    await ctx.db.patch(args.communityId, updates);
+
+    const utid = generateUTID(adminUser.role);
+    await ctx.db.insert("adminActions", {
+      adminId: args.adminId,
+      actionType: "update_community",
+      utid,
+      reason: `Updated community: ${community.name}`,
+      timestamp: getUgandaTime(),
+    });
+
+    return { communityId: args.communityId, utid };
+  },
+});
+
+/**
  * Join a community (farmer only)
  */
 export const joinCommunity = mutation({

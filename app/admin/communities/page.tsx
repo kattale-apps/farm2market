@@ -17,6 +17,14 @@ export default function CommunitiesPage() {
   });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [editingCommunityId, setEditingCommunityId] = useState<string | null>(null);
+  const [editData, setEditData] = useState({
+    name: "",
+    description: "",
+    isGlobal: false,
+    geoLocked: false,
+    regionKey: "",
+  });
   const regionOptions = [
     { key: "central_buganda", label: "Central (Buganda)" },
     { key: "eastern_busoga", label: "Eastern (Busoga)" },
@@ -36,6 +44,7 @@ export default function CommunitiesPage() {
   const communities = useQuery(api.communities.getActiveCommunities, userId ? { userId } : "skip");
   const user = useQuery(api.auth.getUser, userId ? { userId } : "skip");
   const createCommunity = useMutation(api.communities.createCommunity);
+  const updateCommunity = useMutation(api.communities.updateCommunity);
   const adminLevel = (user as any)?.adminLevel;
   const isSuperAdmin = user?.role === "admin" && (adminLevel === "super" || adminLevel === undefined);
   const formatMemberContact = (member: any) => {
@@ -85,6 +94,51 @@ export default function CommunitiesPage() {
       setShowCreateForm(false);
     } catch (error: any) {
       setMessage({ type: "error", text: error.message || "Failed to create community" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const startEdit = (community: any) => {
+    setEditingCommunityId(community.id);
+    setEditData({
+      name: community.name || "",
+      description: community.description || "",
+      isGlobal: !!community.isGlobal,
+      geoLocked: !!community.geoLocked,
+      regionKey: "",
+    });
+  };
+
+  const handleUpdate = async () => {
+    if (!userId || !editingCommunityId) return;
+    if (!editData.name.trim()) {
+      setMessage({ type: "error", text: "Community name cannot be empty" });
+      return;
+    }
+    if (editData.geoLocked && !editData.regionKey) {
+      setMessage({ type: "error", text: "Please select a region for geo-locked communities" });
+      return;
+    }
+
+    setLoading(true);
+    setMessage(null);
+
+    try {
+      await updateCommunity({
+        adminId: userId,
+        communityId: editingCommunityId as Id<"communities">,
+        name: editData.name.trim(),
+        description: editData.description.trim() || undefined,
+        isGlobal: editData.isGlobal,
+        geoLocked: editData.geoLocked,
+        regionKey: editData.geoLocked ? editData.regionKey : undefined,
+      });
+      setMessage({ type: "success", text: "Community updated successfully!" });
+      setEditingCommunityId(null);
+      setEditData({ name: "", description: "", isGlobal: false, geoLocked: false, regionKey: "" });
+    } catch (error: any) {
+      setMessage({ type: "error", text: error.message || "Failed to update community" });
     } finally {
       setLoading(false);
     }
@@ -345,6 +399,146 @@ export default function CommunitiesPage() {
                   {community.isGlobal ? "Global" : "Geo-Locked"}
                 </span>
               </div>
+              {isSuperAdmin && (
+                <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.75rem", flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    onClick={() => startEdit(community)}
+                    style={{
+                      padding: "0.4rem 0.75rem",
+                      background: "#1976d2",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontSize: "0.85rem",
+                      fontWeight: "600",
+                    }}
+                  >
+                    Edit Details
+                  </button>
+                </div>
+              )}
+              {isSuperAdmin && editingCommunityId === community.id && (
+                <div style={{ marginBottom: "1rem", padding: "0.75rem", border: "1px solid #e0e0e0", borderRadius: "8px", background: "#fafafa" }}>
+                  <div style={{ display: "grid", gap: "0.75rem" }}>
+                    <div>
+                      <label style={{ display: "block", marginBottom: "0.35rem", fontWeight: "600" }}>
+                        Community Name *
+                      </label>
+                      <input
+                        type="text"
+                        value={editData.name}
+                        onChange={(e) => setEditData({ ...editData, name: e.target.value })}
+                        style={{
+                          width: "100%",
+                          padding: "0.6rem",
+                          border: "1px solid #ddd",
+                          borderRadius: "6px",
+                          fontSize: "0.95rem",
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", marginBottom: "0.35rem", fontWeight: "600" }}>
+                        Description
+                      </label>
+                      <textarea
+                        value={editData.description}
+                        onChange={(e) => setEditData({ ...editData, description: e.target.value })}
+                        rows={3}
+                        style={{
+                          width: "100%",
+                          padding: "0.6rem",
+                          border: "1px solid #ddd",
+                          borderRadius: "6px",
+                          fontSize: "0.95rem",
+                          fontFamily: "inherit",
+                        }}
+                      />
+                    </div>
+                    <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", cursor: "pointer" }}>
+                        <input
+                          type="checkbox"
+                          checked={editData.isGlobal}
+                          onChange={(e) => setEditData({ ...editData, isGlobal: e.target.checked, geoLocked: e.target.checked ? false : editData.geoLocked })}
+                        />
+                        <span>Global</span>
+                      </label>
+                      <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", cursor: "pointer" }}>
+                        <input
+                          type="checkbox"
+                          checked={editData.geoLocked}
+                          onChange={(e) => setEditData({ ...editData, geoLocked: e.target.checked, isGlobal: e.target.checked ? false : editData.isGlobal, regionKey: e.target.checked ? editData.regionKey : "" })}
+                        />
+                        <span>Geo-Locked</span>
+                      </label>
+                    </div>
+                    {editData.geoLocked && !editData.isGlobal && (
+                      <div>
+                        <label style={{ display: "block", marginBottom: "0.35rem", fontWeight: "600" }}>
+                          Region *
+                        </label>
+                        <select
+                          value={editData.regionKey}
+                          onChange={(e) => setEditData({ ...editData, regionKey: e.target.value })}
+                          style={{
+                            width: "100%",
+                            padding: "0.6rem",
+                            border: "1px solid #ddd",
+                            borderRadius: "6px",
+                            fontSize: "0.95rem",
+                            background: "#fff",
+                          }}
+                        >
+                          <option value="">Select region...</option>
+                          {regionOptions.map((option) => (
+                            <option key={option.key} value={option.key}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    <div style={{ display: "flex", gap: "0.75rem" }}>
+                      <button
+                        type="button"
+                        onClick={handleUpdate}
+                        disabled={loading}
+                        style={{
+                          padding: "0.6rem 1rem",
+                          background: loading ? "#ccc" : "#4caf50",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: "6px",
+                          cursor: loading ? "not-allowed" : "pointer",
+                          fontWeight: "600",
+                        }}
+                      >
+                        {loading ? "Saving..." : "Save Changes"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingCommunityId(null);
+                          setEditData({ name: "", description: "", isGlobal: false, geoLocked: false, regionKey: "" });
+                        }}
+                        style={{
+                          padding: "0.6rem 1rem",
+                          background: "#f5f5f5",
+                          border: "1px solid #ddd",
+                          borderRadius: "6px",
+                          cursor: "pointer",
+                          fontWeight: "600",
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
               {community.description && (
                 <p style={{ color: "#666", marginBottom: "0.5rem" }}>{community.description}</p>
               )}

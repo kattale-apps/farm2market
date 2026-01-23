@@ -411,9 +411,11 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
   return (
     <div style={{ padding: "1rem", maxWidth: "100%", boxSizing: "border-box" }}>
       <div style={{ 
-        display: "flex", 
+        display: "flex",
+        flexDirection: isMobile ? "column" : "row",
         justifyContent: "space-between", 
-        alignItems: "flex-start", 
+        alignItems: isMobile ? "stretch" : "flex-start",
+        gap: isMobile ? "0.75rem" : "1.5rem",
         marginBottom: "1.5rem",
         padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
@@ -421,7 +423,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
         border: "1px solid #e0e0e0"
       }}>
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ marginBottom: "0.5rem" }}>
             <h2 style={{ 
               fontSize: "clamp(1.5rem, 4vw, 1.8rem)", 
@@ -438,7 +440,9 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
             color: "#3d3d3d", 
             fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)",
             fontFamily: '"Montserrat", sans-serif',
-            margin: 0
+            margin: 0,
+            lineHeight: 1.35,
+            wordBreak: "break-word"
           }}>
             Location: {locationDisplay}
           </p>
@@ -453,7 +457,13 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
             </p>
           )}
         </div>
-        <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-start", flexWrap: "wrap" }}>
+        <div style={{
+          display: "flex",
+          gap: "0.75rem",
+          alignItems: "flex-start",
+          flexWrap: "wrap",
+          width: isMobile ? "100%" : "auto",
+        }}>
           <Link
             href="/farmer/profile"
             style={{

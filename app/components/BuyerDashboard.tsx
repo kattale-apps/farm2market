@@ -3,7 +3,7 @@
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { exportToExcel, exportToPDF, formatUTIDDataForExport } from "../utils/exportUtils";
 import { formatUgandaDateTime, getUgandaTime } from "../utils/timeUtils";
 import { NotificationMailbox } from "./NotificationMailbox";
@@ -47,6 +47,12 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   const [isMobile, setIsMobile] = useState(false);
   const inboxRef = useRef<HTMLDivElement>(null);
   const [isInboxNarrow, setIsInboxNarrow] = useState(false);
+  const [inventoryPage, setInventoryPage] = useState(1);
+  const [ordersPage, setOrdersPage] = useState(1);
+  const [ledgerPage, setLedgerPage] = useState(1);
+  const INVENTORY_PAGE_SIZE = 10;
+  const ORDERS_PAGE_SIZE = 6;
+  const LEDGER_PAGE_SIZE = 12;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -121,6 +127,83 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
     return `${hours}h ${minutes}m remaining`;
   };
+
+  const getSortTimestamp = (item: any) => {
+    const raw =
+      item?.timestamp ??
+      item?.updatedAt ??
+      item?.createdAt ??
+      item?.purchasedAt ??
+      item?.purchaseAt ??
+      item?.storageStartTime ??
+      item?._creationTime ??
+      0;
+    if (typeof raw === "number") {
+      return raw;
+    }
+    const parsed = Date.parse(raw);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  };
+
+  const sortedInventory = useMemo(() => {
+    if (!inventory?.inventory) return [];
+    return [...inventory.inventory].sort((a: any, b: any) => getSortTimestamp(b) - getSortTimestamp(a));
+  }, [inventory]);
+
+  const sortedOrders = useMemo(() => {
+    if (!orders?.orders) return [];
+    return [...orders.orders].sort((a: any, b: any) => getSortTimestamp(b) - getSortTimestamp(a));
+  }, [orders]);
+
+  const sortedTransactions = useMemo(() => {
+    if (!transactionLedger?.transactions) return [];
+    return [...transactionLedger.transactions].sort((a: any, b: any) => getSortTimestamp(b) - getSortTimestamp(a));
+  }, [transactionLedger]);
+
+  const inventoryTotal = sortedInventory.length;
+  const inventoryTotalPages = Math.max(1, Math.ceil(inventoryTotal / INVENTORY_PAGE_SIZE));
+  const inventoryStart = inventoryTotal === 0 ? 0 : (inventoryPage - 1) * INVENTORY_PAGE_SIZE + 1;
+  const inventoryEnd = Math.min(inventoryPage * INVENTORY_PAGE_SIZE, inventoryTotal);
+  const pagedInventory = sortedInventory.slice(
+    (inventoryPage - 1) * INVENTORY_PAGE_SIZE,
+    inventoryPage * INVENTORY_PAGE_SIZE
+  );
+
+  const ordersTotal = sortedOrders.length;
+  const ordersTotalPages = Math.max(1, Math.ceil(ordersTotal / ORDERS_PAGE_SIZE));
+  const ordersStart = ordersTotal === 0 ? 0 : (ordersPage - 1) * ORDERS_PAGE_SIZE + 1;
+  const ordersEnd = Math.min(ordersPage * ORDERS_PAGE_SIZE, ordersTotal);
+  const pagedOrders = sortedOrders.slice(
+    (ordersPage - 1) * ORDERS_PAGE_SIZE,
+    ordersPage * ORDERS_PAGE_SIZE
+  );
+
+  const ledgerTotal = sortedTransactions.length;
+  const ledgerTotalPages = Math.max(1, Math.ceil(ledgerTotal / LEDGER_PAGE_SIZE));
+  const ledgerStart = ledgerTotal === 0 ? 0 : (ledgerPage - 1) * LEDGER_PAGE_SIZE + 1;
+  const ledgerEnd = Math.min(ledgerPage * LEDGER_PAGE_SIZE, ledgerTotal);
+  const pagedTransactions = sortedTransactions.slice(
+    (ledgerPage - 1) * LEDGER_PAGE_SIZE,
+    ledgerPage * LEDGER_PAGE_SIZE
+  );
+
+  useEffect(() => {
+    if (inventoryPage > inventoryTotalPages) {
+      setInventoryPage(inventoryTotalPages);
+    }
+  }, [inventoryPage, inventoryTotalPages]);
+
+  useEffect(() => {
+    if (ordersPage > ordersTotalPages) {
+      setOrdersPage(ordersTotalPages);
+    }
+  }, [ordersPage, ordersTotalPages]);
+
+  useEffect(() => {
+    if (ledgerPage > ledgerTotalPages) {
+      setLedgerPage(ledgerTotalPages);
+    }
+  }, [ledgerPage, ledgerTotalPages]);
 
   const exportTransactionLedgerToExcel = () => {
     if (!transactionLedger || transactionLedger.transactions.length === 0) return;
@@ -563,10 +646,11 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
           boxSizing: "border-box",
           overflowX: "hidden",
         }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.75rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "clamp(0.5rem, 2vw, 1rem)", flexWrap: "wrap", gap: "0.5rem" }}>
             <h3 style={{
-              margin: 0,
-              fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)",
+              marginTop: 0,
+              marginBottom: 0,
+              fontSize: "clamp(1.1rem, 3vw, 1.3rem)",
               color: "#2c2c2c",
               fontFamily: '"Montserrat", sans-serif',
               fontWeight: "600",
@@ -574,24 +658,21 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
             }}>
               Messages Inbox
             </h3>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <span style={{ fontSize: "0.85rem", color: "#2e7d32", fontWeight: "600" }}>● Live</span>
-              <button
-                type="button"
-                onClick={() => setMessageInboxOpen(false)}
-                style={{
-                  padding: "0.35rem 0.75rem",
-                  background: "#f5f5f5",
-                  border: "1px solid #ddd",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontSize: "0.85rem",
-                  fontWeight: "600",
-                }}
-              >
-                x
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setMessageInboxOpen(false)}
+              style={{
+                padding: "0.25rem 0.6rem",
+                background: "#f5f5f5",
+                border: "1px solid #ddd",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "0.8rem",
+                fontWeight: "600",
+              }}
+            >
+              x
+            </button>
           </div>
           {messageThreads === undefined ? (
             <p style={{ color: "#999" }}>Loading message threads...</p>
@@ -1092,7 +1173,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {inventory?.inventory?.map((item: any, index: number) => {
+                  {pagedInventory.map((item: any, index: number) => {
                     const itemId = item.inventoryId;
                     const isPurchasing = purchasing === itemId;
                     const canPurchase = windowStatus?.isOpen && !isPurchasing;
@@ -1193,10 +1274,86 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                 </tbody>
               </table>
             </div>
+
+            {inventoryTotal > 0 && (
+              <div style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: "0.5rem",
+                marginBottom: "1.5rem"
+              }}>
+                <div style={{ fontSize: "0.8rem", color: "#666" }}>
+                  Showing {inventoryStart}-{inventoryEnd} of {inventoryTotal}
+                </div>
+                {inventoryTotalPages > 1 && (
+                  <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      onClick={() => setInventoryPage((prev) => Math.max(1, prev - 1))}
+                      disabled={inventoryPage === 1}
+                      style={{
+                        padding: "0.3rem 0.6rem",
+                        background: inventoryPage === 1 ? "#e0e0e0" : "#f5f5f5",
+                        color: "#333",
+                        border: "1px solid #ddd",
+                        borderRadius: "4px",
+                        cursor: inventoryPage === 1 ? "not-allowed" : "pointer",
+                        fontSize: "0.8rem",
+                        fontWeight: "600"
+                      }}
+                    >
+                      Prev
+                    </button>
+                    {Array.from({ length: inventoryTotalPages }, (_, idx) => {
+                      const page = idx + 1;
+                      const isActive = page === inventoryPage;
+                      return (
+                        <button
+                          key={page}
+                          type="button"
+                          onClick={() => setInventoryPage(page)}
+                          style={{
+                            padding: "0.3rem 0.6rem",
+                            background: isActive ? "#1976d2" : "#f5f5f5",
+                            color: isActive ? "#fff" : "#333",
+                            border: "1px solid #ddd",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            fontSize: "0.8rem",
+                            fontWeight: "600"
+                          }}
+                        >
+                          {page}
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => setInventoryPage((prev) => Math.min(inventoryTotalPages, prev + 1))}
+                      disabled={inventoryPage === inventoryTotalPages}
+                      style={{
+                        padding: "0.3rem 0.6rem",
+                        background: inventoryPage === inventoryTotalPages ? "#e0e0e0" : "#f5f5f5",
+                        color: "#333",
+                        border: "1px solid #ddd",
+                        borderRadius: "4px",
+                        cursor: inventoryPage === inventoryTotalPages ? "not-allowed" : "pointer",
+                        fontSize: "0.8rem",
+                        fontWeight: "600"
+                      }}
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
             
             {/* Card View for Mobile (fallback) */}
             <div style={{ display: "none", flexDirection: "column", gap: "1rem" }}>
-            {inventory?.inventory?.map((item: any, index: number) => {
+            {pagedInventory.map((item: any, index: number) => {
               const itemId = item.inventoryId;
               const isPurchasing = purchasing === itemId;
               const canPurchase = windowStatus?.isOpen && !isPurchasing;
@@ -1411,7 +1568,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
           <p style={{ color: "#666" }}>No orders yet</p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            {orders.orders.map((order: any, index: number) => (
+            {pagedOrders.map((order: any, index: number) => (
               <div key={index} style={{
                 padding: "1rem",
                 background: order.status === "overdue" ? "#ffebee" : "#e8f5e9",
@@ -1460,6 +1617,81 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                 </div>
               </div>
             ))}
+            {ordersTotal > 0 && (
+              <div style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: "0.5rem",
+                marginTop: "0.25rem"
+              }}>
+                <div style={{ fontSize: "0.8rem", color: "#666" }}>
+                  Showing {ordersStart}-{ordersEnd} of {ordersTotal}
+                </div>
+                {ordersTotalPages > 1 && (
+                  <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      onClick={() => setOrdersPage((prev) => Math.max(1, prev - 1))}
+                      disabled={ordersPage === 1}
+                      style={{
+                        padding: "0.3rem 0.6rem",
+                        background: ordersPage === 1 ? "#e0e0e0" : "#f5f5f5",
+                        color: "#333",
+                        border: "1px solid #ddd",
+                        borderRadius: "4px",
+                        cursor: ordersPage === 1 ? "not-allowed" : "pointer",
+                        fontSize: "0.8rem",
+                        fontWeight: "600"
+                      }}
+                    >
+                      Prev
+                    </button>
+                    {Array.from({ length: ordersTotalPages }, (_, idx) => {
+                      const page = idx + 1;
+                      const isActive = page === ordersPage;
+                      return (
+                        <button
+                          key={page}
+                          type="button"
+                          onClick={() => setOrdersPage(page)}
+                          style={{
+                            padding: "0.3rem 0.6rem",
+                            background: isActive ? "#1976d2" : "#f5f5f5",
+                            color: isActive ? "#fff" : "#333",
+                            border: "1px solid #ddd",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            fontSize: "0.8rem",
+                            fontWeight: "600"
+                          }}
+                        >
+                          {page}
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => setOrdersPage((prev) => Math.min(ordersTotalPages, prev + 1))}
+                      disabled={ordersPage === ordersTotalPages}
+                      style={{
+                        padding: "0.3rem 0.6rem",
+                        background: ordersPage === ordersTotalPages ? "#e0e0e0" : "#f5f5f5",
+                        color: "#333",
+                        border: "1px solid #ddd",
+                        borderRadius: "4px",
+                        cursor: ordersPage === ordersTotalPages ? "not-allowed" : "pointer",
+                        fontSize: "0.8rem",
+                        fontWeight: "600"
+                      }}
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1563,7 +1795,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {transactionLedger.transactions.map((tx: any, index: number) => (
+                  {pagedTransactions.map((tx: any, index: number) => (
                     <tr key={index} style={{ borderBottom: "1px solid #f0f0f0" }}>
                       <td style={{ padding: "0.75rem" }}>{formatDate(tx.timestamp)}</td>
                       <td style={{ padding: "0.75rem" }}>{tx.produceType || "N/A"}</td>
@@ -1592,6 +1824,81 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                 </tbody>
               </table>
             </div>
+            {ledgerTotal > 0 && (
+              <div style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: "0.5rem",
+                marginTop: "0.75rem"
+              }}>
+                <div style={{ fontSize: "0.8rem", color: "#666" }}>
+                  Showing {ledgerStart}-{ledgerEnd} of {ledgerTotal}
+                </div>
+                {ledgerTotalPages > 1 && (
+                  <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      onClick={() => setLedgerPage((prev) => Math.max(1, prev - 1))}
+                      disabled={ledgerPage === 1}
+                      style={{
+                        padding: "0.3rem 0.6rem",
+                        background: ledgerPage === 1 ? "#e0e0e0" : "#f5f5f5",
+                        color: "#333",
+                        border: "1px solid #ddd",
+                        borderRadius: "4px",
+                        cursor: ledgerPage === 1 ? "not-allowed" : "pointer",
+                        fontSize: "0.8rem",
+                        fontWeight: "600"
+                      }}
+                    >
+                      Prev
+                    </button>
+                    {Array.from({ length: ledgerTotalPages }, (_, idx) => {
+                      const page = idx + 1;
+                      const isActive = page === ledgerPage;
+                      return (
+                        <button
+                          key={page}
+                          type="button"
+                          onClick={() => setLedgerPage(page)}
+                          style={{
+                            padding: "0.3rem 0.6rem",
+                            background: isActive ? "#1976d2" : "#f5f5f5",
+                            color: isActive ? "#fff" : "#333",
+                            border: "1px solid #ddd",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            fontSize: "0.8rem",
+                            fontWeight: "600"
+                          }}
+                        >
+                          {page}
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => setLedgerPage((prev) => Math.min(ledgerTotalPages, prev + 1))}
+                      disabled={ledgerPage === ledgerTotalPages}
+                      style={{
+                        padding: "0.3rem 0.6rem",
+                        background: ledgerPage === ledgerTotalPages ? "#e0e0e0" : "#f5f5f5",
+                        color: "#333",
+                        border: "1px solid #ddd",
+                        borderRadius: "4px",
+                        cursor: ledgerPage === ledgerTotalPages ? "not-allowed" : "pointer",
+                        fontSize: "0.8rem",
+                        fontWeight: "600"
+                      }}
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>

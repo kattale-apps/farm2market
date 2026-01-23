@@ -64,15 +64,45 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
   const [isMobile, setIsMobile] = useState(false);
   const inboxRef = useRef<HTMLDivElement>(null);
   const [isInboxNarrow, setIsInboxNarrow] = useState(false);
+  const getSortTimestamp = (item: any) => {
+    const raw =
+      item?.timestamp ??
+      item?.updatedAt ??
+      item?.createdAt ??
+      item?.lastUpdatedAt ??
+      item?.deliveryDeadline ??
+      item?.lockedAt ??
+      item?.lockAt ??
+      item?.purchaseAt ??
+      item?._creationTime ??
+      0;
+    if (typeof raw === "number") {
+      return raw;
+    }
+    const parsed = Date.parse(raw);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  };
+  const sortedListings = useMemo(() => {
+    if (!listings?.listings) return [];
+    return [...listings.listings].sort((a: any, b: any) => getSortTimestamp(b) - getSortTimestamp(a));
+  }, [listings]);
+  const sortedNegotiations = useMemo(() => {
+    if (!negotiations?.negotiations) return [];
+    return [...negotiations.negotiations].sort((a: any, b: any) => getSortTimestamp(b) - getSortTimestamp(a));
+  }, [negotiations]);
+  const sortedLedgerTransactions = useMemo(() => {
+    if (!transactionsLedger?.transactions) return [];
+    return [...transactionsLedger.transactions].sort((a: any, b: any) => getSortTimestamp(b) - getSortTimestamp(a));
+  }, [transactionsLedger]);
   const defaultSupportUtid = useMemo(() => {
-    const listingUtid = listings?.listings?.[0]?.utid;
+    const listingUtid = sortedListings?.[0]?.utid;
     if (listingUtid) return listingUtid;
-    const negotiationUtid = (negotiations as any)?.negotiations?.[0]?.negotiationUtid;
+    const negotiationUtid = sortedNegotiations?.[0]?.negotiationUtid;
     if (negotiationUtid) return negotiationUtid;
-    const ledgerUtid = transactionsLedger?.transactions?.[0]?.lockUtid;
+    const ledgerUtid = sortedLedgerTransactions?.[0]?.lockUtid;
     if (ledgerUtid) return ledgerUtid;
     return SUPPORT_THREAD;
-  }, [listings, negotiations, transactionsLedger]);
+  }, [sortedListings, sortedNegotiations, sortedLedgerTransactions]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -340,11 +370,11 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
   };
 
   const activeNegotiations = useMemo(() => {
-    if (!negotiations) return [];
-    return negotiations.negotiations.filter(
+    if (!sortedNegotiations.length) return [];
+    return sortedNegotiations.filter(
       (neg: any) => neg.status === "pending" || neg.status === "countered"
     );
-  }, [negotiations]);
+  }, [sortedNegotiations]);
 
   const batchedActiveNegotiations = useMemo(() => {
     const batches = new Map<string, any>();
@@ -369,16 +399,20 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
           farmerPricePerKilo: neg.farmerPricePerKilo,
           traderOfferPricePerKilo: neg.traderOfferPricePerKilo,
           currentPricePerKilo: neg.currentPricePerKilo,
+          latestCreatedAt: 0,
           items: [],
         });
       }
-      batches.get(key).items.push(neg);
+      const batch = batches.get(key);
+      const negTimestamp = getSortTimestamp(neg);
+      batch.latestCreatedAt = Math.max(batch.latestCreatedAt, negTimestamp);
+      batch.items.push(neg);
     });
 
-    return Array.from(batches.values());
+    return Array.from(batches.values()).sort((a: any, b: any) => b.latestCreatedAt - a.latestCreatedAt);
   }, [activeNegotiations]);
 
-  const transactionItems = listings?.listings || [];
+  const transactionItems = sortedListings;
   const pagedTransactions = getPageItems(transactionItems, transactionsPage);
   const transactionTotalPages = getTotalPages(transactionItems);
 
@@ -388,9 +422,9 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
   );
   const activeNegotiationsTotalPages = getTotalPages(batchedActiveNegotiations);
 
-  const concludedNegotiations = negotiations?.negotiations.filter(
+  const concludedNegotiations = sortedNegotiations.filter(
     (neg: any) => neg.status === "accepted" || neg.status === "rejected" || neg.status === "cancelled"
-  ) || [];
+  );
   const pagedConcludedNegotiations = getPageItems(concludedNegotiations, concludedNegotiationsPage);
   const concludedTotalPages = getTotalPages(concludedNegotiations);
 
@@ -399,16 +433,19 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
         (delivery: any) => !cancelledUnitIds.has(delivery.unitId)
       )
     : [];
-  const pagedDeliveryItems = getPageItems(deliveryItems, deliveryDeadlinesPage);
-  const deliveryTotalPages = getTotalPages(deliveryItems);
+  const sortedDeliveryItems = [...deliveryItems].sort((a: any, b: any) => getSortTimestamp(b) - getSortTimestamp(a));
+  const pagedDeliveryItems = getPageItems(sortedDeliveryItems, deliveryDeadlinesPage);
+  const deliveryTotalPages = getTotalPages(sortedDeliveryItems);
 
   const expiredItems = expiredUTIDs?.expiredUTIDs || [];
-  const pagedExpiredItems = getPageItems(expiredItems, expiredUtidsPage);
-  const expiredTotalPages = getTotalPages(expiredItems);
+  const sortedExpiredItems = [...expiredItems].sort((a: any, b: any) => getSortTimestamp(b) - getSortTimestamp(a));
+  const pagedExpiredItems = getPageItems(sortedExpiredItems, expiredUtidsPage);
+  const expiredTotalPages = getTotalPages(sortedExpiredItems);
 
   const ledgerItems = allUnitsLedger?.listings || [];
-  const pagedLedgerItems = getPageItems(ledgerItems, ledgerPage);
-  const ledgerTotalPages = getTotalPages(ledgerItems);
+  const sortedLedgerItems = [...ledgerItems].sort((a: any, b: any) => getSortTimestamp(b) - getSortTimestamp(a));
+  const pagedLedgerItems = getPageItems(sortedLedgerItems, ledgerPage);
+  const ledgerTotalPages = getTotalPages(sortedLedgerItems);
 
   const user = useQuery(api.auth.getUser, { userId });
   const profile = useQuery(api.farmerProfile.getFarmerProfile, { farmerId: userId });
@@ -546,10 +583,11 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
           boxSizing: "border-box",
           overflowX: "hidden",
         }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.75rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "clamp(0.5rem, 2vw, 1rem)", flexWrap: "wrap", gap: "0.5rem" }}>
             <h3 style={{
-              margin: 0,
-              fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)",
+              marginTop: 0,
+              marginBottom: 0,
+              fontSize: "clamp(1.1rem, 3vw, 1.3rem)",
               color: "#2c2c2c",
               fontFamily: '"Montserrat", sans-serif',
               fontWeight: "600",
@@ -557,24 +595,21 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
             }}>
               Messages Inbox
             </h3>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <span style={{ fontSize: "0.85rem", color: "#2e7d32", fontWeight: "600" }}>● Live</span>
-              <button
-                type="button"
-                onClick={() => setMessageInboxOpen(false)}
-                style={{
-                  padding: "0.35rem 0.75rem",
-                  background: "#f5f5f5",
-                  border: "1px solid #ddd",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontSize: "0.85rem",
-                  fontWeight: "600",
-                }}
-              >
-                x
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setMessageInboxOpen(false)}
+              style={{
+                padding: "0.25rem 0.6rem",
+                background: "#f5f5f5",
+                border: "1px solid #ddd",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "0.8rem",
+                fontWeight: "600",
+              }}
+            >
+              x
+            </button>
           </div>
           {messageThreads === undefined ? (
             <p style={{ color: "#999" }}>Loading message threads...</p>

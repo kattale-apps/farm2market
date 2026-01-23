@@ -5,7 +5,7 @@ import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { TraderListings } from "./TraderListings";
 import { CreateTraderListing } from "./CreateTraderListing";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { exportToExcel, exportToPDF, formatUTIDDataForExport } from "../utils/exportUtils";
 import { exportUTIDsByCategory, exportUTIDsByCategoryPDF, exportInventoryVolume, exportCapitalVolume } from "../utils/traderReports";
 import { NotificationMailbox } from "./NotificationMailbox";
@@ -46,6 +46,16 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
   const [isMobile, setIsMobile] = useState(false);
   const inboxRef = useRef<HTMLDivElement>(null);
   const [isInboxNarrow, setIsInboxNarrow] = useState(false);
+  const [openListingsPage, setOpenListingsPage] = useState(1);
+  const [activeUtidPage, setActiveUtidPage] = useState(1);
+  const [buyOffersPage, setBuyOffersPage] = useState(1);
+  const [inventoryPage, setInventoryPage] = useState(1);
+  const [todayActivityPage, setTodayActivityPage] = useState(1);
+  const OPEN_LISTINGS_PAGE_SIZE = 5;
+  const ACTIVE_UTID_PAGE_SIZE = 8;
+  const BUY_OFFERS_PAGE_SIZE = 6;
+  const INVENTORY_PAGE_SIZE = 6;
+  const TODAY_ACTIVITY_PAGE_SIZE = 6;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -171,6 +181,95 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
 
   // Get open listings (from farmers)
   const openListings = useQuery(api.listings.getActiveListings);
+  const getSortTimestamp = (item: any) => {
+    const raw =
+      item?.timestamp ??
+      item?.updatedAt ??
+      item?.createdAt ??
+      item?.lastUpdatedAt ??
+      item?.storageStartTime ??
+      item?._creationTime ??
+      0;
+    if (typeof raw === "number") {
+      return raw;
+    }
+    const parsed = Date.parse(raw);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  };
+
+  const sortedOpenListings = useMemo(() => {
+    if (!openListings) return [];
+    return [...openListings].sort((a: any, b: any) => getSortTimestamp(b) - getSortTimestamp(a));
+  }, [openListings]);
+
+  const sortedActiveUtids = useMemo(() => {
+    if (!activeUTIDs?.utids) return [];
+    return [...activeUTIDs.utids].sort((a: any, b: any) => getSortTimestamp(b) - getSortTimestamp(a));
+  }, [activeUTIDs]);
+  const sortedBuyOffers = useMemo(() => {
+    if (!buyOffers?.negotiations) return [];
+    return [...buyOffers.negotiations].sort((a: any, b: any) => getSortTimestamp(b) - getSortTimestamp(a));
+  }, [buyOffers]);
+  const sortedInventory = useMemo(() => {
+    if (!inventory?.inventory) return [];
+    return [...inventory.inventory].sort((a: any, b: any) => getSortTimestamp(b) - getSortTimestamp(a));
+  }, [inventory]);
+
+  const openListingsTotal = sortedOpenListings.length;
+  const openListingsTotalPages = Math.max(1, Math.ceil(openListingsTotal / OPEN_LISTINGS_PAGE_SIZE));
+  const openListingsStart = openListingsTotal === 0 ? 0 : (openListingsPage - 1) * OPEN_LISTINGS_PAGE_SIZE + 1;
+  const openListingsEnd = Math.min(openListingsPage * OPEN_LISTINGS_PAGE_SIZE, openListingsTotal);
+  const pagedOpenListings = sortedOpenListings.slice(
+    (openListingsPage - 1) * OPEN_LISTINGS_PAGE_SIZE,
+    openListingsPage * OPEN_LISTINGS_PAGE_SIZE
+  );
+
+  const activeUtidsTotal = sortedActiveUtids.length;
+  const activeUtidsTotalPages = Math.max(1, Math.ceil(activeUtidsTotal / ACTIVE_UTID_PAGE_SIZE));
+  const activeUtidsStart = activeUtidsTotal === 0 ? 0 : (activeUtidPage - 1) * ACTIVE_UTID_PAGE_SIZE + 1;
+  const activeUtidsEnd = Math.min(activeUtidPage * ACTIVE_UTID_PAGE_SIZE, activeUtidsTotal);
+  const pagedActiveUtids = sortedActiveUtids.slice(
+    (activeUtidPage - 1) * ACTIVE_UTID_PAGE_SIZE,
+    activeUtidPage * ACTIVE_UTID_PAGE_SIZE
+  );
+  const buyOffersTotal = sortedBuyOffers.length;
+  const buyOffersTotalPages = Math.max(1, Math.ceil(buyOffersTotal / BUY_OFFERS_PAGE_SIZE));
+  const buyOffersStart = buyOffersTotal === 0 ? 0 : (buyOffersPage - 1) * BUY_OFFERS_PAGE_SIZE + 1;
+  const buyOffersEnd = Math.min(buyOffersPage * BUY_OFFERS_PAGE_SIZE, buyOffersTotal);
+  const pagedBuyOffers = sortedBuyOffers.slice(
+    (buyOffersPage - 1) * BUY_OFFERS_PAGE_SIZE,
+    buyOffersPage * BUY_OFFERS_PAGE_SIZE
+  );
+  const inventoryTotal = sortedInventory.length;
+  const inventoryTotalPages = Math.max(1, Math.ceil(inventoryTotal / INVENTORY_PAGE_SIZE));
+  const inventoryStart = inventoryTotal === 0 ? 0 : (inventoryPage - 1) * INVENTORY_PAGE_SIZE + 1;
+  const inventoryEnd = Math.min(inventoryPage * INVENTORY_PAGE_SIZE, inventoryTotal);
+  const pagedInventory = sortedInventory.slice(
+    (inventoryPage - 1) * INVENTORY_PAGE_SIZE,
+    inventoryPage * INVENTORY_PAGE_SIZE
+  );
+
+  useEffect(() => {
+    if (openListingsPage > openListingsTotalPages) {
+      setOpenListingsPage(openListingsTotalPages);
+    }
+  }, [openListingsPage, openListingsTotalPages]);
+
+  useEffect(() => {
+    if (activeUtidPage > activeUtidsTotalPages) {
+      setActiveUtidPage(activeUtidsTotalPages);
+    }
+  }, [activeUtidPage, activeUtidsTotalPages]);
+  useEffect(() => {
+    if (buyOffersPage > buyOffersTotalPages) {
+      setBuyOffersPage(buyOffersTotalPages);
+    }
+  }, [buyOffersPage, buyOffersTotalPages]);
+  useEffect(() => {
+    if (inventoryPage > inventoryTotalPages) {
+      setInventoryPage(inventoryTotalPages);
+    }
+  }, [inventoryPage, inventoryTotalPages]);
 
   // Calculate today's activity with UTIDs and Purchase/Sell status
   const today = Date.now();
@@ -233,6 +332,19 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
 
   // Combine all activities
   const todayActivity = [...todayPurchases, ...todaySales, ...todayNegotiations].sort((a, b) => b.timestamp - a.timestamp);
+  const todayActivityTotal = todayActivity.length;
+  const todayActivityTotalPages = Math.max(1, Math.ceil(todayActivityTotal / TODAY_ACTIVITY_PAGE_SIZE));
+  const todayActivityStart = todayActivityTotal === 0 ? 0 : (todayActivityPage - 1) * TODAY_ACTIVITY_PAGE_SIZE + 1;
+  const todayActivityEnd = Math.min(todayActivityPage * TODAY_ACTIVITY_PAGE_SIZE, todayActivityTotal);
+  const pagedTodayActivity = todayActivity.slice(
+    (todayActivityPage - 1) * TODAY_ACTIVITY_PAGE_SIZE,
+    todayActivityPage * TODAY_ACTIVITY_PAGE_SIZE
+  );
+  useEffect(() => {
+    if (todayActivityPage > todayActivityTotalPages) {
+      setTodayActivityPage(todayActivityTotalPages);
+    }
+  }, [todayActivityPage, todayActivityTotalPages]);
 
   return (
     <div style={{ padding: "clamp(0.75rem, 2vw, 1rem)", maxWidth: "100%", boxSizing: "border-box" }}>
@@ -316,10 +428,11 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
           boxSizing: "border-box",
           overflowX: "hidden",
         }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.75rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "clamp(0.5rem, 2vw, 1rem)", flexWrap: "wrap", gap: "0.5rem" }}>
             <h3 style={{
-              margin: 0,
-              fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)",
+              marginTop: 0,
+              marginBottom: 0,
+              fontSize: "clamp(1.1rem, 3vw, 1.3rem)",
               color: "#2c2c2c",
               fontFamily: '"Montserrat", sans-serif',
               fontWeight: "600",
@@ -327,24 +440,21 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
             }}>
               Messages Inbox
             </h3>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <span style={{ fontSize: "0.85rem", color: "#2e7d32", fontWeight: "600" }}>● Live</span>
-              <button
-                type="button"
-                onClick={() => setMessageInboxOpen(false)}
-                style={{
-                  padding: "0.35rem 0.75rem",
-                  background: "#f5f5f5",
-                  border: "1px solid #ddd",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontSize: "0.85rem",
-                  fontWeight: "600",
-                }}
-              >
-                x
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setMessageInboxOpen(false)}
+              style={{
+                padding: "0.25rem 0.6rem",
+                background: "#f5f5f5",
+                border: "1px solid #ddd",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "0.8rem",
+                fontWeight: "600",
+              }}
+            >
+              x
+            </button>
           </div>
           {messageThreads === undefined ? (
             <p style={{ color: "#999" }}>Loading message threads...</p>
@@ -503,7 +613,7 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
               <p style={{ color: "#666" }}>No open listings available</p>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                {openListings.slice(0, 5).map((listing: any, idx: number) => (
+                {pagedOpenListings.map((listing: any, idx: number) => (
                   <div key={idx} style={{
                     padding: "0.75rem",
                     background: "#f5f5f5",
@@ -545,6 +655,81 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
                     </div>
                   </div>
                 ))}
+                {openListingsTotal > 0 && (
+                  <div style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: "0.5rem",
+                    marginTop: "0.25rem"
+                  }}>
+                    <div style={{ fontSize: "0.8rem", color: "#666" }}>
+                      Showing {openListingsStart}-{openListingsEnd} of {openListingsTotal}
+                    </div>
+                    {openListingsTotalPages > 1 && (
+                      <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap" }}>
+                        <button
+                          type="button"
+                          onClick={() => setOpenListingsPage((prev) => Math.max(1, prev - 1))}
+                          disabled={openListingsPage === 1}
+                          style={{
+                            padding: "0.3rem 0.6rem",
+                            background: openListingsPage === 1 ? "#e0e0e0" : "#f5f5f5",
+                            color: "#333",
+                            border: "1px solid #ddd",
+                            borderRadius: "4px",
+                            cursor: openListingsPage === 1 ? "not-allowed" : "pointer",
+                            fontSize: "0.8rem",
+                            fontWeight: "600"
+                          }}
+                        >
+                          Prev
+                        </button>
+                        {Array.from({ length: openListingsTotalPages }, (_, idx) => {
+                          const page = idx + 1;
+                          const isActive = page === openListingsPage;
+                          return (
+                            <button
+                              key={page}
+                              type="button"
+                              onClick={() => setOpenListingsPage(page)}
+                              style={{
+                                padding: "0.3rem 0.6rem",
+                                background: isActive ? "#1976d2" : "#f5f5f5",
+                                color: isActive ? "#fff" : "#333",
+                                border: "1px solid #ddd",
+                                borderRadius: "4px",
+                                cursor: "pointer",
+                                fontSize: "0.8rem",
+                                fontWeight: "600"
+                              }}
+                            >
+                              {page}
+                            </button>
+                          );
+                        })}
+                        <button
+                          type="button"
+                          onClick={() => setOpenListingsPage((prev) => Math.min(openListingsTotalPages, prev + 1))}
+                          disabled={openListingsPage === openListingsTotalPages}
+                          style={{
+                            padding: "0.3rem 0.6rem",
+                            background: openListingsPage === openListingsTotalPages ? "#e0e0e0" : "#f5f5f5",
+                            color: "#333",
+                            border: "1px solid #ddd",
+                            borderRadius: "4px",
+                            cursor: openListingsPage === openListingsTotalPages ? "not-allowed" : "pointer",
+                            fontSize: "0.8rem",
+                            fontWeight: "600"
+                          }}
+                        >
+                          Next
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -573,7 +758,7 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
               <p style={{ color: "#666" }}>No activity today</p>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                {todayActivity.map((activity: any, idx: number) => (
+                {pagedTodayActivity.map((activity: any, idx: number) => (
                   <div key={idx} style={{
                     padding: "0.75rem",
                     background: "#f5f5f5",
@@ -619,6 +804,80 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
                     </div>
                   </div>
                 ))}
+                {todayActivityTotal > 0 && (
+                  <div style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: "0.5rem"
+                  }}>
+                    <div style={{ fontSize: "0.8rem", color: "#666" }}>
+                      Showing {todayActivityStart}-{todayActivityEnd} of {todayActivityTotal}
+                    </div>
+                    {todayActivityTotalPages > 1 && (
+                      <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap" }}>
+                        <button
+                          type="button"
+                          onClick={() => setTodayActivityPage((prev) => Math.max(1, prev - 1))}
+                          disabled={todayActivityPage === 1}
+                          style={{
+                            padding: "0.3rem 0.6rem",
+                            background: todayActivityPage === 1 ? "#e0e0e0" : "#f5f5f5",
+                            color: "#333",
+                            border: "1px solid #ddd",
+                            borderRadius: "4px",
+                            cursor: todayActivityPage === 1 ? "not-allowed" : "pointer",
+                            fontSize: "0.8rem",
+                            fontWeight: "600"
+                          }}
+                        >
+                          Prev
+                        </button>
+                        {Array.from({ length: todayActivityTotalPages }, (_, idx) => {
+                          const page = idx + 1;
+                          const isActive = page === todayActivityPage;
+                          return (
+                            <button
+                              key={page}
+                              type="button"
+                              onClick={() => setTodayActivityPage(page)}
+                              style={{
+                                padding: "0.3rem 0.6rem",
+                                background: isActive ? "#1976d2" : "#f5f5f5",
+                                color: isActive ? "#fff" : "#333",
+                                border: "1px solid #ddd",
+                                borderRadius: "4px",
+                                cursor: "pointer",
+                                fontSize: "0.8rem",
+                                fontWeight: "600"
+                              }}
+                            >
+                              {page}
+                            </button>
+                          );
+                        })}
+                        <button
+                          type="button"
+                          onClick={() => setTodayActivityPage((prev) => Math.min(todayActivityTotalPages, prev + 1))}
+                          disabled={todayActivityPage === todayActivityTotalPages}
+                          style={{
+                            padding: "0.3rem 0.6rem",
+                            background: todayActivityPage === todayActivityTotalPages ? "#e0e0e0" : "#f5f5f5",
+                            color: "#333",
+                            border: "1px solid #ddd",
+                            borderRadius: "4px",
+                            cursor: todayActivityPage === todayActivityTotalPages ? "not-allowed" : "pointer",
+                            fontSize: "0.8rem",
+                            fontWeight: "600"
+                          }}
+                        >
+                          Next
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -649,7 +908,7 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
               <p style={{ color: "#666" }}>No buy-offers from buyers</p>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-                {buyOffers.negotiations.map((offer: any) => {
+                {pagedBuyOffers.map((offer: any) => {
                   const offerId = offer.negotiationId;
                   const counterPrice = counterPrices[offerId] || "";
                   const isProcessing = processingOffers[offerId] || false;
@@ -892,6 +1151,80 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
                     </div>
                   );
                 })}
+              {buyOffersTotal > 0 && (
+                <div style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: "0.5rem"
+                }}>
+                  <div style={{ fontSize: "0.8rem", color: "#666" }}>
+                    Showing {buyOffersStart}-{buyOffersEnd} of {buyOffersTotal}
+                  </div>
+                  {buyOffersTotalPages > 1 && (
+                    <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap" }}>
+                      <button
+                        type="button"
+                        onClick={() => setBuyOffersPage((prev) => Math.max(1, prev - 1))}
+                        disabled={buyOffersPage === 1}
+                        style={{
+                          padding: "0.3rem 0.6rem",
+                          background: buyOffersPage === 1 ? "#e0e0e0" : "#f5f5f5",
+                          color: "#333",
+                          border: "1px solid #ddd",
+                          borderRadius: "4px",
+                          cursor: buyOffersPage === 1 ? "not-allowed" : "pointer",
+                          fontSize: "0.8rem",
+                          fontWeight: "600"
+                        }}
+                      >
+                        Prev
+                      </button>
+                      {Array.from({ length: buyOffersTotalPages }, (_, idx) => {
+                        const page = idx + 1;
+                        const isActive = page === buyOffersPage;
+                        return (
+                          <button
+                            key={page}
+                            type="button"
+                            onClick={() => setBuyOffersPage(page)}
+                            style={{
+                              padding: "0.3rem 0.6rem",
+                              background: isActive ? "#1976d2" : "#f5f5f5",
+                              color: isActive ? "#fff" : "#333",
+                              border: "1px solid #ddd",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                              fontSize: "0.8rem",
+                              fontWeight: "600"
+                            }}
+                          >
+                            {page}
+                          </button>
+                        );
+                      })}
+                      <button
+                        type="button"
+                        onClick={() => setBuyOffersPage((prev) => Math.min(buyOffersTotalPages, prev + 1))}
+                        disabled={buyOffersPage === buyOffersTotalPages}
+                        style={{
+                          padding: "0.3rem 0.6rem",
+                          background: buyOffersPage === buyOffersTotalPages ? "#e0e0e0" : "#f5f5f5",
+                          color: "#333",
+                          border: "1px solid #ddd",
+                          borderRadius: "4px",
+                          cursor: buyOffersPage === buyOffersTotalPages ? "not-allowed" : "pointer",
+                          fontSize: "0.8rem",
+                          fontWeight: "600"
+                        }}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
               </div>
             )}
           </div>
@@ -1066,7 +1399,7 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
           )}
         </div>
 
-        {/* Exposure Status */}
+        {/* Capital Locked Summary */}
         <div style={{
           padding: "clamp(1rem, 3vw, 1.5rem)",
           background: "#fff",
@@ -1075,22 +1408,22 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
           border: "1px solid #e0e0e0"
         }}>
           <h3 style={{ marginTop: 0, marginBottom: "1rem", fontSize: "clamp(1rem, 3vw, 1.2rem)", color: "#1a1a1a" }}>
-            Exposure Status
+            Capital Locked
           </h3>
-          {exposure === undefined ? (
+          {exposure === undefined || ledger === undefined ? (
             <p style={{ color: "#999" }}>Loading...</p>
           ) : (
             <div>
               <div style={{ marginBottom: "1rem" }}>
-                <div style={{ color: "#666", fontSize: "0.9rem" }}>Current Exposure</div>
-                <div style={{ fontSize: "1.5rem", fontWeight: "600", color: exposure.exposure.totalExposure >= exposure.spendCap.maxExposure * 0.8 ? "#d32f2f" : "#1a1a1a" }}>
-                  {formatUGX(exposure.exposure.totalExposure)}
+                <div style={{ color: "#666", fontSize: "0.9rem" }}>Locked Capital</div>
+                <div style={{ fontSize: "1.5rem", fontWeight: "600", color: "#1a1a1a" }}>
+                  {formatUGX(exposure.exposure.lockedCapital)}
                 </div>
               </div>
               <div style={{ marginBottom: "1rem" }}>
-                <div style={{ color: "#666", fontSize: "0.9rem" }}>Spend Cap</div>
+                <div style={{ color: "#666", fontSize: "0.9rem" }}>Total Capital</div>
                 <div style={{ fontSize: "1.2rem", color: "#666" }}>
-                  {formatUGX(exposure.spendCap.maxExposure)}
+                  {formatUGX(ledger.capital.balance)}
                 </div>
               </div>
               <div style={{
@@ -1102,14 +1435,14 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
                 marginTop: "0.5rem"
               }}>
                 <div style={{
-                  width: `${Math.min(100, exposure.spendCap.usagePercent)}%`,
+                  width: `${Math.min(100, capitalInvestedPercentage)}%`,
                   height: "100%",
-                  background: exposure.spendCap.usagePercent >= 80 ? "#d32f2f" : "#4caf50",
+                  background: capitalInvestedPercentage >= 80 ? "#d32f2f" : "#4caf50",
                   transition: "width 0.3s"
                 }} />
               </div>
               <div style={{ marginTop: "0.5rem", fontSize: "0.85rem", color: "#666" }}>
-                {exposure.spendCap.usagePercent}% of cap used
+                {capitalInvestedPercentage.toFixed(1)}% of capital locked
               </div>
             </div>
           )}
@@ -1248,7 +1581,7 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
           <p style={{ color: "#666" }}>No inventory in storage</p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-            {inventory.inventory.map((item: any, index: number) => {
+            {pagedInventory.map((item: any, index: number) => {
               const totalPrice = item.originalPricePerKilo * item.totalKilos;
               const projectedRemainingPrice = item.originalPricePerKilo * item.projectedKilosRemaining;
               
@@ -1389,6 +1722,80 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
                 </div>
               );
             })}
+            {inventoryTotal > 0 && (
+              <div style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: "0.5rem"
+              }}>
+                <div style={{ fontSize: "0.8rem", color: "#666" }}>
+                  Showing {inventoryStart}-{inventoryEnd} of {inventoryTotal}
+                </div>
+                {inventoryTotalPages > 1 && (
+                  <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      onClick={() => setInventoryPage((prev) => Math.max(1, prev - 1))}
+                      disabled={inventoryPage === 1}
+                      style={{
+                        padding: "0.3rem 0.6rem",
+                        background: inventoryPage === 1 ? "#e0e0e0" : "#f5f5f5",
+                        color: "#333",
+                        border: "1px solid #ddd",
+                        borderRadius: "4px",
+                        cursor: inventoryPage === 1 ? "not-allowed" : "pointer",
+                        fontSize: "0.8rem",
+                        fontWeight: "600"
+                      }}
+                    >
+                      Prev
+                    </button>
+                    {Array.from({ length: inventoryTotalPages }, (_, idx) => {
+                      const page = idx + 1;
+                      const isActive = page === inventoryPage;
+                      return (
+                        <button
+                          key={page}
+                          type="button"
+                          onClick={() => setInventoryPage(page)}
+                          style={{
+                            padding: "0.3rem 0.6rem",
+                            background: isActive ? "#1976d2" : "#f5f5f5",
+                            color: isActive ? "#fff" : "#333",
+                            border: "1px solid #ddd",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            fontSize: "0.8rem",
+                            fontWeight: "600"
+                          }}
+                        >
+                          {page}
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => setInventoryPage((prev) => Math.min(inventoryTotalPages, prev + 1))}
+                      disabled={inventoryPage === inventoryTotalPages}
+                      style={{
+                        padding: "0.3rem 0.6rem",
+                        background: inventoryPage === inventoryTotalPages ? "#e0e0e0" : "#f5f5f5",
+                        color: "#333",
+                        border: "1px solid #ddd",
+                        borderRadius: "4px",
+                        cursor: inventoryPage === inventoryTotalPages ? "not-allowed" : "pointer",
+                        fontSize: "0.8rem",
+                        fontWeight: "600"
+                      }}
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1447,7 +1854,7 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
           <p style={{ color: "#666" }}>No active transactions</p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-            {activeUTIDs.utids.map((utid: any, index: number) => {
+            {pagedActiveUtids.map((utid: any, index: number) => {
               // Determine background color based on state
               const getStateColor = (state: string) => {
                 if (state?.includes("Locked-In (In Transit)")) return "#fff3cd"; // Yellow for in transit
@@ -1608,6 +2015,80 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
                 </div>
               );
             })}
+            {activeUtidsTotal > 0 && (
+              <div style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: "0.5rem"
+              }}>
+                <div style={{ fontSize: "0.8rem", color: "#666" }}>
+                  Showing {activeUtidsStart}-{activeUtidsEnd} of {activeUtidsTotal}
+                </div>
+                {activeUtidsTotalPages > 1 && (
+                  <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      onClick={() => setActiveUtidPage((prev) => Math.max(1, prev - 1))}
+                      disabled={activeUtidPage === 1}
+                      style={{
+                        padding: "0.3rem 0.6rem",
+                        background: activeUtidPage === 1 ? "#e0e0e0" : "#f5f5f5",
+                        color: "#333",
+                        border: "1px solid #ddd",
+                        borderRadius: "4px",
+                        cursor: activeUtidPage === 1 ? "not-allowed" : "pointer",
+                        fontSize: "0.8rem",
+                        fontWeight: "600"
+                      }}
+                    >
+                      Prev
+                    </button>
+                    {Array.from({ length: activeUtidsTotalPages }, (_, idx) => {
+                      const page = idx + 1;
+                      const isActive = page === activeUtidPage;
+                      return (
+                        <button
+                          key={page}
+                          type="button"
+                          onClick={() => setActiveUtidPage(page)}
+                          style={{
+                            padding: "0.3rem 0.6rem",
+                            background: isActive ? "#1976d2" : "#f5f5f5",
+                            color: isActive ? "#fff" : "#333",
+                            border: "1px solid #ddd",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            fontSize: "0.8rem",
+                            fontWeight: "600"
+                          }}
+                        >
+                          {page}
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => setActiveUtidPage((prev) => Math.min(activeUtidsTotalPages, prev + 1))}
+                      disabled={activeUtidPage === activeUtidsTotalPages}
+                      style={{
+                        padding: "0.3rem 0.6rem",
+                        background: activeUtidPage === activeUtidsTotalPages ? "#e0e0e0" : "#f5f5f5",
+                        color: "#333",
+                        border: "1px solid #ddd",
+                        borderRadius: "4px",
+                        cursor: activeUtidPage === activeUtidsTotalPages ? "not-allowed" : "pointer",
+                        fontSize: "0.8rem",
+                        fontWeight: "600"
+                      }}
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1806,7 +2287,7 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
                     </tr>
                   </thead>
                   <tbody>
-                    {inventory.inventory.map((item: any, idx: number) => (
+                    {pagedInventory.map((item: any, idx: number) => (
                       <tr key={idx} style={{ borderBottom: "1px solid #f0f0f0" }}>
                         <td style={{ padding: "0.75rem", fontSize: "0.9rem" }}>{item.produceType}</td>
                         <td style={{ padding: "0.75rem", fontSize: "0.9rem" }}>{item.totalKilos.toFixed(2)} kg</td>
@@ -1816,6 +2297,81 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
                     ))}
                   </tbody>
                 </table>
+                {inventoryTotal > 0 && (
+                  <div style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: "0.5rem",
+                    marginTop: "0.75rem"
+                  }}>
+                    <div style={{ fontSize: "0.8rem", color: "#666" }}>
+                      Showing {inventoryStart}-{inventoryEnd} of {inventoryTotal}
+                    </div>
+                    {inventoryTotalPages > 1 && (
+                      <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap" }}>
+                        <button
+                          type="button"
+                          onClick={() => setInventoryPage((prev) => Math.max(1, prev - 1))}
+                          disabled={inventoryPage === 1}
+                          style={{
+                            padding: "0.3rem 0.6rem",
+                            background: inventoryPage === 1 ? "#e0e0e0" : "#f5f5f5",
+                            color: "#333",
+                            border: "1px solid #ddd",
+                            borderRadius: "4px",
+                            cursor: inventoryPage === 1 ? "not-allowed" : "pointer",
+                            fontSize: "0.8rem",
+                            fontWeight: "600"
+                          }}
+                        >
+                          Prev
+                        </button>
+                        {Array.from({ length: inventoryTotalPages }, (_, idx) => {
+                          const page = idx + 1;
+                          const isActive = page === inventoryPage;
+                          return (
+                            <button
+                              key={page}
+                              type="button"
+                              onClick={() => setInventoryPage(page)}
+                              style={{
+                                padding: "0.3rem 0.6rem",
+                                background: isActive ? "#1976d2" : "#f5f5f5",
+                                color: isActive ? "#fff" : "#333",
+                                border: "1px solid #ddd",
+                                borderRadius: "4px",
+                                cursor: "pointer",
+                                fontSize: "0.8rem",
+                                fontWeight: "600"
+                              }}
+                            >
+                              {page}
+                            </button>
+                          );
+                        })}
+                        <button
+                          type="button"
+                          onClick={() => setInventoryPage((prev) => Math.min(inventoryTotalPages, prev + 1))}
+                          disabled={inventoryPage === inventoryTotalPages}
+                          style={{
+                            padding: "0.3rem 0.6rem",
+                            background: inventoryPage === inventoryTotalPages ? "#e0e0e0" : "#f5f5f5",
+                            color: "#333",
+                            border: "1px solid #ddd",
+                            borderRadius: "4px",
+                            cursor: inventoryPage === inventoryTotalPages ? "not-allowed" : "pointer",
+                            fontSize: "0.8rem",
+                            fontWeight: "600"
+                          }}
+                        >
+                          Next
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>

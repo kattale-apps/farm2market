@@ -4,7 +4,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { formatUgandaDateTime, formatUgandaTimeOnly, getUgandaTime } from "../utils/timeUtils";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import Image from "next/image";
 import { exportToExcel, exportToPDF, formatUTIDDataForExport } from "../utils/exportUtils";
 import { StorageLocationsManager } from "./StorageLocationsManager";
@@ -26,6 +26,9 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
     adminId: userId,
     limit: utidPageSize,
     offset: utidPageOffset,
+  });
+  const pendingDeliveryUTIDs = useQuery(api.introspection.getPendingDeliveryUTIDs, {
+    adminId: userId,
   });
   const pilotMode = useQuery(api.pilotMode.getPilotMode);
   const purchaseWindowStatus = useQuery(api.admin.getPurchaseWindowStatus, { adminId: userId });
@@ -161,6 +164,31 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
       return { start, end, offset: (index * timelinePageSize) };
     }
   );
+
+  const getSortTimestamp = (item: any) => {
+    const raw =
+      item?.timestamp ??
+      item?.updatedAt ??
+      item?.createdAt ??
+      item?.purchasedAt ??
+      item?._creationTime ??
+      0;
+    if (typeof raw === "number") {
+      return raw;
+    }
+    const parsed = Date.parse(raw);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  };
+
+  const sortedAllUtids = useMemo(() => {
+    if (!allUTIDs?.utids) return [];
+    return [...allUTIDs.utids].sort((a: any, b: any) => getSortTimestamp(b) - getSortTimestamp(a));
+  }, [allUTIDs]);
+
+  const sortedStoreAdminUtids = useMemo(() => {
+    if (!storeAdminAudit?.utids) return [];
+    return [...storeAdminAudit.utids].sort((a: any, b: any) => getSortTimestamp(b) - getSortTimestamp(a));
+  }, [storeAdminAudit]);
 
   const handleExportUTIDs = (format: "excel" | "pdf") => {
     if (!allUTIDs || !allUTIDs.utids || allUTIDs.utids.length === 0) {
@@ -679,7 +707,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
               </div>
             </div>
             <div style={{ marginTop: "1rem", maxHeight: "400px", overflowY: "auto", overflowX: "hidden" }}>
-              {allUTIDs.utids.map((utidData: any, index: number) => (
+              {sortedAllUtids.map((utidData: any, index: number) => (
                 <div key={index} style={{
                   padding: "0.75rem",
                   marginBottom: "0.5rem",
@@ -809,7 +837,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
             <p style={{ color: "#666" }}>No delivery confirmations recorded yet.</p>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-              {storeAdminAudit.utids.map((item: any) => (
+              {sortedStoreAdminUtids.map((item: any) => (
                 <div
                   key={item.utid}
                   style={{
@@ -908,7 +936,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
             boxSizing: "border-box",
             overflowX: "hidden"
           }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.75rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "clamp(0.5rem, 2vw, 1rem)", flexWrap: "wrap", gap: "0.5rem" }}>
               <h3 style={{
                 marginTop: 0,
                 marginBottom: 0,
@@ -925,12 +953,12 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                 type="button"
                 onClick={() => setAdminInboxOpen(false)}
                 style={{
-                  padding: "0.35rem 0.75rem",
+                  padding: "0.25rem 0.6rem",
                   background: "#f5f5f5",
                   border: "1px solid #ddd",
                   borderRadius: "6px",
                   cursor: "pointer",
-                  fontSize: "0.85rem",
+                  fontSize: "0.8rem",
                   fontWeight: "600",
                 }}
               >
@@ -1306,7 +1334,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                 </label>
               </div>
             )}
-            {allUTIDs.utids.slice(timelineOffset, timelineOffset + timelinePageSize).map((utidData: any, index: number) => {
+            {sortedAllUtids.slice(timelineOffset, timelineOffset + timelinePageSize).map((utidData: any, index: number) => {
               const { formatUgandaTimeOnly, getUgandaTime } = require("../utils/timeUtils");
               const timestamp = utidData.timestamp || getUgandaTime();
               const time = formatUgandaTimeOnly(timestamp);
@@ -1340,11 +1368,11 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           <h4 style={{ marginBottom: "1rem", fontSize: "1.1rem", color: "#1a1a1a" }}>
             Confirm Delivery to Storage by UTID
           </h4>
-          {allUTIDs === undefined ? (
+          {pendingDeliveryUTIDs === undefined ? (
             <p style={{ color: "#999" }}>Loading UTIDs...</p>
           ) : (
           <DeliveryConfirmationForm
-            allUTIDs={allUTIDs}
+            deliveryUTIDs={pendingDeliveryUTIDs}
             confirmDelivery={confirmDeliveryToStorageByUTID}
             adminId={userId}
             isSuperAdmin={isSuperAdmin}

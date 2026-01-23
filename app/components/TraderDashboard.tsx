@@ -1808,7 +1808,7 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
         onOpenInbox={() => {
           setMessageInboxOpen(true);
           if ((!messageThreads || messageThreads.length === 0) && selectedMessageUtid === null) {
-            const fallbackUtid = activeUTIDs?.[0]?.utid || "";
+            const fallbackUtid = activeUTIDs?.utids?.[0]?.utid || "";
             if (fallbackUtid) {
               setSelectedMessageUtid(fallbackUtid);
             }

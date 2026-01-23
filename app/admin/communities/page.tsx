@@ -282,7 +282,7 @@ export default function CommunitiesPage() {
                 type="button"
                 onClick={() => {
                   setShowCreateForm(false);
-                  setFormData({ name: "", description: "", isGlobal: false, geoLocked: false });
+                  setFormData({ name: "", description: "", isGlobal: false, geoLocked: false, regionKey: "" });
                 }}
                 style={{
                   padding: "0.75rem 1.5rem",

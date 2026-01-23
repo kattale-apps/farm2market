@@ -43,6 +43,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   const [depositMessage, setDepositMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [messageInboxOpen, setMessageInboxOpen] = useState(false);
   const [selectedMessageUtid, setSelectedMessageUtid] = useState<string | null>(null);
+  const SUPPORT_THREAD = "SUPPORT";
 
   const formatUGX = (amount: number) => {
     return new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX" }).format(amount);
@@ -500,7 +501,13 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
           <NotificationMailbox userId={userId} />
           <button
             type="button"
-            onClick={() => setMessageInboxOpen(!messageInboxOpen)}
+            onClick={() => {
+              const nextOpen = !messageInboxOpen;
+              setMessageInboxOpen(nextOpen);
+              if (nextOpen && !selectedMessageUtid) {
+                setSelectedMessageUtid(SUPPORT_THREAD);
+              }
+            }}
             style={{
               padding: "0.5rem 1rem",
               background: messageInboxOpen ? "#1976d2" : "#f5f5f5",
@@ -546,7 +553,12 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
           {messageThreads === undefined ? (
             <p style={{ color: "#999" }}>Loading message threads...</p>
           ) : messageThreads.length === 0 ? (
-            <p style={{ color: "#666" }}>No messages yet. Start a conversation via Contact Us.</p>
+            <div>
+              <p style={{ color: "#666", marginBottom: "0.75rem" }}>
+                No messages yet. Start a support conversation with SuperAdmin below.
+              </p>
+              <ThreadView userId={userId} utid={SUPPORT_THREAD} />
+            </div>
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "minmax(220px, 1fr) 2fr", gap: "1rem" }}>
               <div style={{
@@ -558,6 +570,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
               }}>
                 {messageThreads.map((thread) => {
                   const isSelected = selectedMessageUtid === thread.utid;
+                  const isSupport = thread.utid === SUPPORT_THREAD;
                   return (
                     <button
                       key={thread.utid}
@@ -573,8 +586,13 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                       }}
                     >
                       <div style={{ fontWeight: "600", color: "#2c2c2c" }}>
-                        UTID: {thread.utid}
+                        {isSupport ? "Support Inbox" : `UTID: ${thread.utid}`}
                       </div>
+                      {isSupport && (
+                        <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.25rem" }}>
+                          General help with SuperAdmin
+                        </div>
+                      )}
                       {thread.unreadCount > 0 && (
                         <div style={{ marginTop: "0.35rem", fontSize: "0.75rem", color: "#d32f2f", fontWeight: "600" }}>
                           {thread.unreadCount} unread
@@ -1708,11 +1726,8 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
         isMobile={false}
         onOpenInbox={() => {
           setMessageInboxOpen(true);
-          if ((!messageThreads || messageThreads.length === 0) && selectedMessageUtid === null) {
-            const fallbackUtid = orders?.orders?.[0]?.purchaseUtid || "";
-            if (fallbackUtid) {
-              setSelectedMessageUtid(fallbackUtid);
-            }
+          if (selectedMessageUtid === null) {
+            setSelectedMessageUtid(SUPPORT_THREAD);
           }
           if (typeof document !== "undefined") {
             document.getElementById("message-inbox")?.scrollIntoView({ behavior: "smooth" });

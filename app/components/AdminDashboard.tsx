@@ -87,6 +87,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
     userId ? { userId } : "skip"
   );
   const [selectedMessageUtid, setSelectedMessageUtid] = useState<string | null>(null);
+  const SUPPORT_THREAD = "SUPPORT";
   const inboxThreads = isSuperAdmin ? adminMessageThreads : userMessageThreads;
   const inboxUnreadCount = inboxThreads
     ? inboxThreads.reduce((sum: number, thread: any) => sum + (thread.unreadCount || 0), 0)
@@ -910,9 +911,12 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                 {inboxThreads.map((thread: any) => {
                   const isSelected = selectedMessageUtid === thread.utid;
                   const contact = thread.otherUserEmail || thread.otherUserPhoneNumber;
-                  const title = isSuperAdmin
-                    ? `${thread.otherUserAlias}${contact ? ` (${contact})` : ""}`
-                    : "Conversation";
+                  const isSupport = thread.utid === SUPPORT_THREAD;
+                  const title = isSupport
+                    ? `Support Inbox${isSuperAdmin ? ` — ${thread.otherUserAlias}${contact ? ` (${contact})` : ""}` : ""}`
+                    : isSuperAdmin
+                      ? `${thread.otherUserAlias}${contact ? ` (${contact})` : ""}`
+                      : "Conversation";
                   return (
                     <button
                       key={thread.utid}
@@ -931,7 +935,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                         {title}
                       </div>
                       <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.25rem" }}>
-                        UTID: {thread.utid}
+                        {isSupport ? "Thread: Support" : `UTID: ${thread.utid}`}
                       </div>
                       {thread.lastMessage && (
                         <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.25rem" }}>

@@ -60,6 +60,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
   const [ledgerView, setLedgerView] = useState<"list" | "card">("list");
   const [ledgerPage, setLedgerPage] = useState(0);
   const ITEMS_PER_PAGE = 5;
+  const SUPPORT_THREAD = "SUPPORT";
   const defaultSupportUtid = useMemo(() => {
     const listingUtid = listings?.listings?.[0]?.utid;
     if (listingUtid) return listingUtid;
@@ -67,7 +68,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
     if (negotiationUtid) return negotiationUtid;
     const ledgerUtid = transactionsLedger?.transactions?.[0]?.lockUtid;
     if (ledgerUtid) return ledgerUtid;
-    return "";
+    return SUPPORT_THREAD;
   }, [listings, negotiations, transactionsLedger]);
 
   const formatDate = (timestamp: number) => {
@@ -471,7 +472,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
             onClick={() => {
               const nextOpen = !messageInboxOpen;
               setMessageInboxOpen(nextOpen);
-              if (nextOpen && (!messageThreads || messageThreads.length === 0) && defaultSupportUtid) {
+              if (nextOpen && !selectedMessageUtid && defaultSupportUtid) {
                 setSelectedMessageUtid(defaultSupportUtid);
               }
             }}
@@ -525,18 +526,12 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
           {messageThreads === undefined ? (
             <p style={{ color: "#999" }}>Loading message threads...</p>
           ) : messageThreads.length === 0 ? (
-            defaultSupportUtid ? (
-              <div>
-                <p style={{ color: "#666", marginBottom: "0.75rem" }}>
-                  No messages yet. We will start a new conversation linked to UTID: {defaultSupportUtid}.
-                </p>
-                <ThreadView userId={userId} utid={defaultSupportUtid} />
-              </div>
-            ) : (
-              <p style={{ color: "#666" }}>
-                No messages yet. Create a listing or complete a transaction first to open a UTID‑linked thread.
+            <div>
+              <p style={{ color: "#666", marginBottom: "0.75rem" }}>
+                No messages yet. Start a support conversation with SuperAdmin below.
               </p>
-            )
+              <ThreadView userId={userId} utid={defaultSupportUtid} />
+            </div>
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "minmax(220px, 1fr) 2fr", gap: "1rem" }}>
               <div style={{
@@ -548,6 +543,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
               }}>
                 {messageThreads.map((thread) => {
                   const isSelected = selectedMessageUtid === thread.utid;
+                  const isSupport = thread.utid === SUPPORT_THREAD;
                   return (
                     <button
                       key={thread.utid}
@@ -563,8 +559,13 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                       }}
                     >
                       <div style={{ fontWeight: "600", color: "#2c2c2c" }}>
-                        UTID: {thread.utid}
+                        {isSupport ? "Support Inbox" : `UTID: ${thread.utid}`}
                       </div>
+                      {isSupport && (
+                        <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.25rem" }}>
+                          General help with SuperAdmin
+                        </div>
+                      )}
                       {thread.unreadCount > 0 && (
                         <div style={{ marginTop: "0.35rem", fontSize: "0.75rem", color: "#d32f2f", fontWeight: "600" }}>
                           {thread.unreadCount} unread
@@ -2621,7 +2622,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
           type="button"
           onClick={() => {
             setMessageInboxOpen(true);
-            if ((!messageThreads || messageThreads.length === 0) && defaultSupportUtid) {
+            if (!selectedMessageUtid && defaultSupportUtid) {
               setSelectedMessageUtid(defaultSupportUtid);
             }
             if (typeof document !== "undefined") {

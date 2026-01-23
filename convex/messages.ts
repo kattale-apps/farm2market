@@ -1,10 +1,10 @@
 /**
- * Messaging System (UTID-Linked)
- * 
+ * Messaging System
+ *
  * - Users can message SuperAdmin
  * - SuperAdmin can message any user
- * - All messages must link to a UTID
- * - No phone numbers or identities visible
+ * - Messages are UTID-linked OR use SUPPORT thread for general help
+ * - No phone numbers or identities visible to non-admins
  */
 
 import { v } from "convex/values";
@@ -18,6 +18,8 @@ import { Id } from "./_generated/dataModel";
 function isSuperAdmin(user: { adminLevel?: "super" | "junior" }): boolean {
   return user.adminLevel === "super" || user.adminLevel === undefined;
 }
+
+const SUPPORT_THREAD = "SUPPORT";
 
 /**
  * Get SuperAdmin user ID (for messaging)
@@ -126,6 +128,8 @@ export const getUserMessageThreads = query({
     const utidSet = new Set<string>();
     sentMessages.forEach((m) => utidSet.add(m.utid));
     receivedMessages.forEach((m) => utidSet.add(m.utid));
+    // Always include support thread (non-UTID general help)
+    utidSet.add(SUPPORT_THREAD);
 
     // Get unread count per UTID
     const unreadCounts = new Map<string, number>();
@@ -159,6 +163,8 @@ export const sendMessage = mutation({
       throw new Error("Message cannot be empty");
     }
 
+    const normalizedUtid = args.utid.trim() || SUPPORT_THREAD;
+
     const fromUser = await ctx.db.get(args.fromUserId);
     if (!fromUser) {
       throw new Error("Sender not found");
@@ -171,7 +177,7 @@ export const sendMessage = mutation({
 
     // Verify UTID exists (check if it's referenced in any entity)
     // This is a basic check - in production, you might want more thorough validation
-    const utidExists = await validateUTID(ctx, args.utid);
+    const utidExists = await validateUTID(ctx, normalizedUtid);
     if (!utidExists) {
       throw new Error("Invalid UTID. Message must be linked to a valid transaction.");
     }
@@ -188,7 +194,7 @@ export const sendMessage = mutation({
     await ctx.db.insert("messages", {
       fromUserId: args.fromUserId,
       toUserId: args.toUserId,
-      utid: args.utid,
+      utid: normalizedUtid,
       message: args.message.trim(),
       read: false,
       createdAt: getUgandaTime(),
@@ -309,6 +315,7 @@ export const getAdminMessageThreads = query({
  * Checks if UTID is referenced in listings, negotiations, walletLedger, etc.
  */
 async function validateUTID(ctx: any, utid: string): Promise<boolean> {
+  if (utid === SUPPORT_THREAD) return true;
   // Check listings
   const listing = await ctx.db
     .query("listings")

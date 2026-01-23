@@ -18,6 +18,7 @@ export function ThreadView({ userId, utid, onClose }: ThreadViewProps) {
   const [messageText, setMessageText] = useState("");
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const isSupportThread = utid === "SUPPORT";
 
   // Get SuperAdmin ID (users can only message SuperAdmin)
   const superAdmin = useQuery(api.messages.getSuperAdmin, {});
@@ -84,10 +85,18 @@ export function ThreadView({ userId, utid, onClose }: ThreadViewProps) {
         }}
       >
         <div>
-          <h3 style={{ margin: 0, fontSize: "1.1rem" }}>Message Thread</h3>
-          <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.85rem", color: "#666" }}>
-            UTID: {utid}
-          </p>
+          <h3 style={{ margin: 0, fontSize: "1.1rem" }}>
+            {isSupportThread ? "Support Inbox" : "Message Thread"}
+          </h3>
+          {isSupportThread ? (
+            <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.85rem", color: "#666" }}>
+              General support with SuperAdmin
+            </p>
+          ) : (
+            <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.85rem", color: "#666" }}>
+              UTID: {utid}
+            </p>
+          )}
         </div>
         {onClose && (
           <button

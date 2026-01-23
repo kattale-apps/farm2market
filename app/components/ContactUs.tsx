@@ -14,7 +14,21 @@ interface ContactUsProps {
 
 export function ContactUs({ isMobile = false }: ContactUsProps) {
   const [showContact, setShowContact] = useState(false);
+  const [accountLabel, setAccountLabel] = useState("");
   const handleOpenInbox = () => {
+    const inboxHeading = Array.from(document.querySelectorAll("h3")).find((el) => {
+      const text = el.textContent || "";
+      return text.includes("Messages Inbox") || text.includes("Admin Inbox");
+    });
+
+    if (!inboxHeading) {
+      const inboxButton = Array.from(document.querySelectorAll("button")).find((btn) => {
+        const text = btn.textContent || "";
+        return text.includes("Inbox");
+      });
+      inboxButton?.click();
+    }
+
     const inboxTargets = ["message-inbox", "notification-inbox", "admin-inbox"];
     const targetId = inboxTargets.find((id) => document.getElementById(id));
     if (targetId) {
@@ -22,8 +36,36 @@ export function ContactUs({ isMobile = false }: ContactUsProps) {
       setShowContact(false);
       return;
     }
+
+    if (inboxHeading) {
+      inboxHeading.scrollIntoView({ behavior: "smooth" });
+      setShowContact(false);
+      return;
+    }
+
     alert("Inbox panel not found. Please open your inbox from the dashboard.");
     setShowContact(false);
+  };
+
+  const handleShowContact = () => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("pilot_user");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          const contact = parsed?.email || parsed?.phoneNumber;
+          const alias = parsed?.alias;
+          if (alias && contact) {
+            setAccountLabel(`${alias} (${contact})`);
+          } else if (alias) {
+            setAccountLabel(alias);
+          }
+        }
+      } catch {
+        setAccountLabel("");
+      }
+    }
+    setShowContact(true);
   };
 
   if (!showContact) {
@@ -36,7 +78,7 @@ export function ContactUs({ isMobile = false }: ContactUsProps) {
         boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
       }}>
         <button
-          onClick={() => setShowContact(true)}
+          onClick={handleShowContact}
           style={{
             padding: "0.75rem 1.5rem",
             background: "#2e7d32",
@@ -114,6 +156,19 @@ export function ContactUs({ isMobile = false }: ContactUsProps) {
         <p style={{ margin: 0, color: "#555", fontSize: isMobile ? "0.9rem" : "1rem" }}>
           Use the in-app inbox to contact Admin. This keeps your messages secure and UTID-linked.
         </p>
+        {accountLabel && (
+          <div style={{
+            fontSize: isMobile ? "0.85rem" : "0.9rem",
+            color: "#2c2c2c",
+            background: "#f5f5f5",
+            border: "1px solid #e0e0e0",
+            borderRadius: "6px",
+            padding: "0.5rem 0.75rem",
+            fontWeight: "600",
+          }}>
+            Using account: {accountLabel}
+          </div>
+        )}
         <button
           type="button"
           onClick={handleOpenInbox}

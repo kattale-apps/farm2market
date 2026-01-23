@@ -99,10 +99,12 @@ export const getActiveCommunities = query({
     let userSubcountyId: Id<"subcounties"> | undefined;
     let userParishId: Id<"parishes"> | undefined;
     let isAdmin = false;
+    let userRecord: { role?: string; adminLevel?: "super" | "junior" } | null = null;
 
     if (args.userId) {
       const user = await ctx.db.get(args.userId);
       if (user) {
+        userRecord = user;
         isAdmin = user.role === "admin";
         userDistrictId = user.districtId;
         userSubcountyId = user.subcountyId;
@@ -124,7 +126,7 @@ export const getActiveCommunities = query({
       return false;
     });
 
-    const isSuperAdmin = isAdmin && user?.adminLevel !== "junior";
+    const isSuperAdmin = isAdmin && userRecord?.adminLevel !== "junior";
 
     // Get membership status for each community
     const communitiesWithMembership = await Promise.all(

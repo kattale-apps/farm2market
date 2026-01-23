@@ -88,7 +88,27 @@ export default function CommunitiesPage() {
         <h1 style={{ fontSize: "clamp(1.5rem, 4vw, 2rem)", margin: 0 }}>
           Grower Communities
         </h1>
-        {isSuperAdmin && (
+        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof window !== "undefined") {
+                window.location.href = "/";
+              }
+            }}
+            style={{
+              padding: "0.6rem 1rem",
+              background: "#f5f5f5",
+              color: "#2c2c2c",
+              border: "1px solid #ddd",
+              borderRadius: "8px",
+              cursor: "pointer",
+              fontWeight: "600",
+            }}
+          >
+            ← Back to Home
+          </button>
+          {isSuperAdmin && (
           <button
             onClick={() => setShowCreateForm(!showCreateForm)}
             style={{
@@ -103,7 +123,8 @@ export default function CommunitiesPage() {
           >
             + Create Community
           </button>
-        )}
+          )}
+        </div>
       </div>
 
       {message && (
@@ -228,9 +249,19 @@ export default function CommunitiesPage() {
       {communities === undefined ? (
         <p>Loading communities...</p>
       ) : communities.length === 0 ? (
-        <p style={{ color: "#666", padding: "2rem", textAlign: "center" }}>
-          No communities yet. Please check back soon.
-        </p>
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <p style={{
+            color: "#666",
+            padding: "1.5rem 2rem",
+            textAlign: "center",
+            background: "#f9f9f9",
+            borderRadius: "10px",
+            border: "1px solid #e0e0e0",
+            maxWidth: "520px",
+          }}>
+            No communities yet. Please check back soon.
+          </p>
+        </div>
       ) : (
         <div style={{ display: "grid", gap: "1.5rem" }}>
           {communities.map((community: any) => (

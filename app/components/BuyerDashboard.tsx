@@ -3,7 +3,7 @@
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { exportToExcel, exportToPDF, formatUTIDDataForExport } from "../utils/exportUtils";
 import { formatUgandaDateTime, getUgandaTime } from "../utils/timeUtils";
 import { NotificationMailbox } from "./NotificationMailbox";
@@ -44,6 +44,15 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   const [messageInboxOpen, setMessageInboxOpen] = useState(false);
   const [selectedMessageUtid, setSelectedMessageUtid] = useState<string | null>(null);
   const SUPPORT_THREAD = "SUPPORT";
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   const formatUGX = (amount: number) => {
     return new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX" }).format(amount);
@@ -535,7 +544,11 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
           background: "#fff",
           borderRadius: "12px",
           boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          border: "1px solid #e0e0e0"
+          border: "1px solid #e0e0e0",
+          width: "100%",
+          maxWidth: "100%",
+          boxSizing: "border-box",
+          overflowX: "hidden",
         }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.75rem" }}>
             <h3 style={{
@@ -560,12 +573,21 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
               <ThreadView userId={userId} utid={SUPPORT_THREAD} />
             </div>
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "minmax(220px, 1fr) 2fr", gap: "1rem" }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: isMobile ? "1fr" : "minmax(220px, 1fr) 2fr",
+                gap: "1rem",
+                width: "100%",
+                maxWidth: "100%",
+                boxSizing: "border-box",
+              }}
+            >
               <div style={{
                 border: "1px solid #e0e0e0",
                 borderRadius: "8px",
                 overflow: "hidden",
-                maxHeight: "420px",
+                maxHeight: isMobile ? "240px" : "420px",
                 overflowY: "auto"
               }}>
                 {messageThreads.map((thread) => {

@@ -100,6 +100,15 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   const [pilotModeLoading, setPilotModeLoading] = useState(false);
   const [pilotModeMessage, setPilotModeMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [expandedMetric, setExpandedMetric] = useState<string | null>(null); // Track which metric card is expanded
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   const storageLocationsById = new Map<string, any>();
   if (storageLocations) {
@@ -881,7 +890,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           width: "100%",
           maxWidth: "100%",
           boxSizing: "border-box",
-          overflowX: "auto"
+          overflowX: isMobile ? "hidden" : "auto"
         }}>
           <h3 style={{
             marginTop: 0,
@@ -900,12 +909,21 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           ) : inboxThreads.length === 0 ? (
             <p style={{ color: "#666" }}>No messages yet.</p>
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "minmax(220px, 1fr) 2fr", gap: "1rem" }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: isMobile ? "1fr" : "minmax(220px, 1fr) 2fr",
+                gap: "1rem",
+                width: "100%",
+                maxWidth: "100%",
+                boxSizing: "border-box",
+              }}
+            >
               <div style={{
                 border: "1px solid #e0e0e0",
                 borderRadius: "8px",
                 overflow: "hidden",
-                maxHeight: "500px",
+                maxHeight: isMobile ? "260px" : "500px",
                 overflowY: "auto"
               }}>
                 {inboxThreads.map((thread: any) => {

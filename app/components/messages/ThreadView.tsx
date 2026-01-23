@@ -68,7 +68,7 @@ export function ThreadView({ userId, utid, onClose }: ThreadViewProps) {
       style={{
         display: "flex",
         flexDirection: "column",
-        height: "500px",
+        height: "min(500px, 70vh)",
         border: "1px solid #ddd",
         borderRadius: "8px",
         overflow: "hidden",

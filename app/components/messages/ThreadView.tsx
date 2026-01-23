@@ -68,7 +68,7 @@ export function ThreadView({ userId, utid, onClose }: ThreadViewProps) {
       style={{
         display: "flex",
         flexDirection: "column",
-        height: "min(500px, 70vh)",
+        height: "min(420px, 60vh)",
         border: "1px solid #ddd",
         borderRadius: "8px",
         overflow: "hidden",
@@ -79,7 +79,7 @@ export function ThreadView({ userId, utid, onClose }: ThreadViewProps) {
     >
       <div
         style={{
-          padding: "1rem",
+          padding: "clamp(0.6rem, 2.5vw, 1rem)",
           background: "#f5f5f5",
           borderBottom: "1px solid #ddd",
           display: "flex",
@@ -121,7 +121,7 @@ export function ThreadView({ userId, utid, onClose }: ThreadViewProps) {
         style={{
           flex: 1,
           overflowY: "auto",
-          padding: "1rem",
+          padding: "clamp(0.6rem, 2.5vw, 1rem)",
           background: "#fafafa",
         }}
       >
@@ -141,7 +141,7 @@ export function ThreadView({ userId, utid, onClose }: ThreadViewProps) {
             >
               <div
                 style={{
-                  maxWidth: "70%",
+                  maxWidth: "85%",
                   padding: "0.75rem 1rem",
                   borderRadius: "12px",
                   background: msg.isFromMe ? "#4caf50" : "#fff",
@@ -166,41 +166,47 @@ export function ThreadView({ userId, utid, onClose }: ThreadViewProps) {
       <form
         onSubmit={handleSend}
         style={{
-          padding: "1rem",
+          padding: "clamp(0.6rem, 2.5vw, 1rem)",
           background: "#fff",
           borderTop: "1px solid #ddd",
           display: "flex",
-          gap: "0.5rem",
+          gap: "0.4rem",
           alignItems: "stretch",
         }}
       >
-        <input
-          type="text"
-          value={messageText}
-          onChange={(e) => setMessageText(e.target.value)}
-          placeholder="Type your message..."
-          disabled={loading}
-          style={{
-            flex: 1,
-            padding: "0.85rem",
-            border: "1px solid #ddd",
-            borderRadius: "6px",
-            fontSize: "1rem",
-            minHeight: "3.25rem",
-            lineHeight: "1.4",
-          }}
-        />
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+          <input
+            type="text"
+            value={messageText}
+            onChange={(e) => setMessageText(e.target.value)}
+            placeholder="Type your message..."
+            disabled={loading}
+            style={{
+              padding: "clamp(0.6rem, 2.5vw, 0.85rem)",
+              border: "1px solid #ddd",
+              borderRadius: "6px",
+              fontSize: "clamp(0.9rem, 3vw, 1rem)",
+              minHeight: "clamp(2.4rem, 6vh, 3rem)",
+              lineHeight: "1.4",
+            }}
+          />
+          <div style={{ fontSize: "clamp(0.75rem, 2.6vw, 0.85rem)", color: "#777" }}>
+            Press Enter to send
+          </div>
+        </div>
         <button
           type="submit"
           disabled={loading || !messageText.trim()}
           style={{
-            padding: "0.75rem 1.5rem",
+            padding: "clamp(0.6rem, 2.5vw, 0.85rem) clamp(1rem, 4vw, 1.25rem)",
             background: loading || !messageText.trim() ? "#ccc" : "#4caf50",
             color: "white",
             border: "none",
             borderRadius: "6px",
             cursor: loading || !messageText.trim() ? "not-allowed" : "pointer",
             fontWeight: "600",
+            fontSize: "clamp(0.85rem, 2.8vw, 0.95rem)",
+            alignSelf: "flex-start",
           }}
         >
           Send

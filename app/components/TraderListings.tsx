@@ -19,6 +19,10 @@ export function TraderListings({ userId }: TraderListingsProps) {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [offeringListingMode, setOfferingListingMode] = useState<"unit" | "garden">("unit");
   const [showSelectedUnits, setShowSelectedUnits] = useState(false);
+  const [listingsPage, setListingsPage] = useState(1);
+  const [produceFilter, setProduceFilter] = useState("all");
+  const [expandedBatches, setExpandedBatches] = useState<Set<string>>(new Set());
+  const LISTINGS_PAGE_SIZE = 10;
 
   const listings = useQuery(api.listings.getActiveListings);
   const traderNegotiations = useQuery(api.negotiations.getTraderNegotiations, { traderId: userId });
@@ -43,6 +47,44 @@ export function TraderListings({ userId }: TraderListingsProps) {
     });
     return map;
   }, [listings]);
+
+  const openListings = useMemo(
+    () => (listings || []).filter((listing: any) => !listing.isTraderListing),
+    [listings]
+  );
+
+  const produceOptions = useMemo(
+    () =>
+      Array.from(new Set(openListings.map((listing: any) => listing.produceType).filter(Boolean))).sort(),
+    [openListings]
+  );
+
+  const sortedOpenListings = useMemo(
+    () => [...openListings].sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0)),
+    [openListings]
+  );
+
+  const filteredOpenListings = useMemo(
+    () => (produceFilter === "all"
+      ? sortedOpenListings
+      : sortedOpenListings.filter((listing: any) => listing.produceType === produceFilter)),
+    [produceFilter, sortedOpenListings]
+  );
+
+  const listingsTotal = filteredOpenListings.length;
+  const listingsTotalPages = Math.max(1, Math.ceil(listingsTotal / LISTINGS_PAGE_SIZE));
+  const listingsStart = listingsTotal === 0 ? 0 : (listingsPage - 1) * LISTINGS_PAGE_SIZE + 1;
+  const listingsEnd = Math.min(listingsPage * LISTINGS_PAGE_SIZE, listingsTotal);
+  const pagedListings = filteredOpenListings.slice(
+    (listingsPage - 1) * LISTINGS_PAGE_SIZE,
+    listingsPage * LISTINGS_PAGE_SIZE
+  );
+
+  useEffect(() => {
+    if (listingsPage > listingsTotalPages) {
+      setListingsPage(listingsTotalPages);
+    }
+  }, [listingsPage, listingsTotalPages]);
 
   useEffect(() => {
     if (!offering || availableUnits.length === 0) return;
@@ -70,6 +112,62 @@ export function TraderListings({ userId }: TraderListingsProps) {
     // Timestamps are stored in Uganda time, convert for display
     return formatUgandaDateTime(timestamp);
   };
+
+  const activeNegotiations = useMemo(
+    () => traderNegotiations?.negotiations.filter((neg: any) => neg.status === "pending" || neg.status === "countered") || [],
+    [traderNegotiations]
+  );
+
+  const batchedNegotiations = useMemo(() => {
+    const batches = new Map<string, any>();
+
+    activeNegotiations.forEach((neg: any) => {
+      const listingForNeg = listingsById.get(neg.listingId);
+      const isGardenNegotiation =
+        listingForNeg?.listingMode === "garden" ||
+        listingForNeg?.gardenSize != null ||
+        listingForNeg?.gardenDimensions != null ||
+        listingForNeg?.totalPrice != null;
+
+      const key = [
+        neg.listingId,
+        neg.status,
+        neg.traderOfferPricePerKilo,
+        neg.currentPricePerKilo,
+        isGardenNegotiation ? "garden" : "unit",
+      ].join("|");
+
+      if (!batches.has(key)) {
+        batches.set(key, {
+          key,
+          produceType: neg.produceType,
+          status: neg.status,
+          isGardenNegotiation,
+          listing: listingForNeg,
+          traderOfferPricePerKilo: neg.traderOfferPricePerKilo,
+          currentPricePerKilo: neg.currentPricePerKilo,
+          unitNumbers: [],
+          utids: [],
+          items: [],
+          count: 0,
+          latestCreatedAt: 0,
+        });
+      }
+
+      const batch = batches.get(key);
+      batch.count += 1;
+      batch.latestCreatedAt = Math.max(batch.latestCreatedAt, neg.createdAt || 0);
+      if (neg.unitNumber) batch.unitNumbers.push(neg.unitNumber);
+      if (neg.negotiationUtid) batch.utids.push(neg.negotiationUtid);
+      batch.items.push({
+        negotiationId: neg.negotiationId,
+        unitNumber: neg.unitNumber,
+        utid: neg.negotiationUtid,
+      });
+    });
+
+    return Array.from(batches.values()).sort((a: any, b: any) => (b.latestCreatedAt || 0) - (a.latestCreatedAt || 0));
+  }, [activeNegotiations, listingsById]);
 
   const handleMakeOffer = async (listingId: Id<"listings">) => {
     const price = parseFloat(offerPrice);
@@ -211,7 +309,7 @@ export function TraderListings({ userId }: TraderListingsProps) {
       )}
 
       {/* Active Negotiations */}
-      {traderNegotiations && traderNegotiations.negotiations.length > 0 && (
+      {batchedNegotiations.length > 0 && (
         <div style={{
           marginBottom: "1.5rem",
           padding: "clamp(1rem, 3vw, 1.5rem)",
@@ -222,57 +320,126 @@ export function TraderListings({ userId }: TraderListingsProps) {
           <h4 style={{ marginTop: 0, marginBottom: "1rem", fontSize: "clamp(1rem, 3vw, 1.1rem)", color: "#856404" }}>
             Your Active Negotiations
           </h4>
+          <div style={{ fontSize: "0.85rem", color: "#856404", marginBottom: "0.75rem" }}>
+            Tap a batch to view delivery details and offer history.
+          </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-            {traderNegotiations.negotiations.map((neg: any) => {
-              const listingForNeg = listingsById.get(neg.listingId);
-              const isGardenNegotiation =
-                listingForNeg?.listingMode === "garden" ||
-                listingForNeg?.gardenSize != null ||
-                listingForNeg?.gardenDimensions != null ||
-                listingForNeg?.totalPrice != null;
-              const gardenTotalKilos = listingForNeg?.totalKilos || listingForNeg?.unitSize || 1;
-              const offerTotal = neg.traderOfferPricePerKilo * gardenTotalKilos;
-              const currentTotal = neg.currentPricePerKilo * gardenTotalKilos;
-              const currentGardenPrice = listingForNeg?.totalPrice ?? currentTotal;
+            {batchedNegotiations.map((batch: any) => {
+              const unitSize = batch.listing?.unitSize || 10;
+              const totalKilos = batch.isGardenNegotiation
+                ? (batch.listing?.totalKilos || unitSize)
+                : unitSize * batch.count;
+              const unitLabel = batch.isGardenNegotiation ? "🌿 Garden Sale" : "⚖️ Kilo Sale";
+              const isExpanded = expandedBatches.has(batch.key);
+              const unitLabelStyle = {
+                padding: "0.25rem 0.6rem",
+                borderRadius: "999px",
+                fontSize: "0.75rem",
+                fontWeight: "700",
+                background: batch.isGardenNegotiation ? "#1b5e20" : "#0d47a1",
+                color: "#fff",
+                boxShadow: "0 0 0 1px rgba(0,0,0,0.1)"
+              };
 
               return (
-                <div key={neg.negotiationId} style={{
+                <div key={batch.key} style={{
                   padding: "0.75rem",
                   background: "#fff",
                   borderRadius: "8px",
-                  border: "1px solid #e0e0e0"
-                }}>
-                  <div style={{ fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", marginBottom: "0.5rem" }}>
-                    <strong>{neg.produceType}</strong>{" "}
-                    {isGardenNegotiation ? "- 🌿 Garden Sale" : `- ⚖️ Unit #${neg.unitNumber}`}
+                  border: "1px solid #e0e0e0",
+                  cursor: "pointer"
+                }}
+                  onClick={() => {
+                    setExpandedBatches((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(batch.key)) {
+                        next.delete(batch.key);
+                      } else {
+                        next.add(batch.key);
+                      }
+                      return next;
+                    });
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.5rem" }}>
+                    <strong>{batch.produceType}</strong>
+                    <span style={unitLabelStyle}>{unitLabel}</span>
+                    <span style={{ fontSize: "0.75rem", color: "#666" }}>
+                      {isExpanded ? "Hide details" : "View details"}
+                    </span>
                   </div>
                   <div style={{ fontSize: "clamp(0.8rem, 2.5vw, 0.85rem)", color: "#666", marginBottom: "0.5rem" }}>
-                    {isGardenNegotiation
-                      ? `Your Offer: ${formatUGX(offerTotal)} | Current Garden Price: ${formatUGX(currentGardenPrice)} | Status: `
-                      : `Your Offer: ${formatUGX(neg.traderOfferPricePerKilo)}/kg | Current Price: ${formatUGX(neg.currentPricePerKilo)}/kg | Status: `}
-                    <strong>{neg.status}</strong>
+                    {batch.isGardenNegotiation
+                      ? `Garden total: ${totalKilos} kg | Status: `
+                      : `Units: ${batch.unitNumbers.slice(0, 6).map((n: number) => `#${n}`).join(", ")}${batch.unitNumbers.length > 6 ? ` +${batch.unitNumbers.length - 6}` : ""} • ${totalKilos} kg | Status: `}
+                    <strong>{batch.status}</strong>
                   </div>
-                  <div style={{ fontSize: "clamp(0.7rem, 2vw, 0.75rem)", color: "#999", fontFamily: "monospace", wordBreak: "break-all", marginBottom: "0.5rem" }}>
-                    UTID: {neg.negotiationUtid}
+                  <div style={{ fontSize: "clamp(0.7rem, 2vw, 0.75rem)", color: "#999", fontFamily: "monospace", wordBreak: "break-all" }}>
+                    UTIDs: {batch.utids.slice(0, 3).join(", ")}{batch.utids.length > 3 ? ` +${batch.utids.length - 3}` : ""}
                   </div>
-                  {neg.status === "countered" && (
-                    <button
-                      onClick={() => handleAcceptCounterOffer(neg.negotiationId)}
-                      style={{
-                        padding: "0.5rem 1rem",
-                        background: "#1976d2",
-                        color: "#fff",
-                        border: "none",
-                        borderRadius: "6px",
-                        cursor: "pointer",
-                        fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)",
-                        fontWeight: "600",
-                      }}
-                    >
-                      {isGardenNegotiation
-                        ? `Accept Counter-Offer (${formatUGX(currentGardenPrice)})`
-                        : `Accept Counter-Offer (${formatUGX(neg.currentPricePerKilo)}/kg)`}
-                    </button>
+                  {isExpanded && (
+                    <div style={{
+                      marginTop: "0.75rem",
+                      padding: "0.75rem",
+                      background: "#f5f5f5",
+                      borderRadius: "6px",
+                      border: "1px solid #e0e0e0"
+                    }}>
+                      <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.5rem", fontWeight: "600" }}>
+                        Offer History
+                      </div>
+                      <div style={{ fontSize: "0.8rem", color: "#666", marginBottom: "0.5rem" }}>
+                        Your Offer: <strong>{formatUGX(batch.traderOfferPricePerKilo)}/kg</strong> | Current Price: <strong>{formatUGX(batch.currentPricePerKilo)}/kg</strong>
+                      </div>
+                      <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.5rem", fontWeight: "600" }}>
+                        Listing Details
+                      </div>
+                      <div style={{ fontSize: "0.8rem", color: "#666", display: "grid", gap: "0.35rem" }}>
+                        <div>Listing UTID: <strong>{batch.listing?.utid || "N/A"}</strong></div>
+                        <div>Farmer: <strong>{batch.listing?.farmerAlias || "Unknown"}</strong></div>
+                        <div>Listed: <strong>{batch.listing?.createdAt ? formatDate(batch.listing.createdAt) : "N/A"}</strong></div>
+                        <div>Mode: <strong>{batch.isGardenNegotiation ? "Garden Sale" : "Kilo Sale"}</strong></div>
+                        <div>Total: <strong>{totalKilos} kg</strong></div>
+                        {!batch.isGardenNegotiation && (
+                          <div>Unit Size: <strong>{unitSize} kg</strong></div>
+                        )}
+                        <div>Delivery Location: <strong>{batch.listing?.storageLocation?.districtName ? `${batch.listing.storageLocation.districtName} (${batch.listing.storageLocation.code})` : "Not available"}</strong></div>
+                      </div>
+                      <div style={{ marginTop: "0.5rem", fontSize: "0.75rem", color: "#999", fontFamily: "monospace", wordBreak: "break-all" }}>
+                        All UTIDs: {batch.utids.join(", ")}
+                      </div>
+                    </div>
+                  )}
+                  {batch.status === "countered" && (
+                    <div style={{ marginTop: "0.5rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                      {batch.items.slice(0, 3).map((item: any) => (
+                        <div key={item.negotiationId} style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                          <span style={{ fontSize: "0.8rem", color: "#666" }}>
+                            {item.unitNumber ? `Unit #${item.unitNumber}` : "Unit"} {item.utid ? `• ${item.utid}` : ""}
+                          </span>
+                          <button
+                            onClick={() => handleAcceptCounterOffer(item.negotiationId)}
+                            style={{
+                              padding: "0.4rem 0.75rem",
+                              background: "#1976d2",
+                              color: "#fff",
+                              border: "none",
+                              borderRadius: "6px",
+                              cursor: "pointer",
+                              fontSize: "0.8rem",
+                              fontWeight: "600",
+                            }}
+                          >
+                            Accept Counter-Offer
+                          </button>
+                        </div>
+                      ))}
+                      {batch.items.length > 3 && (
+                        <div style={{ fontSize: "0.75rem", color: "#666" }}>
+                          +{batch.items.length - 3} more countered unit(s). Use filters above to narrow.
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               );
@@ -353,39 +520,71 @@ export function TraderListings({ userId }: TraderListingsProps) {
       )}
 
       {/* Available Listings */}
-      {listings === undefined ? (
-        <p style={{ color: "#999" }}>Loading listings...</p>
-      ) : listings.length === 0 ? (
-        <p style={{ color: "#666" }}>No active listings available. Farmers need to create listings first.</p>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-          {listings
-            .filter((listing: any) => !listing.isTraderListing) // Traders can only make offers on farmer listings (10kg units), not trader listings (100kg blocks)
-            .map((listing: any) => {
-            // Check if trader has an active negotiation for this listing
-            const hasActiveNegotiation = traderNegotiations?.negotiations.some(
-              (neg: any) => neg.listingId === listing.listingId && (neg.status === "pending" || neg.status === "countered")
-            );
-            const isOffering = offering?.listingId === listing.listingId;
+      <div style={{
+        marginBottom: "1.5rem",
+        padding: "clamp(1rem, 3vw, 1.5rem)",
+        background: "#fff",
+        borderRadius: "12px",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        border: "1px solid #e0e0e0"
+      }}>
+        <h4 style={{ marginTop: 0, marginBottom: "0.75rem", fontSize: "clamp(1rem, 3vw, 1.1rem)", color: "#1a1a1a" }}>
+          Open & Available Listings
+        </h4>
+        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1rem", alignItems: "center" }}>
+          <span style={{ fontSize: "0.85rem", color: "#666" }}>Filter produce:</span>
+          <select
+            value={produceFilter}
+            onChange={(e) => {
+              setProduceFilter(e.target.value);
+              setListingsPage(1);
+            }}
+            style={{
+              padding: "0.4rem 0.6rem",
+              border: "1px solid #ddd",
+              borderRadius: "6px",
+              fontSize: "0.85rem",
+              background: "#fff"
+            }}
+          >
+            <option value="all">All produce</option>
+            {produceOptions.map((produce: string) => (
+              <option key={produce} value={produce}>{produce}</option>
+            ))}
+          </select>
+        </div>
 
-            const isGardenListing = listing.listingMode === "garden" || Boolean(listing.gardenSize || listing.gardenDimensions || listing.totalPrice);
+        {listings === undefined ? (
+          <p style={{ color: "#999" }}>Loading listings...</p>
+        ) : filteredOpenListings.length === 0 ? (
+          <p style={{ color: "#666" }}>No active listings available. Farmers need to create listings first.</p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+            {pagedListings.map((listing: any) => {
+              // Check if trader has an active negotiation for this listing
+              const hasActiveNegotiation = activeNegotiations.some(
+                (neg: any) => neg.listingId === listing.listingId
+              );
+              const isOffering = offering?.listingId === listing.listingId;
 
-            return (
-              <div
-                key={listing.listingId}
-                style={{
-                  padding: "clamp(1rem, 3vw, 1.5rem)",
-                  background: isGardenListing ? "#f1f8e9" : "#fff",
-                  borderRadius: "12px",
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-                  border: hasActiveNegotiation
-                    ? "2px solid #ff9800"
-                    : isGardenListing
-                      ? "2px solid #7cb342"
-                      : "1px solid #e0e0e0",
-                  position: "relative",
-                }}
-              >
+              const isGardenListing = listing.listingMode === "garden" || Boolean(listing.gardenSize || listing.gardenDimensions || listing.totalPrice);
+
+              return (
+                <div
+                  key={listing.listingId}
+                  style={{
+                    padding: "clamp(1rem, 3vw, 1.5rem)",
+                    background: isGardenListing ? "#f1f8e9" : "#fff",
+                    borderRadius: "12px",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+                    border: hasActiveNegotiation
+                      ? "2px solid #ff9800"
+                      : isGardenListing
+                        ? "2px solid #7cb342"
+                        : "1px solid #e0e0e0",
+                    position: "relative",
+                  }}
+                >
                 {hasActiveNegotiation && (
                   <div style={{
                     position: "absolute",
@@ -415,8 +614,9 @@ export function TraderListings({ userId }: TraderListingsProps) {
                           borderRadius: "999px",
                           fontSize: "0.75rem",
                           fontWeight: "600",
-                          background: isGardenListing ? "#7cb342" : "#1976d2",
+                          background: isGardenListing ? "#1b5e20" : "#0d47a1",
                           color: "#fff",
+                          boxShadow: "0 0 0 1px rgba(0,0,0,0.1)"
                         }}
                       >
                         {isGardenListing ? "🌿 Garden Sale" : "⚖️ Kilo Sale"}
@@ -751,9 +951,76 @@ export function TraderListings({ userId }: TraderListingsProps) {
                 </div>
               </div>
             );
-          })}
-        </div>
-      )}
+            })}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
+              <div style={{ fontSize: "0.8rem", color: "#666" }}>
+                Showing {listingsStart}-{listingsEnd} of {listingsTotal}
+              </div>
+              {listingsTotalPages > 1 && (
+                <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    onClick={() => setListingsPage((prev) => Math.max(1, prev - 1))}
+                    disabled={listingsPage === 1}
+                    style={{
+                      padding: "0.3rem 0.6rem",
+                      background: listingsPage === 1 ? "#e0e0e0" : "#f5f5f5",
+                      color: "#333",
+                      border: "1px solid #ddd",
+                      borderRadius: "4px",
+                      cursor: listingsPage === 1 ? "not-allowed" : "pointer",
+                      fontSize: "0.8rem",
+                      fontWeight: "600"
+                    }}
+                  >
+                    Prev
+                  </button>
+                  {Array.from({ length: listingsTotalPages }, (_, idx) => {
+                    const page = idx + 1;
+                    const isActive = page === listingsPage;
+                    return (
+                      <button
+                        key={page}
+                        type="button"
+                        onClick={() => setListingsPage(page)}
+                        style={{
+                          padding: "0.3rem 0.6rem",
+                          background: isActive ? "#1976d2" : "#f5f5f5",
+                          color: isActive ? "#fff" : "#333",
+                          border: "1px solid #ddd",
+                          borderRadius: "4px",
+                          cursor: "pointer",
+                          fontSize: "0.8rem",
+                          fontWeight: "600"
+                        }}
+                      >
+                        {page}
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => setListingsPage((prev) => Math.min(listingsTotalPages, prev + 1))}
+                    disabled={listingsPage === listingsTotalPages}
+                    style={{
+                      padding: "0.3rem 0.6rem",
+                      background: listingsPage === listingsTotalPages ? "#e0e0e0" : "#f5f5f5",
+                      color: "#333",
+                      border: "1px solid #ddd",
+                      borderRadius: "4px",
+                      cursor: listingsPage === listingsTotalPages ? "not-allowed" : "pointer",
+                      fontSize: "0.8rem",
+                      fontWeight: "600"
+                    }}
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

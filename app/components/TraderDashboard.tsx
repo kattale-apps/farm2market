@@ -46,20 +46,26 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
   const [isMobile, setIsMobile] = useState(false);
   const inboxRef = useRef<HTMLDivElement>(null);
   const [isInboxNarrow, setIsInboxNarrow] = useState(false);
+  const isInboxStacked = isMobile || isInboxNarrow;
+  const activeThreadUtid = selectedMessageUtid || messageThreads?.[0]?.utid || SUPPORT_THREAD;
   const [openListingsPage, setOpenListingsPage] = useState(1);
   const [activeUtidPage, setActiveUtidPage] = useState(1);
   const [buyOffersPage, setBuyOffersPage] = useState(1);
   const [inventoryPage, setInventoryPage] = useState(1);
   const [todayActivityPage, setTodayActivityPage] = useState(1);
   const OPEN_LISTINGS_PAGE_SIZE = 5;
-  const ACTIVE_UTID_PAGE_SIZE = 8;
+  const ACTIVE_UTID_PAGE_SIZE = 5;
   const BUY_OFFERS_PAGE_SIZE = 6;
   const INVENTORY_PAGE_SIZE = 6;
   const TODAY_ACTIVITY_PAGE_SIZE = 6;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    const handleResize = () => {
+      const width = window.innerWidth;
+      setIsMobile(width <= 768);
+      setIsInboxNarrow(width <= 720);
+    };
     handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
@@ -469,7 +475,7 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: isInboxNarrow ? "1fr" : "minmax(220px, 1fr) 2fr",
+                gridTemplateColumns: isInboxStacked ? "1fr" : "minmax(220px, 1fr) 2fr",
                 gap: "1rem",
                 width: "100%",
                 maxWidth: "100%",
@@ -477,51 +483,55 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
                 overflowX: "hidden",
               }}
             >
-              <div style={{
-                border: "1px solid #e0e0e0",
-                borderRadius: "8px",
-                overflow: "hidden",
-                maxHeight: isInboxNarrow ? "240px" : "420px",
-                overflowY: "auto",
-                width: "100%",
-                minWidth: 0,
-              }}>
-                {messageThreads.map((thread) => {
-                  const isSelected = selectedMessageUtid === thread.utid;
-                  const isSupport = thread.utid === SUPPORT_THREAD;
-                  return (
-                    <button
-                      key={thread.utid}
-                      onClick={() => setSelectedMessageUtid(thread.utid)}
-                      style={{
-                        width: "100%",
-                        textAlign: "left",
-                        padding: "0.75rem",
-                        border: "none",
-                        borderBottom: "1px solid #e0e0e0",
-                        background: isSelected ? "#e3f2fd" : "#fff",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <div style={{ fontWeight: "600", color: "#2c2c2c" }}>
-                        {isSupport ? "Support Inbox" : `UTID: ${thread.utid}`}
-                      </div>
-                      {isSupport && (
-                        <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.25rem" }}>
-                          General help with SuperAdmin
+              {!isInboxStacked && (
+                <div style={{
+                  border: "1px solid #e0e0e0",
+                  borderRadius: "8px",
+                  overflow: "hidden",
+                  maxHeight: "420px",
+                  overflowY: "auto",
+                  width: "100%",
+                  minWidth: 0,
+                }}>
+                  {messageThreads.map((thread) => {
+                    const isSelected = selectedMessageUtid === thread.utid;
+                    const isSupport = thread.utid === SUPPORT_THREAD;
+                    return (
+                      <button
+                        key={thread.utid}
+                        onClick={() => setSelectedMessageUtid(thread.utid)}
+                        style={{
+                          width: "100%",
+                          textAlign: "left",
+                          padding: "0.75rem",
+                          border: "none",
+                          borderBottom: "1px solid #e0e0e0",
+                          background: isSelected ? "#e3f2fd" : "#fff",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <div style={{ fontWeight: "600", color: "#2c2c2c" }}>
+                          {isSupport ? "Support Inbox" : `UTID: ${thread.utid}`}
                         </div>
-                      )}
-                      {thread.unreadCount > 0 && (
-                        <div style={{ marginTop: "0.35rem", fontSize: "0.75rem", color: "#d32f2f", fontWeight: "600" }}>
-                          {thread.unreadCount} unread
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
+                        {isSupport && (
+                          <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.25rem" }}>
+                            General help with SuperAdmin
+                          </div>
+                        )}
+                        {thread.unreadCount > 0 && (
+                          <div style={{ marginTop: "0.35rem", fontSize: "0.75rem", color: "#d32f2f", fontWeight: "600" }}>
+                            {thread.unreadCount} unread
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
               <div style={{ width: "100%", minWidth: 0 }}>
-                {selectedMessageUtid ? (
+                {isInboxStacked ? (
+                  <ThreadView userId={userId} utid={activeThreadUtid} />
+                ) : selectedMessageUtid ? (
                   <ThreadView userId={userId} utid={selectedMessageUtid} />
                 ) : (
                   <div style={{
@@ -1360,6 +1370,12 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
       ) : (
         /* Pro View */
         <>
+          {/* Create Listing from Inventory */}
+          <CreateTraderListing userId={userId} />
+
+          {/* Listings & Negotiations */}
+          <TraderListings userId={userId} />
+
           {/* Wallet & Exposure */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", gap: "1.5rem", marginBottom: "1.5rem" }}>
         {/* Ledger Summary */}
@@ -1800,7 +1816,7 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
         )}
       </div>
 
-      {/* Active Transactions */}
+      {/* Transactions Log */}
       <div style={{
         marginBottom: "1.5rem",
         padding: "clamp(1rem, 3vw, 1.5rem)",
@@ -1811,7 +1827,7 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
           <h3 style={{ marginTop: 0, marginBottom: 0, fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", color: "#1a1a1a" }}>
-            Active Transactions
+            Transactions Log
           </h3>
           {activeUTIDs && activeUTIDs.utids && activeUTIDs.utids.length > 0 && (
             <div style={{ display: "flex", gap: "0.5rem" }}>
@@ -2235,21 +2251,6 @@ export function TraderDashboard({ userId }: TraderDashboardProps) {
           </div>
         </div>
       </div>
-
-          {/* Create Trader Listing from 100kg Blocks */}
-          <CreateTraderListing userId={userId} />
-
-          {/* Available Listings for Negotiations */}
-          <div style={{
-            marginBottom: "1.5rem",
-            padding: "clamp(1rem, 3vw, 1.5rem)",
-            background: "#fff",
-            borderRadius: "12px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-            border: "1px solid #e0e0e0"
-          }}>
-            <TraderListings userId={userId} />
-          </div>
 
           {/* Pro View: Inventory Table */}
           <div style={{

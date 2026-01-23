@@ -106,6 +106,7 @@ export const createUser = mutation({
       v.literal("admin")
     ),
     adminLevel: v.optional(v.union(v.literal("super"), v.literal("junior"))),
+    adminCategory: v.optional(v.union(v.literal("store"), v.literal("message"))),
     allowedStorageLocationIds: v.optional(v.array(v.id("storageLocations"))),
     creatorAdminId: v.optional(v.id("users")), // Admin creating this user (for permission check)
   },
@@ -144,6 +145,9 @@ export const createUser = mutation({
       
       // If creating junior admin, allowedStorageLocationIds must be provided and non-empty
       if (args.adminLevel === "junior") {
+        if (!args.adminCategory) {
+          throw new Error("Junior admins must have an adminCategory");
+        }
         if (!args.allowedStorageLocationIds || args.allowedStorageLocationIds.length === 0) {
           throw new Error("Junior admins must have at least one assigned storage location");
         }
@@ -163,6 +167,9 @@ export const createUser = mutation({
       // For non-admin roles, adminLevel and allowedStorageLocationIds should not be set
       if (args.adminLevel !== undefined) {
         throw new Error("adminLevel can only be set for admin role");
+      }
+      if (args.adminCategory !== undefined) {
+        throw new Error("adminCategory can only be set for admin role");
       }
       if (args.allowedStorageLocationIds !== undefined && args.allowedStorageLocationIds.length > 0) {
         throw new Error("allowedStorageLocationIds can only be set for junior admin role");
@@ -190,6 +197,9 @@ export const createUser = mutation({
     if (args.role === "admin") {
       if (args.adminLevel !== undefined) {
         userData.adminLevel = args.adminLevel;
+      }
+      if (args.adminCategory !== undefined) {
+        userData.adminCategory = args.adminCategory;
       }
       if (args.adminLevel === "junior" && args.allowedStorageLocationIds) {
         userData.allowedStorageLocationIds = args.allowedStorageLocationIds;

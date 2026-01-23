@@ -189,6 +189,9 @@ export const getActiveListings = query({
       listings.map(async (listing) => {
         const farmer = listing.farmerId ? await ctx.db.get(listing.farmerId) : null;
         const trader = listing.traderId ? await ctx.db.get(listing.traderId) : null;
+        const storageLocation = listing.storageLocationId
+          ? await ctx.db.get(listing.storageLocationId)
+          : null;
         const units = await ctx.db
           .query("listingUnits")
           .withIndex("by_listing", (q) => q.eq("listingId", listing._id))
@@ -216,6 +219,9 @@ export const getActiveListings = query({
           traderAlias: trader?.alias || null,
           isTraderListing: !!listing.traderId, // Flag to identify trader listings (100kg blocks)
           createdAt: listing.createdAt,
+          storageLocation: storageLocation
+            ? { districtName: storageLocation.districtName, code: storageLocation.code }
+            : null,
           // Garden sale fields (optional for older listings)
           listingMode: derivedListingMode,
           gardenSize: listing.gardenSize,
@@ -241,6 +247,9 @@ export const getListingDetails = query({
     }
 
     const farmer = listing.farmerId ? await ctx.db.get(listing.farmerId) : null;
+    const storageLocation = listing.storageLocationId
+      ? await ctx.db.get(listing.storageLocationId)
+      : null;
     const units = await ctx.db
       .query("listingUnits")
       .withIndex("by_listing", (q) => q.eq("listingId", args.listingId))
@@ -267,6 +276,9 @@ export const getListingDetails = query({
       status: listing.status,
       farmerAlias: farmer?.alias || "unknown",
       createdAt: listing.createdAt,
+      storageLocation: storageLocation
+        ? { districtName: storageLocation.districtName, code: storageLocation.code }
+        : null,
       // Garden sale fields (optional for older listings)
       listingMode: derivedListingMode,
       gardenSize: listing.gardenSize,

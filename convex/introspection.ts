@@ -343,6 +343,121 @@ export const getAllActiveUTIDs = query({
 });
 
 /**
+ * Get delivery-ready UTIDs (farmer-confirmed unit locks)
+ *
+ * Returns UTIDs grouped by lockUtid, sorted by earliest delivery deadline
+ * (or earliest lockedAt if no deadline). Junior admins only see UTIDs
+ * for their assigned storage locations. SuperAdmin sees all, including
+ * items missing a storage location.
+ */
+export const getPendingDeliveryUTIDs = query({
+  args: {
+    adminId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const adminUser = await verifyAdmin(ctx, args.adminId);
+    const isAdminSuper = adminUser.adminLevel === "super" || adminUser.adminLevel === undefined;
+    const allowedLocationIds = adminUser.allowedStorageLocationIds || [];
+
+    const lockedUnits = await ctx.db
+      .query("listingUnits")
+      .withIndex("by_status", (q) => q.eq("status", "locked"))
+      .collect();
+
+    const deliveryUnits = lockedUnits.filter(
+      (unit) => unit.lockUtid && unit.deliveryStatus === "farmer_confirmed"
+    );
+
+    const batches = new Map<string, any>();
+
+    for (const unit of deliveryUnits) {
+      if (!unit.lockUtid) continue;
+
+      const listing = await ctx.db.get(unit.listingId);
+      if (!listing) continue;
+
+      const storageLocationId = listing.storageLocationId || null;
+      const storageLocation = storageLocationId ? await ctx.db.get(storageLocationId) : null;
+      const produceType = listing.produceType || "Produce";
+      const quantity = listing.unitSize || 10;
+
+      if (!batches.has(unit.lockUtid)) {
+        batches.set(unit.lockUtid, {
+          utid: unit.lockUtid,
+          items: [],
+          totalUnits: 0,
+          totalKilos: 0,
+          earliestDeliveryDeadline: Number.POSITIVE_INFINITY,
+          earliestLockedAt: Number.POSITIVE_INFINITY,
+          locations: [],
+          hasMissingLocation: false,
+          hasDisallowedLocation: false,
+        });
+      }
+
+      const batch = batches.get(unit.lockUtid);
+      batch.items.push({
+        unitId: unit._id,
+        produceType,
+        quantity,
+        deliveryStatus: unit.deliveryStatus,
+        deliveryDeadline: unit.deliveryDeadline || null,
+        lockedAt: unit.lockedAt || null,
+        storageLocation: storageLocation
+          ? { districtName: storageLocation.districtName, code: storageLocation.code }
+          : null,
+      });
+
+      batch.totalUnits += 1;
+      batch.totalKilos += quantity;
+
+      if (unit.deliveryDeadline) {
+        batch.earliestDeliveryDeadline = Math.min(batch.earliestDeliveryDeadline, unit.deliveryDeadline);
+      }
+      if (unit.lockedAt) {
+        batch.earliestLockedAt = Math.min(batch.earliestLockedAt, unit.lockedAt);
+      }
+
+      if (!storageLocationId) {
+        batch.hasMissingLocation = true;
+      } else if (!allowedLocationIds.includes(storageLocationId)) {
+        batch.hasDisallowedLocation = true;
+      }
+
+      if (storageLocation && !batch.locations.find((loc: any) => loc.code === storageLocation.code)) {
+        batch.locations.push({
+          districtName: storageLocation.districtName,
+          code: storageLocation.code,
+        });
+      }
+    }
+
+    let results = Array.from(batches.values());
+
+    if (!isAdminSuper) {
+      results = results.filter(
+        (batch) => !batch.hasMissingLocation && !batch.hasDisallowedLocation
+      );
+    }
+
+    results.sort((a, b) => {
+      const aKey = Number.isFinite(a.earliestDeliveryDeadline)
+        ? a.earliestDeliveryDeadline
+        : a.earliestLockedAt;
+      const bKey = Number.isFinite(b.earliestDeliveryDeadline)
+        ? b.earliestDeliveryDeadline
+        : b.earliestLockedAt;
+      return aKey - bKey;
+    });
+
+    return {
+      utids: results,
+      totalUTIDs: results.length,
+    };
+  },
+});
+
+/**
  * Get wallet ledger entries grouped by UTID
  * 
  * Groups all wallet ledger entries by their UTID, showing

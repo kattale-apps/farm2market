@@ -47,6 +47,8 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   const [isMobile, setIsMobile] = useState(false);
   const inboxRef = useRef<HTMLDivElement>(null);
   const [isInboxNarrow, setIsInboxNarrow] = useState(false);
+  const isInboxStacked = isMobile || isInboxNarrow;
+  const activeThreadUtid = selectedMessageUtid || messageThreads?.[0]?.utid || SUPPORT_THREAD;
   const [inventoryPage, setInventoryPage] = useState(1);
   const [ordersPage, setOrdersPage] = useState(1);
   const [ledgerPage, setLedgerPage] = useState(1);
@@ -56,7 +58,11 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    const handleResize = () => {
+      const width = window.innerWidth;
+      setIsMobile(width <= 768);
+      setIsInboxNarrow(width <= 720);
+    };
     handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
@@ -687,7 +693,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: isInboxNarrow ? "1fr" : "minmax(220px, 1fr) 2fr",
+                gridTemplateColumns: isInboxStacked ? "1fr" : "minmax(220px, 1fr) 2fr",
                 gap: "1rem",
                 width: "100%",
                 maxWidth: "100%",
@@ -695,51 +701,55 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                 overflowX: "hidden",
               }}
             >
-              <div style={{
-                border: "1px solid #e0e0e0",
-                borderRadius: "8px",
-                overflow: "hidden",
-                maxHeight: isInboxNarrow ? "240px" : "420px",
-                overflowY: "auto",
-                width: "100%",
-                minWidth: 0,
-              }}>
-                {messageThreads.map((thread) => {
-                  const isSelected = selectedMessageUtid === thread.utid;
-                  const isSupport = thread.utid === SUPPORT_THREAD;
-                  return (
-                    <button
-                      key={thread.utid}
-                      onClick={() => setSelectedMessageUtid(thread.utid)}
-                      style={{
-                        width: "100%",
-                        textAlign: "left",
-                        padding: "0.75rem",
-                        border: "none",
-                        borderBottom: "1px solid #e0e0e0",
-                        background: isSelected ? "#e3f2fd" : "#fff",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <div style={{ fontWeight: "600", color: "#2c2c2c" }}>
-                        {isSupport ? "Support Inbox" : `UTID: ${thread.utid}`}
-                      </div>
-                      {isSupport && (
-                        <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.25rem" }}>
-                          General help with SuperAdmin
+              {!isInboxStacked && (
+                <div style={{
+                  border: "1px solid #e0e0e0",
+                  borderRadius: "8px",
+                  overflow: "hidden",
+                  maxHeight: "420px",
+                  overflowY: "auto",
+                  width: "100%",
+                  minWidth: 0,
+                }}>
+                  {messageThreads.map((thread) => {
+                    const isSelected = selectedMessageUtid === thread.utid;
+                    const isSupport = thread.utid === SUPPORT_THREAD;
+                    return (
+                      <button
+                        key={thread.utid}
+                        onClick={() => setSelectedMessageUtid(thread.utid)}
+                        style={{
+                          width: "100%",
+                          textAlign: "left",
+                          padding: "0.75rem",
+                          border: "none",
+                          borderBottom: "1px solid #e0e0e0",
+                          background: isSelected ? "#e3f2fd" : "#fff",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <div style={{ fontWeight: "600", color: "#2c2c2c" }}>
+                          {isSupport ? "Support Inbox" : `UTID: ${thread.utid}`}
                         </div>
-                      )}
-                      {thread.unreadCount > 0 && (
-                        <div style={{ marginTop: "0.35rem", fontSize: "0.75rem", color: "#d32f2f", fontWeight: "600" }}>
-                          {thread.unreadCount} unread
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
+                        {isSupport && (
+                          <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.25rem" }}>
+                            General help with SuperAdmin
+                          </div>
+                        )}
+                        {thread.unreadCount > 0 && (
+                          <div style={{ marginTop: "0.35rem", fontSize: "0.75rem", color: "#d32f2f", fontWeight: "600" }}>
+                            {thread.unreadCount} unread
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
               <div style={{ width: "100%", minWidth: 0 }}>
-                {selectedMessageUtid ? (
+                {isInboxStacked ? (
+                  <ThreadView userId={userId} utid={activeThreadUtid} />
+                ) : selectedMessageUtid ? (
                   <ThreadView userId={userId} utid={selectedMessageUtid} />
                 ) : (
                   <div style={{

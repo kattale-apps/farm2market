@@ -4,14 +4,14 @@ import { useState } from "react";
 import { Id } from "../../convex/_generated/dataModel";
 
 interface DeliveryConfirmationFormProps {
-  allUTIDs: any;
+  deliveryUTIDs: any;
   confirmDelivery: any;
   adminId: Id<"users">;
   isSuperAdmin?: boolean;
 }
 
 export function DeliveryConfirmationForm({
-  allUTIDs,
+  deliveryUTIDs,
   confirmDelivery,
   adminId,
   isSuperAdmin = true,
@@ -24,15 +24,8 @@ export function DeliveryConfirmationForm({
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  // Filter UTIDs to show delivery-eligible unit_lock UTIDs.
-  // SuperAdmin can view all farmer UTIDs, but only farmer-confirmed deliveries can be confirmed.
-  const lockUtids = allUTIDs?.utids?.filter((utid: any) => {
-    if (utid.type !== "unit_lock") return false;
-    if (isSuperAdmin) {
-      return utid.entities?.some((entity: any) => entity.deliveryStatus !== "delivered");
-    }
-    return utid.entities?.some((entity: any) => entity.deliveryStatus === "farmer_confirmed");
-  }) || [];
+  // Delivery-ready UTIDs are pre-filtered in the query.
+  const lockUtids = deliveryUTIDs?.utids || [];
 
   const handleConfirm = async () => {
     if (!selectedUtid) {
@@ -81,10 +74,8 @@ export function DeliveryConfirmationForm({
   const selectedUtidData = selectedUtid
     ? lockUtids.find((u: any) => u.utid === selectedUtid)
     : null;
-  const selectedEntity =
-    selectedUtidData?.entities?.find((e: any) => e.deliveryStatus === "farmer_confirmed") ||
-    selectedUtidData?.entities?.[0];
-  const isConfirmable = selectedEntity?.deliveryStatus === "farmer_confirmed";
+  const selectedEntity = selectedUtidData?.items?.[0];
+  const isConfirmable = selectedUtidData?.items?.some((item: any) => item.deliveryStatus === "farmer_confirmed");
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
@@ -92,11 +83,13 @@ export function DeliveryConfirmationForm({
         <label style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.9rem", fontWeight: "600" }}>
           Select Delivery UTID:
         </label>
+        <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.5rem" }}>
+          Pending delivery UTIDs: {deliveryUTIDs?.totalUTIDs ?? "loading"}
+        </div>
         <p style={{ fontSize: "0.8rem", color: "#666", marginBottom: "0.5rem" }}>
           {isSuperAdmin
-            ? "SuperAdmin can view all farmer UTIDs. Only farmer-confirmed deliveries can be confirmed here."
-            : "Only deliveries that farmers have self-confirmed are shown here. Location information is displayed for each UTID."}
-          {!isSuperAdmin && " Only UTIDs from your assigned storage locations are visible."}
+            ? "SuperAdmin can view all farmer-confirmed UTIDs. Items without a storage location are highlighted."
+            : "Only deliveries that farmers have self-confirmed are shown here. Only UTIDs from your assigned storage locations are visible."}
         </p>
         {lockUtids.length === 0 ? (
           <p style={{ color: "#666", fontSize: "0.85rem" }}>No deliveries available for confirmation. Farmers must self-confirm deliveries first.</p>
@@ -115,37 +108,78 @@ export function DeliveryConfirmationForm({
           >
             <option value="">-- Select a lock UTID --</option>
             {lockUtids.map((utid: any) => {
-              const entity = utid.entities?.find((e: any) => e.deliveryStatus === "farmer_confirmed") || utid.entities?.[0];
-              const location = entity?.storageLocation;
-              const locationText = location ? ` - ${location.districtName} (${location.code})` : "";
-              const statusText = entity?.deliveryStatus ? ` [${entity.deliveryStatus}]` : "";
+              const firstItem = utid.items?.[0];
+              const location =
+                utid.locations && utid.locations.length === 1 ? utid.locations[0] : null;
+              const locationText = location
+                ? ` - ${location.districtName} (${location.code})`
+                : utid.hasMissingLocation
+                  ? " - No location"
+                  : utid.locations && utid.locations.length > 1
+                    ? " - Multiple locations"
+                    : "";
               return (
                 <option key={utid.utid} value={utid.utid}>
-                  {utid.utid} - {entity?.produceType || "Produce"} ({entity?.quantity || "10"}kg){locationText}{statusText}
+                  {utid.utid} - {firstItem?.produceType || "Produce"} ({utid.totalKilos || firstItem?.quantity || "10"}kg){locationText}
                 </option>
               );
             })}
           </select>
         )}
         {selectedUtid && (() => {
-          const entity = selectedEntity;
-          const location = entity?.storageLocation;
-          return location ? (
-            <div style={{
-              marginTop: "0.75rem",
-              padding: "0.75rem",
-              background: "#e3f2fd",
-              borderRadius: "6px",
-              border: "1px solid #90caf9",
-            }}>
-              <div style={{ fontSize: "0.85rem", fontWeight: "600", color: "#1565c0", marginBottom: "0.25rem" }}>
-                Delivery Location:
+          const location =
+            selectedUtidData?.locations && selectedUtidData.locations.length === 1
+              ? selectedUtidData.locations[0]
+              : null;
+          if (location) {
+            return (
+              <div style={{
+                marginTop: "0.75rem",
+                padding: "0.75rem",
+                background: "#e3f2fd",
+                borderRadius: "6px",
+                border: "1px solid #90caf9",
+              }}>
+                <div style={{ fontSize: "0.85rem", fontWeight: "600", color: "#1565c0", marginBottom: "0.25rem" }}>
+                  Delivery Location:
+                </div>
+                <div style={{ fontSize: "0.9rem", color: "#1976d2" }}>
+                  {location.districtName} ({location.code})
+                </div>
               </div>
-              <div style={{ fontSize: "0.9rem", color: "#1976d2" }}>
-                {location.districtName} ({location.code})
+            );
+          }
+          if (selectedUtidData?.hasMissingLocation) {
+            return (
+              <div style={{
+                marginTop: "0.75rem",
+                padding: "0.75rem",
+                background: "#fff3cd",
+                borderRadius: "6px",
+                border: "1px solid #ffeeba",
+                fontSize: "0.85rem",
+                color: "#856404",
+              }}>
+                No storage location recorded for this UTID. SuperAdmin can still confirm.
               </div>
-            </div>
-          ) : null;
+            );
+          }
+          if (selectedUtidData?.locations && selectedUtidData.locations.length > 1) {
+            return (
+              <div style={{
+                marginTop: "0.75rem",
+                padding: "0.75rem",
+                background: "#fff3cd",
+                borderRadius: "6px",
+                border: "1px solid #ffeeba",
+                fontSize: "0.85rem",
+                color: "#856404",
+              }}>
+                Multiple locations detected for this UTID.
+              </div>
+            );
+          }
+          return null;
         })()}
         {selectedUtid && !isConfirmable && (
           <div style={{

@@ -4,7 +4,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { CreateListing } from "./CreateListing";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { exportToExcel, exportToPDF, formatUTIDDataForExport } from "../utils/exportUtils";
 import { formatUgandaDateTime, getUgandaTime } from "../utils/timeUtils";
 import { NotificationMailbox } from "./NotificationMailbox";
@@ -62,6 +62,8 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
   const ITEMS_PER_PAGE = 5;
   const SUPPORT_THREAD = "SUPPORT";
   const [isMobile, setIsMobile] = useState(false);
+  const inboxRef = useRef<HTMLDivElement>(null);
+  const [isInboxNarrow, setIsInboxNarrow] = useState(false);
   const defaultSupportUtid = useMemo(() => {
     const listingUtid = listings?.listings?.[0]?.utid;
     if (listingUtid) return listingUtid;
@@ -78,6 +80,16 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
     handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    if (!inboxRef.current || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect?.width || 0;
+      setIsInboxNarrow(width <= 720);
+    });
+    observer.observe(inboxRef.current);
+    return () => observer.disconnect();
   }, []);
 
   const formatDate = (timestamp: number) => {
@@ -521,6 +533,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
       {messageInboxOpen && (
         <div
           id="message-inbox"
+          ref={inboxRef}
           style={{
           marginBottom: "1.5rem",
           padding: "clamp(1rem, 3vw, 1.5rem)",
@@ -544,7 +557,24 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
             }}>
               Messages Inbox
             </h3>
-            <span style={{ fontSize: "0.85rem", color: "#2e7d32", fontWeight: "600" }}>● Live</span>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <span style={{ fontSize: "0.85rem", color: "#2e7d32", fontWeight: "600" }}>● Live</span>
+              <button
+                type="button"
+                onClick={() => setMessageInboxOpen(false)}
+                style={{
+                  padding: "0.35rem 0.75rem",
+                  background: "#f5f5f5",
+                  border: "1px solid #ddd",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontSize: "0.85rem",
+                  fontWeight: "600",
+                }}
+              >
+                x
+              </button>
+            </div>
           </div>
           {messageThreads === undefined ? (
             <p style={{ color: "#999" }}>Loading message threads...</p>
@@ -559,19 +589,22 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: isMobile ? "1fr" : "minmax(220px, 1fr) 2fr",
+                gridTemplateColumns: isInboxNarrow ? "1fr" : "minmax(220px, 1fr) 2fr",
                 gap: "1rem",
                 width: "100%",
                 maxWidth: "100%",
                 boxSizing: "border-box",
+                overflowX: "hidden",
               }}
             >
               <div style={{
                 border: "1px solid #e0e0e0",
                 borderRadius: "8px",
                 overflow: "hidden",
-                maxHeight: isMobile ? "240px" : "420px",
-                overflowY: "auto"
+                maxHeight: isInboxNarrow ? "240px" : "420px",
+                overflowY: "auto",
+                width: "100%",
+                minWidth: 0,
               }}>
                 {messageThreads.map((thread) => {
                   const isSelected = selectedMessageUtid === thread.utid;
@@ -607,7 +640,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                   );
                 })}
               </div>
-              <div>
+              <div style={{ width: "100%", minWidth: 0 }}>
                 {selectedMessageUtid ? (
                   <ThreadView userId={userId} utid={selectedMessageUtid} />
                 ) : (

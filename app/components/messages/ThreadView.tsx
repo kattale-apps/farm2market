@@ -72,6 +72,9 @@ export function ThreadView({ userId, utid, onClose }: ThreadViewProps) {
         border: "1px solid #ddd",
         borderRadius: "8px",
         overflow: "hidden",
+        width: "100%",
+        maxWidth: "100%",
+        minWidth: 0,
       }}
     >
       <div
@@ -168,6 +171,7 @@ export function ThreadView({ userId, utid, onClose }: ThreadViewProps) {
           borderTop: "1px solid #ddd",
           display: "flex",
           gap: "0.5rem",
+          alignItems: "stretch",
         }}
       >
         <input
@@ -178,10 +182,12 @@ export function ThreadView({ userId, utid, onClose }: ThreadViewProps) {
           disabled={loading}
           style={{
             flex: 1,
-            padding: "0.75rem",
+            padding: "0.85rem",
             border: "1px solid #ddd",
             borderRadius: "6px",
             fontSize: "1rem",
+            minHeight: "3.25rem",
+            lineHeight: "1.4",
           }}
         />
         <button

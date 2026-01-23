@@ -4,7 +4,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { formatUgandaDateTime, formatUgandaTimeOnly, getUgandaTime } from "../utils/timeUtils";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { exportToExcel, exportToPDF, formatUTIDDataForExport } from "../utils/exportUtils";
 import { StorageLocationsManager } from "./StorageLocationsManager";
@@ -101,6 +101,9 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   const [pilotModeMessage, setPilotModeMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [expandedMetric, setExpandedMetric] = useState<string | null>(null); // Track which metric card is expanded
   const [isMobile, setIsMobile] = useState(false);
+  const [adminInboxOpen, setAdminInboxOpen] = useState(true);
+  const inboxRef = useRef<HTMLDivElement>(null);
+  const [isInboxNarrow, setIsInboxNarrow] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -108,6 +111,16 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
     handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    if (!inboxRef.current || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect?.width || 0;
+      setIsInboxNarrow(width <= 720);
+    });
+    observer.observe(inboxRef.current);
+    return () => observer.disconnect();
   }, []);
 
   const storageLocationsById = new Map<string, any>();
@@ -198,6 +211,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           <button
             type="button"
             onClick={() => {
+              setAdminInboxOpen(true);
               const inbox = document.getElementById("admin-inbox");
               if (inbox) {
                 inbox.scrollIntoView({ behavior: "smooth" });
@@ -878,115 +892,138 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
       )}
 
       {/* Admin Inbox */}
-      <div
-        id="admin-inbox"
-        style={{
-          marginBottom: "2rem",
-          padding: "clamp(1rem, 3vw, 1.5rem)",
-          background: "#fff",
-          borderRadius: "12px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          border: "1px solid #e0e0e0",
-          width: "100%",
-          maxWidth: "100%",
-          boxSizing: "border-box",
-          overflowX: isMobile ? "hidden" : "auto"
-        }}>
-          <h3 style={{
-            marginTop: 0,
-            marginBottom: "1rem",
-            fontSize: "clamp(1.1rem, 3vw, 1.3rem)",
-            wordWrap: "break-word",
-            color: "#2c2c2c",
-            fontFamily: '"Montserrat", sans-serif',
-            fontWeight: "600",
-            letterSpacing: "-0.01em"
+      {adminInboxOpen && (
+        <div
+          id="admin-inbox"
+          ref={inboxRef}
+          style={{
+            marginBottom: "2rem",
+            padding: "clamp(1rem, 3vw, 1.5rem)",
+            background: "#fff",
+            borderRadius: "12px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+            border: "1px solid #e0e0e0",
+            width: "100%",
+            maxWidth: "100%",
+            boxSizing: "border-box",
+            overflowX: "hidden"
           }}>
-            Admin Inbox
-          </h3>
-          {inboxThreads === undefined ? (
-            <p style={{ color: "#999" }}>Loading message threads...</p>
-          ) : inboxThreads.length === 0 ? (
-            <p style={{ color: "#666" }}>No messages yet.</p>
-          ) : (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: isMobile ? "1fr" : "minmax(220px, 1fr) 2fr",
-                gap: "1rem",
-                width: "100%",
-                maxWidth: "100%",
-                boxSizing: "border-box",
-              }}
-            >
-              <div style={{
-                border: "1px solid #e0e0e0",
-                borderRadius: "8px",
-                overflow: "hidden",
-                maxHeight: isMobile ? "260px" : "500px",
-                overflowY: "auto"
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.75rem" }}>
+              <h3 style={{
+                marginTop: 0,
+                marginBottom: 0,
+                fontSize: "clamp(1.1rem, 3vw, 1.3rem)",
+                wordWrap: "break-word",
+                color: "#2c2c2c",
+                fontFamily: '"Montserrat", sans-serif',
+                fontWeight: "600",
+                letterSpacing: "-0.01em"
               }}>
-                {inboxThreads.map((thread: any) => {
-                  const isSelected = selectedMessageUtid === thread.utid;
-                  const contact = thread.otherUserEmail || thread.otherUserPhoneNumber;
-                  const isSupport = thread.utid === SUPPORT_THREAD;
-                  const title = isSupport
-                    ? `Support Inbox${isSuperAdmin ? ` — ${thread.otherUserAlias}${contact ? ` (${contact})` : ""}` : ""}`
-                    : isSuperAdmin
-                      ? `${thread.otherUserAlias}${contact ? ` (${contact})` : ""}`
-                      : "Conversation";
-                  return (
-                    <button
-                      key={thread.utid}
-                      onClick={() => setSelectedMessageUtid(thread.utid)}
-                      style={{
-                        width: "100%",
-                        textAlign: "left",
-                        padding: "0.75rem",
-                        border: "none",
-                        borderBottom: "1px solid #e0e0e0",
-                        background: isSelected ? "#e3f2fd" : "#fff",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <div style={{ fontWeight: "600", color: "#2c2c2c" }}>
-                        {title}
-                      </div>
-                      <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.25rem" }}>
-                        {isSupport ? "Thread: Support" : `UTID: ${thread.utid}`}
-                      </div>
-                      {thread.lastMessage && (
-                        <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.25rem" }}>
-                          {thread.lastMessage}
-                        </div>
-                      )}
-                      {thread.unreadCount > 0 && (
-                        <div style={{ marginTop: "0.35rem", fontSize: "0.75rem", color: "#d32f2f", fontWeight: "600" }}>
-                          {thread.unreadCount} unread
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-              <div>
-                {selectedMessageUtid ? (
-                  <ThreadView userId={userId} utid={selectedMessageUtid} />
-                ) : (
-                  <div style={{
-                    padding: "2rem",
-                    border: "1px dashed #ddd",
-                    borderRadius: "8px",
-                    textAlign: "center",
-                    color: "#666"
-                  }}>
-                    Select a thread to view messages.
-                  </div>
-                )}
-              </div>
+                Admin Inbox
+              </h3>
+              <button
+                type="button"
+                onClick={() => setAdminInboxOpen(false)}
+                style={{
+                  padding: "0.35rem 0.75rem",
+                  background: "#f5f5f5",
+                  border: "1px solid #ddd",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontSize: "0.85rem",
+                  fontWeight: "600",
+                }}
+              >
+                x
+              </button>
             </div>
-          )}
-        </div>
+            {inboxThreads === undefined ? (
+              <p style={{ color: "#999" }}>Loading message threads...</p>
+            ) : inboxThreads.length === 0 ? (
+              <p style={{ color: "#666" }}>No messages yet.</p>
+            ) : (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isInboxNarrow ? "1fr" : "minmax(220px, 1fr) 2fr",
+                  gap: "1rem",
+                  width: "100%",
+                  maxWidth: "100%",
+                  boxSizing: "border-box",
+                  overflowX: "hidden",
+                }}
+              >
+                <div style={{
+                  border: "1px solid #e0e0e0",
+                  borderRadius: "8px",
+                  overflow: "hidden",
+                  maxHeight: isInboxNarrow ? "260px" : "500px",
+                  overflowY: "auto",
+                  width: "100%",
+                  minWidth: 0,
+                }}>
+                  {inboxThreads.map((thread: any) => {
+                    const isSelected = selectedMessageUtid === thread.utid;
+                    const contact = thread.otherUserEmail || thread.otherUserPhoneNumber;
+                    const isSupport = thread.utid === SUPPORT_THREAD;
+                    const title = isSupport
+                      ? `Support Inbox${isSuperAdmin ? ` — ${thread.otherUserAlias}${contact ? ` (${contact})` : ""}` : ""}`
+                      : isSuperAdmin
+                        ? `${thread.otherUserAlias}${contact ? ` (${contact})` : ""}`
+                        : "Conversation";
+                    return (
+                      <button
+                        key={thread.utid}
+                        onClick={() => setSelectedMessageUtid(thread.utid)}
+                        style={{
+                          width: "100%",
+                          textAlign: "left",
+                          padding: "0.75rem",
+                          border: "none",
+                          borderBottom: "1px solid #e0e0e0",
+                          background: isSelected ? "#e3f2fd" : "#fff",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <div style={{ fontWeight: "600", color: "#2c2c2c" }}>
+                          {title}
+                        </div>
+                        <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.25rem" }}>
+                          {isSupport ? "Thread: Support" : `UTID: ${thread.utid}`}
+                        </div>
+                        {thread.lastMessage && (
+                          <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.25rem" }}>
+                            {thread.lastMessage}
+                          </div>
+                        )}
+                        {thread.unreadCount > 0 && (
+                          <div style={{ marginTop: "0.35rem", fontSize: "0.75rem", color: "#d32f2f", fontWeight: "600" }}>
+                            {thread.unreadCount} unread
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div style={{ width: "100%", minWidth: 0 }}>
+                  {selectedMessageUtid ? (
+                    <ThreadView userId={userId} utid={selectedMessageUtid} />
+                  ) : (
+                    <div style={{
+                      padding: "2rem",
+                      border: "1px dashed #ddd",
+                      borderRadius: "8px",
+                      textAlign: "center",
+                      color: "#666"
+                    }}>
+                      Select a thread to view messages.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
       {/* Purchase Window Control - Super Admin Only */}
       {isSuperAdmin && (

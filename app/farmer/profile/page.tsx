@@ -356,7 +356,15 @@ export default function FarmerProfilePage() {
           <h2 style={{ fontSize: "1.2rem", marginBottom: "1.5rem", color: "#2c2c2c" }}>Edit Profile</h2>
 
           {/* Location Selection */}
-          <div style={{ marginBottom: "2rem" }}>
+          <div
+            style={{
+              marginBottom: "2rem",
+              background: "#e8f5e9",
+              padding: "1.25rem",
+              borderRadius: "10px",
+              border: "1px solid #c8e6c9",
+            }}
+          >
             <h3 style={{ fontSize: "1rem", marginBottom: "1rem", color: "#2c2c2c" }}>Location</h3>
             <div style={{ display: "grid", gap: "1rem" }}>
               <div>

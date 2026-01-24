@@ -47,6 +47,10 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   const confirmDeliveryToStorageByUTID = useMutation(api.admin.confirmDeliveryToStorageByUTID);
   const adminDepositDemoFunds = useMutation(api.admin.adminDepositDemoFunds);
   const allUsers = useQuery(api.introspection.getAllUsers, { adminId: userId });
+  const communitySummaries = useQuery(
+    api.communities.getActiveCommunities,
+    userId ? { userId } : "skip"
+  );
   const qualityOptions = useQuery(api.admin.getQualityOptions, { adminId: userId, activeOnly: false });
   const addQualityOption = useMutation(api.admin.addQualityOption);
   const updateQualityOption = useMutation(api.admin.updateQualityOption);
@@ -63,6 +67,8 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   const createUser = useMutation(api.auth.createUser);
   const currentUser = allUsers?.find((u: any) => u.userId === userId);
   const isSuperAdmin = currentUser?.role === "admin" && (currentUser?.adminLevel === "super" || currentUser?.adminLevel === undefined);
+  const isCommunityAdmin = currentUser?.role === "admin" && currentUser?.adminLevel === "junior" && currentUser?.adminCategory === "community";
+  const canViewCommunityDatabase = isSuperAdmin || isCommunityAdmin;
   const storeAdmins = useQuery(
     api.adminAudit.getStoreAdmins,
     isSuperAdmin ? { adminId: userId } : "skip"
@@ -1053,6 +1059,128 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           </div>
         )}
 
+      {canViewCommunityDatabase && (
+        <div
+          style={{
+            marginBottom: "2rem",
+            padding: "clamp(1rem, 3vw, 1.5rem)",
+            background: "#fff",
+            borderRadius: "12px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+            border: "1px solid #e0e0e0",
+            width: "100%",
+            maxWidth: "100%",
+            boxSizing: "border-box",
+            overflowX: "hidden",
+          }}
+        >
+          <h3 style={{
+            marginTop: 0,
+            marginBottom: "1rem",
+            fontSize: "clamp(1.1rem, 3vw, 1.3rem)",
+            color: "#2c2c2c",
+            fontFamily: '"Montserrat", sans-serif',
+            fontWeight: "600",
+            letterSpacing: "-0.01em",
+          }}>
+            Community Members Database
+          </h3>
+          {communitySummaries === undefined ? (
+            <p style={{ color: "#999" }}>Loading communities...</p>
+          ) : communitySummaries.length === 0 ? (
+            <p style={{ color: "#666" }}>No communities yet.</p>
+          ) : (
+            <div style={{ display: "grid", gap: "1rem" }}>
+              {communitySummaries.map((community: any) => {
+                const members = community.members || [];
+                const nonMembers = community.nonMembers || [];
+                const formatContact = (person: any) => {
+                  const contact = person?.email || person?.phoneNumber;
+                  return contact ? `${person.alias} (${contact})` : person.alias;
+                };
+                return (
+                  <div
+                    key={community.id}
+                    style={{
+                      padding: "1rem",
+                      borderRadius: "10px",
+                      border: "1px solid #e0e0e0",
+                      background: "#fafafa",
+                    }}
+                  >
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "center", marginBottom: "0.75rem" }}>
+                      <div style={{ fontWeight: "700", color: "#2c2c2c" }}>{community.name}</div>
+                      <div style={{ fontSize: "0.85rem", color: "#666" }}>{community.memberCount} member(s)</div>
+                      <div style={{ fontSize: "0.85rem", color: "#666" }}>{nonMembers.length} not yet joined</div>
+                    </div>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: isInboxNarrow ? "1fr" : "1fr 1fr",
+                        gap: "1rem",
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: "0.85rem", fontWeight: "600", color: "#2c2c2c", marginBottom: "0.4rem" }}>
+                          Members
+                        </div>
+                        <div style={{
+                          maxHeight: "180px",
+                          overflowY: "auto",
+                          border: "1px solid #e0e0e0",
+                          borderRadius: "8px",
+                          padding: "0.5rem",
+                          background: "#fff",
+                        }}>
+                          {members.length === 0 ? (
+                            <div style={{ fontSize: "0.85rem", color: "#777" }}>No members yet.</div>
+                          ) : (
+                            members.map((member: any) => (
+                              <div
+                                key={member.userId}
+                                style={{ padding: "0.35rem 0.5rem", borderRadius: "6px", fontSize: "0.85rem", color: "#444" }}
+                              >
+                                {formatContact(member)}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: "0.85rem", fontWeight: "600", color: "#2c2c2c", marginBottom: "0.4rem" }}>
+                          Not Yet Joined
+                        </div>
+                        <div style={{
+                          maxHeight: "180px",
+                          overflowY: "auto",
+                          border: "1px solid #e0e0e0",
+                          borderRadius: "8px",
+                          padding: "0.5rem",
+                          background: "#fff",
+                        }}>
+                          {nonMembers.length === 0 ? (
+                            <div style={{ fontSize: "0.85rem", color: "#777" }}>All farmers are members.</div>
+                          ) : (
+                            nonMembers.map((person: any) => (
+                              <div
+                                key={person.userId}
+                                style={{ padding: "0.35rem 0.5rem", borderRadius: "6px", fontSize: "0.85rem", color: "#444" }}
+                              >
+                                {formatContact(person)}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Purchase Window Control - Super Admin Only */}
       {isSuperAdmin && (
       <div style={{
@@ -2036,7 +2164,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
 function CreateAdminAccountForm({ createUser, storageLocations, adminId }: { createUser: any; storageLocations: any; adminId: Id<"users"> }) {
   const [email, setEmail] = useState("");
   const [adminLevel, setAdminLevel] = useState<"super" | "junior" | "">("");
-  const [adminCategory, setAdminCategory] = useState<"store" | "message" | "">("");
+  const [adminCategory, setAdminCategory] = useState<"store" | "message" | "community" | "">("");
   const [selectedLocationIds, setSelectedLocationIds] = useState<Id<"storageLocations">[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -2054,8 +2182,8 @@ function CreateAdminAccountForm({ createUser, storageLocations, adminId }: { cre
       setMessage({ type: "error", text: "Please select admin category for junior admin" });
       return;
     }
-    if (adminLevel === "junior" && selectedLocationIds.length === 0) {
-      setMessage({ type: "error", text: "Junior admins must have at least one assigned storage location" });
+    if (adminLevel === "junior" && adminCategory === "store" && selectedLocationIds.length === 0) {
+      setMessage({ type: "error", text: "Store admins must have at least one assigned storage location" });
       return;
     }
 
@@ -2162,7 +2290,7 @@ function CreateAdminAccountForm({ createUser, storageLocations, adminId }: { cre
           </label>
           <select
             value={adminCategory}
-            onChange={(e) => setAdminCategory(e.target.value as "store" | "message" | "")}
+            onChange={(e) => setAdminCategory(e.target.value as "store" | "message" | "community" | "")}
             disabled={loading}
             style={{
               width: "100%",
@@ -2176,11 +2304,12 @@ function CreateAdminAccountForm({ createUser, storageLocations, adminId }: { cre
             <option value="">Select admin category...</option>
             <option value="store">Store Admin (Delivery Confirmations)</option>
             <option value="message">Message Admin (Inbox Support)</option>
+            <option value="community">Community Admin (Members Database)</option>
           </select>
         </div>
       )}
 
-      {adminLevel === "junior" && storageLocations && (
+      {adminLevel === "junior" && adminCategory === "store" && storageLocations && (
         <div style={{ marginBottom: "1rem" }}>
           <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#1a1a1a" }}>
             Assigned Storage Locations (Select at least one):

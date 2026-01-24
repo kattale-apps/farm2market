@@ -854,6 +854,7 @@ export const getAllUsers = query({
       state: user.state,
       customSpendCap: user.customSpendCap,
       adminLevel: user.adminLevel,
+      adminCategory: user.adminCategory,
       allowedStorageLocationIds: user.allowedStorageLocationIds,
     }));
   },

@@ -47,6 +47,8 @@ export default function CommunitiesPage() {
   const updateCommunity = useMutation(api.communities.updateCommunity);
   const adminLevel = (user as any)?.adminLevel;
   const isSuperAdmin = user?.role === "admin" && (adminLevel === "super" || adminLevel === undefined);
+  const isCommunityAdmin = user?.role === "admin" && adminLevel === "junior" && (user as any)?.adminCategory === "community";
+  const canViewCommunityMembers = isSuperAdmin || isCommunityAdmin;
   const formatMemberContact = (member: any) => {
     const contact = member?.email || member?.phoneNumber;
     return contact ? `${member.alias} (${contact})` : member.alias;
@@ -548,10 +550,10 @@ export default function CommunitiesPage() {
                   <span style={{ color: "#4caf50", fontWeight: "600" }}>✓ You are a member</span>
                 )}
               </div>
-              {isSuperAdmin && community.members && community.members.length > 0 && (
+              {canViewCommunityMembers && (
                 <div style={{ marginTop: "0.75rem" }}>
                   <div style={{ fontSize: "0.85rem", fontWeight: "600", color: "#2c2c2c", marginBottom: "0.5rem" }}>
-                    Members (SuperAdmin view)
+                    Members (Admin view)
                   </div>
                   <div style={{
                     maxHeight: "160px",
@@ -561,19 +563,56 @@ export default function CommunitiesPage() {
                     padding: "0.5rem",
                     background: "#fafafa"
                   }}>
-                    {community.members.map((member: any) => (
-                      <div
-                        key={member.userId}
-                        style={{
-                          padding: "0.4rem 0.5rem",
-                          borderRadius: "6px",
-                          fontSize: "0.85rem",
-                          color: "#444",
-                        }}
-                      >
-                        {formatMemberContact(member)}
-                      </div>
-                    ))}
+                    {community.members && community.members.length > 0 ? (
+                      community.members.map((member: any) => (
+                        <div
+                          key={member.userId}
+                          style={{
+                            padding: "0.4rem 0.5rem",
+                            borderRadius: "6px",
+                            fontSize: "0.85rem",
+                            color: "#444",
+                          }}
+                        >
+                          {formatMemberContact(member)}
+                        </div>
+                      ))
+                    ) : (
+                      <div style={{ fontSize: "0.85rem", color: "#777" }}>No members yet.</div>
+                    )}
+                  </div>
+                </div>
+              )}
+              {canViewCommunityMembers && (
+                <div style={{ marginTop: "0.75rem" }}>
+                  <div style={{ fontSize: "0.85rem", fontWeight: "600", color: "#2c2c2c", marginBottom: "0.5rem" }}>
+                    Not Yet Joined
+                  </div>
+                  <div style={{
+                    maxHeight: "160px",
+                    overflowY: "auto",
+                    border: "1px solid #e0e0e0",
+                    borderRadius: "8px",
+                    padding: "0.5rem",
+                    background: "#fff"
+                  }}>
+                    {community.nonMembers && community.nonMembers.length > 0 ? (
+                      community.nonMembers.map((member: any) => (
+                        <div
+                          key={member.userId}
+                          style={{
+                            padding: "0.4rem 0.5rem",
+                            borderRadius: "6px",
+                            fontSize: "0.85rem",
+                            color: "#444",
+                          }}
+                        >
+                          {formatMemberContact(member)}
+                        </div>
+                      ))
+                    ) : (
+                      <div style={{ fontSize: "0.85rem", color: "#777" }}>All farmers are members.</div>
+                    )}
                   </div>
                 </div>
               )}

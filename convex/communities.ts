@@ -20,6 +20,10 @@ function isSuperAdmin(user: { adminLevel?: "super" | "junior" }): boolean {
   return user.adminLevel === "super" || user.adminLevel === undefined;
 }
 
+function isCommunityAdmin(user: { adminLevel?: "super" | "junior"; adminCategory?: "store" | "message" | "community" }): boolean {
+  return user.adminLevel === "junior" && user.adminCategory === "community";
+}
+
 const normalizeName = (name: string) => name.trim().toLowerCase();
 
 const REGION_GROUPS: { key: string; districts: string[] }[] = [
@@ -99,7 +103,7 @@ export const getActiveCommunities = query({
     let userSubcountyId: Id<"subcounties"> | undefined;
     let userParishId: Id<"parishes"> | undefined;
     let isAdmin = false;
-    let userRecord: { role?: string; adminLevel?: "super" | "junior" } | null = null;
+    let userRecord: { role?: string; adminLevel?: "super" | "junior"; adminCategory?: "store" | "message" | "community" } | null = null;
 
     if (args.userId) {
       const user = await ctx.db.get(args.userId);
@@ -126,7 +130,19 @@ export const getActiveCommunities = query({
       return false;
     });
 
-    const isSuperAdmin = isAdmin && userRecord?.adminLevel !== "junior";
+    const isSuperAdminUser = isAdmin && !!userRecord && isSuperAdmin(userRecord);
+    const isCommunityAdminUser = isAdmin && !!userRecord && isCommunityAdmin(userRecord);
+    const canViewMemberDetails = isSuperAdminUser || isCommunityAdminUser;
+
+    let farmerById = new Map<Id<"users">, any>();
+    let allFarmers: any[] = [];
+    if (canViewMemberDetails) {
+      allFarmers = await ctx.db
+        .query("users")
+        .withIndex("by_role", (q) => q.eq("role", "farmer"))
+        .collect();
+      farmerById = new Map(allFarmers.map((farmer) => [farmer._id, farmer]));
+    }
 
     // Get membership status for each community
     const communitiesWithMembership = await Promise.all(
@@ -149,18 +165,26 @@ export const getActiveCommunities = query({
           .collect();
 
         let memberDetails: Array<{ userId: Id<"users">; alias: string; email?: string; phoneNumber?: string }> | undefined;
-        if (isSuperAdmin) {
-          memberDetails = await Promise.all(
-            memberships.map(async (membership) => {
-              const member = await ctx.db.get(membership.userId);
-              return {
-                userId: membership.userId,
-                alias: member?.alias || "Unknown",
-                email: member?.email,
-                phoneNumber: member?.phoneNumber,
-              };
-            })
-          );
+        let nonMemberDetails: Array<{ userId: Id<"users">; alias: string; email?: string; phoneNumber?: string }> | undefined;
+        if (canViewMemberDetails) {
+          const memberIds = new Set(memberships.map((membership) => membership.userId));
+          memberDetails = memberships.map((membership) => {
+            const member = farmerById.get(membership.userId);
+            return {
+              userId: membership.userId,
+              alias: member?.alias || "Unknown",
+              email: member?.email,
+              phoneNumber: member?.phoneNumber,
+            };
+          });
+          nonMemberDetails = allFarmers
+            .filter((farmer) => !memberIds.has(farmer._id))
+            .map((farmer) => ({
+              userId: farmer._id,
+              alias: farmer.alias || "Unknown",
+              email: farmer.email,
+              phoneNumber: farmer.phoneNumber,
+            }));
         }
 
         return {
@@ -172,6 +196,7 @@ export const getActiveCommunities = query({
           isMember,
           memberCount: memberships.length,
           members: memberDetails,
+          nonMembers: nonMemberDetails,
         };
       })
     );

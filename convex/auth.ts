@@ -106,7 +106,7 @@ export const createUser = mutation({
       v.literal("admin")
     ),
     adminLevel: v.optional(v.union(v.literal("super"), v.literal("junior"))),
-    adminCategory: v.optional(v.union(v.literal("store"), v.literal("message"))),
+    adminCategory: v.optional(v.union(v.literal("store"), v.literal("message"), v.literal("community"))),
     allowedStorageLocationIds: v.optional(v.array(v.id("storageLocations"))),
     creatorAdminId: v.optional(v.id("users")), // Admin creating this user (for permission check)
   },
@@ -143,23 +143,27 @@ export const createUser = mutation({
         throw new Error("Invalid adminLevel. Must be 'super' or 'junior'");
       }
       
-      // If creating junior admin, allowedStorageLocationIds must be provided and non-empty
+      // If creating junior admin, adminCategory is required. Storage locations required for store admins only.
       if (args.adminLevel === "junior") {
         if (!args.adminCategory) {
           throw new Error("Junior admins must have an adminCategory");
         }
-        if (!args.allowedStorageLocationIds || args.allowedStorageLocationIds.length === 0) {
-          throw new Error("Junior admins must have at least one assigned storage location");
+        if (args.adminCategory === "store") {
+          if (!args.allowedStorageLocationIds || args.allowedStorageLocationIds.length === 0) {
+            throw new Error("Store admins must have at least one assigned storage location");
+          }
         }
         
-        // Validate that all location IDs exist and are active
-        for (const locationId of args.allowedStorageLocationIds) {
-          const location = await ctx.db.get(locationId);
-          if (!location) {
-            throw new Error(`Storage location ${locationId} not found`);
-          }
-          if (!location.active) {
-            throw new Error(`Storage location ${locationId} is not active`);
+        // Validate that all location IDs exist and are active (when provided)
+        if (args.allowedStorageLocationIds && args.allowedStorageLocationIds.length > 0) {
+          for (const locationId of args.allowedStorageLocationIds) {
+            const location = await ctx.db.get(locationId);
+            if (!location) {
+              throw new Error(`Storage location ${locationId} not found`);
+            }
+            if (!location.active) {
+              throw new Error(`Storage location ${locationId} is not active`);
+            }
           }
         }
       }

@@ -6,6 +6,80 @@ import { Id } from "../../../convex/_generated/dataModel";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
+const REGION_GROUPS = [
+  {
+    key: "central_buganda",
+    label: "Central (Buganda)",
+    districts: [
+      "Kampala", "Wakiso", "Mukono", "Buikwe", "Kayunga",
+      "Luweero", "Nakaseke", "Nakasongola", "Mityana", "Kiboga",
+      "Mpigi", "Butambala", "Gomba", "Masaka",
+      "Lwengo", "Kalungu", "Bukomansimbi", "Sembabule", "Lyantonde",
+      "Rakai", "Kyotera", "Mubende", "Kassanda"
+    ],
+  },
+  {
+    key: "eastern_busoga",
+    label: "Eastern (Busoga)",
+    districts: ["Jinja", "Mayuge", "Iganga", "Bugiri", "Namayingo", "Buyende", "Kaliro", "Kamuli", "Luuka", "Namutumba"],
+  },
+  {
+    key: "eastern_teso",
+    label: "Eastern (Teso)",
+    districts: ["Soroti", "Kaberamaido", "Serere", "Kalaki", "Amuria", "Katakwi", "Kumi", "Bukedea", "Ngora", "Kapelebyong"],
+  },
+  {
+    key: "eastern_elgon",
+    label: "Eastern (Elgon)",
+    districts: ["Mbale", "Manafwa", "Bududa", "Sironko", "Bulambuli", "Bungokho"],
+  },
+  {
+    key: "eastern_other",
+    label: "Eastern (Other)",
+    districts: ["Tororo", "Busia", "Butaleja", "Budaka", "Pallisa", "Kibuku", "Butebo"],
+  },
+  {
+    key: "northern_acholi",
+    label: "Northern (Acholi)",
+    districts: ["Gulu", "Nwoya", "Amuru", "Pader", "Kitgum", "Lamwo", "Agago", "Omoro"],
+  },
+  {
+    key: "northern_lango",
+    label: "Northern (Lango)",
+    districts: ["Lira", "Dokolo", "Alebtong", "Oyam", "Apac", "Kole", "Amolatar", "Kwania"],
+  },
+  {
+    key: "northern_westnile",
+    label: "Northern (West Nile)",
+    districts: ["Arua", "Moyo", "Adjumani", "Yumbe", "Koboko", "Maracha", "Terego", "Zombo", "Nebbi", "Pakwach"],
+  },
+  {
+    key: "northern_karamoja",
+    label: "Northern (Karamoja)",
+    districts: ["Moroto", "Kotido", "Kaabong", "Abim", "Nakapiripirit", "Napak", "Amudat", "Nabilatuk", "Karenga"],
+  },
+  {
+    key: "western_tooro",
+    label: "Western (Tooro)",
+    districts: ["Fort Portal", "Kabarole", "Kamwenge", "Kyenjojo", "Kyegegwa", "Bunyangabu"],
+  },
+  {
+    key: "western_bunyoro",
+    label: "Western (Bunyoro)",
+    districts: ["Hoima", "Kikuube", "Masindi", "Kiryandongo", "Buliisa", "Kagadi", "Kakumiro", "Kyankwanzi"],
+  },
+  {
+    key: "western_ankole",
+    label: "Western (Ankole)",
+    districts: ["Mbarara", "Isingiro", "Ntungamo", "Bushenyi", "Sheema", "Mitooma", "Rubirizi", "Buhweju", "Rukungiri", "Kanungu"],
+  },
+  {
+    key: "western_kigezi",
+    label: "Western (Kigezi)",
+    districts: ["Kabale", "Kisoro", "Rukiga"],
+  },
+];
+
 export default function FarmerOnboardingPage() {
   const router = useRouter();
   const [userId, setUserId] = useState<Id<"users"> | null>(null);
@@ -15,6 +89,11 @@ export default function FarmerOnboardingPage() {
   const sortedDistricts = (districts ?? [])
     .slice()
     .sort((a, b) => a.name.localeCompare(b.name));
+  const [selectedRegionKey, setSelectedRegionKey] = useState("");
+  const selectedRegion = REGION_GROUPS.find((group) => group.key === selectedRegionKey);
+  const filteredDistricts = selectedRegion
+    ? sortedDistricts.filter((district) => selectedRegion.districts.includes(district.name))
+    : [];
   const [selectedDistrictId, setSelectedDistrictId] = useState<Id<"districts"> | "">("");
   const subcounties = useQuery(
     api.locations.getSubcountiesByDistrict,
@@ -76,6 +155,11 @@ export default function FarmerOnboardingPage() {
       return;
     }
 
+    if (!selectedRegionKey) {
+      setMessage({ type: "error", text: "Please select a Region" });
+      return;
+    }
+
     if (!selectedDistrictId || !selectedSubcountyId || !selectedParishId) {
       setMessage({ type: "error", text: "Please select District, Subcounty, and Parish" });
       return;
@@ -129,6 +213,13 @@ export default function FarmerOnboardingPage() {
       setLoading(false);
     }
   };
+
+  // Reset district/subcounty/parish when region changes
+  useEffect(() => {
+    setSelectedDistrictId("");
+    setSelectedSubcountyId("");
+    setSelectedParishId("");
+  }, [selectedRegionKey]);
 
   // Reset subcounty/parish when district changes
   useEffect(() => {
@@ -199,10 +290,10 @@ export default function FarmerOnboardingPage() {
           {/* Location Selection */}
           <div style={{ 
             marginBottom: "2rem",
-            background: "#f8f9fa",
+            background: "#e8f5e9",
             padding: "1.5rem",
             borderRadius: "8px",
-            border: "1px solid #e9ecef"
+            border: "1px solid #c8e6c9"
           }}>
             <h2 style={{ 
               fontSize: "clamp(1.2rem, 3vw, 1.5rem)", 
@@ -213,6 +304,39 @@ export default function FarmerOnboardingPage() {
             }}>
               Location
             </h2>
+
+            <div style={{ marginBottom: "1rem" }}>
+              <label style={{ 
+                display: "block", 
+                marginBottom: "0.5rem", 
+                fontWeight: "600",
+                color: "#2c2c2c",
+                fontSize: "0.95rem"
+              }}>
+                Region *
+              </label>
+              <select
+                value={selectedRegionKey}
+                onChange={(e) => setSelectedRegionKey(e.target.value)}
+                required
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  fontSize: "1rem",
+                  border: "1px solid #ddd",
+                  borderRadius: "8px",
+                  background: "#fff",
+                  color: "#2c2c2c",
+                }}
+              >
+                <option value="">Select Region</option>
+                {REGION_GROUPS.map((group) => (
+                  <option key={group.key} value={group.key}>
+                    {group.label}
+                  </option>
+                ))}
+              </select>
+            </div>
 
             <div style={{ marginBottom: "1rem" }}>
               <label style={{ 
@@ -250,18 +374,20 @@ export default function FarmerOnboardingPage() {
                   value={selectedDistrictId}
                   onChange={(e) => setSelectedDistrictId(e.target.value as Id<"districts"> | "")}
                   required
+                  disabled={!selectedRegionKey}
                   style={{
                     width: "100%",
                     padding: "0.75rem",
                     fontSize: "1rem",
                     border: "1px solid #ddd",
                     borderRadius: "8px",
-                    background: "#fff",
+                    background: selectedRegionKey ? "#fff" : "#f5f5f5",
                     color: "#2c2c2c",
+                    cursor: selectedRegionKey ? "pointer" : "not-allowed",
                   }}
                 >
-                  <option value="">Select District</option>
-                  {sortedDistricts.map((d) => (
+                  <option value="">{selectedRegionKey ? "Select District" : "Select Region first"}</option>
+                  {filteredDistricts.map((d) => (
                     <option key={d.id} value={d.id}>
                       {d.name}
                     </option>

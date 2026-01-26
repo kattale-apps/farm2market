@@ -52,7 +52,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   const allUsers = useQuery(api.introspection.getAllUsers, { adminId: userId });
   const districts = useQuery(api.locations.getActiveDistricts, {});
   const subcounties = useQuery(api.locations.getAllSubcounties, {});
-  const parishes = useQuery(api.locations.getAllParishes, {});
+  // const parishes = useQuery(api.locations.getAllParishes, {});
   // Group users by role
   const usersByRole = allUsers ? {
     farmer: allUsers.filter((u: any) => u.role === "farmer"),
@@ -62,7 +62,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   } : { farmer: [], trader: [], buyer: [], admin: [] };
   const districtMap = new Map(districts?.map(d => [d.id, d.name]) || []);
   const subcountyMap = new Map(subcounties?.map(s => [s.id, s.name]) || []);
-  const parishMap = new Map(parishes?.map(p => [p.id, p.name]) || []);
+  // const parishMap = new Map(parishes?.map(p => [p.id, p.name]) || []);
   const communitySummaries = useQuery(
     api.communities.getActiveCommunities,
     userId ? { userId } : "skip"
@@ -244,7 +244,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
         Phone: f.phoneNumber || "",
         District: f.districtId ? districtMap.get(f.districtId) || "Unknown" : "",
         Subcounty: f.subcountyId ? subcountyMap.get(f.subcountyId) || "Unknown" : "",
-        Parish: f.parishId ? parishMap.get(f.parishId) || "Unknown" : "",
+        Parish: f.parishId || "",
         Joined: (f as any)._creationTime ? formatUgandaDate((f as any)._creationTime) : "N/A",
       }));
     } else if (type === "profiles") {
@@ -256,7 +256,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
         Role: f.role,
         District: f.districtId ? districtMap.get(f.districtId) || "Unknown" : "",
         Subcounty: f.subcountyId ? subcountyMap.get(f.subcountyId) || "Unknown" : "",
-        Parish: f.parishId ? parishMap.get(f.parishId) || "Unknown" : "",
+        Parish: f.parishId || "",
         FarmSizeAcres: f.farmSizeAcres ? f.farmSizeAcres.toFixed(4) : "",
         Joined: (f as any)._creationTime ? formatUgandaDate((f as any)._creationTime) : "N/A",
       }));
@@ -266,7 +266,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
         Alias: f.alias,
         District: f.districtId ? districtMap.get(f.districtId) || "Unknown" : "",
         Subcounty: f.subcountyId ? subcountyMap.get(f.subcountyId) || "Unknown" : "",
-        Parish: f.parishId ? parishMap.get(f.parishId) || "Unknown" : "",
+        Parish: f.parishId || "",
         Joined: (f as any)._creationTime ? formatUgandaDate((f as any)._creationTime) : "N/A",
         Activities: "Summary not implemented yet",
       }));

@@ -3,10 +3,13 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
-import { formatUgandaDateTime, formatUgandaTimeOnly, getUgandaTime } from "../utils/timeUtils";
+import { formatUgandaDateTime, formatUgandaTimeOnly, getUgandaTime, formatUgandaDate } from "../utils/timeUtils";
 import { useState, useEffect, useMemo, useRef } from "react";
 import Image from "next/image";
 import { exportToExcel, exportToPDF, formatUTIDDataForExport } from "../utils/exportUtils";
+import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { StorageLocationsManager } from "./StorageLocationsManager";
 import { DeliveryConfirmationForm } from "./DeliveryConfirmationForm";
 import { ThreadView } from "./messages/ThreadView";
@@ -47,6 +50,13 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   const confirmDeliveryToStorageByUTID = useMutation(api.admin.confirmDeliveryToStorageByUTID);
   const adminDepositDemoFunds = useMutation(api.admin.adminDepositDemoFunds);
   const allUsers = useQuery(api.introspection.getAllUsers, { adminId: userId });
+  // Group users by role
+  const usersByRole = allUsers ? {
+    farmer: allUsers.filter((u: any) => u.role === "farmer"),
+    trader: allUsers.filter((u: any) => u.role === "trader"),
+    buyer: allUsers.filter((u: any) => u.role === "buyer"),
+    admin: allUsers.filter((u: any) => u.role === "admin"),
+  } : { farmer: [], trader: [], buyer: [], admin: [] };
   const communitySummaries = useQuery(
     api.communities.getActiveCommunities,
     userId ? { userId } : "skip"
@@ -210,6 +220,66 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
       exportToExcel(formattedData, filename, "Admin");
     } else {
       exportToPDF(formattedData, filename, "Admin");
+    }
+  };
+
+  const handleExportFarmers = (format: "excel" | "pdf", type: "list" | "profiles" | "activities") => {
+    const farmers = usersByRole.farmer;
+    if (!farmers || farmers.length === 0) {
+      alert("No farmer data available to export");
+      return;
+    }
+    let data: any[] = [];
+    if (type === "list") {
+      data = farmers.map(f => ({
+        UserID: f.userId,
+        Alias: f.alias,
+        Email: f.email || "",
+        Phone: f.phoneNumber || "",
+        Joined: (f as any)._creationTime ? formatUgandaDate((f as any)._creationTime) : "N/A",
+      }));
+    } else if (type === "profiles") {
+      data = farmers.map(f => ({
+        UserID: f.userId,
+        Alias: f.alias,
+        Email: f.email || "",
+        Phone: f.phoneNumber || "",
+        Role: f.role,
+        Joined: (f as any)._creationTime ? formatUgandaDate((f as any)._creationTime) : "N/A",
+      }));
+    } else if (type === "activities") {
+      data = farmers.map(f => ({
+        UserID: f.userId,
+        Alias: f.alias,
+        Joined: (f as any)._creationTime ? formatUgandaDate((f as any)._creationTime) : "N/A",
+        Activities: "Summary not implemented yet",
+      }));
+    }
+    const filename = `farmers_${type}_${formatUgandaDate(Date.now())}`;
+    if (format === "excel") {
+      const workbook = XLSX.utils.book_new();
+      const worksheet = XLSX.utils.json_to_sheet(data);
+      worksheet["!cols"] = Object.keys(data[0] || {}).map(() => ({ wch: 20 }));
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Farmers");
+      XLSX.writeFile(workbook, `${filename}.xlsx`);
+    } else {
+      const doc = new jsPDF();
+      doc.setFontSize(18);
+      doc.text("Farmer Members Report", doc.internal.pageSize.getWidth() / 2, 20, { align: "center" });
+      doc.setFontSize(12);
+      doc.text(`Type: ${type}`, doc.internal.pageSize.getWidth() / 2, 30, { align: "center" });
+      doc.text(`Generated: ${formatUgandaDateTime(getUgandaTime())}`, doc.internal.pageSize.getWidth() / 2, 37, { align: "center" });
+      doc.text(`Total Farmers: ${farmers.length}`, doc.internal.pageSize.getWidth() / 2, 44, { align: "center" });
+      const tableData = data.map(row => Object.values(row).map(v => String(v)));
+      autoTable(doc, {
+        head: [Object.keys(data[0] || {})],
+        body: tableData,
+        startY: 50,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [25, 118, 210] },
+        alternateRowStyles: { fillColor: [245, 245, 245] },
+      });
+      doc.save(`${filename}.pdf`);
     }
   };
 
@@ -1181,6 +1251,128 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
         </div>
       )}
 
+      {/* Farmer Members Export - Super Admin Only */}
+      {isSuperAdmin && (
+        <div
+          style={{
+            marginBottom: "2rem",
+            padding: "clamp(1rem, 3vw, 1.5rem)",
+            background: "#fff",
+            borderRadius: "12px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+            border: "1px solid #e0e0e0",
+            width: "100%",
+            maxWidth: "100%",
+            boxSizing: "border-box",
+            overflowX: "hidden",
+          }}
+        >
+          <h3 style={{
+            marginTop: 0,
+            marginBottom: "1rem",
+            fontSize: "clamp(1.1rem, 3vw, 1.3rem)",
+            color: "#2c2c2c",
+            fontFamily: '"Montserrat", sans-serif',
+            fontWeight: "600",
+            letterSpacing: "-0.01em",
+          }}>
+            Farmer Members Export
+          </h3>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+            <button
+              onClick={() => handleExportFarmers("excel", "list")}
+              style={{
+                padding: "0.5rem 1rem",
+                background: "#4caf50",
+                color: "#fff",
+                border: "none",
+                borderRadius: "6px",
+                fontSize: "0.85rem",
+                fontWeight: "600",
+                cursor: "pointer"
+              }}
+            >
+              Export Member List to Excel
+            </button>
+            <button
+              onClick={() => handleExportFarmers("pdf", "list")}
+              style={{
+                padding: "0.5rem 1rem",
+                background: "#2196f3",
+                color: "#fff",
+                border: "none",
+                borderRadius: "6px",
+                fontSize: "0.85rem",
+                fontWeight: "600",
+                cursor: "pointer"
+              }}
+            >
+              Export Member List to PDF
+            </button>
+            <button
+              onClick={() => handleExportFarmers("excel", "profiles")}
+              style={{
+                padding: "0.5rem 1rem",
+                background: "#4caf50",
+                color: "#fff",
+                border: "none",
+                borderRadius: "6px",
+                fontSize: "0.85rem",
+                fontWeight: "600",
+                cursor: "pointer"
+              }}
+            >
+              Export Profile Details to Excel
+            </button>
+            <button
+              onClick={() => handleExportFarmers("pdf", "profiles")}
+              style={{
+                padding: "0.5rem 1rem",
+                background: "#2196f3",
+                color: "#fff",
+                border: "none",
+                borderRadius: "6px",
+                fontSize: "0.85rem",
+                fontWeight: "600",
+                cursor: "pointer"
+              }}
+            >
+              Export Profile Details to PDF
+            </button>
+            <button
+              onClick={() => handleExportFarmers("excel", "activities")}
+              style={{
+                padding: "0.5rem 1rem",
+                background: "#4caf50",
+                color: "#fff",
+                border: "none",
+                borderRadius: "6px",
+                fontSize: "0.85rem",
+                fontWeight: "600",
+                cursor: "pointer"
+              }}
+            >
+              Export Activity Summaries to Excel
+            </button>
+            <button
+              onClick={() => handleExportFarmers("pdf", "activities")}
+              style={{
+                padding: "0.5rem 1rem",
+                background: "#2196f3",
+                color: "#fff",
+                border: "none",
+                borderRadius: "6px",
+                fontSize: "0.85rem",
+                fontWeight: "600",
+                cursor: "pointer"
+              }}
+            >
+              Export Activity Summaries to PDF
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Purchase Window Control - Super Admin Only */}
       {isSuperAdmin && (
       <div style={{
@@ -1979,6 +2171,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
             sendRoleBasedNotification={sendRoleBasedNotification}
             adminId={userId}
             isSuperAdmin={isSuperAdmin}
+            usersByRole={usersByRole}
           />
         )}
       </div>
@@ -2881,12 +3074,14 @@ function NotificationForm({
   sendRoleBasedNotification,
   adminId,
   isSuperAdmin,
+  usersByRole,
 }: {
   allUsers: any[];
   sendNotification: any;
   sendRoleBasedNotification: any;
   adminId: Id<"users">;
   isSuperAdmin: boolean;
+  usersByRole: any;
 }) {
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
   const [title, setTitle] = useState("");
@@ -2957,14 +3152,6 @@ function NotificationForm({
     }
   };
 
-  // Group users by role
-  const usersByRole = {
-    farmer: allUsers.filter((u: any) => u.role === "farmer"),
-    trader: allUsers.filter((u: any) => u.role === "trader"),
-    buyer: allUsers.filter((u: any) => u.role === "buyer"),
-    admin: allUsers.filter((u: any) => u.role === "admin"),
-  };
-
   return (
     <div>
       <div style={{ marginBottom: "1rem" }}>
@@ -3000,12 +3187,12 @@ function NotificationForm({
         </div>
         <div style={{ maxHeight: "300px", overflowY: "auto", border: "1px solid #ddd", borderRadius: "6px", padding: "0.75rem" }}>
           {Object.entries(usersByRole).map(([role, users]) => (
-            users.length > 0 && (
+            (users as any[]).length > 0 && (
               <div key={role} style={{ marginBottom: "1rem" }}>
                 <div style={{ fontWeight: "600", marginBottom: "0.5rem", textTransform: "capitalize", color: "#666" }}>
-                  {role}s ({users.length})
+                  {role}s ({(users as any[]).length})
                 </div>
-                {users.map((user: any) => {
+                {(users as any[]).map((user: any) => {
                   const contact = user.email || user.phoneNumber;
                   const label = isSuperAdmin && contact ? `${user.alias} (${contact})` : user.alias;
                   return (
@@ -3107,7 +3294,7 @@ function NotificationForm({
         </h4>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
           {Object.entries(usersByRole).map(([role, users]) => (
-            users.length > 0 && (
+            (users as any[]).length > 0 && (
               <button
                 key={role}
                 onClick={async () => {
@@ -3150,7 +3337,7 @@ function NotificationForm({
                   cursor: roleLoading !== null || !title.trim() || !message.trim() || !reason.trim() ? "not-allowed" : "pointer"
                 }}
               >
-                {roleLoading === role ? "Sending..." : `Send to All ${role.charAt(0).toUpperCase() + role.slice(1)}s (${users.length})`}
+                {roleLoading === role ? "Sending..." : `Send to All ${role.charAt(0).toUpperCase() + role.slice(1)}s (${(users as any[]).length})`}
               </button>
             )
           ))}

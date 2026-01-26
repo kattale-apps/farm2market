@@ -154,6 +154,25 @@ export default function Home() {
             flexWrap: "wrap"
           }}>
             <a
+              href="/downloads/farm2market.apk"
+              download
+              style={{
+                display: "inline-block",
+                padding: "0.5rem 1rem",
+                background: "#111827",
+                color: "white",
+                textDecoration: "none",
+                borderRadius: "6px",
+                fontSize: isMobile ? "0.85rem" : "0.9rem",
+                fontWeight: "700",
+                transition: "background 0.3s"
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = "#0f172a"}
+              onMouseLeave={(e) => e.currentTarget.style.background = "#111827"}
+            >
+              Download APK
+            </a>
+            <a
               href="/contact"
               style={{
                 display: "inline-block",

@@ -856,6 +856,12 @@ export const getAllUsers = query({
       adminLevel: user.adminLevel,
       adminCategory: user.adminCategory,
       allowedStorageLocationIds: user.allowedStorageLocationIds,
+      ...(user.role === "farmer" ? {
+        districtId: user.districtId,
+        subcountyId: user.subcountyId,
+        parishId: user.parishId,
+        farmSizeAcres: user.farmSizeAcres,
+      } : {}),
     }));
   },
 });

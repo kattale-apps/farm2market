@@ -282,3 +282,43 @@ export const createParish = mutation({
     return { parishId, utid };
   },
 });
+
+/**
+ * Get all active subcounties
+ */
+export const getAllSubcounties = query({
+  args: {},
+  handler: async (ctx) => {
+    const subcounties = await ctx.db
+      .query("subcounties")
+      .withIndex("by_active", (q) => q.eq("active", true))
+      .collect();
+
+    return subcounties.map((s) => ({
+      id: s._id,
+      name: s.name,
+      code: s.code,
+      districtId: s.districtId,
+    }));
+  },
+});
+
+/**
+ * Get all active parishes
+ */
+export const getAllParishes = query({
+  args: {},
+  handler: async (ctx) => {
+    const parishes = await ctx.db
+      .query("parishes")
+      .withIndex("by_active", (q) => q.eq("active", true))
+      .collect();
+
+    return parishes.map((p) => ({
+      id: p._id,
+      name: p.name,
+      code: p.code,
+      subcountyId: p.subcountyId,
+    }));
+  },
+});

@@ -19,9 +19,14 @@ import { Id } from "./_generated/dataModel";
 /**
  * Verify user is admin (shared helper)
  */
-async function verifyAdmin(ctx: any, adminId: string) {
+async function verifyAdmin(ctx: any, adminId: Id<"users">) {
   const user = await ctx.db.get(adminId);
-  if (!user || user.role !== "admin") {
+  if (!user) {
+    console.error(`[verifyAdmin] User not found: ${adminId}`);
+    throw new Error("User is not an admin");
+  }
+  if (user.role !== "admin") {
+    console.error(`[verifyAdmin] User ${adminId} is not an admin. Role: ${user.role}`);
     throw new Error("User is not an admin");
   }
   return user;

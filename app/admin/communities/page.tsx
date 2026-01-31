@@ -14,6 +14,8 @@ export default function CommunitiesPage() {
     isGlobal: false,
     geoLocked: false,
     regionKey: "",
+    communityType: "farmer" as "farmer" | "trader" | "buyer",
+    assignAdminId: "",
   });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -42,6 +44,7 @@ export default function CommunitiesPage() {
   ];
 
   const communities = useQuery(api.communities.getActiveCommunities, userId ? { userId } : "skip");
+  const allUsers = useQuery(api.introspection.getAllUsers, userId ? { adminId: userId } : "skip");
   const user = useQuery(api.auth.getUser, userId ? { userId } : "skip");
   const createCommunity = useMutation(api.communities.createCommunity);
   const updateCommunity = useMutation(api.communities.updateCommunity);
@@ -49,6 +52,7 @@ export default function CommunitiesPage() {
   const isSuperAdmin = user?.role === "admin" && (adminLevel === "super" || adminLevel === undefined);
   const isCommunityAdmin = user?.role === "admin" && adminLevel === "junior" && (user as any)?.adminCategory === "community";
   const canViewCommunityMembers = isSuperAdmin || isCommunityAdmin;
+  const communityAdmins = (allUsers || []).filter((u: any) => u.role === "admin" && u.adminCategory === "community");
   const formatMemberContact = (member: any) => {
     const contact = member?.email || member?.phoneNumber;
     return contact ? `${member.alias} (${contact})` : member.alias;
@@ -90,9 +94,11 @@ export default function CommunitiesPage() {
         isGlobal: formData.isGlobal,
         geoLocked: formData.geoLocked,
         regionKey: formData.geoLocked ? formData.regionKey : undefined,
+        communityType: formData.communityType as any,
+        assignAdminId: formData.assignAdminId ? (formData.assignAdminId as Id<"users">) : undefined,
       });
       setMessage({ type: "success", text: "Community created successfully!" });
-      setFormData({ name: "", description: "", isGlobal: false, geoLocked: false, regionKey: "" });
+      setFormData({ name: "", description: "", isGlobal: false, geoLocked: false, regionKey: "", communityType: "farmer", assignAdminId: "" });
       setShowCreateForm(false);
     } catch (error: any) {
       setMessage({ type: "error", text: error.message || "Failed to create community" });
@@ -322,6 +328,52 @@ export default function CommunitiesPage() {
                 </select>
               </div>
             )}
+            <div style={{ marginBottom: "1rem" }}>
+              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600" }}>
+                Community Type *
+              </label>
+              <select
+                value={formData.communityType}
+                onChange={(e) => setFormData({ ...formData, communityType: e.target.value as "farmer" | "trader" | "buyer" })}
+                required
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  border: "1px solid #ddd",
+                  borderRadius: "6px",
+                  fontSize: "1rem",
+                  background: "#fff",
+                }}
+              >
+                <option value="farmer">Farmer</option>
+                <option value="trader">Trader</option>
+                <option value="buyer">Buyer</option>
+              </select>
+            </div>
+            <div style={{ marginBottom: "1rem" }}>
+              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600" }}>
+                Assign Admin (Optional)
+              </label>
+              <select
+                value={formData.assignAdminId}
+                onChange={(e) => setFormData({ ...formData, assignAdminId: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  border: "1px solid #ddd",
+                  borderRadius: "6px",
+                  fontSize: "1rem",
+                  background: "#fff",
+                }}
+              >
+                <option value="">No assignment</option>
+                {communityAdmins.map((admin) => (
+                  <option key={admin.userId} value={admin.userId}>
+                    {admin.alias} ({admin.email || admin.phoneNumber})
+                  </option>
+                ))}
+              </select>
+            </div>
             <div style={{ display: "flex", gap: "1rem" }}>
               <button
                 type="submit"
@@ -342,7 +394,7 @@ export default function CommunitiesPage() {
                 type="button"
                 onClick={() => {
                   setShowCreateForm(false);
-                  setFormData({ name: "", description: "", isGlobal: false, geoLocked: false, regionKey: "" });
+                  setFormData({ name: "", description: "", isGlobal: false, geoLocked: false, regionKey: "", communityType: "farmer", assignAdminId: "" });
                 }}
                 style={{
                   padding: "0.75rem 1.5rem",

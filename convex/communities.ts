@@ -118,16 +118,32 @@ export const getActiveCommunities = query({
 
     // Filter communities user can see
     const accessibleCommunities = communities.filter((c) => {
-      if (isAdmin) return true;
-      if (c.isGlobal) return true;
-      if (!c.geoLocked) return true;
-
-      // Check geo-locking
-      if (userDistrictId && c.districtIds?.includes(userDistrictId)) return true;
-      if (userSubcountyId && c.subcountyIds?.includes(userSubcountyId)) return true;
-      if (userParishId && c.parishIds?.includes(userParishId)) return true;
-
-      return false;
+      if (!isAdmin) {
+        // Non-admins see based on global/geo-locking
+        if (c.isGlobal) return true;
+        if (!c.geoLocked) return true;
+        
+        // Check geo-locking
+        if (userDistrictId && c.districtIds?.includes(userDistrictId)) return true;
+        if (userSubcountyId && c.subcountyIds?.includes(userSubcountyId)) return true;
+        if (userParishId && c.parishIds?.includes(userParishId)) return true;
+        
+        return false;
+      }
+      
+      // Admins see based on their level
+      const isSuperAdminCheck = userRecord && isSuperAdmin(userRecord);
+      if (isSuperAdminCheck) return true; // SuperAdmins see all
+      
+      // Junior community admins see only their assigned communities
+      const isJuniorCommunityAdminCheck = userRecord && userRecord.adminLevel === "junior" && userRecord.adminCategory === "community";
+      if (isJuniorCommunityAdminCheck) {
+        const assignedIds = (userRecord as any).assignedCommunityIds || [];
+        return assignedIds.includes(c._id);
+      }
+      
+      // Other junior admins see all
+      return true;
     });
 
     const isSuperAdminUser = isAdmin && !!userRecord && isSuperAdmin(userRecord);
@@ -219,6 +235,8 @@ export const createCommunity = mutation({
     districtIds: v.optional(v.array(v.id("districts"))),
     subcountyIds: v.optional(v.array(v.id("subcounties"))),
     parishIds: v.optional(v.array(v.id("parishes"))),
+    communityType: v.optional(v.union(v.literal("farmer"), v.literal("trader"), v.literal("buyer"))),
+    assignAdminId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
     // Verify admin role
@@ -305,7 +323,24 @@ export const createCommunity = mutation({
       createdBy: args.adminId,
       createdAt: getUgandaTime(),
       utid,
+      communityType: args.communityType || "farmer",
     });
+
+    // If assigning to a community admin, add to their assignedCommunityIds
+    if (args.assignAdminId) {
+      const targetAdmin = await ctx.db.get(args.assignAdminId);
+      if (!targetAdmin) {
+        throw new Error("Target admin user not found");
+      }
+      if (targetAdmin.role !== "admin" || targetAdmin.adminLevel !== "junior") {
+        throw new Error("Can only assign communities to junior community admins");
+      }
+
+      const currentAssigned = (targetAdmin as any).assignedCommunityIds || [];
+      await ctx.db.patch(args.assignAdminId, {
+        assignedCommunityIds: [...currentAssigned, communityId],
+      });
+    }
 
     // Log admin action
     await ctx.db.insert("adminActions", {

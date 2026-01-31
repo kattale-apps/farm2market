@@ -634,7 +634,7 @@ export default defineSchema({
     createdBy: v.id("users"), // SuperAdmin who created this community
     createdAt: v.number(),
     utid: v.string(), // Admin action UTID
-    communityType: v.union(v.literal("farmer"), v.literal("trader"), v.literal("buyer")), // Type of community
+    communityType: v.optional(v.union(v.literal("farmer"), v.literal("trader"), v.literal("buyer"))), // Type of community (optional for backward-compatibility)
   })
     .index("by_active", ["isGlobal", "geoLocked"])
     .index("by_created_by", ["createdBy"]),

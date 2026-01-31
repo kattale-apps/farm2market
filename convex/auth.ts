@@ -455,3 +455,43 @@ export const verifyRole = query({
     return { authorized: true };
   },
 });
+
+/**
+ * Change password for authenticated user
+ */
+export const changePassword = mutation({
+  args: {
+    userId: v.id("users"),
+    currentPassword: v.string(),
+    newPassword: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) throw new Error("User not found");
+
+    // Verify current password
+    if (!user.passwordHash) throw new Error("User does not have a password set");
+
+    const isValid = await comparePassword(args.currentPassword, user.passwordHash);
+    if (!isValid) throw new Error("Current password is incorrect");
+
+    // Validate new password
+    if (args.newPassword.length < 8) {
+      throw new Error("New password must be at least 8 characters");
+    }
+
+    if (args.currentPassword === args.newPassword) {
+      throw new Error("New password must be different from current password");
+    }
+
+    // Hash new password
+    const newHash = await hashPassword(args.newPassword);
+
+    // Update user
+    await ctx.db.patch(args.userId, {
+      passwordHash: newHash,
+    });
+
+    return { success: true };
+  },
+});

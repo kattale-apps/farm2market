@@ -122,6 +122,18 @@ export default function CommunityDashboardPage() {
               🌾 Community Dashboard
             </h1>
           </div>
+          <Link href="/admin/change-password" style={{
+            padding: "0.75rem 1.5rem",
+            background: "#ff9800",
+            color: "#fff",
+            borderRadius: "8px",
+            textDecoration: "none",
+            fontSize: "0.9rem",
+            fontWeight: "600",
+            whiteSpace: "nowrap",
+          }}>
+            🔒 Change Password
+          </Link>
         </div>
 
         {/* Message Alert */}

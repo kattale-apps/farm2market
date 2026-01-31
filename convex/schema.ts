@@ -34,6 +34,7 @@ export default defineSchema({
     adminLevel: v.optional(v.union(v.literal("super"), v.literal("junior"))), // Admin hierarchy level. undefined means super admin (backward compatible).
     adminCategory: v.optional(v.union(v.literal("store"), v.literal("message"), v.literal("community"))), // Junior admin category (store delivery vs message support vs community oversight)
     allowedStorageLocationIds: v.optional(v.array(v.id("storageLocations"))), // Storage locations junior admin can access. Only applies to junior admins.
+    serviceLevel: v.optional(v.union(v.literal("Standard"), v.literal("Premium"))), // Service tier for community admins (Standard = 5 exports/month, Premium = unlimited). Only applies to community admins.
     // Location and farm profile (for farmers)
     districtId: v.optional(v.id("districts")), // District where farmer is located
     subcountyId: v.optional(v.id("subcounties")), // Subcounty where farmer is located

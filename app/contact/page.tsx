@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { ThreadView } from "../components/messages/ThreadView";
 
 /**
  * Contact Us Page
  * 
- * Allows users to contact Farm2Market Uganda support
+ * For community admins: Direct messaging with SuperAdmin
+ * For other users: Contact form
  */
 
 export default function ContactPage() {
@@ -16,6 +18,7 @@ export default function ContactPage() {
   const [message, setMessage] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -25,6 +28,70 @@ export default function ContactPage() {
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
+
+  // Get current user from localStorage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("pilot_user");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          setCurrentUser(parsed);
+        }
+      } catch (err) {
+        console.error("Failed to parse pilot_user", err);
+      }
+    }
+  }, []);
+  const isCommunityAdmin = currentUser?.role === "admin" && 
+    currentUser?.adminLevel === "junior" && 
+    currentUser?.adminCategory === "community";
+  // For community admins: Show direct chat with superadmin
+  if (isCommunityAdmin && currentUser?.userId) {
+    return (
+      <main style={{
+        padding: isMobile ? "1rem" : "clamp(2rem, 5vw, 4rem)",
+        maxWidth: "900px",
+        margin: "0 auto",
+        minHeight: "100vh",
+        background: "rgba(255, 255, 255, 0.95)",
+        borderRadius: isMobile ? "0" : "12px",
+        boxShadow: isMobile ? "none" : "0 2px 8px rgba(0,0,0,0.1)",
+        marginTop: isMobile ? "0" : "2rem",
+        marginBottom: isMobile ? "0" : "2rem"
+      }}>
+        <div style={{
+          marginBottom: "2rem",
+          paddingBottom: "1rem",
+          borderBottom: "2px solid #2e7d32"
+        }}>
+          <h1 style={{
+            fontSize: isMobile ? "clamp(1.5rem, 6vw, 2.5rem)" : "2.5rem",
+            color: "#2c2c2c",
+            fontWeight: "800",
+            fontFamily: '"Montserrat", sans-serif',
+            letterSpacing: "-0.03em",
+            marginBottom: "0.5rem"
+          }}>
+            Support Chat
+          </h1>
+          <p style={{
+            color: "#666",
+            fontSize: isMobile ? "0.9rem" : "1rem"
+          }}>
+            Chat directly with Farm2Market Uganda SuperAdmin
+          </p>
+        </div>
+
+        <div style={{ maxWidth: "100%" }}>
+          <ThreadView 
+            userId={currentUser.userId as any} 
+            utid="SUPPORT"
+          />
+        </div>
+      </main>
+    );
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

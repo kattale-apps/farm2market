@@ -170,7 +170,7 @@ export default function Home() {
               onMouseEnter={(e) => e.currentTarget.style.background = "#0f172a"}
               onMouseLeave={(e) => e.currentTarget.style.background = "#111827"}
             >
-              Download APK
+              Download APP
             </a>
             <a
               href="/contact"

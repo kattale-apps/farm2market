@@ -478,7 +478,7 @@ export default function LoginPage() {
               onMouseEnter={(e) => (e.currentTarget.style.background = "#2e7d32")}
               onMouseLeave={(e) => (e.currentTarget.style.background = "#4caf50")}
             >
-              📥 Download APK
+              📥 Download APP
             </a>
           </div>
           <p style={{ fontSize: "0.8rem", color: "#666", marginTop: "1rem" }}>

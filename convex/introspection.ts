@@ -14,6 +14,7 @@
 
 import { v } from "convex/values";
 import { query } from "./_generated/server";
+import { getAll } from "./_generated/engine/api";
 import { Id } from "./_generated/dataModel";
 
 /**
@@ -21,12 +22,16 @@ import { Id } from "./_generated/dataModel";
  */
 async function verifyAdmin(ctx: any, adminId: Id<"users">) {
   const user = await ctx.db.get(adminId);
+
   if (!user) {
     console.error(`[verifyAdmin] User not found: ${adminId}`);
     throw new Error("User is not an admin");
   }
+
   if (user.role !== "admin") {
     console.error(`[verifyAdmin] User ${adminId} is not an admin. Role: ${user.role}`);
+
+    console.error(`[verifyAdmin] User object:`, user); // Dump entire object
     throw new Error("User is not an admin");
   }
   return user;
@@ -45,6 +50,11 @@ export const getAllActiveUTIDs = query({
     offset: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    console.log("[getAllUsers] Called with args:", args); // Log the arguments
+    
+    if (!args.adminId) {
+      throw new Error("Admin ID is missing in getAllUsers");
+    }
     const adminUser = await verifyAdmin(ctx, args.adminId);
     const isAdminSuper = adminUser.adminLevel === "super" || adminUser.adminLevel === undefined;
 
@@ -869,6 +879,7 @@ export const getAllUsers = query({
         farmSizeAcres: user.farmSizeAcres,
       } : {}),
     }));
+
   },
 });
 

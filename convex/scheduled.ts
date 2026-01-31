@@ -83,15 +83,14 @@ export const checkExpiredUTIDs = internalMutation({
         const expirationUtid = generateUTID("system");
 
         // ATOMIC OPERATION: Unlock unit and reverse wallet entry
-        // Step 1: Unlock the unit and mark as expired
+        // Step 1: Mark unit as cancelled and archived (instead of available)
         await ctx.db.patch(unit._id, {
-          status: "available",
-          lockedBy: undefined,
-          lockedAt: undefined,
-          lockUtid: undefined,
-          deliveryDeadline: undefined,
+          status: "cancelled", // Unit is removed from circulation
           deliveryStatus: "cancelled", // Mark as cancelled due to expiration
+          archived: true, // Mark as archived to read-only
+          archivedAt: now,
           activeNegotiationId: undefined,
+          // We keep lockedBy/lockUtid for audit trail history
         });
 
         // Step 2: Reverse wallet ledger entry (unlock capital)
@@ -128,6 +127,7 @@ export const checkExpiredUTIDs = internalMutation({
 
         const availableCount = allUnits.filter((u: any) => u.status === "available").length;
         const lockedCount = allUnits.filter((u: any) => u.status === "locked").length;
+        const deliveredCount = allUnits.filter((u: any) => u.status === "delivered").length;
 
         if (availableCount > 0 && lockedCount === 0) {
           await ctx.db.patch(listing._id, {
@@ -136,6 +136,11 @@ export const checkExpiredUTIDs = internalMutation({
         } else if (lockedCount > 0) {
           await ctx.db.patch(listing._id, {
             status: "partially_locked",
+          });
+        } else if (availableCount === 0 && lockedCount === 0 && deliveredCount === 0) {
+          // If all units are cancelled (and none delivered), cancel the listing
+          await ctx.db.patch(listing._id, {
+            status: "cancelled",
           });
         }
 

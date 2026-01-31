@@ -5,6 +5,7 @@ import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import FarmSizePreview from "../../components/FarmSizePreview";
 
 const REGION_GROUPS = [
   {
@@ -642,6 +643,16 @@ export default function FarmerOnboardingPage() {
                 </p>
               </div>
             )}
+
+            {/* Read-only conversion preview (acres) */}
+            <FarmSizePreview
+              unit={farmSizeUnit}
+              length={farmSizeLength}
+              width={farmSizeWidth}
+              omwigo={farmSizeOmwigo}
+              emiigo={farmSizeEmiigo}
+            />
+
           </div>
 
           <button

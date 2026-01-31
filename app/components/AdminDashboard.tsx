@@ -385,6 +385,25 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
               🌾 Community Dashboard
             </a>
           )}
+          {isSuperAdmin && (
+            <a
+              href="/admin/service-levels"
+              style={{
+                padding: "0.6rem 1rem",
+                background: "#ff9800",
+                color: "#fff",
+                border: "none",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "0.9rem",
+                textDecoration: "none",
+                display: "inline-block",
+              }}
+            >
+              ⚙️ Service Levels
+            </a>
+          )}
           <span style={{ fontSize: "0.85rem", color: "#2e7d32", fontWeight: "600" }}>
             ● Live
           </span>

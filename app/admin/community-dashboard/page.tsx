@@ -43,6 +43,12 @@ export default function CommunityDashboardPage() {
   // Query communities (filtered to show only the user's community if they're a community admin)
   const communities = useQuery(api.communities.getActiveCommunities, userId ? { userId } : "skip");
 
+  // Query export quota
+  const exportQuota = useQuery(api.communities.getExportQuota, userId ? { userId } : "skip");
+
+  // Mutation for logging exports
+  const logExport = useMutation(api.communities.logExport);
+
   // For community admin: get their managed community
   const userCommunities = useMemo(() => {
     if (!communities || userAdminCategory !== "community") return [];
@@ -275,41 +281,102 @@ export default function CommunityDashboardPage() {
                     </table>
                   </div>
 
+                  {/* Export Quota Info */}
+                  {exportQuota && (
+                    <div style={{
+                      marginTop: "1rem",
+                      padding: "1rem",
+                      background: exportQuota.remaining === 0 && exportQuota.serviceLevel === "Standard" ? "#ffebee" : "#e3f2fd",
+                      borderRadius: "8px",
+                      border: `1px solid ${exportQuota.remaining === 0 && exportQuota.serviceLevel === "Standard" ? "#ffcdd2" : "#bbdefb"}`,
+                    }}>
+                      <p style={{
+                        margin: "0 0 0.5rem 0",
+                        fontSize: "0.9rem",
+                        color: "#1565c0",
+                        fontWeight: "600",
+                      }}>
+                        📊 Service Level: {exportQuota.serviceLevel}
+                      </p>
+                      {exportQuota.serviceLevel === "Standard" ? (
+                        <p style={{
+                          margin: "0",
+                          fontSize: "0.85rem",
+                          color: exportQuota.remaining === 0 ? "#c62828" : "#666",
+                        }}>
+                          Exports used this month: {exportQuota.used}/{exportQuota.limit} | Remaining: <strong>{exportQuota.remaining}</strong>
+                        </p>
+                      ) : (
+                        <p style={{
+                          margin: "0",
+                          fontSize: "0.85rem",
+                          color: "#2e7d32",
+                        }}>
+                          ✓ Unlimited exports
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   {/* Export Button */}
                   <div style={{ marginTop: "1.5rem" }}>
                     <button
-                      onClick={() => {
-                        if (!community.members) return;
-                        const exportData = community.members.map(m => ({
-                          "Farmer Name": m.alias,
-                          "Phone": m.phoneNumber || "",
-                          "Email": m.email || "",
-                        }));
-                        const ws = XLSX.utils.json_to_sheet(exportData);
-                        const wb = XLSX.utils.book_new();
-                        XLSX.utils.book_append_sheet(wb, ws, "Members");
-                        XLSX.writeFile(wb, `${community.name}-members.xlsx`);
-                        setMessage({ type: "success", text: "Members exported successfully!" });
+                      onClick={async () => {
+                        if (!userId || !community.members) return;
+
+                        setLoading(true);
+                        setMessage(null);
+
+                        try {
+                          // Check quota and log export
+                          await logExport({
+                            userId,
+                            exportType: "community_members",
+                            dataCount: community.members.length,
+                          });
+
+                          // Export data
+                          const exportData = community.members.map(m => ({
+                            "Farmer Name": m.alias,
+                            "Phone": m.phoneNumber || "",
+                            "Email": m.email || "",
+                          }));
+                          const ws = XLSX.utils.json_to_sheet(exportData);
+                          const wb = XLSX.utils.book_new();
+                          XLSX.utils.book_append_sheet(wb, ws, "Members");
+                          XLSX.writeFile(wb, `${community.name}-members.xlsx`);
+                          setMessage({ type: "success", text: "Members exported successfully!" });
+                        } catch (error: any) {
+                          setMessage({ type: "error", text: error.message || "Failed to export members" });
+                        } finally {
+                          setLoading(false);
+                        }
                       }}
+                      disabled={loading || (exportQuota?.remaining === 0 && exportQuota?.serviceLevel === "Standard")}
                       style={{
                         padding: "0.75rem 1.5rem",
-                        background: "#2196f3",
+                        background: (exportQuota?.remaining === 0 && exportQuota?.serviceLevel === "Standard") || loading ? "#ccc" : "#2196f3",
                         color: "#fff",
                         border: "none",
                         borderRadius: "8px",
                         fontSize: "0.95rem",
                         fontWeight: "600",
-                        cursor: "pointer",
+                        cursor: (exportQuota?.remaining === 0 && exportQuota?.serviceLevel === "Standard") || loading ? "not-allowed" : "pointer",
+                        opacity: (exportQuota?.remaining === 0 && exportQuota?.serviceLevel === "Standard") || loading ? 0.6 : 1,
                         transition: "all 0.3s ease",
                       }}
                       onMouseEnter={(e) => {
-                        (e.target as HTMLButtonElement).style.background = "#1976d2";
+                        if (!loading && !(exportQuota?.remaining === 0 && exportQuota?.serviceLevel === "Standard")) {
+                          (e.target as HTMLButtonElement).style.background = "#1976d2";
+                        }
                       }}
                       onMouseLeave={(e) => {
-                        (e.target as HTMLButtonElement).style.background = "#2196f3";
+                        if (!loading && !(exportQuota?.remaining === 0 && exportQuota?.serviceLevel === "Standard")) {
+                          (e.target as HTMLButtonElement).style.background = "#2196f3";
+                        }
                       }}
                     >
-                      📥 Export Members (Excel)
+                      {loading ? "Exporting..." : "📥 Export Members (Excel)"}
                     </button>
                   </div>
                 </div>

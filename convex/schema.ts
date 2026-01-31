@@ -652,4 +652,21 @@ export default defineSchema({
   })
     .index("by_listing", ["listingId"])
     .index("by_community", ["communityId"]),
+
+  /**
+   * Export logs for quota tracking
+   * - Track exports per user (mainly for community admins)
+   * - Standard tier: 5 exports per month
+   * - Premium tier: unlimited exports
+   */
+  exportLogs: defineTable({
+    userId: v.id("users"), // User who exported
+    exportType: v.string(), // "community_members", "excel", "pdf", etc.
+    exportedAt: v.number(), // Timestamp
+    month: v.string(), // "YYYY-MM" for monthly quota tracking
+    dataCount: v.number(), // Number of rows/records exported
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_month", ["userId", "month"])
+    .index("by_exported_at", ["exportedAt"]),
 });

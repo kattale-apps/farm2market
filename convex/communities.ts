@@ -647,3 +647,182 @@ export const notifyCommunity = mutation({
     return { utid, notifiedCount: memberships.length };
   },
 });
+
+/**
+ * Get export quota info for a user
+ * - Returns remaining exports for current month
+ * - Standard tier: 5 per month, Premium: unlimited
+ */
+export const getExportQuota = query({
+  args: {
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    // Get user
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    // Get service level (default to Premium if not specified, or Standard if explicitly set)
+    const serviceLevel = user.serviceLevel || "Premium";
+
+    // Premium = unlimited
+    if (serviceLevel === "Premium") {
+      return {
+        serviceLevel: "Premium",
+        limit: -1, // -1 means unlimited
+        used: 0,
+        remaining: -1,
+      };
+    }
+
+    // Standard = 5 per month
+    const now = getUgandaTime();
+    const currentMonth = new Date(now).toISOString().slice(0, 7); // "YYYY-MM"
+
+    const exportsThisMonth = await ctx.db
+      .query("exportLogs")
+      .withIndex("by_user_month", (q) => q.eq("userId", args.userId).eq("month", currentMonth))
+      .collect();
+
+    const usedCount = exportsThisMonth.length;
+    const limit = 5;
+    const remaining = Math.max(0, limit - usedCount);
+
+    return {
+      serviceLevel: "Standard",
+      limit,
+      used: usedCount,
+      remaining,
+      canExport: remaining > 0,
+    };
+  },
+});
+
+/**
+ * Check if user can export and log the export
+ */
+export const logExport = mutation({
+  args: {
+    userId: v.id("users"),
+    exportType: v.string(),
+    dataCount: v.number(),
+  },
+  handler: async (ctx, args) => {
+    // Get user
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    // Get service level
+    const serviceLevel = user.serviceLevel || "Premium";
+
+    // Premium users can always export
+    if (serviceLevel === "Premium") {
+      const now = getUgandaTime();
+      const currentMonth = new Date(now).toISOString().slice(0, 7);
+      
+      await ctx.db.insert("exportLogs", {
+        userId: args.userId,
+        exportType: args.exportType,
+        exportedAt: now,
+        month: currentMonth,
+        dataCount: args.dataCount,
+      });
+      
+      return { success: true, remaining: -1, message: "Export successful" };
+    }
+
+    // Standard users: check quota
+    const now = getUgandaTime();
+    const currentMonth = new Date(now).toISOString().slice(0, 7);
+
+    const exportsThisMonth = await ctx.db
+      .query("exportLogs")
+      .withIndex("by_user_month", (q) => q.eq("userId", args.userId).eq("month", currentMonth))
+      .collect();
+
+    const usedCount = exportsThisMonth.length;
+    const limit = 5;
+
+    if (usedCount >= limit) {
+      throw new Error(`Export limit reached. You have used all ${limit} exports for this month. Upgrade to Premium for unlimited exports.`);
+    }
+
+    // Log the export
+    await ctx.db.insert("exportLogs", {
+      userId: args.userId,
+      exportType: args.exportType,
+      exportedAt: now,
+      month: currentMonth,
+      dataCount: args.dataCount,
+    });
+
+    const remaining = limit - usedCount - 1;
+    return {
+      success: true,
+      remaining,
+      message: `Export successful. ${remaining} export${remaining !== 1 ? "s" : ""} remaining this month.`,
+    };
+  },
+});
+
+/**
+ * Set service level for a user (SuperAdmin only)
+ */
+export const setUserServiceLevel = mutation({
+  args: {
+    adminId: v.id("users"),
+    userId: v.id("users"),
+    serviceLevel: v.union(v.literal("Standard"), v.literal("Premium")),
+  },
+  handler: async (ctx, args) => {
+    // Verify admin is SuperAdmin
+    const adminCheck = await verifyAdminRole({
+      userId: args.adminId,
+      db: ctx.db,
+    });
+    if (!adminCheck.authorized) {
+      throw new Error("Only admins can set service levels");
+    }
+
+    const adminUser = await ctx.db.get(args.adminId);
+    if (!adminUser || adminUser.role !== "admin") {
+      throw new Error("User is not an admin");
+    }
+
+    if (!isSuperAdmin(adminUser)) {
+      throw new Error("Only SuperAdmin can set service levels");
+    }
+
+    // Get target user
+    const targetUser = await ctx.db.get(args.userId);
+    if (!targetUser) {
+      throw new Error("User not found");
+    }
+
+    // Only community admins should have service levels
+    if (targetUser.role !== "admin" || targetUser.adminCategory !== "community") {
+      throw new Error("Service levels only apply to community admins");
+    }
+
+    // Update service level
+    await ctx.db.patch(args.userId, {
+      serviceLevel: args.serviceLevel,
+    });
+
+    // Log admin action
+    const utid = generateUTID(adminUser.role);
+    await ctx.db.insert("adminActions", {
+      adminId: args.adminId,
+      actionType: "set_service_level",
+      utid,
+      reason: `Set service level for user ${targetUser.alias} to ${args.serviceLevel}`,
+      timestamp: getUgandaTime(),
+    });
+
+    return { success: true, utid };
+  },
+});

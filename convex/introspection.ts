@@ -855,6 +855,7 @@ export const getAllUsers = query({
       customSpendCap: user.customSpendCap,
       adminLevel: user.adminLevel,
       adminCategory: user.adminCategory,
+      serviceLevel: user.serviceLevel,
       allowedStorageLocationIds: user.allowedStorageLocationIds,
       ...(user.role === "farmer" ? {
         districtId: user.districtId,

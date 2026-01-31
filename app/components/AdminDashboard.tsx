@@ -19,6 +19,22 @@ interface AdminDashboardProps {
   userId: Id<"users">;
 }
 
+/**
+ * Helper component to show/hide superadmin-only content
+ * Scalable pattern for future role-based visibility:
+ * - Doesn't render component if condition is false (better performance)
+ * - Explicit intent in JSX (future-proof for multiple admin levels)
+ */
+interface SuperAdminOnlyProps {
+  show: boolean;
+  children: React.ReactNode;
+}
+
+function SuperAdminOnly({ show, children }: SuperAdminOnlyProps) {
+  if (!show) return null;
+  return <>{children}</>;
+}
+
 export function AdminDashboard({ userId }: AdminDashboardProps) {
   const redFlags = useQuery(api.adminRedFlags.getRedFlagsSummary, { adminId: userId });
   const [utidPageOffset, setUtidPageOffset] = useState(0);
@@ -356,7 +372,8 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
         </div>
       </div>
 
-      {/* Red Flags Summary */}
+      {/* Red Flags Summary - Superadmin Only */}
+      <SuperAdminOnly show={isSuperAdmin}>
       <div style={{
         marginBottom: "2rem",
         padding: "clamp(1rem, 3vw, 1.5rem)",
@@ -418,8 +435,10 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           </div>
         )}
       </div>
+      </SuperAdminOnly>
 
-      {/* System Metrics - Today's Listings */}
+      {/* System Metrics - Today's Listings - Superadmin Only */}
+      <SuperAdminOnly show={isSuperAdmin}>
       <div style={{
         marginBottom: "2rem",
         padding: "clamp(1rem, 3vw, 1.5rem)",
@@ -678,8 +697,10 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           </div>
         )}
       </div>
+      </SuperAdminOnly>
 
-      {/* System UTIDs */}
+      {/* System UTIDs - Superadmin Only */}
+      <SuperAdminOnly show={isSuperAdmin}>
       <div style={{
         marginBottom: "2rem",
         padding: "clamp(1rem, 3vw, 1.5rem)",
@@ -1010,8 +1031,10 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           )}
         </div>
       )}
+      </SuperAdminOnly>
 
-      {/* Admin Inbox */}
+      {/* Admin Inbox - Superadmin Only */}
+      <SuperAdminOnly show={isSuperAdmin}>
       {adminInboxOpen && (
         <div
           id="admin-inbox"
@@ -1567,8 +1590,10 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
         )}
       </div>
       )}
+      </SuperAdminOnly>
 
-      {/* System Metrics */}
+      {/* System Metrics (second card) - Superadmin Only */}
+      <SuperAdminOnly show={isSuperAdmin}>
       <div style={{
         marginBottom: "2rem",
         padding: "clamp(1rem, 3vw, 1.5rem)",
@@ -1614,8 +1639,10 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           </div>
         </div>
       </div>
+      </SuperAdminOnly>
 
-      {/* Live Timeline */}
+      {/* Live Timeline - Superadmin Only */}
+      <SuperAdminOnly show={isSuperAdmin}>
       <div style={{
         marginBottom: "2rem",
         padding: "clamp(1rem, 3vw, 1.5rem)",
@@ -1716,8 +1743,10 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           )}
         </div>
       </div>
+      </SuperAdminOnly>
 
-      {/* System Controls - Maintenance Mode */}
+      {/* System Controls - Maintenance Mode - Superadmin Only */}
+      <SuperAdminOnly show={isSuperAdmin}>
       <div style={{
         padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
@@ -1899,8 +1928,10 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           </div>
         )}
       </div>
+      </SuperAdminOnly>
 
-      {/* Kilo-Shaving Rate Management */}
+      {/* Kilo-Shaving Rate Management - Superadmin Only */}
+      <SuperAdminOnly show={isSuperAdmin}>
       <div style={{
         marginBottom: "2rem",
         padding: "clamp(1rem, 3vw, 1.5rem)",
@@ -1943,8 +1974,10 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           </div>
         )}
       </div>
+      </SuperAdminOnly>
 
-      {/* Buyer Service Fee Management */}
+      {/* Buyer Service Fee Management - Superadmin Only */}
+      <SuperAdminOnly show={isSuperAdmin}>
       <div style={{
         marginBottom: "2rem",
         padding: "clamp(1rem, 3vw, 1.5rem)",
@@ -1990,8 +2023,10 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           </div>
         )}
       </div>
+      </SuperAdminOnly>
 
-      {/* Trader Spend Cap Management */}
+      {/* Trader Spend Cap Management - Superadmin Only */}
+      <SuperAdminOnly show={isSuperAdmin}>
       <div style={{
         marginBottom: "2rem",
         padding: "clamp(1rem, 3vw, 1.5rem)",
@@ -2029,8 +2064,10 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           </>
         )}
       </div>
+      </SuperAdminOnly>
 
-      {/* Produce Options Management */}
+      {/* Produce Options Management - Superadmin Only */}
+      <SuperAdminOnly show={isSuperAdmin}>
       <div style={{
         marginBottom: "2rem",
         padding: "clamp(1rem, 3vw, 1.5rem)",
@@ -2114,8 +2151,10 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           />
         )}
       </div>
+      </SuperAdminOnly>
 
-      {/* Storage Locations Management */}
+      {/* Storage Locations Management - Superadmin Only */}
+      <SuperAdminOnly show={isSuperAdmin}>
       <div style={{
         marginBottom: "2rem",
         padding: "clamp(1rem, 3vw, 1.5rem)",
@@ -2191,8 +2230,10 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           />
         )}
       </div>
+      </SuperAdminOnly>
 
-      {/* Demo Funds Deposit */}
+      {/* Demo Funds Deposit - Superadmin Only */}
+      <SuperAdminOnly show={isSuperAdmin}>
       <div style={{
         marginBottom: "2rem",
         padding: "clamp(1rem, 3vw, 1.5rem)",
@@ -2231,6 +2272,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           />
         )}
       </div>
+      </SuperAdminOnly>
 
       {/* Admin Account Creation (Super Admin Only) */}
       {isSuperAdmin && (

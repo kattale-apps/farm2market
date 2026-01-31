@@ -214,23 +214,38 @@ export default function FarmerProfilePage() {
 
   return (
     <div style={{ padding: "clamp(1rem, 4vw, 2rem)", maxWidth: "800px", margin: "0 auto" }}>
-      <div style={{ marginBottom: "2rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div style={{ marginBottom: "2rem", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
         <h1 style={{ fontSize: "clamp(1.5rem, 4vw, 2rem)", margin: 0, color: "#2c2c2c" }}>
           My Profile 👩🏾‍🌾
         </h1>
-        <Link
-          href="/"
-          style={{
-            padding: "0.5rem 1rem",
-            background: "#4CAF50",
-            color: "white",
-            textDecoration: "none",
-            borderRadius: "8px",
-            fontSize: "0.9rem",
-          }}
-        >
-          ← Back to Dashboard
-        </Link>
+        <div style={{ display: "flex", gap: "1rem" }}>
+          <Link
+            href="/farmer/communities"
+            style={{
+              padding: "0.5rem 1rem",
+              background: "#1976d2",
+              color: "white",
+              textDecoration: "none",
+              borderRadius: "8px",
+              fontSize: "0.9rem",
+            }}
+          >
+            🌾 Communities
+          </Link>
+          <Link
+            href="/"
+            style={{
+              padding: "0.5rem 1rem",
+              background: "#4CAF50",
+              color: "white",
+              textDecoration: "none",
+              borderRadius: "8px",
+              fontSize: "0.9rem",
+            }}
+          >
+            ← Back to Dashboard
+          </Link>
+        </div>
       </div>
 
       {message && (

@@ -14,7 +14,6 @@
 
 import { v } from "convex/values";
 import { query } from "./_generated/server";
-import { getAll } from "./_generated/engine/api";
 import { Id } from "./_generated/dataModel";
 
 /**
@@ -28,14 +27,11 @@ async function verifyAdmin(ctx: any, adminId: Id<"users">) {
     throw new Error("User is not an admin");
   }
 
-<<<<<<< HEAD
   if (user.role === "farmer") {
     // Allow the farmer to perform the introspection
     return user;
   }
 
-=======
->>>>>>> a9f1ac113bcf033037952ae4744241dc3bb52660
   if (user.role !== "admin") {
     console.error(`[verifyAdmin] User ${adminId} is not an admin. Role: ${user.role}`);
 

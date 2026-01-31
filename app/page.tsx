@@ -237,7 +237,7 @@ export default function Home() {
                   e.currentTarget.style.background = "#1976d2";
                 }}
               >
-                {isSuperAdmin ? "Create A Growers Community" : "Join A Growers Community"}
+                {isSuperAdmin ? "Create a Community" : "Join A Growers Community"}
               </a>
             )}
           </div>

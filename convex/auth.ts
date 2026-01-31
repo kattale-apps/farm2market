@@ -472,8 +472,10 @@ export const changePassword = mutation({
     // Verify current password
     if (!user.passwordHash) throw new Error("User does not have a password set");
 
-    const isValid = await comparePassword(args.currentPassword, user.passwordHash);
-    if (!isValid) throw new Error("Current password is incorrect");
+    const currentHash = simpleHash(args.currentPassword.trim());
+    if (user.passwordHash !== currentHash) {
+      throw new Error("Current password is incorrect");
+    }
 
     // Validate new password
     if (args.newPassword.length < 8) {
@@ -485,7 +487,7 @@ export const changePassword = mutation({
     }
 
     // Hash new password
-    const newHash = await hashPassword(args.newPassword);
+    const newHash = simpleHash(args.newPassword.trim());
 
     // Update user
     await ctx.db.patch(args.userId, {

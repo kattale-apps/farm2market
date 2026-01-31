@@ -283,7 +283,7 @@ export default function CommunitiesPage() {
                   checked={formData.isGlobal}
                   onChange={(e) => setFormData({ ...formData, isGlobal: e.target.checked, geoLocked: e.target.checked ? false : formData.geoLocked })}
                 />
-                <span>Global Community (accessible to all farmers)</span>
+                <span>Global Community (accessible to all {formData.communityType}s)</span>
               </label>
             </div>
             <div style={{ marginBottom: "1rem" }}>

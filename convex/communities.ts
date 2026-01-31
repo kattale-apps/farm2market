@@ -235,7 +235,7 @@ export const createCommunity = mutation({
     districtIds: v.optional(v.array(v.id("districts"))),
     subcountyIds: v.optional(v.array(v.id("subcounties"))),
     parishIds: v.optional(v.array(v.id("parishes"))),
-    communityType: v.optional(v.union(v.literal("farmer"), v.literal("trader"), v.literal("buyer"))),
+    communityType: v.union(v.literal("farmer"), v.literal("trader"), v.literal("buyer")),
     assignAdminId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {

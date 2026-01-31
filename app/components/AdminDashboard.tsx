@@ -366,6 +366,25 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           >
             📬 Inbox {inboxUnreadCount > 0 ? `(${inboxUnreadCount})` : ""}
           </button>
+          {isCommunityAdmin && (
+            <a
+              href="/admin/community-dashboard"
+              style={{
+                padding: "0.6rem 1rem",
+                background: "#4CAF50",
+                color: "#fff",
+                border: "none",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "0.9rem",
+                textDecoration: "none",
+                display: "inline-block",
+              }}
+            >
+              🌾 Community Dashboard
+            </a>
+          )}
           <span style={{ fontSize: "0.85rem", color: "#2e7d32", fontWeight: "600" }}>
             ● Live
           </span>

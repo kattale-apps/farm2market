@@ -8,19 +8,38 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 export default function FarmerCommunitiesPage() {
+  // Inject responsive styles for farmer communities (client-side only)
+  useEffect(() => {
+    const style = document.createElement("style");
+    style.innerHTML = `
+      @media (max-width: 700px) {
+        .farmer-communities-grid {
+          grid-template-columns: 1fr !important;
+          gap: 1rem !important;
+        }
+        .farmer-communities-header {
+          padding: 1rem !important;
+          font-size: 1.2rem !important;
+        }
+      }
+      @media (min-width: 701px) {
+        .farmer-communities-grid {
+          grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)) !important;
+          gap: 2rem !important;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+    return () => { document.head.removeChild(style); };
+  }, []);
+
   const router = useRouter();
   const [userId, setUserId] = useState<Id<"users"> | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
-
-  // Query communities
   const communities = useQuery(api.communities.getActiveCommunities, userId ? { userId } : "skip");
-
-  // Mutations
   const joinCommunity = useMutation(api.communities.joinCommunity);
   const leaveCommunity = useMutation(api.communities.leaveCommunity);
-
-  // Get user ID from localStorage
   useEffect(() => {
     const storedUser = localStorage.getItem("pilot_user");
     if (storedUser) {
@@ -38,14 +57,11 @@ export default function FarmerCommunitiesPage() {
 
   const handleJoinCommunity = async (communityId: Id<"communities">) => {
     if (!userId) return;
-
     setLoadingAction(`join-${communityId}`);
     setMessage(null);
-
     try {
       await joinCommunity({ farmerId: userId, communityId });
       setMessage({ type: "success", text: "Successfully joined the community!" });
-      // The query will automatically update
     } catch (error: any) {
       setMessage({ type: "error", text: error.message || "Failed to join community" });
     } finally {
@@ -55,14 +71,11 @@ export default function FarmerCommunitiesPage() {
 
   const handleLeaveCommunity = async (communityId: Id<"communities">) => {
     if (!userId) return;
-
     setLoadingAction(`leave-${communityId}`);
     setMessage(null);
-
     try {
       await leaveCommunity({ farmerId: userId, communityId });
       setMessage({ type: "success", text: "Successfully left the community" });
-      // The query will automatically update
     } catch (error: any) {
       setMessage({ type: "error", text: error.message || "Failed to leave community" });
     } finally {
@@ -84,16 +97,49 @@ export default function FarmerCommunitiesPage() {
     <div
       style={{
         minHeight: "100vh",
-        background: `url('/backgrounds/farm-bg.jpg') center center/cover no-repeat, linear-gradient(180deg, #f5fbe7 0%, #e8f5e9 100%)`,
-        padding: "2rem",
+        width: "100vw",
+        background: `linear-gradient(180deg, #f5fbe7 0%, #e8f5e9 100%)`,
+        position: "relative",
+        overflowX: "hidden",
       }}
     >
-      <div style={{
-        maxWidth: "1200px",
-        margin: "0 auto",
-      }}>
+      {/* Responsive background image */}
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "100vw",
+          height: "40vh",
+          minHeight: 220,
+          background: `url('/backgrounds/farm-bg.jpg') center center/cover no-repeat`,
+          zIndex: 0,
+          filter: "brightness(0.7)",
+        }}
+      />
+      <div
+        style={{
+          maxWidth: 1200,
+          margin: "0 auto",
+          position: "relative",
+          zIndex: 1,
+          padding: "clamp(1rem, 4vw, 2rem)",
+        }}
+      >
         {/* Header */}
-        <div style={{ marginBottom: "2rem" }}>
+        <div
+          style={{
+            marginBottom: "2rem",
+            background: "#fff",
+            borderRadius: 16,
+            boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+            padding: "1.5rem 1.2rem 1.2rem 1.2rem",
+            maxWidth: 700,
+            marginLeft: "auto",
+            marginRight: "auto",
+            marginTop: 24,
+          }}
+        >
           <Link href="/farmer/profile" style={{
             fontSize: "0.9rem",
             color: "#1976d2",
@@ -157,12 +203,15 @@ export default function FarmerCommunitiesPage() {
             </p>
           </div>
         ) : (
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(350px, 1fr))",
-            gap: "2rem",
-            marginBottom: "2rem",
-          }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr",
+              gap: "1.5rem",
+              marginBottom: "2rem",
+            }}
+            className="farmer-communities-grid"
+          >
             {communities.map((community) => (
               <div
                 key={community.id}
@@ -173,7 +222,6 @@ export default function FarmerCommunitiesPage() {
                     ? "linear-gradient(135deg, #fffde7 0%, #f9fbe7 100%)"
                     : "linear-gradient(135deg, #f1f8e9 0%, #dcedc8 100%)",
                   borderRadius: "18px",
-                  // boxShadow removed (duplicate)
                   overflow: "hidden",
                   transition: "all 0.3s ease",
                   display: "flex",

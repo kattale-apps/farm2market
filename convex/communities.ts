@@ -70,12 +70,13 @@ import { Id } from "./_generated/dataModel";
 /**
  * Check if admin is SuperAdmin
  */
-function isSuperAdmin(user: { adminLevel?: "super" | "junior" }): boolean {
-  return user.adminLevel === "super" || user.adminLevel === undefined;
+function isSuperAdmin(user: { adminLevel?: "super" | "junior"; adminCategory?: string }): boolean {
+  return user.adminLevel === "super" || (user.adminLevel === undefined && !user.adminCategory);
 }
 
-function isCommunityAdmin(user: { adminLevel?: "super" | "junior"; adminCategory?: "store" | "message" | "community" }): boolean {
-  return user.adminLevel === "junior" && user.adminCategory === "community";
+function isCommunityAdmin(user: { adminLevel?: "super" | "junior"; adminCategory?: string }): boolean {
+  return (user.adminLevel === "junior" && user.adminCategory === "community") ||
+         (user.adminLevel === undefined && user.adminCategory === "community");
 }
 
 const normalizeName = (name: string) => name.trim().toLowerCase();
@@ -190,7 +191,7 @@ export const getActiveCommunities = query({
       if (isSuperAdminCheck) return true; // SuperAdmins see all
       
       // Junior community admins see only their assigned communities
-      const isJuniorCommunityAdminCheck = userRecord && userRecord.adminLevel === "junior" && userRecord.adminCategory === "community";
+      const isJuniorCommunityAdminCheck = userRecord && isCommunityAdmin(userRecord);
       if (isJuniorCommunityAdminCheck) {
         const assignedIds = (userRecord as any).assignedCommunityIds || [];
         return assignedIds.includes(c._id);

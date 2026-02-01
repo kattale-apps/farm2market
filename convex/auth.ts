@@ -423,6 +423,7 @@ export const getUser = query({
       createdAt: user.createdAt,
       adminLevel: user.adminLevel,
       adminCategory: user.adminCategory,
+      assignedCommunityIds: user.assignedCommunityIds,
     };
   },
 });

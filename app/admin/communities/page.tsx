@@ -49,8 +49,8 @@ export default function CommunitiesPage() {
   const updateCommunity = useMutation(api.communities.updateCommunity);
   const deleteCommunity = useMutation(api.communities.deleteCommunity);
   const adminLevel = (user as any)?.adminLevel;
-  const isSuperAdmin = user?.role === "admin" && (adminLevel === "super" || adminLevel === undefined);
-  const isCommunityAdmin = user?.role === "admin" && adminLevel === "junior" && (user as any)?.adminCategory === "community";
+  const isSuperAdmin = user?.role === "admin" && (adminLevel === "super" || (adminLevel === undefined && !(user as any)?.adminCategory));
+  const isCommunityAdmin = user?.role === "admin" && (adminLevel === "junior" || (adminLevel === undefined && (user as any)?.adminCategory === "community"));
   const canViewCommunityMembers = isSuperAdmin || isCommunityAdmin;
   const communityAdmins = (allUsers || []).filter((u: any) => u.role === "admin" && u.adminCategory === "community");
   const formatMemberContact = (member: any) => {

@@ -217,7 +217,7 @@ export default function Home() {
             </a>
             {(user?.role === "farmer" || isSuperAdmin) && (
               <a
-                href="/admin/communities"
+                href={isSuperAdmin ? "/admin/communities" : "/farmer/communities"}
                 style={{
                   display: "inline-block",
                   padding: "0.5rem 1rem",

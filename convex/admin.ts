@@ -73,7 +73,6 @@ async function logAdminAction(
     actionType,
     utid,
     reason,
-    targetUtid,
     metadata,
     timestamp: getUgandaTime(),
   });

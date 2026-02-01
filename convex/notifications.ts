@@ -46,12 +46,11 @@ async function logAdminNotificationAction(
     actionType: `send_notification_${notificationType}`,
     utid,
     reason,
-    targetUtid: metadata?.targetUtid,
     metadata: {
       notificationType,
       ...metadata,
     },
-        timestamp: getUgandaTime(),
+    timestamp: getUgandaTime(),
   });
   return utid;
 }
@@ -347,7 +346,7 @@ export const sendRoleBasedNotification = mutation({
 export const sendUTIDSpecificNotification = mutation({
   args: {
     adminId: v.id("users"),
-    targetUtid: v.string(), // UTID to find related users
+    utid: v.string(), // UTID to find related users
     title: v.string(),
     message: v.string(),
     reason: v.string(), // Required reason for sending notification
@@ -356,10 +355,10 @@ export const sendUTIDSpecificNotification = mutation({
     await verifyAdmin(ctx, args.adminId);
 
     // Find all users related to this UTID
-    const relatedUsers = await findUsersByUTID(ctx, args.targetUtid);
+    const relatedUsers = await findUsersByUTID(ctx, args.utid);
 
     if (relatedUsers.length === 0) {
-      throw new Error(`No users found related to UTID: ${args.targetUtid}`);
+      throw new Error(`No users found related to UTID: ${args.utid}`);
     }
 
     const now = getUgandaTime();
@@ -373,7 +372,7 @@ export const sendUTIDSpecificNotification = mutation({
         type: "utid_specific",
         title: args.title,
         message: args.message,
-        utid: args.targetUtid, // Reference to the transaction UTID
+        utid: args.utid, // Reference to the transaction UTID
         read: false,
         createdAt: getUgandaTime(),
       });
@@ -400,7 +399,7 @@ export const sendUTIDSpecificNotification = mutation({
       "utid_specific",
       args.reason,
       {
-        targetUtid: args.targetUtid,
+        utid: args.utid,
         title: args.title,
         message: args.message,
         notificationUtid,
@@ -411,7 +410,7 @@ export const sendUTIDSpecificNotification = mutation({
 
     return {
       notificationUtid,
-      targetUtid: args.targetUtid,
+      utid: args.utid,
       recipientsCount: relatedUsers.length,
       recipientRoles: relatedUsers.map((u) => u.role),
       notificationIds: notificationIds.length,
@@ -709,7 +708,7 @@ export const getNotificationHistory = query({
       .collect();
 
     const notificationActions = adminActions.filter((action) =>
-      action.actionType.startsWith("send_notification_")
+      action.actionType?.startsWith("send_notification_")
     );
 
     return {
@@ -730,7 +729,7 @@ export const getNotificationHistory = query({
         actionType: action.actionType,
         utid: action.utid,
         reason: action.reason,
-        targetUtid: action.targetUtid,
+        // targetUtid removed
         timestamp: action.timestamp,
         metadata: action.metadata,
       })),

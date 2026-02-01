@@ -44,9 +44,8 @@ export const deleteCommunity = mutation({
     const utid = generateUTID(adminUser.role);
     await ctx.db.insert("adminActions", {
       adminId: args.adminId,
-      actionType: "delete_community",
-      utid,
-      reason: `Deleted community: ${args.communityId}`,
+      action: "delete_community",
+      details: `Deleted community: ${args.communityId} (UTID: ${utid})`,
       timestamp: getUgandaTime(),
     });
     return { success: true, utid };
@@ -400,9 +399,8 @@ export const createCommunity = mutation({
     // Log admin action
     await ctx.db.insert("adminActions", {
       adminId: args.adminId,
-      actionType: "create_community",
-      utid,
-      reason: `Created community: ${args.name}`,
+      action: "create_community",
+      details: `Created community: ${args.name} (UTID: ${utid})`,
       timestamp: getUgandaTime(),
     });
 
@@ -524,9 +522,8 @@ export const updateCommunity = mutation({
     const utid = generateUTID(adminUser.role);
     await ctx.db.insert("adminActions", {
       adminId: args.adminId,
-      actionType: "update_community",
-      utid,
-      reason: `Updated community: ${community.name}`,
+      action: "update_community",
+      details: `Updated community: ${community.name} (UTID: ${utid})`,
       timestamp: getUgandaTime(),
     });
 
@@ -728,9 +725,8 @@ export const notifyCommunity = mutation({
     // Log admin action
     await ctx.db.insert("adminActions", {
       adminId: args.adminId,
-      actionType: "notify_community",
-      utid,
-      reason: `Sent notification to community: ${args.communityId}`,
+      action: "notify_community",
+      details: `Sent notification to community: ${args.communityId} (UTID: ${utid})`,
       timestamp: getUgandaTime(),
     });
 
@@ -907,9 +903,8 @@ export const setUserServiceLevel = mutation({
     const utid = generateUTID(adminUser.role);
     await ctx.db.insert("adminActions", {
       adminId: args.adminId,
-      actionType: "set_service_level",
-      utid,
-      reason: `Set service level for user ${targetUser.alias} to ${args.serviceLevel}`,
+      action: "set_service_level",
+      details: `Set service level for user ${targetUser.alias} to ${args.serviceLevel} (UTID: ${utid})`,
       timestamp: getUgandaTime(),
     });
 

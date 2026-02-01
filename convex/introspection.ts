@@ -250,22 +250,22 @@ export const getAllActiveUTIDs = query({
       .collect();
 
     for (const action of adminActions) {
-      if (!utidMap.has(action.utid)) {
-        utidMap.set(action.utid, {
-          utid: action.utid,
+      const utid = action.utid || "unknown";
+      if (!utidMap.has(utid)) {
+        utidMap.set(utid, {
+          utid: utid,
           type: "admin_action",
           timestamp: action.timestamp,
           entities: [],
         });
       }
-      const utidData = utidMap.get(action.utid)!;
+      const utidData = utidMap.get(utid)!;
       utidData.entities.push({
         table: "adminActions",
         actionId: action._id,
-        actionType: action.actionType,
+        actionType: action.actionType || action.action || "unknown",
         adminId: action.adminId,
-        reason: action.reason,
-        targetUtid: action.targetUtid,
+        reason: action.reason || action.details || "No details",
         timestamp: action.timestamp,
       });
     }
@@ -865,6 +865,7 @@ export const getAllUsers = query({
     const users = await ctx.db.query("users").collect();
 
     return users.map((user) => ({
+      _id: user._id,
       userId: user._id,
       email: isSuperAdmin ? user.email : undefined,
       phoneNumber: isSuperAdmin ? user.phoneNumber : undefined,

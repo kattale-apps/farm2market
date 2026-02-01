@@ -500,3 +500,22 @@ export const changePassword = mutation({
     return { success: true };
   },
 });
+
+/**
+ * Update user role and assignment (SuperAdmin only)
+ */
+export const updateUserRoleAndAssignment = mutation({
+  args: {
+    userId: v.id("users"),
+    adminLevel: v.optional(v.union(v.literal("super"), v.literal("junior"))),
+    adminCategory: v.optional(v.union(v.literal("store"), v.literal("message"), v.literal("community"))),
+    assignedCommunityIds: v.optional(v.array(v.string())),
+  },
+  handler: async (ctx, args) => {
+    const updates: any = {};
+    if (args.adminLevel !== undefined) updates.adminLevel = args.adminLevel;
+    if (args.adminCategory !== undefined) updates.adminCategory = args.adminCategory;
+    if (args.assignedCommunityIds !== undefined) updates.assignedCommunityIds = args.assignedCommunityIds;
+    await ctx.db.patch(args.userId, updates);
+  },
+});

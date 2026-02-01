@@ -190,7 +190,6 @@ export const verifyDeliveryWithProof = mutation({
       actionType: "verify_delivery_with_proof",
       utid: verificationUtid,
       reason: args.reason.trim(),
-      targetUtid: args.lockUtid,
       metadata: {
         comment: args.comment.trim(),
         photoCount: photoIds.length,

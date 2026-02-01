@@ -36,6 +36,7 @@ export default defineSchema({
     allowedStorageLocationIds: v.optional(v.array(v.id("storageLocations"))), // Storage locations junior admin can access. Only applies to junior admins.
     assignedCommunityIds: v.optional(v.array(v.id("communities"))), // Communities assigned to junior community admins. Only applies to community admins.
     serviceLevel: v.optional(v.union(v.literal("Standard"), v.literal("Premium"))), // Service tier for community admins (Standard = 5 exports/month, Premium = unlimited). Only applies to community admins.
+    exportLimit: v.optional(v.number()), // Max number of exports per month for admin (super/junior)
     // Location and farm profile (for farmers)
     districtId: v.optional(v.id("districts")), // District where farmer is located
     subcountyId: v.optional(v.id("subcounties")), // Subcounty where farmer is located
@@ -332,16 +333,18 @@ export default defineSchema({
    */
   adminActions: defineTable({
     adminId: v.id("users"),
-    actionType: v.string(),
-    utid: v.string(),
-    reason: v.string(),
-    targetUtid: v.optional(v.string()), // UTID of the affected transaction/entity
+    action: v.optional(v.string()),
+    actionType: v.optional(v.string()),
+    targetUserId: v.optional(v.id("users")),
+    targetCommunityId: v.optional(v.id("communities")),
+    details: v.optional(v.string()),
+    reason: v.optional(v.string()),
+    utid: v.optional(v.string()),
+    targetUtid: v.optional(v.string()),
     metadata: v.optional(v.any()),
     timestamp: v.number(),
   })
     .index("by_admin", ["adminId"])
-    .index("by_utid", ["utid"])
-    .index("by_target_utid", ["targetUtid"])
     .index("by_timestamp", ["timestamp"]),
 
   /**

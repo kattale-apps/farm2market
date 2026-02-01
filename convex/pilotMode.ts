@@ -120,7 +120,6 @@ export const setPilotMode = mutation({
       actionType: args.pilotMode ? "enable_pilot_mode" : "disable_pilot_mode",
       utid: generateUTID("admin"), // Separate UTID for admin action log
       reason: args.reason,
-      targetUtid: utid, // Reference to the system settings UTID
       metadata: {
         pilotMode: args.pilotMode,
         previousPilotMode: existing?.pilotMode || false,

@@ -215,7 +215,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
       {/* System Metrics - Today's Listings - Superadmin Only */}
       <SuperAdminOnly show={isSuperAdmin}>
         <div style={{ marginBottom: "2rem" }}>
-          <h3>System Metrics - Today's Listings</h3>
+          <h3>System Metrics - Today&apos;s Listings</h3>
           {systemMetrics === undefined ? (
             <p style={{ color: "#999" }}>Loading...</p>
           ) : (

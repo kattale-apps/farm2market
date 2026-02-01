@@ -91,6 +91,17 @@ const REGION_GROUPS: { key: string; districts: string[] }[] = [
   },
 ];
 
+
+
+export const getCommunities = query({
+  args: {
+    adminId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    // ...
+  },
+});
+
 /**
  * Delete a community (SuperAdmin only)
  */
@@ -100,51 +111,11 @@ export const deleteCommunity = mutation({
     communityId: v.id("communities"),
   },
   handler: async (ctx, args) => {
-    // Verify admin is SuperAdmin
-    const adminCheck = await verifyAdminRole({
-      userId: args.adminId,
-      db: ctx.db,
-    });
-    if (!adminCheck.authorized) {
-      throw new Error("Only admins can delete communities");
-    }
-    const adminUser = await ctx.db.get(args.adminId);
-    if (!adminUser || adminUser.role !== "admin") {
-      throw new Error("User is not an admin");
-    }
-    if (!isSuperAdmin(adminUser)) {
-      throw new Error("Only SuperAdmin can delete communities");
-    }
-    // Delete all memberships for this community
-    const memberships = await ctx.db
-      .query("communityMemberships")
-      .withIndex("by_community", (q) => q.eq("communityId", args.communityId))
-      .collect();
-    for (const membership of memberships) {
-      await ctx.db.delete(membership._id);
-    }
-    // Delete all listing tags for this community
-    const tags = await ctx.db
-      .query("communityListingTags")
-      .withIndex("by_community", (q) => q.eq("communityId", args.communityId))
-      .collect();
-    for (const tag of tags) {
-      await ctx.db.delete(tag._id);
-    }
-    // Delete the community itself
-    await ctx.db.delete(args.communityId);
-    // Log admin action
-    const utid = generateUTID(adminUser.role);
-    await ctx.db.insert("adminActions", {
-      adminId: args.adminId,
-      action: "delete_community",
-      details: `Deleted community: ${args.communityId} (UTID: ${utid})`,
-      timestamp: getUgandaTime(),
-    });
-    return { success: true, utid };
+    // ...
   },
 });
 
+// ...
 /**
  * Get all communities (for farmers to browse and join)
  */

@@ -98,25 +98,12 @@ export default function FarmerCommunitiesPage() {
       style={{
         minHeight: "100vh",
         width: "100vw",
-        background: `linear-gradient(180deg, #f5fbe7 0%, #e8f5e9 100%)`,
+        background: `linear-gradient(180deg, #f5fbe7 0%, #e8f5e9 100%), url('/backgrounds/farm-bg.jpg') center center/cover no-repeat`,
+        backgroundBlendMode: "multiply",
         position: "relative",
         overflowX: "hidden",
       }}
     >
-      {/* Responsive background image */}
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: "100vw",
-          height: "40vh",
-          minHeight: 220,
-          background: `url('/backgrounds/farm-bg.jpg') center center/cover no-repeat`,
-          zIndex: 0,
-          filter: "brightness(0.7)",
-        }}
-      />
       <div
         style={{
           maxWidth: 1200,

@@ -22,11 +22,11 @@ export default function FarmerProfilePage() {
   const [phoneNumber, setPhoneNumber] = useState<string>("");
   const [sex, setSex] = useState<"M" | "F" | "">("");
   const [farmSizeInput, setFarmSizeInput] = useState<{
-    unit?: "ft" | "m";
+    unit?: "ft" | "m" | "acres" | "omwigo";
     length?: number;
     width?: number;
     omwigo?: number;
-    emiigo?: number;
+    acres?: number;
   }>({});
 
   const regionGroups = useMemo(() => [
@@ -584,7 +584,7 @@ export default function FarmerProfilePage() {
                   <option value="ft">Feet (ft × ft)</option>
                   <option value="m">Meters (m × m)</option>
                   <option value="omwigo">Omwigo</option>
-                  <option value="emiigo">Emiigo</option>
+                  <option value="acres">Acres</option>
                 </select>
               </div>
 
@@ -649,16 +649,16 @@ export default function FarmerProfilePage() {
                     }}
                   />
                 </div>
-              ) : farmSizeInput.unit === "emiigo" ? (
+              ) : farmSizeInput.unit === "acres" ? (
                 <div>
                   <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
-                    Number of Emiigo
+                    Acres
                   </label>
                   <input
                     type="number"
-                    value={farmSizeInput.emiigo || ""}
+                    value={farmSizeInput.acres || ""}
                     onChange={(e) =>
-                      setFarmSizeInput({ ...farmSizeInput, emiigo: parseFloat(e.target.value) })
+                      setFarmSizeInput({ ...farmSizeInput, acres: parseFloat(e.target.value) })
                     }
                     style={{
                       width: "100%",
@@ -670,6 +670,22 @@ export default function FarmerProfilePage() {
                   />
                 </div>
               ) : null}
+                        {/* Live conversion preview to acres */}
+                        <div style={{ marginTop: "1rem", background: "#f1f8e9", padding: "0.75rem 1rem", borderRadius: 8, color: "#33691e", fontWeight: 500 }}>
+                          {(() => {
+                            let acres = 0;
+                            if (farmSizeInput.unit === "acres" && farmSizeInput.acres) {
+                              acres = farmSizeInput.acres;
+                            } else if (farmSizeInput.unit === "ft" && farmSizeInput.length && farmSizeInput.width) {
+                              acres = (farmSizeInput.length * farmSizeInput.width) / 43560;
+                            } else if (farmSizeInput.unit === "m" && farmSizeInput.length && farmSizeInput.width) {
+                              acres = (farmSizeInput.length * farmSizeInput.width) / 4046.86;
+                            } else if (farmSizeInput.unit === "omwigo" && farmSizeInput.omwigo) {
+                              acres = farmSizeInput.omwigo * 0.25; // Example: 1 omwigo = 0.25 acres (adjust as needed)
+                            }
+                            return `Farm size in acres: ${acres ? acres.toFixed(4) : "-"}`;
+                          })()}
+                        </div>
             </div>
           </div>
 

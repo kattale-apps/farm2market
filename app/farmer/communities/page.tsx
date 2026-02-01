@@ -165,21 +165,26 @@ export default function FarmerCommunitiesPage() {
               <div
                 key={community.id}
                 style={{
-                  background: "#fff",
-                  borderRadius: "12px",
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+                  background: community.isGlobal
+                    ? "linear-gradient(135deg, #e0f7fa 0%, #b2ebf2 100%)"
+                    : community.geoLocked
+                    ? "linear-gradient(135deg, #fffde7 0%, #ffe082 100%)"
+                    : "linear-gradient(135deg, #f3e5f5 0%, #ce93d8 100%)",
+                  borderRadius: "16px",
+                  boxShadow: "0 4px 16px rgba(44,124,140,0.10)",
                   overflow: "hidden",
                   transition: "all 0.3s ease",
                   display: "flex",
                   flexDirection: "column",
                   height: "100%",
+                  border: community.isMember ? "2px solid #43a047" : "2px solid #e0e0e0",
                 }}
               >
                 {/* Card Header */}
                 <div style={{
                   padding: "1.5rem",
-                  background: community.isMember ? "#e8f5e9" : "#f5f5f5",
-                  borderBottom: `3px solid ${community.isMember ? "#4caf50" : "#ddd"}`,
+                  background: community.isMember ? "#e8f5e9" : community.isGlobal ? "#e3f2fd" : community.geoLocked ? "#fffde7" : "#f3e5f5",
+                  borderBottom: `3px solid ${community.isMember ? "#43a047" : community.isGlobal ? "#29b6f6" : community.geoLocked ? "#ffd600" : "#ab47bc"}`,
                 }}>
                   <h3 style={{
                     margin: "0 0 0.5rem 0",

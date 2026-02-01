@@ -421,6 +421,8 @@ export const getUser = query({
       alias: user.alias,
       role: user.role,
       createdAt: user.createdAt,
+      adminLevel: user.adminLevel,
+      adminCategory: user.adminCategory,
     };
   },
 });

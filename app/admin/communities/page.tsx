@@ -438,16 +438,6 @@ export default function CommunitiesPage() {
       ) : (
         <div style={{ display: "grid", gap: "1.5rem" }}>
           {communities
-            .filter((community: any) => {
-              // Only superadmin sees all, community admin sees only their communities, not system/global
-              if (isSuperAdmin) return true;
-              if (isCommunityAdmin) {
-                // Hide system/global communities from community admin
-                return community.adminId === userId && !community.isGlobal;
-              }
-              // All others see nothing
-              return false;
-            })
             .map((community: any) => (
               <div
                 key={community.id}

@@ -913,3 +913,32 @@ export const getUserById = query({
     };
   },
 });
+
+/**
+ * Get communities (admin only)
+ * Returns all for superadmin, assigned for community admin
+ */
+export const getCommunities = query({
+  args: {
+    adminId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const user = await verifyAdmin(ctx, args.adminId);
+    const isSuperAdmin = user.adminLevel === "super" || user.adminLevel === undefined;
+
+    if (isSuperAdmin) {
+      return await ctx.db.query("communities").collect();
+    }
+
+    if (user.adminCategory === "community" && user.assignedCommunityIds) {
+      const communities = [];
+      for (const id of user.assignedCommunityIds) {
+        const comm = await ctx.db.get(id);
+        if (comm) communities.push(comm);
+      }
+      return communities;
+    }
+
+    return [];
+  },
+});

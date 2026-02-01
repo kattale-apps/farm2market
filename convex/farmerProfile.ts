@@ -8,6 +8,7 @@ import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { getUgandaTime } from "./utils";
+import { calculateFarmSizeAcres } from "./farmerOnboarding";
 
 /**
  * Get farmer profile with location names
@@ -83,9 +84,7 @@ export const updateFarmerProfile = mutation({
     // Calculate farm size if provided
     let farmSizeAcres: number | undefined;
     if (args.farmSizeInput) {
-      // Import and use the calculation function
-      const farmerOnboarding = await import("./farmerOnboarding");
-      farmSizeAcres = farmerOnboarding.calculateFarmSizeAcres(args.farmSizeInput as any);
+      farmSizeAcres = calculateFarmSizeAcres(args.farmSizeInput as any);
     }
 
     // Validate location hierarchy if provided

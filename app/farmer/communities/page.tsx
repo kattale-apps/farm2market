@@ -78,6 +78,8 @@ export default function FarmerCommunitiesPage() {
     );
   }
 
+  // Debug: log userId and communities
+  console.log("[DEBUG] userId:", userId, "communities:", communities);
   return (
     <div style={{
       minHeight: "100vh",
@@ -251,66 +253,81 @@ export default function FarmerCommunitiesPage() {
                   display: "flex",
                   gap: "1rem",
                 }}>
-                  {!community.isMember ? (
-                    <button
-                      onClick={() => handleJoinCommunity(community.id)}
-                      disabled={loadingAction === `join-${community.id}`}
-                      style={{
-                        flex: 1,
-                        padding: "0.75rem 1.5rem",
-                        background: "#4caf50",
-                        color: "#fff",
-                        border: "none",
-                        borderRadius: "8px",
-                        fontSize: "0.95rem",
-                        fontWeight: "600",
-                        cursor: loadingAction === `join-${community.id}` ? "not-allowed" : "pointer",
-                        opacity: loadingAction === `join-${community.id}` ? 0.6 : 1,
-                        transition: "all 0.3s ease",
-                      }}
-                      onMouseEnter={(e) => {
-                        if (loadingAction !== `join-${community.id}`) {
-                          (e.target as HTMLButtonElement).style.background = "#45a049";
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (loadingAction !== `join-${community.id}`) {
-                          (e.target as HTMLButtonElement).style.background = "#4caf50";
-                        }
-                      }}
-                    >
-                      {loadingAction === `join-${community.id}` ? "Joining..." : "Join Community"}
-                    </button>
+                  {/* Always show buttons for debug if isMember is missing */}
+                  {typeof community.isMember === "boolean" ? (
+                    !community.isMember ? (
+                      <button
+                        onClick={() => handleJoinCommunity(community.id)}
+                        disabled={loadingAction === `join-${community.id}`}
+                        style={{
+                          flex: 1,
+                          padding: "0.75rem 1.5rem",
+                          background: "#4caf50",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: "8px",
+                          fontSize: "0.95rem",
+                          fontWeight: "600",
+                          cursor: loadingAction === `join-${community.id}` ? "not-allowed" : "pointer",
+                          opacity: loadingAction === `join-${community.id}` ? 0.6 : 1,
+                          transition: "all 0.3s ease",
+                        }}
+                        onMouseEnter={(e) => {
+                          if (loadingAction !== `join-${community.id}`) {
+                            (e.target as HTMLButtonElement).style.background = "#45a049";
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (loadingAction !== `join-${community.id}`) {
+                            (e.target as HTMLButtonElement).style.background = "#4caf50";
+                          }
+                        }}
+                      >
+                        {loadingAction === `join-${community.id}` ? "Joining..." : "Join Community"}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleLeaveCommunity(community.id)}
+                        disabled={loadingAction === `leave-${community.id}`}
+                        style={{
+                          flex: 1,
+                          padding: "0.75rem 1.5rem",
+                          background: "#f44336",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: "8px",
+                          fontSize: "0.95rem",
+                          fontWeight: "600",
+                          cursor: loadingAction === `leave-${community.id}` ? "not-allowed" : "pointer",
+                          opacity: loadingAction === `leave-${community.id}` ? 0.6 : 1,
+                          transition: "all 0.3s ease",
+                        }}
+                        onMouseEnter={(e) => {
+                          if (loadingAction !== `leave-${community.id}`) {
+                            (e.target as HTMLButtonElement).style.background = "#da190b";
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (loadingAction !== `leave-${community.id}`) {
+                            (e.target as HTMLButtonElement).style.background = "#f44336";
+                          }
+                        }}
+                      >
+                        {loadingAction === `leave-${community.id}` ? "Leaving..." : "Leave Community"}
+                      </button>
+                    )
                   ) : (
-                    <button
-                      onClick={() => handleLeaveCommunity(community.id)}
-                      disabled={loadingAction === `leave-${community.id}`}
-                      style={{
-                        flex: 1,
-                        padding: "0.75rem 1.5rem",
-                        background: "#f44336",
-                        color: "#fff",
-                        border: "none",
-                        borderRadius: "8px",
-                        fontSize: "0.95rem",
-                        fontWeight: "600",
-                        cursor: loadingAction === `leave-${community.id}` ? "not-allowed" : "pointer",
-                        opacity: loadingAction === `leave-${community.id}` ? 0.6 : 1,
-                        transition: "all 0.3s ease",
-                      }}
-                      onMouseEnter={(e) => {
-                        if (loadingAction !== `leave-${community.id}`) {
-                          (e.target as HTMLButtonElement).style.background = "#da190b";
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (loadingAction !== `leave-${community.id}`) {
-                          (e.target as HTMLButtonElement).style.background = "#f44336";
-                        }
-                      }}
-                    >
-                      {loadingAction === `leave-${community.id}` ? "Leaving..." : "Leave Community"}
-                    </button>
+                    <div style={{ color: "#ff9800", fontWeight: 600 }}>
+                      [Debug] isMember missing - showing both buttons
+                      <button
+                        onClick={() => handleJoinCommunity(community.id)}
+                        style={{ marginRight: 8, background: "#4caf50", color: "#fff", border: "none", borderRadius: 8, padding: "0.5rem 1rem" }}
+                      >Join Community</button>
+                      <button
+                        onClick={() => handleLeaveCommunity(community.id)}
+                        style={{ background: "#f44336", color: "#fff", border: "none", borderRadius: 8, padding: "0.5rem 1rem" }}
+                      >Leave Community</button>
+                    </div>
                   )}
                 </div>
               </div>

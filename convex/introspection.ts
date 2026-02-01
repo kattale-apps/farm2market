@@ -27,7 +27,8 @@ export const getCommunitiesForAdmin = query({
 
     // Super admin sees all communities
     if (isSuperAdmin) {
-      return await ctx.db.query("communities").collect();
+      const allCommunities = await ctx.db.query("communities").collect();
+      return await enrichWithStats(ctx, allCommunities);
     }
 
     // Community admin sees only assigned communities
@@ -43,16 +44,69 @@ export const getCommunitiesForAdmin = query({
         )
       );
 
-      return communities.filter(
+      const validCommunities = communities.filter(
         (community): community is NonNullable<typeof community> =>
           community !== null
       );
+      
+      return await enrichWithStats(ctx, validCommunities);
     }
 
     // All other admins see nothing
     return [];
   },
 });
+
+async function enrichWithStats(ctx: any, communities: any[]) {
+  return await Promise.all(
+    communities.map(async (c) => {
+      const memberships = await ctx.db
+        .query("communityMemberships")
+        .withIndex("by_community", (q: any) => q.eq("communityId", c._id))
+        .collect();
+      return {
+        ...c,
+        memberCount: memberships.length,
+      };
+    })
+  );
+}
+
+/**
+ * Admin-only: get members of a specific community
+ */
+export const getCommunityMembers = query({
+  args: {
+    adminId: v.id("users"),
+    communityId: v.id("communities"),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.adminId);
+    if (!user || user.role !== "admin") throw new Error("Unauthorized");
+
+    const isSuperAdmin = user.adminLevel === "super" || user.adminLevel === undefined;
+    
+    // Check permissions
+    if (!isSuperAdmin) {
+      if (user.adminCategory !== "community") throw new Error("Forbidden");
+      if (!user.assignedCommunityIds?.includes(args.communityId)) throw new Error("Forbidden");
+    }
+
+    const memberships = await ctx.db
+      .query("communityMemberships")
+      .withIndex("by_community", (q) => q.eq("communityId", args.communityId))
+      .collect();
+
+    return await Promise.all(memberships.map(async (m) => {
+      const memberUser = await ctx.db.get(m.userId);
+      return {
+        ...memberUser,
+        joinedAt: m.joinedAt,
+      };
+    }));
+  },
+});
+
 /**
  * Super-admin only: get all users
  */

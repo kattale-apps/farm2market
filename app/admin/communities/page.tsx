@@ -48,6 +48,7 @@ export default function CommunitiesPage() {
   const user = useQuery(api.auth.getUser, userId ? { userId } : "skip");
   const createCommunity = useMutation(api.communities.createCommunity);
   const updateCommunity = useMutation(api.communities.updateCommunity);
+  const deleteCommunity = useMutation(api.communities.deleteCommunity);
   const adminLevel = (user as any)?.adminLevel;
   const isSuperAdmin = user?.role === "admin" && (adminLevel === "super" || adminLevel === undefined);
   const isCommunityAdmin = user?.role === "admin" && adminLevel === "junior" && (user as any)?.adminCategory === "community";
@@ -470,6 +471,35 @@ export default function CommunitiesPage() {
                     }}
                   >
                     Edit Details
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!userId) return;
+                      if (!window.confirm("Are you sure you want to delete this community? This cannot be undone.")) return;
+                      setLoading(true);
+                      setMessage(null);
+                      try {
+                        await deleteCommunity({ adminId: userId, communityId: community.id });
+                        setMessage({ type: "success", text: "Community deleted successfully!" });
+                      } catch (error: any) {
+                        setMessage({ type: "error", text: error.message || "Failed to delete community" });
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                    style={{
+                      padding: "0.4rem 0.75rem",
+                      background: "#f44336",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontSize: "0.85rem",
+                      fontWeight: "600",
+                    }}
+                  >
+                    Delete
                   </button>
                 </div>
               )}

@@ -908,6 +908,7 @@ export const getUserById = query({
       alias: user.alias,
       state: user.state,
       adminLevel: user.adminLevel,
+      adminCategory: user.adminCategory,
       allowedStorageLocationIds: user.allowedStorageLocationIds,
     };
   },

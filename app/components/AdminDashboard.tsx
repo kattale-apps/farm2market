@@ -14,6 +14,7 @@ import { StorageLocationsManager } from "./StorageLocationsManager";
 import { DeliveryConfirmationForm } from "./DeliveryConfirmationForm";
 import { ThreadView } from "./messages/ThreadView";
 import { ContactUs } from "./ContactUs";
+import { FinanceDashboard } from "./FinanceDashboard";
 
 interface AdminDashboardProps {
   userId: Id<"users">;
@@ -69,15 +70,20 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   const districts = useQuery(api.locations.getActiveDistricts, {});
   const subcounties = useQuery(api.locations.getAllSubcounties, {});
   // const parishes = useQuery(api.locations.getAllParishes, {});
+  
+  // Fetch current user details directly for faster permission checks
+  const user = useQuery(api.introspection.getUserById, { userId });
+
   // Group users by role
-  const usersByRole = allUsers ? {
+  const usersByRole = useMemo(() => allUsers ? {
     farmer: allUsers.filter((u: any) => u.role === "farmer"),
     trader: allUsers.filter((u: any) => u.role === "trader"),
     buyer: allUsers.filter((u: any) => u.role === "buyer"),
     admin: allUsers.filter((u: any) => u.role === "admin"),
-  } : { farmer: [], trader: [], buyer: [], admin: [] };
-  const districtMap = new Map(districts?.map(d => [d.id, d.name]) || []);
-  const subcountyMap = new Map(subcounties?.map(s => [s.id, s.name]) || []);
+  } : { farmer: [], trader: [], buyer: [], admin: [] }, [allUsers]);
+
+  const districtMap = useMemo(() => new Map(districts?.map(d => [d.id, d.name]) || []), [districts]);
+  const subcountyMap = useMemo(() => new Map(subcounties?.map(s => [s.id, s.name]) || []), [subcounties]);
   // const parishMap = new Map(parishes?.map(p => [p.id, p.name]) || []);
   const communitySummaries = useQuery(
     api.communities.getActiveCommunities,
@@ -97,10 +103,12 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   const deleteStorageLocation = useMutation(api.admin.deleteStorageLocation);
   const todayMetrics = useQuery(api.admin.getTodaySystemMetrics, { adminId: userId });
   const createUser = useMutation(api.auth.createUser);
-  const currentUser = allUsers?.find((u: any) => u.userId === userId);
-  const isSuperAdmin = currentUser?.role === "admin" && (currentUser?.adminLevel === "super" || currentUser?.adminLevel === undefined);
-  const isCommunityAdmin = currentUser?.role === "admin" && currentUser?.adminLevel === "junior" && currentUser?.adminCategory === "community";
+  
+  const isSuperAdmin = user?.role === "admin" && (user?.adminLevel === "super" || user?.adminLevel === undefined);
+  const isCommunityAdmin = user?.role === "admin" && user?.adminLevel === "junior" && user?.adminCategory === "community";
   const canViewCommunityDatabase = isSuperAdmin || isCommunityAdmin;
+  const isFinanceAdmin = user?.role === "admin" && user?.adminLevel === "junior" && user?.adminCategory === "finance";
+  const canViewFinanceDashboard = isSuperAdmin || isFinanceAdmin;
   const storeAdmins = useQuery(
     api.adminAudit.getStoreAdmins,
     isSuperAdmin ? { adminId: userId } : "skip"
@@ -164,12 +172,16 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
     return () => observer.disconnect();
   }, []);
 
-  const storageLocationsById = new Map<string, any>();
-  if (storageLocations) {
-    storageLocations.forEach((location: any) => {
-      storageLocationsById.set(location._id, location);
-    });
-  }
+  const storageLocationsById = useMemo(() => {
+    const map = new Map<string, any>();
+    if (storageLocations) {
+      storageLocations.forEach((location: any) => {
+        map.set(location._id, location);
+      });
+    }
+    return map;
+  }, [storageLocations]);
+
   const formatStoreAdminLocations = (admin: any) => {
     if (admin?.storageLocationNames?.length) {
       return admin.storageLocationNames.join(", ");
@@ -409,6 +421,11 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           </span>
         </div>
       </div>
+
+      {/* Finance Dashboard - Finance Admin & Super Admin */}
+      {canViewFinanceDashboard && (
+        <FinanceDashboard userId={userId} />
+      )}
 
       {/* Red Flags Summary - Superadmin Only */}
       <SuperAdminOnly show={isSuperAdmin}>
@@ -919,7 +936,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
       </div>
 
       {/* Delivery Confirmations (SuperAdmin only) */}
-      {isSuperAdmin && (
+      <SuperAdminOnly show={isSuperAdmin}>
         <div
           id="superadmin-inbox"
           style={{
@@ -1068,7 +1085,6 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
             </div>
           )}
         </div>
-      )}
       </SuperAdminOnly>
 
       {/* Admin Inbox - Superadmin Only */}
@@ -1205,6 +1221,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
             )}
           </div>
         )}
+      </SuperAdminOnly>
 
       {canViewCommunityDatabase && (
         <div
@@ -1451,7 +1468,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
       )}
 
       {/* Purchase Window Control - Super Admin Only */}
-      {isSuperAdmin && (
+      <SuperAdminOnly show={isSuperAdmin}>
       <div style={{
         marginBottom: "2rem",
         padding: "clamp(1rem, 3vw, 1.5rem)",
@@ -1627,7 +1644,6 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           </div>
         )}
       </div>
-      )}
       </SuperAdminOnly>
 
       {/* System Metrics (second card) - Superadmin Only */}
@@ -2453,7 +2469,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
 function CreateAdminAccountForm({ createUser, storageLocations, adminId }: { createUser: any; storageLocations: any; adminId: Id<"users"> }) {
   const [email, setEmail] = useState("");
   const [adminLevel, setAdminLevel] = useState<"super" | "junior" | "">("");
-  const [adminCategory, setAdminCategory] = useState<"store" | "message" | "community" | "">("");
+  const [adminCategory, setAdminCategory] = useState<"store" | "message" | "community" | "finance" | "">("");
   const [selectedLocationIds, setSelectedLocationIds] = useState<Id<"storageLocations">[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -2579,7 +2595,7 @@ function CreateAdminAccountForm({ createUser, storageLocations, adminId }: { cre
           </label>
           <select
             value={adminCategory}
-            onChange={(e) => setAdminCategory(e.target.value as "store" | "message" | "community" | "")}
+            onChange={(e) => setAdminCategory(e.target.value as "store" | "message" | "community" | "finance" | "")}
             disabled={loading}
             style={{
               width: "100%",
@@ -2594,6 +2610,7 @@ function CreateAdminAccountForm({ createUser, storageLocations, adminId }: { cre
             <option value="store">Store Admin (Delivery Confirmations)</option>
             <option value="message">Message Admin (Inbox Support)</option>
             <option value="community">Community Admin (Members Database)</option>
+            <option value="finance">Finance Admin (Financial Reports)</option>
           </select>
         </div>
       )}

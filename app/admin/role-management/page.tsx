@@ -110,7 +110,7 @@ export default function AdminRoleManagementPage() {
             <input
               type="text"
               value={editData.assignedCommunityIds.join(",")}
-              onChange={e => setEditData({ ...editData, assignedCommunityIds: e.target.value.split(",").map((id: string) => id.trim()) })}
+              onChange={e => setEditData({ ...editData, assignedCommunityIds: e.target.value.split(",").map((id: string) => id.trim()).filter(Boolean) })}
               style={{ width: 300 }}
             />
           </div>

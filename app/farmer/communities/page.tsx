@@ -173,7 +173,7 @@ export default function FarmerCommunitiesPage() {
                     ? "linear-gradient(135deg, #fffde7 0%, #f9fbe7 100%)"
                     : "linear-gradient(135deg, #f1f8e9 0%, #dcedc8 100%)",
                   borderRadius: "18px",
-                  boxShadow: "0 0 16px 4px rgba(76, 175, 80, 0.25), 0 6px 24px rgba(76,175,80,0.10)",
+                  // boxShadow removed (duplicate)
                   overflow: "hidden",
                   transition: "all 0.3s ease",
                   display: "flex",

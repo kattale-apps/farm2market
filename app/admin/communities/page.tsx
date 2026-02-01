@@ -1,5 +1,4 @@
 "use client";
-
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
@@ -115,7 +114,7 @@ export default function CommunitiesPage() {
       description: community.description || "",
       isGlobal: !!community.isGlobal,
       geoLocked: !!community.geoLocked,
-      regionKey: "",
+      regionKey: community.regionKey || "",
     });
   };
 
@@ -153,6 +152,7 @@ export default function CommunitiesPage() {
     }
   };
 
+  // Main return for logged-in users
   if (!userId) {
     return (
       <div style={{ padding: "2rem", textAlign: "center" }}>
@@ -160,7 +160,6 @@ export default function CommunitiesPage() {
       </div>
     );
   }
-
   return (
     <div style={{
       minHeight: "100vh",
@@ -202,21 +201,22 @@ export default function CommunitiesPage() {
           >
             ← Back to Home
           </button>
+          {/* Only show Create Community button to superadmin */}
           {isSuperAdmin && (
-          <button
-            onClick={() => setShowCreateForm(!showCreateForm)}
-            style={{
-              padding: "0.75rem 1.5rem",
-              background: "#4caf50",
-              color: "white",
-              border: "none",
-              borderRadius: "8px",
-              cursor: "pointer",
-              fontWeight: "600",
-            }}
-          >
-            + Create Community
-          </button>
+            <button
+              onClick={() => setShowCreateForm(!showCreateForm)}
+              style={{
+                padding: "0.75rem 1.5rem",
+                background: "#4caf50",
+                color: "white",
+                border: "none",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontWeight: "600",
+              }}
+            >
+              + Create Community
+            </button>
           )}
         </div>
       </div>
@@ -235,6 +235,7 @@ export default function CommunitiesPage() {
         </div>
       )}
 
+      {/* Only superadmin can see the create community form */}
       {isSuperAdmin && showCreateForm && (
         <div
           style={{
@@ -436,9 +437,20 @@ export default function CommunitiesPage() {
         </div>
       ) : (
         <div style={{ display: "grid", gap: "1.5rem" }}>
-          {communities.map((community: any) => (
-            <div
-              key={community.id}
+          {communities
+            .filter((community: any) => {
+              // Only superadmin sees all, community admin sees only their communities, not system/global
+              if (isSuperAdmin) return true;
+              if (isCommunityAdmin) {
+                // Hide system/global communities from community admin
+                return community.adminId === userId && !community.isGlobal;
+              }
+              // All others see nothing
+              return false;
+            })
+            .map((community: any) => (
+              <div
+                key={community.id}
               style={{
                 padding: "1.5rem",
                 background: community.isGlobal
@@ -731,6 +743,7 @@ export default function CommunitiesPage() {
           ))}
         </div>
       )}
+    </div>
     </div>
   );
 }

@@ -81,11 +81,13 @@ export default function FarmerCommunitiesPage() {
   // Debug: log userId and communities
   console.log("[DEBUG] userId:", userId, "communities:", communities);
   return (
-    <div style={{
-      minHeight: "100vh",
-      background: "#fafafa",
-      padding: "2rem",
-    }}>
+    <div
+      style={{
+        minHeight: "100vh",
+        background: `url('/backgrounds/farm-bg.jpg') center center/cover no-repeat, linear-gradient(180deg, #f5fbe7 0%, #e8f5e9 100%)`,
+        padding: "2rem",
+      }}
+    >
       <div style={{
         maxWidth: "1200px",
         margin: "0 auto",
@@ -166,25 +168,26 @@ export default function FarmerCommunitiesPage() {
                 key={community.id}
                 style={{
                   background: community.isGlobal
-                    ? "linear-gradient(135deg, #e0f7fa 0%, #b2ebf2 100%)"
+                    ? "linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)"
                     : community.geoLocked
-                    ? "linear-gradient(135deg, #fffde7 0%, #ffe082 100%)"
-                    : "linear-gradient(135deg, #f3e5f5 0%, #ce93d8 100%)",
-                  borderRadius: "16px",
-                  boxShadow: "0 4px 16px rgba(44,124,140,0.10)",
+                    ? "linear-gradient(135deg, #fffde7 0%, #f9fbe7 100%)"
+                    : "linear-gradient(135deg, #f1f8e9 0%, #dcedc8 100%)",
+                  borderRadius: "18px",
+                  boxShadow: "0 6px 24px rgba(76,175,80,0.10)",
                   overflow: "hidden",
                   transition: "all 0.3s ease",
                   display: "flex",
                   flexDirection: "column",
                   height: "100%",
-                  border: community.isMember ? "2px solid #43a047" : "2px solid #e0e0e0",
+                  border: community.isMember ? "2.5px solid #388e3c" : "2px solid #c5e1a5",
+                  borderBottom: community.isGlobal ? "4px solid #43a047" : community.geoLocked ? "4px solid #fbc02d" : "4px solid #8bc34a",
                 }}
               >
                 {/* Card Header */}
                 <div style={{
                   padding: "1.5rem",
-                  background: community.isMember ? "#e8f5e9" : community.isGlobal ? "#e3f2fd" : community.geoLocked ? "#fffde7" : "#f3e5f5",
-                  borderBottom: `3px solid ${community.isMember ? "#43a047" : community.isGlobal ? "#29b6f6" : community.geoLocked ? "#ffd600" : "#ab47bc"}`,
+                  background: community.isMember ? "#e8f5e9" : community.isGlobal ? "#f1f8e9" : community.geoLocked ? "#fffde7" : "#f9fbe7",
+                  borderBottom: `2.5px solid ${community.isMember ? "#388e3c" : community.isGlobal ? "#43a047" : community.geoLocked ? "#fbc02d" : "#8bc34a"}`,
                 }}>
                   <h3 style={{
                     margin: "0 0 0.5rem 0",

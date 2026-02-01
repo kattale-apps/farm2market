@@ -52,6 +52,12 @@ export default function CommunitiesPage() {
   const isSuperAdmin = user?.role === "admin" && (adminLevel === "super" || (adminLevel === undefined && !(user as any)?.adminCategory));
   const isCommunityAdmin = user?.role === "admin" && ((adminLevel === "junior" && (user as any)?.adminCategory === "community") || (adminLevel === undefined && (user as any)?.adminCategory === "community"));
   const canViewCommunityMembers = isSuperAdmin || isCommunityAdmin;
+  // For junior community admins, filter to only assigned communities (defensive, backend already enforces)
+  let filteredCommunities = communities;
+  if (isCommunityAdmin && user && Array.isArray((user as any).assignedCommunityIds)) {
+    const assignedIds = (user as any).assignedCommunityIds.map((id: any) => id.toString());
+    filteredCommunities = (communities || []).filter((c: any) => assignedIds.includes(c.id?.toString()));
+  }
   const communityAdmins = (allUsers || []).filter((u: any) => u.role === "admin" && u.adminCategory === "community");
   const formatMemberContact = (member: any) => {
     const contact = member?.email || member?.phoneNumber;
@@ -360,11 +366,12 @@ export default function CommunitiesPage() {
             </div>
             <div style={{ marginBottom: "1rem" }}>
               <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600" }}>
-                Assign Admin (Optional)
+                Assign Admin *
               </label>
               <select
                 value={formData.assignAdminId}
                 onChange={(e) => setFormData({ ...formData, assignAdminId: e.target.value })}
+                required
                 style={{
                   width: "100%",
                   padding: "0.75rem",
@@ -374,7 +381,7 @@ export default function CommunitiesPage() {
                   background: "#fff",
                 }}
               >
-                <option value="">No assignment</option>
+                <option value="">Select admin...</option>
                 {communityAdmins.map((admin) => (
                   <option key={admin.userId} value={admin.userId}>
                     {admin.alias} ({admin.email || admin.phoneNumber})
@@ -419,9 +426,9 @@ export default function CommunitiesPage() {
         </div>
       )}
 
-      {communities === undefined ? (
+      {filteredCommunities === undefined ? (
         <p>Loading communities...</p>
-      ) : communities.length === 0 ? (
+      ) : filteredCommunities.length === 0 ? (
         <div style={{ display: "flex", justifyContent: "center" }}>
           <p style={{
             color: "#666",
@@ -437,7 +444,7 @@ export default function CommunitiesPage() {
         </div>
       ) : (
         <div style={{ display: "grid", gap: "1.5rem" }}>
-          {communities
+          {filteredCommunities
             .map((community: any) => (
               <div
                 key={community.id}
@@ -487,6 +494,13 @@ export default function CommunitiesPage() {
               </div>
               {isSuperAdmin && (
                 <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.75rem", flexWrap: "wrap" }}>
+                                    {/* Assigned Admin Contact */}
+                                    <div style={{ marginBottom: "0.5rem", fontSize: "0.95rem", color: "#1976d2", fontWeight: 500 }}>
+                                      Assigned Admin: {(() => {
+                                        const admin = communityAdmins.find((a: any) => a.userId === community.assignAdminId);
+                                        return admin ? `${admin.alias} (${admin.email || admin.phoneNumber})` : <span style={{ color: '#f44336' }}>Unassigned</span>;
+                                      })()}
+                                    </div>
                   <button
                     type="button"
                     onClick={() => startEdit(community)}

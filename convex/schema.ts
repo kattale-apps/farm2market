@@ -32,7 +32,7 @@ export default defineSchema({
     passwordHash: v.optional(v.string()), // Secure password hash (bcrypt/argon2). Required for production authentication.
     customSpendCap: v.optional(v.number()), // Admin-set custom spend cap for traders (in UGX). If not set, uses default MAX_TRADER_EXPOSURE_UGX.
     adminLevel: v.optional(v.union(v.literal("super"), v.literal("junior"))), // Admin hierarchy level. undefined means super admin (backward compatible).
-    adminCategory: v.optional(v.union(v.literal("store"), v.literal("message"), v.literal("community"), v.literal("finance"))), // Junior admin category (store delivery vs message support vs community oversight)
+    adminCategory: v.optional(v.union(v.literal("store"), v.literal("message"), v.literal("community"))), // Junior admin category (store delivery vs message support vs community oversight)
     allowedStorageLocationIds: v.optional(v.array(v.id("storageLocations"))), // Storage locations junior admin can access. Only applies to junior admins.
     assignedCommunityIds: v.optional(v.array(v.id("communities"))), // Communities assigned to junior community admins. Only applies to community admins.
     serviceLevel: v.optional(v.union(v.literal("Standard"), v.literal("Premium"))), // Service tier for community admins (Standard = 5 exports/month, Premium = unlimited). Only applies to community admins.

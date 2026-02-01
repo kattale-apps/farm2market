@@ -16,7 +16,7 @@ export function CreateAdminAccountForm({ adminId }: CreateAdminAccountFormProps)
   
   const [email, setEmail] = useState("");
   const [adminLevel, setAdminLevel] = useState<"super" | "junior">("junior");
-  const [adminCategory, setAdminCategory] = useState<"store" | "message" | "community" | "finance">("store");
+  const [adminCategory, setAdminCategory] = useState<"store" | "message" | "community">("store");
   const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -79,13 +79,12 @@ export function CreateAdminAccountForm({ adminId }: CreateAdminAccountFormProps)
             <label style={{ display: "block", marginBottom: "0.5rem" }}>Category:</label>
             <select 
               value={adminCategory} 
-              onChange={(e) => setAdminCategory(e.target.value as "store" | "message" | "community" | "finance")}
+              onChange={(e) => setAdminCategory(e.target.value as "store" | "message" | "community")}
               style={{ width: "100%", padding: "0.5rem" }}
             >
               <option value="store">Store Admin</option>
               <option value="message">Message Admin</option>
               <option value="community">Community Admin</option>
-              <option value="finance">Finance Admin</option>
             </select>
           </div>
         )}

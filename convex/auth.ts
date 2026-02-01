@@ -106,7 +106,7 @@ export const createUser = mutation({
       v.literal("admin")
     ),
     adminLevel: v.optional(v.union(v.literal("super"), v.literal("junior"))),
-    adminCategory: v.optional(v.union(v.literal("store"), v.literal("message"), v.literal("community"), v.literal("finance"))),
+    adminCategory: v.optional(v.union(v.literal("store"), v.literal("message"), v.literal("community"))),
     allowedStorageLocationIds: v.optional(v.array(v.id("storageLocations"))),
     creatorAdminId: v.optional(v.id("users")), // Admin creating this user (for permission check)
   },
@@ -508,7 +508,7 @@ export const updateUserRoleAndAssignment = mutation({
   args: {
     userId: v.id("users"),
     adminLevel: v.optional(v.union(v.literal("super"), v.literal("junior"))),
-    adminCategory: v.optional(v.union(v.literal("store"), v.literal("message"), v.literal("community"), v.literal("finance"))),
+    adminCategory: v.optional(v.union(v.literal("store"), v.literal("message"), v.literal("community"))),
     assignedCommunityIds: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {

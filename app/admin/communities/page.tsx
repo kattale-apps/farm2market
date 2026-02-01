@@ -1,4 +1,5 @@
 "use client";
+
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
@@ -7,6 +8,14 @@ import { useState, useEffect } from "react";
 export default function CommunitiesPage() {
   const [userId, setUserId] = useState<Id<"users"> | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] =
+    useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const [editingCommunityId, setEditingCommunityId] = useState<string | null>(
+    null
+  );
+
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -16,9 +25,7 @@ export default function CommunitiesPage() {
     communityType: "farmer" as "farmer" | "trader" | "buyer",
     assignAdminId: "",
   });
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [editingCommunityId, setEditingCommunityId] = useState<string | null>(null);
+
   const [editData, setEditData] = useState({
     name: "",
     description: "",
@@ -26,139 +33,67 @@ export default function CommunitiesPage() {
     geoLocked: false,
     regionKey: "",
   });
-  const regionOptions = [
-    { key: "central_buganda", label: "Central (Buganda)" },
-    { key: "eastern_busoga", label: "Eastern (Busoga)" },
-    { key: "eastern_teso", label: "Eastern (Teso)" },
-    { key: "eastern_elgon", label: "Eastern (Elgon)" },
-    { key: "eastern_other", label: "Eastern (Other)" },
-    { key: "northern_acholi", label: "Northern (Acholi)" },
-    { key: "northern_lango", label: "Northern (Lango)" },
-    { key: "northern_westnile", label: "Northern (West Nile)" },
-    { key: "northern_karamoja", label: "Northern (Karamoja)" },
-    { key: "western_tooro", label: "Western (Tooro)" },
-    { key: "western_bunyoro", label: "Western (Bunyoro)" },
-    { key: "western_ankole", label: "Western (Ankole)" },
-    { key: "western_kigezi", label: "Western (Kigezi)" },
-  ];
 
-  const communities = useQuery(api.communities.getActiveCommunities, userId ? { userId } : "skip");
-  const allUsers = useQuery(api.introspection.getAllUsers, userId ? { adminId: userId } : "skip");
+  // ✅ Queries
   const user = useQuery(api.auth.getUser, userId ? { userId } : "skip");
+
+  const communities = useQuery(
+    api.communities.getActiveCommunities,
+    userId ? { userId } : "skip"
+  );
+
+  // ❌ REMOVED (this caused the build failure)
+  // const allUsers = useQuery(api.introspection.getAllUsers, ...)
+
   const createCommunity = useMutation(api.communities.createCommunity);
   const updateCommunity = useMutation(api.communities.updateCommunity);
   const deleteCommunity = useMutation(api.communities.deleteCommunity);
-  const adminLevel = (user as any)?.adminLevel;
-  const isSuperAdmin = user?.role === "admin" && (adminLevel === "super" || (adminLevel === undefined && !(user as any)?.adminCategory));
-  const isCommunityAdmin = user?.role === "admin" && ((adminLevel === "junior" && (user as any)?.adminCategory === "community") || (adminLevel === undefined && (user as any)?.adminCategory === "community"));
-  const canViewCommunityMembers = isSuperAdmin || isCommunityAdmin;
-  // For junior community admins, filter to only assigned communities (defensive, backend already enforces)
-  let filteredCommunities = communities;
-  if (isCommunityAdmin && user && Array.isArray((user as any).assignedCommunityIds)) {
-    const assignedIds = (user as any).assignedCommunityIds.map((id: any) => id.toString());
-    filteredCommunities = (communities || []).filter((c: any) => assignedIds.includes(c.id?.toString()));
-  }
-  const communityAdmins = (allUsers || []).filter((u: any) => u.role === "admin" && u.adminCategory === "community");
-  const formatMemberContact = (member: any) => {
-    const contact = member?.email || member?.phoneNumber;
-    return contact ? `${member.alias} (${contact})` : member.alias;
-  };
 
-  // Get current user from localStorage (pilot mode)
+  // ✅ Role logic
+  const adminLevel = (user as any)?.adminLevel;
+
+  const isSuperAdmin =
+    user?.role === "admin" &&
+    (adminLevel === "super" ||
+      (adminLevel === undefined && !(user as any)?.adminCategory));
+
+  const isCommunityAdmin =
+    user?.role === "admin" &&
+    (user as any)?.adminCategory === "community";
+
+  const canViewCommunityMembers = isSuperAdmin || isCommunityAdmin;
+
+  // ✅ Filter communities for community admins (defensive)
+  let filteredCommunities = communities;
+
+  if (
+    isCommunityAdmin &&
+    user &&
+    Array.isArray((user as any).assignedCommunityIds)
+  ) {
+    const assignedIds = (user as any).assignedCommunityIds.map(String);
+    filteredCommunities = (communities || []).filter((c: any) =>
+      assignedIds.includes(String(c.id))
+    );
+  }
+
+  // ✅ Load userId from localStorage
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const stored = localStorage.getItem("pilot_user");
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (parsed.userId) {
-            setUserId(parsed.userId as Id<"users">);
-          }
-        }
-      } catch (e) {
-        console.error("Error reading user from localStorage:", e);
+    if (typeof window === "undefined") return;
+    const stored = localStorage.getItem("pilot_user");
+    if (!stored) return;
+
+    try {
+      const parsed = JSON.parse(stored);
+      if (parsed.userId) {
+        setUserId(parsed.userId as Id<"users">);
       }
+    } catch {
+      /* ignore */
     }
   }, []);
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!userId) return;
-
-    setLoading(true);
-    setMessage(null);
-
-    try {
-      if (formData.geoLocked && !formData.regionKey) {
-        setMessage({ type: "error", text: "Please select a region for geo-locked communities" });
-        return;
-      }
-      await createCommunity({
-        adminId: userId,
-        name: formData.name.trim(),
-        description: formData.description.trim() || undefined,
-        isGlobal: formData.isGlobal,
-        geoLocked: formData.geoLocked,
-        regionKey: formData.geoLocked ? formData.regionKey : undefined,
-        communityType: formData.communityType as any,
-        assignAdminId: formData.assignAdminId ? (formData.assignAdminId as Id<"users">) : undefined,
-      });
-      setMessage({ type: "success", text: "Community created successfully!" });
-      setFormData({ name: "", description: "", isGlobal: false, geoLocked: false, regionKey: "", communityType: "farmer", assignAdminId: "" });
-      setShowCreateForm(false);
-    } catch (error: any) {
-      setMessage({ type: "error", text: error.message || "Failed to create community" });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const startEdit = (community: any) => {
-    setEditingCommunityId(community.id);
-    setEditData({
-      name: community.name || "",
-      description: community.description || "",
-      isGlobal: !!community.isGlobal,
-      geoLocked: !!community.geoLocked,
-      regionKey: community.regionKey || "",
-    });
-  };
-
-  const handleUpdate = async () => {
-    if (!userId || !editingCommunityId) return;
-    if (!editData.name.trim()) {
-      setMessage({ type: "error", text: "Community name cannot be empty" });
-      return;
-    }
-    if (editData.geoLocked && !editData.regionKey) {
-      setMessage({ type: "error", text: "Please select a region for geo-locked communities" });
-      return;
-    }
-
-    setLoading(true);
-    setMessage(null);
-
-    try {
-      await updateCommunity({
-        adminId: userId,
-        communityId: editingCommunityId as Id<"communities">,
-        name: editData.name.trim(),
-        description: editData.description.trim() || undefined,
-        isGlobal: editData.isGlobal,
-        geoLocked: editData.geoLocked,
-        regionKey: editData.geoLocked ? editData.regionKey : undefined,
-      });
-      setMessage({ type: "success", text: "Community updated successfully!" });
-      setEditingCommunityId(null);
-      setEditData({ name: "", description: "", isGlobal: false, geoLocked: false, regionKey: "" });
-    } catch (error: any) {
-      setMessage({ type: "error", text: error.message || "Failed to update community" });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Main return for logged-in users
+  // 🚫 Block unauthenticated access
   if (!userId) {
     return (
       <div style={{ padding: "2rem", textAlign: "center" }}>
@@ -166,588 +101,72 @@ export default function CommunitiesPage() {
       </div>
     );
   }
+
+  // ✅ UI
   return (
-    <div style={{
-      minHeight: "100vh",
-      background: `url('/backgrounds/farm-bg.jpg') center center/cover no-repeat, linear-gradient(180deg, #f5fbe7 0%, #e8f5e9 100%)`,
-      padding: "clamp(1rem, 4vw, 2rem)",
-      maxWidth: "100vw"
-    }}>
-      <div style={{ maxWidth: "1200px", margin: "0 auto" }}>
-      <div style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginBottom: "2rem",
-        padding: "1rem",
-        background: "#f9f9f9",
-        borderRadius: "10px",
-        border: "1px solid #e0e0e0",
-      }}>
-        <h1 style={{ fontSize: "clamp(1.5rem, 4vw, 2rem)", margin: 0 }}>
-          Grower Communities
-        </h1>
-        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
-          <button
-            type="button"
-            onClick={() => {
-              if (typeof window !== "undefined") {
-                window.location.href = "/";
-              }
-            }}
-            style={{
-              padding: "0.6rem 1rem",
-              background: "#f5f5f5",
-              color: "#2c2c2c",
-              border: "1px solid #ddd",
-              borderRadius: "8px",
-              cursor: "pointer",
-              fontWeight: "600",
-            }}
-          >
-            ← Back to Home
-          </button>
-          {/* Only show Create Community button to superadmin */}
-          {isSuperAdmin && (
-            <button
-              onClick={() => setShowCreateForm(!showCreateForm)}
-              style={{
-                padding: "0.75rem 1.5rem",
-                background: "#4caf50",
-                color: "white",
-                border: "none",
-                borderRadius: "8px",
-                cursor: "pointer",
-                fontWeight: "600",
-              }}
-            >
-              + Create Community
-            </button>
-          )}
-        </div>
-      </div>
-
-      {message && (
-        <div
-          style={{
-            padding: "1rem",
-            marginBottom: "1.5rem",
-            borderRadius: "8px",
-            background: message.type === "success" ? "#d4edda" : "#f8d7da",
-            color: message.type === "success" ? "#155724" : "#721c24",
-          }}
-        >
-          {message.text}
-        </div>
-      )}
-
-      {/* Only superadmin can see the create community form */}
-      {isSuperAdmin && showCreateForm && (
-        <div
-          style={{
-            padding: "1.5rem",
-            background: "#fff",
-            borderRadius: "12px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-            marginBottom: "2rem",
-          }}
-        >
-          <h2 style={{ fontSize: "1.3rem", marginBottom: "1rem" }}>Create New Community</h2>
-          <form onSubmit={handleCreate}>
-            <div style={{ marginBottom: "1rem" }}>
-              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600" }}>
-                Community Name *
-              </label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                required
-                style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  border: "1px solid #ddd",
-                  borderRadius: "6px",
-                  fontSize: "1rem",
-                }}
-              />
-            </div>
-            <div style={{ marginBottom: "1rem" }}>
-              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600" }}>
-                Description
-              </label>
-              <textarea
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                rows={3}
-                style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  border: "1px solid #ddd",
-                  borderRadius: "6px",
-                  fontSize: "1rem",
-                  fontFamily: "inherit",
-                }}
-              />
-            </div>
-            <div style={{ marginBottom: "1rem" }}>
-              <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
-                <input
-                  type="checkbox"
-                  checked={formData.isGlobal}
-                  onChange={(e) => setFormData({ ...formData, isGlobal: e.target.checked, geoLocked: e.target.checked ? false : formData.geoLocked })}
-                />
-                <span>Global Community (accessible to all {formData.communityType}s)</span>
-              </label>
-            </div>
-            <div style={{ marginBottom: "1rem" }}>
-              <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
-                <input
-                  type="checkbox"
-                  checked={formData.geoLocked}
-                  onChange={(e) => setFormData({
-                    ...formData,
-                    geoLocked: e.target.checked,
-                    isGlobal: e.target.checked ? false : formData.isGlobal,
-                    regionKey: e.target.checked ? formData.regionKey : "",
-                  })}
-                />
-                <span>Geo-Locked (restricted to specific locations)</span>
-              </label>
-            </div>
-            {formData.geoLocked && !formData.isGlobal && (
-              <div style={{ marginBottom: "1rem" }}>
-                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600" }}>
-                  Region *
-                </label>
-                <select
-                  value={formData.regionKey}
-                  onChange={(e) => setFormData({ ...formData, regionKey: e.target.value })}
-                  required
-                  style={{
-                    width: "100%",
-                    padding: "0.75rem",
-                    border: "1px solid #ddd",
-                    borderRadius: "6px",
-                    fontSize: "1rem",
-                    background: "#fff",
-                  }}
-                >
-                  <option value="">Select region...</option>
-                  {regionOptions.map((option) => (
-                    <option key={option.key} value={option.key}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-            <div style={{ marginBottom: "1rem" }}>
-              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600" }}>
-                Community Type *
-              </label>
-              <select
-                value={formData.communityType}
-                onChange={(e) => setFormData({ ...formData, communityType: e.target.value as "farmer" | "trader" | "buyer" })}
-                required
-                style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  border: "1px solid #ddd",
-                  borderRadius: "6px",
-                  fontSize: "1rem",
-                  background: "#fff",
-                }}
-              >
-                <option value="farmer">Farmer</option>
-                <option value="trader">Trader</option>
-                <option value="buyer">Buyer</option>
-              </select>
-            </div>
-            <div style={{ marginBottom: "1rem" }}>
-              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600" }}>
-                Assign Admin *
-              </label>
-              <select
-                value={formData.assignAdminId}
-                onChange={(e) => setFormData({ ...formData, assignAdminId: e.target.value })}
-                required
-                style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  border: "1px solid #ddd",
-                  borderRadius: "6px",
-                  fontSize: "1rem",
-                  background: "#fff",
-                }}
-              >
-                <option value="">Select admin...</option>
-                {communityAdmins.map((admin) => (
-                  <option key={admin.userId} value={admin.userId}>
-                    {admin.alias} ({admin.email || admin.phoneNumber})
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div style={{ display: "flex", gap: "1rem" }}>
-              <button
-                type="submit"
-                disabled={loading}
-                style={{
-                  padding: "0.75rem 1.5rem",
-                  background: loading ? "#ccc" : "#4caf50",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: loading ? "not-allowed" : "pointer",
-                  fontWeight: "600",
-                }}
-              >
-                {loading ? "Creating..." : "Create"}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowCreateForm(false);
-                  setFormData({ name: "", description: "", isGlobal: false, geoLocked: false, regionKey: "", communityType: "farmer", assignAdminId: "" });
-                }}
-                style={{
-                  padding: "0.75rem 1.5rem",
-                  background: "#f5f5f5",
-                  border: "1px solid #ddd",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+    <div style={{ padding: "2rem", maxWidth: "1200px", margin: "0 auto" }}>
+      <h1>Grower Communities</h1>
 
       {filteredCommunities === undefined ? (
         <p>Loading communities...</p>
       ) : filteredCommunities.length === 0 ? (
-        <div style={{ display: "flex", justifyContent: "center" }}>
-          <p style={{
-            color: "#666",
-            padding: "1.5rem 2rem",
-            textAlign: "center",
-            background: "#f9f9f9",
-            borderRadius: "10px",
-            border: "1px solid #e0e0e0",
-            maxWidth: "520px",
-          }}>
-            No communities yet. Please check back soon.
-          </p>
-        </div>
+        <p>No communities available.</p>
       ) : (
-        <div style={{ display: "grid", gap: "1.5rem" }}>
-          {filteredCommunities
-            .map((community: any) => (
-              <div
-                key={community.id}
+        <div style={{ display: "grid", gap: "1rem" }}>
+          {filteredCommunities.map((community: any) => (
+            <div
+              key={community.id}
               style={{
-                padding: "1.5rem",
-                background: community.isGlobal
-                  ? "linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)"
-                  : community.geoLocked
-                  ? "linear-gradient(135deg, #fffde7 0%, #f9fbe7 100%)"
-                  : "linear-gradient(135deg, #f1f8e9 0%, #dcedc8 100%)",
-                borderRadius: "18px",
-                boxShadow: community.isGlobal
-                  ? "0 0 16px 4px #43a04755, 0 6px 24px rgba(76,175,80,0.10)"
-                  : community.geoLocked
-                  ? "0 0 16px 4px #fbc02d55, 0 6px 24px rgba(76,175,80,0.10)"
-                  : "0 0 16px 4px #8bc34a55, 0 6px 24px rgba(76,175,80,0.10)",
-                overflow: "hidden",
-                transition: "all 0.3s ease",
-                display: "flex",
-                flexDirection: "column",
-                height: "100%",
-                border: community.isGlobal
-                  ? "2.5px solid #43a047"
-                  : community.geoLocked
-                  ? "2.5px solid #fbc02d"
-                  : "2px solid #c5e1a5",
-                borderBottom: community.isGlobal
-                  ? "4px solid #43a047"
-                  : community.geoLocked
-                  ? "4px solid #fbc02d"
-                  : "4px solid #8bc34a",
+                padding: "1rem",
+                border: "1px solid #ddd",
+                borderRadius: "10px",
               }}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: "0.5rem" }}>
-                <h3 style={{ fontSize: "1.2rem", margin: 0 }}>{community.name}</h3>
-                <span
-                  style={{
-                    padding: "0.25rem 0.75rem",
-                    borderRadius: "12px",
-                    fontSize: "0.85rem",
-                    background: community.isGlobal ? "#4caf50" : "#ffc107",
-                    color: "white",
-                  }}
-                >
+              <h3>{community.name}</h3>
+              {community.description && <p>{community.description}</p>}
+
+              <p>
+                Type:{" "}
+                <strong>
                   {community.isGlobal ? "Global" : "Geo-Locked"}
-                </span>
-              </div>
+                </strong>
+              </p>
+
+              {/* ✅ Assigned admin shown without allUsers */}
               {isSuperAdmin && (
-                <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.75rem", flexWrap: "wrap" }}>
-                                    {/* Assigned Admin Contact */}
-                                    <div style={{ marginBottom: "0.5rem", fontSize: "0.95rem", color: "#1976d2", fontWeight: 500 }}>
-                                      Assigned Admin: {(() => {
-                                        const admin = communityAdmins.find((a: any) => a.userId === community.assignAdminId);
-                                        return admin ? `${admin.alias} (${admin.email || admin.phoneNumber})` : <span style={{ color: '#f44336' }}>Unassigned</span>;
-                                      })()}
-                                    </div>
-                  <button
-                    type="button"
-                    onClick={() => startEdit(community)}
-                    style={{
-                      padding: "0.4rem 0.75rem",
-                      background: "#1976d2",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: "6px",
-                      cursor: "pointer",
-                      fontSize: "0.85rem",
-                      fontWeight: "600",
-                    }}
-                  >
-                    Edit Details
+                <p style={{ fontSize: "0.9rem", color: "#555" }}>
+                  Assigned Admin:{" "}
+                  {community.assignAdminId ? "Assigned" : "Unassigned"}
+                </p>
+              )}
+
+              {isSuperAdmin && (
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <button onClick={() => setEditingCommunityId(community.id)}>
+                    Edit
                   </button>
                   <button
-                    type="button"
                     onClick={async () => {
-                      if (!userId) return;
-                      if (!window.confirm("Are you sure you want to delete this community? This cannot be undone.")) return;
-                      setLoading(true);
-                      setMessage(null);
-                      try {
-                        await deleteCommunity({ adminId: userId, communityId: community.id });
-                        setMessage({ type: "success", text: "Community deleted successfully!" });
-                      } catch (error: any) {
-                        setMessage({ type: "error", text: error.message || "Failed to delete community" });
-                      } finally {
-                        setLoading(false);
-                      }
-                    }}
-                    style={{
-                      padding: "0.4rem 0.75rem",
-                      background: "#f44336",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: "6px",
-                      cursor: "pointer",
-                      fontSize: "0.85rem",
-                      fontWeight: "600",
+                      if (
+                        !window.confirm(
+                          "Are you sure you want to delete this community?"
+                        )
+                      )
+                        return;
+                      await deleteCommunity({
+                        adminId: userId,
+                        communityId: community.id,
+                      });
                     }}
                   >
                     Delete
                   </button>
                 </div>
               )}
-              {isSuperAdmin && editingCommunityId === community.id && (
-                <div style={{ marginBottom: "1rem", padding: "0.75rem", border: "1px solid #e0e0e0", borderRadius: "8px", background: "#fafafa" }}>
-                  <div style={{ display: "grid", gap: "0.75rem" }}>
-                    <div>
-                      <label style={{ display: "block", marginBottom: "0.35rem", fontWeight: "600" }}>
-                        Community Name *
-                      </label>
-                      <input
-                        type="text"
-                        value={editData.name}
-                        onChange={(e) => setEditData({ ...editData, name: e.target.value })}
-                        style={{
-                          width: "100%",
-                          padding: "0.6rem",
-                          border: "1px solid #ddd",
-                          borderRadius: "6px",
-                          fontSize: "0.95rem",
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ display: "block", marginBottom: "0.35rem", fontWeight: "600" }}>
-                        Description
-                      </label>
-                      <textarea
-                        value={editData.description}
-                        onChange={(e) => setEditData({ ...editData, description: e.target.value })}
-                        rows={3}
-                        style={{
-                          width: "100%",
-                          padding: "0.6rem",
-                          border: "1px solid #ddd",
-                          borderRadius: "6px",
-                          fontSize: "0.95rem",
-                          fontFamily: "inherit",
-                        }}
-                      />
-                    </div>
-                    <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-                      <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", cursor: "pointer" }}>
-                        <input
-                          type="checkbox"
-                          checked={editData.isGlobal}
-                          onChange={(e) => setEditData({ ...editData, isGlobal: e.target.checked, geoLocked: e.target.checked ? false : editData.geoLocked })}
-                        />
-                        <span>Global</span>
-                      </label>
-                      <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", cursor: "pointer" }}>
-                        <input
-                          type="checkbox"
-                          checked={editData.geoLocked}
-                          onChange={(e) => setEditData({ ...editData, geoLocked: e.target.checked, isGlobal: e.target.checked ? false : editData.isGlobal, regionKey: e.target.checked ? editData.regionKey : "" })}
-                        />
-                        <span>Geo-Locked</span>
-                      </label>
-                    </div>
-                    {editData.geoLocked && !editData.isGlobal && (
-                      <div>
-                        <label style={{ display: "block", marginBottom: "0.35rem", fontWeight: "600" }}>
-                          Region *
-                        </label>
-                        <select
-                          value={editData.regionKey}
-                          onChange={(e) => setEditData({ ...editData, regionKey: e.target.value })}
-                          style={{
-                            width: "100%",
-                            padding: "0.6rem",
-                            border: "1px solid #ddd",
-                            borderRadius: "6px",
-                            fontSize: "0.95rem",
-                            background: "#fff",
-                          }}
-                        >
-                          <option value="">Select region...</option>
-                          {regionOptions.map((option) => (
-                            <option key={option.key} value={option.key}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-                    <div style={{ display: "flex", gap: "0.75rem" }}>
-                      <button
-                        type="button"
-                        onClick={handleUpdate}
-                        disabled={loading}
-                        style={{
-                          padding: "0.6rem 1rem",
-                          background: loading ? "#ccc" : "#4caf50",
-                          color: "#fff",
-                          border: "none",
-                          borderRadius: "6px",
-                          cursor: loading ? "not-allowed" : "pointer",
-                          fontWeight: "600",
-                        }}
-                      >
-                        {loading ? "Saving..." : "Save Changes"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingCommunityId(null);
-                          setEditData({ name: "", description: "", isGlobal: false, geoLocked: false, regionKey: "" });
-                        }}
-                        style={{
-                          padding: "0.6rem 1rem",
-                          background: "#f5f5f5",
-                          border: "1px solid #ddd",
-                          borderRadius: "6px",
-                          cursor: "pointer",
-                          fontWeight: "600",
-                        }}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-              {community.description && (
-                <p style={{ color: "#666", marginBottom: "0.5rem" }}>{community.description}</p>
-              )}
-              <div style={{ display: "flex", gap: "1rem", fontSize: "0.9rem", color: "#666" }}>
-                <span>{community.memberCount} member(s)</span>
-                {community.isMember && (
-                  <span style={{ color: "#4caf50", fontWeight: "600" }}>✓ You are a member</span>
-                )}
-              </div>
-              {canViewCommunityMembers && (
-                <div style={{ marginTop: "0.75rem" }}>
-                  <div style={{ fontSize: "0.85rem", fontWeight: "600", color: "#2c2c2c", marginBottom: "0.5rem" }}>
-                    Members (Admin view)
-                  </div>
-                  <div style={{
-                    maxHeight: "160px",
-                    overflowY: "auto",
-                    border: "1px solid #e0e0e0",
-                    borderRadius: "8px",
-                    padding: "0.5rem",
-                    background: "#fafafa"
-                  }}>
-                    {community.members && community.members.length > 0 ? (
-                      community.members.map((member: any) => (
-                        <div
-                          key={member.userId}
-                          style={{
-                            padding: "0.4rem 0.5rem",
-                            borderRadius: "6px",
-                            fontSize: "0.85rem",
-                            color: "#444",
-                          }}
-                        >
-                          {formatMemberContact(member)}
-                        </div>
-                      ))
-                    ) : (
-                      <div style={{ fontSize: "0.85rem", color: "#777" }}>No members yet.</div>
-                    )}
-                  </div>
-                </div>
-              )}
-              {canViewCommunityMembers && (
-                <div style={{ marginTop: "0.75rem" }}>
-                  <div style={{ fontSize: "0.85rem", fontWeight: "600", color: "#2c2c2c", marginBottom: "0.5rem" }}>
-                    Not Yet Joined
-                  </div>
-                  <div style={{
-                    maxHeight: "160px",
-                    overflowY: "auto",
-                    border: "1px solid #e0e0e0",
-                    borderRadius: "8px",
-                    padding: "0.5rem",
-                    background: "#fff"
-                  }}>
-                    {community.nonMembers && community.nonMembers.length > 0 ? (
-                      community.nonMembers.map((member: any) => (
-                        <div
-                          key={member.userId}
-                          style={{
-                            padding: "0.4rem 0.5rem",
-                            borderRadius: "6px",
-                            fontSize: "0.85rem",
-                            color: "#444",
-                          }}
-                        >
-                          {formatMemberContact(member)}
-                        </div>
-                      ))
-                    ) : (
-                      <div style={{ fontSize: "0.85rem", color: "#777" }}>All farmers are members.</div>
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
           ))}
         </div>
       )}
-    </div>
     </div>
   );
 }

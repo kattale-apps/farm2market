@@ -10,8 +10,11 @@ export * from "./farmerOnboarding";
 export * from "./farmerProfile";
 export * from "./finance";
 
-// ✅ Explicit admin / introspection export (NO wildcard)
-export { getCommunitiesForAdmin } from "./introspection";
+// ✅ Explicit introspection exports
+export {
+  getCommunitiesForAdmin,
+  getAllUsers,
+} from "./introspection";
 
 export * from "./inventoryBlocks";
 export * from "./listings";

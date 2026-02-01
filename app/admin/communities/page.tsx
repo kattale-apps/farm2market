@@ -162,7 +162,13 @@ export default function CommunitiesPage() {
   }
 
   return (
-    <div style={{ padding: "clamp(1rem, 4vw, 2rem)", maxWidth: "1200px", margin: "0 auto" }}>
+    <div style={{
+      minHeight: "100vh",
+      background: `url('/backgrounds/farm-bg.jpg') center center/cover no-repeat, linear-gradient(180deg, #f5fbe7 0%, #e8f5e9 100%)`,
+      padding: "clamp(1rem, 4vw, 2rem)",
+      maxWidth: "100vw"
+    }}>
+      <div style={{ maxWidth: "1200px", margin: "0 auto" }}>
       <div style={{
         display: "flex",
         justifyContent: "space-between",
@@ -435,9 +441,32 @@ export default function CommunitiesPage() {
               key={community.id}
               style={{
                 padding: "1.5rem",
-                background: "#fff",
-                borderRadius: "12px",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+                background: community.isGlobal
+                  ? "linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)"
+                  : community.geoLocked
+                  ? "linear-gradient(135deg, #fffde7 0%, #f9fbe7 100%)"
+                  : "linear-gradient(135deg, #f1f8e9 0%, #dcedc8 100%)",
+                borderRadius: "18px",
+                boxShadow: community.isGlobal
+                  ? "0 0 16px 4px #43a04755, 0 6px 24px rgba(76,175,80,0.10)"
+                  : community.geoLocked
+                  ? "0 0 16px 4px #fbc02d55, 0 6px 24px rgba(76,175,80,0.10)"
+                  : "0 0 16px 4px #8bc34a55, 0 6px 24px rgba(76,175,80,0.10)",
+                overflow: "hidden",
+                transition: "all 0.3s ease",
+                display: "flex",
+                flexDirection: "column",
+                height: "100%",
+                border: community.isGlobal
+                  ? "2.5px solid #43a047"
+                  : community.geoLocked
+                  ? "2.5px solid #fbc02d"
+                  : "2px solid #c5e1a5",
+                borderBottom: community.isGlobal
+                  ? "4px solid #43a047"
+                  : community.geoLocked
+                  ? "4px solid #fbc02d"
+                  : "4px solid #8bc34a",
               }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: "0.5rem" }}>

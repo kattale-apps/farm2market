@@ -173,7 +173,7 @@ export default function FarmerCommunitiesPage() {
                     ? "linear-gradient(135deg, #fffde7 0%, #f9fbe7 100%)"
                     : "linear-gradient(135deg, #f1f8e9 0%, #dcedc8 100%)",
                   borderRadius: "18px",
-                  boxShadow: "0 6px 24px rgba(76,175,80,0.10)",
+                  boxShadow: "0 0 16px 4px rgba(76, 175, 80, 0.25), 0 6px 24px rgba(76,175,80,0.10)",
                   overflow: "hidden",
                   transition: "all 0.3s ease",
                   display: "flex",
@@ -181,6 +181,13 @@ export default function FarmerCommunitiesPage() {
                   height: "100%",
                   border: community.isMember ? "2.5px solid #388e3c" : "2px solid #c5e1a5",
                   borderBottom: community.isGlobal ? "4px solid #43a047" : community.geoLocked ? "4px solid #fbc02d" : "4px solid #8bc34a",
+                  boxShadow: community.isMember
+                    ? "0 0 16px 4px #43a04799, 0 6px 24px rgba(76,175,80,0.10)"
+                    : community.isGlobal
+                    ? "0 0 16px 4px #43a04755, 0 6px 24px rgba(76,175,80,0.10)"
+                    : community.geoLocked
+                    ? "0 0 16px 4px #fbc02d55, 0 6px 24px rgba(76,175,80,0.10)"
+                    : "0 0 16px 4px #8bc34a55, 0 6px 24px rgba(76,175,80,0.10)",
                 }}
               >
                 {/* Card Header */}

@@ -15,16 +15,6 @@ interface AdminDashboardProps {
   userId: string;
 }
 
-function SuperAdminOnly({
-  show,
-  children,
-}: {
-  show: boolean;
-  children: React.ReactNode;
-}) {
-  return show ? <>{children}</> : null;
-}
-
 /* ───────────────── Styles ───────────────── */
 
 const containerStyle: React.CSSProperties = {
@@ -33,44 +23,30 @@ const containerStyle: React.CSSProperties = {
   background: "#f3f6f4",
 };
 
-const farmBackgroundWrapper: React.CSSProperties = {
+const farmCardStyle: React.CSSProperties = {
   backgroundImage: "url('/backgrounds/farm-bg.jpg')",
   backgroundSize: "cover",
   backgroundPosition: "center",
   backgroundRepeat: "no-repeat",
-  borderRadius: "20px",
+  borderRadius: "22px",
   padding: "2rem",
+  boxShadow: "0 14px 36px rgba(0,0,0,0.12)",
 };
 
-const glassPanel: React.CSSProperties = {
-  background: "rgba(255, 255, 255, 0.78)",
-  backdropFilter: "blur(12px)",
-  WebkitBackdropFilter: "blur(12px)",
+const glassPanelStyle: React.CSSProperties = {
+  background: "rgba(255, 255, 255, 0.82)",
+  backdropFilter: "blur(14px)",
+  WebkitBackdropFilter: "blur(14px)",
   borderRadius: "16px",
   padding: "1.75rem",
-  boxShadow: "0 12px 30px rgba(0,0,0,0.12)",
 };
 
-const cardStyle: React.CSSProperties = {
-  backgroundColor: "#ffffff",
+const utilityCardStyle: React.CSSProperties = {
+  background: "#ffffff",
   border: "1px solid #e0e0e0",
   borderRadius: "12px",
-  padding: "1rem",
+  padding: "1rem 1.25rem",
   boxShadow: "0 6px 16px rgba(0,0,0,0.06)",
-  display: "flex",
-  flexDirection: "column",
-  justifyContent: "space-between",
-};
-
-const disabledButtonStyle: React.CSSProperties = {
-  padding: "0.6rem 1rem",
-  background: "#cfd8dc",
-  color: "#546e7a",
-  borderRadius: "8px",
-  border: "1px dashed #b0bec5",
-  cursor: "not-allowed",
-  fontWeight: 600,
-  opacity: 0.85,
 };
 
 /* ───────────────── Component ───────────────── */
@@ -134,21 +110,13 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
     }
   };
 
-  /* ───────────── Premium Notice Handler ───────────── */
-
-  const handlePremiumClick = () => {
-    alert(
-      "🚀 Creating a community is a Premium feature.\n\nPlease contact Farm2Market support to upgrade your account."
-    );
-  };
-
   /* ───────────────── UI ───────────────── */
 
   return (
     <div style={containerStyle}>
       <h2 style={{ marginBottom: "1rem" }}>Community Management</h2>
 
-      {/* Premium Banner */}
+      {/* Premium Notice */}
       <div
         style={{
           background: "#fff3cd",
@@ -164,107 +132,127 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
         support for access.
       </div>
 
-      {/* Notifications / Inbox / Create */}
+      {/* Notifications / Inbox */}
       <div
         style={{
           display: "flex",
           gap: "1rem",
-          marginBottom: "1.5rem",
+          marginBottom: "1.75rem",
           flexWrap: "wrap",
         }}
       >
-        <div style={cardStyle}>🔔 Notifications (Premium)</div>
-        <div style={cardStyle}>📥 Inbox (Premium)</div>
-
-        <button
-          onClick={handlePremiumClick}
-          style={disabledButtonStyle}
-          title="Premium Feature"
-        >
-          ➕ Create Community (Premium)
-        </button>
+        <div style={utilityCardStyle}>🔔 Notifications (Premium)</div>
+        <div style={utilityCardStyle}>📥 Inbox (Premium)</div>
       </div>
 
-      {/* MAIN CONTENT */}
-      <div style={farmBackgroundWrapper}>
-        <div style={glassPanel}>
+      {/* FARM BACKGROUND CARD */}
+      <div style={farmCardStyle}>
+        <div style={glassPanelStyle}>
           {selectedCommunityId ? (
             <>
-              <button
-                onClick={() => setSelectedCommunityId(null)}
-                style={{
-                  marginBottom: "1rem",
-                  padding: "0.5rem 1rem",
-                  borderRadius: "6px",
-                  border: "1px solid #ccc",
-                  background: "#ffffff",
-                  cursor: "pointer",
-                  fontWeight: 600,
-                }}
-              >
-                ← Back to Communities
-              </button>
-
+              {/* Back + Export */}
               <div
                 style={{
                   display: "flex",
-                  gap: "0.75rem",
-                  marginBottom: "1rem",
+                  justifyContent: "space-between",
                   flexWrap: "wrap",
+                  gap: "0.75rem",
+                  marginBottom: "1.25rem",
                 }}
               >
                 <button
-                  onClick={() => handleExport("excel")}
+                  onClick={() => setSelectedCommunityId(null)}
                   style={{
-                    background: "#2e7d32",
-                    color: "#fff",
                     padding: "0.5rem 1rem",
-                    borderRadius: 6,
-                    border: "none",
+                    borderRadius: "6px",
+                    border: "1px solid #ccc",
+                    background: "#ffffff",
+                    cursor: "pointer",
                     fontWeight: 600,
                   }}
                 >
-                  Export Excel
+                  ← Back to Communities
                 </button>
-                <button
-                  onClick={() => handleExport("pdf")}
-                  style={{
-                    background: "#d32f2f",
-                    color: "#fff",
-                    padding: "0.5rem 1rem",
-                    borderRadius: 6,
-                    border: "none",
-                    fontWeight: 600,
-                  }}
-                >
-                  Export PDF
-                </button>
+
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <button
+                    onClick={() => handleExport("excel")}
+                    style={{
+                      background: "#2e7d32",
+                      color: "#fff",
+                      padding: "0.5rem 1rem",
+                      borderRadius: 6,
+                      border: "none",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Export Excel
+                  </button>
+                  <button
+                    onClick={() => handleExport("pdf")}
+                    style={{
+                      background: "#d32f2f",
+                      color: "#fff",
+                      padding: "0.5rem 1rem",
+                      borderRadius: 6,
+                      border: "none",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Export PDF
+                  </button>
+                </div>
               </div>
 
-              <h4>Members ({communityMembers?.length ?? 0})</h4>
+              {/* Members Table */}
+              <h4 style={{ marginBottom: "0.75rem" }}>
+                Members ({communityMembers?.length ?? 0})
+              </h4>
 
               {!communityMembers ? (
                 <p>Loading members…</p>
               ) : (
                 <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <table
+                    style={{
+                      width: "100%",
+                      borderCollapse: "collapse",
+                      background: "#ffffff",
+                      borderRadius: "10px",
+                      overflow: "hidden",
+                    }}
+                  >
                     <thead>
                       <tr style={{ background: "#f5f5f5" }}>
-                        <th>Alias</th>
-                        <th>Role</th>
-                        <th>Phone</th>
-                        <th>Email</th>
-                        <th>Joined</th>
+                        {["Alias", "Role", "Phone", "Email", "Joined"].map(
+                          (h) => (
+                            <th
+                              key={h}
+                              style={{
+                                padding: "0.75rem",
+                                textAlign: "left",
+                                borderBottom: "1px solid #ddd",
+                                fontWeight: 700,
+                              }}
+                            >
+                              {h}
+                            </th>
+                          )
+                        )}
                       </tr>
                     </thead>
                     <tbody>
                       {communityMembers.map((m) => (
                         <tr key={m._id}>
-                          <td>{m.alias}</td>
-                          <td>{m.role}</td>
-                          <td>{m.phoneNumber ?? "-"}</td>
-                          <td>{m.email ?? "-"}</td>
-                          <td>
+                          <td style={{ padding: "0.75rem" }}>{m.alias}</td>
+                          <td style={{ padding: "0.75rem" }}>{m.role}</td>
+                          <td style={{ padding: "0.75rem" }}>
+                            {m.phoneNumber ?? "-"}
+                          </td>
+                          <td style={{ padding: "0.75rem" }}>
+                            {m.email ?? "-"}
+                          </td>
+                          <td style={{ padding: "0.75rem" }}>
                             {m.joinedAt
                               ? formatUgandaDate(m.joinedAt)
                               : "-"}
@@ -277,6 +265,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
               )}
             </>
           ) : (
+            /* COMMUNITY LIST */
             <div
               style={{
                 display: "grid",
@@ -285,14 +274,20 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
               }}
             >
               {communities?.map((c) => (
-                <div key={c._id} style={cardStyle}>
-                  <div>
-                    <h4>{c.name}</h4>
-                    <p>{c.description}</p>
-                    <p>
-                      <strong>Members:</strong> {c.memberCount ?? 0}
-                    </p>
-                  </div>
+                <div
+                  key={c._id}
+                  style={{
+                    background: "#ffffff",
+                    borderRadius: "12px",
+                    padding: "1rem",
+                    border: "1px solid #e0e0e0",
+                  }}
+                >
+                  <h4>{c.name}</h4>
+                  <p>{c.description}</p>
+                  <p>
+                    <strong>Members:</strong> {c.memberCount ?? 0}
+                  </p>
                   <button
                     onClick={() => setSelectedCommunityId(c._id)}
                     style={{
@@ -303,6 +298,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                       borderRadius: 6,
                       border: "none",
                       fontWeight: 600,
+                      width: "100%",
                     }}
                   >
                     Manage & View Members
@@ -313,10 +309,6 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           )}
         </div>
       </div>
-
-      <SuperAdminOnly show={false}>
-        <div />
-      </SuperAdminOnly>
     </div>
   );
 }

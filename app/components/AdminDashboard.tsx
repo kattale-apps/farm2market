@@ -19,8 +19,11 @@ interface AdminDashboardProps {
 
 const containerStyle: React.CSSProperties = {
   minHeight: "100vh",
-  padding: "2rem",
+  padding: "clamp(1rem, 5vw, 2rem)",
   background: "#f3f6f4",
+  boxSizing: "border-box",
+  maxWidth: "100vw",
+  overflowX: "hidden",
 };
 
 const farmCardStyle: React.CSSProperties = {
@@ -29,8 +32,9 @@ const farmCardStyle: React.CSSProperties = {
   backgroundPosition: "center",
   backgroundRepeat: "no-repeat",
   borderRadius: "22px",
-  padding: "2rem",
+  padding: "clamp(1rem, 3vw, 2rem)",
   boxShadow: "0 14px 36px rgba(0,0,0,0.12)",
+  boxSizing: "border-box",
 };
 
 const glassPanelStyle: React.CSSProperties = {
@@ -38,7 +42,8 @@ const glassPanelStyle: React.CSSProperties = {
   backdropFilter: "blur(14px)",
   WebkitBackdropFilter: "blur(14px)",
   borderRadius: "16px",
-  padding: "1.75rem",
+  padding: "clamp(1rem, 3vw, 1.75rem)",
+  boxSizing: "border-box",
 };
 
 const utilityCardStyle: React.CSSProperties = {
@@ -47,6 +52,7 @@ const utilityCardStyle: React.CSSProperties = {
   borderRadius: "12px",
   padding: "1rem 1.25rem",
   boxShadow: "0 6px 16px rgba(0,0,0,0.06)",
+  boxSizing: "border-box",
 };
 
 /* ───────────────── Component ───────────────── */
@@ -174,7 +180,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                   ← Back to Communities
                 </button>
 
-                <div style={{ display: "flex", gap: "0.5rem" }}>
+                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                   <button
                     onClick={() => handleExport("excel")}
                     style={{
@@ -212,7 +218,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
               {!communityMembers ? (
                 <p>Loading members…</p>
               ) : (
-                <div style={{ overflowX: "auto" }}>
+                <div style={{ overflowX: "auto", maxWidth: "100%" }}>
                   <table
                     style={{
                       width: "100%",
@@ -269,7 +275,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
+                gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 260px), 1fr))",
                 gap: "1rem",
               }}
             >

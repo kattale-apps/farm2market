@@ -99,7 +99,7 @@ function AddFundsForm({ adminId }: { adminId: Id<"users"> }) {
     <div style={{ marginTop: '2rem', borderTop: '1px solid #eee', paddingTop: '1.5rem' }}>
       <h4 style={{ marginTop: 0, color: "#2c2c2c" }}>Add Demo Funds to User Account</h4>
       <p style={{ color: "#666", marginTop: 0, fontSize: '0.9rem' }}>
-        This action deposits funds into a trader or buyer's wallet for demonstration or testing purposes.
+        This action deposits funds into a trader or buyer&apos;s wallet for demonstration or testing purposes.
       </p>
       <form onSubmit={handleSubmit} style={formStyle}>
         <div>

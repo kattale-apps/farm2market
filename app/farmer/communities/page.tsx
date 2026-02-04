@@ -37,9 +37,14 @@ export default function FarmerCommunitiesPage() {
   const [userId, setUserId] = useState<Id<"users"> | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
+  const agroFreshCommunityId = process.env.NEXT_PUBLIC_AGROFRESH_COMMUNITY_ID;
   const communities = useQuery(api.communities.getActiveCommunities, userId ? { userId } : "skip");
+  const myDrafts = useQuery(api.farmValidation.getMyDrafts, userId ? { farmerId: userId } : "skip");
   const joinCommunity = useMutation(api.communities.joinCommunity);
   const leaveCommunity = useMutation(api.communities.leaveCommunity);
+  const createNewValidation = useMutation(api.farmValidation.createNewDraft) as (
+    args: { farmerId: Id<"users"> }
+  ) => Promise<Id<"agroFreshUGFarmValidations">>;
   useEffect(() => {
     const storedUser = localStorage.getItem("pilot_user");
     if (storedUser) {
@@ -55,12 +60,53 @@ export default function FarmerCommunitiesPage() {
     }
   }, [router]);
 
-  const handleJoinCommunity = async (communityId: Id<"communities">) => {
+  useEffect(() => {
+    if (!communities || !agroFreshCommunityId) return;
+    const found = communities.some((c) => c.id === agroFreshCommunityId);
+    if (!found) {
+      console.warn("[DEBUG] AgroFresh community ID not found in list:", agroFreshCommunityId, communities);
+    }
+  }, [communities, agroFreshCommunityId]);
+
+  const normalizeCommunityKey = (value?: string) =>
+    (value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
+  const isAgroFreshCommunity = (community: { id: Id<"communities">; name?: string; description?: string }) => {
+    if (agroFreshCommunityId && community.id === agroFreshCommunityId) return true;
+    const nameKey = normalizeCommunityKey(community.name);
+    const descriptionKey = normalizeCommunityKey(community.description);
+    return nameKey.includes("agrofresh") || descriptionKey.includes("agrofresh");
+  };
+
+  const getLatestDraftId = () => {
+    if (!myDrafts || myDrafts.length === 0) return null;
+    const sorted = [...myDrafts].sort((a: any, b: any) => {
+      const aTime = a.updatedAt ?? a.createdAt ?? a._creationTime ?? 0;
+      const bTime = b.updatedAt ?? b.createdAt ?? b._creationTime ?? 0;
+      return bTime - aTime;
+    });
+    return sorted[0]?._id ?? null;
+  };
+
+  const handleJoinCommunity = async (community: { id: Id<"communities">; name: string; description?: string }) => {
     if (!userId) return;
-    setLoadingAction(`join-${communityId}`);
+    console.log("[DEBUG] join community click:", community);
+    setLoadingAction(`join-${community.id}`);
     setMessage(null);
     try {
-      await joinCommunity({ farmerId: userId, communityId });
+      if (isAgroFreshCommunity(community)) {
+        const latestDraftId = getLatestDraftId();
+        if (latestDraftId) {
+          router.push(`/farm-validation/${latestDraftId}`);
+        } else {
+          const newFormId = await createNewValidation({ farmerId: userId });
+          router.push(`/farm-validation/${newFormId}`);
+        }
+        setMessage({ type: "success", text: "Please complete the AGROFRESH UG validation form to finish joining." });
+        return;
+      }
+
+      await joinCommunity({ farmerId: userId, communityId: community.id });
       setMessage({ type: "success", text: "Successfully joined the community!" });
     } catch (error: any) {
       setMessage({ type: "error", text: error.message || "Failed to join community" });
@@ -71,6 +117,7 @@ export default function FarmerCommunitiesPage() {
 
   const handleLeaveCommunity = async (communityId: Id<"communities">) => {
     if (!userId) return;
+    console.log("[DEBUG] leave community click:", communityId);
     setLoadingAction(`leave-${communityId}`);
     setMessage(null);
     try {
@@ -214,7 +261,9 @@ export default function FarmerCommunitiesPage() {
                   display: "flex",
                   flexDirection: "column",
                   height: "100%",
-                  border: community.isMember ? "2.5px solid #388e3c" : "2px solid #c5e1a5",
+                  borderTop: community.isMember ? "2.5px solid #388e3c" : "2px solid #c5e1a5",
+                  borderLeft: community.isMember ? "2.5px solid #388e3c" : "2px solid #c5e1a5",
+                  borderRight: community.isMember ? "2.5px solid #388e3c" : "2px solid #c5e1a5",
                   borderBottom: community.isGlobal ? "4px solid #43a047" : community.geoLocked ? "4px solid #fbc02d" : "4px solid #8bc34a",
                   boxShadow: community.isMember
                     ? "0 0 16px 4px #43a04799, 0 6px 24px rgba(76,175,80,0.10)"
@@ -307,7 +356,7 @@ export default function FarmerCommunitiesPage() {
                   {typeof community.isMember === "boolean" ? (
                     !community.isMember ? (
                       <button
-                        onClick={() => handleJoinCommunity(community.id)}
+                        onClick={() => handleJoinCommunity({ id: community.id, name: community.name })}
                         disabled={loadingAction === `join-${community.id}`}
                         style={{
                           flex: 1,
@@ -370,7 +419,7 @@ export default function FarmerCommunitiesPage() {
                     <div style={{ color: "#ff9800", fontWeight: 600 }}>
                       [Debug] isMember missing - showing both buttons
                       <button
-                        onClick={() => handleJoinCommunity(community.id)}
+                        onClick={() => handleJoinCommunity({ id: community.id, name: community.name })}
                         style={{ marginRight: 8, background: "#4caf50", color: "#fff", border: "none", borderRadius: 8, padding: "0.5rem 1rem" }}
                       >Join Community</button>
                       <button

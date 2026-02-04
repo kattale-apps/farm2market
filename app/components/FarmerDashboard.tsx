@@ -11,6 +11,7 @@ import { NotificationMailbox } from "./NotificationMailbox";
 import { ThreadView } from "./messages/ThreadView";
 import { ContactUs } from "./ContactUs";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 interface FarmerDashboardProps {
   userId: Id<"users">;
@@ -24,6 +25,8 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
   const expiredUTIDs = useQuery(api.farmerDashboard.getExpiredUTIDs, { farmerId: userId });
   const transactionsLedger = useQuery(api.farmerDashboard.getSuccessfulTransactionsLedger, { farmerId: userId });
   const allUnitsLedger = useQuery(api.farmerDashboard.getAllUnitsLedger, { farmerId: userId });
+  const communities = useQuery(api.communities.getActiveCommunities, { userId });
+  const myAgroFreshDrafts = useQuery(api.farmValidation.getMyDrafts, { farmerId: userId });
   
   const acceptOffer = useMutation(api.negotiations.acceptOffer);
   const rejectOffer = useMutation(api.negotiations.rejectOffer);
@@ -33,6 +36,10 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
   const cancelListing = useMutation(api.farmerDashboard.cancelListing);
   const farmerConfirmDelivery = useMutation(api.farmerDashboard.farmerConfirmDelivery);
   const messageThreads = useQuery(api.messages.getUserMessageThreads, { userId });
+  const createNewValidation = useMutation(api.farmValidation.createNewDraft) as (
+    args: { farmerId: Id<"users"> }
+  ) => Promise<Id<"agroFreshUGFarmValidations">>;
+  const router = useRouter();
   
   const [countering, setCountering] = useState<Id<"negotiations"> | null>(null);
   const [counteringBatch, setCounteringBatch] = useState<string | null>(null);
@@ -42,6 +49,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
   const [cancellingListing, setCancellingListing] = useState<Id<"listings"> | null>(null);
   const [counterPrice, setCounterPrice] = useState<string>("");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [creatingValidation, setCreatingValidation] = useState(false);
   const [messageInboxOpen, setMessageInboxOpen] = useState(false);
   const [selectedMessageUtid, setSelectedMessageUtid] = useState<string | null>(null);
   const [selectedListing, setSelectedListing] = useState<any | null>(null);
@@ -463,6 +471,43 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
         .join(", ") || "Location not set"
     : "Loading...";
 
+  const normalizeCommunityKey = (value?: string) =>
+    (value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
+  const agroFreshCommunityId = process.env.NEXT_PUBLIC_AGROFRESH_COMMUNITY_ID;
+
+  const isAgroFreshMember =
+    communities?.some((c: any) => {
+      if (agroFreshCommunityId && c.id === agroFreshCommunityId) return !!c.isMember;
+      const nameKey = normalizeCommunityKey(c.name);
+      const descriptionKey = normalizeCommunityKey(c.description);
+      return (nameKey.includes("agrofresh") || descriptionKey.includes("agrofresh")) && c.isMember;
+    }) ?? false;
+
+  const handleStartNewForm = async () => {
+    setCreatingValidation(true);
+    try {
+      const latestDraft = myAgroFreshDrafts?.length
+        ? [...myAgroFreshDrafts].sort((a: any, b: any) => {
+            const aTime = a.updatedAt ?? a.createdAt ?? a._creationTime ?? 0;
+            const bTime = b.updatedAt ?? b.createdAt ?? b._creationTime ?? 0;
+            return bTime - aTime;
+          })[0]
+        : null;
+
+      if (latestDraft?._id) {
+        router.push(`/farm-validation/${latestDraft._id}`);
+      } else {
+        const newFormId = await createNewValidation({ farmerId: userId });
+        router.push(`/farm-validation/${newFormId}`);
+      }
+    } catch (err: any) {
+      setMessage({ type: "error", text: err?.message || "Failed to start new farm validation" });
+    } finally {
+      setCreatingValidation(false);
+    }
+  };
+
   return (
     <div style={{ padding: "1rem", maxWidth: "100%", boxSizing: "border-box" }}>
       <div style={{ 
@@ -572,6 +617,57 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
           </button>
         </div>
       </div>
+
+      {isAgroFreshMember && (
+        <div
+          style={{
+            marginBottom: "1.5rem",
+            padding: "clamp(1rem, 3vw, 1.5rem)",
+            background: "#ffffff",
+            borderRadius: "12px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+            border: "1px solid #e0e0e0",
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.75rem",
+          }}
+        >
+          <h3
+            style={{
+              margin: 0,
+              fontSize: "clamp(1.1rem, 3vw, 1.3rem)",
+              color: "#2c2c2c",
+              fontFamily: '"Montserrat", sans-serif',
+              fontWeight: "600",
+              letterSpacing: "-0.01em",
+            }}
+          >
+            Farm Validation
+          </h3>
+          <p style={{ margin: 0, color: "#555", fontSize: "0.95rem" }}>
+            Submit a new farm for validation with AGROFRESH UG.
+          </p>
+          <div>
+            <button
+              onClick={handleStartNewForm}
+              disabled={creatingValidation}
+              style={{
+                padding: "0.75rem 1.25rem",
+                background: "#2e7d32",
+                color: "#fff",
+                border: "none",
+                borderRadius: "8px",
+                fontSize: "0.95rem",
+                fontWeight: "600",
+                cursor: creatingValidation ? "not-allowed" : "pointer",
+                opacity: creatingValidation ? 0.7 : 1,
+              }}
+            >
+              {creatingValidation ? "Starting..." : "Start New Farm Validation"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {messageInboxOpen && (
         <div

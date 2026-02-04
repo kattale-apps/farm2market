@@ -14,6 +14,36 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
+const imageMetadata = {
+  storageId: v.id("_storage"),
+  url: v.string(),
+  lat: v.number(),
+  lng: v.number(),
+  accuracy: v.number(),
+  capturedAt: v.string(), // ISO 8601 string
+};
+
+// Reusable livestock section template
+const livestockSection = v.object({
+  present: v.boolean(),
+  breed: v.optional(v.string()),
+  animalCount: v.optional(v.string()),
+  managementSystem: v.optional(v.string()),
+  healthStatus: v.optional(v.string()),
+  productionOutput: v.optional(v.string()),
+});
+
+// Reusable crop section template
+const cropSection = v.object({
+  present: v.boolean(),
+  variety: v.optional(v.string()),
+  areaUnderCultivation: v.optional(v.string()),
+  areaUnit: v.optional(v.string()),
+  productionOutput: v.optional(v.string()),
+  productionUnit: v.optional(v.string()),
+  lastHarvestDate: v.optional(v.string()),
+});
+
 export default defineSchema({
   /**
    * Users table
@@ -657,6 +687,63 @@ export default defineSchema({
   })
     .index("by_listing", ["listingId"])
     .index("by_community", ["communityId"]),
+
+  agroFreshUGFarmValidations: defineTable({
+    farmerId: v.id("users"),
+    community: v.literal("AGROFRESH_UG"),
+    status: v.union(
+      v.literal("DRAFT"),
+      v.literal("SUBMITTED"),
+      v.literal("VERIFIED")
+    ),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    verifiedAt: v.optional(v.number()),
+    verifiedBy: v.optional(v.id("users")),
+
+    // Section 1: Farmer & Farm Particulars
+    section1: v.optional(v.object({
+      farmerFullName: v.optional(v.string()),
+      phoneNumber: v.optional(v.string()),
+      nationalId: v.optional(v.string()),
+      farmName: v.optional(v.string()),
+      district: v.optional(v.string()),
+      subCounty: v.optional(v.string()),
+      parish: v.optional(v.string()),
+      village: v.optional(v.string()),
+      gps: v.optional(v.object({ lat: v.number(), lng: v.number() })),
+      farmSize: v.optional(v.string()),
+      farmSizeUnit: v.optional(v.string()),
+      mainEnterprise: v.optional(v.string()),
+      farmingExperience: v.optional(v.string()),
+      waterSource: v.optional(v.string()),
+      certifications: v.optional(v.array(v.string())),
+      farmerPhoto: v.optional(v.object(imageMetadata)),
+      farmPhotos: v.optional(v.array(v.object(imageMetadata))),
+    })),
+
+    // Section 2: Livestock & Aquaculture
+    section2_1_dairy: v.optional(livestockSection),
+    section2_2_poultry: v.optional(livestockSection),
+    section2_3_piggery: v.optional(livestockSection),
+    section2_4_cuniculture: v.optional(livestockSection),
+    section2_5_apiary: v.optional(v.object({
+      present: v.boolean(),
+      hiveCount: v.optional(v.string()),
+      honeyProduction: v.optional(v.string()),
+      productionUnit: v.optional(v.string()),
+    })),
+    section2_6_aquaculture: v.optional(cropSection),
+
+    // Section 2: Crops & Trees
+    section2_7_banana: v.optional(cropSection),
+    section2_8_maize: v.optional(cropSection),
+    section2_9_fruitTrees: v.optional(cropSection),
+    section2_10_woodyForest: v.optional(cropSection),
+  })
+    .index("by_farmerId_and_community", ["farmerId", "community"])
+    .index("by_status", ["status"])
+    .index("by_createdAt", ["createdAt"]),
 
   /**
    * Export logs for quota tracking

@@ -395,7 +395,7 @@ export default function CommunitiesPage() {
                       description: editData.description || community.description,
                       isGlobal: editData.isGlobal !== undefined ? editData.isGlobal : community.isGlobal,
                       geoLocked: editData.geoLocked !== undefined ? editData.geoLocked : community.geoLocked,
-                      regionKey: editData.regionKey || community.regionKey,
+                      regionKey: editData.regionKey || "",
                     });
                     setMessage({ type: "success", text: "Community updated successfully!" });
                     setEditingCommunityId(null);

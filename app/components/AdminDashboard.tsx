@@ -62,9 +62,16 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   const [selectedCommunityId, setSelectedCommunityId] =
     useState<Id<"communities"> | null>(null);
 
+  const adminUser = useQuery(api.auth.getUser, { userId: adminId });
   const communities = useQuery(api.introspection.getCommunitiesForAdmin, {
     adminId,
   });
+
+  // Check if user is SuperAdmin
+  const isSuperAdmin = adminUser?.role === "admin" && (
+    adminUser?.adminLevel === "super" || 
+    (adminUser?.adminLevel === undefined && !adminUser?.adminCategory)
+  );
 
   const communityMembers = useQuery(
     api.introspection.getCommunityMembers,
@@ -120,6 +127,223 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
 
   return (
     <div style={containerStyle}>
+      {/* SuperAdmin Cards */}
+      {isSuperAdmin && (
+        <>
+          <h2 style={{ marginBottom: "1rem", fontSize: "1.8rem", fontWeight: "700" }}>
+            SuperAdmin Dashboard
+          </h2>
+          
+          {/* Admin Action Cards */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 280px), 1fr))",
+              gap: "1.25rem",
+              marginBottom: "2rem",
+            }}
+          >
+            {/* Finance Dashboard */}
+            <a href="/admin/finance" style={{ textDecoration: "none" }}>
+              <div
+                style={{
+                  ...utilityCardStyle,
+                  cursor: "pointer",
+                  transition: "transform 0.2s, box-shadow 0.2s",
+                  background: "linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%)",
+                  color: "#fff",
+                  minHeight: "140px",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-4px)";
+                  e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.15)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.06)";
+                }}
+              >
+                <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>💰</div>
+                <div>
+                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Finance Dashboard</h3>
+                  <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.95 }}>
+                    View commission earnings and financial reports
+                  </p>
+                </div>
+              </div>
+            </a>
+
+            {/* Role Management */}
+            <a href="/admin/role-management" style={{ textDecoration: "none" }}>
+              <div
+                style={{
+                  ...utilityCardStyle,
+                  cursor: "pointer",
+                  transition: "transform 0.2s, box-shadow 0.2s",
+                  background: "linear-gradient(135deg, #1976d2 0%, #1565c0 100%)",
+                  color: "#fff",
+                  minHeight: "140px",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-4px)";
+                  e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.15)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.06)";
+                }}
+              >
+                <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>👥</div>
+                <div>
+                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Role Management</h3>
+                  <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.95 }}>
+                    Manage admin roles and permissions
+                  </p>
+                </div>
+              </div>
+            </a>
+
+            {/* Communities */}
+            <a href="/admin/communities" style={{ textDecoration: "none" }}>
+              <div
+                style={{
+                  ...utilityCardStyle,
+                  cursor: "pointer",
+                  transition: "transform 0.2s, box-shadow 0.2s",
+                  background: "linear-gradient(135deg, #f57c00 0%, #ef6c00 100%)",
+                  color: "#fff",
+                  minHeight: "140px",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-4px)";
+                  e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.15)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.06)";
+                }}
+              >
+                <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>🌾</div>
+                <div>
+                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Communities</h3>
+                  <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.95 }}>
+                    Create and manage grower communities
+                  </p>
+                </div>
+              </div>
+            </a>
+
+            {/* StoreAdmin Audit */}
+            <a href="/admin/storeadmin-audit" style={{ textDecoration: "none" }}>
+              <div
+                style={{
+                  ...utilityCardStyle,
+                  cursor: "pointer",
+                  transition: "transform 0.2s, box-shadow 0.2s",
+                  background: "linear-gradient(135deg, #7b1fa2 0%, #6a1b9a 100%)",
+                  color: "#fff",
+                  minHeight: "140px",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-4px)";
+                  e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.15)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.06)";
+                }}
+              >
+                <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>📦</div>
+                <div>
+                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>StoreAdmin Audit</h3>
+                  <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.95 }}>
+                    Audit store admin activities and deliveries
+                  </p>
+                </div>
+              </div>
+            </a>
+
+            {/* Service Levels */}
+            <a href="/admin/service-levels" style={{ textDecoration: "none" }}>
+              <div
+                style={{
+                  ...utilityCardStyle,
+                  cursor: "pointer",
+                  transition: "transform 0.2s, box-shadow 0.2s",
+                  background: "linear-gradient(135deg, #0288d1 0%, #0277bd 100%)",
+                  color: "#fff",
+                  minHeight: "140px",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-4px)";
+                  e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.15)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.06)";
+                }}
+              >
+                <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>⭐</div>
+                <div>
+                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Service Levels</h3>
+                  <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.95 }}>
+                    Manage export limits and service tiers
+                  </p>
+                </div>
+              </div>
+            </a>
+
+            {/* Community Dashboard */}
+            <a href="/admin/community-dashboard" style={{ textDecoration: "none" }}>
+              <div
+                style={{
+                  ...utilityCardStyle,
+                  cursor: "pointer",
+                  transition: "transform 0.2s, box-shadow 0.2s",
+                  background: "linear-gradient(135deg, #d32f2f 0%, #c62828 100%)",
+                  color: "#fff",
+                  minHeight: "140px",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-4px)";
+                  e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.15)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.06)";
+                }}
+              >
+                <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>📊</div>
+                <div>
+                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Community Dashboard</h3>
+                  <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.95 }}>
+                    View and filter community members
+                  </p>
+                </div>
+              </div>
+            </a>
+          </div>
+        </>
+      )}
+
       <h2 style={{ marginBottom: "1rem" }}>Community Management</h2>
 
       {/* Premium Notice */}

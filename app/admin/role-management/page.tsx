@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
@@ -27,15 +28,55 @@ type EditAdminState = {
   assignedCommunityIds: string[];
 };
 
+/* ───────────────── Styles ───────────────── */
+
+const containerStyle: React.CSSProperties = {
+  minHeight: "100vh",
+  padding: "clamp(1rem, 5vw, 2rem)",
+  background: "linear-gradient(135deg, #f3f6f4 0%, #e8f5e9 100%)",
+  boxSizing: "border-box",
+};
+
+const farmCardStyle: React.CSSProperties = {
+  backgroundImage: "url('/backgrounds/farm-bg.jpg')",
+  backgroundSize: "cover",
+  backgroundPosition: "center",
+  backgroundRepeat: "no-repeat",
+  borderRadius: "22px",
+  padding: "clamp(1rem, 3vw, 2rem)",
+  boxShadow: "0 14px 36px rgba(0,0,0,0.12)",
+  boxSizing: "border-box",
+};
+
+const glassPanelStyle: React.CSSProperties = {
+  background: "rgba(255, 255, 255, 0.82)",
+  backdropFilter: "blur(14px)",
+  WebkitBackdropFilter: "blur(14px)",
+  borderRadius: "16px",
+  padding: "clamp(1rem, 3vw, 1.75rem)",
+  boxSizing: "border-box",
+};
+
 /* ───────────────── Page ───────────────── */
 
 export default function AdminRoleManagementPage() {
+  const router = useRouter();
   const [userId, setUserId] = useState<Id<"users"> | null>(null);
   const [selectedAdmin, setSelectedAdmin] = useState<AnyUser | null>(null);
   const [editData, setEditData] = useState<EditAdminState | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
 
   /* Load pilot user */
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
   useEffect(() => {
     try {
       const stored = localStorage.getItem("pilot_user");
@@ -99,169 +140,540 @@ export default function AdminRoleManagementPage() {
   /* ───────────────── UI ───────────────── */
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f5f7f6", padding: "2rem" }}>
-      <div
-        style={{
-          maxWidth: 1000,
-          margin: "0 auto",
-          background: "#fff",
-          padding: "2rem",
-          borderRadius: 14,
-          boxShadow: "0 10px 30px rgba(0,0,0,0.12)",
-        }}
-      >
-        <h1>Admin Role Management (Super Admin)</h1>
-
-        {message && (
+    <div style={containerStyle}>
+      <div style={farmCardStyle}>
+        <div style={glassPanelStyle}>
+          {/* Header with Back Button */}
           <div
             style={{
-              margin: "1rem 0",
-              padding: "0.75rem 1rem",
-              background: "#e8f5e9",
-              color: "#2e7d32",
-              borderRadius: 8,
-              fontWeight: 600,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "1.5rem",
+              flexWrap: "wrap",
+              gap: "1rem",
             }}
           >
-            {message}
+            <div style={{ flex: 1 }}>
+              <h1
+                style={{
+                  margin: "0 0 0.5rem 0",
+                  fontSize: "clamp(1.5rem, 5vw, 2rem)",
+                  fontWeight: "700",
+                  color: "#1a1a1a",
+                }}
+              >
+                Admin Role Management
+              </h1>
+              <p style={{ margin: 0, color: "#666", fontSize: "0.9rem" }}>
+                Manage admin roles and permissions
+              </p>
+            </div>
+            <button
+              onClick={() => router.push("/")}
+              style={{
+                padding: "0.6rem 1.2rem",
+                background: "#f5f5f5",
+                border: "1px solid #ccc",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "0.9rem",
+                transition: "background 0.2s",
+                whiteSpace: "nowrap",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.background = "#e0e0e0")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.background = "#f5f5f5")
+              }
+            >
+              ← Back to Dashboard
+            </button>
           </div>
-        )}
 
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ background: "#f0f0f0" }}>
-              <th>Alias</th>
-              <th>Email</th>
-              <th>Admin Level</th>
-              <th>Admin Category</th>
-              <th>Assigned Communities</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {admins.map((admin) => (
-              <tr key={admin.userId}>
-                <td>{admin.alias}</td>
-                <td>{admin.email ?? "-"}</td>
-                <td>{admin.adminLevel ?? "-"}</td>
-                <td>{admin.adminCategory ?? "-"}</td>
-                <td>
-                  {admin.assignedCommunityIds?.length
-                    ? admin.assignedCommunityIds.join(", ")
-                    : "-"}
-                </td>
-                <td>
-                  <button
-                    onClick={() => handleEdit(admin)}
+          {/* Message Alert */}
+          {message && (
+            <div
+              style={{
+                margin: "1rem 0",
+                padding: "0.75rem 1rem",
+                background: "#e8f5e9",
+                color: "#2e7d32",
+                borderRadius: 8,
+                fontWeight: 600,
+                fontSize: "0.95rem",
+              }}
+            >
+              ✓ {message}
+            </div>
+          )}
+
+          {/* Admin List or Edit Form */}
+          {!selectedAdmin ? (
+            /* Admin Table - Responsive */
+            <div style={{ overflowX: "auto", marginTop: "1.5rem" }}>
+              {isMobile ? (
+                /* Mobile Card View */
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr",
+                    gap: "1rem",
+                  }}
+                >
+                  {admins.map((admin) => (
+                    <div
+                      key={admin.userId}
+                      style={{
+                        background: "#fff",
+                        border: "1px solid #e0e0e0",
+                        borderRadius: "10px",
+                        padding: "1rem",
+                        boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+                      }}
+                    >
+                      <div
+                        style={{
+                          marginBottom: "0.75rem",
+                          paddingBottom: "0.75rem",
+                          borderBottom: "1px solid #f0f0f0",
+                        }}
+                      >
+                        <h3
+                          style={{
+                            margin: "0 0 0.25rem 0",
+                            color: "#1a1a1a",
+                            fontSize: "1rem",
+                            fontWeight: "600",
+                          }}
+                        >
+                          {admin.alias}
+                        </h3>
+                        <p
+                          style={{
+                            margin: "0.25rem 0",
+                            color: "#666",
+                            fontSize: "0.85rem",
+                            wordBreak: "break-all",
+                          }}
+                        >
+                          {admin.email ?? "-"}
+                        </p>
+                      </div>
+
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr 1fr",
+                          gap: "0.75rem",
+                          marginBottom: "1rem",
+                          fontSize: "0.85rem",
+                        }}
+                      >
+                        <div>
+                          <span style={{ color: "#999", fontWeight: "600" }}>
+                            Level:
+                          </span>
+                          <div style={{ color: "#1a1a1a" }}>
+                            {admin.adminLevel ?? "-"}
+                          </div>
+                        </div>
+                        <div>
+                          <span style={{ color: "#999", fontWeight: "600" }}>
+                            Category:
+                          </span>
+                          <div style={{ color: "#1a1a1a" }}>
+                            {admin.adminCategory ?? "-"}
+                          </div>
+                        </div>
+                      </div>
+
+                      {admin.assignedCommunityIds?.length ? (
+                        <div
+                          style={{
+                            marginBottom: "1rem",
+                            fontSize: "0.85rem",
+                          }}
+                        >
+                          <span style={{ color: "#999", fontWeight: "600" }}>
+                            Communities:
+                          </span>
+                          <div style={{ color: "#1a1a1a", marginTop: "0.25rem" }}>
+                            {admin.assignedCommunityIds.length} assigned
+                          </div>
+                        </div>
+                      ) : null}
+
+                      <button
+                        onClick={() => handleEdit(admin)}
+                        style={{
+                          width: "100%",
+                          padding: "0.6rem",
+                          background: "#1976d2",
+                          color: "#fff",
+                          borderRadius: 6,
+                          border: "none",
+                          cursor: "pointer",
+                          fontWeight: "600",
+                          fontSize: "0.9rem",
+                        }}
+                      >
+                        Edit
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                /* Desktop Table View */
+                <table
+                  style={{
+                    width: "100%",
+                    borderCollapse: "collapse",
+                    background: "#fff",
+                    borderRadius: "10px",
+                    overflow: "hidden",
+                  }}
+                >
+                  <thead>
+                    <tr style={{ background: "#f5f5f5" }}>
+                      <th
+                        style={{
+                          padding: "0.75rem",
+                          textAlign: "left",
+                          fontWeight: "600",
+                          borderBottom: "2px solid #e0e0e0",
+                          fontSize: "0.9rem",
+                        }}
+                      >
+                        Alias
+                      </th>
+                      <th
+                        style={{
+                          padding: "0.75rem",
+                          textAlign: "left",
+                          fontWeight: "600",
+                          borderBottom: "2px solid #e0e0e0",
+                          fontSize: "0.9rem",
+                        }}
+                      >
+                        Email
+                      </th>
+                      <th
+                        style={{
+                          padding: "0.75rem",
+                          textAlign: "left",
+                          fontWeight: "600",
+                          borderBottom: "2px solid #e0e0e0",
+                          fontSize: "0.9rem",
+                        }}
+                      >
+                        Level
+                      </th>
+                      <th
+                        style={{
+                          padding: "0.75rem",
+                          textAlign: "left",
+                          fontWeight: "600",
+                          borderBottom: "2px solid #e0e0e0",
+                          fontSize: "0.9rem",
+                        }}
+                      >
+                        Category
+                      </th>
+                      <th
+                        style={{
+                          padding: "0.75rem",
+                          textAlign: "left",
+                          fontWeight: "600",
+                          borderBottom: "2px solid #e0e0e0",
+                          fontSize: "0.9rem",
+                        }}
+                      >
+                        Communities
+                      </th>
+                      <th
+                        style={{
+                          padding: "0.75rem",
+                          textAlign: "center",
+                          fontWeight: "600",
+                          borderBottom: "2px solid #e0e0e0",
+                          fontSize: "0.9rem",
+                        }}
+                      >
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {admins.map((admin) => (
+                      <tr
+                        key={admin.userId}
+                        style={{
+                          borderBottom: "1px solid #f0f0f0",
+                          transition: "background 0.2s",
+                        }}
+                        onMouseEnter={(e) =>
+                          (e.currentTarget.style.background = "#f9f9f9")
+                        }
+                        onMouseLeave={(e) =>
+                          (e.currentTarget.style.background = "transparent")
+                        }
+                      >
+                        <td style={{ padding: "0.75rem", fontSize: "0.9rem" }}>
+                          {admin.alias}
+                        </td>
+                        <td
+                          style={{
+                            padding: "0.75rem",
+                            fontSize: "0.9rem",
+                            wordBreak: "break-word",
+                            maxWidth: "200px",
+                          }}
+                        >
+                          {admin.email ?? "-"}
+                        </td>
+                        <td style={{ padding: "0.75rem", fontSize: "0.9rem" }}>
+                          {admin.adminLevel ?? "-"}
+                        </td>
+                        <td style={{ padding: "0.75rem", fontSize: "0.9rem" }}>
+                          {admin.adminCategory ?? "-"}
+                        </td>
+                        <td style={{ padding: "0.75rem", fontSize: "0.9rem" }}>
+                          {admin.assignedCommunityIds?.length
+                            ? `${admin.assignedCommunityIds.length} assigned`
+                            : "-"}
+                        </td>
+                        <td
+                          style={{
+                            padding: "0.75rem",
+                            textAlign: "center",
+                          }}
+                        >
+                          <button
+                            onClick={() => handleEdit(admin)}
+                            style={{
+                              padding: "0.4rem 0.75rem",
+                              background: "#1976d2",
+                              color: "#fff",
+                              borderRadius: 6,
+                              border: "none",
+                              cursor: "pointer",
+                              fontWeight: "600",
+                              fontSize: "0.85rem",
+                            }}
+                          >
+                            Edit
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          ) : (
+            /* Edit Form */
+            <div
+              style={{
+                marginTop: "1.5rem",
+                background: "#fafafa",
+                padding: "clamp(1rem, 3vw, 1.5rem)",
+                borderRadius: 12,
+                border: "1px solid #e0e0e0",
+              }}
+            >
+              <h2
+                style={{
+                  margin: "0 0 1.5rem 0",
+                  fontSize: "1.5rem",
+                  fontWeight: "700",
+                  color: "#1a1a1a",
+                }}
+              >
+                Edit Admin: {selectedAdmin.alias}
+              </h2>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+                  gap: "1.5rem",
+                  marginBottom: "1.5rem",
+                }}
+              >
+                {/* Admin Level */}
+                <div>
+                  <label
                     style={{
-                      padding: "0.4rem 0.75rem",
-                      background: "#1976d2",
-                      color: "#fff",
-                      borderRadius: 6,
-                      border: "none",
-                      cursor: "pointer",
-                      fontWeight: 600,
+                      display: "block",
+                      marginBottom: "0.5rem",
+                      fontWeight: "600",
+                      color: "#333",
+                      fontSize: "0.9rem",
                     }}
                   >
-                    Edit
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                    Admin Level
+                  </label>
+                  <select
+                    value={editData?.adminLevel ?? ""}
+                    onChange={(e) =>
+                      setEditData({
+                        ...(editData || {
+                          adminLevel: "",
+                          adminCategory: "",
+                          assignedCommunityIds: [],
+                        }),
+                        adminLevel: e.target.value as AdminLevel,
+                      })
+                    }
+                    style={{
+                      width: "100%",
+                      padding: "0.6rem",
+                      borderRadius: "6px",
+                      border: "1px solid #ccc",
+                      fontSize: "0.9rem",
+                      boxSizing: "border-box",
+                    }}
+                  >
+                    <option value="">None</option>
+                    <option value="super">Super</option>
+                    <option value="junior">Junior</option>
+                  </select>
+                </div>
 
-        {selectedAdmin && editData && (
-          <div
-            style={{
-              marginTop: "2rem",
-              background: "#fafafa",
-              padding: "1.5rem",
-              borderRadius: 12,
-              border: "1px solid #ddd",
-            }}
-          >
-            <h2>Edit Admin: {selectedAdmin.alias}</h2>
+                {/* Admin Category */}
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      marginBottom: "0.5rem",
+                      fontWeight: "600",
+                      color: "#333",
+                      fontSize: "0.9rem",
+                    }}
+                  >
+                    Admin Category
+                  </label>
+                  <select
+                    value={editData?.adminCategory ?? ""}
+                    onChange={(e) =>
+                      setEditData({
+                        ...(editData || {
+                          adminLevel: "",
+                          adminCategory: "",
+                          assignedCommunityIds: [],
+                        }),
+                        adminCategory: e.target.value as AdminCategory,
+                      })
+                    }
+                    style={{
+                      width: "100%",
+                      padding: "0.6rem",
+                      borderRadius: "6px",
+                      border: "1px solid #ccc",
+                      fontSize: "0.9rem",
+                      boxSizing: "border-box",
+                    }}
+                  >
+                    <option value="">None</option>
+                    <option value="community">Community</option>
+                    <option value="store">Store</option>
+                    <option value="message">Message</option>
+                  </select>
+                </div>
+              </div>
 
-            <label>Admin Level</label>
-            <select
-              value={editData.adminLevel}
-              onChange={(e) =>
-                setEditData({
-                  ...editData,
-                  adminLevel: e.target.value as AdminLevel,
-                })
-              }
-            >
-              <option value="">None</option>
-              <option value="super">Super</option>
-              <option value="junior">Junior</option>
-            </select>
+              {/* Assigned Communities */}
+              <div style={{ marginBottom: "1.5rem" }}>
+                <label
+                  style={{
+                    display: "block",
+                    marginBottom: "0.5rem",
+                    fontWeight: "600",
+                    color: "#333",
+                    fontSize: "0.9rem",
+                  }}
+                >
+                  Assigned Community IDs (comma-separated)
+                </label>
+                <textarea
+                  value={editData?.assignedCommunityIds.join(",") ?? ""}
+                  onChange={(e) =>
+                    setEditData({
+                      ...(editData || {
+                        adminLevel: "",
+                        adminCategory: "",
+                        assignedCommunityIds: [],
+                      }),
+                      assignedCommunityIds: e.target.value
+                        .split(",")
+                        .map((id) => id.trim())
+                        .filter(Boolean),
+                    })
+                  }
+                  style={{
+                    width: "100%",
+                    padding: "0.6rem",
+                    borderRadius: "6px",
+                    border: "1px solid #ccc",
+                    fontSize: "0.9rem",
+                    fontFamily: "monospace",
+                    minHeight: "80px",
+                    boxSizing: "border-box",
+                  }}
+                  placeholder="Enter community IDs separated by commas"
+                />
+              </div>
 
-            <label style={{ marginTop: 12 }}>Admin Category</label>
-            <select
-              value={editData.adminCategory}
-              onChange={(e) =>
-                setEditData({
-                  ...editData,
-                  adminCategory: e.target.value as AdminCategory,
-                })
-              }
-            >
-              <option value="">None</option>
-              <option value="community">Community</option>
-              <option value="store">Store</option>
-              <option value="message">Message</option>
-            </select>
-
-            <label style={{ marginTop: 12 }}>Assigned Community IDs</label>
-            <input
-              type="text"
-              value={editData.assignedCommunityIds.join(",")}
-              onChange={(e) =>
-                setEditData({
-                  ...editData,
-                  assignedCommunityIds: e.target.value
-                    .split(",")
-                    .map((id) => id.trim())
-                    .filter(Boolean),
-                })
-              }
-              style={{ width: "100%" }}
-            />
-
-            <div style={{ marginTop: 16, display: "flex", gap: 12 }}>
-              <button
-                onClick={handleSave}
+              {/* Buttons */}
+              <div
                 style={{
-                  background: "#4caf50",
-                  color: "#fff",
-                  padding: "0.6rem 1.2rem",
-                  borderRadius: 6,
-                  border: "none",
-                  fontWeight: 600,
+                  display: "flex",
+                  gap: "1rem",
+                  flexWrap: "wrap",
                 }}
               >
-                Save
-              </button>
-              <button
-                onClick={() => {
-                  setSelectedAdmin(null);
-                  setEditData(null);
-                }}
-                style={{
-                  background: "#e0e0e0",
-                  padding: "0.6rem 1.2rem",
-                  borderRadius: 6,
-                  border: "none",
-                  fontWeight: 600,
-                }}
-              >
-                Cancel
-              </button>
+                <button
+                  onClick={handleSave}
+                  style={{
+                    flex: isMobile ? "1 1 100%" : "0 1 auto",
+                    padding: "0.75rem 1.5rem",
+                    background: "#4caf50",
+                    color: "#fff",
+                    borderRadius: 6,
+                    border: "none",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                    fontSize: "0.9rem",
+                  }}
+                >
+                  Save Changes
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedAdmin(null);
+                    setEditData(null);
+                    setMessage(null);
+                  }}
+                  style={{
+                    flex: isMobile ? "1 1 100%" : "0 1 auto",
+                    padding: "0.75rem 1.5rem",
+                    background: "#e0e0e0",
+                    borderRadius: 6,
+                    border: "none",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                    fontSize: "0.9rem",
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

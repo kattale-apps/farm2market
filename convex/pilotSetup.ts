@@ -79,6 +79,8 @@ export const createPilotUsers = mutation({
           createdAt: getUgandaTime(),
           lastActiveAt: getUgandaTime(),
           passwordHash,
+          // Set adminLevel to "super" for admin users
+          ...(userData.role === "admin" && { adminLevel: "super" as const }),
         });
 
         created.push({
@@ -98,6 +100,41 @@ export const createPilotUsers = mutation({
       totalCreated: created.length,
       totalErrors: errors.length,
       sharedPassword: "Farm2Market2024",
+    };
+  },
+});
+
+/**
+ * Fix existing admin user to have superadmin level
+ * 
+ * Updates admin@pilot.farm2market to have adminLevel = "super"
+ */
+export const fixAdminLevel = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const admin = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", "admin@pilot.farm2market"))
+      .first();
+
+    if (!admin) {
+      return { error: "Admin user not found" };
+    }
+
+    if (admin.adminLevel === "super") {
+      return { message: "Admin already has superadmin level", adminLevel: admin.adminLevel };
+    }
+
+    await ctx.db.patch(admin._id, {
+      adminLevel: "super" as const,
+    });
+
+    return {
+      message: "Admin level updated to super",
+      email: admin.email,
+      alias: admin.alias,
+      oldLevel: admin.adminLevel,
+      newLevel: "super",
     };
   },
 });

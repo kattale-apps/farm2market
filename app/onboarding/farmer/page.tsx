@@ -108,7 +108,7 @@ export default function FarmerOnboardingPage() {
   const [selectedParishId, setSelectedParishId] = useState<Id<"parishes"> | "">("");
 
   // Farm size input
-  const [farmSizeUnit, setFarmSizeUnit] = useState<"ft" | "m" | "omwigo" | "emiigo">("ft");
+  const [farmSizeUnit, setFarmSizeUnit] = useState<"ft" | "m" | "emiigo" | "acres">("ft");
   const [farmSizeLength, setFarmSizeLength] = useState("");
   const [farmSizeWidth, setFarmSizeWidth] = useState("");
   const [farmSizeOmwigo, setFarmSizeOmwigo] = useState("");
@@ -168,18 +168,18 @@ export default function FarmerOnboardingPage() {
 
     // Build farm size input
     let farmSizeInput: any = {};
-    if (farmSizeUnit === "omwigo") {
-      if (!farmSizeOmwigo || parseFloat(farmSizeOmwigo) <= 0) {
-        setMessage({ type: "error", text: "Please enter a valid number of Omwigo" });
-        return;
-      }
-      farmSizeInput.omwigo = parseFloat(farmSizeOmwigo);
-    } else if (farmSizeUnit === "emiigo") {
+    if (farmSizeUnit === "emiigo") {
       if (!farmSizeEmiigo || parseFloat(farmSizeEmiigo) <= 0) {
         setMessage({ type: "error", text: "Please enter a valid number of Emiigo" });
         return;
       }
       farmSizeInput.emiigo = parseFloat(farmSizeEmiigo);
+    } else if (farmSizeUnit === "acres") {
+      if (!farmSizeLength || parseFloat(farmSizeLength) <= 0) {
+        setMessage({ type: "error", text: "Please enter a valid number of acres" });
+        return;
+      }
+      farmSizeInput.acres = parseFloat(farmSizeLength);
     } else {
       if (!farmSizeLength || !farmSizeWidth || parseFloat(farmSizeLength) <= 0 || parseFloat(farmSizeWidth) <= 0) {
         setMessage({ type: "error", text: "Please enter valid length and width" });
@@ -486,7 +486,7 @@ export default function FarmerOnboardingPage() {
               </label>
               <select
                 value={farmSizeUnit}
-                onChange={(e) => setFarmSizeUnit(e.target.value as "ft" | "m" | "omwigo" | "emiigo")}
+                onChange={(e) => setFarmSizeUnit(e.target.value as "ft" | "m" | "emiigo" | "acres")}
                 required
                 style={{
                   width: "100%",
@@ -500,7 +500,7 @@ export default function FarmerOnboardingPage() {
               >
               <option value="ft">Feet × Feet</option>
               <option value="m">Meters × Meters</option>
-              <option value="omwigo">Omwigo (10×100 ft)</option>
+              <option value="acres">Acres</option>
               <option value="emiigo">Emiigo (Multiple Omwigo)</option>
             </select>
           </div>
@@ -563,8 +563,15 @@ export default function FarmerOnboardingPage() {
                     }}
                   />
                 </div>
+                <FarmSizePreview
+                  unit={farmSizeUnit}
+                  length={farmSizeLength}
+                  width={farmSizeWidth}
+                  omwigo={farmSizeOmwigo}
+                  emiigo={farmSizeEmiigo}
+                />
               </>
-            ) : farmSizeUnit === "omwigo" ? (
+            ) : farmSizeUnit === "acres" ? (
               <div style={{ marginBottom: "1rem" }}>
                 <label style={{ 
                   display: "block", 
@@ -573,14 +580,14 @@ export default function FarmerOnboardingPage() {
                   color: "#2c2c2c",
                   fontSize: "0.95rem"
                 }}>
-                  Number of Omwigo *
+                  Acres *
                 </label>
                 <input
                   type="number"
                   step="0.01"
                   min="0.01"
-                  value={farmSizeOmwigo}
-                  onChange={(e) => setFarmSizeOmwigo(e.target.value)}
+                  value={farmSizeLength}
+                  onChange={(e) => setFarmSizeLength(e.target.value)}
                   required
                   style={{
                     width: "100%",
@@ -592,16 +599,13 @@ export default function FarmerOnboardingPage() {
                     color: "#2c2c2c",
                   }}
                 />
-                <p style={{ 
-                  fontSize: "0.9rem", 
-                  color: "#666", 
-                  marginTop: "0.5rem",
-                  background: "#f8f9fa",
-                  padding: "0.5rem",
-                  borderRadius: "4px"
-                }}>
-                  1 Omwigo = 10 × 100 ft = 1000 sq ft
-                </p>
+                <FarmSizePreview
+                  unit={farmSizeUnit}
+                  length={farmSizeLength}
+                  width={farmSizeWidth}
+                  omwigo={farmSizeOmwigo}
+                  emiigo={farmSizeEmiigo}
+                />
               </div>
             ) : (
               <div style={{ marginBottom: "1rem" }}>
@@ -631,6 +635,13 @@ export default function FarmerOnboardingPage() {
                     color: "#2c2c2c",
                   }}
                 />
+                <FarmSizePreview
+                  unit={farmSizeUnit}
+                  length={farmSizeLength}
+                  width={farmSizeWidth}
+                  omwigo={farmSizeOmwigo}
+                  emiigo={farmSizeEmiigo}
+                />
                 <p style={{ 
                   fontSize: "0.9rem", 
                   color: "#666", 
@@ -643,15 +654,6 @@ export default function FarmerOnboardingPage() {
                 </p>
               </div>
             )}
-
-            {/* Read-only conversion preview (acres) */}
-            <FarmSizePreview
-              unit={farmSizeUnit}
-              length={farmSizeLength}
-              width={farmSizeWidth}
-              omwigo={farmSizeOmwigo}
-              emiigo={farmSizeEmiigo}
-            />
 
           </div>
 

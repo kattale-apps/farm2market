@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 
-type Unit = "ft" | "m" | "omwigo" | "emiigo";
+type Unit = "ft" | "m" | "omwigo" | "emiigo" | "acres";
 
 function toAcresFromInput(input: {
   unit?: Unit;
@@ -19,6 +19,10 @@ function toAcresFromInput(input: {
 
   if (input.emiigo !== undefined && !isNaN(input.emiigo) && input.emiigo > 0) {
     return input.emiigo * OMWIGO_SQ_FT * ACRES_PER_SQ_FT;
+  }
+
+  if (input.unit === "acres" && input.length !== undefined && !isNaN(input.length) && input.length > 0) {
+    return input.length;
   }
 
   if (

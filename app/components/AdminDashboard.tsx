@@ -61,6 +61,9 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   const adminId = userId as Id<"users">;
   const [selectedCommunityId, setSelectedCommunityId] =
     useState<Id<"communities"> | null>(null);
+  const [memberStatusFilter, setMemberStatusFilter] = useState<
+    "all" | "PENDING" | "APPROVED" | "REJECTED" | "REVOKED"
+  >("all");
 
   const adminUser = useQuery(api.auth.getUser, { userId: adminId });
   const communities = useQuery(api.introspection.getCommunitiesForAdmin, {
@@ -76,7 +79,11 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   const communityMembers = useQuery(
     api.introspection.getCommunityMembers,
     selectedCommunityId
-      ? { adminId, communityId: selectedCommunityId }
+      ? {
+          adminId,
+          communityId: selectedCommunityId,
+          status: memberStatusFilter === "all" ? undefined : memberStatusFilter,
+        }
       : "skip"
   );
 
@@ -101,6 +108,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
     const rows = communityMembers.map((m) => ({
       Alias: m.alias ?? "-",
       Role: m.role ?? "-",
+      Status: (m as any).status ?? "-",
       Phone: m.phoneNumber ?? "-",
       Email: m.email ?? "-",
       Joined: m.joinedAt ? formatUgandaDate(m.joinedAt) : "-",
@@ -115,7 +123,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
       const doc = new jsPDF();
       doc.text(`${name} Members`, 14, 15);
       autoTable(doc, {
-        head: [["Alias", "Role", "Phone", "Email", "Joined"]],
+        head: [["Alias", "Role", "Status", "Phone", "Email", "Joined"]],
         body: rows.map((r) => Object.values(r)),
         startY: 20,
       });
@@ -439,6 +447,34 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                 Members ({communityMembers?.length ?? 0})
               </h4>
 
+              <div
+                style={{
+                  marginBottom: "0.75rem",
+                  display: "flex",
+                  gap: "0.5rem",
+                  alignItems: "center",
+                }}
+              >
+                <label style={{ fontWeight: 600 }}>Status:</label>
+                <select
+                  value={memberStatusFilter}
+                  onChange={(e) =>
+                    setMemberStatusFilter(e.target.value as any)
+                  }
+                  style={{
+                    padding: "0.35rem 0.6rem",
+                    borderRadius: 6,
+                    border: "1px solid #ddd",
+                  }}
+                >
+                  <option value="all">All</option>
+                  <option value="PENDING">Pending</option>
+                  <option value="APPROVED">Approved</option>
+                  <option value="REJECTED">Rejected</option>
+                  <option value="REVOKED">Revoked</option>
+                </select>
+              </div>
+
               {!communityMembers ? (
                 <p>Loading members…</p>
               ) : (
@@ -454,7 +490,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                   >
                     <thead>
                       <tr style={{ background: "#f5f5f5" }}>
-                        {["Alias", "Role", "Phone", "Email", "Joined"].map(
+                        {["Alias", "Role", "Status", "Phone", "Email", "Joined"].map(
                           (h) => (
                             <th
                               key={h}
@@ -476,6 +512,9 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                         <tr key={m._id}>
                           <td style={{ padding: "0.75rem" }}>{m.alias}</td>
                           <td style={{ padding: "0.75rem" }}>{m.role}</td>
+                          <td style={{ padding: "0.75rem" }}>
+                            {(m as any).status ?? "-"}
+                          </td>
                           <td style={{ padding: "0.75rem" }}>
                             {m.phoneNumber ?? "-"}
                           </td>

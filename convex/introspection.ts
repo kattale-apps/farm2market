@@ -86,6 +86,14 @@ export const getCommunityMembers = query({
   args: {
     adminId: v.id("users"),
     communityId: v.id("communities"),
+    status: v.optional(
+      v.union(
+        v.literal("PENDING"),
+        v.literal("APPROVED"),
+        v.literal("REJECTED"),
+        v.literal("REVOKED")
+      )
+    ),
   },
   handler: async (ctx, args) => {
     const user = await ctx.db.get(args.adminId);
@@ -96,21 +104,34 @@ export const getCommunityMembers = query({
     // Check permissions
     if (!isSuperAdmin) {
       if (user.adminCategory !== "community") throw new Error("Forbidden");
-      if (!user.assignedCommunityIds?.includes(args.communityId)) throw new Error("Forbidden");
+      const community = await ctx.db.get(args.communityId);
+      const assignedIds = user.assignedCommunityIds || [];
+      const isDirectAdmin = community?.communityAdminId === args.adminId;
+      const isAssigned = assignedIds.includes(args.communityId);
+      if (!isAssigned && !isDirectAdmin) throw new Error("Forbidden");
     }
 
-    const memberships = await ctx.db
-      .query("communityMemberships")
+    const memberRecords = await ctx.db
+      .query("communityMembers")
       .withIndex("by_community", (q) => q.eq("communityId", args.communityId))
       .collect();
 
-    return await Promise.all(memberships.map(async (m) => {
-      const memberUser = await ctx.db.get(m.userId);
-      return {
-        ...memberUser,
-        joinedAt: m.joinedAt,
-      };
-    }));
+    const filtered = args.status
+      ? memberRecords.filter((m: any) => m.status === args.status)
+      : memberRecords;
+
+    return await Promise.all(
+      filtered.map(async (m: any) => {
+        const memberUser = await ctx.db.get(m.farmerId);
+        return {
+          ...memberUser,
+          status: m.status,
+          applicationId: m.applicationId,
+          joinedAt: m.joinedAt,
+          updatedAt: m.updatedAt,
+        };
+      })
+    );
   },
 });
 

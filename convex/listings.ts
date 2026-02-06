@@ -516,6 +516,62 @@ export const createTraderListing = mutation({
 });
 
 /**
+ * Create trader inventory lot manually (trader only)
+ * Backward compatible: does not alter existing farmer-sourced inventory.
+ */
+export const createTraderInventoryLot = mutation({
+  args: {
+    traderId: v.id("users"),
+    produceType: v.string(),
+    totalKilos: v.number(),
+    unitPrice: v.number(),
+    storageLocationId: v.id("storageLocations"),
+    qualityRating: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await checkPilotMode(ctx);
+
+    const user = await ctx.db.get(args.traderId);
+    if (!user || user.role !== "trader") {
+      throwAppError(invalidRoleError("trader"));
+    }
+
+    if (args.totalKilos <= 0) {
+      throwAppError(invalidKilosError());
+    }
+
+    if (args.unitPrice <= 0) {
+      throwAppError(invalidAmountError());
+    }
+
+    const storageLocation = await ctx.db.get(args.storageLocationId);
+    if (!storageLocation || !storageLocation.active) {
+      throw new Error("Storage location not available");
+    }
+
+    const utid = generateUTID(user.role);
+
+    const inventoryId = await ctx.db.insert("traderInventory", {
+      traderId: args.traderId,
+      listingUnitIds: [],
+      totalKilos: args.totalKilos,
+      blockSize: args.totalKilos,
+      produceType: args.produceType.trim(),
+      storageLocationId: args.storageLocationId,
+      qualityRating: args.qualityRating?.trim() || undefined,
+      unitPrice: args.unitPrice,
+      acquiredAt: getUgandaTime(),
+      storageStartTime: getUgandaTime(),
+      status: "in_storage",
+      utid,
+      is100kgBlock: args.totalKilos === BUYER_BLOCK_SIZE_KG,
+    });
+
+    return { inventoryId, utid };
+  },
+});
+
+/**
  * Update trader listing ETA (trader only)
  * Charges FarmCoin tokens per change
  */

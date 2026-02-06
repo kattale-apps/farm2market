@@ -11,17 +11,25 @@ interface CreateTraderListingProps {
 
 export function CreateTraderListing({ userId }: CreateTraderListingProps) {
   const createTraderListing = useMutation(api.listings.createTraderListing);
+  const createInventoryLot = useMutation(api.listings.createTraderInventoryLot);
   const availableInventory = useQuery(api.listings.getTraderAvailableInventoryForListing, { traderId: userId });
+  const storageLocations = useQuery(api.listings.getActiveStorageLocations);
   const traderProfile = useQuery(api.auth.getUser, { userId });
   const farmcoinSummary = useQuery((api as any).farmcoin.getTraderFarmcoinSummary, { traderId: userId } as any);
   const farmcoinSettings = useQuery((api as any).farmcoin.getFarmcoinSettings, {} as any);
   const requestFarmcoinTokens = useMutation((api as any).farmcoin.requestFarmcoinTokens);
   const [showForm, setShowForm] = useState(false);
+  const [showInventoryForm, setShowInventoryForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [selectedInventory, setSelectedInventory] = useState<string>("");
   const [pricePerKilo, setPricePerKilo] = useState<string>("");
   const [requestReason, setRequestReason] = useState("");
+  const [newProduceType, setNewProduceType] = useState("");
+  const [newTotalKilos, setNewTotalKilos] = useState("");
+  const [newUnitPrice, setNewUnitPrice] = useState("");
+  const [newStorageLocationId, setNewStorageLocationId] = useState("");
+  const [newQualityRating, setNewQualityRating] = useState("");
 
   const formatUGX = (amount: number) => {
     return new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX" }).format(amount);
@@ -195,6 +203,149 @@ export function CreateTraderListing({ userId }: CreateTraderListingProps) {
           </button>
         </div>
       )}
+
+      <div style={{ marginBottom: "1rem", padding: "0.75rem", borderRadius: "8px", background: "#f8fafc", border: "1px solid #e2e8f0" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+          <div style={{ fontWeight: 600, color: "#1a1a1a" }}>Add Inventory Lot</div>
+          <button
+            type="button"
+            onClick={() => setShowInventoryForm((prev) => !prev)}
+            style={{
+              padding: "0.4rem 0.9rem",
+              background: showInventoryForm ? "#999" : "#0f172a",
+              color: "#fff",
+              border: "none",
+              borderRadius: "6px",
+              cursor: "pointer",
+              fontSize: "0.8rem",
+              fontWeight: 600,
+            }}
+          >
+            {showInventoryForm ? "Hide" : "Add Lot"}
+          </button>
+        </div>
+        {showInventoryForm && (
+          <div style={{ marginTop: "0.75rem", display: "grid", gap: "0.75rem" }}>
+            <input
+              type="text"
+              placeholder="Produce type (e.g., Cassava)"
+              value={newProduceType}
+              onChange={(e) => setNewProduceType(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "0.65rem",
+                border: "1px solid #ddd",
+                borderRadius: "6px",
+                fontSize: "0.85rem",
+              }}
+            />
+            <input
+              type="number"
+              min="1"
+              placeholder="Total kilos"
+              value={newTotalKilos}
+              onChange={(e) => setNewTotalKilos(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "0.65rem",
+                border: "1px solid #ddd",
+                borderRadius: "6px",
+                fontSize: "0.85rem",
+              }}
+            />
+            <input
+              type="number"
+              min="1"
+              placeholder="Purchase price per kilo (UGX)"
+              value={newUnitPrice}
+              onChange={(e) => setNewUnitPrice(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "0.65rem",
+                border: "1px solid #ddd",
+                borderRadius: "6px",
+                fontSize: "0.85rem",
+              }}
+            />
+            <select
+              value={newStorageLocationId}
+              onChange={(e) => setNewStorageLocationId(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "0.65rem",
+                border: "1px solid #ddd",
+                borderRadius: "6px",
+                fontSize: "0.85rem",
+              }}
+            >
+              <option value="">Select storage location</option>
+              {(storageLocations || []).map((loc: any) => (
+                <option key={loc.locationId} value={loc.locationId}>
+                  {loc.districtName} ({loc.code})
+                </option>
+              ))}
+            </select>
+            <input
+              type="text"
+              placeholder="Quality rating (optional)"
+              value={newQualityRating}
+              onChange={(e) => setNewQualityRating(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "0.65rem",
+                border: "1px solid #ddd",
+                borderRadius: "6px",
+                fontSize: "0.85rem",
+              }}
+            />
+            <button
+              type="button"
+              onClick={async () => {
+                if (!newProduceType || !newTotalKilos || !newUnitPrice || !newStorageLocationId) {
+                  setMessage({ type: "error", text: "Please fill all required inventory fields." });
+                  return;
+                }
+                setLoading(true);
+                setMessage(null);
+                try {
+                  const created = await createInventoryLot({
+                    traderId: userId,
+                    produceType: newProduceType,
+                    totalKilos: Number(newTotalKilos),
+                    unitPrice: Number(newUnitPrice),
+                    storageLocationId: newStorageLocationId as Id<"storageLocations">,
+                    qualityRating: newQualityRating || undefined,
+                  });
+                  setMessage({ type: "success", text: "Inventory lot added. You can now create a listing." });
+                  setSelectedInventory(created.inventoryId);
+                  setNewProduceType("");
+                  setNewTotalKilos("");
+                  setNewUnitPrice("");
+                  setNewStorageLocationId("");
+                  setNewQualityRating("");
+                  setShowInventoryForm(false);
+                } catch (error: any) {
+                  setMessage({ type: "error", text: error.message || "Failed to add inventory lot" });
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              style={{
+                padding: "0.65rem 1rem",
+                background: "#0f172a",
+                color: "#fff",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "0.85rem",
+                fontWeight: 600,
+              }}
+            >
+              Add Inventory Lot
+            </button>
+          </div>
+        )}
+      </div>
 
       {showForm && (
         <div>

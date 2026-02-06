@@ -222,7 +222,8 @@ export async function calculateInventoryPricePerKilo(
 ): Promise<number> {
   const inventory = await ctx.db.get(inventoryId);
   if (!inventory || !inventory.listingUnitIds || inventory.listingUnitIds.length === 0) {
-    return 0;
+    // Backward compatibility: allow manual inventory lots without listing units.
+    return inventory?.unitPrice ?? 0;
   }
 
   // Get all listing units and their prices

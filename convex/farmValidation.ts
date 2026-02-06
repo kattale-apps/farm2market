@@ -248,6 +248,12 @@ export const submitForm = mutation({
         status: "PENDING",
         updatedAt: now,
       });
+
+      await upsertPendingCommunityMember(ctx, {
+        communityId: existingApplication.communityId,
+        farmerId: form.farmerId,
+        applicationId: existingApplication._id,
+      });
     } else {
       const nameCandidate = form.communityName || form.community || AGROFRESH_UG_COMMUNITY_NAME;
       const resolvedName = nameCandidate === AGROFRESH_UG_COMMUNITY_ID ? AGROFRESH_UG_COMMUNITY_NAME : nameCandidate;
@@ -255,7 +261,7 @@ export const submitForm = mutation({
       if (!community) {
         throw new Error("Community not found. Please contact support.");
       }
-      await ctx.db.insert("communityApplications", {
+      const applicationId = await ctx.db.insert("communityApplications", {
         communityId: community._id,
         farmerId: form.farmerId,
         formId,
@@ -263,11 +269,57 @@ export const submitForm = mutation({
         createdAt: now,
         updatedAt: now,
       });
+
+      await upsertPendingCommunityMember(ctx, {
+        communityId: community._id,
+        farmerId: form.farmerId,
+        applicationId,
+      });
     }
 
     return { success: true };
   },
 });
+
+async function upsertPendingCommunityMember(
+  ctx: any,
+  args: { communityId: Id<"communities">; farmerId: Id<"users">; applicationId: Id<"communityApplications"> }
+) {
+  const existing = await ctx.db
+    .query("communityMembers")
+    .withIndex("by_community_farmer", (q: any) =>
+      q.eq("communityId", args.communityId).eq("farmerId", args.farmerId)
+    )
+    .first();
+
+  const now = Date.now();
+  if (existing) {
+    await ctx.db.patch(existing._id, {
+      status: "PENDING",
+      applicationId: args.applicationId,
+      updatedAt: now,
+    });
+  } else {
+    await ctx.db.insert("communityMembers", {
+      communityId: args.communityId,
+      farmerId: args.farmerId,
+      status: "PENDING",
+      applicationId: args.applicationId,
+      updatedAt: now,
+    });
+  }
+
+  const existingMembership = await ctx.db
+    .query("communityMemberships")
+    .withIndex("by_community_user", (q: any) =>
+      q.eq("communityId", args.communityId).eq("userId", args.farmerId)
+    )
+    .first();
+
+  if (existingMembership) {
+    await ctx.db.delete(existingMembership._id);
+  }
+}
 
 export const deleteDraft = mutation({
   args: { formId: v.id("agroFreshUGFarmValidations"), farmerId: v.id("users") },

@@ -40,8 +40,20 @@ export default function CommunityDashboardPage() {
     }
   }, [router]);
 
+  const currentUser = useQuery(
+    api.auth.getUser,
+    userId ? { userId } : "skip"
+  );
+
+  const resolvedRole = currentUser?.role ?? userRole;
+  const resolvedAdminCategory =
+    (currentUser as any)?.adminCategory ?? userAdminCategory;
+
   // Query communities (filtered to show only the user's community if they're a community admin)
-  const communities = useQuery(api.communities.getActiveCommunities, userId ? { userId } : "skip");
+  const communities = useQuery(
+    api.communities.getActiveCommunities,
+    userId ? { userId } : "skip"
+  );
 
   // Query export quota
   const exportQuota = useQuery(api.communities.getExportQuota, userId ? { userId } : "skip");
@@ -54,11 +66,11 @@ export default function CommunityDashboardPage() {
 
   // For community admin: get their managed community
   const userCommunities = useMemo(() => {
-    if (!communities || userAdminCategory !== "community") return [];
+    if (!communities || resolvedAdminCategory !== "community") return [];
     // In a real app, we'd have a way to get the specific community managed by this admin
     // For now, we'll show all communities they're associated with
     return communities;
-  }, [communities, userAdminCategory]);
+  }, [communities, resolvedAdminCategory]);
 
   const communityIds = useMemo(() => userCommunities.map((c) => c.id), [userCommunities]);
   const applicationsByCommunity = useQuery(
@@ -91,7 +103,7 @@ export default function CommunityDashboardPage() {
   }
 
   // Only community admins can access this page
-  if (userRole !== "admin" || userAdminCategory !== "community") {
+  if (resolvedRole !== "admin" || resolvedAdminCategory !== "community") {
     return (
       <div style={{
         padding: "2rem",

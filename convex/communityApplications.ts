@@ -430,6 +430,34 @@ async function upsertCommunityMember(ctx: any, args: { communityId: Id<"communit
       updatedAt: now,
     });
   }
+
+  await syncCommunityMembership(ctx, {
+    communityId: args.communityId,
+    userId: args.farmerId,
+    status: args.status,
+  });
+}
+
+async function syncCommunityMembership(ctx: any, args: { communityId: Id<"communities">; userId: Id<"users">; status: "PENDING" | "APPROVED" | "REJECTED" | "REVOKED"; }) {
+  const existing = await ctx.db
+    .query("communityMemberships")
+    .withIndex("by_community_user", (q: any) => q.eq("communityId", args.communityId).eq("userId", args.userId))
+    .first();
+
+  if (args.status === "APPROVED") {
+    if (!existing) {
+      await ctx.db.insert("communityMemberships", {
+        communityId: args.communityId,
+        userId: args.userId,
+        joinedAt: Date.now(),
+      });
+    }
+    return;
+  }
+
+  if (existing) {
+    await ctx.db.delete(existing._id);
+  }
 }
 
 async function logAdminAction(ctx: any, args: { adminId: Id<"users">; communityId: Id<"communities">; applicationId: Id<"communityApplications">; action: "APPROVED" | "REJECTED" | "REVOKED"; note?: string; }) {

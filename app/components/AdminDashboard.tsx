@@ -64,6 +64,9 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   const [memberStatusFilter, setMemberStatusFilter] = useState<
     "all" | "PENDING" | "APPROVED" | "REJECTED" | "REVOKED"
   >("all");
+  const [selectedApplicationId, setSelectedApplicationId] = useState<
+    Id<"communityApplications"> | null
+  >(null);
 
   const adminUser = useQuery(api.auth.getUser, { userId: adminId });
   const communities = useQuery(api.introspection.getCommunitiesForAdmin, {
@@ -85,6 +88,20 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           status: memberStatusFilter === "all" ? undefined : memberStatusFilter,
         }
       : "skip"
+  );
+
+  const selectedApplicationDetails = useQuery(
+    api.communityApplications.getApplicationDetails,
+    selectedApplicationId
+      ? { adminId, applicationId: selectedApplicationId }
+      : "skip"
+  );
+
+  const approveApplication = useMutation(
+    api.communityApplications.approveApplication
+  );
+  const rejectApplication = useMutation(
+    api.communityApplications.rejectApplication
   );
 
   const backfillMembers = useMutation(
@@ -127,7 +144,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
       const doc = new jsPDF();
       doc.text(`${name} Members`, 14, 15);
       autoTable(doc, {
-        head: [["Alias", "Role", "Status", "Phone", "Email", "Joined"]],
+        head: [["Alias", "Role", "Status", "Phone", "Email", "Joined", "Actions"]],
         body: rows.map((r) => Object.values(r)),
         startY: 20,
       });
@@ -494,7 +511,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                   >
                     <thead>
                       <tr style={{ background: "#f5f5f5" }}>
-                        {["Alias", "Role", "Status", "Phone", "Email", "Joined"].map(
+                        {["Alias", "Role", "Status", "Phone", "Email", "Joined", "Actions"].map(
                           (h) => (
                             <th
                               key={h}
@@ -529,6 +546,43 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                             {m.joinedAt
                               ? formatUgandaDate(m.joinedAt)
                               : "-"}
+                          </td>
+                          <td style={{ padding: "0.75rem", display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+                            <button
+                              onClick={() =>
+                                m.applicationId && setSelectedApplicationId(m.applicationId)
+                              }
+                              style={{ padding: "0.35rem 0.6rem" }}
+                              disabled={!m.applicationId}
+                            >
+                              View
+                            </button>
+                            {m.status === "PENDING" && m.applicationId && (
+                              <>
+                                <button
+                                  onClick={async () => {
+                                    await approveApplication({
+                                      adminId,
+                                      applicationId: m.applicationId,
+                                    });
+                                  }}
+                                  style={{ padding: "0.35rem 0.6rem" }}
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    await rejectApplication({
+                                      adminId,
+                                      applicationId: m.applicationId,
+                                    });
+                                  }}
+                                  style={{ padding: "0.35rem 0.6rem" }}
+                                >
+                                  Reject
+                                </button>
+                              </>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -608,6 +662,103 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                   </button>
                 </div>
               ))}
+            </div>
+          )}
+
+          {selectedApplicationId && (
+            <div
+              style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(0,0,0,0.45)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 50,
+                padding: "1rem",
+              }}
+              onClick={() => setSelectedApplicationId(null)}
+            >
+              <div
+                style={{
+                  background: "#fff",
+                  borderRadius: 12,
+                  maxWidth: 900,
+                  width: "100%",
+                  padding: "1.25rem",
+                  boxShadow: "0 12px 30px rgba(0,0,0,0.2)",
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <h3 style={{ margin: 0 }}>Application Review</h3>
+                  <button
+                    onClick={() => setSelectedApplicationId(null)}
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      fontSize: "1.25rem",
+                      cursor: "pointer",
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+
+                {!selectedApplicationDetails ? (
+                  <p style={{ color: "#666", marginTop: "1rem" }}>Loading details...</p>
+                ) : (
+                  <div style={{ marginTop: "1rem" }}>
+                    {(() => {
+                      const section1 = (selectedApplicationDetails as any)?.form?.section1 || {};
+                      const farmer = (selectedApplicationDetails as any)?.farmer || {};
+                      return (
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                          <div><strong>Farmer Name:</strong> {section1.farmerFullName || farmer.alias || "-"}</div>
+                          <div><strong>Farm Name:</strong> {section1.farmName || "-"}</div>
+                          <div><strong>Phone:</strong> {section1.phoneNumber || farmer.phoneNumber || "-"}</div>
+                          <div><strong>Email:</strong> {section1.emailAddress || farmer.email || "-"}</div>
+                          <div><strong>County:</strong> {section1.county || farmer.county || "-"}</div>
+                          <div><strong>District/Subcounty:</strong> {section1.districtSubCounty || farmer.districtText || "-"}</div>
+                          <div><strong>Village:</strong> {section1.village || farmer.village || "-"}</div>
+                          <div><strong>Farm Size (Acres):</strong> {section1.farmSizeAcres || "-"}</div>
+                          <div><strong>Main Enterprises:</strong> {(section1.mainEnterprises || []).join(", ") || "-"}</div>
+                          <div><strong>System of Farming:</strong> {section1.systemOfFarming || "-"}</div>
+                          <div><strong>Years of Experience:</strong> {section1.yearsOfExperience || "-"}</div>
+                          <div><strong>Water Source:</strong> {section1.waterSource || farmer.waterSource || "-"}</div>
+                        </div>
+                      );
+                    })()}
+
+                    <div style={{ marginTop: "1rem", display: "flex", gap: "0.5rem" }}>
+                      <button
+                        onClick={async () => {
+                          await approveApplication({
+                            adminId,
+                            applicationId: selectedApplicationId,
+                          });
+                          setSelectedApplicationId(null);
+                        }}
+                        style={{ padding: "0.5rem 0.9rem" }}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={async () => {
+                          await rejectApplication({
+                            adminId,
+                            applicationId: selectedApplicationId,
+                          });
+                          setSelectedApplicationId(null);
+                        }}
+                        style={{ padding: "0.5rem 0.9rem" }}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

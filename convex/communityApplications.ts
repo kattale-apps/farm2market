@@ -50,11 +50,14 @@ export const getPaginatedApplications = query({
       throw new Error("Admin not found");
     }
 
-    if (adminUser.adminCategory === "community") {
+    const isSuperAdmin = adminUser.adminLevel === "super" || adminUser.adminLevel === undefined;
+
+    if (!isSuperAdmin && adminUser.adminCategory === "community") {
       const assigned = (adminUser as any).assignedCommunityIds || [];
       const community = await ctx.db.get(communityId);
       const isDirectAdmin = community?.communityAdminId === adminId;
-      if (!assigned.includes(communityId) && !isDirectAdmin) {
+      const isAssigned = assigned.some((id: string) => id === communityId);
+      if (!isAssigned && !isDirectAdmin) {
         throw new Error("Not authorized for this community");
       }
     }
@@ -169,7 +172,9 @@ export const getApplicationsByCommunityIds = query({
     }
 
     let allowedCommunityIds = communityIds;
-    if (adminUser.adminCategory === "community") {
+    const isSuperAdmin = adminUser.adminLevel === "super" || adminUser.adminLevel === undefined;
+
+    if (!isSuperAdmin && adminUser.adminCategory === "community") {
       const assigned = (adminUser as any).assignedCommunityIds || [];
       const communityRecords = await Promise.all(
         communityIds.map((id) => ctx.db.get(id))
@@ -181,7 +186,7 @@ export const getApplicationsByCommunityIds = query({
           .map((c: any) => c._id)
       );
       allowedCommunityIds = communityIds.filter(
-        (id) => assigned.includes(id) || directAssigned.has(id)
+        (id) => assigned.some((aid: string) => aid === id) || directAssigned.has(id)
       );
     }
 
@@ -269,7 +274,9 @@ export const getCommunityMembersByCommunityIds = query({
     }
 
     let allowedCommunityIds = communityIds;
-    if (adminUser.adminCategory === "community") {
+    const isSuperAdmin = adminUser.adminLevel === "super" || adminUser.adminLevel === undefined;
+
+    if (!isSuperAdmin && adminUser.adminCategory === "community") {
       const assigned = (adminUser as any).assignedCommunityIds || [];
       const communityRecords = await Promise.all(
         communityIds.map((id) => ctx.db.get(id))
@@ -281,7 +288,7 @@ export const getCommunityMembersByCommunityIds = query({
           .map((c: any) => c._id)
       );
       allowedCommunityIds = communityIds.filter(
-        (id) => assigned.includes(id) || directAssigned.has(id)
+        (id) => assigned.some((aid: string) => aid === id) || directAssigned.has(id)
       );
     }
 

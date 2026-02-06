@@ -402,8 +402,8 @@ export const getActiveStorageLocations = query({
 });
 
 /**
- * Create a trader listing from 100kg inventory block (trader only)
- * Traders can only list in 100kg blocks
+ * Create a trader listing from inventory (trader only)
+ * Backward compatible: existing 100kg listings remain valid.
  */
 export const createTraderListing = mutation({
   args: {
@@ -451,10 +451,7 @@ export const createTraderListing = mutation({
       throw new Error("Inventory must be in storage to create a listing");
     }
 
-    // CRITICAL: Traders can only list in 100kg blocks
-    if (!inventory.is100kgBlock || inventory.totalKilos !== BUYER_BLOCK_SIZE_KG) {
-      throw new Error(`Traders can only list in exactly ${BUYER_BLOCK_SIZE_KG}kg blocks. This inventory block is ${inventory.totalKilos}kg.`);
-    }
+    // Backward compatibility: allow any inventory size while preserving existing 100kg listings.
 
     // Check if this inventory block already has an active listing
     const existingListing = await ctx.db
@@ -488,17 +485,17 @@ export const createTraderListing = mutation({
     // Generate UTID
     const utid = generateUTID(user.role);
 
-    // Create listing - traders list in 100kg blocks (1 unit = 100kg)
+    // Create listing - traders list from their inventory as a single unit
     const listingId = await ctx.db.insert("listings", {
       traderId: args.traderId,
       inventoryId: args.inventoryId,
       farmerId: undefined, // Not a farmer listing
       utid,
       produceType: inventory.produceType,
-      totalKilos: BUYER_BLOCK_SIZE_KG, // Exactly 100kg
+      totalKilos: inventory.totalKilos,
       pricePerKilo: args.pricePerKilo,
-      unitSize: BUYER_BLOCK_SIZE_KG, // 100kg per unit for trader listings
-      totalUnits: 1, // 1 unit = 100kg block
+      unitSize: inventory.totalKilos, // Single-unit listing sized to inventory
+      totalUnits: 1, // 1 unit = inventory size
       status: "active",
       createdAt: getUgandaTime(),
       deliverySLA: 0, // Not applicable for trader listings
@@ -507,7 +504,7 @@ export const createTraderListing = mutation({
       storageLocationId: inventory.storageLocationId,
     });
 
-    // Create a single listing unit representing the 100kg block
+    // Create a single listing unit representing the inventory lot
     const unitId = await ctx.db.insert("listingUnits", {
       listingId,
       unitNumber: 1,
@@ -621,7 +618,8 @@ export const updateTraderDeliveryStatus = mutation({
 });
 
 /**
- * Get trader's available 100kg inventory blocks for listing
+ * Get trader's available inventory for listing
+ * Backward compatible: includes 100kg blocks and other sizes.
  */
 export const getTraderAvailableInventoryForListing = query({
   args: {
@@ -634,15 +632,13 @@ export const getTraderAvailableInventoryForListing = query({
       throw new Error("User is not a trader");
     }
 
-    // Get all 100kg blocks in storage that don't have active listings
+    // Get all inventory in storage that doesn't have active listings
     const inventory = await ctx.db
       .query("traderInventory")
       .withIndex("by_trader", (q) => q.eq("traderId", args.traderId))
       .filter((q) => 
         q.and(
-          q.eq(q.field("status"), "in_storage"),
-          q.eq(q.field("is100kgBlock"), true),
-          q.eq(q.field("totalKilos"), BUYER_BLOCK_SIZE_KG)
+          q.eq(q.field("status"), "in_storage")
         )
       )
       .collect();

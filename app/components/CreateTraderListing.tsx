@@ -31,7 +31,7 @@ export function CreateTraderListing({ userId }: CreateTraderListingProps) {
     e.preventDefault();
     
     if (!selectedInventory) {
-      setMessage({ type: "error", text: "Please select an inventory block" });
+      setMessage({ type: "error", text: "Please select an inventory lot" });
       return;
     }
 
@@ -53,7 +53,7 @@ export function CreateTraderListing({ userId }: CreateTraderListingProps) {
 
       setMessage({
         type: "success",
-        text: `Listing created successfully! UTID: ${result.utid}. Your 100kg block is now available for buyers.`,
+        text: `Listing created successfully! UTID: ${result.utid}. Your inventory lot is now available for buyers.`,
       });
 
       // Reset form
@@ -202,13 +202,13 @@ export function CreateTraderListing({ userId }: CreateTraderListingProps) {
             <p style={{ color: "#999" }}>Loading available inventory...</p>
           ) : availableInventory.availableBlocks.length === 0 ? (
             <p style={{ color: "#666" }}>
-              No 100kg inventory blocks available for listing. You need to have 100kg blocks in storage to create listings.
+              No inventory lots available for listing. You need inventory in storage to create listings.
             </p>
           ) : (
             <form onSubmit={handleSubmit}>
               <div style={{ marginBottom: "1rem" }}>
                 <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#1a1a1a" }}>
-                  Select 100kg Inventory Block:
+                  Select Inventory Lot:
                 </label>
                 <select
                   value={selectedInventory}
@@ -224,7 +224,7 @@ export function CreateTraderListing({ userId }: CreateTraderListingProps) {
                     fontFamily: "inherit"
                   }}
                 >
-                  <option value="">-- Select a 100kg block --</option>
+                  <option value="">-- Select an inventory lot --</option>
                   {availableInventory.availableBlocks.map((block: any) => (
                     <option key={block.inventoryId} value={block.inventoryId}>
                       {block.produceType} - {block.totalKilos}kg | Purchase Price: {formatUGX(block.unitPrice)}/kg | UTID: {block.utid.slice(-12)}
@@ -234,7 +234,7 @@ export function CreateTraderListing({ userId }: CreateTraderListingProps) {
                 {selectedBlock && (
                   <div style={{ marginTop: "0.5rem", padding: "0.75rem", background: "#f5f5f5", borderRadius: "6px", fontSize: "0.85rem" }}>
                     <div><strong>Produce:</strong> {selectedBlock.produceType}</div>
-                    <div><strong>Block Size:</strong> {selectedBlock.totalKilos}kg (100kg block)</div>
+                    <div><strong>Inventory Size:</strong> {selectedBlock.totalKilos}kg</div>
                     <div><strong>Your Purchase Price:</strong> {formatUGX(selectedBlock.unitPrice)}/kg</div>
                     <div style={{ fontSize: "0.75rem", color: "#666", marginTop: "0.25rem", fontFamily: "monospace", wordBreak: "break-all" }}>
                       Inventory UTID: {selectedBlock.utid}
@@ -267,13 +267,13 @@ export function CreateTraderListing({ userId }: CreateTraderListingProps) {
                 />
                 {selectedBlock && pricePerKilo && !isNaN(parseFloat(pricePerKilo)) && (
                   <div style={{ marginTop: "0.5rem", fontSize: "0.85rem", color: "#666" }}>
-                    Total Block Value: {formatUGX(parseFloat(pricePerKilo) * 100)} (100kg × {formatUGX(parseFloat(pricePerKilo))}/kg)
+                    Total Lot Value: {formatUGX(parseFloat(pricePerKilo) * (selectedBlock?.totalKilos || 0))} ({selectedBlock?.totalKilos || 0}kg × {formatUGX(parseFloat(pricePerKilo))}/kg)
                   </div>
                 )}
               </div>
 
               <div style={{ padding: "0.75rem", background: "#fff3cd", borderRadius: "6px", marginBottom: "1rem", fontSize: "0.85rem", color: "#856404" }}>
-                <strong>⚠️ Important:</strong> Posting a listing costs {postingCost} FarmCoin Token(s). Traders can only list in 100kg blocks.
+                <strong>⚠️ Important:</strong> Posting a listing costs {postingCost} FarmCoin Token(s). Listings use your full inventory lot size.
               </div>
 
               <button
@@ -291,7 +291,7 @@ export function CreateTraderListing({ userId }: CreateTraderListingProps) {
                   fontWeight: "600"
                 }}
               >
-                {loading ? "Creating Listing..." : "Create 100kg Block Listing"}
+                {loading ? "Creating Listing..." : "Create Inventory Listing"}
               </button>
             </form>
           )}

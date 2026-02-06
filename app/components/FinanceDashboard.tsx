@@ -116,7 +116,7 @@ function AddFundsForm({ adminId }: { adminId: Id<"users"> }) {
             </option>
             {allUsers.map(user => (
               <option key={user._id} value={user._id}>
-                {user.alias} (trader) - Bal: {user.farmcoinBalance} Token(s)
+                {user.alias} • {user._id} - Bal: {user.farmcoinBalance} Token(s)
               </option>
             ))}
           </select>

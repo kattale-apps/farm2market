@@ -21,14 +21,20 @@ export function TraderListings({ userId }: TraderListingsProps) {
   const [showSelectedUnits, setShowSelectedUnits] = useState(false);
   const [listingsPage, setListingsPage] = useState(1);
   const [produceFilter, setProduceFilter] = useState("all");
+  const [availableStartDate, setAvailableStartDate] = useState("");
+  const [availableEndDate, setAvailableEndDate] = useState("");
+  const [listingsPageSize, setListingsPageSize] = useState(10);
   const [expandedBatches, setExpandedBatches] = useState<Set<string>>(new Set());
-  const LISTINGS_PAGE_SIZE = 10;
+  const [expandedListings, setExpandedListings] = useState<Set<string>>(new Set());
+  const [cancelTarget, setCancelTarget] = useState<{ negotiationId: Id<"negotiations">; unitLabel: string } | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
 
   const listings = useQuery(api.listings.getActiveListings);
   const traderNegotiations = useQuery(api.negotiations.getTraderNegotiations, { traderId: userId });
   const acceptedNegotiations = useQuery(api.negotiations.getAcceptedNegotiations, { traderId: userId });
   const makeOffer = useMutation(api.negotiations.makeOffer);
   const acceptCounterOffer = useMutation(api.negotiations.acceptCounterOffer);
+  const cancelNegotiation = useMutation(api.negotiations.cancelNegotiation);
   const lockUnit = useMutation(api.payments.lockUnit);
   
   // Get available units for the listing being offered on
@@ -64,20 +70,28 @@ export function TraderListings({ userId }: TraderListingsProps) {
     [openListings]
   );
 
-  const filteredOpenListings = useMemo(
-    () => (produceFilter === "all"
-      ? sortedOpenListings
-      : sortedOpenListings.filter((listing: any) => listing.produceType === produceFilter)),
-    [produceFilter, sortedOpenListings]
-  );
+  const filteredOpenListings = useMemo(() => {
+    const normalizedStart = availableStartDate ? new Date(`${availableStartDate}T00:00:00`).getTime() : null;
+    const normalizedEnd = availableEndDate ? new Date(`${availableEndDate}T23:59:59.999`).getTime() : null;
+
+    return sortedOpenListings.filter((listing: any) => {
+      if (produceFilter !== "all" && listing.produceType !== produceFilter) return false;
+      if (!normalizedStart && !normalizedEnd) return true;
+      // Backward compatibility: use createdAt as availability date when no dedicated field exists.
+      const listingDate = listing.createdAt || 0;
+      if (normalizedStart && listingDate < normalizedStart) return false;
+      if (normalizedEnd && listingDate > normalizedEnd) return false;
+      return true;
+    });
+  }, [produceFilter, availableStartDate, availableEndDate, sortedOpenListings]);
 
   const listingsTotal = filteredOpenListings.length;
-  const listingsTotalPages = Math.max(1, Math.ceil(listingsTotal / LISTINGS_PAGE_SIZE));
-  const listingsStart = listingsTotal === 0 ? 0 : (listingsPage - 1) * LISTINGS_PAGE_SIZE + 1;
-  const listingsEnd = Math.min(listingsPage * LISTINGS_PAGE_SIZE, listingsTotal);
+  const listingsTotalPages = Math.max(1, Math.ceil(listingsTotal / listingsPageSize));
+  const listingsStart = listingsTotal === 0 ? 0 : (listingsPage - 1) * listingsPageSize + 1;
+  const listingsEnd = Math.min(listingsPage * listingsPageSize, listingsTotal);
   const pagedListings = filteredOpenListings.slice(
-    (listingsPage - 1) * LISTINGS_PAGE_SIZE,
-    listingsPage * LISTINGS_PAGE_SIZE
+    (listingsPage - 1) * listingsPageSize,
+    listingsPage * listingsPageSize
   );
 
   useEffect(() => {
@@ -163,6 +177,8 @@ export function TraderListings({ userId }: TraderListingsProps) {
         negotiationId: neg.negotiationId,
         unitNumber: neg.unitNumber,
         utid: neg.negotiationUtid,
+        unitStatus: neg.unitStatus,
+        status: neg.status,
       });
     });
 
@@ -210,11 +226,10 @@ export function TraderListings({ userId }: TraderListingsProps) {
         offerPricePerKilo: price,
       });
       
-      const utidsList = result.negotiations.map((n: any) => n.utid).join(", ");
       const unitNumbers = result.negotiations.map((n: any) => `#${n.unitNumber}`).join(", ");
       setMessage({
         type: "success",
-        text: `✅ Offer made successfully on ${result.totalUnits} unit(s) (Units: ${unitNumbers})! Each unit has been recorded in your incoming purchase ledger with its own UTID. UTIDs: ${utidsList}. Waiting for farmer's response.`,
+        text: `✅ Offer made successfully on ${result.totalUnits} unit(s) (Units: ${unitNumbers})! Each unit has been recorded in your incoming purchase ledger. View batch UTIDs in Active Negotiations.`,
       });
       
       setOfferPrice("");
@@ -244,7 +259,7 @@ export function TraderListings({ userId }: TraderListingsProps) {
       
       setMessage({
         type: "success",
-        text: `Counter-offer accepted! UTID: ${result.acceptedUtid}. You can now proceed to pay-to-lock.`,
+        text: "Counter-offer accepted! You can now proceed to pay-to-lock.",
       });
       
       setTimeout(() => {
@@ -270,7 +285,7 @@ export function TraderListings({ userId }: TraderListingsProps) {
       
       setMessage({
         type: "success",
-        text: `Unit locked successfully! UTID: ${result.utid}. Balance after: ${formatUGX(result.balanceAfter)}. Delivery deadline: 6 hours from now.`,
+        text: `Unit locked successfully! Balance after: ${formatUGX(result.balanceAfter)}. Delivery deadline: 6 hours from now.`,
       });
       
       setTimeout(() => {
@@ -283,6 +298,30 @@ export function TraderListings({ userId }: TraderListingsProps) {
       });
     } finally {
       setLocking(null);
+    }
+  };
+
+  const handleConfirmCancel = async () => {
+    if (!cancelTarget) return;
+    setMessage(null);
+    try {
+      await cancelNegotiation({
+        traderId: userId,
+        negotiationId: cancelTarget.negotiationId,
+        reason: cancelReason.trim() || undefined,
+      });
+      setMessage({
+        type: "success",
+        text: `Negotiation cancelled for ${cancelTarget.unitLabel}.`,
+      });
+    } catch (error: any) {
+      setMessage({
+        type: "error",
+        text: error?.message || "Failed to cancel negotiation",
+      });
+    } finally {
+      setCancelTarget(null);
+      setCancelReason("");
     }
   };
 
@@ -305,6 +344,83 @@ export function TraderListings({ userId }: TraderListingsProps) {
           }}
         >
           {message.text}
+        </div>
+      )}
+
+      {cancelTarget && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: "1rem",
+          }}
+          onClick={() => setCancelTarget(null)}
+        >
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: 12,
+              maxWidth: 520,
+              width: "100%",
+              padding: "1.25rem",
+              boxShadow: "0 12px 30px rgba(0,0,0,0.2)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h4 style={{ marginTop: 0 }}>Cancel Negotiation</h4>
+            <p style={{ color: "#666" }}>
+              Confirm cancellation for {cancelTarget.unitLabel}. This is allowed only before payment lock.
+            </p>
+            <input
+              type="text"
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              placeholder="Optional reason"
+              style={{
+                width: "100%",
+                padding: "0.6rem",
+                borderRadius: 8,
+                border: "1px solid #ddd",
+                marginBottom: "0.9rem",
+                fontSize: "0.9rem",
+              }}
+            />
+            <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={() => setCancelTarget(null)}
+                style={{
+                  padding: "0.5rem 0.9rem",
+                  background: "#f5f5f5",
+                  border: "1px solid #ddd",
+                  borderRadius: 6,
+                  cursor: "pointer",
+                }}
+              >
+                Keep
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmCancel}
+                style={{
+                  padding: "0.5rem 0.9rem",
+                  background: "#d32f2f",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 6,
+                  cursor: "pointer",
+                  fontWeight: "600",
+                }}
+              >
+                Confirm Cancel
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -375,7 +491,7 @@ export function TraderListings({ userId }: TraderListingsProps) {
                     <strong>{batch.status}</strong>
                   </div>
                   <div style={{ fontSize: "clamp(0.7rem, 2vw, 0.75rem)", color: "#999", fontFamily: "monospace", wordBreak: "break-all" }}>
-                    UTIDs: {batch.utids.slice(0, 3).join(", ")}{batch.utids.length > 3 ? ` +${batch.utids.length - 3}` : ""}
+                    Batch UTIDs: {batch.utids.slice(0, 3).join(", ")}{batch.utids.length > 3 ? ` +${batch.utids.length - 3}` : ""}
                   </div>
                   {isExpanded && (
                     <div style={{
@@ -395,7 +511,6 @@ export function TraderListings({ userId }: TraderListingsProps) {
                         Listing Details
                       </div>
                       <div style={{ fontSize: "0.8rem", color: "#666", display: "grid", gap: "0.35rem" }}>
-                        <div>Listing UTID: <strong>{batch.listing?.utid || "N/A"}</strong></div>
                         <div>Farmer: <strong>{batch.listing?.farmerAlias || "Unknown"}</strong></div>
                         <div>Listed: <strong>{batch.listing?.createdAt ? formatDate(batch.listing.createdAt) : "N/A"}</strong></div>
                         <div>Mode: <strong>{batch.isGardenNegotiation ? "Garden Sale" : "Kilo Sale"}</strong></div>
@@ -405,8 +520,8 @@ export function TraderListings({ userId }: TraderListingsProps) {
                         )}
                         <div>Delivery Location: <strong>{batch.listing?.storageLocation?.districtName ? `${batch.listing.storageLocation.districtName} (${batch.listing.storageLocation.code})` : "Not available"}</strong></div>
                       </div>
-                      <div style={{ marginTop: "0.5rem", fontSize: "0.75rem", color: "#999", fontFamily: "monospace", wordBreak: "break-all" }}>
-                        All UTIDs: {batch.utids.join(", ")}
+                      <div style={{ marginTop: "0.5rem", fontSize: "0.75rem", color: "#999" }}>
+                        Batch UTIDs are listed above for quick reference.
                       </div>
                     </div>
                   )}
@@ -415,7 +530,7 @@ export function TraderListings({ userId }: TraderListingsProps) {
                       {batch.items.slice(0, 3).map((item: any) => (
                         <div key={item.negotiationId} style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
                           <span style={{ fontSize: "0.8rem", color: "#666" }}>
-                            {item.unitNumber ? `Unit #${item.unitNumber}` : "Unit"} {item.utid ? `• ${item.utid}` : ""}
+                            {item.unitNumber ? `Unit #${item.unitNumber}` : "Unit"}
                           </span>
                           <button
                             onClick={() => handleAcceptCounterOffer(item.negotiationId)}
@@ -437,6 +552,53 @@ export function TraderListings({ userId }: TraderListingsProps) {
                       {batch.items.length > 3 && (
                         <div style={{ fontSize: "0.75rem", color: "#666" }}>
                           +{batch.items.length - 3} more countered unit(s). Use filters above to narrow.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {batch.items.some((item: any) => item.unitStatus !== "locked") && batch.status !== "cancelled" && (
+                    <div style={{ marginTop: "0.75rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                      <div style={{ fontSize: "0.8rem", color: "#666", fontWeight: "600" }}>
+                        Cancel before payment lock
+                      </div>
+                      {batch.items.slice(0, 3).map((item: any) => {
+                        const canCancel = item.unitStatus !== "locked" && item.status !== "cancelled" && item.status !== "rejected";
+                        return (
+                          <div key={`cancel-${item.negotiationId}`} style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                            <span style={{ fontSize: "0.8rem", color: "#666" }}>
+                              {item.unitNumber ? `Unit #${item.unitNumber}` : "Unit"}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!canCancel) return;
+                                setCancelTarget({
+                                  negotiationId: item.negotiationId,
+                                  unitLabel: item.unitNumber ? `Unit #${item.unitNumber}` : "Unit",
+                                });
+                                setCancelReason("");
+                              }}
+                              disabled={!canCancel}
+                              style={{
+                                padding: "0.35rem 0.6rem",
+                                background: canCancel ? "#d32f2f" : "#ccc",
+                                color: "#fff",
+                                border: "none",
+                                borderRadius: "6px",
+                                cursor: canCancel ? "pointer" : "not-allowed",
+                                fontSize: "0.75rem",
+                                fontWeight: "600",
+                              }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        );
+                      })}
+                      {batch.items.length > 3 && (
+                        <div style={{ fontSize: "0.75rem", color: "#666" }}>
+                          +{batch.items.length - 3} more active unit(s).
                         </div>
                       )}
                     </div>
@@ -488,27 +650,48 @@ export function TraderListings({ userId }: TraderListingsProps) {
                       ? `Final Offer: ${formatUGX(finalGardenTotal)}`
                       : `Final Price: ${formatUGX(neg.finalPricePerKilo)}/kg | Total: ${formatUGX(neg.totalPrice)}`}
                   </div>
-                  <div style={{ fontSize: "clamp(0.7rem, 2vw, 0.75rem)", color: "#999", fontFamily: "monospace", wordBreak: "break-all", marginBottom: "0.5rem" }}>
-                    UTID: {neg.acceptedUtid}
+                  <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                    <button
+                      onClick={() => handleLockUnit(neg.unitId)}
+                      disabled={locking === neg.unitId}
+                      style={{
+                        padding: "0.5rem 1rem",
+                        background: locking === neg.unitId ? "#ccc" : "#28a745",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: "6px",
+                        cursor: locking === neg.unitId ? "not-allowed" : "pointer",
+                        fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)",
+                        fontWeight: "600",
+                      }}
+                    >
+                      {locking === neg.unitId
+                        ? "Locking..."
+                        : `Pay-to-Lock (${formatUGX(isGardenNegotiation ? finalGardenTotal : neg.totalPrice)})`}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCancelTarget({
+                          negotiationId: neg.negotiationId,
+                          unitLabel: neg.unitNumber ? `Unit #${neg.unitNumber}` : "Unit",
+                        });
+                        setCancelReason("");
+                      }}
+                      style={{
+                        padding: "0.5rem 1rem",
+                        background: "#d32f2f",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: "6px",
+                        cursor: "pointer",
+                        fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)",
+                        fontWeight: "600",
+                      }}
+                    >
+                      Cancel
+                    </button>
                   </div>
-                  <button
-                    onClick={() => handleLockUnit(neg.unitId)}
-                    disabled={locking === neg.unitId}
-                    style={{
-                      padding: "0.5rem 1rem",
-                      background: locking === neg.unitId ? "#ccc" : "#28a745",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: "6px",
-                      cursor: locking === neg.unitId ? "not-allowed" : "pointer",
-                      fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)",
-                      fontWeight: "600",
-                    }}
-                  >
-                    {locking === neg.unitId
-                      ? "Locking..."
-                      : `Pay-to-Lock (${formatUGX(isGardenNegotiation ? finalGardenTotal : neg.totalPrice)})`}
-                  </button>
                   <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.75rem", color: "#666" }}>
                     ⚠️ After payment, farmer must deliver within 6 hours. Delivery countdown starts from payment time.
                   </p>
@@ -537,7 +720,6 @@ export function TraderListings({ userId }: TraderListingsProps) {
             value={produceFilter}
             onChange={(e) => {
               setProduceFilter(e.target.value);
-              setListingsPage(1);
             }}
             style={{
               padding: "0.4rem 0.6rem",
@@ -552,6 +734,67 @@ export function TraderListings({ userId }: TraderListingsProps) {
               <option key={produce} value={produce}>{produce}</option>
             ))}
           </select>
+          <span style={{ fontSize: "0.85rem", color: "#666" }}>Available from:</span>
+          <input
+            type="date"
+            value={availableStartDate}
+            onChange={(e) => setAvailableStartDate(e.target.value)}
+            style={{
+              padding: "0.4rem 0.6rem",
+              border: "1px solid #ddd",
+              borderRadius: "6px",
+              fontSize: "0.85rem",
+              background: "#fff"
+            }}
+          />
+          <span style={{ fontSize: "0.85rem", color: "#666" }}>to</span>
+          <input
+            type="date"
+            value={availableEndDate}
+            onChange={(e) => setAvailableEndDate(e.target.value)}
+            style={{
+              padding: "0.4rem 0.6rem",
+              border: "1px solid #ddd",
+              borderRadius: "6px",
+              fontSize: "0.85rem",
+              background: "#fff"
+            }}
+          />
+          <span style={{ fontSize: "0.85rem", color: "#666" }}>Per page:</span>
+          <select
+            value={listingsPageSize}
+            onChange={(e) => setListingsPageSize(Number(e.target.value))}
+            style={{
+              padding: "0.4rem 0.6rem",
+              border: "1px solid #ddd",
+              borderRadius: "6px",
+              fontSize: "0.85rem",
+              background: "#fff"
+            }}
+          >
+            {[10, 20, 50].map((size) => (
+              <option key={size} value={size}>{size}</option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => {
+              setProduceFilter("all");
+              setAvailableStartDate("");
+              setAvailableEndDate("");
+            }}
+            style={{
+              padding: "0.4rem 0.75rem",
+              borderRadius: "6px",
+              border: "1px solid #ddd",
+              background: "#f5f5f5",
+              fontSize: "0.85rem",
+              cursor: "pointer",
+              fontWeight: "600",
+            }}
+          >
+            Reset
+          </button>
         </div>
 
         {listings === undefined ? (
@@ -568,6 +811,7 @@ export function TraderListings({ userId }: TraderListingsProps) {
               const isOffering = offering?.listingId === listing.listingId;
 
               const isGardenListing = listing.listingMode === "garden" || Boolean(listing.gardenSize || listing.gardenDimensions || listing.totalPrice);
+              const isExpanded = expandedListings.has(listing.listingId);
 
               return (
                 <div
@@ -627,7 +871,7 @@ export function TraderListings({ userId }: TraderListingsProps) {
                         <strong>Total:</strong>{" "}
                         {isGardenListing
                           ? `Garden • ${listing.gardenSize || "N/A"} acres`
-                          : `${listing.totalKilos} kg (${listing.totalUnits} ${listing.isTraderListing ? "block" : "units"})`}
+                          : `${listing.totalKilos} kg (${listing.totalUnits} ${listing.isTraderListing ? "lot" : "units"})`}
                       </div>
                       <div>
                         <strong>Price:</strong>{" "}
@@ -636,32 +880,66 @@ export function TraderListings({ userId }: TraderListingsProps) {
                           : `${formatUGX(listing.pricePerKilo)}/kg`}
                       </div>
                       <div>
-                        <strong>Unit:</strong>{" "}
-                        {isGardenListing
-                          ? "Garden sale"
-                          : `${formatUGX(listing.pricePerKilo * listing.unitSize)} (${listing.unitSize}kg)`}
-                      </div>
-                      <div>
                         <strong>Available:</strong>{" "}
                         {isGardenListing
                           ? "1 garden"
-                          : `${listing.availableUnits || listing.totalUnits} ${listing.isTraderListing ? "block" : "units"}`}
+                          : `${listing.availableUnits || listing.totalUnits} ${listing.isTraderListing ? "lot" : "units"}`}
+                      </div>
+                      <div>
+                        <strong>Listed:</strong> {formatDate(listing.createdAt)}
                       </div>
                     </div>
-                    <div style={{ fontSize: "clamp(0.8rem, 2.5vw, 0.85rem)", color: "#999" }}>
-                      {listing.isTraderListing ? (
-                        <>Trader: {listing.traderAlias || "Unknown"} | Listed: {formatDate(listing.createdAt)} | 100kg Block</>
-                      ) : (
-                        <>Farmer: {listing.farmerAlias || "Unknown"} | Listed: {formatDate(listing.createdAt)}</>
-                      )}
-                    </div>
-                    <div style={{ fontSize: "clamp(0.49rem, 1.4vw, 0.525rem)", color: "#999", marginTop: "0.5rem", fontFamily: "monospace", wordBreak: "break-all" }}>
-                      UTID: {listing.utid}
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExpandedListings((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(listing.listingId)) {
+                            next.delete(listing.listingId);
+                          } else {
+                            next.add(listing.listingId);
+                          }
+                          return next;
+                        });
+                      }}
+                      style={{
+                        padding: "0.4rem 0.75rem",
+                        borderRadius: "6px",
+                        border: "1px solid #ddd",
+                        background: isExpanded ? "#e3f2fd" : "#f5f5f5",
+                        fontSize: "0.85rem",
+                        cursor: "pointer",
+                        fontWeight: "600",
+                      }}
+                    >
+                      {isExpanded ? "Hide details" : "View details"}
+                    </button>
                   </div>
                 </div>
 
-                <div style={{ marginTop: "1rem", padding: "1rem", background: "#f5f5f5", borderRadius: "8px" }}>
+                {isExpanded && (
+                  <div style={{ marginTop: "1rem", padding: "1rem", background: "#f5f5f5", borderRadius: "8px" }}>
+                  <div style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 160px), 1fr))",
+                    gap: "0.75rem",
+                    fontSize: "0.85rem",
+                    color: "#555",
+                    marginBottom: "0.75rem",
+                  }}>
+                    <div>
+                      <strong>Unit Size:</strong> {isGardenListing ? "Garden" : `${listing.unitSize}kg`}
+                    </div>
+                    <div>
+                      <strong>Unit Price:</strong>{" "}
+                      {isGardenListing
+                        ? formatUGX(listing.totalPrice || 0)
+                        : formatUGX(listing.pricePerKilo * listing.unitSize)}
+                    </div>
+                    <div>
+                      <strong>Location:</strong> {listing.storageLocation?.districtName || "N/A"}
+                    </div>
+                  </div>
                   {hasActiveNegotiation ? (
                     <p style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", color: "#666" }}>
                       <strong>You have an active negotiation for this listing.</strong> Check &quot;Your Active Negotiations&quot; above.
@@ -864,7 +1142,7 @@ export function TraderListings({ userId }: TraderListingsProps) {
                               color: "#856404",
                               textAlign: "center"
                             }}>
-                              ⚠️ Each unit will get its own UTID in your incoming purchase ledger
+                              ⚠️ Offers are tracked under batch UTIDs in your incoming purchase ledger
                             </div>
                           </div>
                         )}
@@ -949,6 +1227,7 @@ export function TraderListings({ userId }: TraderListingsProps) {
                     </div>
                   )}
                 </div>
+                )}
               </div>
             );
             })}

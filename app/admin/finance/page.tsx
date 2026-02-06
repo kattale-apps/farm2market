@@ -3,7 +3,8 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import Link from "next/link";
 import * as XLSX from "xlsx";
 
 export default function FinanceDashboardPage() {
@@ -31,6 +32,10 @@ export default function FinanceDashboardPage() {
   );
   const farmcoinLedger = useQuery(
     (api as any).farmcoin.getFarmcoinLedger,
+    userId ? { adminId: userId } : "skip"
+  );
+  const traderBalances = useQuery(
+    (api as any).farmcoin.getFarmcoinTraderBalances,
     userId ? { adminId: userId } : "skip"
   );
   const unverifiedTraders = useQuery(
@@ -63,6 +68,11 @@ export default function FinanceDashboardPage() {
   const formatUGX = (amount: number) => {
     return new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX" }).format(amount);
   };
+
+  const traderOptions = useMemo(() => {
+    const traders = traderBalances?.traders ? [...traderBalances.traders] : [];
+    return traders.sort((a, b) => (a.alias || "").localeCompare(b.alias || ""));
+  }, [traderBalances]);
 
   
 
@@ -135,7 +145,24 @@ export default function FinanceDashboardPage() {
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
         marginBottom: "2rem",
       }}>
-        <h2 style={{ fontSize: "1.3rem", marginBottom: "1rem" }}>FarmCoin Tokens</h2>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+          <h2 style={{ fontSize: "1.3rem", marginBottom: "1rem" }}>FarmCoin Tokens</h2>
+          <Link
+            href="/"
+            style={{
+              padding: "0.5rem 0.9rem",
+              background: "#f5f5f5",
+              borderRadius: 8,
+              border: "1px solid #ddd",
+              textDecoration: "none",
+              color: "#333",
+              fontWeight: 600,
+              fontSize: "0.85rem",
+            }}
+          >
+            ← Back to Home
+          </Link>
+        </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "1.5rem" }}>
           <div style={{ minWidth: "240px" }}>
             <div style={{ fontWeight: 600, marginBottom: "0.35rem" }}>Posting Cost</div>
@@ -214,13 +241,23 @@ export default function FinanceDashboardPage() {
         {isSuperAdmin && (
           <div style={{ marginTop: "1.5rem", display: "grid", gap: "0.75rem", maxWidth: 520 }}>
             <div style={{ fontWeight: 600 }}>Grant FarmCoin Tokens</div>
-            <input
-              type="text"
-              placeholder="Trader ID"
+            <select
               value={grantTraderId}
               onChange={(e) => setGrantTraderId(e.target.value)}
               style={{ padding: "0.6rem", borderRadius: 8, border: "1px solid #ddd" }}
-            />
+            >
+              <option value="">Select trader</option>
+              {traderOptions.map((trader: any) => (
+                <option key={trader._id} value={trader._id}>
+                  {trader.alias || "Trader"} • {trader._id}
+                </option>
+              ))}
+            </select>
+            {grantTraderId && (
+              <div style={{ fontSize: "0.85rem", color: "#666" }}>
+                Selected trader ID: <strong>{grantTraderId}</strong>
+              </div>
+            )}
             <input
               type="number"
               min={1}

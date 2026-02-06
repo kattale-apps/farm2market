@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import * as XLSX from "xlsx";
 import { formatUgandaDate } from "../utils/dateUtils";
+import { NotificationMailbox } from "./NotificationMailbox";
 
 const REGION_GROUPS: { label: string; districts: string[] }[] = [
   {
@@ -137,6 +138,8 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   const [selectedApplicationId, setSelectedApplicationId] = useState<
     Id<"communityApplications"> | null
   >(null);
+  const [selectedMessageThread, setSelectedMessageThread] = useState<{ utid: string; otherUserId: Id<"users"> } | null>(null);
+  const [adminMessageText, setAdminMessageText] = useState("");
 
   const adminUser = useQuery(api.auth.getUser, { userId: adminId });
   const communities = useQuery(api.introspection.getCommunitiesForAdmin, {
@@ -147,6 +150,11 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   const isSuperAdmin = adminUser?.role === "admin" && (
     adminUser?.adminLevel === "super" || 
     (adminUser?.adminLevel === undefined && !adminUser?.adminCategory)
+  );
+
+  const allUsers = useQuery(
+    api.introspection.getAllUsers,
+    isSuperAdmin ? { adminId } : "skip"
   );
 
   const communityMembers = useQuery(
@@ -177,6 +185,18 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
       : "skip"
   );
 
+  const adminMessageThreads = useQuery(
+    api.messages.getAdminMessageThreads,
+    isSuperAdmin ? { adminId } : "skip"
+  );
+
+  const selectedAdminThread = useQuery(
+    api.messages.getMessageThread,
+    selectedMessageThread
+      ? { userId: adminId, utid: selectedMessageThread.utid }
+      : "skip"
+  );
+
   const approveApplication = useMutation(
     api.communityApplications.approveApplication
   );
@@ -187,8 +207,16 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
     api.communityApplications.deleteCommunityMember
   );
 
+  const sendAdminMessage = useMutation(api.messages.sendMessage);
+  const markMessagesAsRead = useMutation(api.messages.markMessagesAsRead);
+
 
   const logExport = useMutation(api.communities.logExport);
+
+  const membersList = useMemo(
+    () => (allUsers ?? []).filter((u) => u.role === "farmer" || u.role === "trader" || u.role === "buyer"),
+    [allUsers]
+  );
 
   /* ───────────── Export Logic ───────────── */
 
@@ -331,6 +359,17 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
     XLSX.writeFile(wb, `${name}_Members.xlsx`);
   };
 
+  const handleSendAdminMessage = async () => {
+    if (!selectedMessageThread || !adminMessageText.trim()) return;
+    await sendAdminMessage({
+      fromUserId: adminId,
+      toUserId: selectedMessageThread.otherUserId,
+      utid: selectedMessageThread.utid,
+      message: adminMessageText.trim(),
+    });
+    setAdminMessageText("");
+  };
+
   /* ───────────────── UI ───────────────── */
 
   return (
@@ -417,8 +456,8 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
               </div>
             </a>
 
-            {/* Communities */}
-            <a href="/admin/communities" style={{ textDecoration: "none" }}>
+            {/* Community Management */}
+            <a href="#community-management" style={{ textDecoration: "none" }}>
               <div
                 style={{
                   ...utilityCardStyle,
@@ -442,9 +481,42 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
               >
                 <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>🌾</div>
                 <div>
-                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Communities</h3>
+                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Community Management</h3>
                   <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.95 }}>
-                    Create and manage grower communities
+                    Manage communities and members
+                  </p>
+                </div>
+              </div>
+            </a>
+
+            {/* Members */}
+            <a href="#members" style={{ textDecoration: "none" }}>
+              <div
+                style={{
+                  ...utilityCardStyle,
+                  cursor: "pointer",
+                  transition: "transform 0.2s, box-shadow 0.2s",
+                  background: "linear-gradient(135deg, #3949ab 0%, #283593 100%)",
+                  color: "#fff",
+                  minHeight: "140px",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-4px)";
+                  e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.15)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.06)";
+                }}
+              >
+                <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>🧑🏽‍🌾</div>
+                <div>
+                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Members</h3>
+                  <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.95 }}>
+                    View farmers, traders, and buyers
                   </p>
                 </div>
               </div>
@@ -516,6 +588,39 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
               </div>
             </a>
 
+            {/* Messages & Notifications */}
+            <a href="#admin-inbox" style={{ textDecoration: "none" }}>
+              <div
+                style={{
+                  ...utilityCardStyle,
+                  cursor: "pointer",
+                  transition: "transform 0.2s, box-shadow 0.2s",
+                  background: "linear-gradient(135deg, #00838f 0%, #006064 100%)",
+                  color: "#fff",
+                  minHeight: "140px",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-4px)";
+                  e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.15)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.06)";
+                }}
+              >
+                <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>📬</div>
+                <div>
+                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Messages & Notifications</h3>
+                  <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.95 }}>
+                    Respond to member messages
+                  </p>
+                </div>
+              </div>
+            </a>
+
             {/* Community Dashboard */}
             <a href="/admin/community-dashboard" style={{ textDecoration: "none" }}>
               <div
@@ -552,7 +657,74 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
         </>
       )}
 
-      <h2 style={{ marginBottom: "1rem" }}>Community Management</h2>
+      {isSuperAdmin && (
+        <div id="members" style={{ marginBottom: "2rem" }}>
+          <h2 style={{ marginBottom: "1rem" }}>Members</h2>
+          <div style={{
+            background: "#fff",
+            borderRadius: "12px",
+            padding: "1rem",
+            border: "1px solid #e0e0e0",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+          }}>
+            {membersList === undefined ? (
+              <p style={{ color: "#666" }}>Loading members...</p>
+            ) : membersList.length === 0 ? (
+              <p style={{ color: "#666" }}>No members found.</p>
+            ) : (
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
+                  <thead>
+                    <tr style={{ textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>
+                      <th style={{ padding: "0.6rem" }}>Role</th>
+                      <th style={{ padding: "0.6rem" }}>Alias</th>
+                      <th style={{ padding: "0.6rem" }}>Member ID</th>
+                      <th style={{ padding: "0.6rem" }}>Email</th>
+                      <th style={{ padding: "0.6rem" }}>Phone</th>
+                      <th style={{ padding: "0.6rem" }}>Location</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {membersList.map((member: any) => (
+                      <tr key={member.userId} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                        <td style={{ padding: "0.6rem" }}>{member.role}</td>
+                        <td style={{ padding: "0.6rem" }}>{member.alias || "-"}</td>
+                        <td style={{ padding: "0.6rem", fontFamily: "monospace", fontSize: "0.8rem" }}>{member.userId}</td>
+                        <td style={{ padding: "0.6rem" }}>{member.email || "-"}</td>
+                        <td style={{ padding: "0.6rem" }}>{member.phoneNumber || "-"}</td>
+                        <td style={{ padding: "0.6rem", color: "#666" }}>
+                          {[member.districtText, member.subCountyText, member.village].filter(Boolean).join(" • ") || "-"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <h2 id="community-management" style={{ marginBottom: "1rem" }}>Community Management</h2>
+
+      <div style={{ marginBottom: "0.75rem" }}>
+        <a
+          href="/admin/communities"
+          style={{
+            display: "inline-block",
+            padding: "0.4rem 0.75rem",
+            borderRadius: 6,
+            border: "1px solid #ddd",
+            background: "#f5f5f5",
+            textDecoration: "none",
+            color: "#333",
+            fontSize: "0.85rem",
+            fontWeight: 600,
+          }}
+        >
+          Open Full Community Manager
+        </a>
+      </div>
 
       {/* Premium Notice */}
       <div
@@ -905,6 +1077,147 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           )}
         </div>
       </div>
+
+      {isSuperAdmin && (
+        <div id="admin-inbox" style={{ marginTop: "2rem" }}>
+          <h2 style={{ marginBottom: "1rem" }}>Messages & Notifications</h2>
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(220px, 320px) 1fr",
+            gap: "1rem",
+            alignItems: "stretch",
+          }}>
+            <div style={{
+              background: "#fff",
+              borderRadius: 12,
+              padding: "1rem",
+              border: "1px solid #e0e0e0",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+            }}>
+              <div style={{ marginBottom: "0.75rem", fontWeight: 600 }}>Notifications</div>
+              <NotificationMailbox userId={adminId} />
+            </div>
+            <div style={{
+              background: "#fff",
+              borderRadius: 12,
+              padding: "1rem",
+              border: "1px solid #e0e0e0",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+              minHeight: "320px",
+            }}>
+              <div style={{ display: "grid", gridTemplateColumns: "minmax(180px, 260px) 1fr", gap: "1rem" }}>
+                <div style={{ borderRight: "1px solid #eee", paddingRight: "0.75rem" }}>
+                  <div style={{ fontWeight: 600, marginBottom: "0.75rem" }}>Message Threads</div>
+                  {adminMessageThreads === undefined ? (
+                    <p style={{ color: "#666" }}>Loading threads...</p>
+                  ) : adminMessageThreads.length === 0 ? (
+                    <p style={{ color: "#666" }}>No messages yet.</p>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                      {adminMessageThreads.map((thread: any) => (
+                        <button
+                          key={thread.utid}
+                          type="button"
+                          onClick={async () => {
+                            setSelectedMessageThread({ utid: thread.utid, otherUserId: thread.otherUserId });
+                            await markMessagesAsRead({ userId: adminId, utid: thread.utid });
+                          }}
+                          style={{
+                            padding: "0.5rem",
+                            borderRadius: 8,
+                            border: "1px solid #ddd",
+                            background: selectedMessageThread?.utid === thread.utid ? "#e3f2fd" : "#f9fafb",
+                            textAlign: "left",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <div style={{ fontWeight: 600, fontSize: "0.85rem" }}>
+                            {thread.otherUserAlias || "Member"}
+                          </div>
+                          <div style={{ fontSize: "0.75rem", color: "#666" }}>
+                            {thread.lastMessage?.slice(0, 40) || "No message"}
+                          </div>
+                          {thread.unreadCount > 0 && (
+                            <div style={{ fontSize: "0.7rem", color: "#d32f2f", fontWeight: 600 }}>
+                              {thread.unreadCount} unread
+                            </div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                  <div style={{ fontWeight: 600 }}>Thread</div>
+                  {selectedMessageThread ? (
+                    <>
+                      <div style={{
+                        flex: 1,
+                        maxHeight: "260px",
+                        overflowY: "auto",
+                        border: "1px solid #eee",
+                        borderRadius: 8,
+                        padding: "0.75rem",
+                        background: "#fafafa",
+                      }}>
+                        {selectedAdminThread === undefined ? (
+                          <p style={{ color: "#666" }}>Loading messages...</p>
+                        ) : selectedAdminThread.length === 0 ? (
+                          <p style={{ color: "#666" }}>No messages in this thread.</p>
+                        ) : (
+                          selectedAdminThread.map((msg: any) => (
+                            <div key={msg.id} style={{ marginBottom: "0.6rem" }}>
+                              <div style={{ fontSize: "0.75rem", color: "#666" }}>
+                                {msg.isFromMe ? "You" : msg.fromAlias}
+                              </div>
+                              <div style={{ fontSize: "0.9rem" }}>{msg.message}</div>
+                              <div style={{ fontSize: "0.7rem", color: "#999" }}>
+                                {new Date(msg.createdAt).toLocaleString()}
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                      <div style={{ display: "flex", gap: "0.5rem" }}>
+                        <input
+                          type="text"
+                          value={adminMessageText}
+                          onChange={(e) => setAdminMessageText(e.target.value)}
+                          placeholder="Type your response..."
+                          style={{
+                            flex: 1,
+                            padding: "0.6rem",
+                            borderRadius: 8,
+                            border: "1px solid #ddd",
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={handleSendAdminMessage}
+                          disabled={!adminMessageText.trim()}
+                          style={{
+                            padding: "0.6rem 1rem",
+                            background: adminMessageText.trim() ? "#1976d2" : "#ccc",
+                            color: "#fff",
+                            border: "none",
+                            borderRadius: 8,
+                            cursor: adminMessageText.trim() ? "pointer" : "not-allowed",
+                            fontWeight: 600,
+                          }}
+                        >
+                          Send
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <p style={{ color: "#666" }}>Select a thread to respond.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

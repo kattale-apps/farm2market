@@ -208,6 +208,10 @@ export const getAllUsers = query({
       adminLevel: u.adminLevel,
       adminCategory: u.adminCategory,
       assignedCommunityIds: u.assignedCommunityIds ?? [],
+      districtText: (u as any).districtText,
+      subCountyText: (u as any).subCountyText,
+      village: (u as any).village,
+      county: (u as any).county,
     }));
   },
 });

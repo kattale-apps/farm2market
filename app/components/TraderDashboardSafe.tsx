@@ -15,19 +15,43 @@ export function TraderDashboardSafe({ userId }: TraderDashboardSafeProps) {
   const user = useQuery(api.auth.getUser, { userId });
   const farmcoinSummary = useQuery(api.farmcoin.getTraderFarmcoinSummary, { traderId: userId });
 
+  const isVerified = (user as any)?.isVerifiedTrader && (user as any)?.verificationStatus === "verified";
+
   return (
-    <div style={{ padding: "clamp(0.75rem, 2vw, 1rem)", maxWidth: "100%", boxSizing: "border-box" }}>
+    <div style={{
+      padding: "clamp(0.75rem, 2vw, 1rem)",
+      maxWidth: "100%",
+      boxSizing: "border-box",
+      background: "linear-gradient(180deg, #f7faf9 0%, #eef5f1 100%)",
+      borderRadius: "16px",
+    }}>
       <div style={{ marginBottom: "1.5rem" }}>
-        <h2 style={{
-          fontSize: "clamp(1.5rem, 4vw, 1.8rem)",
-          marginBottom: "0.5rem",
-          color: "#2c2c2c",
-          fontFamily: '"Montserrat", sans-serif',
-          fontWeight: "700",
-          letterSpacing: "-0.02em"
-        }}>
-          Trader: {user?.alias || "Trader"}
-        </h2>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+          <h2 style={{
+            fontSize: "clamp(1.5rem, 4vw, 1.8rem)",
+            marginBottom: "0.25rem",
+            color: "#2c2c2c",
+            fontFamily: '"Montserrat", sans-serif',
+            fontWeight: "700",
+            letterSpacing: "-0.02em"
+          }}>
+            🚚 Trader: {user?.alias || "Trader"}
+          </h2>
+          <span style={{
+            padding: "0.25rem 0.6rem",
+            borderRadius: "999px",
+            fontSize: "0.8rem",
+            fontWeight: "600",
+            background: isVerified ? "#e8f5e9" : "#fff3cd",
+            color: isVerified ? "#2e7d32" : "#8d6e00",
+            border: `1px solid ${isVerified ? "#81c784" : "#ffe082"}`,
+          }}>
+            {isVerified ? "Verified" : "Not Verified"}
+          </span>
+        </div>
+        <div style={{ color: "#64748b", fontSize: "0.9rem" }}>
+          Verification is managed by SuperAdmin only.
+        </div>
       </div>
 
       <div style={{

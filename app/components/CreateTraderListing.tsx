@@ -80,7 +80,7 @@ export function CreateTraderListing({ userId }: CreateTraderListingProps) {
 
   const postingCost = farmcoinSettings?.farmcoinPostingCost ?? 1;
   const farmcoinBalance = farmcoinSummary?.balance ?? 0;
-  const isVerified = traderProfile?.isVerifiedTrader && traderProfile?.verificationStatus === "verified";
+  const isVerified = (traderProfile as any)?.isVerifiedTrader && (traderProfile as any)?.verificationStatus === "verified";
   const canPost = isVerified && farmcoinBalance >= postingCost;
 
   return (

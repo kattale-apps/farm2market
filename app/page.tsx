@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { AdminDashboard } from "./components/AdminDashboard";
-import { TraderDashboard } from "./components/TraderDashboard";
+import { TraderDashboardSafe } from "./components/TraderDashboardSafe";
 import { FarmerDashboard } from "./components/FarmerDashboard";
 import { BuyerDashboard } from "./components/BuyerDashboard";
 import { Id } from "../convex/_generated/dataModel";
@@ -368,7 +368,7 @@ export default function Home() {
         marginTop: "1rem"
       }}>
         {user?.role === "admin" && user?.userId && <AdminDashboard userId={user.userId as Id<"users">} />}
-        {user?.role === "trader" && user?.userId && <TraderDashboard userId={user.userId as Id<"users">} />}
+        {user?.role === "trader" && user?.userId && <TraderDashboardSafe userId={user.userId as Id<"users">} />}
         {user?.role === "farmer" && user?.userId && <FarmerDashboard userId={user.userId as Id<"users">} />}
         {user?.role === "buyer" && user?.userId && <BuyerDashboard userId={user.userId as Id<"users">} />}
       </div>

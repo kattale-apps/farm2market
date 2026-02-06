@@ -147,21 +147,18 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
         Status: entry.status ?? "-",
         Joined: entry.joinedAt ? formatUgandaDate(entry.joinedAt) : "-",
         UpdatedAt: entry.updatedAt ? formatUgandaDate(entry.updatedAt) : "-",
-        FarmerAlias: farmer.alias ?? "-",
-        FarmerEmail: farmer.email ?? "-",
-        FarmerPhone: farmer.phoneNumber ?? "-",
-        FarmerCounty: farmer.county ?? "-",
-        FarmerDistrict: farmer.districtText ?? "-",
-        FarmerSubCounty: farmer.subCountyText ?? "-",
-        FarmerVillage: farmer.village ?? "-",
-        FarmerWaterSource: farmer.waterSource ?? "-",
+        Alias: farmer.alias ?? "-",
+        Email: section1.emailAddress ?? farmer.email ?? "-",
+        Phone: section1.phoneNumber ?? farmer.phoneNumber ?? "-",
+        Region: section1.region ?? farmer.region ?? "",
+        District: section1.districtSubCounty ?? section1.district ?? farmer.districtText ?? "",
+        County: section1.county ?? farmer.county ?? "",
+        Subcounty: section1.subCounty ?? section1.districtSubCounty ?? farmer.subCountyText ?? "",
+        Parish: section1.parish ?? "",
+        Village: section1.village ?? farmer.village ?? "",
+        WaterSource: section1.waterSource ?? farmer.waterSource ?? "",
         farmerFullName: section1.farmerFullName ?? "",
         farmName: section1.farmName ?? "",
-        phoneNumber: section1.phoneNumber ?? "",
-        emailAddress: section1.emailAddress ?? "",
-        county: section1.county ?? "",
-        districtSubCounty: section1.districtSubCounty ?? "",
-        village: section1.village ?? "",
         farmSizeAcres: section1.farmSizeAcres ?? "",
         totalAreaAgProductionAcres: section1.totalAreaAgProductionAcres ?? "",
         totalAreaPlantedForestAcres: section1.totalAreaPlantedForestAcres ?? "",
@@ -170,7 +167,6 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
         mainEnterprises: (section1.mainEnterprises || []).join(", "),
         otherCommercialActivity: section1.otherCommercialActivity ?? "",
         yearsOfExperience: section1.yearsOfExperience ?? "",
-        waterSource: section1.waterSource ?? "",
         waterSourceOther: section1.waterSourceOther ?? "",
         certifications: section1.certifications ?? "",
         dairy_systemOfFarming: form.section2_1_dairy?.systemOfFarming ?? "",
@@ -265,10 +261,12 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
     } else {
       const doc = new jsPDF();
       doc.text(`${name} Members`, 14, 15);
+      const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
       autoTable(doc, {
-        head: [["Status", "Joined", "UpdatedAt", "FarmerAlias", "FarmerEmail", "FarmerPhone", "FarmerCounty", "FarmerDistrict", "FarmerSubCounty", "FarmerVillage", "FarmerWaterSource", "farmerFullName", "farmName", "phoneNumber", "emailAddress", "county", "districtSubCounty", "village", "farmSizeAcres", "totalAreaAgProductionAcres", "totalAreaPlantedForestAcres", "systemOfFarming", "systemOfFarmingOther", "mainEnterprises", "otherCommercialActivity", "yearsOfExperience", "waterSource", "waterSourceOther", "certifications", "dairy_systemOfFarming", "dairy_systemOfFarmingOther", "dairy_enterpriseAreaAcres", "dairy_currentLivestockIntensity", "dairy_numberOfMilkers", "dairy_milkProductivityDaily", "dairy_accessToColdStorage", "dairy_marketPointOfSale", "dairy_transportToMarket", "poultry_systemOfFarming", "poultry_systemOfFarmingOther", "poultry_enterpriseAreaAcres", "poultry_currentPoultryIntensity", "poultry_typesOfChicken", "poultry_accessToColdStorage", "poultry_marketPointOfSale", "poultry_transportToMarket", "piggery_systemOfFarming", "piggery_systemOfFarmingOther", "piggery_enterpriseAreaAcres", "piggery_currentPiggeryIntensity", "piggery_product", "piggery_accessToColdStorage", "piggery_marketPointOfSale", "piggery_transportToMarket", "rabbitry_systemOfFarming", "rabbitry_systemOfFarmingOther", "rabbitry_enterpriseAreaAcres", "rabbitry_currentRabbitryIntensity", "rabbitry_mainProduct", "rabbitry_accessToColdStorage", "rabbitry_marketPointOfSale", "rabbitry_transportToMarket", "apiary_systemOfFarming", "apiary_systemOfFarmingOther", "apiary_enterpriseAreaAcres", "apiary_currentApiaryIntensity", "apiary_mainProduct", "apiary_accessToColdStorage", "apiary_marketPointOfSale", "apiary_transportToMarket", "aquaculture_systemOfFarming", "aquaculture_systemOfFarmingOther", "aquaculture_enterpriseAreaAcres", "aquaculture_currentStock", "aquaculture_typeOfFish", "aquaculture_accessToColdStorage", "aquaculture_marketPointOfSale", "aquaculture_transportToMarket", "banana_systemOfFarming", "banana_systemOfFarmingOther", "banana_enterpriseAreaAcres", "banana_productionIntensityPerAcre", "banana_type", "banana_accessToColdStorage", "banana_marketPointOfSale", "banana_transportToMarket", "maize_systemOfFarming", "maize_systemOfFarmingOther", "maize_enterpriseAreaAcres", "maize_productionIntensityPerAcre", "maize_accessToColdStorage", "maize_marketPointOfSale", "maize_transportToMarket", "fruitTrees_systemOfFarming", "fruitTrees_systemOfFarmingOther", "fruitTrees_enterpriseAreaAcres", "fruitTrees_stockPerAcre", "fruitTrees_type", "fruitTrees_accessToColdStorage", "fruitTrees_marketPointOfSale", "fruitTrees_transportToMarket", "plantedForest_systemOfFarming", "plantedForest_systemOfFarmingOther", "plantedForest_enterpriseAreaAcres", "plantedForest_stockPerAcre", "plantedForest_type", "plantedForest_marketPointOfSale", "plantedForest_transportToMarket"]],
+        head: [headers],
         body: rows.map((r) => Object.values(r)),
         startY: 20,
+        styles: { fontSize: 6 },
       });
       doc.save(`${name}_Members.pdf`);
     }

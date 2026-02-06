@@ -4,6 +4,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -76,8 +77,7 @@ export default function FarmerCommunitiesPage() {
     }
   }, [communities, agroFreshCommunityId]);
 
-  const normalizeCommunityKey = (value?: string) =>
-    (value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const normalizeCommunityKey = (value?: string) => (value || "").toLowerCase();
 
   const isAgroFreshCommunity = (community: { id: Id<"communities">; name?: string; description?: string }) => {
     if (agroFreshCommunityId && community.id === agroFreshCommunityId) return true;
@@ -333,9 +333,11 @@ export default function FarmerCommunitiesPage() {
                             flexShrink: 0,
                           }}
                         >
-                          <img
+                          <Image
                             src={headerLogo}
                             alt={`${community.name} logo`}
+                            width={52}
+                            height={52}
                             style={{ width: "100%", height: "100%", objectFit: "cover" }}
                           />
                         </div>

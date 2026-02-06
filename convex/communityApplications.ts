@@ -71,6 +71,8 @@ export const getPaginatedApplications = query({
       if (!isAssigned && !isDirectAdmin) {
         throw new Error(`Not authorized. Admin not assigned to community ${communityId}`);
       }
+    } else if (!isSuperAdmin && adminUser.adminCategory !== "community") {
+      throw new Error("Forbidden");
     }
 
     const safePageSize = Math.min(Math.max(pageSize, 1), 20);
@@ -278,6 +280,8 @@ export const getApplicationsByCommunityIds = query({
       allowedCommunityIds = communityIds.filter(
         (id) => assigned.some((aid: string) => aid === id) || directAssigned.has(id)
       );
+    } else if (!isSuperAdmin && adminUser.adminCategory !== "community") {
+      throw new Error("Forbidden");
     }
 
     const results = await Promise.all(
@@ -380,6 +384,8 @@ export const getCommunityMembersByCommunityIds = query({
       allowedCommunityIds = communityIds.filter(
         (id) => assigned.some((aid: string) => aid === id) || directAssigned.has(id)
       );
+    } else if (!isSuperAdmin && adminUser.adminCategory !== "community") {
+      throw new Error("Forbidden");
     }
 
     const results = await Promise.all(
@@ -464,9 +470,27 @@ export const getApplicationDetails = query({
       throw new Error("Not authorized");
     }
 
+    const adminUser = await ctx.db.get(adminId);
+    if (!adminUser) {
+      throw new Error("Admin not found");
+    }
+
     const app = await ctx.db.get(applicationId);
     if (!app) {
       throw new Error("Application not found");
+    }
+
+    const isSuperAdmin = adminUser.adminLevel === "super" || adminUser.adminLevel === undefined;
+    if (!isSuperAdmin && adminUser.adminCategory === "community") {
+      const community = await ctx.db.get(app.communityId);
+      const assigned = (adminUser as any).assignedCommunityIds || [];
+      const isDirectAdmin = community?.communityAdminId === adminId;
+      const isAssigned = assigned.some((id: string) => id === app.communityId);
+      if (!isAssigned && !isDirectAdmin) {
+        throw new Error("Forbidden");
+      }
+    } else if (!isSuperAdmin && adminUser.adminCategory !== "community") {
+      throw new Error("Forbidden");
     }
 
     const form = await ctx.db.get(app.formId);
@@ -811,6 +835,24 @@ export const getExportData = query({
     }
 
     const communityId = await getAgroFreshCommunityId(ctx);
+
+    const adminUser = await ctx.db.get(adminId);
+    if (!adminUser) {
+      throw new Error("Admin not found");
+    }
+
+    const isSuperAdmin = adminUser.adminLevel === "super" || adminUser.adminLevel === undefined;
+    if (!isSuperAdmin && adminUser.adminCategory === "community") {
+      const community = await ctx.db.get(communityId);
+      const assigned = (adminUser as any).assignedCommunityIds || [];
+      const isDirectAdmin = community?.communityAdminId === adminId;
+      const isAssigned = assigned.some((id: string) => id === communityId);
+      if (!isAssigned && !isDirectAdmin) {
+        throw new Error("Forbidden");
+      }
+    } else if (!isSuperAdmin && adminUser.adminCategory !== "community") {
+      throw new Error("Forbidden");
+    }
     const all = await ctx.db
       .query("communityApplications")
       .withIndex("by_community", (q: any) => q.eq("communityId", communityId))
@@ -858,12 +900,23 @@ export const getExportData = query({
 export const syncAgroFreshAdmin = mutation({
   args: { adminId: v.id("users") },
   handler: async (ctx, { adminId }) => {
+    const adminCheck = await verifyAdminRole({ userId: adminId, db: ctx.db });
+    if (!adminCheck.authorized) {
+      throw new Error("Not authorized");
+    }
+
     const admin = await ctx.db.get(adminId);
     if (!admin) throw new Error("Admin not found");
 
     const communityId = await getAgroFreshCommunityId(ctx);
+    const community = await ctx.db.get(communityId);
+    const isDirectAdmin = community?.communityAdminId === adminId;
+    if (!isDirectAdmin) {
+      throw new Error("Forbidden");
+    }
+
     const assigned = (admin as any).assignedCommunityIds || [];
-    
+
     if (!assigned.some((id: string) => id === communityId)) {
       await ctx.db.patch(adminId, {
         assignedCommunityIds: [...assigned, communityId],

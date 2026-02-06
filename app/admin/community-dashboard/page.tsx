@@ -15,6 +15,7 @@ export default function CommunityDashboardPage() {
   const [userAdminCategory, setUserAdminCategory] = useState<string>("");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [selectedApplicationId, setSelectedApplicationId] = useState<Id<"communityApplications"> | null>(null);
 
   // Filter state
   const [filterType, setFilterType] = useState<"all" | "phone" | "email" | "location">( "all");
@@ -63,6 +64,13 @@ export default function CommunityDashboardPage() {
   const approveApplication = useMutation(api.communityApplications.approveApplication);
   const rejectApplication = useMutation(api.communityApplications.rejectApplication);
   const revokeMembership = useMutation(api.communityApplications.revokeMembership);
+
+  const selectedApplicationDetails = useQuery(
+    api.communityApplications.getApplicationDetails,
+    userId && selectedApplicationId
+      ? { adminId: userId, applicationId: selectedApplicationId }
+      : "skip"
+  );
 
   // For community admin: get their managed community
   const userCommunities = useMemo(() => {
@@ -294,6 +302,12 @@ export default function CommunityDashboardPage() {
                                 <td style={{ padding: "0.5rem" }}>{app.form?.section1?.districtSubCounty || app.farmer?.districtText || "-"}</td>
                                 <td style={{ padding: "0.5rem" }}>{app.createdAt ? new Date(app.createdAt).toLocaleString() : "-"}</td>
                                 <td style={{ padding: "0.5rem", display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+                                  <button
+                                    onClick={() => setSelectedApplicationId(app.id as any)}
+                                    style={{ padding: "0.35rem 0.6rem" }}
+                                  >
+                                    View
+                                  </button>
                                   <button
                                     onClick={async () => {
                                       try {
@@ -589,6 +603,107 @@ export default function CommunityDashboardPage() {
           ))
         )}
       </div>
+
+      {selectedApplicationId && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 50,
+            padding: "1rem",
+          }}
+          onClick={() => setSelectedApplicationId(null)}
+        >
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: 12,
+              maxWidth: 900,
+              width: "100%",
+              padding: "1.25rem",
+              boxShadow: "0 12px 30px rgba(0,0,0,0.2)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h3 style={{ margin: 0 }}>Application Review</h3>
+              <button
+                onClick={() => setSelectedApplicationId(null)}
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  fontSize: "1.25rem",
+                  cursor: "pointer",
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {!selectedApplicationDetails ? (
+              <p style={{ color: "#666", marginTop: "1rem" }}>Loading details...</p>
+            ) : (
+              <div style={{ marginTop: "1rem" }}>
+                {(() => {
+                  const section1 = (selectedApplicationDetails as any)?.form?.section1 || {};
+                  const farmer = (selectedApplicationDetails as any)?.farmer || {};
+                  return (
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                      <div><strong>Farmer Name:</strong> {section1.farmerFullName || farmer.alias || "-"}</div>
+                      <div><strong>Farm Name:</strong> {section1.farmName || "-"}</div>
+                      <div><strong>Phone:</strong> {section1.phoneNumber || farmer.phoneNumber || "-"}</div>
+                      <div><strong>Email:</strong> {section1.emailAddress || farmer.email || "-"}</div>
+                      <div><strong>County:</strong> {section1.county || farmer.county || "-"}</div>
+                      <div><strong>District/Subcounty:</strong> {section1.districtSubCounty || farmer.districtText || "-"}</div>
+                      <div><strong>Village:</strong> {section1.village || farmer.village || "-"}</div>
+                      <div><strong>Farm Size (Acres):</strong> {section1.farmSizeAcres || "-"}</div>
+                      <div><strong>Main Enterprises:</strong> {(section1.mainEnterprises || []).join(", ") || "-"}</div>
+                      <div><strong>System of Farming:</strong> {section1.systemOfFarming || "-"}</div>
+                      <div><strong>Years of Experience:</strong> {section1.yearsOfExperience || "-"}</div>
+                      <div><strong>Water Source:</strong> {section1.waterSource || farmer.waterSource || "-"}</div>
+                    </div>
+                  );
+                })()}
+
+                <div style={{ marginTop: "1rem", display: "flex", gap: "0.5rem" }}>
+                  <button
+                    onClick={async () => {
+                      try {
+                        await approveApplication({ adminId: userId as any, applicationId: selectedApplicationId as any });
+                        setMessage({ type: "success", text: "Application approved." });
+                        setSelectedApplicationId(null);
+                      } catch (error: any) {
+                        setMessage({ type: "error", text: error?.message || "Failed to approve" });
+                      }
+                    }}
+                    style={{ padding: "0.5rem 0.9rem" }}
+                  >
+                    Approve
+                  </button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        await rejectApplication({ adminId: userId as any, applicationId: selectedApplicationId as any });
+                        setMessage({ type: "success", text: "Application rejected." });
+                        setSelectedApplicationId(null);
+                      } catch (error: any) {
+                        setMessage({ type: "error", text: error?.message || "Failed to reject" });
+                      }
+                    }}
+                    style={{ padding: "0.5rem 0.9rem" }}
+                  >
+                    Reject
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

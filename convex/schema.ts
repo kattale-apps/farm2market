@@ -62,7 +62,7 @@ export default defineSchema({
     passwordHash: v.optional(v.string()), // Secure password hash (bcrypt/argon2). Required for production authentication.
     customSpendCap: v.optional(v.number()), // Admin-set custom spend cap for traders (in UGX). If not set, uses default MAX_TRADER_EXPOSURE_UGX.
     adminLevel: v.optional(v.union(v.literal("super"), v.literal("junior"))), // Admin hierarchy level. undefined means super admin (backward compatible).
-    adminCategory: v.optional(v.union(v.literal("store"), v.literal("message"), v.literal("community"))), // Junior admin category (store delivery vs message support vs community oversight)
+    adminCategory: v.optional(v.union(v.literal("store"), v.literal("message"), v.literal("community"), v.literal("finance"))), // Junior admin category (store delivery vs message support vs community oversight vs finance)
     allowedStorageLocationIds: v.optional(v.array(v.id("storageLocations"))), // Storage locations junior admin can access. Only applies to junior admins.
     assignedCommunityIds: v.optional(v.array(v.id("communities"))), // Communities assigned to junior community admins. Only applies to community admins.
     serviceLevel: v.optional(v.union(v.literal("Standard"), v.literal("Premium"))), // Service tier for community admins (Standard = 5 exports/month, Premium = unlimited). Only applies to community admins.
@@ -81,6 +81,11 @@ export default defineSchema({
     waterSource: v.optional(v.string()),
     districtText: v.optional(v.string()),
     subCountyText: v.optional(v.string()),
+    // Trader verification
+    isVerifiedTrader: v.optional(v.boolean()),
+    verificationStatus: v.optional(v.union(v.literal("pending"), v.literal("verified"), v.literal("rejected"))),
+    verifiedBy: v.optional(v.id("users")),
+    verifiedAt: v.optional(v.number()),
     // Notification preferences
     notificationPreferences: v.optional(v.any()), // { newListings: boolean, offers: boolean, etc. }
   })
@@ -146,6 +151,29 @@ export default defineSchema({
     qualityRating: v.optional(v.string()), // Quality rating from admin-managed dropdown (e.g., "Premium", "Good", "Fair")
     qualityComment: v.optional(v.string()), // Farmer's text comment about produce quality
     storageLocationId: v.optional(v.id("storageLocations")), // Storage location (district) where produce will be delivered (optional for backward compatibility with existing data)
+    // Trader packaging-based listing fields (optional for backward compatibility)
+    productName: v.optional(v.string()),
+    packagingTypeEnum: v.optional(v.string()),
+    packagingTypeCustom: v.optional(v.string()),
+    availableUnits: v.optional(v.number()),
+    pricingUnit: v.optional(v.union(v.literal("per_package"), v.literal("per_kg"))),
+    pricePerUnit: v.optional(v.number()),
+    departureLocation: v.optional(v.string()),
+    destinationLocation: v.optional(v.string()),
+    etaType: v.optional(v.union(v.literal("duration"), v.literal("arrival_time"))),
+    etaValue: v.optional(v.number()),
+    etaLastUpdatedAt: v.optional(v.number()),
+    deliveryStatus: v.optional(v.union(
+      v.literal("in_storage"),
+      v.literal("in_transit"),
+      v.literal("delivered")
+    )),
+    progressStage: v.optional(v.union(
+      v.literal("departed"),
+      v.literal("midway"),
+      v.literal("delayed"),
+      v.literal("arrived")
+    )),
     // Garden sale mode
     listingMode: v.optional(v.union(v.literal("unit"), v.literal("garden"))), // Listing mode: unit-based (default) or entire garden plot
     gardenSize: v.optional(v.number()), // Garden size in acres (for garden mode)
@@ -154,6 +182,7 @@ export default defineSchema({
   })
     .index("by_farmer", ["farmerId"])
     .index("by_trader", ["traderId"])
+    .index("by_inventory", ["inventoryId"])
     .index("by_utid", ["utid"])
     .index("by_status", ["status"]),
 
@@ -470,7 +499,67 @@ export default defineSchema({
     storageFeeRateKgPerDay: v.optional(v.number()), // Kilo-shaving rate (kilos per day per 100kg block). Default: 0.5
     buyerServiceFeePercentage: v.optional(v.number()), // Service fee percentage added to purchase price for buyers. Default: 3
     traderCommissionPercentage: v.optional(v.number()), // Trader commission percentage on sales. Default: 0
+    farmcoinPostingCost: v.optional(v.number()), // FarmCoin Tokens required to post a listing
+    farmcoinEtaChangeCost: v.optional(v.number()), // FarmCoin Tokens required to change ETA
   }),
+
+  /**
+   * FarmCoin Ledger
+   * - Per-transaction ledger entries
+   * - Central ledger and per-trader ledger entries
+   */
+  farmcoinLedger: defineTable({
+    accountType: v.union(v.literal("central"), v.literal("trader")),
+    traderId: v.optional(v.id("users")),
+    delta: v.number(),
+    balanceAfter: v.number(),
+    source: v.union(
+      v.literal("grant"),
+      v.literal("posting_cost"),
+      v.literal("eta_change"),
+      v.literal("admin_adjustment"),
+      v.literal("transfer"),
+      v.literal("future_reward")
+    ),
+    utid: v.string(),
+    listingId: v.optional(v.id("listings")),
+    adminId: v.optional(v.id("users")),
+    reason: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_trader", ["traderId", "createdAt"])
+    .index("by_utid", ["utid"])
+    .index("by_source", ["source"])
+    .index("by_account", ["accountType", "createdAt"]),
+
+  /**
+   * FarmCoin Pricing History
+   * - Versioned token pricing changes
+   */
+  farmcoinPricingHistory: defineTable({
+    changedByAdminId: v.id("users"),
+    oldValue: v.number(),
+    newValue: v.number(),
+    reason: v.string(),
+    utid: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_created", ["createdAt"])
+    .index("by_admin", ["changedByAdminId", "createdAt"]),
+
+  /**
+   * ETA change history
+   */
+  etaHistory: defineTable({
+    listingId: v.id("listings"),
+    oldEtaValue: v.optional(v.number()),
+    newEtaValue: v.number(),
+    etaType: v.union(v.literal("duration"), v.literal("arrival_time")),
+    reason: v.string(),
+    updatedBy: v.id("users"),
+    createdAt: v.number(),
+  })
+    .index("by_listing", ["listingId", "createdAt"]),
 
   /**
    * Quality options for produce quality ratings

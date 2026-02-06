@@ -8,6 +8,7 @@
 
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { generateUTID, getUgandaTime } from "./utils";
 import { LISTING_UNIT_SIZE_KG, BUYER_BLOCK_SIZE_KG } from "./constants";
 import { checkPilotMode } from "./pilotMode";
@@ -209,12 +210,24 @@ export const getActiveListings = query({
           listingId: listing._id,
           utid: listing.utid,
           produceType: listing.produceType,
+          productName: listing.productName,
           totalKilos: listing.totalKilos,
           pricePerKilo: listing.pricePerKilo,
+          pricingUnit: listing.pricingUnit,
+          pricePerUnit: listing.pricePerUnit,
           unitSize: listing.unitSize || (listing.traderId ? BUYER_BLOCK_SIZE_KG : LISTING_UNIT_SIZE_KG), // Traders list in 100kg, farmers in 10kg
           totalUnits: listing.totalUnits,
-          availableUnits,
+          availableUnits: listing.availableUnits ?? availableUnits,
           lockedUnits,
+          packagingTypeEnum: listing.packagingTypeEnum,
+          packagingTypeCustom: listing.packagingTypeCustom,
+          departureLocation: listing.departureLocation,
+          destinationLocation: listing.destinationLocation,
+          etaType: listing.etaType,
+          etaValue: listing.etaValue,
+          etaLastUpdatedAt: listing.etaLastUpdatedAt,
+          deliveryStatus: listing.deliveryStatus,
+          progressStage: listing.progressStage,
           farmerAlias: farmer?.alias || null,
           traderAlias: trader?.alias || null,
           isTraderListing: !!listing.traderId, // Flag to identify trader listings (100kg blocks)
@@ -407,6 +420,11 @@ export const createTraderListing = mutation({
       throwAppError(invalidRoleError("trader"));
     }
 
+    // Verify trader is approved
+    if (!user.isVerifiedTrader || user.verificationStatus !== "verified") {
+      throw new Error("Trader verification required before posting listings");
+    }
+
     // Rate limit check
     await checkRateLimit(ctx, args.traderId, user.role, "create_trader_listing", {
       inventoryId: args.inventoryId,
@@ -454,6 +472,19 @@ export const createTraderListing = mutation({
       throw new Error("This inventory block already has an active listing");
     }
 
+    // FarmCoin token gating (posting cost)
+    const settings = await ctx.db.query("systemSettings").first();
+    const postingCost = settings?.farmcoinPostingCost ?? 1;
+    if (postingCost > 0) {
+      await ctx.runMutation((internal as any).farmcoin.spendFarmcoinTokens, {
+        traderId: args.traderId,
+        amount: postingCost,
+        source: "posting_cost",
+        listingId: undefined,
+        reason: "Trader listing posting cost",
+      });
+    }
+
     // Generate UTID
     const utid = generateUTID(user.role);
 
@@ -484,6 +515,108 @@ export const createTraderListing = mutation({
     });
 
     return { listingId, utid, totalUnits: 1, unitIds: [unitId] };
+  },
+});
+
+/**
+ * Update trader listing ETA (trader only)
+ * Charges FarmCoin tokens per change
+ */
+export const updateTraderListingEta = mutation({
+  args: {
+    traderId: v.id("users"),
+    listingId: v.id("listings"),
+    etaType: v.union(v.literal("duration"), v.literal("arrival_time")),
+    etaValue: v.number(),
+    reason: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const trader = await ctx.db.get(args.traderId);
+    if (!trader || trader.role !== "trader") {
+      throwAppError(invalidRoleError("trader"));
+    }
+
+    if (!trader.isVerifiedTrader || trader.verificationStatus !== "verified") {
+      throw new Error("Trader verification required before updating ETA");
+    }
+
+    const listing = await ctx.db.get(args.listingId);
+    if (!listing || listing.traderId !== args.traderId) {
+      throw new Error("Listing not found or not owned by trader");
+    }
+
+    if (listing.progressStage === "arrived") {
+      throw new Error("ETA cannot be changed after arrival");
+    }
+
+    const settings = await ctx.db.query("systemSettings").first();
+    const etaChangeCost = settings?.farmcoinEtaChangeCost ?? 1;
+
+    if (etaChangeCost > 0) {
+      await ctx.runMutation((internal as any).farmcoin.spendFarmcoinTokens, {
+        traderId: args.traderId,
+        amount: etaChangeCost,
+        source: "eta_change",
+        listingId: args.listingId,
+        reason: args.reason,
+      });
+    }
+
+    await ctx.db.insert("etaHistory", {
+      listingId: args.listingId,
+      oldEtaValue: listing.etaValue,
+      newEtaValue: args.etaValue,
+      etaType: args.etaType,
+      reason: args.reason,
+      updatedBy: args.traderId,
+      createdAt: getUgandaTime(),
+    });
+
+    await ctx.db.patch(args.listingId, {
+      etaType: args.etaType,
+      etaValue: args.etaValue,
+      etaLastUpdatedAt: getUgandaTime(),
+    });
+
+    return { success: true };
+  },
+});
+
+/**
+ * Update trader delivery status (manual progress)
+ */
+export const updateTraderDeliveryStatus = mutation({
+  args: {
+    traderId: v.id("users"),
+    listingId: v.id("listings"),
+    progressStage: v.union(
+      v.literal("departed"),
+      v.literal("midway"),
+      v.literal("delayed"),
+      v.literal("arrived")
+    ),
+  },
+  handler: async (ctx, args) => {
+    const trader = await ctx.db.get(args.traderId);
+    if (!trader || trader.role !== "trader") {
+      throwAppError(invalidRoleError("trader"));
+    }
+
+    const listing = await ctx.db.get(args.listingId);
+    if (!listing || listing.traderId !== args.traderId) {
+      throw new Error("Listing not found or not owned by trader");
+    }
+
+    const deliveryStatus = args.progressStage === "arrived"
+      ? "delivered"
+      : listing.deliveryStatus || "in_transit";
+
+    await ctx.db.patch(args.listingId, {
+      progressStage: args.progressStage,
+      deliveryStatus,
+    });
+
+    return { success: true };
   },
 });
 

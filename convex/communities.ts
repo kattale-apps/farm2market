@@ -129,7 +129,7 @@ export const getActiveCommunities = query({
     let userSubcountyId: Id<"subcounties"> | undefined;
     let userParishId: Id<"parishes"> | undefined;
     let isAdmin = false;
-    let userRecord: { role?: string; adminLevel?: "super" | "junior"; adminCategory?: "store" | "message" | "community" } | null = null;
+    let userRecord: { role?: string; adminLevel?: "super" | "junior"; adminCategory?: "store" | "message" | "community" | "finance" } | null = null;
 
     if (args.userId) {
       const user = await ctx.db.get(args.userId);

@@ -16,6 +16,7 @@ export default function CommunityDashboardPage() {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [selectedApplicationId, setSelectedApplicationId] = useState<Id<"communityApplications"> | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
 
   // Filter state
   const [filterType, setFilterType] = useState<"all" | "phone" | "email" | "location">( "all");
@@ -40,6 +41,14 @@ export default function CommunityDashboardPage() {
       }
     }
   }, [router]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   const currentUser = useQuery(
     api.auth.getUser,
@@ -145,7 +154,14 @@ export default function CommunityDashboardPage() {
         margin: "0 auto",
       }}>
         {/* Header */}
-        <div style={{ marginBottom: "2rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{
+          marginBottom: "2rem",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: isMobile ? "flex-start" : "center",
+          flexDirection: isMobile ? "column" : "row",
+          gap: isMobile ? "0.75rem" : "0",
+        }}>
           <div>
             <Link href="/" style={{
               fontSize: "0.9rem",
@@ -624,12 +640,20 @@ export default function CommunityDashboardPage() {
               borderRadius: 12,
               maxWidth: 900,
               width: "100%",
-              padding: "1.25rem",
+              padding: isMobile ? "1rem" : "1.25rem",
               boxShadow: "0 12px 30px rgba(0,0,0,0.2)",
+              maxHeight: "85vh",
+              overflowY: "auto",
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: isMobile ? "flex-start" : "center",
+              flexDirection: isMobile ? "column" : "row",
+              gap: isMobile ? "0.5rem" : "0",
+            }}>
               <h3 style={{ margin: 0 }}>Application Review</h3>
               <button
                 onClick={() => setSelectedApplicationId(null)}
@@ -652,7 +676,11 @@ export default function CommunityDashboardPage() {
                   const section1 = (selectedApplicationDetails as any)?.form?.section1 || {};
                   const farmer = (selectedApplicationDetails as any)?.farmer || {};
                   return (
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                    <div style={{
+                      display: "grid",
+                      gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+                      gap: "0.75rem",
+                    }}>
                       <div><strong>Farmer Name:</strong> {section1.farmerFullName || farmer.alias || "-"}</div>
                       <div><strong>Farm Name:</strong> {section1.farmName || "-"}</div>
                       <div><strong>Phone:</strong> {section1.phoneNumber || farmer.phoneNumber || "-"}</div>
@@ -669,7 +697,12 @@ export default function CommunityDashboardPage() {
                   );
                 })()}
 
-                <div style={{ marginTop: "1rem", display: "flex", gap: "0.5rem" }}>
+                <div style={{
+                  marginTop: "1rem",
+                  display: "flex",
+                  gap: "0.5rem",
+                  flexWrap: "wrap",
+                }}>
                   <button
                     onClick={async () => {
                       try {
@@ -680,7 +713,10 @@ export default function CommunityDashboardPage() {
                         setMessage({ type: "error", text: error?.message || "Failed to approve" });
                       }
                     }}
-                    style={{ padding: "0.5rem 0.9rem" }}
+                    style={{
+                      padding: "0.5rem 0.9rem",
+                      flex: isMobile ? "1 1 100%" : "0 0 auto",
+                    }}
                   >
                     Approve
                   </button>
@@ -694,7 +730,10 @@ export default function CommunityDashboardPage() {
                         setMessage({ type: "error", text: error?.message || "Failed to reject" });
                       }
                     }}
-                    style={{ padding: "0.5rem 0.9rem" }}
+                    style={{
+                      padding: "0.5rem 0.9rem",
+                      flex: isMobile ? "1 1 100%" : "0 0 auto",
+                    }}
                   >
                     Reject
                   </button>

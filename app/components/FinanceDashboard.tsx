@@ -53,10 +53,10 @@ function AddFundsForm({ adminId }: { adminId: Id<"users"> }) {
   const [isLoading, setIsLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error', message: string } | null>(null);
 
-  const usersWithStatus = useQuery(api.admin.getUsersWithDemoFundStatus, { adminId });
-  const depositFunds = useMutation(api.admin.depositDemoFunds);
+  const traderBalances = useQuery(api.farmcoin.getFarmcoinTraderBalances, { adminId });
+  const grantTokens = useMutation(api.farmcoin.grantFarmcoinTokens);
 
-  const allUsers = usersWithStatus ? [...usersWithStatus.traders, ...usersWithStatus.buyers] : [];
+  const allUsers = traderBalances ? [...traderBalances.traders] : [];
   allUsers.sort((a, b) => (a.alias || "").localeCompare(b.alias || ""));
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -76,20 +76,20 @@ function AddFundsForm({ adminId }: { adminId: Id<"users"> }) {
     setStatusMessage(null);
 
     try {
-      const result = await depositFunds({
+      const result = await grantTokens({
         adminId,
-        targetUserId: selectedUserId,
+        traderId: selectedUserId,
         amount: numericAmount,
         reason,
       });
       const targetUser = allUsers.find(u => u._id === selectedUserId);
-      setStatusMessage({ type: 'success', message: `Successfully deposited ${result.amount.toLocaleString()} UGX to ${result.role} '${targetUser?.alias}'. New balance: ${result.balanceAfter.toLocaleString()} UGX.` });
+      setStatusMessage({ type: 'success', message: `Successfully granted ${numericAmount} FarmCoin Tokens to trader '${targetUser?.alias}'. New balance: ${result.traderBalance} Token(s).` });
       setSelectedUserId("");
       setAmount("");
       setReason("");
     } catch (error) {
       console.error("Failed to deposit funds:", error);
-      setStatusMessage({ type: 'error', message: (error as Error).message || 'Failed to deposit funds.' });
+      setStatusMessage({ type: 'error', message: (error as Error).message || 'Failed to grant FarmCoin Tokens.' });
     } finally {
       setIsLoading(false);
     }
@@ -97,13 +97,13 @@ function AddFundsForm({ adminId }: { adminId: Id<"users"> }) {
 
   return (
     <div style={{ marginTop: '2rem', borderTop: '1px solid #eee', paddingTop: '1.5rem' }}>
-      <h4 style={{ marginTop: 0, color: "#2c2c2c" }}>Add Demo Funds to User Account</h4>
+      <h4 style={{ marginTop: 0, color: "#2c2c2c" }}>Add FarmCoin Tokens to User Account</h4>
       <p style={{ color: "#666", marginTop: 0, fontSize: '0.9rem' }}>
-        This action deposits funds into a trader or buyer&apos;s wallet for demonstration or testing purposes.
+        This action grants FarmCoin Tokens to a trader or buyer account for operational use.
       </p>
       <form onSubmit={handleSubmit} style={formStyle}>
         <div>
-          <label htmlFor="user-select" style={labelStyle}>Select User (Trader or Buyer)</label>
+          <label htmlFor="user-select" style={labelStyle}>Select Trader</label>
           <select
             id="user-select"
             value={selectedUserId}
@@ -112,44 +112,44 @@ function AddFundsForm({ adminId }: { adminId: Id<"users"> }) {
             required
           >
             <option value="" disabled>
-              {usersWithStatus === undefined ? "Loading users..." : "Select a user"}
+              {traderBalances === undefined ? "Loading traders..." : "Select a trader"}
             </option>
             {allUsers.map(user => (
               <option key={user._id} value={user._id}>
-                {user.alias} ({user.role}) - Bal: {user.demoFundStatus.currentBalance.toLocaleString()} UGX
+                {user.alias} (trader) - Bal: {user.farmcoinBalance} Token(s)
               </option>
             ))}
           </select>
         </div>
 
         <div>
-          <label htmlFor="amount-input" style={labelStyle}>Amount (UGX)</label>
+          <label htmlFor="amount-input" style={labelStyle}>Amount (FarmCoin Tokens)</label>
           <input
             id="amount-input"
             type="number"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            placeholder="e.g., 50000"
+            placeholder="e.g., 25"
             style={{ ...inputStyle, width: '100%' }}
             required
           />
         </div>
 
         <div>
-          <label htmlFor="reason-input" style={labelStyle}>Reason for Deposit</label>
+          <label htmlFor="reason-input" style={labelStyle}>Reason for Grant</label>
           <input
             id="reason-input"
             type="text"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder="e.g., Initial demo funds for training"
+            placeholder="e.g., Initial FarmCoin allocation"
             style={{ ...inputStyle, width: '100%' }}
             required
           />
         </div>
 
         <button type="submit" style={buttonStyle} disabled={isLoading}>
-          {isLoading ? 'Depositing...' : 'Deposit Funds'}
+          {isLoading ? 'Granting...' : 'Grant Tokens'}
         </button>
       </form>
 

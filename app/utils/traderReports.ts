@@ -254,7 +254,7 @@ export function exportCapitalVolume(
     return new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX" }).format(amount);
   };
 
-  // Calculate revenue earned (profit credits)
+  // Calculate revenue earned (profit earnings)
   const revenueEarned = ledger.profit.balance;
   const capitalExposed = exposure.exposure.totalExposure;
   const capitalDeposited = ledger.capital.balance;

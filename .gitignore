@@ -16,6 +16,8 @@ node_modules/
 # Misc
 .DS_Store
 *.pem
+hs_err_pid*
+.tmp/
 
 # Debug
 npm-debug.log*

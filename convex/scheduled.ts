@@ -160,3 +160,104 @@ export const checkExpiredUTIDs = internalMutation({
     return results;
   },
 });
+
+/**
+ * Scheduled function to send ETA notifications to buyers with active orders
+ * - 3 hours to delivery
+ * - 1 hour to delivery
+ * - Arrival (when trader marks arrived)
+ */
+export const checkEtaNotifications = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = getUgandaTime();
+    const threeHoursMs = 3 * 60 * 60 * 1000;
+    const oneHourMs = 60 * 60 * 1000;
+
+    const purchases = await ctx.db
+      .query("buyerPurchases")
+      .withIndex("by_status", (q: any) => q.eq("status", "pending_pickup"))
+      .collect();
+
+    for (const purchase of purchases) {
+      const inventory = await ctx.db.get(purchase.inventoryId);
+      if (!inventory) continue;
+
+      const listing = await ctx.db
+        .query("listings")
+        .withIndex("by_inventory", (q: any) => q.eq("inventoryId", purchase.inventoryId))
+        .first();
+
+      if (!listing || !listing.etaType || !listing.etaValue) continue;
+
+      const baseTime = listing.etaLastUpdatedAt || listing.createdAt;
+      const etaTimestamp =
+        listing.etaType === "duration"
+          ? baseTime + listing.etaValue * 60 * 60 * 1000
+          : listing.etaValue;
+
+      const timeRemaining = etaTimestamp - now;
+
+      const hasNotification = async (title: string) => {
+        const existing = await ctx.db
+          .query("notifications")
+          .withIndex("by_user", (q: any) => q.eq("userId", purchase.buyerId))
+          .filter((q: any) =>
+            q.and(
+              q.eq(q.field("utid"), purchase.utid),
+              q.eq(q.field("title"), title)
+            )
+          )
+          .first();
+        return !!existing;
+      };
+
+      if (timeRemaining > oneHourMs && timeRemaining <= threeHoursMs) {
+        const title = "ETA Reminder: 3 hours";
+        if (!(await hasNotification(title))) {
+          await ctx.db.insert("notifications", {
+            userId: purchase.buyerId,
+            type: "system",
+            title,
+            message: `Your order is about 3 hours from delivery. ETA: ${new Date(etaTimestamp).toLocaleString()}.`,
+            utid: purchase.utid,
+            read: false,
+            createdAt: now,
+          });
+        }
+      }
+
+      if (timeRemaining > 0 && timeRemaining <= oneHourMs) {
+        const title = "ETA Reminder: 1 hour";
+        if (!(await hasNotification(title))) {
+          await ctx.db.insert("notifications", {
+            userId: purchase.buyerId,
+            type: "system",
+            title,
+            message: `Your order is about 1 hour from delivery. ETA: ${new Date(etaTimestamp).toLocaleString()}.`,
+            utid: purchase.utid,
+            read: false,
+            createdAt: now,
+          });
+        }
+      }
+
+      if (listing.progressStage === "arrived") {
+        const title = "Order Arrived";
+        if (!(await hasNotification(title))) {
+          await ctx.db.insert("notifications", {
+            userId: purchase.buyerId,
+            type: "system",
+            title,
+            message: "Your order has arrived at its destination.",
+            utid: purchase.utid,
+            read: false,
+            createdAt: now,
+          });
+        }
+      }
+    }
+
+    return { processed: purchases.length };
+  },
+});

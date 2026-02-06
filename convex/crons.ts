@@ -17,4 +17,10 @@ crons.interval(
   internal.scheduled.checkExpiredUTIDs,
 );
 
+crons.interval(
+  "check ETA notifications",
+  { minutes: 15 },
+  internal.scheduled.checkEtaNotifications,
+);
+
 export default crons;

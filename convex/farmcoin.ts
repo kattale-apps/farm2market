@@ -1,0 +1,560 @@
+/**
+ * FarmCoin Token Ledger
+ *
+ * - Central ledger + per-trader ledger
+ * - Per-transaction entries with source + UTID
+ * - Pricing changes are versioned
+ */
+
+import { v } from "convex/values";
+import { mutation, query, internalMutation } from "./_generated/server";
+import { Id } from "./_generated/dataModel";
+import { generateUTID, getUgandaTime } from "./utils";
+import { verifyAdminRole } from "./auth";
+
+const DEFAULT_POSTING_COST = 1;
+const DEFAULT_ETA_CHANGE_COST = 1;
+
+function isSuperAdmin(user: { adminLevel?: "super" | "junior" }) {
+  return user.adminLevel === "super" || user.adminLevel === undefined;
+}
+
+function isFinanceAdmin(user: { adminLevel?: "super" | "junior"; adminCategory?: string }) {
+  return user.adminLevel === "junior" && user.adminCategory === "finance";
+}
+
+async function getLatestFarmcoinBalance(
+  ctx: any,
+  accountType: "central" | "trader",
+  traderId?: Id<"users">
+): Promise<number> {
+  let query = ctx.db
+    .query("farmcoinLedger")
+    .withIndex("by_account", (q: any) => q.eq("accountType", accountType))
+    .order("desc");
+
+  if (accountType === "trader" && traderId) {
+    query = query.filter((q: any) => q.eq(q.field("traderId"), traderId));
+  }
+
+  const latest = await query.first();
+
+  return latest?.balanceAfter ?? 0;
+}
+
+export const getFarmcoinSettings = query({
+  args: {},
+  handler: async (ctx) => {
+    const settings = await ctx.db.query("systemSettings").first();
+    return {
+      farmcoinPostingCost: settings?.farmcoinPostingCost ?? DEFAULT_POSTING_COST,
+      farmcoinEtaChangeCost: settings?.farmcoinEtaChangeCost ?? DEFAULT_ETA_CHANGE_COST,
+    };
+  },
+});
+
+export const getFarmcoinPricingHistory = query({
+  args: { adminId: v.id("users") },
+  handler: async (ctx, args) => {
+    const adminCheck = await verifyAdminRole({ userId: args.adminId, db: ctx.db });
+    if (!adminCheck.authorized || !adminCheck.user) {
+      throw new Error("Not authorized");
+    }
+
+    const adminUser = adminCheck.user;
+    if (!isSuperAdmin(adminUser) && !isFinanceAdmin(adminUser)) {
+      throw new Error("Not authorized");
+    }
+
+    const history = await ctx.db
+      .query("farmcoinPricingHistory")
+      .withIndex("by_created", (q: any) => q)
+      .order("desc")
+      .collect();
+
+    return history;
+  },
+});
+
+export const updateFarmcoinPricing = mutation({
+  args: {
+    adminId: v.id("users"),
+    farmcoinPostingCost: v.optional(v.number()),
+    farmcoinEtaChangeCost: v.optional(v.number()),
+    reason: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const adminCheck = await verifyAdminRole({ userId: args.adminId, db: ctx.db });
+    if (!adminCheck.authorized || !adminCheck.user) {
+      throw new Error("Not authorized");
+    }
+
+    const adminUser = adminCheck.user;
+    if (!isSuperAdmin(adminUser)) {
+      throw new Error("Only Superadmin can update FarmCoin pricing");
+    }
+
+    const settings = await ctx.db.query("systemSettings").first();
+    const now = getUgandaTime();
+
+    if (args.farmcoinPostingCost !== undefined) {
+      const oldValue = settings?.farmcoinPostingCost ?? DEFAULT_POSTING_COST;
+      const newValue = args.farmcoinPostingCost;
+      const utid = generateUTID("admin");
+
+      if (settings) {
+        await ctx.db.patch(settings._id, { farmcoinPostingCost: newValue });
+      } else {
+        await ctx.db.insert("systemSettings", {
+          pilotMode: false,
+          setBy: args.adminId,
+          setAt: now,
+          reason: "FarmCoin pricing initialization",
+          utid: generateUTID("admin"),
+          farmcoinPostingCost: newValue,
+          farmcoinEtaChangeCost: DEFAULT_ETA_CHANGE_COST,
+        });
+      }
+
+      await ctx.db.insert("farmcoinPricingHistory", {
+        changedByAdminId: args.adminId,
+        oldValue,
+        newValue,
+        reason: args.reason,
+        utid,
+        createdAt: now,
+      });
+    }
+
+    if (args.farmcoinEtaChangeCost !== undefined) {
+      const oldValue = settings?.farmcoinEtaChangeCost ?? DEFAULT_ETA_CHANGE_COST;
+      const newValue = args.farmcoinEtaChangeCost;
+      const utid = generateUTID("admin");
+
+      if (settings) {
+        await ctx.db.patch(settings._id, { farmcoinEtaChangeCost: newValue });
+      } else {
+        await ctx.db.insert("systemSettings", {
+          pilotMode: false,
+          setBy: args.adminId,
+          setAt: now,
+          reason: "FarmCoin pricing initialization",
+          utid: generateUTID("admin"),
+          farmcoinPostingCost: DEFAULT_POSTING_COST,
+          farmcoinEtaChangeCost: newValue,
+        });
+      }
+
+      await ctx.db.insert("farmcoinPricingHistory", {
+        changedByAdminId: args.adminId,
+        oldValue,
+        newValue,
+        reason: args.reason,
+        utid,
+        createdAt: now,
+      });
+    }
+
+    return { success: true };
+  },
+});
+
+export const getFarmcoinLedger = query({
+  args: {
+    adminId: v.id("users"),
+    traderId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, args) => {
+    const adminCheck = await verifyAdminRole({ userId: args.adminId, db: ctx.db });
+    if (!adminCheck.authorized || !adminCheck.user) {
+      throw new Error("Not authorized");
+    }
+
+    const adminUser = adminCheck.user;
+    const canViewFull = isSuperAdmin(adminUser);
+    const canViewAggregate = isFinanceAdmin(adminUser) || canViewFull;
+
+    if (!canViewAggregate) {
+      throw new Error("Not authorized");
+    }
+
+    const entries = await ctx.db
+      .query("farmcoinLedger")
+      .order("desc")
+      .collect();
+
+    if (canViewFull && args.traderId) {
+      return entries.filter((e: any) => e.traderId === args.traderId);
+    }
+
+    if (canViewFull) {
+      return entries;
+    }
+
+    // Finance admin: aggregate only (no trader identities)
+    return entries.map((entry: any) => ({
+      accountType: entry.accountType,
+      delta: entry.delta,
+      balanceAfter: entry.balanceAfter,
+      source: entry.source,
+      listingId: entry.listingId,
+      reason: entry.reason,
+      utid: entry.utid,
+      createdAt: entry.createdAt,
+    }));
+  },
+});
+
+export const getFarmcoinTraderBalances = query({
+  args: {
+    adminId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const adminCheck = await verifyAdminRole({ userId: args.adminId, db: ctx.db });
+    if (!adminCheck.authorized || !adminCheck.user) {
+      throw new Error("Not authorized");
+    }
+
+    const adminUser = adminCheck.user;
+    if (!isSuperAdmin(adminUser) && !isFinanceAdmin(adminUser)) {
+      throw new Error("Not authorized");
+    }
+
+    const traders = await ctx.db
+      .query("users")
+      .withIndex("by_role", (q: any) => q.eq("role", "trader"))
+      .collect();
+
+    const tradersWithBalances = await Promise.all(
+      traders.map(async (trader: any) => {
+        const latestEntry = await ctx.db
+          .query("farmcoinLedger")
+          .withIndex("by_trader", (q: any) => q.eq("traderId", trader._id))
+          .order("desc")
+          .first();
+
+        return {
+          _id: trader._id,
+          alias: trader.alias,
+          email: trader.email,
+          role: trader.role,
+          farmcoinBalance: latestEntry?.balanceAfter ?? 0,
+        };
+      })
+    );
+
+    return { traders: tradersWithBalances };
+  },
+});
+
+export const getTraderFarmcoinSummary = query({
+  args: { traderId: v.id("users") },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.traderId);
+    if (!user || user.role !== "trader") {
+      throw new Error("User is not a trader");
+    }
+
+    const entries = await ctx.db
+      .query("farmcoinLedger")
+      .withIndex("by_trader", (q: any) => q.eq("traderId", args.traderId))
+      .order("desc")
+      .collect();
+
+    const balance = entries[0]?.balanceAfter ?? 0;
+    const recent = entries.slice(0, 10);
+
+    return { balance, recent };
+  },
+});
+
+export const grantFarmcoinTokens = mutation({
+  args: {
+    adminId: v.id("users"),
+    traderId: v.id("users"),
+    amount: v.number(),
+    reason: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const adminCheck = await verifyAdminRole({ userId: args.adminId, db: ctx.db });
+    if (!adminCheck.authorized || !adminCheck.user) {
+      throw new Error("Not authorized");
+    }
+
+    const adminUser = adminCheck.user;
+    if (!isSuperAdmin(adminUser)) {
+      throw new Error("Only Superadmin can grant FarmCoin tokens");
+    }
+
+    const trader = await ctx.db.get(args.traderId);
+    if (!trader || trader.role !== "trader") {
+      throw new Error("User is not a trader");
+    }
+
+    if (args.amount <= 0) {
+      throw new Error("Amount must be positive");
+    }
+
+    const now = getUgandaTime();
+    const utid = generateUTID("admin");
+
+    const centralBalance = await getLatestFarmcoinBalance(ctx, "central");
+    const centralAfter = centralBalance - args.amount;
+
+    const traderBalance = await getLatestFarmcoinBalance(ctx, "trader", args.traderId);
+    const traderAfter = traderBalance + args.amount;
+
+    await ctx.db.insert("farmcoinLedger", {
+      accountType: "central",
+      delta: -args.amount,
+      balanceAfter: centralAfter,
+      source: "grant",
+      utid,
+      adminId: args.adminId,
+      reason: args.reason,
+      createdAt: now,
+    });
+
+    await ctx.db.insert("farmcoinLedger", {
+      accountType: "trader",
+      traderId: args.traderId,
+      delta: args.amount,
+      balanceAfter: traderAfter,
+      source: "grant",
+      utid,
+      adminId: args.adminId,
+      reason: args.reason,
+      createdAt: now,
+    });
+
+    return { utid, traderBalance: traderAfter, centralBalance: centralAfter };
+  },
+});
+
+export const adjustCentralFarmcoin = mutation({
+  args: {
+    adminId: v.id("users"),
+    delta: v.number(),
+    reason: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const adminCheck = await verifyAdminRole({ userId: args.adminId, db: ctx.db });
+    if (!adminCheck.authorized || !adminCheck.user) {
+      throw new Error("Not authorized");
+    }
+
+    const adminUser = adminCheck.user;
+    if (!isSuperAdmin(adminUser)) {
+      throw new Error("Only Superadmin can adjust central FarmCoin ledger");
+    }
+
+    const now = getUgandaTime();
+    const utid = generateUTID("admin");
+    const centralBalance = await getLatestFarmcoinBalance(ctx, "central");
+    const centralAfter = centralBalance + args.delta;
+
+    await ctx.db.insert("farmcoinLedger", {
+      accountType: "central",
+      delta: args.delta,
+      balanceAfter: centralAfter,
+      source: "admin_adjustment",
+      utid,
+      adminId: args.adminId,
+      reason: args.reason,
+      createdAt: now,
+    });
+
+    return { utid, centralBalance: centralAfter };
+  },
+});
+
+export const spendFarmcoinTokens = internalMutation({
+  args: {
+    traderId: v.id("users"),
+    amount: v.number(),
+    source: v.union(
+      v.literal("posting_cost"),
+      v.literal("eta_change"),
+      v.literal("admin_adjustment"),
+      v.literal("transfer"),
+      v.literal("future_reward")
+    ),
+    listingId: v.optional(v.id("listings")),
+    reason: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const trader = await ctx.db.get(args.traderId);
+    if (!trader || trader.role !== "trader") {
+      throw new Error("User is not a trader");
+    }
+
+    if (args.amount <= 0) {
+      throw new Error("Amount must be positive");
+    }
+
+    const now = getUgandaTime();
+    const utid = generateUTID("system");
+
+    const traderBalance = await getLatestFarmcoinBalance(ctx, "trader", args.traderId);
+    if (traderBalance < args.amount) {
+      throw new Error("Insufficient FarmCoin balance");
+    }
+
+    const traderAfter = traderBalance - args.amount;
+    const centralBalance = await getLatestFarmcoinBalance(ctx, "central");
+    const centralAfter = centralBalance + args.amount;
+
+    await ctx.db.insert("farmcoinLedger", {
+      accountType: "trader",
+      traderId: args.traderId,
+      delta: -args.amount,
+      balanceAfter: traderAfter,
+      source: args.source,
+      utid,
+      listingId: args.listingId,
+      reason: args.reason,
+      createdAt: now,
+    });
+
+    await ctx.db.insert("farmcoinLedger", {
+      accountType: "central",
+      delta: args.amount,
+      balanceAfter: centralAfter,
+      source: args.source,
+      utid,
+      listingId: args.listingId,
+      reason: args.reason,
+      createdAt: now,
+    });
+
+    return { utid, traderBalance: traderAfter, centralBalance: centralAfter };
+  },
+});
+
+export const requestFarmcoinTokens = mutation({
+  args: {
+    traderId: v.id("users"),
+    reason: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const trader = await ctx.db.get(args.traderId);
+    if (!trader || trader.role !== "trader") {
+      throw new Error("User is not a trader");
+    }
+
+    const admins = await ctx.db.query("users").collect();
+    const superadmins = admins.filter(
+      (u: any) => u.role === "admin" && (u.adminLevel === "super" || u.adminLevel === undefined)
+    );
+
+    const utid = generateUTID("trader");
+    const now = getUgandaTime();
+
+    for (const admin of superadmins) {
+      await ctx.db.insert("notifications", {
+        userId: admin._id,
+        type: "system",
+        title: "FarmCoin Token Request",
+        message: `${trader.alias} requested FarmCoin tokens. Reason: ${args.reason}`,
+        utid,
+        read: false,
+        createdAt: now,
+      });
+    }
+
+    return { success: true, utid };
+  },
+});
+
+export const getUnverifiedTraders = query({
+  args: { adminId: v.id("users") },
+  handler: async (ctx, args) => {
+    const adminCheck = await verifyAdminRole({ userId: args.adminId, db: ctx.db });
+    if (!adminCheck.authorized || !adminCheck.user) {
+      throw new Error("Not authorized");
+    }
+
+    if (!isSuperAdmin(adminCheck.user)) {
+      throw new Error("Only Superadmin can view verification queue");
+    }
+
+    const traders = await ctx.db
+      .query("users")
+      .withIndex("by_role", (q: any) => q.eq("role", "trader"))
+      .collect();
+
+    return traders.filter((t: any) => t.verificationStatus !== "verified");
+  },
+});
+
+export const verifyTrader = mutation({
+  args: {
+    adminId: v.id("users"),
+    traderId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const adminCheck = await verifyAdminRole({ userId: args.adminId, db: ctx.db });
+    if (!adminCheck.authorized || !adminCheck.user) {
+      throw new Error("Not authorized");
+    }
+
+    if (!isSuperAdmin(adminCheck.user)) {
+      throw new Error("Only Superadmin can verify traders");
+    }
+
+    const trader = await ctx.db.get(args.traderId);
+    if (!trader || trader.role !== "trader") {
+      throw new Error("User is not a trader");
+    }
+
+    await ctx.db.patch(args.traderId, {
+      isVerifiedTrader: true,
+      verificationStatus: "verified",
+      verifiedBy: args.adminId,
+      verifiedAt: getUgandaTime(),
+    });
+
+    return { success: true };
+  },
+});
+
+export const rejectTrader = mutation({
+  args: {
+    adminId: v.id("users"),
+    traderId: v.id("users"),
+    reason: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const adminCheck = await verifyAdminRole({ userId: args.adminId, db: ctx.db });
+    if (!adminCheck.authorized || !adminCheck.user) {
+      throw new Error("Not authorized");
+    }
+
+    if (!isSuperAdmin(adminCheck.user)) {
+      throw new Error("Only Superadmin can reject traders");
+    }
+
+    const trader = await ctx.db.get(args.traderId);
+    if (!trader || trader.role !== "trader") {
+      throw new Error("User is not a trader");
+    }
+
+    await ctx.db.patch(args.traderId, {
+      isVerifiedTrader: false,
+      verificationStatus: "rejected",
+      verifiedBy: args.adminId,
+      verifiedAt: getUgandaTime(),
+    });
+
+    await ctx.db.insert("adminActions", {
+      adminId: args.adminId,
+      actionType: "reject_trader",
+      targetUserId: args.traderId,
+      reason: args.reason,
+      utid: generateUTID("admin"),
+      timestamp: getUgandaTime(),
+    });
+
+    return { success: true };
+  },
+});

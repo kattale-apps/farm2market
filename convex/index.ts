@@ -8,6 +8,7 @@ export * from "./communities";
 export * from "./farmerDashboard";
 export * from "./farmerOnboarding";
 export * from "./farmerProfile";
+export * from "./farmcoin";
 export * from "./finance";
 
 // ✅ Explicit introspection exports

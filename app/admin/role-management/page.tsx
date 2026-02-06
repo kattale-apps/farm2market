@@ -15,12 +15,12 @@ type AnyUser = {
   phoneNumber?: string;
   role: "farmer" | "trader" | "buyer" | "admin";
   adminLevel?: "super" | "junior";
-  adminCategory?: "community" | "store" | "message";
+  adminCategory?: "community" | "store" | "message" | "finance";
   assignedCommunityIds?: Id<"communities">[];
 };
 
 type AdminLevel = "super" | "junior" | "";
-type AdminCategory = "community" | "store" | "message" | "";
+type AdminCategory = "community" | "store" | "message" | "finance" | "";
 
 type EditAdminState = {
   adminLevel: AdminLevel;
@@ -613,6 +613,7 @@ export default function AdminRoleManagementPage() {
                     <option value="community">Community</option>
                     <option value="store">Store</option>
                     <option value="message">Message</option>
+                    <option value="finance">Finance</option>
                   </select>
                 </div>
               </div>

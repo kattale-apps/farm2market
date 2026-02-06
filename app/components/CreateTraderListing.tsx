@@ -12,11 +12,16 @@ interface CreateTraderListingProps {
 export function CreateTraderListing({ userId }: CreateTraderListingProps) {
   const createTraderListing = useMutation(api.listings.createTraderListing);
   const availableInventory = useQuery(api.listings.getTraderAvailableInventoryForListing, { traderId: userId });
+  const traderProfile = useQuery(api.auth.getUser, { userId });
+  const farmcoinSummary = useQuery((api as any).farmcoin.getTraderFarmcoinSummary, { traderId: userId } as any);
+  const farmcoinSettings = useQuery((api as any).farmcoin.getFarmcoinSettings, {} as any);
+  const requestFarmcoinTokens = useMutation((api as any).farmcoin.requestFarmcoinTokens);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [selectedInventory, setSelectedInventory] = useState<string>("");
   const [pricePerKilo, setPricePerKilo] = useState<string>("");
+  const [requestReason, setRequestReason] = useState("");
 
   const formatUGX = (amount: number) => {
     return new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX" }).format(amount);
@@ -73,6 +78,11 @@ export function CreateTraderListing({ userId }: CreateTraderListingProps) {
     (block: any) => block.inventoryId === selectedInventory
   );
 
+  const postingCost = farmcoinSettings?.farmcoinPostingCost ?? 1;
+  const farmcoinBalance = farmcoinSummary?.balance ?? 0;
+  const isVerified = traderProfile?.isVerifiedTrader && traderProfile?.verificationStatus === "verified";
+  const canPost = isVerified && farmcoinBalance >= postingCost;
+
   return (
     <div style={{
       padding: "clamp(1rem, 3vw, 1.5rem)",
@@ -113,6 +123,76 @@ export function CreateTraderListing({ userId }: CreateTraderListingProps) {
           color: message.type === "success" ? "#2e7d32" : "#c62828",
         }}>
           {message.text}
+        </div>
+      )}
+
+      <div style={{
+        marginBottom: "1rem",
+        padding: "0.75rem",
+        borderRadius: "8px",
+        background: "#f1f5f9",
+        border: "1px solid #e2e8f0",
+        fontSize: "0.85rem",
+        color: "#334155",
+      }}>
+        <div><strong>Verification:</strong> {isVerified ? "Verified" : "Not Verified"}</div>
+        <div><strong>FarmCoin Balance:</strong> {farmcoinBalance} Token(s)</div>
+        <div><strong>Posting Cost:</strong> {postingCost} Token(s)</div>
+        {!isVerified && (
+          <div style={{ marginTop: "0.35rem", color: "#b45309" }}>
+            Posting is locked until Superadmin verifies your trader account.
+          </div>
+        )}
+        {isVerified && farmcoinBalance < postingCost && (
+          <div style={{ marginTop: "0.35rem", color: "#b45309" }}>
+            Insufficient FarmCoin Tokens to post a listing.
+          </div>
+        )}
+      </div>
+
+      {!canPost && (
+        <div style={{ marginBottom: "1rem" }}>
+          <input
+            type="text"
+            placeholder="Reason for token request"
+            value={requestReason}
+            onChange={(e) => setRequestReason(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "0.65rem",
+              border: "1px solid #ddd",
+              borderRadius: "6px",
+              fontSize: "0.85rem",
+              marginBottom: "0.5rem",
+            }}
+          />
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                await requestFarmcoinTokens({
+                  traderId: userId,
+                  reason: requestReason || "Request FarmCoin tokens",
+                });
+                setMessage({ type: "success", text: "FarmCoin token request sent to Superadmin." });
+                setRequestReason("");
+              } catch (error: any) {
+                setMessage({ type: "error", text: error.message || "Failed to request tokens" });
+              }
+            }}
+            style={{
+              padding: "0.6rem 1rem",
+              background: "#0f172a",
+              color: "#fff",
+              border: "none",
+              borderRadius: "6px",
+              cursor: "pointer",
+              fontSize: "0.85rem",
+              fontWeight: 600,
+            }}
+          >
+            Request FarmCoin Tokens
+          </button>
         </div>
       )}
 
@@ -193,20 +273,20 @@ export function CreateTraderListing({ userId }: CreateTraderListingProps) {
               </div>
 
               <div style={{ padding: "0.75rem", background: "#fff3cd", borderRadius: "6px", marginBottom: "1rem", fontSize: "0.85rem", color: "#856404" }}>
-                <strong>⚠️ Important:</strong> Traders can only list in 100kg blocks. This listing will be for exactly 100kg.
+                <strong>⚠️ Important:</strong> Posting a listing costs {postingCost} FarmCoin Token(s). Traders can only list in 100kg blocks.
               </div>
 
               <button
                 type="submit"
-                disabled={loading || !selectedInventory || !pricePerKilo}
+                disabled={loading || !selectedInventory || !pricePerKilo || !canPost}
                 style={{
                   width: "100%",
                   padding: "0.75rem 1.5rem",
-                  background: loading || !selectedInventory || !pricePerKilo ? "#ccc" : "#28a745",
+                  background: loading || !selectedInventory || !pricePerKilo || !canPost ? "#ccc" : "#28a745",
                   color: "#fff",
                   border: "none",
                   borderRadius: "6px",
-                  cursor: loading || !selectedInventory || !pricePerKilo ? "not-allowed" : "pointer",
+                  cursor: loading || !selectedInventory || !pricePerKilo || !canPost ? "not-allowed" : "pointer",
                   fontSize: "1rem",
                   fontWeight: "600"
                 }}

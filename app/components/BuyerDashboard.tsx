@@ -125,6 +125,14 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
     return formatUgandaDateTime(timestamp);
   };
 
+  const formatEtaLabel = (order: any) => {
+    if (!order?.etaType || order?.etaValue == null) return "ETA not provided";
+    if (order.etaType === "arrival_time") {
+      return `ETA: ${formatDate(order.etaValue)}`;
+    }
+    return `ETA: ${order.etaValue}h`;
+  };
+
   const formatTimeRemaining = (deadline: number) => {
     const now = getUgandaTime();
     const diff = deadline - now;
@@ -1591,6 +1599,34 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                 <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.25rem" }}>
                   Pickup deadline: {formatDate(order.pickupSLA)}
                 </div>
+                {(order.etaType || order.deliveryStatus || order.progressStage) && (
+                  <div style={{
+                    marginBottom: "0.35rem",
+                    padding: "0.5rem",
+                    background: "#f8fafc",
+                    borderRadius: "6px",
+                    border: "1px solid #e2e8f0",
+                    fontSize: "0.85rem",
+                    color: "#475569"
+                  }}>
+                    <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>{formatEtaLabel(order)}</div>
+                    {order.etaLastUpdatedAt && (
+                      <div style={{ fontSize: "0.75rem", color: "#94a3b8" }}>
+                        Updated: {formatDate(order.etaLastUpdatedAt)}
+                      </div>
+                    )}
+                    {(order.deliveryStatus || order.progressStage) && (
+                      <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                        Status: {order.deliveryStatus || "in_transit"}{order.progressStage ? ` • ${order.progressStage}` : ""}
+                      </div>
+                    )}
+                    {(order.departureLocation || order.destinationLocation) && (
+                      <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                        Route: {order.departureLocation || "N/A"} → {order.destinationLocation || "N/A"}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div style={{
                   fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)",
                   fontWeight: "600",

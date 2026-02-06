@@ -249,6 +249,9 @@ export const getBuyerOrders = query({
       purchases.map(async (purchase) => {
         const inventory = await ctx.db.get(purchase.inventoryId);
         const trader = inventory ? await ctx.db.get(inventory.traderId) : null;
+        const listingUnitId = inventory?.listingUnitIds?.[0];
+        const listingUnit = listingUnitId ? await ctx.db.get(listingUnitId) : null;
+        const listing = listingUnit ? await ctx.db.get(listingUnit.listingId) : null;
 
         // Calculate pickup deadline status (server-side)
         const isPastDeadline = now > purchase.pickupSLA;
@@ -268,6 +271,16 @@ export const getBuyerOrders = query({
           purchasedAt: purchase.purchasedAt,
           pickupSLA: purchase.pickupSLA, // Deadline timestamp (48 hours after purchase)
           status: purchase.status,
+          etaType: listing?.etaType ?? null,
+          etaValue: listing?.etaValue ?? null,
+          etaLastUpdatedAt: listing?.etaLastUpdatedAt ?? null,
+          deliveryStatus: listing?.deliveryStatus ?? null,
+          progressStage: listing?.progressStage ?? null,
+          departureLocation: listing?.departureLocation ?? null,
+          destinationLocation: listing?.destinationLocation ?? null,
+          packagingTypeEnum: listing?.packagingTypeEnum ?? null,
+          packagingTypeCustom: listing?.packagingTypeCustom ?? null,
+          productName: listing?.productName ?? null,
           // Server-calculated countdown (no client-side time logic)
           isPastDeadline,
           hoursRemaining: Math.round(hoursRemaining * 100) / 100, // Rounded to 2 decimals
@@ -345,6 +358,9 @@ export const getBuyerActiveOrders = query({
       pendingPurchases.map(async (purchase) => {
         const inventory = await ctx.db.get(purchase.inventoryId);
         const trader = inventory ? await ctx.db.get(inventory.traderId) : null;
+        const listingUnitId = inventory?.listingUnitIds?.[0];
+        const listingUnit = listingUnitId ? await ctx.db.get(listingUnitId) : null;
+        const listing = listingUnit ? await ctx.db.get(listingUnit.listingId) : null;
 
         // Calculate pickup deadline status (server-side)
         const isPastDeadline = now > purchase.pickupSLA;
@@ -364,6 +380,16 @@ export const getBuyerActiveOrders = query({
           purchasedAt: purchase.purchasedAt,
           pickupSLA: purchase.pickupSLA,
           status: purchase.status,
+          etaType: listing?.etaType ?? null,
+          etaValue: listing?.etaValue ?? null,
+          etaLastUpdatedAt: listing?.etaLastUpdatedAt ?? null,
+          deliveryStatus: listing?.deliveryStatus ?? null,
+          progressStage: listing?.progressStage ?? null,
+          departureLocation: listing?.departureLocation ?? null,
+          destinationLocation: listing?.destinationLocation ?? null,
+          packagingTypeEnum: listing?.packagingTypeEnum ?? null,
+          packagingTypeCustom: listing?.packagingTypeCustom ?? null,
+          productName: listing?.productName ?? null,
           // Server-calculated countdown
           isPastDeadline,
           hoursRemaining: Math.round(hoursRemaining * 100) / 100,

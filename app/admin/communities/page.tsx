@@ -373,7 +373,9 @@ export default function CommunitiesPage() {
               <p style={{ margin: 0, fontSize: "0.9rem", color: "#555" }}>
                 <strong>Currently Assigned Admin:</strong>{" "}
                 {(() => {
-                  const currentCommunity = (communities || []).find((c: any) => c.id === editingCommunityId);
+                  const currentCommunity = (communities as any[] | undefined)?.find(
+                    (c: any) => c.id === editingCommunityId
+                  );
                   const adminInfo = getAssignedAdminInfo(editingCommunityId, currentCommunity?.communityAdminId);
                   return adminInfo.alias === "Unassigned" 
                     ? "Unassigned" 

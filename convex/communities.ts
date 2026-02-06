@@ -234,6 +234,7 @@ export const getActiveCommunities = query({
           name: c.name,
           description: c.description,
           logoPath: (c as any).logoPath,
+          communityAdminId: (c as any).communityAdminId,
           isGlobal: c.isGlobal,
           geoLocked: c.geoLocked,
           isMember,

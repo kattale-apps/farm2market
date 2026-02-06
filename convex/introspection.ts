@@ -118,28 +118,43 @@ export const getCommunityMembers = query({
 
     let derivedRecords: any[] = memberRecords;
     if (memberRecords.length === 0) {
-      const apps = await ctx.db
-        .query("communityApplications")
+      const memberships = await ctx.db
+        .query("communityMemberships")
         .withIndex("by_community", (q: any) => q.eq("communityId", args.communityId))
         .collect();
 
-      const sorted = [...apps].sort(
-        (a: any, b: any) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0)
-      );
-      const latestByFarmer = new Map<Id<"users">, any>();
-      for (const app of sorted) {
-        if (!latestByFarmer.has(app.farmerId)) {
-          latestByFarmer.set(app.farmerId, app);
-        }
-      }
+      if (memberships.length > 0) {
+        derivedRecords = memberships.map((m: any) => ({
+          farmerId: m.userId,
+          status: "APPROVED",
+          applicationId: undefined,
+          joinedAt: m.joinedAt,
+          updatedAt: m.joinedAt,
+        }));
+      } else {
+        const apps = await ctx.db
+          .query("communityApplications")
+          .withIndex("by_community", (q: any) => q.eq("communityId", args.communityId))
+          .collect();
 
-      derivedRecords = Array.from(latestByFarmer.values()).map((app: any) => ({
-        farmerId: app.farmerId,
-        status: app.status,
-        applicationId: app._id,
-        joinedAt: app.status === "APPROVED" ? (app.decidedAt || app.updatedAt || app.createdAt) : undefined,
-        updatedAt: app.updatedAt || app.createdAt,
-      }));
+        const sorted = [...apps].sort(
+          (a: any, b: any) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0)
+        );
+        const latestByFarmer = new Map<Id<"users">, any>();
+        for (const app of sorted) {
+          if (!latestByFarmer.has(app.farmerId)) {
+            latestByFarmer.set(app.farmerId, app);
+          }
+        }
+
+        derivedRecords = Array.from(latestByFarmer.values()).map((app: any) => ({
+          farmerId: app.farmerId,
+          status: app.status,
+          applicationId: app._id,
+          joinedAt: app.status === "APPROVED" ? (app.decidedAt || app.updatedAt || app.createdAt) : undefined,
+          updatedAt: app.updatedAt || app.createdAt,
+        }));
+      }
     }
 
     const filtered = args.status

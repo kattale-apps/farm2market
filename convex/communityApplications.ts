@@ -206,32 +206,51 @@ export const getCommunityMemberExportData = query({
 
     let filtered: any[] = status ? members.filter((m: any) => m.status === status) : members;
     if (members.length === 0) {
-      const apps = await ctx.db
-        .query("communityApplications")
+      const memberships = await ctx.db
+        .query("communityMemberships")
         .withIndex("by_community", (q: any) => q.eq("communityId", communityId))
         .collect();
 
-      const sorted = [...apps].sort(
-        (a: any, b: any) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0)
-      );
-      const latestByFarmer = new Map<Id<"users">, any>();
-      for (const app of sorted) {
-        if (!latestByFarmer.has(app.farmerId)) {
-          latestByFarmer.set(app.farmerId, app);
+      if (memberships.length > 0) {
+        const derivedMembers: any[] = memberships.map((m: any) => ({
+          status: "APPROVED",
+          joinedAt: m.joinedAt,
+          updatedAt: m.joinedAt,
+          applicationId: undefined,
+          farmerId: m.userId,
+        }));
+
+        filtered = status
+          ? derivedMembers.filter((m: any) => m.status === status)
+          : derivedMembers;
+      } else {
+        const apps = await ctx.db
+          .query("communityApplications")
+          .withIndex("by_community", (q: any) => q.eq("communityId", communityId))
+          .collect();
+
+        const sorted = [...apps].sort(
+          (a: any, b: any) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0)
+        );
+        const latestByFarmer = new Map<Id<"users">, any>();
+        for (const app of sorted) {
+          if (!latestByFarmer.has(app.farmerId)) {
+            latestByFarmer.set(app.farmerId, app);
+          }
         }
+
+        const derivedMembers: any[] = Array.from(latestByFarmer.values()).map((app: any) => ({
+          status: app.status,
+          joinedAt: app.status === "APPROVED" ? (app.decidedAt || app.updatedAt || app.createdAt) : undefined,
+          updatedAt: app.updatedAt || app.createdAt,
+          applicationId: app._id,
+          farmerId: app.farmerId,
+        }));
+
+        filtered = status
+          ? derivedMembers.filter((m: any) => m.status === status)
+          : derivedMembers;
       }
-
-      const derivedMembers: any[] = Array.from(latestByFarmer.values()).map((app: any) => ({
-        status: app.status,
-        joinedAt: app.status === "APPROVED" ? (app.decidedAt || app.updatedAt || app.createdAt) : undefined,
-        updatedAt: app.updatedAt || app.createdAt,
-        applicationId: app._id,
-        farmerId: app.farmerId,
-      }));
-
-      filtered = status
-        ? derivedMembers.filter((m: any) => m.status === status)
-        : derivedMembers;
     }
 
     const applications: any[] = await Promise.all(
@@ -423,7 +442,27 @@ export const getCommunityMembersByCommunityIds = query({
           .withIndex("by_community", (q: any) => q.eq("communityId", communityId))
           .collect();
 
-        const filtered = status ? all.filter((m: any) => m.status === status) : all;
+        let filtered = status ? all.filter((m: any) => m.status === status) : all;
+        if (all.length === 0) {
+          const memberships = await ctx.db
+            .query("communityMemberships")
+            .withIndex("by_community", (q: any) => q.eq("communityId", communityId))
+            .collect();
+
+          if (memberships.length > 0) {
+            const derivedMembers: any[] = memberships.map((m: any) => ({
+              status: "APPROVED",
+              joinedAt: m.joinedAt,
+              updatedAt: m.joinedAt,
+              applicationId: undefined,
+              farmerId: m.userId,
+            }));
+
+            filtered = status
+              ? derivedMembers.filter((m: any) => m.status === status)
+              : derivedMembers;
+          }
+        }
 
         const farmerIds = Array.from(new Set(filtered.map((m: any) => m.farmerId)));
         const applicationIds = Array.from(

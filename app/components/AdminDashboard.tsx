@@ -87,6 +87,10 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
       : "skip"
   );
 
+  const backfillMembers = useMutation(
+    api.communityApplications.backfillCommunityMembers
+  );
+
   const logExport = useMutation(api.communities.logExport);
 
   /* ───────────── Export Logic ───────────── */
@@ -530,6 +534,36 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              )}
+
+              {communityMembers && communityMembers.length === 0 && selectedCommunityId && (
+                <div style={{ marginTop: "0.75rem", display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                  <button
+                    onClick={async () => {
+                      try {
+                        await backfillMembers({
+                          adminId,
+                          communityId: selectedCommunityId,
+                        });
+                      } catch {
+                        // no-op
+                      }
+                    }}
+                    style={{
+                      padding: "0.5rem 0.9rem",
+                      background: "#1976d2",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: 6,
+                      fontWeight: 600,
+                    }}
+                  >
+                    Sync Members
+                  </button>
+                  <span style={{ color: "#666", fontSize: "0.85rem" }}>
+                    Runs a one-time sync from applications.
+                  </span>
                 </div>
               )}
             </>

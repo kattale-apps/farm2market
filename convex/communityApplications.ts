@@ -591,6 +591,55 @@ export const revokeMembership = mutation({
   },
 });
 
+export const backfillCommunityMembers = mutation({
+  args: {
+    adminId: v.id("users"),
+    communityId: v.id("communities"),
+  },
+  handler: async (ctx, { adminId, communityId }) => {
+    const adminCheck = await verifyAdminRole({ userId: adminId, db: ctx.db });
+    if (!adminCheck.authorized) {
+      throw new Error("Not authorized");
+    }
+
+    const adminUser = await ctx.db.get(adminId);
+    if (!adminUser) {
+      throw new Error("Admin not found");
+    }
+
+    const isSuperAdmin = adminUser.adminLevel === "super" || adminUser.adminLevel === undefined;
+    if (!isSuperAdmin && adminUser.adminCategory === "community") {
+      const community = await ctx.db.get(communityId);
+      const assigned = (adminUser as any).assignedCommunityIds || [];
+      const isDirectAdmin = community?.communityAdminId === adminId;
+      const isAssigned = assigned.some((id: string) => id === communityId);
+      if (!isAssigned && !isDirectAdmin) {
+        throw new Error("Forbidden");
+      }
+    } else if (!isSuperAdmin && adminUser.adminCategory !== "community") {
+      throw new Error("Forbidden");
+    }
+
+    const applications = await ctx.db
+      .query("communityApplications")
+      .withIndex("by_community", (q: any) => q.eq("communityId", communityId))
+      .collect();
+
+    let updated = 0;
+    for (const app of applications) {
+      await upsertCommunityMember(ctx, {
+        communityId: app.communityId,
+        farmerId: app.farmerId,
+        status: app.status,
+        applicationId: app._id,
+      });
+      updated += 1;
+    }
+
+    return { success: true, total: applications.length, updated };
+  },
+});
+
 export const getExportData = query({
   args: {
     adminId: v.id("users"),

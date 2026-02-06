@@ -330,6 +330,9 @@ export const signup = mutation({
       userId: user._id,
       alias: user.alias,
       role: user.role,
+      adminLevel: user.adminLevel,
+      adminCategory: user.adminCategory,
+      assignedCommunityIds: user.assignedCommunityIds,
     };
   },
 });
@@ -399,6 +402,9 @@ export const login = mutation({
       userId: user._id,
       alias: user.alias,
       role: user.role,
+      adminLevel: user.adminLevel,
+      adminCategory: user.adminCategory,
+      assignedCommunityIds: user.assignedCommunityIds,
     };
   },
 });

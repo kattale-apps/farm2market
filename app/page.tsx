@@ -24,6 +24,7 @@ export default function Home() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [showCommunityTooltip, setShowCommunityTooltip] = useState(false);
   const isSuperAdmin = user?.role === "admin" && user?.adminLevel !== "junior";
   
   useEffect(() => {
@@ -78,6 +79,13 @@ export default function Home() {
       ? { farmerId: user.userId as Id<"users"> } 
       : "skip"
   );
+
+  const communities = useQuery(
+    api.communities.getActiveCommunities,
+    user?.role === "farmer" && user?.userId ? { userId: user.userId as Id<"users"> } : "skip"
+  );
+
+  const memberCommunities = (communities || []).filter((c: any) => c.isMember);
 
   // Redirect farmers to onboarding if not completed
   useEffect(() => {
@@ -265,6 +273,69 @@ export default function Home() {
           }}>
             Role: {user?.role || "unknown"}
           </p>
+          {user?.role === "farmer" && (
+            <div style={{ position: "relative", alignSelf: isMobile ? "flex-start" : "flex-end" }}>
+              <button
+                type="button"
+                aria-haspopup="true"
+                aria-expanded={showCommunityTooltip}
+                onClick={() => setShowCommunityTooltip((prev) => !prev)}
+                onMouseEnter={() => setShowCommunityTooltip(true)}
+                onMouseLeave={() => setShowCommunityTooltip(false)}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.4rem",
+                  padding: isMobile ? "0.5rem 0.85rem" : "0.35rem 0.6rem",
+                  borderRadius: "999px",
+                  background: "#eef7ff",
+                  color: "#1e5aa7",
+                  fontSize: isMobile ? "0.9rem" : "0.8rem",
+                  fontWeight: 600,
+                  border: "1px solid #cfe3ff",
+                  cursor: "pointer",
+                  width: isMobile ? "100%" : "auto",
+                  justifyContent: "center",
+                }}
+              >
+                Communities ({memberCommunities.length}) ⓘ
+              </button>
+              {showCommunityTooltip && (
+                <div
+                  onMouseEnter={() => setShowCommunityTooltip(true)}
+                  onMouseLeave={() => setShowCommunityTooltip(false)}
+                  style={{
+                    position: "absolute",
+                    top: "120%",
+                    right: isMobile ? "auto" : 0,
+                    left: isMobile ? 0 : "auto",
+                    zIndex: 10,
+                    minWidth: isMobile ? "100%" : "220px",
+                    maxWidth: isMobile ? "90vw" : "320px",
+                    background: "#ffffff",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "10px",
+                    boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+                    padding: "0.75rem",
+                    textAlign: "left",
+                  }}
+                >
+                  <div style={{ fontWeight: 700, marginBottom: "0.5rem", color: "#1b5e20" }}>
+                    Your Communities
+                  </div>
+                  {memberCommunities.length === 0 ? (
+                    <div style={{ color: "#6b7280", fontSize: "0.85rem" }}>No memberships yet.</div>
+                  ) : (
+                    <ul style={{ margin: 0, paddingLeft: "1rem", fontSize: "0.85rem", color: "#374151" }}>
+                      {memberCommunities.map((c: any) => (
+                        <li key={c.id}>{c.name}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           <button
             onClick={() => {
               localStorage.removeItem("pilot_user");

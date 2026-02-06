@@ -261,6 +261,16 @@ export default function AdminRoleManagementPage() {
                         >
                           {admin.email ?? "-"}
                         </p>
+                        <p
+                          style={{
+                            margin: "0.25rem 0",
+                            color: "#888",
+                            fontSize: "0.8rem",
+                            wordBreak: "break-all",
+                          }}
+                        >
+                          User ID: {admin.userId}
+                        </p>
                       </div>
 
                       <div
@@ -369,6 +379,17 @@ export default function AdminRoleManagementPage() {
                           fontSize: "0.9rem",
                         }}
                       >
+                        User ID
+                      </th>
+                      <th
+                        style={{
+                          padding: "0.75rem",
+                          textAlign: "left",
+                          fontWeight: "600",
+                          borderBottom: "2px solid #e0e0e0",
+                          fontSize: "0.9rem",
+                        }}
+                      >
                         Level
                       </th>
                       <th
@@ -433,6 +454,17 @@ export default function AdminRoleManagementPage() {
                           }}
                         >
                           {admin.email ?? "-"}
+                        </td>
+                        <td
+                          style={{
+                            padding: "0.75rem",
+                            fontSize: "0.85rem",
+                            wordBreak: "break-all",
+                            maxWidth: "220px",
+                            color: "#555",
+                          }}
+                        >
+                          {admin.userId}
                         </td>
                         <td style={{ padding: "0.75rem", fontSize: "0.9rem" }}>
                           {admin.adminLevel ?? "-"}

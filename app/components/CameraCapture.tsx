@@ -61,8 +61,12 @@ export function CameraCapture({ formId, field, onUploadComplete }: Props) {
       // 2. Draw video frame to canvas
       const video = videoRef.current;
       const canvas = canvasRef.current;
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      const maxDimension = 1280;
+      const rawWidth = video.videoWidth;
+      const rawHeight = video.videoHeight;
+      const scale = Math.min(1, maxDimension / Math.max(rawWidth, rawHeight));
+      canvas.width = Math.round(rawWidth * scale);
+      canvas.height = Math.round(rawHeight * scale);
       const ctx = canvas.getContext("2d");
       if (!ctx) throw new Error("Could not get canvas context");
 
@@ -70,12 +74,15 @@ export function CameraCapture({ formId, field, onUploadComplete }: Props) {
 
       // 3. Stamp metadata on the image
       const stampText = `GPS: ${latitude.toFixed(5)}, ${longitude.toFixed(5)} | ${capturedAt.toLocaleString()}`;
-      ctx.font = "16px Arial";
+      const fontSize = Math.max(14, Math.round(canvas.width * 0.02));
+      ctx.font = `${fontSize}px Arial`;
+      const textWidth = ctx.measureText(stampText).width;
+      const padding = 8;
+      const boxHeight = fontSize + 10;
+      ctx.fillStyle = "rgba(0,0,0,0.6)";
+      ctx.fillRect(6, canvas.height - boxHeight - 6, textWidth + padding * 2, boxHeight);
       ctx.fillStyle = "white";
-      ctx.strokeStyle = "black";
-      ctx.lineWidth = 3;
-      ctx.strokeText(stampText, 10, canvas.height - 10);
-      ctx.fillText(stampText, 10, canvas.height - 10);
+      ctx.fillText(stampText, 6 + padding, canvas.height - 10);
 
       // 4. Get blob from canvas and upload
       canvas.toBlob(async (blob) => {
@@ -106,7 +113,7 @@ export function CameraCapture({ formId, field, onUploadComplete }: Props) {
 
         onUploadComplete(finalMetadata);
         stopCamera();
-      }, "image/jpeg");
+      }, "image/jpeg", 0.7);
     } catch (err) {
       console.error("Capture failed:", err);
       setError(`Capture failed: ${(err as Error).message}`);

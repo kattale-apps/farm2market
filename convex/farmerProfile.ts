@@ -47,6 +47,11 @@ export const getFarmerProfile = query({
       email: farmer.email,
       phoneNumber: farmer.phoneNumber,
       sex: farmer.sex,
+      county: farmer.county,
+      village: farmer.village,
+      waterSource: farmer.waterSource,
+      districtText: farmer.districtText,
+      subCountyText: farmer.subCountyText,
       districtId: farmer.districtId,
       districtName,
       subcountyId: farmer.subcountyId,
@@ -73,7 +78,13 @@ export const updateFarmerProfile = mutation({
     parishId: v.optional(v.id("parishes")),
     farmSizeInput: v.optional(v.any()), // {unit, length, width, omwigo, emiigo}
     phoneNumber: v.optional(v.string()),
+    email: v.optional(v.string()),
     sex: v.optional(v.union(v.literal("M"), v.literal("F"))),
+    county: v.optional(v.string()),
+    village: v.optional(v.string()),
+    waterSource: v.optional(v.string()),
+    districtText: v.optional(v.string()),
+    subCountyText: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const farmer = await ctx.db.get(args.farmerId);
@@ -119,8 +130,26 @@ export const updateFarmerProfile = mutation({
     if (args.phoneNumber !== undefined) {
       updates.phoneNumber = args.phoneNumber.trim() || undefined;
     }
+    if (args.email !== undefined) {
+      updates.email = args.email.trim() || undefined;
+    }
     if (args.sex !== undefined) {
       updates.sex = args.sex;
+    }
+    if (args.county !== undefined) {
+      updates.county = args.county.trim() || undefined;
+    }
+    if (args.village !== undefined) {
+      updates.village = args.village.trim() || undefined;
+    }
+    if (args.waterSource !== undefined) {
+      updates.waterSource = args.waterSource.trim() || undefined;
+    }
+    if (args.districtText !== undefined) {
+      updates.districtText = args.districtText.trim() || undefined;
+    }
+    if (args.subCountyText !== undefined) {
+      updates.subCountyText = args.subCountyText.trim() || undefined;
     }
     if (farmSizeAcres !== undefined) {
       updates.farmSizeAcres = farmSizeAcres;

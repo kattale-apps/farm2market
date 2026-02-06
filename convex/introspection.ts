@@ -31,25 +31,32 @@ export const getCommunitiesForAdmin = query({
       return await enrichWithStats(ctx, allCommunities);
     }
 
-    // Community admin sees only assigned communities
-    if (
-      user.adminCategory === "community" &&
-      Array.isArray(user.assignedCommunityIds) &&
-      user.assignedCommunityIds.length > 0
-    ) {
-      const communities = await Promise.all(
-        user.assignedCommunityIds.map(
-          (communityId: Id<"communities">) =>
-            ctx.db.get(communityId)
+    // Community admin sees assigned communities or directly assigned via communityAdminId
+    if (user.adminCategory === "community") {
+      const assignedIds = Array.isArray(user.assignedCommunityIds)
+        ? user.assignedCommunityIds
+        : [];
+      const directAssigned = await ctx.db
+        .query("communities")
+        .filter((q: any) => q.eq(q.field("communityAdminId"), args.adminId))
+        .collect();
+      const assignedCommunities = await Promise.all(
+        assignedIds.map((communityId: Id<"communities">) =>
+          ctx.db.get(communityId)
         )
       );
 
-      const validCommunities = communities.filter(
-        (community): community is NonNullable<typeof community> =>
-          community !== null
-      );
-      
-      return await enrichWithStats(ctx, validCommunities);
+      const validCommunities = [
+        ...assignedCommunities.filter(
+          (community): community is NonNullable<typeof community> =>
+            community !== null
+        ),
+        ...directAssigned,
+      ];
+
+      if (validCommunities.length > 0) {
+        return await enrichWithStats(ctx, validCommunities);
+      }
     }
 
     // All other admins see nothing

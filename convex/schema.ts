@@ -74,6 +74,12 @@ export default defineSchema({
     farmSizeAcres: v.optional(v.number()), // Farm size in acres (calculated)
     farmSizeRaw: v.optional(v.any()), // Raw farm size input: {unit, length, width, omwigo, emiigo}
     onboardingCompleted: v.optional(v.boolean()), // Whether farmer has completed onboarding
+    // Farmer profile (community onboarding preload fields)
+    county: v.optional(v.string()),
+    village: v.optional(v.string()),
+    waterSource: v.optional(v.string()),
+    districtText: v.optional(v.string()),
+    subCountyText: v.optional(v.string()),
     // Notification preferences
     notificationPreferences: v.optional(v.any()), // { newListings: boolean, offers: boolean, etc. }
   })
@@ -659,6 +665,8 @@ export default defineSchema({
   communities: defineTable({
     name: v.string(), // Community name
     description: v.optional(v.string()), // Community description
+    logoPath: v.optional(v.string()), // Optional logo path in /public
+    communityAdminId: v.optional(v.id("users")), // Assigned community admin
     isGlobal: v.boolean(), // Whether community is global (not geo-locked)
     geoLocked: v.boolean(), // Whether community is geo-locked
     districtIds: v.optional(v.array(v.id("districts"))), // Districts for geo-locking
@@ -688,58 +696,334 @@ export default defineSchema({
     .index("by_listing", ["listingId"])
     .index("by_community", ["communityId"]),
 
-  agroFreshUGFarmValidations: defineTable({
+  communityMembers: defineTable({
+    communityId: v.id("communities"),
     farmerId: v.id("users"),
-    community: v.literal("AGROFRESH_UG"),
     status: v.union(
-      v.literal("DRAFT"),
-      v.literal("SUBMITTED"),
-      v.literal("VERIFIED")
+      v.literal("PENDING"),
+      v.literal("APPROVED"),
+      v.literal("REJECTED"),
+      v.literal("REVOKED")
+    ),
+    applicationId: v.optional(v.id("communityApplications")),
+    joinedAt: v.optional(v.number()),
+    updatedAt: v.number(),
+  })
+    .index("by_community", ["communityId"])
+    .index("by_farmer", ["farmerId"])
+    .index("by_community_farmer", ["communityId", "farmerId"])
+    .index("by_status", ["status"]),
+
+  communityApplications: defineTable({
+    communityId: v.id("communities"),
+    farmerId: v.id("users"),
+    formId: v.id("agroFreshUGFarmValidations"),
+    status: v.union(
+      v.literal("PENDING"),
+      v.literal("APPROVED"),
+      v.literal("REJECTED"),
+      v.literal("REVOKED")
     ),
     createdAt: v.number(),
     updatedAt: v.number(),
-    verifiedAt: v.optional(v.number()),
-    verifiedBy: v.optional(v.id("users")),
+    decidedAt: v.optional(v.number()),
+    decidedBy: v.optional(v.id("users")),
+  })
+    .index("by_community", ["communityId"])
+    .index("by_farmer", ["farmerId"])
+    .index("by_form", ["formId"])
+    .index("by_status", ["status"])
+    .index("by_community_farmer", ["communityId", "farmerId"]),
 
-    // Section 1: Farmer & Farm Particulars
+  adminActionLogs: defineTable({
+    adminId: v.id("users"),
+    communityId: v.id("communities"),
+    applicationId: v.id("communityApplications"),
+    action: v.union(
+      v.literal("APPROVED"),
+      v.literal("REJECTED"),
+      v.literal("REVOKED")
+    ),
+    note: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_application", ["applicationId"])
+    .index("by_admin", ["adminId"])
+    .index("by_community", ["communityId"]),
+
+  agroFreshUGFarmValidations: defineTable({
+    farmerId: v.id("users"),
+    community: v.literal("AGROFRESH_UG"),
+    communityName: v.optional(v.string()),
+    status: v.union(v.literal("DRAFT"), v.literal("SUBMITTED")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    deletedByFarmer: v.optional(v.boolean()),
+    deletedAt: v.optional(v.number()),
+
+    // Section 1: Farmer Registration Information & Farm Specifics
     section1: v.optional(v.object({
       farmerFullName: v.optional(v.string()),
-      phoneNumber: v.optional(v.string()),
-      nationalId: v.optional(v.string()),
       farmName: v.optional(v.string()),
+      phoneNumber: v.optional(v.string()),
+      emailAddress: v.optional(v.string()),
+      county: v.optional(v.string()),
+      districtSubCounty: v.optional(v.string()),
+      village: v.optional(v.string()),
+      farmSizeAcres: v.optional(v.string()),
+      totalAreaAgProductionAcres: v.optional(v.string()),
+      totalAreaPlantedForestAcres: v.optional(v.string()),
+      systemOfFarming: v.optional(v.string()),
+      systemOfFarmingOther: v.optional(v.string()),
+      mainEnterprises: v.optional(v.array(v.string())),
+      otherCommercialActivity: v.optional(v.string()),
+      yearsOfExperience: v.optional(v.string()),
+      waterSource: v.optional(v.string()),
+      waterSourceOther: v.optional(v.string()),
+      certifications: v.optional(v.string()),
+      verificationPhoto: v.optional(v.object(imageMetadata)),
+      // Legacy fields retained for existing data
+      nationalId: v.optional(v.string()),
       district: v.optional(v.string()),
       subCounty: v.optional(v.string()),
       parish: v.optional(v.string()),
-      village: v.optional(v.string()),
-      gps: v.optional(v.object({ lat: v.number(), lng: v.number() })),
       farmSize: v.optional(v.string()),
       farmSizeUnit: v.optional(v.string()),
       mainEnterprise: v.optional(v.string()),
       farmingExperience: v.optional(v.string()),
-      waterSource: v.optional(v.string()),
-      certifications: v.optional(v.array(v.string())),
-      farmerPhoto: v.optional(v.object(imageMetadata)),
-      farmPhotos: v.optional(v.array(v.object(imageMetadata))),
     })),
 
-    // Section 2: Livestock & Aquaculture
-    section2_1_dairy: v.optional(livestockSection),
-    section2_2_poultry: v.optional(livestockSection),
-    section2_3_piggery: v.optional(livestockSection),
-    section2_4_cuniculture: v.optional(livestockSection),
+    section2_1_dairy: v.optional(v.object({
+      systemOfFarming: v.optional(v.string()),
+      systemOfFarmingOther: v.optional(v.string()),
+      enterpriseAreaAcres: v.optional(v.string()),
+      currentLivestockIntensity: v.optional(v.string()),
+      numberOfMilkers: v.optional(v.string()),
+      milkProductivityDaily: v.optional(v.string()),
+      accessToColdStorage: v.optional(v.string()),
+      marketPointOfSale: v.optional(v.string()),
+      transportToMarket: v.optional(v.string()),
+      // Legacy fields
+      present: v.optional(v.boolean()),
+      breed: v.optional(v.string()),
+      animalCount: v.optional(v.string()),
+      managementSystem: v.optional(v.string()),
+      healthStatus: v.optional(v.string()),
+      productionOutput: v.optional(v.string()),
+    })),
+
+    section2_2_poultry: v.optional(v.object({
+      systemOfFarming: v.optional(v.string()),
+      systemOfFarmingOther: v.optional(v.string()),
+      enterpriseAreaAcres: v.optional(v.string()),
+      currentPoultryIntensity: v.optional(v.string()),
+      typesOfChicken: v.optional(v.array(v.string())),
+      typesOfChickenOther: v.optional(v.string()),
+      accessToColdStorage: v.optional(v.string()),
+      marketPointOfSale: v.optional(v.string()),
+      transportToMarket: v.optional(v.string()),
+      // Legacy fields
+      present: v.optional(v.boolean()),
+      breed: v.optional(v.string()),
+      animalCount: v.optional(v.string()),
+      managementSystem: v.optional(v.string()),
+      healthStatus: v.optional(v.string()),
+      productionOutput: v.optional(v.string()),
+    })),
+
+    section2_3_piggery: v.optional(v.object({
+      systemOfFarming: v.optional(v.string()),
+      systemOfFarmingOther: v.optional(v.string()),
+      enterpriseAreaAcres: v.optional(v.string()),
+      currentPiggeryIntensity: v.optional(v.string()),
+      product: v.optional(v.string()),
+      accessToColdStorage: v.optional(v.string()),
+      marketPointOfSale: v.optional(v.string()),
+      transportToMarket: v.optional(v.string()),
+      // Legacy fields
+      present: v.optional(v.boolean()),
+      breed: v.optional(v.string()),
+      animalCount: v.optional(v.string()),
+      managementSystem: v.optional(v.string()),
+      healthStatus: v.optional(v.string()),
+      productionOutput: v.optional(v.string()),
+    })),
+
+    section2_4_rabbitry: v.optional(v.object({
+      systemOfFarming: v.optional(v.string()),
+      systemOfFarmingOther: v.optional(v.string()),
+      enterpriseAreaUnit: v.optional(v.string()),
+      enterpriseAreaLength: v.optional(v.string()),
+      enterpriseAreaWidth: v.optional(v.string()),
+      enterpriseAreaAcres: v.optional(v.string()),
+      currentRabbitryIntensity: v.optional(v.string()),
+      rabbitryIntensityOther: v.optional(v.string()),
+      mainProduct: v.optional(v.array(v.string())),
+      mainProductOther: v.optional(v.string()),
+      accessToColdStorage: v.optional(v.string()),
+      marketPointOfSale: v.optional(v.string()),
+      transportToMarket: v.optional(v.string()),
+      // Legacy fields
+      present: v.optional(v.boolean()),
+      breed: v.optional(v.string()),
+      animalCount: v.optional(v.string()),
+      managementSystem: v.optional(v.string()),
+      healthStatus: v.optional(v.string()),
+      productionOutput: v.optional(v.string()),
+    })),
+
+    // Legacy section key
+    section2_4_cuniculture: v.optional(v.object({
+      present: v.optional(v.boolean()),
+      breed: v.optional(v.string()),
+      animalCount: v.optional(v.string()),
+      managementSystem: v.optional(v.string()),
+      healthStatus: v.optional(v.string()),
+      productionOutput: v.optional(v.string()),
+    })),
+
     section2_5_apiary: v.optional(v.object({
-      present: v.boolean(),
+      systemOfFarming: v.optional(v.string()),
+      systemOfFarmingOther: v.optional(v.string()),
+      enterpriseAreaUnit: v.optional(v.string()),
+      enterpriseAreaLength: v.optional(v.string()),
+      enterpriseAreaWidth: v.optional(v.string()),
+      enterpriseAreaAcres: v.optional(v.string()),
+      currentApiaryIntensity: v.optional(v.string()),
+      mainProduct: v.optional(v.string()),
+      mainProductOther: v.optional(v.string()),
+      accessToColdStorage: v.optional(v.string()),
+      marketPointOfSale: v.optional(v.string()),
+      transportToMarket: v.optional(v.string()),
+      // Legacy fields
+      present: v.optional(v.boolean()),
       hiveCount: v.optional(v.string()),
       honeyProduction: v.optional(v.string()),
       productionUnit: v.optional(v.string()),
     })),
-    section2_6_aquaculture: v.optional(cropSection),
 
-    // Section 2: Crops & Trees
-    section2_7_banana: v.optional(cropSection),
-    section2_8_maize: v.optional(cropSection),
-    section2_9_fruitTrees: v.optional(cropSection),
-    section2_10_woodyForest: v.optional(cropSection),
+    section2_6_aquaculture: v.optional(v.object({
+      systemOfFarming: v.optional(v.string()),
+      systemOfFarmingOther: v.optional(v.string()),
+      enterpriseAreaUnit: v.optional(v.string()),
+      enterpriseAreaLength: v.optional(v.string()),
+      enterpriseAreaWidth: v.optional(v.string()),
+      enterpriseAreaDepth: v.optional(v.string()),
+      enterpriseAreaAcres: v.optional(v.string()),
+      currentStock: v.optional(v.string()),
+      typeOfFish: v.optional(v.array(v.string())),
+      typeOfFishOther: v.optional(v.string()),
+      accessToColdStorage: v.optional(v.string()),
+      marketPointOfSale: v.optional(v.string()),
+      transportToMarket: v.optional(v.string()),
+      // Legacy crop fields
+      present: v.optional(v.boolean()),
+      variety: v.optional(v.string()),
+      areaUnderCultivation: v.optional(v.string()),
+      areaUnit: v.optional(v.string()),
+      productionOutput: v.optional(v.string()),
+      productionUnit: v.optional(v.string()),
+      lastHarvestDate: v.optional(v.string()),
+    })),
+
+    section2_7_banana: v.optional(v.object({
+      systemOfFarming: v.optional(v.string()),
+      systemOfFarmingOther: v.optional(v.string()),
+      waterSource: v.optional(v.string()),
+      waterSourceOther: v.optional(v.string()),
+      manureType: v.optional(v.string()),
+      enterpriseAreaAcres: v.optional(v.string()),
+      productionIntensityPerAcre: v.optional(v.string()),
+      type: v.optional(v.string()),
+      accessToColdStorage: v.optional(v.string()),
+      marketPointOfSale: v.optional(v.string()),
+      transportToMarket: v.optional(v.string()),
+      // Legacy crop fields
+      present: v.optional(v.boolean()),
+      variety: v.optional(v.string()),
+      areaUnderCultivation: v.optional(v.string()),
+      areaUnit: v.optional(v.string()),
+      productionOutput: v.optional(v.string()),
+      productionUnit: v.optional(v.string()),
+      lastHarvestDate: v.optional(v.string()),
+    })),
+
+    section2_8_maize: v.optional(v.object({
+      systemOfFarming: v.optional(v.string()),
+      systemOfFarmingOther: v.optional(v.string()),
+      waterSource: v.optional(v.string()),
+      waterSourceOther: v.optional(v.string()),
+      manureType: v.optional(v.string()),
+      enterpriseAreaAcres: v.optional(v.string()),
+      productionIntensityPerAcre: v.optional(v.string()),
+      accessToColdStorage: v.optional(v.string()),
+      marketPointOfSale: v.optional(v.string()),
+      transportToMarket: v.optional(v.string()),
+      // Legacy crop fields
+      present: v.optional(v.boolean()),
+      variety: v.optional(v.string()),
+      areaUnderCultivation: v.optional(v.string()),
+      areaUnit: v.optional(v.string()),
+      productionOutput: v.optional(v.string()),
+      productionUnit: v.optional(v.string()),
+      lastHarvestDate: v.optional(v.string()),
+    })),
+
+    section2_9_fruitTrees: v.optional(v.object({
+      systemOfFarming: v.optional(v.string()),
+      systemOfFarmingOther: v.optional(v.string()),
+      waterSource: v.optional(v.string()),
+      waterSourceOther: v.optional(v.string()),
+      manureType: v.optional(v.string()),
+      enterpriseAreaAcres: v.optional(v.string()),
+      stockPerAcre: v.optional(v.string()),
+      type: v.optional(v.array(v.string())),
+      typeOther: v.optional(v.string()),
+      accessToColdStorage: v.optional(v.string()),
+      marketPointOfSale: v.optional(v.string()),
+      transportToMarket: v.optional(v.string()),
+      // Legacy crop fields
+      present: v.optional(v.boolean()),
+      variety: v.optional(v.string()),
+      areaUnderCultivation: v.optional(v.string()),
+      areaUnit: v.optional(v.string()),
+      productionOutput: v.optional(v.string()),
+      productionUnit: v.optional(v.string()),
+      lastHarvestDate: v.optional(v.string()),
+    })),
+
+    section2_10_plantedForest: v.optional(v.object({
+      systemOfFarming: v.optional(v.string()),
+      systemOfFarmingOther: v.optional(v.string()),
+      waterSource: v.optional(v.string()),
+      waterSourceOther: v.optional(v.string()),
+      manureType: v.optional(v.string()),
+      enterpriseAreaAcres: v.optional(v.string()),
+      stockPerAcre: v.optional(v.string()),
+      type: v.optional(v.string()),
+      typeOther: v.optional(v.string()),
+      marketPointOfSale: v.optional(v.string()),
+      transportToMarket: v.optional(v.string()),
+      // Legacy crop fields
+      present: v.optional(v.boolean()),
+      variety: v.optional(v.string()),
+      areaUnderCultivation: v.optional(v.string()),
+      areaUnit: v.optional(v.string()),
+      productionOutput: v.optional(v.string()),
+      productionUnit: v.optional(v.string()),
+      lastHarvestDate: v.optional(v.string()),
+    })),
+
+    // Legacy section key
+    section2_10_woodyForest: v.optional(v.object({
+      present: v.optional(v.boolean()),
+      variety: v.optional(v.string()),
+      areaUnderCultivation: v.optional(v.string()),
+      areaUnit: v.optional(v.string()),
+      productionOutput: v.optional(v.string()),
+      productionUnit: v.optional(v.string()),
+      lastHarvestDate: v.optional(v.string()),
+    })),
   })
     .index("by_farmerId_and_community", ["farmerId", "community"])
     .index("by_status", ["status"])

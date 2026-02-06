@@ -165,7 +165,7 @@ export const getActiveCommunities = query({
       const isJuniorCommunityAdminCheck = userRecord && isCommunityAdmin(userRecord);
       if (isJuniorCommunityAdminCheck) {
         const assignedIds = (userRecord as any).assignedCommunityIds || [];
-        return assignedIds.includes(c._id);
+        return assignedIds.includes(c._id) || c.communityAdminId === args.userId;
       }
       
       // Other junior admins see all
@@ -233,6 +233,7 @@ export const getActiveCommunities = query({
           id: c._id,
           name: c.name,
           description: c.description,
+          logoPath: (c as any).logoPath,
           isGlobal: c.isGlobal,
           geoLocked: c.geoLocked,
           isMember,
@@ -255,6 +256,7 @@ export const createCommunity = mutation({
     adminId: v.id("users"),
     name: v.string(),
     description: v.optional(v.string()),
+    logoPath: v.optional(v.string()),
     isGlobal: v.boolean(),
     geoLocked: v.boolean(),
     regionKey: v.optional(v.string()),
@@ -337,10 +339,29 @@ export const createCommunity = mutation({
     // Generate UTID
     const utid = generateUTID(adminUser.role);
 
+    // Validate assigned community admin (if provided)
+    let assignedAdminId: Id<"users"> | undefined = undefined;
+    if (args.assignAdminId) {
+      const targetAdmin = await ctx.db.get(args.assignAdminId);
+      if (!targetAdmin) {
+        throw new Error("Target admin user not found");
+      }
+      if (targetAdmin.role !== "admin" || targetAdmin.adminLevel !== "junior" || targetAdmin.adminCategory !== "community") {
+        throw new Error("Assigned admin must be a junior community admin");
+      }
+      const currentAssigned = (targetAdmin as any).assignedCommunityIds || [];
+      if (currentAssigned.length > 0) {
+        throw new Error("Community admin already assigned to another community");
+      }
+      assignedAdminId = args.assignAdminId;
+    }
+
     // Create community
     const communityId = await ctx.db.insert("communities", {
       name: args.name.trim(),
       description: args.description?.trim(),
+      logoPath: args.logoPath?.trim(),
+      communityAdminId: assignedAdminId,
       isGlobal: args.isGlobal,
       geoLocked: args.geoLocked,
       districtIds: resolvedDistrictIds,
@@ -355,14 +376,7 @@ export const createCommunity = mutation({
     // If assigning to a community admin, add to their assignedCommunityIds
     if (args.assignAdminId) {
       const targetAdmin = await ctx.db.get(args.assignAdminId);
-      if (!targetAdmin) {
-        throw new Error("Target admin user not found");
-      }
-      if (targetAdmin.role !== "admin" || targetAdmin.adminLevel !== "junior") {
-        throw new Error("Can only assign communities to junior community admins");
-      }
-
-      const currentAssigned = (targetAdmin as any).assignedCommunityIds || [];
+      const currentAssigned = (targetAdmin as any)?.assignedCommunityIds || [];
       await ctx.db.patch(args.assignAdminId, {
         assignedCommunityIds: [...currentAssigned, communityId],
       });
@@ -389,6 +403,7 @@ export const updateCommunity = mutation({
     communityId: v.id("communities"),
     name: v.optional(v.string()),
     description: v.optional(v.string()),
+    logoPath: v.optional(v.string()),
     isGlobal: v.optional(v.boolean()),
     geoLocked: v.optional(v.boolean()),
     regionKey: v.optional(v.string()),
@@ -472,6 +487,9 @@ export const updateCommunity = mutation({
     }
     if (args.description !== undefined) {
       updates.description = args.description.trim();
+    }
+    if (args.logoPath !== undefined) {
+      updates.logoPath = args.logoPath?.trim();
     }
     if (args.isGlobal !== undefined) {
       updates.isGlobal = args.isGlobal;

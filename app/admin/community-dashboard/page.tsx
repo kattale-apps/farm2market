@@ -48,6 +48,9 @@ export default function CommunityDashboardPage() {
 
   // Mutation for logging exports
   const logExport = useMutation(api.communities.logExport);
+  const approveApplication = useMutation(api.communityApplications.approveApplication);
+  const rejectApplication = useMutation(api.communityApplications.rejectApplication);
+  const revokeMembership = useMutation(api.communityApplications.revokeMembership);
 
   // For community admin: get their managed community
   const userCommunities = useMemo(() => {
@@ -56,6 +59,28 @@ export default function CommunityDashboardPage() {
     // For now, we'll show all communities they're associated with
     return communities;
   }, [communities, userAdminCategory]);
+
+  const communityIds = useMemo(() => userCommunities.map((c) => c.id), [userCommunities]);
+  const applicationsByCommunity = useQuery(
+    api.communityApplications.getApplicationsByCommunityIds,
+    userId && communityIds.length > 0
+      ? {
+          adminId: userId,
+          communityIds,
+          status: "PENDING",
+        }
+      : "skip"
+  );
+  const approvedMembersByCommunity = useQuery(
+    api.communityApplications.getCommunityMembersByCommunityIds,
+    userId && communityIds.length > 0
+      ? {
+          adminId: userId,
+          communityIds,
+          status: "APPROVED",
+        }
+      : "skip"
+  );
 
   if (!userId) {
     return (
@@ -214,6 +239,153 @@ export default function CommunityDashboardPage() {
                   {community.isGlobal && <div>🌍 Global Community</div>}
                   {community.geoLocked && <div>📍 Geo-locked</div>}
                 </div>
+              </div>
+
+              {/* Pending Applications */}
+              <div style={{ padding: "1.5rem", borderBottom: "1px solid #eee" }}>
+                <h3 style={{
+                  margin: "0 0 1rem 0",
+                  fontSize: "1.05rem",
+                  fontWeight: "600",
+                  color: "#2c2c2c",
+                }}>
+                  📄 Pending Applications
+                </h3>
+                {applicationsByCommunity === undefined ? (
+                  <p style={{ color: "#999" }}>Loading applications...</p>
+                ) : (
+                  (() => {
+                    const pending =
+                      applicationsByCommunity?.find((c) => c.communityId === community.id)?.applications || [];
+                    if (pending.length === 0) {
+                      return <p style={{ color: "#999" }}>No pending applications.</p>;
+                    }
+                    return (
+                      <div style={{ overflowX: "auto" }}>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
+                          <thead>
+                            <tr style={{ textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>
+                              <th style={{ padding: "0.5rem" }}>Name</th>
+                              <th style={{ padding: "0.5rem" }}>Farm Name</th>
+                              <th style={{ padding: "0.5rem" }}>Phone</th>
+                              <th style={{ padding: "0.5rem" }}>District</th>
+                              <th style={{ padding: "0.5rem" }}>Submitted</th>
+                              <th style={{ padding: "0.5rem" }}>Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {pending.map((app: any) => (
+                              <tr key={app.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                                <td style={{ padding: "0.5rem" }}>{app.form?.section1?.farmerFullName || app.farmer?.alias || "-"}</td>
+                                <td style={{ padding: "0.5rem" }}>{app.form?.section1?.farmName || "-"}</td>
+                                <td style={{ padding: "0.5rem" }}>{app.form?.section1?.phoneNumber || app.farmer?.phoneNumber || "-"}</td>
+                                <td style={{ padding: "0.5rem" }}>{app.form?.section1?.districtSubCounty || app.farmer?.districtText || "-"}</td>
+                                <td style={{ padding: "0.5rem" }}>{app.createdAt ? new Date(app.createdAt).toLocaleString() : "-"}</td>
+                                <td style={{ padding: "0.5rem", display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+                                  <button
+                                    onClick={async () => {
+                                      try {
+                                        await approveApplication({ adminId: userId as any, applicationId: app.id as any });
+                                        setMessage({ type: "success", text: "Application approved." });
+                                      } catch (error: any) {
+                                        setMessage({ type: "error", text: error?.message || "Failed to approve" });
+                                      }
+                                    }}
+                                    style={{ padding: "0.35rem 0.6rem" }}
+                                  >
+                                    Approve
+                                  </button>
+                                  <button
+                                    onClick={async () => {
+                                      try {
+                                        await rejectApplication({ adminId: userId as any, applicationId: app.id as any });
+                                        setMessage({ type: "success", text: "Application rejected." });
+                                      } catch (error: any) {
+                                        setMessage({ type: "error", text: error?.message || "Failed to reject" });
+                                      }
+                                    }}
+                                    style={{ padding: "0.35rem 0.6rem" }}
+                                  >
+                                    Reject
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })()
+                )}
+              </div>
+
+              {/* Approved Members */}
+              <div style={{ padding: "1.5rem", borderBottom: "1px solid #eee" }}>
+                <h3 style={{
+                  margin: "0 0 1rem 0",
+                  fontSize: "1.05rem",
+                  fontWeight: "600",
+                  color: "#2c2c2c",
+                }}>
+                  ✅ Approved Members
+                </h3>
+                {approvedMembersByCommunity === undefined ? (
+                  <p style={{ color: "#999" }}>Loading members...</p>
+                ) : (
+                  (() => {
+                    const approved =
+                      approvedMembersByCommunity?.find((c) => c.communityId === community.id)?.members || [];
+                    if (approved.length === 0) {
+                      return <p style={{ color: "#999" }}>No approved members.</p>;
+                    }
+                    return (
+                      <div style={{ overflowX: "auto" }}>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
+                          <thead>
+                            <tr style={{ textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>
+                              <th style={{ padding: "0.5rem" }}>Name</th>
+                              <th style={{ padding: "0.5rem" }}>Farm Name</th>
+                              <th style={{ padding: "0.5rem" }}>Phone</th>
+                              <th style={{ padding: "0.5rem" }}>District</th>
+                              <th style={{ padding: "0.5rem" }}>Approved On</th>
+                              <th style={{ padding: "0.5rem" }}>Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {approved.map((member: any) => (
+                              <tr key={member.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                                <td style={{ padding: "0.5rem" }}>{member.form?.section1?.farmerFullName || member.farmer?.alias || "-"}</td>
+                                <td style={{ padding: "0.5rem" }}>{member.form?.section1?.farmName || "-"}</td>
+                                <td style={{ padding: "0.5rem" }}>{member.form?.section1?.phoneNumber || member.farmer?.phoneNumber || "-"}</td>
+                                <td style={{ padding: "0.5rem" }}>{member.form?.section1?.districtSubCounty || member.farmer?.districtText || "-"}</td>
+                                <td style={{ padding: "0.5rem" }}>{member.joinedAt ? new Date(member.joinedAt).toLocaleString() : "-"}</td>
+                                <td style={{ padding: "0.5rem" }}>
+                                  <button
+                                    onClick={async () => {
+                                      if (!member.applicationId) {
+                                        setMessage({ type: "error", text: "No application linked for this member." });
+                                        return;
+                                      }
+                                      try {
+                                        await revokeMembership({ adminId: userId as any, applicationId: member.applicationId as any });
+                                        setMessage({ type: "success", text: "Membership revoked." });
+                                      } catch (error: any) {
+                                        setMessage({ type: "error", text: error?.message || "Failed to revoke" });
+                                      }
+                                    }}
+                                    style={{ padding: "0.35rem 0.6rem" }}
+                                  >
+                                    Revoke
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })()
+                )}
               </div>
 
               {/* Members Section */}

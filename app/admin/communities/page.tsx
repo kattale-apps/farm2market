@@ -69,11 +69,15 @@ export default function CommunitiesPage() {
   const deleteCommunity = useMutation(api.communities.deleteCommunity);
 
   // Get assigned admin name by finding which admin has this community in assignedCommunityIds
-  const getAssignedAdminInfo = (communityId: string) => {
+  const getAssignedAdminInfo = (communityId: string, communityAdminId?: string) => {
     if (!allAdmins || !communityId) return { alias: "Unassigned", email: "" };
-    const admin = allAdmins.find((a: any) => 
-      a.role === "admin" && 
-      Array.isArray(a.assignedCommunityIds) && 
+    if (communityAdminId) {
+      const direct = allAdmins.find((a: any) => a._id === communityAdminId || a.userId === communityAdminId);
+      if (direct) return { alias: direct.alias, email: direct.email };
+    }
+    const admin = allAdmins.find((a: any) =>
+      a.role === "admin" &&
+      Array.isArray(a.assignedCommunityIds) &&
       a.assignedCommunityIds.some((id: any) => id === communityId)
     );
     return admin ? { alias: admin.alias, email: admin.email } : { alias: "Unassigned", email: "" };
@@ -208,7 +212,7 @@ export default function CommunitiesPage() {
                   Assigned Community Admin:{" "}
                   <strong>
                     {(() => {
-                      const adminInfo = getAssignedAdminInfo(community.id);
+                      const adminInfo = getAssignedAdminInfo(community.id, (community as any).communityAdminId);
                       return adminInfo.alias === "Unassigned" 
                         ? "Unassigned" 
                         : `${adminInfo.alias} (${adminInfo.email})`;
@@ -369,7 +373,8 @@ export default function CommunitiesPage() {
               <p style={{ margin: 0, fontSize: "0.9rem", color: "#555" }}>
                 <strong>Currently Assigned Admin:</strong>{" "}
                 {(() => {
-                  const adminInfo = getAssignedAdminInfo(editingCommunityId);
+                  const currentCommunity = (communities || []).find((c: any) => c.id === editingCommunityId);
+                  const adminInfo = getAssignedAdminInfo(editingCommunityId, currentCommunity?.communityAdminId);
                   return adminInfo.alias === "Unassigned" 
                     ? "Unassigned" 
                     : `${adminInfo.alias} (${adminInfo.email})`;

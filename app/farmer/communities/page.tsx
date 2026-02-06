@@ -37,9 +37,17 @@ export default function FarmerCommunitiesPage() {
   const [userId, setUserId] = useState<Id<"users"> | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
+  const [selectedCommunityId, setSelectedCommunityId] = useState<Id<"communities"> | null>(null);
   const agroFreshCommunityId = process.env.NEXT_PUBLIC_AGROFRESH_COMMUNITY_ID;
   const communities = useQuery(api.communities.getActiveCommunities, userId ? { userId } : "skip");
   const myDrafts = useQuery(api.farmValidation.getMyDrafts, userId ? { farmerId: userId } : "skip");
+  const latestForm = useQuery(api.farmValidation.getLatestFormForFarmer, userId ? { farmerId: userId } : "skip");
+  const latestApplicationStatus = useQuery(
+    (api as any).communityApplications.getMyApplicationStatus,
+    latestForm?._id && userId
+      ? { farmerId: userId, formId: latestForm._id }
+      : "skip"
+  );
   const joinCommunity = useMutation(api.communities.joinCommunity);
   const leaveCommunity = useMutation(api.communities.leaveCommunity);
   const createNewValidation = useMutation(api.farmValidation.createNewDraft) as (
@@ -76,6 +84,13 @@ export default function FarmerCommunitiesPage() {
     const nameKey = normalizeCommunityKey(community.name);
     const descriptionKey = normalizeCommunityKey(community.description);
     return nameKey.includes("agrofresh") || descriptionKey.includes("agrofresh");
+  };
+
+  const getCommunityStatus = (community: { id: Id<"communities">; name?: string; description?: string; isMember?: boolean }) => {
+    if (isAgroFreshCommunity(community)) {
+      return latestApplicationStatus?.status || (latestForm?.status === "SUBMITTED" ? "PENDING" : "DRAFT");
+    }
+    return community.isMember ? "APPROVED" : "NOT_MEMBER";
   };
 
   const getLatestDraftId = () => {
@@ -174,14 +189,24 @@ export default function FarmerCommunitiesPage() {
             marginTop: 24,
           }}
         >
-          <Link href="/farmer/profile" style={{
-            fontSize: "0.9rem",
-            color: "#1976d2",
-            textDecoration: "none",
-            marginBottom: "1rem",
-            display: "inline-block",
-          }}>
-            ← Back to Profile
+          <Link
+            href="/"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              padding: "0.65rem 1.1rem",
+              borderRadius: "999px",
+              background: "#ffffff",
+              color: "#1b5e20",
+              textDecoration: "none",
+              fontWeight: 700,
+              border: "1px solid #e0e0e0",
+              boxShadow: "0 2px 10px rgba(0,0,0,0.08)",
+              marginBottom: "1rem",
+            }}
+          >
+            ← Back to Home
           </Link>
           <h1 style={{
             fontSize: "clamp(1.8rem, 5vw, 2.2rem)",
@@ -261,6 +286,7 @@ export default function FarmerCommunitiesPage() {
                   display: "flex",
                   flexDirection: "column",
                   height: "100%",
+                  position: "relative",
                   borderTop: community.isMember ? "2.5px solid #388e3c" : "2px solid #c5e1a5",
                   borderLeft: community.isMember ? "2.5px solid #388e3c" : "2px solid #c5e1a5",
                   borderRight: community.isMember ? "2.5px solid #388e3c" : "2px solid #c5e1a5",
@@ -272,41 +298,62 @@ export default function FarmerCommunitiesPage() {
                     : community.geoLocked
                     ? "0 0 16px 4px #fbc02d55, 0 6px 24px rgba(76,175,80,0.10)"
                     : "0 0 16px 4px #8bc34a55, 0 6px 24px rgba(76,175,80,0.10)",
+                  cursor: "pointer",
+                  outline: selectedCommunityId === community.id ? "3px solid #1976d2" : "none",
+                }}
+                onClick={() => {
+                  setSelectedCommunityId((prev) => (prev === community.id ? null : community.id));
                 }}
               >
-                {/* Card Header */}
-                <div style={{
-                  padding: "1.5rem",
-                  background: community.isMember ? "#e8f5e9" : community.isGlobal ? "#f1f8e9" : community.geoLocked ? "#fffde7" : "#f9fbe7",
-                  borderBottom: `2.5px solid ${community.isMember ? "#388e3c" : community.isGlobal ? "#43a047" : community.geoLocked ? "#fbc02d" : "#8bc34a"}`,
-                }}>
-                  <h3 style={{
-                    margin: "0 0 0.5rem 0",
-                    fontSize: "1.3rem",
-                    fontFamily: '"Montserrat", sans-serif',
-                    fontWeight: "700",
-                    color: "#2c2c2c",
+                <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", height: "100%" }}>
+                  {/* Card Header */}
+                  <div style={{
+                    padding: "1.5rem",
+                    background: community.isMember ? "#e8f5e9" : community.isGlobal ? "#f1f8e9" : community.geoLocked ? "#fffde7" : "#f9fbe7",
+                    borderBottom: `2.5px solid ${community.isMember ? "#388e3c" : community.isGlobal ? "#43a047" : community.geoLocked ? "#fbc02d" : "#8bc34a"}`,
                   }}>
-                    {community.name}
-                  </h3>
-                  {community.description && (
-                    <p style={{
-                      margin: "0",
-                      fontSize: "0.9rem",
-                      color: "#666",
-                      lineHeight: "1.4",
+                    <h3 style={{
+                      margin: "0 0 0.5rem 0",
+                      fontSize: "1.3rem",
+                      fontFamily: '"Montserrat", sans-serif',
+                      fontWeight: "700",
+                      color: "#2c2c2c",
                     }}>
-                      {community.description}
-                    </p>
-                  )}
-                </div>
+                      {community.name}
+                    </h3>
+                    {community.description && (
+                      <p style={{
+                        margin: "0",
+                        fontSize: "0.9rem",
+                        color: "#666",
+                        lineHeight: "1.4",
+                      }}>
+                        {community.description}
+                      </p>
+                    )}
+                  </div>
 
-                {/* Card Body */}
-                <div style={{
-                  padding: "1.5rem",
-                  flex: "1",
-                }}>
-                  <div style={{ marginBottom: "1rem" }}>
+                  {/* Card Body */}
+                  <div style={{
+                    padding: "1.5rem",
+                    flex: "1",
+                    position: "relative",
+                  }}>
+                    {(community.logoPath || isAgroFreshCommunity(community)) && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          inset: 0,
+                          backgroundImage: `url('${community.logoPath || "/agrofreshlogo.png"}')`,
+                          backgroundSize: "cover",
+                          backgroundPosition: "center",
+                          backgroundRepeat: "no-repeat",
+                          opacity: 0.08,
+                          pointerEvents: "none",
+                        }}
+                      />
+                    )}
+                    <div style={{ marginBottom: "1rem" }}>
                     <p style={{
                       margin: "0.5rem 0",
                       fontSize: "0.9rem",
@@ -342,92 +389,172 @@ export default function FarmerCommunitiesPage() {
                         ✓ You are a member
                       </p>
                     )}
+                    {isAgroFreshCommunity(community) && latestForm && (
+                      <div style={{
+                        marginTop: "0.75rem",
+                        padding: "0.75rem",
+                        borderRadius: 10,
+                        background: "#ffffff",
+                        border: "1px solid #e0e0e0",
+                      }}>
+                        <div style={{ fontWeight: 700, color: "#2e7d32" }}>AGROFRESH UG Form</div>
+                        <div style={{ fontSize: "0.9rem", color: "#555", marginTop: 4 }}>
+                          Status: {latestApplicationStatus?.status || "DRAFT"}
+                        </div>
+                        <div style={{ fontSize: "0.85rem", color: "#777", marginTop: 4 }}>
+                          Last updated: {latestForm.updatedAt ? new Date(latestForm.updatedAt).toLocaleString() : "-"}
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/farm-validation/${latestForm._id}`);
+                          }}
+                          style={{
+                            marginTop: "0.5rem",
+                            padding: "0.5rem 0.8rem",
+                            borderRadius: 8,
+                            background: "#1976d2",
+                            color: "#fff",
+                            border: "none",
+                            fontSize: "0.85rem",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                          }}
+                        >
+                          View Form
+                        </button>
+                      </div>
+                    )}
                   </div>
-                </div>
 
-                {/* Card Footer */}
-                <div style={{
-                  padding: "1.5rem",
-                  borderTop: "1px solid #eee",
-                  display: "flex",
-                  gap: "1rem",
-                }}>
-                  {/* Always show buttons for debug if isMember is missing */}
-                  {typeof community.isMember === "boolean" ? (
-                    !community.isMember ? (
-                      <button
-                        onClick={() => handleJoinCommunity({ id: community.id, name: community.name })}
-                        disabled={loadingAction === `join-${community.id}`}
-                        style={{
-                          flex: 1,
-                          padding: "0.75rem 1.5rem",
-                          background: "#4caf50",
-                          color: "#fff",
-                          border: "none",
-                          borderRadius: "8px",
-                          fontSize: "0.95rem",
-                          fontWeight: "600",
-                          cursor: loadingAction === `join-${community.id}` ? "not-allowed" : "pointer",
-                          opacity: loadingAction === `join-${community.id}` ? 0.6 : 1,
-                          transition: "all 0.3s ease",
-                        }}
-                        onMouseEnter={(e) => {
-                          if (loadingAction !== `join-${community.id}`) {
-                            (e.target as HTMLButtonElement).style.background = "#45a049";
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (loadingAction !== `join-${community.id}`) {
-                            (e.target as HTMLButtonElement).style.background = "#4caf50";
-                          }
-                        }}
-                      >
-                        {loadingAction === `join-${community.id}` ? "Joining..." : "Join Community"}
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => handleLeaveCommunity(community.id)}
-                        disabled={loadingAction === `leave-${community.id}`}
-                        style={{
-                          flex: 1,
-                          padding: "0.75rem 1.5rem",
-                          background: "#f44336",
-                          color: "#fff",
-                          border: "none",
-                          borderRadius: "8px",
-                          fontSize: "0.95rem",
-                          fontWeight: "600",
-                          cursor: loadingAction === `leave-${community.id}` ? "not-allowed" : "pointer",
-                          opacity: loadingAction === `leave-${community.id}` ? 0.6 : 1,
-                          transition: "all 0.3s ease",
-                        }}
-                        onMouseEnter={(e) => {
-                          if (loadingAction !== `leave-${community.id}`) {
-                            (e.target as HTMLButtonElement).style.background = "#da190b";
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (loadingAction !== `leave-${community.id}`) {
-                            (e.target as HTMLButtonElement).style.background = "#f44336";
-                          }
-                        }}
-                      >
-                        {loadingAction === `leave-${community.id}` ? "Leaving..." : "Leave Community"}
-                      </button>
-                    )
-                  ) : (
-                    <div style={{ color: "#ff9800", fontWeight: 600 }}>
-                      [Debug] isMember missing - showing both buttons
-                      <button
-                        onClick={() => handleJoinCommunity({ id: community.id, name: community.name })}
-                        style={{ marginRight: 8, background: "#4caf50", color: "#fff", border: "none", borderRadius: 8, padding: "0.5rem 1rem" }}
-                      >Join Community</button>
-                      <button
-                        onClick={() => handleLeaveCommunity(community.id)}
-                        style={{ background: "#f44336", color: "#fff", border: "none", borderRadius: 8, padding: "0.5rem 1rem" }}
-                      >Leave Community</button>
+                  {selectedCommunityId === community.id && (
+                    <div style={{
+                      marginTop: "1rem",
+                      padding: "1rem",
+                      borderRadius: 12,
+                      background: "#ffffff",
+                      border: "1px solid #e5e7eb",
+                    }}>
+                      <div style={{ fontWeight: 700, color: "#1b5e20", marginBottom: "0.5rem" }}>
+                        Community View
+                      </div>
+                      {getCommunityStatus(community) === "PENDING" && isAgroFreshCommunity(community) && latestForm ? (
+                        <div>
+                          <div style={{ fontWeight: 600, marginBottom: "0.5rem" }}>Pending — Your Submitted Profile</div>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "0.5rem" }}>
+                            <div><strong>Name:</strong> {latestForm.section1?.farmerFullName || "-"}</div>
+                            <div><strong>Farm:</strong> {latestForm.section1?.farmName || "-"}</div>
+                            <div><strong>Phone:</strong> {latestForm.section1?.phoneNumber || "-"}</div>
+                            <div><strong>District:</strong> {latestForm.section1?.districtSubCounty || "-"}</div>
+                            <div><strong>Village:</strong> {latestForm.section1?.village || "-"}</div>
+                            </div>
+                          </div>
+                      ) : getCommunityStatus(community) === "APPROVED" ? (
+                        <div>
+                          <div style={{ fontWeight: 600, marginBottom: "0.5rem" }}>Admin Posts</div>
+                          <div style={{ color: "#6b7280" }}>No posts yet. Community updates will appear here.</div>
+                        </div>
+                      ) : (
+                        <div style={{ color: "#6b7280" }}>Join this community to view member content.</div>
+                      )}
                     </div>
                   )}
+                </div>
+
+                  {/* Card Footer */}
+                  <div style={{
+                    padding: "1.5rem",
+                    borderTop: "1px solid #eee",
+                    display: "flex",
+                    gap: "1rem",
+                  }}>
+                    {/* Always show buttons for debug if isMember is missing */}
+                    {typeof community.isMember === "boolean" ? (
+                      !community.isMember ? (
+                        getCommunityStatus(community) === "PENDING" && isAgroFreshCommunity(community) ? (
+                          <div style={{ color: "#b45309", fontWeight: 600 }}>Pending approval</div>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleJoinCommunity({ id: community.id, name: community.name });
+                            }}
+                            disabled={loadingAction === `join-${community.id}`}
+                            style={{
+                              flex: 1,
+                              padding: "0.75rem 1.5rem",
+                              background: "#4caf50",
+                              color: "#fff",
+                              border: "none",
+                              borderRadius: "8px",
+                              fontSize: "0.95rem",
+                              fontWeight: "600",
+                              cursor: loadingAction === `join-${community.id}` ? "not-allowed" : "pointer",
+                              opacity: loadingAction === `join-${community.id}` ? 0.6 : 1,
+                              transition: "all 0.3s ease",
+                            }}
+                            onMouseEnter={(e) => {
+                              if (loadingAction !== `join-${community.id}`) {
+                                (e.target as HTMLButtonElement).style.background = "#45a049";
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (loadingAction !== `join-${community.id}`) {
+                                (e.target as HTMLButtonElement).style.background = "#4caf50";
+                              }
+                            }}
+                          >
+                            {loadingAction === `join-${community.id}` ? "Joining..." : "Join Community"}
+                          </button>
+                        )
+                      ) : (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleLeaveCommunity(community.id);
+                          }}
+                          disabled={loadingAction === `leave-${community.id}`}
+                          style={{
+                            flex: 1,
+                            padding: "0.75rem 1.5rem",
+                            background: "#f44336",
+                            color: "#fff",
+                            border: "none",
+                            borderRadius: "8px",
+                            fontSize: "0.95rem",
+                            fontWeight: "600",
+                            cursor: loadingAction === `leave-${community.id}` ? "not-allowed" : "pointer",
+                            opacity: loadingAction === `leave-${community.id}` ? 0.6 : 1,
+                            transition: "all 0.3s ease",
+                          }}
+                          onMouseEnter={(e) => {
+                            if (loadingAction !== `leave-${community.id}`) {
+                              (e.target as HTMLButtonElement).style.background = "#da190b";
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (loadingAction !== `leave-${community.id}`) {
+                              (e.target as HTMLButtonElement).style.background = "#f44336";
+                            }
+                          }}
+                        >
+                          {loadingAction === `leave-${community.id}` ? "Leaving..." : "Leave Community"}
+                        </button>
+                      )
+                    ) : (
+                      <div style={{ color: "#ff9800", fontWeight: 600 }}>
+                        [Debug] isMember missing - showing both buttons
+                        <button
+                          onClick={() => handleJoinCommunity({ id: community.id, name: community.name })}
+                          style={{ marginRight: 8, background: "#4caf50", color: "#fff", border: "none", borderRadius: 8, padding: "0.5rem 1rem" }}
+                        >Join Community</button>
+                        <button
+                          onClick={() => handleLeaveCommunity(community.id)}
+                          style={{ background: "#f44336", color: "#fff", border: "none", borderRadius: 8, padding: "0.5rem 1rem" }}
+                        >Leave Community</button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}

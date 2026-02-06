@@ -5,8 +5,6 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import * as XLSX from "xlsx";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 import { formatUgandaDate } from "../utils/dateUtils";
 
 /* ───────────────── Types ───────────────── */
@@ -125,7 +123,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
 
   /* ───────────── Export Logic ───────────── */
 
-  const handleExport = async (type: "excel" | "pdf") => {
+  const handleExport = async (type: "excel") => {
     if (!communityMembers || !selectedCommunityId) return;
 
     const community = communities?.find(
@@ -148,6 +146,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
         Joined: entry.joinedAt ? formatUgandaDate(entry.joinedAt) : "-",
         UpdatedAt: entry.updatedAt ? formatUgandaDate(entry.updatedAt) : "-",
         Alias: farmer.alias ?? "-",
+        Sex: section1.sex ?? farmer.sex ?? "",
         Email: section1.emailAddress ?? farmer.email ?? "-",
         Phone: section1.phoneNumber ?? farmer.phoneNumber ?? "-",
         Region: section1.region ?? farmer.region ?? "",
@@ -251,25 +250,12 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
       };
     });
 
-    if (type === "excel") {
-      const ws = XLSX.utils.json_to_sheet(rows);
-      const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
-      ws["!cols"] = headers.map((h) => ({ wch: Math.max(14, h.length + 2) }));
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Members");
-      XLSX.writeFile(wb, `${name}_Members.xlsx`);
-    } else {
-      const doc = new jsPDF();
-      doc.text(`${name} Members`, 14, 15);
-      const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
-      autoTable(doc, {
-        head: [headers],
-        body: rows.map((r) => Object.values(r)),
-        startY: 20,
-        styles: { fontSize: 6 },
-      });
-      doc.save(`${name}_Members.pdf`);
-    }
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
+    ws["!cols"] = headers.map((h) => ({ wch: Math.max(14, h.length + 2) }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Members");
+    XLSX.writeFile(wb, `${name}_Members.xlsx`);
   };
 
   /* ───────────────── UI ───────────────── */
@@ -566,19 +552,6 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                     }}
                   >
                     Export Excel
-                  </button>
-                  <button
-                    onClick={() => handleExport("pdf")}
-                    style={{
-                      background: "#d32f2f",
-                      color: "#fff",
-                      padding: "0.5rem 1rem",
-                      borderRadius: 6,
-                      border: "none",
-                      fontWeight: 600,
-                    }}
-                  >
-                    Export PDF
                   </button>
                 </div>
               </div>

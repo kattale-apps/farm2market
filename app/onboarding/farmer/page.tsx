@@ -196,6 +196,7 @@ export default function FarmerOnboardingPage() {
     try {
       const result = await completeOnboarding({
         farmerId: userId,
+        region: selectedRegion?.label || selectedRegionKey,
         districtId: selectedDistrictId as Id<"districts">,
         subcountyId: selectedSubcountyId as Id<"subcounties">,
         parishId: selectedParishId as Id<"parishes">,

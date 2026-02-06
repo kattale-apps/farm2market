@@ -271,40 +271,44 @@ export default function FarmerCommunitiesPage() {
             }}
             className="farmer-communities-grid"
           >
-            {communities.map((community) => (
-              <div
-                key={community.id}
-                style={{
-                  background: community.isGlobal
-                    ? "linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)"
-                    : community.geoLocked
-                    ? "linear-gradient(135deg, #fffde7 0%, #f9fbe7 100%)"
-                    : "linear-gradient(135deg, #f1f8e9 0%, #dcedc8 100%)",
-                  borderRadius: "18px",
-                  overflow: "hidden",
-                  transition: "all 0.3s ease",
-                  display: "flex",
-                  flexDirection: "column",
-                  height: "100%",
-                  position: "relative",
-                  borderTop: community.isMember ? "2.5px solid #388e3c" : "2px solid #c5e1a5",
-                  borderLeft: community.isMember ? "2.5px solid #388e3c" : "2px solid #c5e1a5",
-                  borderRight: community.isMember ? "2.5px solid #388e3c" : "2px solid #c5e1a5",
-                  borderBottom: community.isGlobal ? "4px solid #43a047" : community.geoLocked ? "4px solid #fbc02d" : "4px solid #8bc34a",
-                  boxShadow: community.isMember
-                    ? "0 0 16px 4px #43a04799, 0 6px 24px rgba(76,175,80,0.10)"
-                    : community.isGlobal
-                    ? "0 0 16px 4px #43a04755, 0 6px 24px rgba(76,175,80,0.10)"
-                    : community.geoLocked
-                    ? "0 0 16px 4px #fbc02d55, 0 6px 24px rgba(76,175,80,0.10)"
-                    : "0 0 16px 4px #8bc34a55, 0 6px 24px rgba(76,175,80,0.10)",
-                  cursor: "pointer",
-                  outline: selectedCommunityId === community.id ? "3px solid #1976d2" : "none",
-                }}
-                onClick={() => {
-                  setSelectedCommunityId((prev) => (prev === community.id ? null : community.id));
-                }}
-              >
+            {communities.map((community) => {
+              const headerLogo =
+                community.logoPath || (isAgroFreshCommunity(community) ? "/agrofreshlogo.png" : "");
+
+              return (
+                <div
+                  key={community.id}
+                  style={{
+                    background: community.isGlobal
+                      ? "linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)"
+                      : community.geoLocked
+                      ? "linear-gradient(135deg, #fffde7 0%, #f9fbe7 100%)"
+                      : "linear-gradient(135deg, #f1f8e9 0%, #dcedc8 100%)",
+                    borderRadius: "18px",
+                    overflow: "hidden",
+                    transition: "all 0.3s ease",
+                    display: "flex",
+                    flexDirection: "column",
+                    height: "100%",
+                    position: "relative",
+                    borderTop: community.isMember ? "2.5px solid #388e3c" : "2px solid #c5e1a5",
+                    borderLeft: community.isMember ? "2.5px solid #388e3c" : "2px solid #c5e1a5",
+                    borderRight: community.isMember ? "2.5px solid #388e3c" : "2px solid #c5e1a5",
+                    borderBottom: community.isGlobal ? "4px solid #43a047" : community.geoLocked ? "4px solid #fbc02d" : "4px solid #8bc34a",
+                    boxShadow: community.isMember
+                      ? "0 0 16px 4px #43a04799, 0 6px 24px rgba(76,175,80,0.10)"
+                      : community.isGlobal
+                      ? "0 0 16px 4px #43a04755, 0 6px 24px rgba(76,175,80,0.10)"
+                      : community.geoLocked
+                      ? "0 0 16px 4px #fbc02d55, 0 6px 24px rgba(76,175,80,0.10)"
+                      : "0 0 16px 4px #8bc34a55, 0 6px 24px rgba(76,175,80,0.10)",
+                    cursor: "pointer",
+                    outline: selectedCommunityId === community.id ? "3px solid #1976d2" : "none",
+                  }}
+                  onClick={() => {
+                    setSelectedCommunityId((prev) => (prev === community.id ? null : community.id));
+                  }}
+                >
                 <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", height: "100%" }}>
                   {/* Card Header */}
                   <div style={{
@@ -312,25 +316,52 @@ export default function FarmerCommunitiesPage() {
                     background: community.isMember ? "#e8f5e9" : community.isGlobal ? "#f1f8e9" : community.geoLocked ? "#fffde7" : "#f9fbe7",
                     borderBottom: `2.5px solid ${community.isMember ? "#388e3c" : community.isGlobal ? "#43a047" : community.geoLocked ? "#fbc02d" : "#8bc34a"}`,
                   }}>
-                    <h3 style={{
-                      margin: "0 0 0.5rem 0",
-                      fontSize: "1.3rem",
-                      fontFamily: '"Montserrat", sans-serif',
-                      fontWeight: "700",
-                      color: "#2c2c2c",
-                    }}>
-                      {community.name}
-                    </h3>
-                    {community.description && (
-                      <p style={{
-                        margin: "0",
-                        fontSize: "0.9rem",
-                        color: "#666",
-                        lineHeight: "1.4",
-                      }}>
-                        {community.description}
-                      </p>
-                    )}
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                      {headerLogo && (
+                        <div
+                          style={{
+                            width: 52,
+                            height: 52,
+                            borderRadius: "50%",
+                            background: "#ffffff",
+                            border: "2px solid #43a047",
+                            boxShadow: "0 0 0 4px rgba(67,160,71,0.25), 0 10px 18px rgba(67,160,71,0.35)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            overflow: "hidden",
+                            flexShrink: 0,
+                          }}
+                        >
+                          <img
+                            src={headerLogo}
+                            alt={`${community.name} logo`}
+                            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                          />
+                        </div>
+                      )}
+                      <div>
+                        <h3 style={{
+                          margin: "0 0 0.5rem 0",
+                          fontSize: "1.3rem",
+                          fontFamily: '"Montserrat", sans-serif',
+                          fontWeight: "700",
+                          color: "#2c2c2c",
+                        }}>
+                          {community.name}
+                        </h3>
+                        {community.description && (
+                          <p style={{
+                            margin: "0",
+                            fontSize: "0.9rem",
+                            color: "#666",
+                            lineHeight: "1.4",
+                          }}>
+                            {community.description}
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   </div>
 
                   {/* Card Body */}
@@ -557,7 +588,8 @@ export default function FarmerCommunitiesPage() {
                   </div>
                 </div>
               </div>
-            ))}
+            );
+            })}
           </div>
         )}
       </div>

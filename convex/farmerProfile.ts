@@ -47,6 +47,7 @@ export const getFarmerProfile = query({
       email: farmer.email,
       phoneNumber: farmer.phoneNumber,
       sex: farmer.sex,
+      region: farmer.region,
       county: farmer.county,
       village: farmer.village,
       waterSource: farmer.waterSource,
@@ -80,6 +81,7 @@ export const updateFarmerProfile = mutation({
     phoneNumber: v.optional(v.string()),
     email: v.optional(v.string()),
     sex: v.optional(v.union(v.literal("M"), v.literal("F"))),
+    region: v.optional(v.string()),
     county: v.optional(v.string()),
     village: v.optional(v.string()),
     waterSource: v.optional(v.string()),
@@ -135,6 +137,9 @@ export const updateFarmerProfile = mutation({
     }
     if (args.sex !== undefined) {
       updates.sex = args.sex;
+    }
+    if (args.region !== undefined) {
+      updates.region = args.region.trim() || undefined;
     }
     if (args.county !== undefined) {
       updates.county = args.county.trim() || undefined;

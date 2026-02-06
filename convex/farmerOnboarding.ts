@@ -70,6 +70,7 @@ export const checkOnboardingStatus = query({
       completed,
       hasLocation,
       hasFarmSize,
+      region: farmer.region,
       districtId: farmer.districtId,
       subcountyId: farmer.subcountyId,
       parishId: farmer.parishId,
@@ -85,6 +86,7 @@ export const checkOnboardingStatus = query({
 export const completeOnboarding = mutation({
   args: {
     farmerId: v.id("users"),
+    region: v.string(),
     districtId: v.id("districts"),
     subcountyId: v.id("subcounties"),
     parishId: v.id("parishes"),
@@ -130,6 +132,7 @@ export const completeOnboarding = mutation({
 
     // Update farmer profile
     await ctx.db.patch(args.farmerId, {
+      region: args.region,
       districtId: args.districtId,
       subcountyId: args.subcountyId,
       parishId: args.parishId,

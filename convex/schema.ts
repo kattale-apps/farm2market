@@ -68,6 +68,7 @@ export default defineSchema({
     serviceLevel: v.optional(v.union(v.literal("Standard"), v.literal("Premium"))), // Service tier for community admins (Standard = 5 exports/month, Premium = unlimited). Only applies to community admins.
     exportLimit: v.optional(v.number()), // Max number of exports per month for admin (super/junior)
     // Location and farm profile (for farmers)
+    region: v.optional(v.string()), // Region selected during onboarding
     districtId: v.optional(v.id("districts")), // District where farmer is located
     subcountyId: v.optional(v.id("subcounties")), // Subcounty where farmer is located
     parishId: v.optional(v.id("parishes")), // Parish where farmer is located

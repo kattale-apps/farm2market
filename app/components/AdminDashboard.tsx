@@ -7,6 +7,78 @@ import { Id } from "../../convex/_generated/dataModel";
 import * as XLSX from "xlsx";
 import { formatUgandaDate } from "../utils/dateUtils";
 
+const REGION_GROUPS: { label: string; districts: string[] }[] = [
+  {
+    label: "Central (Buganda)",
+    districts: [
+      "Kampala", "Wakiso", "Mukono", "Buikwe", "Kayunga",
+      "Luweero", "Nakaseke", "Nakasongola", "Mityana", "Kiboga",
+      "Mpigi", "Butambala", "Gomba", "Masaka",
+      "Lwengo", "Kalungu", "Bukomansimbi", "Sembabule", "Lyantonde",
+      "Rakai", "Kyotera", "Mubende", "Kassanda",
+    ],
+  },
+  {
+    label: "Eastern (Busoga)",
+    districts: ["Jinja", "Mayuge", "Iganga", "Bugiri", "Namayingo", "Buyende", "Kaliro", "Kamuli", "Luuka", "Namutumba"],
+  },
+  {
+    label: "Eastern (Teso)",
+    districts: ["Soroti", "Kaberamaido", "Serere", "Kalaki", "Amuria", "Katakwi", "Kumi", "Bukedea", "Ngora", "Kapelebyong"],
+  },
+  {
+    label: "Eastern (Elgon)",
+    districts: ["Mbale", "Manafwa", "Bududa", "Sironko", "Bulambuli", "Bungokho"],
+  },
+  {
+    label: "Eastern (Other)",
+    districts: ["Tororo", "Busia", "Butaleja", "Budaka", "Pallisa", "Kibuku", "Butebo"],
+  },
+  {
+    label: "Northern (Acholi)",
+    districts: ["Gulu", "Nwoya", "Amuru", "Pader", "Kitgum", "Lamwo", "Agago", "Omoro"],
+  },
+  {
+    label: "Northern (Lango)",
+    districts: ["Lira", "Dokolo", "Alebtong", "Oyam", "Apac", "Kole", "Amolatar", "Kwania"],
+  },
+  {
+    label: "Northern (West Nile)",
+    districts: ["Arua", "Moyo", "Adjumani", "Yumbe", "Koboko", "Maracha", "Terego", "Zombo", "Nebbi", "Pakwach"],
+  },
+  {
+    label: "Northern (Karamoja)",
+    districts: ["Moroto", "Kotido", "Kaabong", "Abim", "Nakapiripirit", "Napak", "Amudat", "Nabilatuk", "Karenga"],
+  },
+  {
+    label: "Western (Tooro)",
+    districts: ["Fort Portal", "Kabarole", "Kamwenge", "Kyenjojo", "Kyegegwa", "Bunyangabu"],
+  },
+  {
+    label: "Western (Bunyoro)",
+    districts: ["Hoima", "Kikuube", "Masindi", "Kiryandongo", "Buliisa", "Kagadi", "Kakumiro", "Kyankwanzi"],
+  },
+  {
+    label: "Western (Ankole)",
+    districts: ["Mbarara", "Isingiro", "Ntungamo", "Bushenyi", "Sheema", "Mitooma", "Rubirizi", "Buhweju", "Rukungiri", "Kanungu"],
+  },
+  {
+    label: "Western (Kigezi)",
+    districts: ["Kabale", "Kisoro", "Rukiga"],
+  },
+];
+
+const normalizeDistrict = (value?: string) => (value || "").trim().toLowerCase();
+
+const getRegionLabel = (districtName?: string) => {
+  const normalized = normalizeDistrict(districtName);
+  if (!normalized) return "";
+  const match = REGION_GROUPS.find((group) =>
+    group.districts.some((d) => normalizeDistrict(d) === normalized)
+  );
+  return match?.label ?? "";
+};
+
 /* ───────────────── Types ───────────────── */
 
 interface AdminDashboardProps {
@@ -149,7 +221,11 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
         Sex: section1.sex ?? farmer.sex ?? "",
         Email: section1.emailAddress ?? farmer.email ?? "-",
         Phone: section1.phoneNumber ?? farmer.phoneNumber ?? "-",
-        Region: section1.region ?? farmer.region ?? "",
+        Region:
+          section1.region ??
+          farmer.region ??
+          getRegionLabel(section1.districtSubCounty ?? section1.district ?? farmer.districtText) ??
+          "",
         District: section1.districtSubCounty ?? section1.district ?? farmer.districtText ?? "",
         County: section1.county ?? farmer.county ?? "",
         Subcounty: section1.subCounty ?? section1.districtSubCounty ?? farmer.subCountyText ?? "",

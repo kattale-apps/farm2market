@@ -33,7 +33,7 @@ export function CameraCapture({ formId, field, onUploadComplete }: Props) {
       setStream(mediaStream);
     } catch (err) {
       console.error("Camera access denied:", err);
-      setError("Camera access is required. Please enable it in your browser settings.");
+      setError("Camera access is required. Please enable it in your settings.");
     }
   }, []);
 

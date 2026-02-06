@@ -4,11 +4,22 @@ import { verifyAdminRole } from "./auth";
 import { Id } from "./_generated/dataModel";
 
 const COMMUNITY_NAME = "AGROFRESH UG";
+const KNOWN_AGROFRESH_ID = "ms7d11zfqswjbcvqer43pdzf6x80aate";
 
 const normalizeCommunityName = (value?: string) =>
   (value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
 async function getAgroFreshCommunityId(ctx: any): Promise<Id<"communities">> {
+  // Prioritize the known ID if it exists and matches the name
+  try {
+    const known = await ctx.db.get(KNOWN_AGROFRESH_ID as Id<"communities">);
+    if (known && normalizeCommunityName(known.name) === normalizeCommunityName(COMMUNITY_NAME)) {
+      return known._id;
+    }
+  } catch (e) {
+    // Ignore invalid ID errors
+  }
+
   const communities = await ctx.db.query("communities").collect();
   const target = normalizeCommunityName(COMMUNITY_NAME);
   const exactMatch = communities.find(
@@ -58,7 +69,7 @@ export const getPaginatedApplications = query({
       const isDirectAdmin = community?.communityAdminId === adminId;
       const isAssigned = assigned.some((id: string) => id === communityId);
       if (!isAssigned && !isDirectAdmin) {
-        throw new Error("Not authorized for this community");
+        throw new Error(`Not authorized. Admin not assigned to community ${communityId}`);
       }
     }
 
@@ -606,5 +617,28 @@ export const getExportData = query({
         form,
       };
     });
+  },
+});
+
+/**
+ * Sync admin to AgroFresh community
+ * Helper to ensure the admin is correctly assigned to the resolved community ID
+ */
+export const syncAgroFreshAdmin = mutation({
+  args: { adminId: v.id("users") },
+  handler: async (ctx, { adminId }) => {
+    const admin = await ctx.db.get(adminId);
+    if (!admin) throw new Error("Admin not found");
+
+    const communityId = await getAgroFreshCommunityId(ctx);
+    const assigned = (admin as any).assignedCommunityIds || [];
+    
+    if (!assigned.some((id: string) => id === communityId)) {
+      await ctx.db.patch(adminId, {
+        assignedCommunityIds: [...assigned, communityId],
+      });
+      return { success: true, message: "Admin synchronized", communityId };
+    }
+    return { success: true, message: "Already synchronized", communityId };
   },
 });

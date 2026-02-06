@@ -160,6 +160,85 @@ export const getPaginatedApplications = query({
   },
 });
 
+export const getCommunityMemberExportData = query({
+  args: {
+    adminId: v.id("users"),
+    communityId: v.id("communities"),
+    status: v.optional(
+      v.union(
+        v.literal("PENDING"),
+        v.literal("APPROVED"),
+        v.literal("REJECTED"),
+        v.literal("REVOKED")
+      )
+    ),
+  },
+  handler: async (ctx, { adminId, communityId, status }) => {
+    const adminCheck = await verifyAdminRole({ userId: adminId, db: ctx.db });
+    if (!adminCheck.authorized) {
+      throw new Error("Not authorized");
+    }
+
+    const adminUser = await ctx.db.get(adminId);
+    if (!adminUser) {
+      throw new Error("Admin not found");
+    }
+
+    const isSuperAdmin = adminUser.adminLevel === "super" || adminUser.adminLevel === undefined;
+    if (!isSuperAdmin && adminUser.adminCategory === "community") {
+      const community = await ctx.db.get(communityId);
+      const assigned = (adminUser as any).assignedCommunityIds || [];
+      const isDirectAdmin = community?.communityAdminId === adminId;
+      const isAssigned = assigned.some((id: string) => id === communityId);
+      if (!isAssigned && !isDirectAdmin) {
+        throw new Error("Forbidden");
+      }
+    } else if (!isSuperAdmin && adminUser.adminCategory !== "community") {
+      throw new Error("Forbidden");
+    }
+
+    const members = await ctx.db
+      .query("communityMembers")
+      .withIndex("by_community", (q: any) => q.eq("communityId", communityId))
+      .collect();
+
+    const filtered = status ? members.filter((m: any) => m.status === status) : members;
+
+    const applications: any[] = await Promise.all(
+      filtered.map((m: any) => (m.applicationId ? ctx.db.get(m.applicationId) : null))
+    );
+
+    const formIds = Array.from(
+      new Set(applications.map((a: any) => (a as any)?.formId).filter(Boolean))
+    ) as Id<"agroFreshUGFarmValidations">[];
+
+    const farmerIds = Array.from(
+      new Set(filtered.map((m: any) => m.farmerId))
+    ) as Id<"users">[];
+
+    const forms = await Promise.all(formIds.map((id) => ctx.db.get(id)));
+    const farmers = await Promise.all(farmerIds.map((id) => ctx.db.get(id)));
+
+    const formById = new Map(forms.filter(Boolean).map((f: any) => [f._id, f]));
+    const farmerById = new Map(farmers.filter(Boolean).map((f: any) => [f._id, f]));
+
+    return filtered.map((m: any) => {
+      const app = applications.find((a: any) => a?._id === m.applicationId) || null;
+      const formId = (app as any)?.formId;
+      const form = formId ? formById.get(formId) : null;
+      const farmer = farmerById.get(m.farmerId) || null;
+      return {
+        status: m.status,
+        joinedAt: m.joinedAt,
+        updatedAt: m.updatedAt,
+        application: app,
+        form,
+        farmer,
+      };
+    });
+  },
+});
+
 export const getApplicationsByCommunityIds = query({
   args: {
     adminId: v.id("users"),
@@ -586,6 +665,81 @@ export const revokeMembership = mutation({
       action: "REVOKED",
       note,
     });
+
+    return { success: true };
+  },
+});
+
+export const deleteCommunityMember = mutation({
+  args: {
+    adminId: v.id("users"),
+    communityId: v.id("communities"),
+    farmerId: v.id("users"),
+    applicationId: v.optional(v.id("communityApplications")),
+  },
+  handler: async (ctx, { adminId, communityId, farmerId, applicationId }) => {
+    const adminCheck = await verifyAdminRole({ userId: adminId, db: ctx.db });
+    if (!adminCheck.authorized) {
+      throw new Error("Not authorized");
+    }
+
+    const adminUser = await ctx.db.get(adminId);
+    if (!adminUser) {
+      throw new Error("Admin not found");
+    }
+
+    const isSuperAdmin = adminUser.adminLevel === "super" || adminUser.adminLevel === undefined;
+    if (!isSuperAdmin && adminUser.adminCategory === "community") {
+      const community = await ctx.db.get(communityId);
+      const assigned = (adminUser as any).assignedCommunityIds || [];
+      const isDirectAdmin = community?.communityAdminId === adminId;
+      const isAssigned = assigned.some((id: string) => id === communityId);
+      if (!isAssigned && !isDirectAdmin) {
+        throw new Error("Forbidden");
+      }
+    } else if (!isSuperAdmin && adminUser.adminCategory !== "community") {
+      throw new Error("Forbidden");
+    }
+
+    const member = await ctx.db
+      .query("communityMembers")
+      .withIndex("by_community_farmer", (q: any) =>
+        q.eq("communityId", communityId).eq("farmerId", farmerId)
+      )
+      .first();
+
+    if (member) {
+      await ctx.db.delete(member._id);
+    }
+
+    const membership = await ctx.db
+      .query("communityMemberships")
+      .withIndex("by_community_user", (q: any) =>
+        q.eq("communityId", communityId).eq("userId", farmerId)
+      )
+      .first();
+
+    if (membership) {
+      await ctx.db.delete(membership._id);
+    }
+
+    const appId = applicationId
+      ? applicationId
+      : (await ctx.db
+          .query("communityApplications")
+          .withIndex("by_community_farmer", (q: any) =>
+            q.eq("communityId", communityId).eq("farmerId", farmerId)
+          )
+          .first())?._id;
+
+    if (appId) {
+      await ctx.db.patch(appId, {
+        status: "REVOKED",
+        decidedAt: Date.now(),
+        decidedBy: adminId,
+        updatedAt: Date.now(),
+      });
+    }
 
     return { success: true };
   },

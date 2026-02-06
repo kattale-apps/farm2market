@@ -89,6 +89,16 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
         }
       : "skip"
   );
+  const exportMembers = useQuery(
+    api.communityApplications.getCommunityMemberExportData,
+    selectedCommunityId
+      ? {
+          adminId,
+          communityId: selectedCommunityId,
+          status: memberStatusFilter === "all" ? undefined : memberStatusFilter,
+        }
+      : "skip"
+  );
 
   const selectedApplicationDetails = useQuery(
     api.communityApplications.getApplicationDetails,
@@ -102,6 +112,9 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   );
   const rejectApplication = useMutation(
     api.communityApplications.rejectApplication
+  );
+  const deleteCommunityMember = useMutation(
+    api.communityApplications.deleteCommunityMember
   );
 
   const backfillMembers = useMutation(
@@ -123,20 +136,129 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
     await logExport({
       userId: adminId,
       exportType: type,
-      dataCount: communityMembers.length,
+      dataCount: (exportMembers ?? []).length,
     });
 
-    const rows = communityMembers.map((m: any) => ({
-      Alias: m.alias ?? "-",
-      Role: m.role ?? "-",
-      Status: m.status ?? "-",
-      Phone: m.phoneNumber ?? "-",
-      Email: m.email ?? "-",
-      Joined: m.joinedAt ? formatUgandaDate(m.joinedAt) : "-",
-    }));
+    const rows = (exportMembers ?? []).map((entry: any) => {
+      const form = entry.form || {};
+      const section1 = form.section1 || {};
+      const farmer = entry.farmer || {};
+      return {
+        Status: entry.status ?? "-",
+        Joined: entry.joinedAt ? formatUgandaDate(entry.joinedAt) : "-",
+        UpdatedAt: entry.updatedAt ? formatUgandaDate(entry.updatedAt) : "-",
+        FarmerAlias: farmer.alias ?? "-",
+        FarmerEmail: farmer.email ?? "-",
+        FarmerPhone: farmer.phoneNumber ?? "-",
+        FarmerCounty: farmer.county ?? "-",
+        FarmerDistrict: farmer.districtText ?? "-",
+        FarmerSubCounty: farmer.subCountyText ?? "-",
+        FarmerVillage: farmer.village ?? "-",
+        FarmerWaterSource: farmer.waterSource ?? "-",
+        farmerFullName: section1.farmerFullName ?? "",
+        farmName: section1.farmName ?? "",
+        phoneNumber: section1.phoneNumber ?? "",
+        emailAddress: section1.emailAddress ?? "",
+        county: section1.county ?? "",
+        districtSubCounty: section1.districtSubCounty ?? "",
+        village: section1.village ?? "",
+        farmSizeAcres: section1.farmSizeAcres ?? "",
+        totalAreaAgProductionAcres: section1.totalAreaAgProductionAcres ?? "",
+        totalAreaPlantedForestAcres: section1.totalAreaPlantedForestAcres ?? "",
+        systemOfFarming: section1.systemOfFarming ?? "",
+        systemOfFarmingOther: section1.systemOfFarmingOther ?? "",
+        mainEnterprises: (section1.mainEnterprises || []).join(", "),
+        otherCommercialActivity: section1.otherCommercialActivity ?? "",
+        yearsOfExperience: section1.yearsOfExperience ?? "",
+        waterSource: section1.waterSource ?? "",
+        waterSourceOther: section1.waterSourceOther ?? "",
+        certifications: section1.certifications ?? "",
+        dairy_systemOfFarming: form.section2_1_dairy?.systemOfFarming ?? "",
+        dairy_systemOfFarmingOther: form.section2_1_dairy?.systemOfFarmingOther ?? "",
+        dairy_enterpriseAreaAcres: form.section2_1_dairy?.enterpriseAreaAcres ?? "",
+        dairy_currentLivestockIntensity: form.section2_1_dairy?.currentLivestockIntensity ?? "",
+        dairy_numberOfMilkers: form.section2_1_dairy?.numberOfMilkers ?? "",
+        dairy_milkProductivityDaily: form.section2_1_dairy?.milkProductivityDaily ?? "",
+        dairy_accessToColdStorage: form.section2_1_dairy?.accessToColdStorage ?? "",
+        dairy_marketPointOfSale: form.section2_1_dairy?.marketPointOfSale ?? "",
+        dairy_transportToMarket: form.section2_1_dairy?.transportToMarket ?? "",
+        poultry_systemOfFarming: form.section2_2_poultry?.systemOfFarming ?? "",
+        poultry_systemOfFarmingOther: form.section2_2_poultry?.systemOfFarmingOther ?? "",
+        poultry_enterpriseAreaAcres: form.section2_2_poultry?.enterpriseAreaAcres ?? "",
+        poultry_currentPoultryIntensity: form.section2_2_poultry?.currentPoultryIntensity ?? "",
+        poultry_typesOfChicken: (form.section2_2_poultry?.typesOfChicken || []).join(", "),
+        poultry_accessToColdStorage: form.section2_2_poultry?.accessToColdStorage ?? "",
+        poultry_marketPointOfSale: form.section2_2_poultry?.marketPointOfSale ?? "",
+        poultry_transportToMarket: form.section2_2_poultry?.transportToMarket ?? "",
+        piggery_systemOfFarming: form.section2_3_piggery?.systemOfFarming ?? "",
+        piggery_systemOfFarmingOther: form.section2_3_piggery?.systemOfFarmingOther ?? "",
+        piggery_enterpriseAreaAcres: form.section2_3_piggery?.enterpriseAreaAcres ?? "",
+        piggery_currentPiggeryIntensity: form.section2_3_piggery?.currentPiggeryIntensity ?? "",
+        piggery_product: form.section2_3_piggery?.product ?? "",
+        piggery_accessToColdStorage: form.section2_3_piggery?.accessToColdStorage ?? "",
+        piggery_marketPointOfSale: form.section2_3_piggery?.marketPointOfSale ?? "",
+        piggery_transportToMarket: form.section2_3_piggery?.transportToMarket ?? "",
+        rabbitry_systemOfFarming: form.section2_4_rabbitry?.systemOfFarming ?? "",
+        rabbitry_systemOfFarmingOther: form.section2_4_rabbitry?.systemOfFarmingOther ?? "",
+        rabbitry_enterpriseAreaAcres: form.section2_4_rabbitry?.enterpriseAreaAcres ?? "",
+        rabbitry_currentRabbitryIntensity: form.section2_4_rabbitry?.currentRabbitryIntensity ?? "",
+        rabbitry_mainProduct: (form.section2_4_rabbitry?.mainProduct || []).join(", "),
+        rabbitry_accessToColdStorage: form.section2_4_rabbitry?.accessToColdStorage ?? "",
+        rabbitry_marketPointOfSale: form.section2_4_rabbitry?.marketPointOfSale ?? "",
+        rabbitry_transportToMarket: form.section2_4_rabbitry?.transportToMarket ?? "",
+        apiary_systemOfFarming: form.section2_5_apiary?.systemOfFarming ?? "",
+        apiary_systemOfFarmingOther: form.section2_5_apiary?.systemOfFarmingOther ?? "",
+        apiary_enterpriseAreaAcres: form.section2_5_apiary?.enterpriseAreaAcres ?? "",
+        apiary_currentApiaryIntensity: form.section2_5_apiary?.currentApiaryIntensity ?? "",
+        apiary_mainProduct: form.section2_5_apiary?.mainProduct ?? "",
+        apiary_accessToColdStorage: form.section2_5_apiary?.accessToColdStorage ?? "",
+        apiary_marketPointOfSale: form.section2_5_apiary?.marketPointOfSale ?? "",
+        apiary_transportToMarket: form.section2_5_apiary?.transportToMarket ?? "",
+        aquaculture_systemOfFarming: form.section2_6_aquaculture?.systemOfFarming ?? "",
+        aquaculture_systemOfFarmingOther: form.section2_6_aquaculture?.systemOfFarmingOther ?? "",
+        aquaculture_enterpriseAreaAcres: form.section2_6_aquaculture?.enterpriseAreaAcres ?? "",
+        aquaculture_currentStock: form.section2_6_aquaculture?.currentStock ?? "",
+        aquaculture_typeOfFish: (form.section2_6_aquaculture?.typeOfFish || []).join(", "),
+        aquaculture_accessToColdStorage: form.section2_6_aquaculture?.accessToColdStorage ?? "",
+        aquaculture_marketPointOfSale: form.section2_6_aquaculture?.marketPointOfSale ?? "",
+        aquaculture_transportToMarket: form.section2_6_aquaculture?.transportToMarket ?? "",
+        banana_systemOfFarming: form.section2_7_banana?.systemOfFarming ?? "",
+        banana_systemOfFarmingOther: form.section2_7_banana?.systemOfFarmingOther ?? "",
+        banana_enterpriseAreaAcres: form.section2_7_banana?.enterpriseAreaAcres ?? "",
+        banana_productionIntensityPerAcre: form.section2_7_banana?.productionIntensityPerAcre ?? "",
+        banana_type: form.section2_7_banana?.type ?? "",
+        banana_accessToColdStorage: form.section2_7_banana?.accessToColdStorage ?? "",
+        banana_marketPointOfSale: form.section2_7_banana?.marketPointOfSale ?? "",
+        banana_transportToMarket: form.section2_7_banana?.transportToMarket ?? "",
+        maize_systemOfFarming: form.section2_8_maize?.systemOfFarming ?? "",
+        maize_systemOfFarmingOther: form.section2_8_maize?.systemOfFarmingOther ?? "",
+        maize_enterpriseAreaAcres: form.section2_8_maize?.enterpriseAreaAcres ?? "",
+        maize_productionIntensityPerAcre: form.section2_8_maize?.productionIntensityPerAcre ?? "",
+        maize_accessToColdStorage: form.section2_8_maize?.accessToColdStorage ?? "",
+        maize_marketPointOfSale: form.section2_8_maize?.marketPointOfSale ?? "",
+        maize_transportToMarket: form.section2_8_maize?.transportToMarket ?? "",
+        fruitTrees_systemOfFarming: form.section2_9_fruitTrees?.systemOfFarming ?? "",
+        fruitTrees_systemOfFarmingOther: form.section2_9_fruitTrees?.systemOfFarmingOther ?? "",
+        fruitTrees_enterpriseAreaAcres: form.section2_9_fruitTrees?.enterpriseAreaAcres ?? "",
+        fruitTrees_stockPerAcre: form.section2_9_fruitTrees?.stockPerAcre ?? "",
+        fruitTrees_type: (form.section2_9_fruitTrees?.type || []).join(", "),
+        fruitTrees_accessToColdStorage: form.section2_9_fruitTrees?.accessToColdStorage ?? "",
+        fruitTrees_marketPointOfSale: form.section2_9_fruitTrees?.marketPointOfSale ?? "",
+        fruitTrees_transportToMarket: form.section2_9_fruitTrees?.transportToMarket ?? "",
+        plantedForest_systemOfFarming: form.section2_10_plantedForest?.systemOfFarming ?? "",
+        plantedForest_systemOfFarmingOther: form.section2_10_plantedForest?.systemOfFarmingOther ?? "",
+        plantedForest_enterpriseAreaAcres: form.section2_10_plantedForest?.enterpriseAreaAcres ?? "",
+        plantedForest_stockPerAcre: form.section2_10_plantedForest?.stockPerAcre ?? "",
+        plantedForest_type: form.section2_10_plantedForest?.type ?? "",
+        plantedForest_marketPointOfSale: form.section2_10_plantedForest?.marketPointOfSale ?? "",
+        plantedForest_transportToMarket: form.section2_10_plantedForest?.transportToMarket ?? "",
+      };
+    });
 
     if (type === "excel") {
       const ws = XLSX.utils.json_to_sheet(rows);
+      const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
+      ws["!cols"] = headers.map((h) => ({ wch: Math.max(14, h.length + 2) }));
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Members");
       XLSX.writeFile(wb, `${name}_Members.xlsx`);
@@ -144,7 +266,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
       const doc = new jsPDF();
       doc.text(`${name} Members`, 14, 15);
       autoTable(doc, {
-        head: [["Alias", "Role", "Status", "Phone", "Email", "Joined", "Actions"]],
+        head: [["Status", "Joined", "UpdatedAt", "FarmerAlias", "FarmerEmail", "FarmerPhone", "FarmerCounty", "FarmerDistrict", "FarmerSubCounty", "FarmerVillage", "FarmerWaterSource", "farmerFullName", "farmName", "phoneNumber", "emailAddress", "county", "districtSubCounty", "village", "farmSizeAcres", "totalAreaAgProductionAcres", "totalAreaPlantedForestAcres", "systemOfFarming", "systemOfFarmingOther", "mainEnterprises", "otherCommercialActivity", "yearsOfExperience", "waterSource", "waterSourceOther", "certifications", "dairy_systemOfFarming", "dairy_systemOfFarmingOther", "dairy_enterpriseAreaAcres", "dairy_currentLivestockIntensity", "dairy_numberOfMilkers", "dairy_milkProductivityDaily", "dairy_accessToColdStorage", "dairy_marketPointOfSale", "dairy_transportToMarket", "poultry_systemOfFarming", "poultry_systemOfFarmingOther", "poultry_enterpriseAreaAcres", "poultry_currentPoultryIntensity", "poultry_typesOfChicken", "poultry_accessToColdStorage", "poultry_marketPointOfSale", "poultry_transportToMarket", "piggery_systemOfFarming", "piggery_systemOfFarmingOther", "piggery_enterpriseAreaAcres", "piggery_currentPiggeryIntensity", "piggery_product", "piggery_accessToColdStorage", "piggery_marketPointOfSale", "piggery_transportToMarket", "rabbitry_systemOfFarming", "rabbitry_systemOfFarmingOther", "rabbitry_enterpriseAreaAcres", "rabbitry_currentRabbitryIntensity", "rabbitry_mainProduct", "rabbitry_accessToColdStorage", "rabbitry_marketPointOfSale", "rabbitry_transportToMarket", "apiary_systemOfFarming", "apiary_systemOfFarmingOther", "apiary_enterpriseAreaAcres", "apiary_currentApiaryIntensity", "apiary_mainProduct", "apiary_accessToColdStorage", "apiary_marketPointOfSale", "apiary_transportToMarket", "aquaculture_systemOfFarming", "aquaculture_systemOfFarmingOther", "aquaculture_enterpriseAreaAcres", "aquaculture_currentStock", "aquaculture_typeOfFish", "aquaculture_accessToColdStorage", "aquaculture_marketPointOfSale", "aquaculture_transportToMarket", "banana_systemOfFarming", "banana_systemOfFarmingOther", "banana_enterpriseAreaAcres", "banana_productionIntensityPerAcre", "banana_type", "banana_accessToColdStorage", "banana_marketPointOfSale", "banana_transportToMarket", "maize_systemOfFarming", "maize_systemOfFarmingOther", "maize_enterpriseAreaAcres", "maize_productionIntensityPerAcre", "maize_accessToColdStorage", "maize_marketPointOfSale", "maize_transportToMarket", "fruitTrees_systemOfFarming", "fruitTrees_systemOfFarmingOther", "fruitTrees_enterpriseAreaAcres", "fruitTrees_stockPerAcre", "fruitTrees_type", "fruitTrees_accessToColdStorage", "fruitTrees_marketPointOfSale", "fruitTrees_transportToMarket", "plantedForest_systemOfFarming", "plantedForest_systemOfFarmingOther", "plantedForest_enterpriseAreaAcres", "plantedForest_stockPerAcre", "plantedForest_type", "plantedForest_marketPointOfSale", "plantedForest_transportToMarket"]],
         body: rows.map((r) => Object.values(r)),
         startY: 20,
       });
@@ -511,7 +633,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                   >
                     <thead>
                       <tr style={{ background: "#f5f5f5" }}>
-                        {["Alias", "Role", "Status", "Phone", "Email", "Joined", "Actions"].map(
+                        {["Alias", "Status", "Phone", "Email", "Joined", "Actions"].map(
                           (h) => (
                             <th
                               key={h}
@@ -532,20 +654,11 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                       {communityMembers.map((m: any) => (
                         <tr key={m._id ?? m.farmerId ?? Math.random()}>
                           <td style={{ padding: "0.75rem" }}>{m.alias ?? "-"}</td>
-                          <td style={{ padding: "0.75rem" }}>{m.role ?? "-"}</td>
+                          <td style={{ padding: "0.75rem" }}>{m.status ?? "-"}</td>
+                          <td style={{ padding: "0.75rem" }}>{m.phoneNumber ?? "-"}</td>
+                          <td style={{ padding: "0.75rem" }}>{m.email ?? "-"}</td>
                           <td style={{ padding: "0.75rem" }}>
-                            {m.status ?? "-"}
-                          </td>
-                          <td style={{ padding: "0.75rem" }}>
-                            {m.phoneNumber ?? "-"}
-                          </td>
-                          <td style={{ padding: "0.75rem" }}>
-                            {m.email ?? "-"}
-                          </td>
-                          <td style={{ padding: "0.75rem" }}>
-                            {m.joinedAt
-                              ? formatUgandaDate(m.joinedAt)
-                              : "-"}
+                            {m.joinedAt ? formatUgandaDate(m.joinedAt) : "-"}
                           </td>
                           <td style={{ padding: "0.75rem", display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
                             <button
@@ -583,6 +696,20 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                                 </button>
                               </>
                             )}
+                            <button
+                              onClick={async () => {
+                                if (!selectedCommunityId) return;
+                                await deleteCommunityMember({
+                                  adminId,
+                                  communityId: selectedCommunityId,
+                                  farmerId: m._id,
+                                  applicationId: m.applicationId,
+                                });
+                              }}
+                              style={{ padding: "0.35rem 0.6rem" }}
+                            >
+                              Delete
+                            </button>
                           </td>
                         </tr>
                       ))}

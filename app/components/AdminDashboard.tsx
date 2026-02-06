@@ -105,10 +105,10 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
       dataCount: communityMembers.length,
     });
 
-    const rows = communityMembers.map((m) => ({
+    const rows = communityMembers.map((m: any) => ({
       Alias: m.alias ?? "-",
       Role: m.role ?? "-",
-      Status: (m as any).status ?? "-",
+      Status: m.status ?? "-",
       Phone: m.phoneNumber ?? "-",
       Email: m.email ?? "-",
       Joined: m.joinedAt ? formatUgandaDate(m.joinedAt) : "-",
@@ -508,12 +508,12 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                       </tr>
                     </thead>
                     <tbody>
-                      {communityMembers.map((m) => (
-                        <tr key={m._id}>
-                          <td style={{ padding: "0.75rem" }}>{m.alias}</td>
-                          <td style={{ padding: "0.75rem" }}>{m.role}</td>
+                      {communityMembers.map((m: any) => (
+                        <tr key={m._id ?? m.farmerId ?? Math.random()}>
+                          <td style={{ padding: "0.75rem" }}>{m.alias ?? "-"}</td>
+                          <td style={{ padding: "0.75rem" }}>{m.role ?? "-"}</td>
                           <td style={{ padding: "0.75rem" }}>
-                            {(m as any).status ?? "-"}
+                            {m.status ?? "-"}
                           </td>
                           <td style={{ padding: "0.75rem" }}>
                             {m.phoneNumber ?? "-"}

@@ -44,6 +44,21 @@ export const getPaginatedApplications = query({
     }
 
     const communityId = await getAgroFreshCommunityId(ctx);
+
+    const adminUser = await ctx.db.get(adminId);
+    if (!adminUser) {
+      throw new Error("Admin not found");
+    }
+
+    if (adminUser.adminCategory === "community") {
+      const assigned = (adminUser as any).assignedCommunityIds || [];
+      const community = await ctx.db.get(communityId);
+      const isDirectAdmin = community?.communityAdminId === adminId;
+      if (!assigned.includes(communityId) && !isDirectAdmin) {
+        throw new Error("Not authorized for this community");
+      }
+    }
+
     const safePageSize = Math.min(Math.max(pageSize, 1), 20);
     const safePage = Math.max(page, 1);
 

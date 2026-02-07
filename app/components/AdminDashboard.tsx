@@ -7,44 +7,8 @@ import { Id } from "../../convex/_generated/dataModel";
 import * as XLSX from "xlsx";
 import { formatUgandaDate } from "../utils/dateUtils";
 import { NotificationMailbox } from "./NotificationMailbox";
-            <div style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: "0.75rem",
-              flexWrap: "wrap",
-              marginBottom: "1rem",
-            }}>
-              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-                <label style={{ fontWeight: 600 }}>Category:</label>
-                <select
-                  value={memberRoleFilter}
-                  onChange={(e) => setMemberRoleFilter(e.target.value as any)}
-                  style={{ padding: "0.35rem 0.6rem", borderRadius: 6, border: "1px solid #ddd" }}
-                >
-                  <option value="all">All</option>
-                  <option value="farmer">Farmers</option>
-                  <option value="trader">Traders</option>
-                  <option value="buyer">Buyers</option>
-                </select>
-              </div>
-              <button
-                onClick={handleExportAllMembers}
-                style={{
-                  background: "#111827",
-                  color: "#fff",
-                  padding: "0.5rem 0.9rem",
-                  borderRadius: 6,
-                  border: "none",
-                  fontWeight: 600,
-                }}
-              >
-                Export Excel (All Fields)
-              </button>
-            </div>
-
 const REGION_GROUPS: { label: string; districts: string[] }[] = [
-            ) : filteredMembers.length === 0 ? (
+  {
     label: "Central (Buganda)",
     districts: [
       "Kampala", "Wakiso", "Mukono", "Buikwe", "Kayunga",
@@ -57,12 +21,10 @@ const REGION_GROUPS: { label: string; districts: string[] }[] = [
   {
     label: "Eastern (Busoga)",
     districts: ["Jinja", "Mayuge", "Iganga", "Bugiri", "Namayingo", "Buyende", "Kaliro", "Kamuli", "Luuka", "Namutumba"],
-                      <th style={{ padding: "0.6rem" }}>Communities</th>
-                      <th style={{ padding: "0.6rem" }}>Actions</th>
   },
   {
     label: "Eastern (Teso)",
-                    {filteredMembers.map((member: any) => (
+    districts: ["Soroti", "Serere", "Kaberamaido", "Amuria", "Katakwi", "Ngora", "Kumi", "Bukedea"],
   },
   {
     label: "Eastern (Elgon)",
@@ -72,24 +34,6 @@ const REGION_GROUPS: { label: string; districts: string[] }[] = [
     label: "Eastern (Other)",
     districts: ["Tororo", "Busia", "Butaleja", "Budaka", "Pallisa", "Kibuku", "Butebo"],
   },
-                        <td style={{ padding: "0.6rem", color: "#666" }}>
-                          {(member.communityNames || []).join(", ") || "-"}
-                        </td>
-                        <td style={{ padding: "0.6rem" }}>
-                          <button
-                            onClick={() => setSelectedMember(member)}
-                            style={{
-                              padding: "0.35rem 0.6rem",
-                              borderRadius: 6,
-                              border: "1px solid #d1d5db",
-                              background: "#ffffff",
-                              fontWeight: 600,
-                              cursor: "pointer",
-                            }}
-                          >
-                            View
-                          </button>
-                        </td>
   {
     label: "Northern (Acholi)",
     districts: ["Gulu", "Nwoya", "Amuru", "Pader", "Kitgum", "Lamwo", "Agago", "Omoro"],

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
@@ -135,12 +135,16 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
     "all" | "PENDING" | "APPROVED" | "REJECTED" | "REVOKED"
   >("all");
   const [memberRoleFilter, setMemberRoleFilter] = useState<"all" | "farmer" | "trader" | "buyer">("all");
+  const [membersPageSize, setMembersPageSize] = useState(10);
+  const [membersPage, setMembersPage] = useState(1);
   const [selectedApplicationId, setSelectedApplicationId] = useState<
     Id<"communityApplications"> | null
   >(null);
+  const [showCommunityManager, setShowCommunityManager] = useState(false);
   const [selectedMember, setSelectedMember] = useState<any | null>(null);
   const [selectedMessageThread, setSelectedMessageThread] = useState<{ utid: string; otherUserId: Id<"users"> } | null>(null);
   const [adminMessageText, setAdminMessageText] = useState("");
+  const [showMessagesPanel, setShowMessagesPanel] = useState(false);
   const [notificationTarget, setNotificationTarget] = useState<"role" | "individual" | "community">("role");
   const [notificationRole, setNotificationRole] = useState<"farmer" | "trader" | "buyer">("farmer");
   const [notificationUserId, setNotificationUserId] = useState<string>("");
@@ -243,6 +247,18 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
     if (memberRoleFilter === "all") return membersList;
     return membersList.filter((member: any) => member.role === memberRoleFilter);
   }, [membersList, memberRoleFilter]);
+
+  useEffect(() => {
+    setMembersPage(1);
+  }, [memberRoleFilter, membersPageSize]);
+
+  const membersTotalPages = Math.max(1, Math.ceil(filteredMembers.length / membersPageSize));
+  const membersStart = filteredMembers.length === 0 ? 0 : (membersPage - 1) * membersPageSize + 1;
+  const membersEnd = Math.min(membersPage * membersPageSize, filteredMembers.length);
+  const pagedMembers = filteredMembers.slice(
+    (membersPage - 1) * membersPageSize,
+    membersPage * membersPageSize
+  );
 
   /* ───────────── Export Logic ───────────── */
 
@@ -848,70 +864,39 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
             </a>
 
             {/* Community Management */}
-            <a href="#community-management" style={{ textDecoration: "none" }}>
-              <div
-                style={{
-                  ...utilityCardStyle,
-                  cursor: "pointer",
-                  transition: "transform 0.2s, box-shadow 0.2s",
-                  background: "linear-gradient(135deg, #f57c00 0%, #ef6c00 100%)",
-                  color: "#fff",
-                  minHeight: "140px",
-                  display: "flex",
-                  flexDirection: "column",
-                  justifyContent: "space-between",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = "translateY(-4px)";
-                  e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.15)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = "translateY(0)";
-                  e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.06)";
-                }}
-              >
-                <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>🌾</div>
-                <div>
-                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Community Management</h3>
-                  <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.95 }}>
-                    Manage communities and members
-                  </p>
-                </div>
+            <button
+              type="button"
+              onClick={() => setShowCommunityManager(true)}
+              style={{
+                ...utilityCardStyle,
+                cursor: "pointer",
+                transition: "transform 0.2s, box-shadow 0.2s",
+                background: "linear-gradient(135deg, #f57c00 0%, #ef6c00 100%)",
+                color: "#fff",
+                minHeight: "140px",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "space-between",
+                textAlign: "left",
+                border: "none",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = "translateY(-4px)";
+                e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.15)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.06)";
+              }}
+            >
+              <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>🌾</div>
+              <div>
+                <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Community Management</h3>
+                <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.95 }}>
+                  Manage communities and members
+                </p>
               </div>
-            </a>
-
-            {/* Members */}
-            <a href="#members" style={{ textDecoration: "none" }}>
-              <div
-                style={{
-                  ...utilityCardStyle,
-                  cursor: "pointer",
-                  transition: "transform 0.2s, box-shadow 0.2s",
-                  background: "linear-gradient(135deg, #3949ab 0%, #283593 100%)",
-                  color: "#fff",
-                  minHeight: "140px",
-                  display: "flex",
-                  flexDirection: "column",
-                  justifyContent: "space-between",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = "translateY(-4px)";
-                  e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.15)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = "translateY(0)";
-                  e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.06)";
-                }}
-              >
-                <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>🧑🏽‍🌾</div>
-                <div>
-                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Members</h3>
-                  <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.95 }}>
-                    View farmers, traders, and buyers
-                  </p>
-                </div>
-              </div>
-            </a>
+            </button>
 
             {/* StoreAdmin Audit */}
             <a href="/admin/storeadmin-audit" style={{ textDecoration: "none" }}>
@@ -980,40 +965,40 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
             </a>
 
             {/* Messages & Notifications */}
-            {messagesPanel}
-
-            {/* Community Dashboard */}
-            <a href="/admin/community-dashboard" style={{ textDecoration: "none" }}>
-              <div
-                style={{
-                  ...utilityCardStyle,
-                  cursor: "pointer",
-                  transition: "transform 0.2s, box-shadow 0.2s",
-                  background: "linear-gradient(135deg, #d32f2f 0%, #c62828 100%)",
-                  color: "#fff",
-                  minHeight: "140px",
-                  display: "flex",
-                  flexDirection: "column",
-                  justifyContent: "space-between",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = "translateY(-4px)";
-                  e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.15)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = "translateY(0)";
-                  e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.06)";
-                }}
-              >
-                <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>📊</div>
-                <div>
-                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Community Dashboard</h3>
-                  <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.95 }}>
-                    View and filter community members
-                  </p>
-                </div>
+            <button
+              type="button"
+              onClick={() => setShowMessagesPanel(true)}
+              style={{
+                ...utilityCardStyle,
+                cursor: "pointer",
+                transition: "transform 0.2s, box-shadow 0.2s",
+                background: "linear-gradient(135deg, #00838f 0%, #006064 100%)",
+                color: "#fff",
+                minHeight: "140px",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "space-between",
+                textAlign: "left",
+                border: "none",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = "translateY(-4px)";
+                e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.15)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.06)";
+              }}
+            >
+              <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>📬</div>
+              <div>
+                <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Messages & Notifications</h3>
+                <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.95 }}>
+                  Respond to member messages
+                </p>
               </div>
-            </a>
+            </button>
+
           </div>
         </>
       )}
@@ -1024,162 +1009,247 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
         </div>
       )}
 
-      <h2 id="community-management" style={{ marginBottom: "1rem" }}>Community Management</h2>
-
-      <div style={{ marginBottom: "0.75rem" }}>
-        <a
-          href="/admin/communities"
-          style={{
-            display: "inline-block",
-            padding: "0.4rem 0.75rem",
-            borderRadius: 6,
-            border: "1px solid #ddd",
-            background: "#f5f5f5",
-            textDecoration: "none",
-            color: "#333",
-            fontSize: "0.85rem",
-            fontWeight: 600,
-          }}
-        >
-          Open Full Community Manager
-        </a>
-      </div>
-
-      {/* Premium Notice */}
-      <div
-        style={{
-          background: "#fff3cd",
-          border: "1px solid #ffeeba",
-          padding: "1rem",
-          borderRadius: "10px",
-          marginBottom: "1.25rem",
-          color: "#856404",
-          fontWeight: 600,
-        }}
-      >
-        🚀 Creating communities is a <strong>Premium Feature</strong>. Contact
-        support for access.
-      </div>
-
-      {/* Notifications / Inbox */}
-      <div
-        style={{
-          display: "flex",
-          gap: "1rem",
-          marginBottom: "1.75rem",
-          flexWrap: "wrap",
-        }}
-      >
-        <div style={utilityCardStyle}>🔔 Notifications (Premium)</div>
-        <div style={utilityCardStyle}>📥 Inbox (Premium)</div>
-      </div>
-
-      {/* FARM BACKGROUND CARD */}
-      <div style={farmCardStyle}>
-        <div style={glassPanelStyle}>
-          {isSuperAdmin && (
-            <div id="members" style={{ marginBottom: "1.5rem" }}>
-              <h3 style={{ marginBottom: "1rem" }}>Members</h3>
-              <div style={{
+      {isSuperAdmin && showMessagesPanel && (
+        <div style={{ marginTop: "1.5rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", marginBottom: "1rem" }}>
+            <h2 style={{ margin: 0 }}>Messages & Notifications</h2>
+            <button
+              type="button"
+              onClick={() => setShowMessagesPanel(false)}
+              style={{
+                padding: "0.4rem 0.8rem",
+                borderRadius: 6,
+                border: "1px solid #ddd",
                 background: "#fff",
-                borderRadius: "12px",
-                padding: "1rem",
-                border: "1px solid #e0e0e0",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-              }}>
-                <div style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  gap: "0.75rem",
-                  flexWrap: "wrap",
-                  marginBottom: "1rem",
-                }}>
-                  <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-                    <label style={{ fontWeight: 600 }}>Category:</label>
-                    <select
-                      value={memberRoleFilter}
-                      onChange={(e) => setMemberRoleFilter(e.target.value as any)}
-                      style={{ padding: "0.35rem 0.6rem", borderRadius: 6, border: "1px solid #ddd" }}
-                    >
-                      <option value="all">All</option>
-                      <option value="farmer">Farmers</option>
-                      <option value="trader">Traders</option>
-                      <option value="buyer">Buyers</option>
-                    </select>
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              Close
+            </button>
+          </div>
+          {messagesPanel}
+        </div>
+      )}
+
+      {isSuperAdmin && showCommunityManager && (
+        <div style={{ marginTop: "1.5rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", marginBottom: "1rem" }}>
+            <h2 style={{ margin: 0 }}>Community Management</h2>
+            <button
+              type="button"
+              onClick={() => setShowCommunityManager(false)}
+              style={{
+                padding: "0.4rem 0.8rem",
+                borderRadius: 6,
+                border: "1px solid #ddd",
+                background: "#fff",
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              Close
+            </button>
+          </div>
+
+          <div style={{ marginBottom: "0.75rem" }}>
+            <a
+              href="/admin/communities"
+              style={{
+                display: "inline-block",
+                padding: "0.4rem 0.75rem",
+                borderRadius: 6,
+                border: "1px solid #ddd",
+                background: "#f5f5f5",
+                textDecoration: "none",
+                color: "#333",
+                fontSize: "0.85rem",
+                fontWeight: 600,
+              }}
+            >
+              Open Full Community Manager
+            </a>
+          </div>
+
+          <div
+            style={{
+              background: "#fff3cd",
+              border: "1px solid #ffeeba",
+              padding: "1rem",
+              borderRadius: "10px",
+              marginBottom: "1.25rem",
+              color: "#856404",
+              fontWeight: 600,
+            }}
+          >
+            🚀 Creating communities is a <strong>Premium Feature</strong>. Contact
+            support for access.
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              gap: "1rem",
+              marginBottom: "1.75rem",
+              flexWrap: "wrap",
+            }}
+          >
+            <div style={utilityCardStyle}>🔔 Notifications (Premium)</div>
+            <div style={utilityCardStyle}>📥 Inbox (Premium)</div>
+          </div>
+
+          <div style={farmCardStyle}>
+            <div style={glassPanelStyle}>
+              {isSuperAdmin && (
+                <div id="members" style={{ marginBottom: "1.5rem" }}>
+                  <h3 style={{ marginBottom: "1rem" }}>Members</h3>
+                  <div style={{
+                    background: "#fff",
+                    borderRadius: "12px",
+                    padding: "1rem",
+                    border: "1px solid #e0e0e0",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+                  }}>
+                    <div style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: "0.75rem",
+                      flexWrap: "wrap",
+                      marginBottom: "1rem",
+                    }}>
+                      <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
+                        <label style={{ fontWeight: 600 }}>Category:</label>
+                        <select
+                          value={memberRoleFilter}
+                          onChange={(e) => setMemberRoleFilter(e.target.value as any)}
+                          style={{ padding: "0.35rem 0.6rem", borderRadius: 6, border: "1px solid #ddd" }}
+                        >
+                          <option value="all">All</option>
+                          <option value="farmer">Farmers</option>
+                          <option value="trader">Traders</option>
+                          <option value="buyer">Buyers</option>
+                        </select>
+                        <label style={{ fontWeight: 600 }}>Per page:</label>
+                        <select
+                          value={membersPageSize}
+                          onChange={(e) => setMembersPageSize(Number(e.target.value))}
+                          style={{ padding: "0.35rem 0.6rem", borderRadius: 6, border: "1px solid #ddd" }}
+                        >
+                          <option value={10}>10</option>
+                          <option value={20}>20</option>
+                          <option value={50}>50</option>
+                        </select>
+                      </div>
+                      <button
+                        onClick={handleExportAllMembers}
+                        style={{
+                          background: "#111827",
+                          color: "#fff",
+                          padding: "0.5rem 0.9rem",
+                          borderRadius: 6,
+                          border: "none",
+                          fontWeight: 600,
+                        }}
+                      >
+                        Export Excel (All Fields)
+                      </button>
+                    </div>
+                    {membersList === undefined ? (
+                      <p style={{ color: "#666" }}>Loading members...</p>
+                    ) : filteredMembers.length === 0 ? (
+                      <p style={{ color: "#666" }}>No members found.</p>
+                    ) : (
+                      <div style={{ overflowX: "auto" }}>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
+                          <thead>
+                            <tr style={{ textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>
+                              <th style={{ padding: "0.6rem" }}>Role</th>
+                              <th style={{ padding: "0.6rem" }}>Alias</th>
+                              <th style={{ padding: "0.6rem" }}>Member ID</th>
+                              <th style={{ padding: "0.6rem" }}>Email</th>
+                              <th style={{ padding: "0.6rem" }}>Phone</th>
+                              <th style={{ padding: "0.6rem" }}>Location</th>
+                              <th style={{ padding: "0.6rem" }}>Communities</th>
+                              <th style={{ padding: "0.6rem" }}>Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {pagedMembers.map((member: any) => (
+                              <tr key={member.userId} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                                <td style={{ padding: "0.6rem" }}>{member.role}</td>
+                                <td style={{ padding: "0.6rem" }}>{member.alias || "-"}</td>
+                                <td style={{ padding: "0.6rem", fontFamily: "monospace", fontSize: "0.8rem" }}>{member.userId}</td>
+                                <td style={{ padding: "0.6rem" }}>{member.email || "-"}</td>
+                                <td style={{ padding: "0.6rem" }}>{member.phoneNumber || "-"}</td>
+                                <td style={{ padding: "0.6rem", color: "#666" }}>
+                                  {[member.districtText, member.subCountyText, member.village].filter(Boolean).join(" • ") || "-"}
+                                </td>
+                                <td style={{ padding: "0.6rem", color: "#666" }}>
+                                  {(member.communityNames || []).join(", ") || "-"}
+                                </td>
+                                <td style={{ padding: "0.6rem" }}>
+                                  <button
+                                    onClick={() => setSelectedMember(member)}
+                                    style={{
+                                      padding: "0.35rem 0.6rem",
+                                      borderRadius: 6,
+                                      border: "1px solid #d1d5db",
+                                      background: "#ffffff",
+                                      fontWeight: 600,
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    View
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
+                          <div style={{ fontSize: "0.85rem", color: "#666" }}>
+                            Showing {membersStart}-{membersEnd} of {filteredMembers.length}
+                          </div>
+                          <div style={{ display: "flex", gap: "0.5rem" }}>
+                            <button
+                              type="button"
+                              onClick={() => setMembersPage((p) => Math.max(1, p - 1))}
+                              disabled={membersPage === 1}
+                              style={{
+                                padding: "0.35rem 0.7rem",
+                                borderRadius: 6,
+                                border: "1px solid #ddd",
+                                background: membersPage === 1 ? "#f1f5f9" : "#fff",
+                                cursor: membersPage === 1 ? "not-allowed" : "pointer",
+                                fontWeight: 600,
+                              }}
+                            >
+                              Prev
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setMembersPage((p) => Math.min(membersTotalPages, p + 1))}
+                              disabled={membersPage >= membersTotalPages}
+                              style={{
+                                padding: "0.35rem 0.7rem",
+                                borderRadius: 6,
+                                border: "1px solid #ddd",
+                                background: membersPage >= membersTotalPages ? "#f1f5f9" : "#fff",
+                                cursor: membersPage >= membersTotalPages ? "not-allowed" : "pointer",
+                                fontWeight: 600,
+                              }}
+                            >
+                              Next
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <button
-                    onClick={handleExportAllMembers}
-                    style={{
-                      background: "#111827",
-                      color: "#fff",
-                      padding: "0.5rem 0.9rem",
-                      borderRadius: 6,
-                      border: "none",
-                      fontWeight: 600,
-                    }}
-                  >
-                    Export Excel (All Fields)
-                  </button>
                 </div>
-                {membersList === undefined ? (
-                  <p style={{ color: "#666" }}>Loading members...</p>
-                ) : filteredMembers.length === 0 ? (
-                  <p style={{ color: "#666" }}>No members found.</p>
-                ) : (
-                  <div style={{ overflowX: "auto" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
-                      <thead>
-                        <tr style={{ textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>
-                          <th style={{ padding: "0.6rem" }}>Role</th>
-                          <th style={{ padding: "0.6rem" }}>Alias</th>
-                          <th style={{ padding: "0.6rem" }}>Member ID</th>
-                          <th style={{ padding: "0.6rem" }}>Email</th>
-                          <th style={{ padding: "0.6rem" }}>Phone</th>
-                          <th style={{ padding: "0.6rem" }}>Location</th>
-                          <th style={{ padding: "0.6rem" }}>Communities</th>
-                          <th style={{ padding: "0.6rem" }}>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredMembers.map((member: any) => (
-                          <tr key={member.userId} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                            <td style={{ padding: "0.6rem" }}>{member.role}</td>
-                            <td style={{ padding: "0.6rem" }}>{member.alias || "-"}</td>
-                            <td style={{ padding: "0.6rem", fontFamily: "monospace", fontSize: "0.8rem" }}>{member.userId}</td>
-                            <td style={{ padding: "0.6rem" }}>{member.email || "-"}</td>
-                            <td style={{ padding: "0.6rem" }}>{member.phoneNumber || "-"}</td>
-                            <td style={{ padding: "0.6rem", color: "#666" }}>
-                              {[member.districtText, member.subCountyText, member.village].filter(Boolean).join(" • ") || "-"}
-                            </td>
-                            <td style={{ padding: "0.6rem", color: "#666" }}>
-                              {(member.communityNames || []).join(", ") || "-"}
-                            </td>
-                            <td style={{ padding: "0.6rem" }}>
-                              <button
-                                onClick={() => setSelectedMember(member)}
-                                style={{
-                                  padding: "0.35rem 0.6rem",
-                                  borderRadius: 6,
-                                  border: "1px solid #d1d5db",
-                                  background: "#ffffff",
-                                  fontWeight: 600,
-                                  cursor: "pointer",
-                                }}
-                              >
-                                View
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-          {selectedCommunityId ? (
+              )}
+              {selectedCommunityId ? (
             <>
               {/* Back + Export */}
               <div
@@ -1582,6 +1652,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           )}
         </div>
       </div>
+      )}
 
     </div>
   );

@@ -7,9 +7,44 @@ import { Id } from "../../convex/_generated/dataModel";
 import * as XLSX from "xlsx";
 import { formatUgandaDate } from "../utils/dateUtils";
 import { NotificationMailbox } from "./NotificationMailbox";
+            <div style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: "0.75rem",
+              flexWrap: "wrap",
+              marginBottom: "1rem",
+            }}>
+              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+                <label style={{ fontWeight: 600 }}>Category:</label>
+                <select
+                  value={memberRoleFilter}
+                  onChange={(e) => setMemberRoleFilter(e.target.value as any)}
+                  style={{ padding: "0.35rem 0.6rem", borderRadius: 6, border: "1px solid #ddd" }}
+                >
+                  <option value="all">All</option>
+                  <option value="farmer">Farmers</option>
+                  <option value="trader">Traders</option>
+                  <option value="buyer">Buyers</option>
+                </select>
+              </div>
+              <button
+                onClick={handleExportAllMembers}
+                style={{
+                  background: "#111827",
+                  color: "#fff",
+                  padding: "0.5rem 0.9rem",
+                  borderRadius: 6,
+                  border: "none",
+                  fontWeight: 600,
+                }}
+              >
+                Export Excel (All Fields)
+              </button>
+            </div>
 
 const REGION_GROUPS: { label: string; districts: string[] }[] = [
-  {
+            ) : filteredMembers.length === 0 ? (
     label: "Central (Buganda)",
     districts: [
       "Kampala", "Wakiso", "Mukono", "Buikwe", "Kayunga",
@@ -22,10 +57,12 @@ const REGION_GROUPS: { label: string; districts: string[] }[] = [
   {
     label: "Eastern (Busoga)",
     districts: ["Jinja", "Mayuge", "Iganga", "Bugiri", "Namayingo", "Buyende", "Kaliro", "Kamuli", "Luuka", "Namutumba"],
+                      <th style={{ padding: "0.6rem" }}>Communities</th>
+                      <th style={{ padding: "0.6rem" }}>Actions</th>
   },
   {
     label: "Eastern (Teso)",
-    districts: ["Soroti", "Kaberamaido", "Serere", "Kalaki", "Amuria", "Katakwi", "Kumi", "Bukedea", "Ngora", "Kapelebyong"],
+                    {filteredMembers.map((member: any) => (
   },
   {
     label: "Eastern (Elgon)",
@@ -35,6 +72,24 @@ const REGION_GROUPS: { label: string; districts: string[] }[] = [
     label: "Eastern (Other)",
     districts: ["Tororo", "Busia", "Butaleja", "Budaka", "Pallisa", "Kibuku", "Butebo"],
   },
+                        <td style={{ padding: "0.6rem", color: "#666" }}>
+                          {(member.communityNames || []).join(", ") || "-"}
+                        </td>
+                        <td style={{ padding: "0.6rem" }}>
+                          <button
+                            onClick={() => setSelectedMember(member)}
+                            style={{
+                              padding: "0.35rem 0.6rem",
+                              borderRadius: 6,
+                              border: "1px solid #d1d5db",
+                              background: "#ffffff",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                            }}
+                          >
+                            View
+                          </button>
+                        </td>
   {
     label: "Northern (Acholi)",
     districts: ["Gulu", "Nwoya", "Amuru", "Pader", "Kitgum", "Lamwo", "Agago", "Omoro"],
@@ -135,11 +190,21 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   const [memberStatusFilter, setMemberStatusFilter] = useState<
     "all" | "PENDING" | "APPROVED" | "REJECTED" | "REVOKED"
   >("all");
+  const [memberRoleFilter, setMemberRoleFilter] = useState<"all" | "farmer" | "trader" | "buyer">("all");
   const [selectedApplicationId, setSelectedApplicationId] = useState<
     Id<"communityApplications"> | null
   >(null);
+  const [selectedMember, setSelectedMember] = useState<any | null>(null);
   const [selectedMessageThread, setSelectedMessageThread] = useState<{ utid: string; otherUserId: Id<"users"> } | null>(null);
   const [adminMessageText, setAdminMessageText] = useState("");
+  const [notificationTarget, setNotificationTarget] = useState<"role" | "individual" | "community">("role");
+  const [notificationRole, setNotificationRole] = useState<"farmer" | "trader" | "buyer">("farmer");
+  const [notificationUserId, setNotificationUserId] = useState<string>("");
+  const [notificationCommunityId, setNotificationCommunityId] = useState<string>("");
+  const [notificationTitle, setNotificationTitle] = useState("");
+  const [notificationMessage, setNotificationMessage] = useState("");
+  const [notificationReason, setNotificationReason] = useState("");
+  const [notificationStatus, setNotificationStatus] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const adminUser = useQuery(api.auth.getUser, { userId: adminId });
   const communities = useQuery(api.introspection.getCommunitiesForAdmin, {
@@ -151,6 +216,10 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
     adminUser?.adminLevel === "super" || 
     (adminUser?.adminLevel === undefined && !adminUser?.adminCategory)
   );
+  const isMessageAdmin = adminUser?.role === "admin" &&
+    adminUser?.adminLevel === "junior" &&
+    adminUser?.adminCategory === "message";
+  const canMessageAdmin = isSuperAdmin || isMessageAdmin;
 
   const allUsers = useQuery(
     api.introspection.getAllUsers,
@@ -187,7 +256,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
 
   const adminMessageThreads = useQuery(
     api.messages.getAdminMessageThreads,
-    isSuperAdmin ? { adminId } : "skip"
+    canMessageAdmin ? { adminId } : "skip"
   );
 
   const selectedAdminThread = useQuery(
@@ -209,14 +278,27 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
 
   const sendAdminMessage = useMutation(api.messages.sendMessage);
   const markMessagesAsRead = useMutation(api.messages.markMessagesAsRead);
+  const sendRoleBasedNotification = useMutation(api.notifications.sendRoleBasedNotification);
+  const sendNotificationToSelectedUsers = useMutation(api.notifications.sendNotificationToSelectedUsers);
+  const notifyCommunity = useMutation(api.communities.notifyCommunity);
 
 
   const logExport = useMutation(api.communities.logExport);
+
+  const notificationRecipients = useQuery(
+    api.notifications.getNotificationRecipients,
+    canMessageAdmin ? { adminId } : "skip"
+  );
 
   const membersList = useMemo(
     () => (allUsers ?? []).filter((u) => u.role === "farmer" || u.role === "trader" || u.role === "buyer"),
     [allUsers]
   );
+
+  const filteredMembers = useMemo(() => {
+    if (memberRoleFilter === "all") return membersList;
+    return membersList.filter((member: any) => member.role === memberRoleFilter);
+  }, [membersList, memberRoleFilter]);
 
   /* ───────────── Export Logic ───────────── */
 
@@ -359,6 +441,43 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
     XLSX.writeFile(wb, `${name}_Members.xlsx`);
   };
 
+  const handleExportAllMembers = () => {
+    const rows = filteredMembers.map((member: any) => ({
+      Role: member.role,
+      Alias: member.alias ?? "",
+      MemberId: member.userId,
+      Email: member.email ?? "",
+      Phone: member.phoneNumber ?? "",
+      Sex: member.sex ?? "",
+      AdminLevel: member.adminLevel ?? "",
+      AdminCategory: member.adminCategory ?? "",
+      ServiceLevel: member.serviceLevel ?? "",
+      ExportLimit: member.exportLimit ?? "",
+      Region: member.region ?? "",
+      District: member.districtText ?? "",
+      SubCounty: member.subCountyText ?? "",
+      Village: member.village ?? "",
+      County: member.county ?? "",
+      WaterSource: member.waterSource ?? "",
+      OnboardingCompleted: member.onboardingCompleted ? "Yes" : "No",
+      IsVerifiedTrader: member.isVerifiedTrader ? "Yes" : "No",
+      VerificationStatus: member.verificationStatus ?? "",
+      VerifiedBy: member.verifiedBy ?? "",
+      VerifiedAt: member.verifiedAt ? formatUgandaDate(member.verifiedAt) : "",
+      CreatedAt: member.createdAt ? formatUgandaDate(member.createdAt) : "",
+      LastActiveAt: member.lastActiveAt ? formatUgandaDate(member.lastActiveAt) : "",
+      Communities: (member.communityNames || []).join(", "),
+      CommunityIds: (member.communityIds || []).join(", "),
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
+    ws["!cols"] = headers.map((h) => ({ wch: Math.max(14, h.length + 2) }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Members");
+    XLSX.writeFile(wb, "All_Members.xlsx");
+  };
+
   const handleSendAdminMessage = async () => {
     if (!selectedMessageThread || !adminMessageText.trim()) return;
     await sendAdminMessage({
@@ -369,6 +488,334 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
     });
     setAdminMessageText("");
   };
+
+  const messagesPanel = (
+    <div
+      style={{
+        ...utilityCardStyle,
+        background: "#ffffff",
+        color: "#111827",
+        padding: "1.25rem",
+        border: "1px solid #e0e0e0",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}>
+        <div style={{ fontSize: "2rem" }}>📬</div>
+        <div>
+          <h3 style={{ margin: 0, fontSize: "1.2rem" }}>Messages & Notifications</h3>
+          <p style={{ margin: 0, fontSize: "0.9rem", color: "#555" }}>
+            Respond to member messages
+          </p>
+        </div>
+      </div>
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "minmax(220px, 320px) 1fr",
+        gap: "1rem",
+        alignItems: "stretch",
+      }}>
+        <div style={{
+          gridColumn: "1 / -1",
+          background: "#f8fafc",
+          borderRadius: 10,
+          padding: "0.75rem",
+          border: "1px solid #e5e7eb",
+        }}>
+          <div style={{ fontWeight: 600, marginBottom: "0.5rem" }}>Send Notification</div>
+          {notificationStatus && (
+            <div style={{
+              padding: "0.5rem 0.75rem",
+              borderRadius: 8,
+              background: notificationStatus.type === "success" ? "#e8f5e9" : "#ffebee",
+              color: notificationStatus.type === "success" ? "#2e7d32" : "#c62828",
+              border: `1px solid ${notificationStatus.type === "success" ? "#c8e6c9" : "#ffcdd2"}`,
+              marginBottom: "0.5rem",
+            }}>
+              {notificationStatus.text}
+            </div>
+          )}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "0.5rem" }}>
+            <select
+              value={notificationTarget}
+              onChange={(e) => setNotificationTarget(e.target.value as any)}
+              style={{ padding: "0.45rem", borderRadius: 6, border: "1px solid #ddd" }}
+            >
+              <option value="role">By Category</option>
+              <option value="individual">Individual Member</option>
+              <option value="community">Community</option>
+            </select>
+
+            {notificationTarget === "role" && (
+              <select
+                value={notificationRole}
+                onChange={(e) => setNotificationRole(e.target.value as any)}
+                style={{ padding: "0.45rem", borderRadius: 6, border: "1px solid #ddd" }}
+              >
+                <option value="farmer">Farmers</option>
+                <option value="trader">Traders</option>
+                <option value="buyer">Buyers</option>
+              </select>
+            )}
+
+            {notificationTarget === "individual" && (
+              <select
+                value={notificationUserId}
+                onChange={(e) => setNotificationUserId(e.target.value)}
+                style={{ padding: "0.45rem", borderRadius: 6, border: "1px solid #ddd" }}
+              >
+                <option value="">Select member</option>
+                {(notificationRecipients ?? []).map((user: any) => (
+                  <option key={user.userId} value={user.userId}>
+                    {user.alias || "Member"} • {user.role}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            {notificationTarget === "community" && (
+              <select
+                value={notificationCommunityId}
+                onChange={(e) => setNotificationCommunityId(e.target.value)}
+                style={{ padding: "0.45rem", borderRadius: 6, border: "1px solid #ddd" }}
+              >
+                <option value="">Select community</option>
+                {(communities ?? []).map((community: any) => (
+                  <option key={community._id} value={community._id}>
+                    {community.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "0.5rem", marginTop: "0.5rem" }}>
+            <input
+              type="text"
+              value={notificationTitle}
+              onChange={(e) => setNotificationTitle(e.target.value)}
+              placeholder="Title"
+              style={{ padding: "0.45rem", borderRadius: 6, border: "1px solid #ddd" }}
+            />
+            <input
+              type="text"
+              value={notificationReason}
+              onChange={(e) => setNotificationReason(e.target.value)}
+              placeholder="Reason"
+              style={{ padding: "0.45rem", borderRadius: 6, border: "1px solid #ddd" }}
+            />
+          </div>
+          <textarea
+            value={notificationMessage}
+            onChange={(e) => setNotificationMessage(e.target.value)}
+            placeholder="Message"
+            rows={3}
+            style={{
+              marginTop: "0.5rem",
+              padding: "0.5rem",
+              borderRadius: 6,
+              border: "1px solid #ddd",
+              width: "100%",
+              resize: "vertical",
+            }}
+          />
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.5rem" }}>
+            <button
+              type="button"
+              onClick={async () => {
+                if (!notificationTitle.trim() || !notificationMessage.trim()) {
+                  setNotificationStatus({ type: "error", text: "Title and message are required." });
+                  return;
+                }
+
+                try {
+                  if (notificationTarget === "role") {
+                    await sendRoleBasedNotification({
+                      adminId,
+                      role: notificationRole,
+                      title: notificationTitle.trim(),
+                      message: notificationMessage.trim(),
+                      reason: notificationReason.trim() || "Notification by category",
+                    });
+                  } else if (notificationTarget === "individual") {
+                    if (!notificationUserId) {
+                      setNotificationStatus({ type: "error", text: "Select a member first." });
+                      return;
+                    }
+                    await sendNotificationToSelectedUsers({
+                      adminId,
+                      userIds: [notificationUserId as any],
+                      title: notificationTitle.trim(),
+                      message: notificationMessage.trim(),
+                      reason: notificationReason.trim() || "Notification to individual member",
+                    });
+                  } else {
+                    if (!notificationCommunityId) {
+                      setNotificationStatus({ type: "error", text: "Select a community first." });
+                      return;
+                    }
+                    await notifyCommunity({
+                      adminId,
+                      communityId: notificationCommunityId as any,
+                      title: notificationTitle.trim(),
+                      message: notificationMessage.trim(),
+                      reason: notificationReason.trim() || "Notification to community",
+                    } as any);
+                  }
+
+                  setNotificationStatus({ type: "success", text: "Notification sent." });
+                  setNotificationTitle("");
+                  setNotificationMessage("");
+                  setNotificationReason("");
+                  setNotificationUserId("");
+                  setNotificationCommunityId("");
+                } catch (error: any) {
+                  setNotificationStatus({ type: "error", text: error?.message || "Failed to send notification" });
+                }
+              }}
+              style={{
+                padding: "0.5rem 1rem",
+                background: "#1976d2",
+                color: "#fff",
+                border: "none",
+                borderRadius: 6,
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              Send Notification
+            </button>
+          </div>
+        </div>
+        <div style={{
+          background: "#fff",
+          borderRadius: 12,
+          padding: "1rem",
+          border: "1px solid #e0e0e0",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+        }}>
+          <div style={{ marginBottom: "0.75rem", fontWeight: 600 }}>Notifications</div>
+          <NotificationMailbox userId={adminId} />
+        </div>
+        <div style={{
+          background: "#fff",
+          borderRadius: 12,
+          padding: "1rem",
+          border: "1px solid #e0e0e0",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+          minHeight: "320px",
+        }}>
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(180px, 260px) 1fr", gap: "1rem" }}>
+            <div style={{ borderRight: "1px solid #eee", paddingRight: "0.75rem" }}>
+              <div style={{ fontWeight: 600, marginBottom: "0.75rem" }}>Message Threads</div>
+              {adminMessageThreads === undefined ? (
+                <p style={{ color: "#666" }}>Loading threads...</p>
+              ) : adminMessageThreads.length === 0 ? (
+                <p style={{ color: "#666" }}>No messages yet.</p>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                  {adminMessageThreads.map((thread: any) => (
+                    <button
+                      key={thread.utid}
+                      type="button"
+                      onClick={async () => {
+                        setSelectedMessageThread({ utid: thread.utid, otherUserId: thread.otherUserId });
+                        await markMessagesAsRead({ userId: adminId, utid: thread.utid });
+                      }}
+                      style={{
+                        padding: "0.5rem",
+                        borderRadius: 8,
+                        border: "1px solid #ddd",
+                        background: selectedMessageThread?.utid === thread.utid ? "#e3f2fd" : "#f9fafb",
+                        textAlign: "left",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <div style={{ fontWeight: 600, fontSize: "0.85rem" }}>
+                        {thread.otherUserAlias || "Member"}
+                      </div>
+                      <div style={{ fontSize: "0.75rem", color: "#666" }}>
+                        {thread.lastMessage?.slice(0, 40) || "No message"}
+                      </div>
+                      {thread.unreadCount > 0 && (
+                        <div style={{ fontSize: "0.7rem", color: "#d32f2f", fontWeight: 600 }}>
+                          {thread.unreadCount} unread
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+              <div style={{ fontWeight: 600 }}>Thread</div>
+              {selectedMessageThread ? (
+                <>
+                  <div style={{
+                    flex: 1,
+                    maxHeight: "260px",
+                    overflowY: "auto",
+                    border: "1px solid #eee",
+                    borderRadius: 8,
+                    padding: "0.75rem",
+                    background: "#fafafa",
+                  }}>
+                    {selectedAdminThread === undefined ? (
+                      <p style={{ color: "#666" }}>Loading messages...</p>
+                    ) : selectedAdminThread.length === 0 ? (
+                      <p style={{ color: "#666" }}>No messages in this thread.</p>
+                    ) : (
+                      selectedAdminThread.map((msg: any) => (
+                        <div key={msg.id} style={{ marginBottom: "0.6rem" }}>
+                          <div style={{ fontSize: "0.75rem", color: "#666" }}>
+                            {msg.isFromMe ? "You" : msg.fromAlias}
+                          </div>
+                          <div style={{ fontSize: "0.9rem" }}>{msg.message}</div>
+                          <div style={{ fontSize: "0.7rem", color: "#999" }}>
+                            {new Date(msg.createdAt).toLocaleString()}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <input
+                      type="text"
+                      value={adminMessageText}
+                      onChange={(e) => setAdminMessageText(e.target.value)}
+                      placeholder="Type your response..."
+                      style={{
+                        flex: 1,
+                        padding: "0.6rem",
+                        borderRadius: 8,
+                        border: "1px solid #ddd",
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSendAdminMessage}
+                      disabled={!adminMessageText.trim()}
+                      style={{
+                        padding: "0.6rem 1rem",
+                        background: adminMessageText.trim() ? "#1976d2" : "#ccc",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: 8,
+                        cursor: adminMessageText.trim() ? "pointer" : "not-allowed",
+                        fontWeight: 600,
+                      }}
+                    >
+                      Send
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <p style={{ color: "#666" }}>Select a thread to respond.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   /* ───────────────── UI ───────────────── */
 
@@ -589,37 +1036,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
             </a>
 
             {/* Messages & Notifications */}
-            <a href="#admin-inbox" style={{ textDecoration: "none" }}>
-              <div
-                style={{
-                  ...utilityCardStyle,
-                  cursor: "pointer",
-                  transition: "transform 0.2s, box-shadow 0.2s",
-                  background: "linear-gradient(135deg, #00838f 0%, #006064 100%)",
-                  color: "#fff",
-                  minHeight: "140px",
-                  display: "flex",
-                  flexDirection: "column",
-                  justifyContent: "space-between",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = "translateY(-4px)";
-                  e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.15)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = "translateY(0)";
-                  e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.06)";
-                }}
-              >
-                <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>📬</div>
-                <div>
-                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Messages & Notifications</h3>
-                  <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.95 }}>
-                    Respond to member messages
-                  </p>
-                </div>
-              </div>
-            </a>
+            {messagesPanel}
 
             {/* Community Dashboard */}
             <a href="/admin/community-dashboard" style={{ textDecoration: "none" }}>
@@ -657,51 +1074,9 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
         </>
       )}
 
-      {isSuperAdmin && (
-        <div id="members" style={{ marginBottom: "2rem" }}>
-          <h2 style={{ marginBottom: "1rem" }}>Members</h2>
-          <div style={{
-            background: "#fff",
-            borderRadius: "12px",
-            padding: "1rem",
-            border: "1px solid #e0e0e0",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-          }}>
-            {membersList === undefined ? (
-              <p style={{ color: "#666" }}>Loading members...</p>
-            ) : membersList.length === 0 ? (
-              <p style={{ color: "#666" }}>No members found.</p>
-            ) : (
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
-                  <thead>
-                    <tr style={{ textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>
-                      <th style={{ padding: "0.6rem" }}>Role</th>
-                      <th style={{ padding: "0.6rem" }}>Alias</th>
-                      <th style={{ padding: "0.6rem" }}>Member ID</th>
-                      <th style={{ padding: "0.6rem" }}>Email</th>
-                      <th style={{ padding: "0.6rem" }}>Phone</th>
-                      <th style={{ padding: "0.6rem" }}>Location</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {membersList.map((member: any) => (
-                      <tr key={member.userId} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                        <td style={{ padding: "0.6rem" }}>{member.role}</td>
-                        <td style={{ padding: "0.6rem" }}>{member.alias || "-"}</td>
-                        <td style={{ padding: "0.6rem", fontFamily: "monospace", fontSize: "0.8rem" }}>{member.userId}</td>
-                        <td style={{ padding: "0.6rem" }}>{member.email || "-"}</td>
-                        <td style={{ padding: "0.6rem" }}>{member.phoneNumber || "-"}</td>
-                        <td style={{ padding: "0.6rem", color: "#666" }}>
-                          {[member.districtText, member.subCountyText, member.village].filter(Boolean).join(" • ") || "-"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
+      {isMessageAdmin && !isSuperAdmin && (
+        <div style={{ marginBottom: "2rem" }}>
+          {messagesPanel}
         </div>
       )}
 
@@ -758,6 +1133,108 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
       {/* FARM BACKGROUND CARD */}
       <div style={farmCardStyle}>
         <div style={glassPanelStyle}>
+          {isSuperAdmin && (
+            <div id="members" style={{ marginBottom: "1.5rem" }}>
+              <h3 style={{ marginBottom: "1rem" }}>Members</h3>
+              <div style={{
+                background: "#fff",
+                borderRadius: "12px",
+                padding: "1rem",
+                border: "1px solid #e0e0e0",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+              }}>
+                <div style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: "0.75rem",
+                  flexWrap: "wrap",
+                  marginBottom: "1rem",
+                }}>
+                  <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+                    <label style={{ fontWeight: 600 }}>Category:</label>
+                    <select
+                      value={memberRoleFilter}
+                      onChange={(e) => setMemberRoleFilter(e.target.value as any)}
+                      style={{ padding: "0.35rem 0.6rem", borderRadius: 6, border: "1px solid #ddd" }}
+                    >
+                      <option value="all">All</option>
+                      <option value="farmer">Farmers</option>
+                      <option value="trader">Traders</option>
+                      <option value="buyer">Buyers</option>
+                    </select>
+                  </div>
+                  <button
+                    onClick={handleExportAllMembers}
+                    style={{
+                      background: "#111827",
+                      color: "#fff",
+                      padding: "0.5rem 0.9rem",
+                      borderRadius: 6,
+                      border: "none",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Export Excel (All Fields)
+                  </button>
+                </div>
+                {membersList === undefined ? (
+                  <p style={{ color: "#666" }}>Loading members...</p>
+                ) : filteredMembers.length === 0 ? (
+                  <p style={{ color: "#666" }}>No members found.</p>
+                ) : (
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
+                      <thead>
+                        <tr style={{ textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>
+                          <th style={{ padding: "0.6rem" }}>Role</th>
+                          <th style={{ padding: "0.6rem" }}>Alias</th>
+                          <th style={{ padding: "0.6rem" }}>Member ID</th>
+                          <th style={{ padding: "0.6rem" }}>Email</th>
+                          <th style={{ padding: "0.6rem" }}>Phone</th>
+                          <th style={{ padding: "0.6rem" }}>Location</th>
+                          <th style={{ padding: "0.6rem" }}>Communities</th>
+                          <th style={{ padding: "0.6rem" }}>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredMembers.map((member: any) => (
+                          <tr key={member.userId} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                            <td style={{ padding: "0.6rem" }}>{member.role}</td>
+                            <td style={{ padding: "0.6rem" }}>{member.alias || "-"}</td>
+                            <td style={{ padding: "0.6rem", fontFamily: "monospace", fontSize: "0.8rem" }}>{member.userId}</td>
+                            <td style={{ padding: "0.6rem" }}>{member.email || "-"}</td>
+                            <td style={{ padding: "0.6rem" }}>{member.phoneNumber || "-"}</td>
+                            <td style={{ padding: "0.6rem", color: "#666" }}>
+                              {[member.districtText, member.subCountyText, member.village].filter(Boolean).join(" • ") || "-"}
+                            </td>
+                            <td style={{ padding: "0.6rem", color: "#666" }}>
+                              {(member.communityNames || []).join(", ") || "-"}
+                            </td>
+                            <td style={{ padding: "0.6rem" }}>
+                              <button
+                                onClick={() => setSelectedMember(member)}
+                                style={{
+                                  padding: "0.35rem 0.6rem",
+                                  borderRadius: 6,
+                                  border: "1px solid #d1d5db",
+                                  background: "#ffffff",
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                View
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
           {selectedCommunityId ? (
             <>
               {/* Back + Export */}
@@ -1075,149 +1552,93 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
               </div>
             </div>
           )}
-        </div>
-      </div>
 
-      {isSuperAdmin && (
-        <div id="admin-inbox" style={{ marginTop: "2rem" }}>
-          <h2 style={{ marginBottom: "1rem" }}>Messages & Notifications</h2>
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "minmax(220px, 320px) 1fr",
-            gap: "1rem",
-            alignItems: "stretch",
-          }}>
-            <div style={{
-              background: "#fff",
-              borderRadius: 12,
-              padding: "1rem",
-              border: "1px solid #e0e0e0",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-            }}>
-              <div style={{ marginBottom: "0.75rem", fontWeight: 600 }}>Notifications</div>
-              <NotificationMailbox userId={adminId} />
-            </div>
-            <div style={{
-              background: "#fff",
-              borderRadius: 12,
-              padding: "1rem",
-              border: "1px solid #e0e0e0",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-              minHeight: "320px",
-            }}>
-              <div style={{ display: "grid", gridTemplateColumns: "minmax(180px, 260px) 1fr", gap: "1rem" }}>
-                <div style={{ borderRight: "1px solid #eee", paddingRight: "0.75rem" }}>
-                  <div style={{ fontWeight: 600, marginBottom: "0.75rem" }}>Message Threads</div>
-                  {adminMessageThreads === undefined ? (
-                    <p style={{ color: "#666" }}>Loading threads...</p>
-                  ) : adminMessageThreads.length === 0 ? (
-                    <p style={{ color: "#666" }}>No messages yet.</p>
-                  ) : (
-                    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                      {adminMessageThreads.map((thread: any) => (
-                        <button
-                          key={thread.utid}
-                          type="button"
-                          onClick={async () => {
-                            setSelectedMessageThread({ utid: thread.utid, otherUserId: thread.otherUserId });
-                            await markMessagesAsRead({ userId: adminId, utid: thread.utid });
-                          }}
-                          style={{
-                            padding: "0.5rem",
-                            borderRadius: 8,
-                            border: "1px solid #ddd",
-                            background: selectedMessageThread?.utid === thread.utid ? "#e3f2fd" : "#f9fafb",
-                            textAlign: "left",
-                            cursor: "pointer",
-                          }}
-                        >
-                          <div style={{ fontWeight: 600, fontSize: "0.85rem" }}>
-                            {thread.otherUserAlias || "Member"}
-                          </div>
-                          <div style={{ fontSize: "0.75rem", color: "#666" }}>
-                            {thread.lastMessage?.slice(0, 40) || "No message"}
-                          </div>
-                          {thread.unreadCount > 0 && (
-                            <div style={{ fontSize: "0.7rem", color: "#d32f2f", fontWeight: 600 }}>
-                              {thread.unreadCount} unread
-                            </div>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+          {selectedMember && (
+            <div
+              style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(0,0,0,0.45)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 50,
+                padding: "1rem",
+              }}
+              onClick={() => setSelectedMember(null)}
+            >
+              <div
+                style={{
+                  background: "#fff",
+                  borderRadius: 12,
+                  maxWidth: 900,
+                  width: "100%",
+                  padding: "1.25rem",
+                  boxShadow: "0 12px 30px rgba(0,0,0,0.2)",
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                  <h3 style={{ margin: 0 }}>Member Details</h3>
+                  <button
+                    onClick={() => setSelectedMember(null)}
+                    style={{
+                      padding: "0.4rem 0.75rem",
+                      borderRadius: 6,
+                      border: "1px solid #ddd",
+                      background: "#fff",
+                      cursor: "pointer",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Close
+                  </button>
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                  <div style={{ fontWeight: 600 }}>Thread</div>
-                  {selectedMessageThread ? (
-                    <>
-                      <div style={{
-                        flex: 1,
-                        maxHeight: "260px",
-                        overflowY: "auto",
-                        border: "1px solid #eee",
-                        borderRadius: 8,
-                        padding: "0.75rem",
-                        background: "#fafafa",
-                      }}>
-                        {selectedAdminThread === undefined ? (
-                          <p style={{ color: "#666" }}>Loading messages...</p>
-                        ) : selectedAdminThread.length === 0 ? (
-                          <p style={{ color: "#666" }}>No messages in this thread.</p>
-                        ) : (
-                          selectedAdminThread.map((msg: any) => (
-                            <div key={msg.id} style={{ marginBottom: "0.6rem" }}>
-                              <div style={{ fontSize: "0.75rem", color: "#666" }}>
-                                {msg.isFromMe ? "You" : msg.fromAlias}
-                              </div>
-                              <div style={{ fontSize: "0.9rem" }}>{msg.message}</div>
-                              <div style={{ fontSize: "0.7rem", color: "#999" }}>
-                                {new Date(msg.createdAt).toLocaleString()}
-                              </div>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                      <div style={{ display: "flex", gap: "0.5rem" }}>
-                        <input
-                          type="text"
-                          value={adminMessageText}
-                          onChange={(e) => setAdminMessageText(e.target.value)}
-                          placeholder="Type your response..."
-                          style={{
-                            flex: 1,
-                            padding: "0.6rem",
-                            borderRadius: 8,
-                            border: "1px solid #ddd",
-                          }}
-                        />
-                        <button
-                          type="button"
-                          onClick={handleSendAdminMessage}
-                          disabled={!adminMessageText.trim()}
-                          style={{
-                            padding: "0.6rem 1rem",
-                            background: adminMessageText.trim() ? "#1976d2" : "#ccc",
-                            color: "#fff",
-                            border: "none",
-                            borderRadius: 8,
-                            cursor: adminMessageText.trim() ? "pointer" : "not-allowed",
-                            fontWeight: 600,
-                          }}
-                        >
-                          Send
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <p style={{ color: "#666" }}>Select a thread to respond.</p>
-                  )}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "0.75rem" }}>
+                  {[
+                    { label: "Role", value: selectedMember.role },
+                    { label: "Alias", value: selectedMember.alias },
+                    { label: "Member ID", value: selectedMember.userId },
+                    { label: "Email", value: selectedMember.email },
+                    { label: "Phone", value: selectedMember.phoneNumber },
+                    { label: "Sex", value: selectedMember.sex },
+                    { label: "Admin Level", value: selectedMember.adminLevel },
+                    { label: "Admin Category", value: selectedMember.adminCategory },
+                    { label: "Service Level", value: selectedMember.serviceLevel },
+                    { label: "Export Limit", value: selectedMember.exportLimit },
+                    { label: "Region", value: selectedMember.region },
+                    { label: "District", value: selectedMember.districtText },
+                    { label: "SubCounty", value: selectedMember.subCountyText },
+                    { label: "Village", value: selectedMember.village },
+                    { label: "County", value: selectedMember.county },
+                    { label: "Water Source", value: selectedMember.waterSource },
+                    { label: "Onboarding Completed", value: selectedMember.onboardingCompleted ? "Yes" : "No" },
+                    { label: "Verified Trader", value: selectedMember.isVerifiedTrader ? "Yes" : "No" },
+                    { label: "Verification Status", value: selectedMember.verificationStatus },
+                    { label: "Verified By", value: selectedMember.verifiedBy },
+                    { label: "Verified At", value: selectedMember.verifiedAt ? formatUgandaDate(selectedMember.verifiedAt) : "-" },
+                    { label: "Created At", value: selectedMember.createdAt ? formatUgandaDate(selectedMember.createdAt) : "-" },
+                    { label: "Last Active", value: selectedMember.lastActiveAt ? formatUgandaDate(selectedMember.lastActiveAt) : "-" },
+                    { label: "Communities", value: (selectedMember.communityNames || []).join(", ") || "-" },
+                    { label: "Community IDs", value: (selectedMember.communityIds || []).join(", ") || "-" },
+                  ].map((item) => (
+                    <div key={item.label} style={{
+                      padding: "0.75rem",
+                      border: "1px solid #eee",
+                      borderRadius: 8,
+                      background: "#fafafa",
+                    }}>
+                      <div style={{ fontSize: "0.8rem", color: "#666" }}>{item.label}</div>
+                      <div style={{ fontWeight: 600, wordBreak: "break-word" }}>{item.value || "-"}</div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
-      )}
+      </div>
+
     </div>
   );
 }

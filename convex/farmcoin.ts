@@ -545,6 +545,33 @@ export const getUnverifiedTraders = query({
   },
 });
 
+export const getTraderVerificationList = query({
+  args: { adminId: v.id("users") },
+  handler: async (ctx, args) => {
+    const adminCheck = await verifyAdminRole({ userId: args.adminId, db: ctx.db });
+    if (!adminCheck.authorized || !adminCheck.user) {
+      throw new Error("Not authorized");
+    }
+
+    if (!isSuperAdmin(adminCheck.user)) {
+      throw new Error("Only Superadmin can view traders");
+    }
+
+    const traders = await ctx.db
+      .query("users")
+      .withIndex("by_role", (q: any) => q.eq("role", "trader"))
+      .collect();
+
+    return traders.map((t: any) => ({
+      _id: t._id,
+      alias: t.alias,
+      email: t.email,
+      isVerifiedTrader: t.isVerifiedTrader ?? false,
+      verificationStatus: t.verificationStatus ?? "pending",
+    }));
+  },
+});
+
 export const verifyTrader = mutation({
   args: {
     adminId: v.id("users"),
@@ -611,6 +638,58 @@ export const rejectTrader = mutation({
       reason: args.reason,
       utid: generateUTID("admin"),
       timestamp: getUgandaTime(),
+    });
+
+    return { success: true };
+  },
+});
+
+export const setTraderVerificationStatus = mutation({
+  args: {
+    adminId: v.id("users"),
+    traderId: v.id("users"),
+    status: v.union(v.literal("verified"), v.literal("pending")),
+  },
+  handler: async (ctx, args) => {
+    const adminCheck = await verifyAdminRole({ userId: args.adminId, db: ctx.db });
+    if (!adminCheck.authorized || !adminCheck.user) {
+      throw new Error("Not authorized");
+    }
+
+    if (!isSuperAdmin(adminCheck.user)) {
+      throw new Error("Only Superadmin can change trader verification status");
+    }
+
+    const trader = await ctx.db.get(args.traderId);
+    if (!trader || trader.role !== "trader") {
+      throw new Error("User is not a trader");
+    }
+
+    const now = getUgandaTime();
+
+    if (args.status === "verified") {
+      await ctx.db.patch(args.traderId, {
+        isVerifiedTrader: true,
+        verificationStatus: "verified",
+        verifiedBy: args.adminId,
+        verifiedAt: now,
+      });
+    } else {
+      await ctx.db.patch(args.traderId, {
+        isVerifiedTrader: false,
+        verificationStatus: "pending",
+        verifiedBy: undefined,
+        verifiedAt: undefined,
+      });
+    }
+
+    await ctx.db.insert("adminActions", {
+      adminId: args.adminId,
+      actionType: args.status === "verified" ? "verify_trader" : "mark_trader_unverified",
+      targetUserId: args.traderId,
+      reason: "Superadmin verification status update",
+      utid: generateUTID("admin"),
+      timestamp: now,
     });
 
     return { success: true };

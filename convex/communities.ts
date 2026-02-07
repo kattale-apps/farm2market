@@ -670,6 +670,7 @@ export const notifyCommunity = mutation({
     communityId: v.id("communities"),
     title: v.string(),
     message: v.string(),
+    reason: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     // Verify admin role
@@ -686,9 +687,10 @@ export const notifyCommunity = mutation({
       throw new Error("User is not an admin");
     }
 
-    // Only SuperAdmin can send community notifications
-    if (!isSuperAdmin(adminUser)) {
-      throw new Error("Only SuperAdmin can send community notifications");
+    const isMessageAdmin =
+      adminUser.adminLevel === "junior" && adminUser.adminCategory === "message";
+    if (!isSuperAdmin(adminUser) && !isMessageAdmin) {
+      throw new Error("Only SuperAdmin or Messages Admin can send community notifications");
     }
 
     // Get all community members
@@ -718,6 +720,7 @@ export const notifyCommunity = mutation({
       adminId: args.adminId,
       action: "notify_community",
       details: `Sent notification to community: ${args.communityId} (UTID: ${utid})`,
+      reason: args.reason,
       timestamp: getUgandaTime(),
     });
 

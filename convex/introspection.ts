@@ -198,20 +198,71 @@ export const getAllUsers = query({
     }
 
     const users = await ctx.db.query("users").collect();
+    const communities = await ctx.db.query("communities").collect();
+    const communityMemberships = await ctx.db.query("communityMemberships").collect();
+    const communityMembers = await ctx.db.query("communityMembers").collect();
 
-    return users.map((u) => ({
-      userId: u._id,
-      alias: u.alias,
-      email: u.email,
-      phoneNumber: u.phoneNumber,
-      role: u.role,
-      adminLevel: u.adminLevel,
-      adminCategory: u.adminCategory,
-      assignedCommunityIds: u.assignedCommunityIds ?? [],
-      districtText: (u as any).districtText,
-      subCountyText: (u as any).subCountyText,
-      village: (u as any).village,
-      county: (u as any).county,
-    }));
+    const communityNameById = new Map(
+      communities.map((c: any) => [c._id, c.name])
+    );
+
+    const memberCommunities = new Map<string, Set<string>>();
+
+    for (const membership of communityMemberships) {
+      const key = String(membership.userId);
+      if (!memberCommunities.has(key)) {
+        memberCommunities.set(key, new Set());
+      }
+      memberCommunities.get(key)!.add(String(membership.communityId));
+    }
+
+    for (const member of communityMembers) {
+      if (member.status !== "APPROVED") continue;
+      const key = String(member.farmerId);
+      if (!memberCommunities.has(key)) {
+        memberCommunities.set(key, new Set());
+      }
+      memberCommunities.get(key)!.add(String(member.communityId));
+    }
+
+    return users.map((u) => {
+      const communityIds = Array.from(memberCommunities.get(String(u._id)) ?? []);
+      const communityNames = communityIds
+        .map((id) => communityNameById.get(id))
+        .filter(Boolean);
+
+      return {
+        userId: u._id,
+        alias: u.alias,
+        email: u.email,
+        phoneNumber: u.phoneNumber,
+        role: u.role,
+        sex: (u as any).sex,
+        adminLevel: u.adminLevel,
+        adminCategory: u.adminCategory,
+        allowedStorageLocationIds: u.allowedStorageLocationIds ?? [],
+        assignedCommunityIds: u.assignedCommunityIds ?? [],
+        serviceLevel: u.serviceLevel,
+        exportLimit: u.exportLimit,
+        region: u.region,
+        districtId: u.districtId,
+        subcountyId: u.subcountyId,
+        parishId: u.parishId,
+        districtText: (u as any).districtText,
+        subCountyText: (u as any).subCountyText,
+        village: (u as any).village,
+        county: (u as any).county,
+        waterSource: (u as any).waterSource,
+        onboardingCompleted: u.onboardingCompleted,
+        isVerifiedTrader: (u as any).isVerifiedTrader,
+        verificationStatus: (u as any).verificationStatus,
+        verifiedBy: (u as any).verifiedBy,
+        verifiedAt: (u as any).verifiedAt,
+        createdAt: u.createdAt,
+        lastActiveAt: u.lastActiveAt,
+        communityIds,
+        communityNames,
+      };
+    });
   },
 });

@@ -30,6 +30,14 @@ async function verifyAdmin(ctx: any, adminId: string) {
   return user;
 }
 
+function isSuperAdmin(user: { adminLevel?: "super" | "junior"; adminCategory?: string }) {
+  return user.adminLevel === "super" || user.adminLevel === undefined;
+}
+
+function isMessageAdmin(user: { adminLevel?: "super" | "junior"; adminCategory?: string }) {
+  return user.adminLevel === "junior" && user.adminCategory === "message";
+}
+
 /**
  * Log admin action for notification sending
  */
@@ -735,5 +743,35 @@ export const getNotificationHistory = query({
       })),
       hasMore: grouped.length > limit,
     };
+  },
+});
+
+/**
+ * Get eligible notification recipients (admin only)
+ * - Superadmin and junior message admins only
+ */
+export const getNotificationRecipients = query({
+  args: {
+    adminId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const admin = await verifyAdmin(ctx, args.adminId);
+
+    if (!isSuperAdmin(admin) && !isMessageAdmin(admin)) {
+      throw new Error("Only Superadmin or Messages Admin can access recipients");
+    }
+
+    const users = await ctx.db.query("users").collect();
+    const members = users.filter(
+      (u) => u.role === "farmer" || u.role === "trader" || u.role === "buyer"
+    );
+
+    return members.map((u) => ({
+      userId: u._id,
+      alias: u.alias,
+      email: u.email,
+      phoneNumber: u.phoneNumber,
+      role: u.role,
+    }));
   },
 });

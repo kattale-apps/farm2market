@@ -518,6 +518,115 @@ export const createTraderListing = mutation({
 });
 
 /**
+ * Create a trader listing without inventory (trader sourced)
+ * Uses packaging/pricing fields and FarmCoin posting cost gating.
+ */
+export const createTraderPackagingListing = mutation({
+  args: {
+    traderId: v.id("users"),
+    productName: v.string(),
+    produceType: v.string(),
+    packagingTypeEnum: v.optional(v.string()),
+    packagingTypeCustom: v.optional(v.string()),
+    totalUnits: v.number(),
+    pricingUnit: v.union(v.literal("per_package"), v.literal("per_kg")),
+    pricePerUnit: v.number(),
+    departureLocation: v.string(),
+    destinationLocation: v.string(),
+    etaType: v.union(v.literal("duration"), v.literal("arrival_time")),
+    etaValue: v.number(),
+    deliveryStatus: v.union(v.literal("in_storage"), v.literal("in_transit")),
+  },
+  handler: async (ctx, args) => {
+    await checkPilotMode(ctx);
+
+    const user = await ctx.db.get(args.traderId);
+    if (!user || user.role !== "trader") {
+      throwAppError(invalidRoleError("trader"));
+    }
+
+    if (!user.isVerifiedTrader || user.verificationStatus !== "verified") {
+      throw new Error("Trader verification required before posting listings");
+    }
+
+    await checkRateLimit(ctx, args.traderId, user.role, "create_trader_listing", {
+      productName: args.productName,
+      totalUnits: args.totalUnits,
+    });
+
+    if (!args.productName.trim()) {
+      throw new Error("Product name is required");
+    }
+
+    if (args.totalUnits <= 0) {
+      throw new Error("Total units must be positive");
+    }
+
+    if (args.pricePerUnit <= 0) {
+      throwAppError(invalidAmountError());
+    }
+
+    if (!args.departureLocation.trim() || !args.destinationLocation.trim()) {
+      throw new Error("Departure and destination locations are required");
+    }
+
+    const settings = await ctx.db.query("systemSettings").first();
+    const postingCost = settings?.farmcoinPostingCost ?? 1;
+    if (postingCost > 0) {
+      await ctx.runMutation((internal as any).farmcoin.spendFarmcoinTokens, {
+        traderId: args.traderId,
+        amount: postingCost,
+        source: "posting_cost",
+        listingId: undefined,
+        reason: "Trader listing posting cost",
+      });
+    }
+
+    const utid = generateUTID(user.role);
+    const now = getUgandaTime();
+
+    const listingId = await ctx.db.insert("listings", {
+      traderId: args.traderId,
+      farmerId: undefined,
+      inventoryId: undefined,
+      utid,
+      produceType: args.produceType.trim(),
+      productName: args.productName.trim(),
+      totalKilos: args.totalUnits,
+      pricePerKilo: args.pricingUnit === "per_kg" ? args.pricePerUnit : args.pricePerUnit,
+      unitSize: 1,
+      totalUnits: args.totalUnits,
+      availableUnits: args.totalUnits,
+      status: "active",
+      createdAt: now,
+      deliverySLA: 0,
+      pricingUnit: args.pricingUnit,
+      pricePerUnit: args.pricePerUnit,
+      packagingTypeEnum: args.packagingTypeEnum,
+      packagingTypeCustom: args.packagingTypeCustom,
+      departureLocation: args.departureLocation.trim(),
+      destinationLocation: args.destinationLocation.trim(),
+      etaType: args.etaType,
+      etaValue: args.etaValue,
+      etaLastUpdatedAt: now,
+      deliveryStatus: args.deliveryStatus,
+    });
+
+    const unitIds: Id<"listingUnits">[] = [];
+    for (let i = 1; i <= args.totalUnits; i += 1) {
+      const unitId = await ctx.db.insert("listingUnits", {
+        listingId,
+        unitNumber: i,
+        status: "available",
+      });
+      unitIds.push(unitId);
+    }
+
+    return { listingId, utid, totalUnits: args.totalUnits, unitIds };
+  },
+});
+
+/**
  * Create trader inventory lot manually (trader only)
  * Backward compatible: does not alter existing farmer-sourced inventory.
  */

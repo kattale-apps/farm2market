@@ -15,6 +15,8 @@ export default function FinanceDashboardPage() {
   const [grantTraderId, setGrantTraderId] = useState<string>("");
   const [grantAmount, setGrantAmount] = useState<string>("");
   const [grantReason, setGrantReason] = useState("");
+  const [verificationFilter, setVerificationFilter] = useState<"all" | "verified" | "unverified">("all");
+  const [verificationTraderId, setVerificationTraderId] = useState<string>("");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const currentUser = useQuery(api.auth.getUser, userId ? { userId } : "skip");
   const isSuperAdmin = currentUser?.role === "admin" && (
@@ -42,15 +44,14 @@ export default function FinanceDashboardPage() {
     (api as any).farmcoin.getFarmcoinTraderBalances,
     userId ? { adminId: userId } : "skip"
   );
-  const unverifiedTraders = useQuery(
-    (api as any).farmcoin.getUnverifiedTraders,
+  const traderVerificationList = useQuery(
+    (api as any).farmcoin.getTraderVerificationList,
     userId ? { adminId: userId } : "skip"
   );
 
   const updateFarmcoinPricing = useMutation((api as any).farmcoin.updateFarmcoinPricing);
   const grantFarmcoinTokens = useMutation((api as any).farmcoin.grantFarmcoinTokens);
-  const verifyTrader = useMutation((api as any).farmcoin.verifyTrader);
-  const rejectTrader = useMutation((api as any).farmcoin.rejectTrader);
+  const setTraderVerificationStatus = useMutation((api as any).farmcoin.setTraderVerificationStatus);
 
   // Get current user from localStorage (pilot mode)
   useEffect(() => {
@@ -77,6 +78,20 @@ export default function FinanceDashboardPage() {
     const traders = traderBalances?.traders ? [...traderBalances.traders] : [];
     return traders.sort((a, b) => (a.alias || "").localeCompare(b.alias || ""));
   }, [traderBalances]);
+
+  const verificationOptions = useMemo(() => {
+    const traders = traderVerificationList ? [...traderVerificationList] : [];
+    const filtered = traders.filter((trader: any) => {
+      if (verificationFilter === "verified") {
+        return trader.verificationStatus === "verified";
+      }
+      if (verificationFilter === "unverified") {
+        return trader.verificationStatus !== "verified";
+      }
+      return true;
+    });
+    return filtered.sort((a, b) => (a.alias || "").localeCompare(b.alias || ""));
+  }, [traderVerificationList, verificationFilter]);
 
   
 
@@ -311,6 +326,99 @@ export default function FinanceDashboardPage() {
           </div>
         )}
 
+        {isSuperAdmin && (
+          <div style={{ marginTop: "1.5rem", display: "grid", gap: "0.75rem", maxWidth: 640 }}>
+            <div style={{ fontWeight: 600 }}>Trader Verification Status</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "0.75rem" }}>
+              <select
+                value={verificationFilter}
+                onChange={(e) => {
+                  setVerificationFilter(e.target.value as any);
+                  setVerificationTraderId("");
+                }}
+                style={{ padding: "0.6rem", borderRadius: 8, border: "1px solid #ddd" }}
+              >
+                <option value="all">All traders</option>
+                <option value="verified">Verified only</option>
+                <option value="unverified">Not verified only</option>
+              </select>
+              <select
+                value={verificationTraderId}
+                onChange={(e) => setVerificationTraderId(e.target.value)}
+                style={{ padding: "0.6rem", borderRadius: 8, border: "1px solid #ddd" }}
+              >
+                <option value="">Select trader</option>
+                {verificationOptions.map((trader: any) => (
+                  <option key={trader._id} value={trader._id}>
+                    {trader.alias || "Trader"} • {trader.verificationStatus}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {verificationTraderId && (
+              <div style={{ fontSize: "0.85rem", color: "#666" }}>
+                Selected trader ID: <strong>{verificationTraderId}</strong>
+              </div>
+            )}
+            <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!userId || !verificationTraderId) return;
+                  try {
+                    await setTraderVerificationStatus({
+                      adminId: userId as any,
+                      traderId: verificationTraderId as any,
+                      status: "verified",
+                    });
+                    setMessage({ type: "success", text: "Trader verified." });
+                  } catch (error: any) {
+                    setMessage({ type: "error", text: error.message || "Failed to verify trader" });
+                  }
+                }}
+                style={{
+                  padding: "0.6rem 1rem",
+                  borderRadius: 8,
+                  border: "none",
+                  background: "#2e7d32",
+                  color: "#fff",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Mark Verified
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!userId || !verificationTraderId) return;
+                  try {
+                    await setTraderVerificationStatus({
+                      adminId: userId as any,
+                      traderId: verificationTraderId as any,
+                      status: "pending",
+                    });
+                    setMessage({ type: "success", text: "Trader set to not verified." });
+                  } catch (error: any) {
+                    setMessage({ type: "error", text: error.message || "Failed to update trader" });
+                  }
+                }}
+                style={{
+                  padding: "0.6rem 1rem",
+                  borderRadius: 8,
+                  border: "none",
+                  background: "#d32f2f",
+                  color: "#fff",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Mark Not Verified
+              </button>
+            </div>
+          </div>
+        )}
+
         {(isSuperAdmin || isFinanceAdmin) && (
           <div style={{ marginTop: "1.5rem" }}>
             <button
@@ -437,90 +545,6 @@ export default function FinanceDashboardPage() {
         </div>
       )}
 
-      {isSuperAdmin && (
-        <div style={{
-          padding: "1.5rem",
-          background: "#fff",
-          borderRadius: "12px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          marginBottom: "2rem",
-        }}>
-          <h2 style={{ fontSize: "1.3rem", marginBottom: "1rem" }}>Trader Verification Queue</h2>
-          {unverifiedTraders === undefined ? (
-            <p>Loading traders...</p>
-          ) : unverifiedTraders.length === 0 ? (
-            <p style={{ color: "#666" }}>No pending traders.</p>
-          ) : (
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ borderBottom: "2px solid #ddd" }}>
-                    <th style={{ padding: "0.75rem", textAlign: "left" }}>Trader ID</th>
-                    <th style={{ padding: "0.75rem", textAlign: "left" }}>Alias</th>
-                    <th style={{ padding: "0.75rem", textAlign: "left" }}>Status</th>
-                    <th style={{ padding: "0.75rem", textAlign: "left" }}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {unverifiedTraders.map((trader: any) => (
-                    <tr key={trader._id} style={{ borderBottom: "1px solid #eee" }}>
-                      <td style={{ padding: "0.75rem", fontFamily: "monospace" }}>{trader._id}</td>
-                      <td style={{ padding: "0.75rem" }}>{trader.alias}</td>
-                      <td style={{ padding: "0.75rem" }}>{trader.verificationStatus || "pending"}</td>
-                      <td style={{ padding: "0.75rem", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            try {
-                              await verifyTrader({ adminId: userId as any, traderId: trader._id });
-                              setMessage({ type: "success", text: "Trader verified." });
-                            } catch (error: any) {
-                              setMessage({ type: "error", text: error.message || "Failed to verify trader" });
-                            }
-                          }}
-                          style={{
-                            padding: "0.4rem 0.8rem",
-                            borderRadius: 6,
-                            border: "none",
-                            background: "#2e7d32",
-                            color: "#fff",
-                            fontWeight: 600,
-                            cursor: "pointer",
-                          }}
-                        >
-                          Verify
-                        </button>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            try {
-                              await rejectTrader({ adminId: userId as any, traderId: trader._id, reason: "Rejected by Superadmin" });
-                              setMessage({ type: "success", text: "Trader rejected." });
-                            } catch (error: any) {
-                              setMessage({ type: "error", text: error.message || "Failed to reject trader" });
-                            }
-                          }}
-                          style={{
-                            padding: "0.4rem 0.8rem",
-                            borderRadius: 6,
-                            border: "none",
-                            background: "#d32f2f",
-                            color: "#fff",
-                            fontWeight: 600,
-                            cursor: "pointer",
-                          }}
-                        >
-                          Reject
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
 
       {isSuperAdmin && (
         earnings === undefined ? (

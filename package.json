@@ -10,7 +10,8 @@
     "convex:dev": "convex dev",
     "convex:deploy": "convex deploy",
     "deploy:pilot": "npx convex deploy --yes",
-    "deploy:dev": "npx convex deploy --env-file .env.local --yes"
+    "deploy:dev": "npx convex deploy --env-file .env.local --yes",
+    "test:farmcoin": "node scripts/run_farmcoin_test.js"
   },
   "dependencies": {
     "@capacitor/android": "^8.0.0",

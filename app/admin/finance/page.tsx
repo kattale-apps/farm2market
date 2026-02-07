@@ -34,6 +34,10 @@ export default function FinanceDashboardPage() {
     (api as any).farmcoin.getFarmcoinLedger,
     userId ? { adminId: userId } : "skip"
   );
+  const superadminFarmcoinActivity = useQuery(
+    (api as any).farmcoin.getSuperadminFarmcoinActivity,
+    userId && isSuperAdmin ? { adminId: userId } : "skip"
+  );
   const traderBalances = useQuery(
     (api as any).farmcoin.getFarmcoinTraderBalances,
     userId ? { adminId: userId } : "skip"
@@ -327,6 +331,111 @@ export default function FinanceDashboardPage() {
           </div>
         )}
       </div>
+
+      {isSuperAdmin && (
+        <div style={{
+          padding: "1.5rem",
+          background: "#fff",
+          borderRadius: "12px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+          marginBottom: "2rem",
+        }}>
+          <h2 style={{ fontSize: "1.3rem", marginBottom: "1rem" }}>FarmCoin Distribution & Returns</h2>
+          {superadminFarmcoinActivity === undefined ? (
+            <p>Loading FarmCoin activity...</p>
+          ) : (
+            <>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "1.5rem", marginBottom: "1.25rem" }}>
+                <div style={{ minWidth: "240px" }}>
+                  <div style={{ fontWeight: 600, marginBottom: "0.35rem" }}>Central Pool Balance</div>
+                  <div style={{ fontSize: "1.3rem", color: "#2e7d32" }}>
+                    {superadminFarmcoinActivity.centralBalance} Token(s)
+                  </div>
+                </div>
+                <div style={{ minWidth: "240px" }}>
+                  <div style={{ fontWeight: 600, marginBottom: "0.35rem" }}>Recent Returns to Central Pool</div>
+                  <div style={{ fontSize: "0.95rem", color: "#666" }}>
+                    {superadminFarmcoinActivity.returns.length} entry(ies)
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: "1.5rem" }}>
+                <h3 style={{ fontSize: "1.05rem", marginBottom: "0.75rem" }}>Tokens Granted By You</h3>
+                {superadminFarmcoinActivity.grants.length === 0 ? (
+                  <p style={{ color: "#666" }}>No token grants found.</p>
+                ) : (
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr style={{ borderBottom: "2px solid #ddd" }}>
+                          <th style={{ padding: "0.75rem", textAlign: "left" }}>Trader</th>
+                          <th style={{ padding: "0.75rem", textAlign: "right" }}>Amount</th>
+                          <th style={{ padding: "0.75rem", textAlign: "left" }}>Reason</th>
+                          <th style={{ padding: "0.75rem", textAlign: "left" }}>UTID</th>
+                          <th style={{ padding: "0.75rem", textAlign: "left" }}>Date</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {superadminFarmcoinActivity.grants.slice(0, 50).map((entry: any, idx: number) => (
+                          <tr key={idx} style={{ borderBottom: "1px solid #eee" }}>
+                            <td style={{ padding: "0.75rem" }}>
+                              {entry.traderAlias || "Trader"}
+                              <div style={{ fontSize: "0.8rem", color: "#666" }}>{entry.traderId}</div>
+                            </td>
+                            <td style={{ padding: "0.75rem", textAlign: "right", fontWeight: 600 }}>
+                              +{entry.delta}
+                            </td>
+                            <td style={{ padding: "0.75rem", color: "#666" }}>{entry.reason || "-"}</td>
+                            <td style={{ padding: "0.75rem", fontFamily: "monospace" }}>{entry.utid}</td>
+                            <td style={{ padding: "0.75rem", color: "#666" }}>
+                              {entry.createdAt ? new Date(entry.createdAt).toLocaleString() : ""}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <h3 style={{ fontSize: "1.05rem", marginBottom: "0.75rem" }}>Tokens Returned to Central Pool</h3>
+                {superadminFarmcoinActivity.returns.length === 0 ? (
+                  <p style={{ color: "#666" }}>No returns recorded yet.</p>
+                ) : (
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr style={{ borderBottom: "2px solid #ddd" }}>
+                          <th style={{ padding: "0.75rem", textAlign: "left" }}>Source</th>
+                          <th style={{ padding: "0.75rem", textAlign: "right" }}>Amount</th>
+                          <th style={{ padding: "0.75rem", textAlign: "left" }}>UTID</th>
+                          <th style={{ padding: "0.75rem", textAlign: "left" }}>Date</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {superadminFarmcoinActivity.returns.map((entry: any, idx: number) => (
+                          <tr key={idx} style={{ borderBottom: "1px solid #eee" }}>
+                            <td style={{ padding: "0.75rem" }}>{entry.source?.replace("_", " ")}</td>
+                            <td style={{ padding: "0.75rem", textAlign: "right", fontWeight: 600 }}>
+                              +{entry.delta}
+                            </td>
+                            <td style={{ padding: "0.75rem", fontFamily: "monospace" }}>{entry.utid}</td>
+                            <td style={{ padding: "0.75rem", color: "#666" }}>
+                              {entry.createdAt ? new Date(entry.createdAt).toLocaleString() : ""}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {isSuperAdmin && (
         <div style={{

@@ -86,6 +86,7 @@ export default defineSchema({
     verificationStatus: v.optional(v.union(v.literal("pending"), v.literal("verified"), v.literal("rejected"))),
     verifiedBy: v.optional(v.id("users")),
     verifiedAt: v.optional(v.number()),
+    isTestUser: v.optional(v.boolean()), // Marks test users for safe cleanup/reset
     // Notification preferences
     notificationPreferences: v.optional(v.any()), // { newListings: boolean, offers: boolean, etc. }
   })

@@ -205,6 +205,64 @@ export const getFarmcoinLedger = query({
   },
 });
 
+export const getSuperadminFarmcoinActivity = query({
+  args: {
+    adminId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const adminCheck = await verifyAdminRole({ userId: args.adminId, db: ctx.db });
+    if (!adminCheck.authorized || !adminCheck.user) {
+      throw new Error("Not authorized");
+    }
+
+    const adminUser = adminCheck.user;
+    if (!isSuperAdmin(adminUser)) {
+      throw new Error("Only Superadmin can view this activity");
+    }
+
+    const grantEntries = await ctx.db
+      .query("farmcoinLedger")
+      .withIndex("by_source", (q: any) => q.eq("source", "grant"))
+      .order("desc")
+      .collect();
+
+    const myGrants = grantEntries.filter(
+      (entry: any) => entry.adminId === args.adminId && entry.accountType === "trader"
+    );
+
+    const traderIds = Array.from(
+      new Set(myGrants.map((entry: any) => entry.traderId).filter(Boolean))
+    ) as Id<"users">[];
+
+    const traders = await Promise.all(traderIds.map((id) => ctx.db.get(id)));
+    const traderMap = new Map(
+      traders.filter(Boolean).map((trader: any) => [trader._id, trader])
+    );
+
+    const grants = myGrants.map((entry: any) => {
+      const trader = traderMap.get(entry.traderId);
+      return {
+        ...entry,
+        traderAlias: trader?.alias,
+        traderEmail: trader?.email,
+      };
+    });
+
+    const centralEntries = await ctx.db
+      .query("farmcoinLedger")
+      .withIndex("by_account", (q: any) => q.eq("accountType", "central"))
+      .order("desc")
+      .collect();
+
+    const centralBalance = centralEntries[0]?.balanceAfter ?? 0;
+    const returns = centralEntries
+      .filter((entry: any) => entry.delta > 0 && entry.source !== "grant")
+      .slice(0, 50);
+
+    return { grants, centralBalance, returns };
+  },
+});
+
 export const getFarmcoinTraderBalances = query({
   args: {
     adminId: v.id("users"),

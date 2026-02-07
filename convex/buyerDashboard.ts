@@ -77,6 +77,7 @@ export const getAvailableInventory = query({
             code: storageLocation.code,
           } : null,
           traderAlias: trader?.alias || null, // Only alias, no real identity
+          traderIsVerified: !!trader?.isVerifiedTrader && trader?.verificationStatus === "verified",
           inventoryUtid: inventory.utid, // UTID of the transaction that created this inventory
           acquiredAt: inventory.acquiredAt, // When block was created
           storageStartTime: inventory.storageStartTime, // When storage fees started
@@ -252,6 +253,27 @@ export const getBuyerOrders = query({
         const listingUnitId = inventory?.listingUnitIds?.[0];
         const listingUnit = listingUnitId ? await ctx.db.get(listingUnitId) : null;
         const listing = listingUnit ? await ctx.db.get(listingUnit.listingId) : null;
+        const latestEtaChange = listing
+          ? await ctx.db
+              .query("etaHistory")
+              .withIndex("by_listing", (q) => q.eq("listingId", listing._id))
+              .order("desc")
+              .first()
+          : null;
+
+        const etaBaseTime = listing?.etaLastUpdatedAt || listing?.createdAt || purchase.purchasedAt;
+        const etaTimestamp = listing?.etaType && listing?.etaValue != null
+          ? listing.etaType === "duration"
+            ? etaBaseTime + listing.etaValue * 60 * 60 * 1000
+            : listing.etaValue
+          : null;
+        const etaIsPast = etaTimestamp != null ? now > etaTimestamp : false;
+        const etaHoursRemaining = etaTimestamp != null
+          ? Math.max(0, (etaTimestamp - now) / (1000 * 60 * 60))
+          : null;
+        const etaHoursOverdue = etaTimestamp != null && now > etaTimestamp
+          ? (now - etaTimestamp) / (1000 * 60 * 60)
+          : null;
 
         // Calculate pickup deadline status (server-side)
         const isPastDeadline = now > purchase.pickupSLA;
@@ -268,12 +290,26 @@ export const getBuyerOrders = query({
           produceType: inventory?.produceType || null,
           kilos: purchase.kilos,
           traderAlias: trader?.alias || null, // Only alias, no real identity
+          traderIsVerified: !!trader?.isVerifiedTrader && trader?.verificationStatus === "verified",
           purchasedAt: purchase.purchasedAt,
           pickupSLA: purchase.pickupSLA, // Deadline timestamp (48 hours after purchase)
           status: purchase.status,
           etaType: listing?.etaType ?? null,
           etaValue: listing?.etaValue ?? null,
           etaLastUpdatedAt: listing?.etaLastUpdatedAt ?? null,
+          etaTimestamp,
+          etaIsPast,
+          etaHoursRemaining: etaHoursRemaining != null ? Math.round(etaHoursRemaining * 100) / 100 : null,
+          etaHoursOverdue: etaHoursOverdue != null ? Math.round(etaHoursOverdue * 100) / 100 : null,
+          latestEtaChange: latestEtaChange
+            ? {
+                oldEtaValue: latestEtaChange.oldEtaValue ?? null,
+                newEtaValue: latestEtaChange.newEtaValue,
+                etaType: latestEtaChange.etaType,
+                reason: latestEtaChange.reason,
+                createdAt: latestEtaChange.createdAt,
+              }
+            : null,
           deliveryStatus: listing?.deliveryStatus ?? null,
           progressStage: listing?.progressStage ?? null,
           departureLocation: listing?.departureLocation ?? null,
@@ -361,6 +397,27 @@ export const getBuyerActiveOrders = query({
         const listingUnitId = inventory?.listingUnitIds?.[0];
         const listingUnit = listingUnitId ? await ctx.db.get(listingUnitId) : null;
         const listing = listingUnit ? await ctx.db.get(listingUnit.listingId) : null;
+        const latestEtaChange = listing
+          ? await ctx.db
+              .query("etaHistory")
+              .withIndex("by_listing", (q) => q.eq("listingId", listing._id))
+              .order("desc")
+              .first()
+          : null;
+
+        const etaBaseTime = listing?.etaLastUpdatedAt || listing?.createdAt || purchase.purchasedAt;
+        const etaTimestamp = listing?.etaType && listing?.etaValue != null
+          ? listing.etaType === "duration"
+            ? etaBaseTime + listing.etaValue * 60 * 60 * 1000
+            : listing.etaValue
+          : null;
+        const etaIsPast = etaTimestamp != null ? now > etaTimestamp : false;
+        const etaHoursRemaining = etaTimestamp != null
+          ? Math.max(0, (etaTimestamp - now) / (1000 * 60 * 60))
+          : null;
+        const etaHoursOverdue = etaTimestamp != null && now > etaTimestamp
+          ? (now - etaTimestamp) / (1000 * 60 * 60)
+          : null;
 
         // Calculate pickup deadline status (server-side)
         const isPastDeadline = now > purchase.pickupSLA;
@@ -377,12 +434,26 @@ export const getBuyerActiveOrders = query({
           produceType: inventory?.produceType || null,
           kilos: purchase.kilos,
           traderAlias: trader?.alias || null, // Only alias, no real identity
+          traderIsVerified: !!trader?.isVerifiedTrader && trader?.verificationStatus === "verified",
           purchasedAt: purchase.purchasedAt,
           pickupSLA: purchase.pickupSLA,
           status: purchase.status,
           etaType: listing?.etaType ?? null,
           etaValue: listing?.etaValue ?? null,
           etaLastUpdatedAt: listing?.etaLastUpdatedAt ?? null,
+          etaTimestamp,
+          etaIsPast,
+          etaHoursRemaining: etaHoursRemaining != null ? Math.round(etaHoursRemaining * 100) / 100 : null,
+          etaHoursOverdue: etaHoursOverdue != null ? Math.round(etaHoursOverdue * 100) / 100 : null,
+          latestEtaChange: latestEtaChange
+            ? {
+                oldEtaValue: latestEtaChange.oldEtaValue ?? null,
+                newEtaValue: latestEtaChange.newEtaValue,
+                etaType: latestEtaChange.etaType,
+                reason: latestEtaChange.reason,
+                createdAt: latestEtaChange.createdAt,
+              }
+            : null,
           deliveryStatus: listing?.deliveryStatus ?? null,
           progressStage: listing?.progressStage ?? null,
           departureLocation: listing?.departureLocation ?? null,
@@ -523,6 +594,7 @@ export const getBuyerTransactionLedger = query({
           timestamp: purchase.purchasedAt,
           status: purchase.status,
           traderAlias: trader?.alias || null,
+          traderIsVerified: !!trader?.isVerifiedTrader && trader?.verificationStatus === "verified",
         };
       })
     );

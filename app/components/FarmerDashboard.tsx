@@ -409,6 +409,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
           key,
           produceType: neg.produceType,
           traderAlias: neg.traderAlias || "Unknown",
+          traderIsVerified: !!neg.traderIsVerified,
           status: neg.status,
           farmerPricePerKilo: neg.farmerPricePerKilo,
           traderOfferPricePerKilo: neg.traderOfferPricePerKilo,
@@ -1229,8 +1230,22 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                         {batch.status.toUpperCase()}
                       </span>
                     </div>
-                    <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.35rem" }}>
-                      Trader: {batch.traderAlias} • Offer: {formatUGX(batch.traderOfferPricePerKilo)}/kg
+                    <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.35rem", display: "flex", flexWrap: "wrap", gap: "0.35rem", alignItems: "center" }}>
+                      <span>Trader: {batch.traderAlias}</span>
+                      {batch.traderIsVerified && (
+                        <span style={{
+                          padding: "0.15rem 0.5rem",
+                          borderRadius: "999px",
+                          fontSize: "0.7rem",
+                          fontWeight: "600",
+                          background: "#e8f5e9",
+                          color: "#2e7d32",
+                          border: "1px solid #81c784",
+                        }}>
+                          Verified
+                        </span>
+                      )}
+                      <span>• Offer: {formatUGX(batch.traderOfferPricePerKilo)}/kg</span>
                     </div>
                   </div>
                 ))}
@@ -1252,8 +1267,21 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                 <div style={{ fontWeight: "600", marginBottom: "0.5rem", fontSize: "clamp(0.9rem, 3vw, 1rem)" }}>
                   {getProduceEmoji(batch.produceType)} {batch.produceType} - {batch.items.length} unit{batch.items.length !== 1 ? "s" : ""}
                 </div>
-                <div style={{ fontSize: "clamp(0.8rem, 2.5vw, 0.85rem)", color: "#666", marginBottom: "0.5rem" }}>
-                  Trader: {batch.traderAlias}
+                <div style={{ fontSize: "clamp(0.8rem, 2.5vw, 0.85rem)", color: "#666", marginBottom: "0.5rem", display: "flex", flexWrap: "wrap", gap: "0.35rem", alignItems: "center" }}>
+                  <span>Trader: {batch.traderAlias}</span>
+                  {batch.traderIsVerified && (
+                    <span style={{
+                      padding: "0.15rem 0.5rem",
+                      borderRadius: "999px",
+                      fontSize: "0.7rem",
+                      fontWeight: "600",
+                      background: "#e8f5e9",
+                      color: "#2e7d32",
+                      border: "1px solid #81c784",
+                    }}>
+                      Verified
+                    </span>
+                  )}
                 </div>
                 <div style={{ marginBottom: "0.75rem" }}>
                   {(() => {

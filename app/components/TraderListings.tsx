@@ -28,14 +28,21 @@ export function TraderListings({ userId }: TraderListingsProps) {
   const [expandedListings, setExpandedListings] = useState<Set<string>>(new Set());
   const [cancelTarget, setCancelTarget] = useState<{ negotiationId: Id<"negotiations">; unitLabel: string } | null>(null);
   const [cancelReason, setCancelReason] = useState("");
+  const [etaDrafts, setEtaDrafts] = useState<Record<string, { etaType: "duration" | "arrival_time"; etaValue: string; reason: string }>>({});
+  const [statusDrafts, setStatusDrafts] = useState<Record<string, "departed" | "midway" | "delayed" | "arrived">>({});
+  const [etaUpdating, setEtaUpdating] = useState<Record<string, boolean>>({});
+  const [statusUpdating, setStatusUpdating] = useState<Record<string, boolean>>({});
 
   const listings = useQuery(api.listings.getActiveListings);
   const traderNegotiations = useQuery(api.negotiations.getTraderNegotiations, { traderId: userId });
   const acceptedNegotiations = useQuery(api.negotiations.getAcceptedNegotiations, { traderId: userId });
+  const traderDeliveryListings = useQuery(api.listings.getTraderDeliveryListings, { traderId: userId });
   const makeOffer = useMutation(api.negotiations.makeOffer);
   const acceptCounterOffer = useMutation(api.negotiations.acceptCounterOffer);
   const cancelNegotiation = useMutation(api.negotiations.cancelNegotiation);
   const lockUnit = useMutation(api.payments.lockUnit);
+  const updateTraderListingEta = useMutation(api.listings.updateTraderListingEta);
+  const updateTraderDeliveryStatus = useMutation(api.listings.updateTraderDeliveryStatus);
   
   // Get available units for the listing being offered on
   const listingDetails = useQuery(
@@ -125,6 +132,19 @@ export function TraderListings({ userId }: TraderListingsProps) {
   const formatDate = (timestamp: number) => {
     // Timestamps are stored in Uganda time, convert for display
     return formatUgandaDateTime(timestamp);
+  };
+
+  const getEtaTimestamp = (listing: any) => {
+    if (!listing?.etaType || listing?.etaValue == null) return null;
+    const base = listing.etaLastUpdatedAt || listing.createdAt || Date.now();
+    return listing.etaType === "duration"
+      ? base + listing.etaValue * 60 * 60 * 1000
+      : listing.etaValue;
+  };
+
+  const formatEtaValue = (etaType: "duration" | "arrival_time" | null | undefined, value: number | null | undefined) => {
+    if (!etaType || value == null) return "N/A";
+    return etaType === "arrival_time" ? formatDate(value) : `${value}h`;
   };
 
   const activeNegotiations = useMemo(
@@ -325,9 +345,239 @@ export function TraderListings({ userId }: TraderListingsProps) {
     }
   };
 
+  const handleUpdateEta = async (listingId: Id<"listings">) => {
+    const draft = etaDrafts[listingId] || { etaType: "duration", etaValue: "", reason: "" };
+    const etaValueNum = Number(draft.etaValue);
+    if (!draft.reason.trim()) {
+      setMessage({ type: "error", text: "ETA update requires a reason." });
+      return;
+    }
+    if (!draft.etaValue || Number.isNaN(etaValueNum) || etaValueNum <= 0) {
+      setMessage({ type: "error", text: "Please enter a valid ETA value." });
+      return;
+    }
+
+    setEtaUpdating((prev) => ({ ...prev, [listingId]: true }));
+    setMessage(null);
+    try {
+      await updateTraderListingEta({
+        traderId: userId,
+        listingId,
+        etaType: draft.etaType,
+        etaValue: etaValueNum,
+        reason: draft.reason.trim(),
+      });
+
+      setEtaDrafts((prev) => ({
+        ...prev,
+        [listingId]: { ...draft, reason: "" },
+      }));
+      setMessage({ type: "success", text: "ETA updated and buyers notified." });
+    } catch (error: any) {
+      setMessage({ type: "error", text: error?.message || "Failed to update ETA" });
+    } finally {
+      setEtaUpdating((prev) => ({ ...prev, [listingId]: false }));
+    }
+  };
+
+  const handleUpdateStatus = async (listingId: Id<"listings">) => {
+    const stage = statusDrafts[listingId] || "departed";
+    setStatusUpdating((prev) => ({ ...prev, [listingId]: true }));
+    setMessage(null);
+    try {
+      await updateTraderDeliveryStatus({
+        traderId: userId,
+        listingId,
+        progressStage: stage,
+      });
+      setMessage({ type: "success", text: "Delivery status updated and buyers notified." });
+    } catch (error: any) {
+      setMessage({ type: "error", text: error?.message || "Failed to update delivery status" });
+    } finally {
+      setStatusUpdating((prev) => ({ ...prev, [listingId]: false }));
+    }
+  };
+
 
   return (
     <div>
+      <div style={{
+        padding: "clamp(1rem, 3vw, 1.5rem)",
+        background: "#fff",
+        borderRadius: "12px",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        border: "1px solid #e0e0e0",
+        marginBottom: "1.5rem"
+      }}>
+        <h3 style={{ marginTop: 0, marginBottom: "0.75rem", fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", color: "#1a1a1a" }}>
+          Delivery Status & ETA Updates
+        </h3>
+        <div style={{ color: "#64748b", fontSize: "0.85rem", marginBottom: "1rem" }}>
+          Update delivery status (departed, midway, delayed, arrived) and ETA. ETA changes require a reason and notify buyers/watchers.
+        </div>
+
+        {traderDeliveryListings === undefined ? (
+          <p style={{ color: "#999" }}>Loading delivery listings...</p>
+        ) : !traderDeliveryListings?.listings?.length ? (
+          <p style={{ color: "#666" }}>No trader listings available for delivery updates.</p>
+        ) : (
+          <div style={{ display: "grid", gap: "1rem" }}>
+            {traderDeliveryListings.listings.map((listing: any) => {
+              const etaDraft = etaDrafts[listing.listingId] || {
+                etaType: listing.etaType || "duration",
+                etaValue: listing.etaValue != null ? String(listing.etaValue) : "",
+                reason: "",
+              };
+              const statusDraft = statusDrafts[listing.listingId] || listing.progressStage || "departed";
+              const etaTimestamp = getEtaTimestamp(listing);
+              const now = Date.now();
+              const etaIsPast = etaTimestamp != null ? now > etaTimestamp : false;
+              const etaHoursRemaining = etaTimestamp != null
+                ? Math.max(0, (etaTimestamp - now) / (1000 * 60 * 60))
+                : null;
+              const etaHoursOverdue = etaTimestamp != null && now > etaTimestamp
+                ? (now - etaTimestamp) / (1000 * 60 * 60)
+                : null;
+
+              return (
+                <div key={listing.listingId} style={{
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "10px",
+                  padding: "1rem",
+                  background: listing.progressStage === "delayed" ? "#fff7ed" : "#f8fafc"
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap" }}>
+                    <div>
+                      <div style={{ fontWeight: 600 }}>{listing.productName || listing.produceType}</div>
+                      <div style={{ fontSize: "0.8rem", color: "#64748b" }}>UTID: {listing.utid}</div>
+                      <div style={{ fontSize: "0.8rem", color: "#64748b" }}>
+                        Active Orders: {listing.activeOrders || 0} • Watchers: {listing.activeWatchers || 0}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: "0.85rem", color: "#475569" }}>
+                      <div>ETA: {formatEtaValue(listing.etaType, listing.etaValue)}</div>
+                      {listing.etaLastUpdatedAt && (
+                        <div>Updated: {formatDate(listing.etaLastUpdatedAt)}</div>
+                      )}
+                      {etaTimestamp && (
+                        <div style={{ color: etaIsPast ? "#b91c1c" : "#0f766e" }}>
+                          ETA Countdown: {etaIsPast
+                            ? `${(etaHoursOverdue || 0).toFixed(1)}h overdue`
+                            : `${(etaHoursRemaining || 0).toFixed(1)}h remaining`}
+                        </div>
+                      )}
+                      {(listing.deliveryStatus || listing.progressStage) && (
+                        <div>Status: {listing.deliveryStatus || "in_transit"}{listing.progressStage ? ` • ${listing.progressStage}` : ""}</div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "0.75rem", marginTop: "0.9rem" }}>
+                    <div style={{ display: "grid", gap: "0.5rem" }}>
+                      <div style={{ fontWeight: 600, fontSize: "0.85rem" }}>Update Delivery Status</div>
+                      <select
+                        value={statusDraft}
+                        onChange={(e) =>
+                          setStatusDrafts((prev) => ({
+                            ...prev,
+                            [listing.listingId]: e.target.value as any,
+                          }))
+                        }
+                        style={{ padding: "0.5rem", borderRadius: "6px", border: "1px solid #d1d5db" }}
+                      >
+                        <option value="departed">Departed</option>
+                        <option value="midway">Midway</option>
+                        <option value="delayed">Delayed</option>
+                        <option value="arrived">Arrived</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateStatus(listing.listingId)}
+                        disabled={statusUpdating[listing.listingId]}
+                        style={{
+                          padding: "0.55rem",
+                          borderRadius: "6px",
+                          border: "none",
+                          background: statusUpdating[listing.listingId] ? "#cbd5f5" : "#2563eb",
+                          color: "#fff",
+                          fontWeight: 600,
+                          cursor: statusUpdating[listing.listingId] ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        {statusUpdating[listing.listingId] ? "Updating..." : "Update Status"}
+                      </button>
+                    </div>
+
+                    <div style={{ display: "grid", gap: "0.5rem" }}>
+                      <div style={{ fontWeight: 600, fontSize: "0.85rem" }}>Update ETA</div>
+                      <select
+                        value={etaDraft.etaType}
+                        onChange={(e) =>
+                          setEtaDrafts((prev) => ({
+                            ...prev,
+                            [listing.listingId]: { ...etaDraft, etaType: e.target.value as any },
+                          }))
+                        }
+                        style={{ padding: "0.5rem", borderRadius: "6px", border: "1px solid #d1d5db" }}
+                      >
+                        <option value="duration">Duration (hours)</option>
+                        <option value="arrival_time">Arrival time</option>
+                      </select>
+                      <input
+                        type={etaDraft.etaType === "arrival_time" ? "datetime-local" : "number"}
+                        value={etaDraft.etaType === "arrival_time"
+                          ? (etaDraft.etaValue ? new Date(Number(etaDraft.etaValue)).toISOString().slice(0, 16) : "")
+                          : etaDraft.etaValue
+                        }
+                        onChange={(e) => {
+                          const nextValue = etaDraft.etaType === "arrival_time"
+                            ? String(new Date(e.target.value).getTime())
+                            : e.target.value;
+                          setEtaDrafts((prev) => ({
+                            ...prev,
+                            [listing.listingId]: { ...etaDraft, etaValue: nextValue },
+                          }));
+                        }}
+                        min={etaDraft.etaType === "duration" ? "1" : undefined}
+                        style={{ padding: "0.5rem", borderRadius: "6px", border: "1px solid #d1d5db" }}
+                      />
+                      <input
+                        type="text"
+                        placeholder="Reason for ETA change"
+                        value={etaDraft.reason}
+                        onChange={(e) =>
+                          setEtaDrafts((prev) => ({
+                            ...prev,
+                            [listing.listingId]: { ...etaDraft, reason: e.target.value },
+                          }))
+                        }
+                        style={{ padding: "0.5rem", borderRadius: "6px", border: "1px solid #d1d5db" }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateEta(listing.listingId)}
+                        disabled={etaUpdating[listing.listingId]}
+                        style={{
+                          padding: "0.55rem",
+                          borderRadius: "6px",
+                          border: "none",
+                          background: etaUpdating[listing.listingId] ? "#cbd5f5" : "#0f766e",
+                          color: "#fff",
+                          fontWeight: 600,
+                          cursor: etaUpdating[listing.listingId] ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        {etaUpdating[listing.listingId] ? "Updating..." : "Update ETA"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       <h3 style={{ marginTop: 0, marginBottom: "1rem", fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", color: "#1a1a1a" }}>
         Available Listings (Make Offers)
       </h3>

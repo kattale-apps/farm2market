@@ -19,6 +19,7 @@ import {
   invalidAmountError,
   throwAppError,
 } from "./errors";
+import { Id } from "./_generated/dataModel";
 
 /**
  * Create a listing (farmer only)
@@ -230,6 +231,7 @@ export const getActiveListings = query({
           progressStage: listing.progressStage,
           farmerAlias: farmer?.alias || null,
           traderAlias: trader?.alias || null,
+          traderIsVerified: !!trader?.isVerifiedTrader && trader?.verificationStatus === "verified",
           isTraderListing: !!listing.traderId, // Flag to identify trader listings (100kg blocks)
           createdAt: listing.createdAt,
           storageLocation: storageLocation
@@ -625,11 +627,80 @@ export const updateTraderListingEta = mutation({
       createdAt: getUgandaTime(),
     });
 
+    const now = getUgandaTime();
+    const previousEtaValue = listing.etaValue;
+    const previousEtaType = listing.etaType;
+    const previousBase = listing.etaLastUpdatedAt || listing.createdAt;
+    const previousEtaTimestamp = previousEtaValue == null || !previousEtaType
+      ? null
+      : previousEtaType === "duration"
+        ? previousBase + previousEtaValue * 60 * 60 * 1000
+        : previousEtaValue;
+
+    const nextBase = now;
+    const nextEtaTimestamp = args.etaType === "duration"
+      ? nextBase + args.etaValue * 60 * 60 * 1000
+      : args.etaValue;
+
+    const isExtended = previousEtaTimestamp != null && nextEtaTimestamp > previousEtaTimestamp;
+
     await ctx.db.patch(args.listingId, {
       etaType: args.etaType,
       etaValue: args.etaValue,
-      etaLastUpdatedAt: getUgandaTime(),
+      etaLastUpdatedAt: now,
+      ...(isExtended ? { progressStage: "delayed", deliveryStatus: "in_transit" } : {}),
     });
+
+    if (listing.inventoryId) {
+      const purchases = await ctx.db
+        .query("buyerPurchases")
+        .collect();
+      const activeOrders = purchases.filter(
+        (p) => p.inventoryId === listing.inventoryId && p.status === "pending_pickup"
+      );
+
+      const negotiations = await ctx.db
+        .query("traderBuyerNegotiations")
+        .withIndex("by_inventory", (q) => q.eq("inventoryId", listing.inventoryId as Id<"traderInventory">))
+        .collect();
+
+      const activeWatchers = negotiations.filter((neg) =>
+        neg.status === "pending" || neg.status === "countered" || neg.status === "accepted"
+      );
+
+      const recipientMap = new Map<Id<"users">, { utid: string; label: string }>();
+
+      for (const order of activeOrders) {
+        recipientMap.set(order.buyerId, { utid: order.utid, label: "order" });
+      }
+
+      for (const watcher of activeWatchers) {
+        if (!recipientMap.has(watcher.buyerId)) {
+          recipientMap.set(watcher.buyerId, { utid: watcher.negotiationUtid, label: "watch" });
+        }
+      }
+
+      const oldEtaLabel = previousEtaType === "arrival_time"
+        ? new Date(previousEtaValue || 0).toLocaleString()
+        : previousEtaValue != null
+          ? `${previousEtaValue}h`
+          : "N/A";
+      const newEtaLabel = args.etaType === "arrival_time"
+        ? new Date(args.etaValue).toLocaleString()
+        : `${args.etaValue}h`;
+
+      for (const [buyerId, info] of recipientMap.entries()) {
+        await ctx.db.insert("notifications", {
+          userId: buyerId,
+          type: "system",
+          title: "ETA Updated",
+          message: `ETA updated for ${listing.produceType}. ${oldEtaLabel} → ${newEtaLabel}. Reason: ${args.reason}`,
+          utid: info.utid,
+          read: false,
+          createdAt: now,
+        });
+      }
+    }
 
     return { success: true };
   },
@@ -669,7 +740,121 @@ export const updateTraderDeliveryStatus = mutation({
       deliveryStatus,
     });
 
+    if (listing.inventoryId) {
+      const purchases = await ctx.db
+        .query("buyerPurchases")
+        .collect();
+      const activeOrders = purchases.filter(
+        (p) => p.inventoryId === listing.inventoryId && p.status === "pending_pickup"
+      );
+
+      const negotiations = await ctx.db
+        .query("traderBuyerNegotiations")
+        .withIndex("by_inventory", (q) => q.eq("inventoryId", listing.inventoryId as Id<"traderInventory">))
+        .collect();
+
+      const activeWatchers = negotiations.filter((neg) =>
+        neg.status === "pending" || neg.status === "countered" || neg.status === "accepted"
+      );
+
+      const recipientMap = new Map<Id<"users">, { utid: string; label: string }>();
+
+      for (const order of activeOrders) {
+        recipientMap.set(order.buyerId, { utid: order.utid, label: "order" });
+      }
+
+      for (const watcher of activeWatchers) {
+        if (!recipientMap.has(watcher.buyerId)) {
+          recipientMap.set(watcher.buyerId, { utid: watcher.negotiationUtid, label: "watch" });
+        }
+      }
+
+      for (const [buyerId, info] of recipientMap.entries()) {
+        await ctx.db.insert("notifications", {
+          userId: buyerId,
+          type: "system",
+          title: "Delivery Status Updated",
+          message: `Delivery status updated for ${listing.produceType}: ${args.progressStage}.`,
+          utid: info.utid,
+          read: false,
+          createdAt: getUgandaTime(),
+        });
+      }
+    }
+
     return { success: true };
+  },
+});
+
+/**
+ * Get trader listings for delivery updates (trader only)
+ */
+export const getTraderDeliveryListings = query({
+  args: {
+    traderId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const trader = await ctx.db.get(args.traderId);
+    if (!trader || trader.role !== "trader") {
+      throwAppError(invalidRoleError("trader"));
+    }
+
+    const listings = await ctx.db
+      .query("listings")
+      .withIndex("by_trader", (q) => q.eq("traderId", args.traderId))
+      .collect();
+
+    const purchases = await ctx.db.query("buyerPurchases").collect();
+
+    const enriched = await Promise.all(
+      listings.map(async (listing) => {
+        const inventoryId = listing.inventoryId || null;
+        const activeOrders = inventoryId
+          ? purchases.filter((p) => p.inventoryId === inventoryId && p.status === "pending_pickup")
+          : [];
+
+        const activeWatchers = inventoryId
+          ? await ctx.db
+              .query("traderBuyerNegotiations")
+              .withIndex("by_inventory", (q) => q.eq("inventoryId", inventoryId))
+              .filter((q) =>
+                q.or(
+                  q.eq(q.field("status"), "pending"),
+                  q.eq(q.field("status"), "countered"),
+                  q.eq(q.field("status"), "accepted")
+                )
+              )
+              .collect()
+          : [];
+
+        return {
+          listingId: listing._id,
+          utid: listing.utid,
+          produceType: listing.produceType,
+          totalKilos: listing.totalKilos,
+          status: listing.status,
+          etaType: listing.etaType ?? null,
+          etaValue: listing.etaValue ?? null,
+          etaLastUpdatedAt: listing.etaLastUpdatedAt ?? null,
+          deliveryStatus: listing.deliveryStatus ?? null,
+          progressStage: listing.progressStage ?? null,
+          departureLocation: listing.departureLocation ?? null,
+          destinationLocation: listing.destinationLocation ?? null,
+          productName: listing.productName ?? null,
+          inventoryId,
+          createdAt: listing.createdAt,
+          activeOrders: activeOrders.length,
+          activeWatchers: activeWatchers.length,
+        };
+      })
+    );
+
+    enriched.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+    return {
+      total: enriched.length,
+      listings: enriched,
+    };
   },
 });
 

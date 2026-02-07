@@ -595,9 +595,17 @@ export const cancelNegotiation = mutation({
       lastUpdatedAt: getUgandaTime(),
     });
 
-    await ctx.db.patch(negotiation.unitId, {
-      activeNegotiationId: undefined,
-    });
+    if (unit) {
+      const unitPatch: Partial<typeof unit> = {
+        activeNegotiationId: undefined,
+      };
+
+      if (unit.status !== "available" && unit.status !== "delivered" && unit.status !== "cancelled") {
+        unitPatch.status = "available";
+      }
+
+      await ctx.db.patch(negotiation.unitId, unitPatch);
+    }
 
     const farmer = await ctx.db.get(negotiation.farmerId);
     if (farmer) {

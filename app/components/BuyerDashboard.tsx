@@ -133,6 +133,14 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
     return `ETA: ${order.etaValue}h`;
   };
 
+  const formatEtaValue = (etaType: "arrival_time" | "duration" | null, value: number | null) => {
+    if (!etaType || value == null) return "N/A";
+    if (etaType === "arrival_time") {
+      return formatDate(value);
+    }
+    return `${value}h`;
+  };
+
   const formatTimeRemaining = (deadline: number) => {
     const now = getUgandaTime();
     const diff = deadline - now;
@@ -1398,7 +1406,22 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                       </div>
                       <div>
                         <div style={{ color: "#999", fontSize: "clamp(0.75rem, 2vw, 0.85rem)" }}>Trader</div>
-                        <div style={{ fontWeight: "600", color: "#1a1a1a", fontSize: "clamp(0.9rem, 3vw, 1rem)" }}>{item.traderAlias}</div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
+                          <div style={{ fontWeight: "600", color: "#1a1a1a", fontSize: "clamp(0.9rem, 3vw, 1rem)" }}>{item.traderAlias}</div>
+                          {item.traderIsVerified && (
+                            <span style={{
+                              padding: "0.15rem 0.5rem",
+                              borderRadius: "999px",
+                              fontSize: "0.7rem",
+                              fontWeight: "600",
+                              background: "#e8f5e9",
+                              color: "#2e7d32",
+                              border: "1px solid #81c784",
+                            }}>
+                              Verified
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                     <div style={{ 
@@ -1623,6 +1646,19 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                     {(order.departureLocation || order.destinationLocation) && (
                       <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
                         Route: {order.departureLocation || "N/A"} → {order.destinationLocation || "N/A"}
+                      </div>
+                    )}
+                    {order.etaTimestamp && (
+                      <div style={{ fontSize: "0.75rem", color: order.etaIsPast ? "#b91c1c" : "#0f766e" }}>
+                        ETA Countdown: {order.etaIsPast
+                          ? `${(order.etaHoursOverdue || 0).toFixed(1)}h overdue`
+                          : `${(order.etaHoursRemaining || 0).toFixed(1)}h remaining`}
+                      </div>
+                    )}
+                    {order.latestEtaChange && (
+                      <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                        ETA Update: {formatEtaValue(order.latestEtaChange.etaType, order.latestEtaChange.oldEtaValue)} → {formatEtaValue(order.latestEtaChange.etaType, order.latestEtaChange.newEtaValue)}
+                        {order.latestEtaChange.reason ? ` • Reason: ${order.latestEtaChange.reason}` : ""}
                       </div>
                     )}
                   </div>

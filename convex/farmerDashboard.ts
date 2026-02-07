@@ -163,6 +163,7 @@ export const getActiveNegotiations = query({
           lockedAt: unit.lockedAt,
           // Trader information (anonymity preserved)
           traderAlias: trader?.alias || null, // Only alias, no real identity
+          traderIsVerified: !!trader?.isVerifiedTrader && trader?.verificationStatus === "verified",
           // Delivery deadline (server-calculated)
           deliveryDeadline: unit.deliveryDeadline,
           isPastDeadline,
@@ -261,6 +262,7 @@ export const getPayToLockConfirmations = query({
           paymentTimestamp: walletEntry?.timestamp || null,
           // Trader information (anonymity preserved)
           traderAlias: trader?.alias || null, // Only alias, no real identity
+          traderIsVerified: !!trader?.isVerifiedTrader && trader?.verificationStatus === "verified",
         };
       })
     );
@@ -354,6 +356,7 @@ export const getDeliveryDeadlines = query({
           minutesOverdue: Math.round(minutesOverdue),
           // Trader information (anonymity preserved)
           traderAlias: trader?.alias || null, // Only alias, no real identity
+          traderIsVerified: !!trader?.isVerifiedTrader && trader?.verificationStatus === "verified",
         };
       })
     );
@@ -461,6 +464,7 @@ export const getDeliveryStatus = query({
         hoursOverdue: Math.round(hoursOverdue * 100) / 100,
         // Trader information (anonymity preserved)
         traderAlias: trader?.alias || null, // Only alias, no real identity
+        traderIsVerified: !!trader?.isVerifiedTrader && trader?.verificationStatus === "verified",
       });
     }
 
@@ -563,6 +567,7 @@ export const getExpiredUTIDs = query({
           hoursExpired: Math.round(hoursExpired * 100) / 100,
           daysExpired: Math.round(daysExpired * 100) / 100,
           traderAlias: trader?.alias || null,
+          traderIsVerified: !!trader?.isVerifiedTrader && trader?.verificationStatus === "verified",
           archived: unit.archived || false,
         };
       })
@@ -766,6 +771,7 @@ export const getSuccessfulTransactionsLedger = query({
           deliveryDeadline: unit.deliveryDeadline,
           // Trader information (anonymity preserved)
           traderAlias: trader?.alias || null,
+          traderIsVerified: !!trader?.isVerifiedTrader && trader?.verificationStatus === "verified",
         };
       })
     );

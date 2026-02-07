@@ -333,6 +333,8 @@ export const signup = mutation({
       adminLevel: user.adminLevel,
       adminCategory: user.adminCategory,
       assignedCommunityIds: user.assignedCommunityIds,
+      isVerifiedTrader: user.isVerifiedTrader ?? false,
+      verificationStatus: user.verificationStatus ?? "pending",
     };
   },
 });
@@ -430,6 +432,8 @@ export const getUser = query({
       adminLevel: user.adminLevel,
       adminCategory: user.adminCategory,
       assignedCommunityIds: user.assignedCommunityIds,
+      isVerifiedTrader: user.isVerifiedTrader ?? false,
+      verificationStatus: user.verificationStatus ?? "pending",
     };
   },
 });

@@ -89,6 +89,8 @@ export default defineSchema({
     isTestUser: v.optional(v.boolean()), // Marks test users for safe cleanup/reset
     // Notification preferences
     notificationPreferences: v.optional(v.any()), // { newListings: boolean, offers: boolean, etc. }
+    // Pagination preferences (per user)
+    paginationPreferences: v.optional(v.any()), // { defaultPageSize: number, list: { [key: string]: number } }
   })
     .index("by_email", ["email"])
     .index("by_phone", ["phoneNumber"])

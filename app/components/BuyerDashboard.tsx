@@ -32,6 +32,13 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   const buyerConfirmListingDelivery = useMutation((api as any).buyers.buyerConfirmListingDelivery);
   const cashOutBuyerRewardReceipt = useMutation((api as any).farmcoin.cashOutBuyerRewardReceipt);
   const messageThreads = useQuery(api.messages.getUserMessageThreads, { userId });
+  const paginationPreferences = useQuery(
+    (api as any).userSettings.getPaginationPreferences,
+    { userId } as any
+  );
+  const updatePaginationPreferences = useMutation(
+    (api as any).userSettings.updatePaginationPreferences
+  );
   
   const initiateDeposit = useAction(api.pesapal.initiateBuyerDeposit);
   const paymentTransactions = useQuery(api.pesapal.getUserPaymentTransactions, { userId });
@@ -58,9 +65,11 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   const [inventoryPage, setInventoryPage] = useState(1);
   const [ordersPage, setOrdersPage] = useState(1);
   const [ledgerPage, setLedgerPage] = useState(1);
+  const [listingOrdersPage, setListingOrdersPage] = useState(1);
+  const [ordersPageSize, setOrdersPageSize] = useState(10);
+  const [ledgerPageSize, setLedgerPageSize] = useState(10);
+  const [listingOrdersPageSize, setListingOrdersPageSize] = useState(10);
   const INVENTORY_PAGE_SIZE = 10;
-  const ORDERS_PAGE_SIZE = 6;
-  const LEDGER_PAGE_SIZE = 12;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -81,8 +90,28 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       setIsInboxNarrow(width <= 720);
     });
     observer.observe(inboxRef.current);
-    return () => observer.disconnect();
-  }, []);
+          <div style={{ fontSize: "0.85rem", color: "#666" }}>Per page:</div>
+          <select
+            value={ledgerPageSize}
+            onChange={(e) => {
+              const nextSize = Number(e.target.value);
+              setLedgerPageSize(nextSize);
+              setLedgerPage(1);
+              updatePaginationPreferences({
+                userId,
+                listKey: "buyer_ledger",
+                pageSize: nextSize,
+              } as any);
+            }}
+            style={{ padding: "0.4rem 0.6rem", borderRadius: 6, border: "1px solid #ddd", fontSize: "0.85rem" }}
+          >
+            <option value={10}>10</option>
+            <option value={20}>20</option>
+            <option value={50}>50</option>
+          </select>
+      setListingOrdersPage(1);
+    }
+  }, [paginationPreferences, ordersPageSize, ledgerPageSize, listingOrdersPageSize]);
 
   const formatUGX = (amount: number) => {
     return new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX" }).format(amount);
@@ -183,6 +212,11 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
     return [...orders.orders].sort((a: any, b: any) => getSortTimestamp(b) - getSortTimestamp(a));
   }, [orders]);
 
+  const sortedListingOrders = useMemo(() => {
+    if (!listingOrders?.orders) return [];
+    return [...listingOrders.orders].sort((a: any, b: any) => getSortTimestamp(b) - getSortTimestamp(a));
+  }, [listingOrders]);
+
   const sortedTransactions = useMemo(() => {
     if (!transactionLedger?.transactions) return [];
     return [...transactionLedger.transactions].sort((a: any, b: any) => getSortTimestamp(b) - getSortTimestamp(a));
@@ -198,21 +232,30 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   );
 
   const ordersTotal = sortedOrders.length;
-  const ordersTotalPages = Math.max(1, Math.ceil(ordersTotal / ORDERS_PAGE_SIZE));
-  const ordersStart = ordersTotal === 0 ? 0 : (ordersPage - 1) * ORDERS_PAGE_SIZE + 1;
-  const ordersEnd = Math.min(ordersPage * ORDERS_PAGE_SIZE, ordersTotal);
+  const ordersTotalPages = Math.max(1, Math.ceil(ordersTotal / ordersPageSize));
+  const ordersStart = ordersTotal === 0 ? 0 : (ordersPage - 1) * ordersPageSize + 1;
+  const ordersEnd = Math.min(ordersPage * ordersPageSize, ordersTotal);
   const pagedOrders = sortedOrders.slice(
-    (ordersPage - 1) * ORDERS_PAGE_SIZE,
-    ordersPage * ORDERS_PAGE_SIZE
+    (ordersPage - 1) * ordersPageSize,
+    ordersPage * ordersPageSize
   );
 
   const ledgerTotal = sortedTransactions.length;
-  const ledgerTotalPages = Math.max(1, Math.ceil(ledgerTotal / LEDGER_PAGE_SIZE));
-  const ledgerStart = ledgerTotal === 0 ? 0 : (ledgerPage - 1) * LEDGER_PAGE_SIZE + 1;
-  const ledgerEnd = Math.min(ledgerPage * LEDGER_PAGE_SIZE, ledgerTotal);
+  const ledgerTotalPages = Math.max(1, Math.ceil(ledgerTotal / ledgerPageSize));
+  const ledgerStart = ledgerTotal === 0 ? 0 : (ledgerPage - 1) * ledgerPageSize + 1;
+  const ledgerEnd = Math.min(ledgerPage * ledgerPageSize, ledgerTotal);
   const pagedTransactions = sortedTransactions.slice(
-    (ledgerPage - 1) * LEDGER_PAGE_SIZE,
-    ledgerPage * LEDGER_PAGE_SIZE
+    (ledgerPage - 1) * ledgerPageSize,
+    ledgerPage * ledgerPageSize
+  );
+
+  const listingOrdersTotal = sortedListingOrders.length;
+  const listingOrdersTotalPages = Math.max(1, Math.ceil(listingOrdersTotal / listingOrdersPageSize));
+  const listingOrdersStart = listingOrdersTotal === 0 ? 0 : (listingOrdersPage - 1) * listingOrdersPageSize + 1;
+  const listingOrdersEnd = Math.min(listingOrdersPage * listingOrdersPageSize, listingOrdersTotal);
+  const pagedListingOrders = sortedListingOrders.slice(
+    (listingOrdersPage - 1) * listingOrdersPageSize,
+    listingOrdersPage * listingOrdersPageSize
   );
 
   useEffect(() => {
@@ -232,6 +275,12 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       setLedgerPage(ledgerTotalPages);
     }
   }, [ledgerPage, ledgerTotalPages]);
+
+  useEffect(() => {
+    if (listingOrdersPage > listingOrdersTotalPages) {
+      setListingOrdersPage(listingOrdersTotalPages);
+    }
+  }, [listingOrdersPage, listingOrdersTotalPages]);
 
   const exportTransactionLedgerToExcel = () => {
     if (!transactionLedger || transactionLedger.transactions.length === 0) return;
@@ -641,13 +690,41 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
         }}>
           Trader Listing Orders
         </h3>
+        <div style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "0.5rem",
+          marginBottom: "0.75rem"
+        }}>
+          <div style={{ fontSize: "0.85rem", color: "#666" }}>Per page:</div>
+          <select
+            value={listingOrdersPageSize}
+            onChange={(e) => {
+              const nextSize = Number(e.target.value);
+              setListingOrdersPageSize(nextSize);
+              setListingOrdersPage(1);
+              updatePaginationPreferences({
+                userId,
+                listKey: "buyer_listing_orders",
+                pageSize: nextSize,
+              } as any);
+            }}
+            style={{ padding: "0.4rem 0.6rem", borderRadius: 6, border: "1px solid #ddd", fontSize: "0.85rem" }}
+          >
+            <option value={10}>10</option>
+            <option value={20}>20</option>
+            <option value={50}>50</option>
+          </select>
+        </div>
         {listingOrders === undefined ? (
           <p style={{ color: "#999" }}>Loading...</p>
         ) : !listingOrders?.orders?.length ? (
           <p style={{ color: "#666" }}>No trader listing orders yet</p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            {listingOrders.orders.map((order: any) => {
+            {pagedListingOrders.map((order: any) => {
               const canConfirm = order.traderConfirmedAt && !order.buyerConfirmedAt;
               return (
                 <div key={order.purchaseId} style={{
@@ -668,6 +745,11 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                   <div style={{ fontSize: "0.8rem", color: "#475569", marginBottom: "0.5rem" }}>
                     Trader confirmed: {order.traderConfirmedAt ? "Yes" : "No"} • Buyer confirmed: {order.buyerConfirmedAt ? "Yes" : "No"} • Superadmin confirmed: {order.superadminConfirmedAt ? "Yes" : "No"}
                   </div>
+                  {isMobile && (
+                    <div style={{ fontSize: "0.8rem", color: "#64748b", marginBottom: "0.5rem" }}>
+                      Hint: Confirm after you receive the items.
+                    </div>
+                  )}
                   {canConfirm && (
                     <button
                       type="button"
@@ -692,6 +774,80 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                 </div>
               );
             })}
+            {listingOrdersTotal > 0 && (
+              <div style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: "0.5rem"
+              }}>
+                <div style={{ fontSize: "0.85rem", color: "#666" }}>
+                  Showing {listingOrdersStart}-{listingOrdersEnd} of {listingOrdersTotal}
+                </div>
+                {listingOrdersTotalPages > 1 && (
+                  <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      onClick={() => setListingOrdersPage((prev) => Math.max(1, prev - 1))}
+                      disabled={listingOrdersPage === 1}
+                      style={{
+                        padding: "0.3rem 0.6rem",
+                        background: listingOrdersPage === 1 ? "#e0e0e0" : "#f5f5f5",
+                        color: "#333",
+                        border: "1px solid #ddd",
+                        borderRadius: "4px",
+                        cursor: listingOrdersPage === 1 ? "not-allowed" : "pointer",
+                        fontSize: "0.8rem",
+                        fontWeight: "600"
+                      }}
+                    >
+                      Prev
+                    </button>
+                    {Array.from({ length: listingOrdersTotalPages }, (_, idx) => {
+                      const page = idx + 1;
+                      const isActive = page === listingOrdersPage;
+                      return (
+                        <button
+                          key={page}
+                          type="button"
+                          onClick={() => setListingOrdersPage(page)}
+                          style={{
+                            padding: "0.3rem 0.6rem",
+                            background: isActive ? "#1976d2" : "#f5f5f5",
+                            color: isActive ? "#fff" : "#333",
+                            border: "1px solid #ddd",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            fontSize: "0.8rem",
+                            fontWeight: "600"
+                          }}
+                        >
+                          {page}
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => setListingOrdersPage((prev) => Math.min(listingOrdersTotalPages, prev + 1))}
+                      disabled={listingOrdersPage === listingOrdersTotalPages}
+                      style={{
+                        padding: "0.3rem 0.6rem",
+                        background: listingOrdersPage === listingOrdersTotalPages ? "#e0e0e0" : "#f5f5f5",
+                        color: "#333",
+                        border: "1px solid #ddd",
+                        borderRadius: "4px",
+                        cursor: listingOrdersPage === listingOrdersTotalPages ? "not-allowed" : "pointer",
+                        fontSize: "0.8rem",
+                        fontWeight: "600"
+                      }}
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1778,6 +1934,34 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
           }}>
           My Orders
         </h3>
+          <div style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "0.5rem",
+            marginBottom: "0.75rem"
+          }}>
+            <div style={{ fontSize: "0.85rem", color: "#666" }}>Per page:</div>
+            <select
+              value={ordersPageSize}
+              onChange={(e) => {
+                const nextSize = Number(e.target.value);
+                setOrdersPageSize(nextSize);
+                setOrdersPage(1);
+                updatePaginationPreferences({
+                  userId,
+                  listKey: "buyer_orders",
+                  pageSize: nextSize,
+                } as any);
+              }}
+              style={{ padding: "0.4rem 0.6rem", borderRadius: 6, border: "1px solid #ddd", fontSize: "0.85rem" }}
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+            </select>
+          </div>
         {orders === undefined ? (
           <p style={{ color: "#999" }}>Loading...</p>
         ) : !orders || !orders.orders || orders.orders.length === 0 ? (
@@ -1852,6 +2036,11 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                   borderRadius: "6px",
                   border: "1px solid #e0e0e0",
                 }}>
+                  {isMobile && (
+                    <div style={{ fontSize: "0.8rem", color: "#64748b", marginBottom: "0.35rem" }}>
+                      Hint: Check the deadline before pickup.
+                    </div>
+                  )}
                   <div style={{
                     fontSize: "clamp(0.9rem, 2.5vw, 1rem)",
                     color: "#666",
@@ -1981,7 +2170,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                   fontWeight: "600"
                 }}
               >
-                📊 Export Excel
+                Export Excel
               </button>
               <button
                 onClick={() => exportTransactionLedgerToPDF()}
@@ -1996,10 +2185,38 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                   fontWeight: "600"
                 }}
               >
-                📄 Export PDF
+                Export PDF
               </button>
             </div>
           )}
+        </div>
+        <div style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "0.5rem",
+          marginBottom: "0.75rem"
+        }}>
+          <div style={{ fontSize: "0.85rem", color: "#666" }}>Per page:</div>
+          <select
+            value={ledgerPageSize}
+            onChange={(e) => {
+              const nextSize = Number(e.target.value);
+              setLedgerPageSize(nextSize);
+              setLedgerPage(1);
+              updatePaginationPreferences({
+                userId,
+                listKey: "buyer_ledger",
+                pageSize: nextSize,
+              } as any);
+            }}
+            style={{ padding: "0.4rem 0.6rem", borderRadius: 6, border: "1px solid #ddd", fontSize: "0.85rem" }}
+          >
+            <option value={10}>10</option>
+            <option value={20}>20</option>
+            <option value={50}>50</option>
+          </select>
         </div>
         {transactionLedger === undefined ? (
           <p style={{ color: "#999" }}>Loading...</p>

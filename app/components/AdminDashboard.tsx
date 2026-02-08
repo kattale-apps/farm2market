@@ -135,11 +135,13 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
     "all" | "PENDING" | "APPROVED" | "REJECTED" | "REVOKED"
   >("all");
   const [memberRoleFilter, setMemberRoleFilter] = useState<"all" | "farmer" | "trader" | "buyer">("all");
-  const [membersPageSize, setMembersPageSize] = useState(10);
+  const [membersPageSize, setMembersPageSize] = useState(20);
   const [membersPage, setMembersPage] = useState(1);
   const [selectedApplicationId, setSelectedApplicationId] = useState<
     Id<"communityApplications"> | null
   >(null);
+  const [communityMembersPage, setCommunityMembersPage] = useState(1);
+  const [communityMembersPageSize, setCommunityMembersPageSize] = useState(20);
   const [showCommunityManager, setShowCommunityManager] = useState(false);
   const [selectedMember, setSelectedMember] = useState<any | null>(null);
   const [selectedMessageThread, setSelectedMessageThread] = useState<{ utid: string; otherUserId: Id<"users"> } | null>(null);
@@ -153,6 +155,16 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   const [notificationMessage, setNotificationMessage] = useState("");
   const [notificationReason, setNotificationReason] = useState("");
   const [notificationStatus, setNotificationStatus] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const paginationPreferences = useQuery(
+    (api as any).userSettings.getPaginationPreferences,
+    { userId: adminId } as any
+  );
+  const updatePaginationPreferences = useMutation(
+    (api as any).userSettings.updatePaginationPreferences
+  );
+  const membersPageSizeKey = "admin_members";
+  const communityMembersPageSizeKey = "admin_community_members";
 
   const adminUser = useQuery(api.auth.getUser, { userId: adminId });
   const communities = useQuery(api.introspection.getCommunitiesForAdmin, {
@@ -214,6 +226,32 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
       : "skip"
   );
 
+  useEffect(() => {
+    if (!paginationPreferences) return;
+    const nextSize =
+      paginationPreferences.list?.[membersPageSizeKey] ??
+      paginationPreferences.defaultPageSize ??
+      20;
+    const nextCommunitySize =
+      paginationPreferences.list?.[communityMembersPageSizeKey] ??
+      paginationPreferences.defaultPageSize ??
+      20;
+    if (nextSize !== membersPageSize) {
+      setMembersPageSize(nextSize);
+      setMembersPage(1);
+    }
+    if (nextCommunitySize !== communityMembersPageSize) {
+      setCommunityMembersPageSize(nextCommunitySize);
+      setCommunityMembersPage(1);
+    }
+  }, [
+    paginationPreferences,
+    membersPageSizeKey,
+    communityMembersPageSizeKey,
+    membersPageSize,
+    communityMembersPageSize,
+  ]);
+
   const approveApplication = useMutation(
     api.communityApplications.approveApplication
   );
@@ -252,12 +290,25 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
     setMembersPage(1);
   }, [memberRoleFilter, membersPageSize]);
 
+  useEffect(() => {
+    setCommunityMembersPage(1);
+  }, [memberStatusFilter, communityMembersPageSize, selectedCommunityId]);
+
   const membersTotalPages = Math.max(1, Math.ceil(filteredMembers.length / membersPageSize));
   const membersStart = filteredMembers.length === 0 ? 0 : (membersPage - 1) * membersPageSize + 1;
   const membersEnd = Math.min(membersPage * membersPageSize, filteredMembers.length);
   const pagedMembers = filteredMembers.slice(
     (membersPage - 1) * membersPageSize,
     membersPage * membersPageSize
+  );
+
+  const communityMembersList = communityMembers ?? [];
+  const communityMembersTotalPages = Math.max(1, Math.ceil(communityMembersList.length / communityMembersPageSize));
+  const communityMembersStart = communityMembersList.length === 0 ? 0 : (communityMembersPage - 1) * communityMembersPageSize + 1;
+  const communityMembersEnd = Math.min(communityMembersPage * communityMembersPageSize, communityMembersList.length);
+  const pagedCommunityMembers = communityMembersList.slice(
+    (communityMembersPage - 1) * communityMembersPageSize,
+    communityMembersPage * communityMembersPageSize
   );
 
   /* ───────────── Export Logic ───────────── */
@@ -1094,8 +1145,8 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
               flexWrap: "wrap",
             }}
           >
-            <div style={utilityCardStyle}>🔔 Notifications (Premium)</div>
-            <div style={utilityCardStyle}>📥 Inbox (Premium)</div>
+            <div style={utilityCardStyle}>Notifications (Premium)</div>
+            <div style={utilityCardStyle}>Inbox (Premium)</div>
           </div>
 
           <div style={farmCardStyle}>
@@ -1133,7 +1184,16 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                         <label style={{ fontWeight: 600 }}>Per page:</label>
                         <select
                           value={membersPageSize}
-                          onChange={(e) => setMembersPageSize(Number(e.target.value))}
+                          onChange={(e) => {
+                            const nextSize = Number(e.target.value);
+                            setMembersPageSize(nextSize);
+                            setMembersPage(1);
+                            updatePaginationPreferences({
+                              userId: adminId,
+                              listKey: membersPageSizeKey,
+                              pageSize: nextSize,
+                            } as any);
+                          }}
                           style={{ padding: "0.35rem 0.6rem", borderRadius: 6, border: "1px solid #ddd" }}
                         >
                           <option value={10}>10</option>
@@ -1323,6 +1383,29 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                   <option value="REJECTED">Rejected</option>
                   <option value="REVOKED">Revoked</option>
                 </select>
+                <label style={{ fontWeight: 600 }}>Per page:</label>
+                <select
+                  value={communityMembersPageSize}
+                  onChange={(e) => {
+                    const nextSize = Number(e.target.value);
+                    setCommunityMembersPageSize(nextSize);
+                    setCommunityMembersPage(1);
+                    updatePaginationPreferences({
+                      userId: adminId,
+                      listKey: communityMembersPageSizeKey,
+                      pageSize: nextSize,
+                    } as any);
+                  }}
+                  style={{
+                    padding: "0.35rem 0.6rem",
+                    borderRadius: 6,
+                    border: "1px solid #ddd",
+                  }}
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                </select>
               </div>
 
               {!communityMembers ? (
@@ -1358,7 +1441,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                       </tr>
                     </thead>
                     <tbody>
-                      {communityMembers.map((m: any) => (
+                      {pagedCommunityMembers.map((m: any) => (
                         <tr key={m._id ?? m.farmerId ?? Math.random()}>
                           <td style={{ padding: "0.75rem" }}>{m.alias ?? "-"}</td>
                           <td style={{ padding: "0.75rem" }}>{m.status ?? "-"}</td>
@@ -1422,6 +1505,45 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                       ))}
                     </tbody>
                   </table>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
+                    <div style={{ fontSize: "0.85rem", color: "#666" }}>
+                      Showing {communityMembersStart}-{communityMembersEnd} of {communityMembersList.length}
+                    </div>
+                    {communityMembersTotalPages > 1 && (
+                      <div style={{ display: "flex", gap: "0.5rem" }}>
+                        <button
+                          type="button"
+                          onClick={() => setCommunityMembersPage((p) => Math.max(1, p - 1))}
+                          disabled={communityMembersPage === 1}
+                          style={{
+                            padding: "0.35rem 0.7rem",
+                            borderRadius: 6,
+                            border: "1px solid #ddd",
+                            background: communityMembersPage === 1 ? "#f1f5f9" : "#fff",
+                            cursor: communityMembersPage === 1 ? "not-allowed" : "pointer",
+                            fontWeight: 600,
+                          }}
+                        >
+                          Prev
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCommunityMembersPage((p) => Math.min(communityMembersTotalPages, p + 1))}
+                          disabled={communityMembersPage >= communityMembersTotalPages}
+                          style={{
+                            padding: "0.35rem 0.7rem",
+                            borderRadius: 6,
+                            border: "1px solid #ddd",
+                            background: communityMembersPage >= communityMembersTotalPages ? "#f1f5f9" : "#fff",
+                            cursor: communityMembersPage >= communityMembersTotalPages ? "not-allowed" : "pointer",
+                            fontWeight: 600,
+                          }}
+                        >
+                          Next
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 

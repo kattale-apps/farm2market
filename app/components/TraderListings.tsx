@@ -37,6 +37,13 @@ export function TraderListings({ userId }: TraderListingsProps) {
   const traderNegotiations = useQuery(api.negotiations.getTraderNegotiations, { traderId: userId });
   const acceptedNegotiations = useQuery(api.negotiations.getAcceptedNegotiations, { traderId: userId });
   const traderDeliveryListings = useQuery(api.listings.getTraderDeliveryListings, { traderId: userId });
+  const paginationPreferences = useQuery(
+    (api as any).userSettings.getPaginationPreferences,
+    { userId } as any
+  );
+  const updatePaginationPreferences = useMutation(
+    (api as any).userSettings.updatePaginationPreferences
+  );
   const makeOffer = useMutation(api.negotiations.makeOffer);
   const acceptCounterOffer = useMutation(api.negotiations.acceptCounterOffer);
   const cancelNegotiation = useMutation(api.negotiations.cancelNegotiation);
@@ -106,6 +113,16 @@ export function TraderListings({ userId }: TraderListingsProps) {
       setListingsPage(listingsTotalPages);
     }
   }, [listingsPage, listingsTotalPages]);
+
+  useEffect(() => {
+    if (!paginationPreferences) return;
+    const defaultSize = paginationPreferences.defaultPageSize ?? 10;
+    const nextSize = paginationPreferences.list?.trader_marketplace_listings ?? defaultSize;
+    if (nextSize !== listingsPageSize) {
+      setListingsPageSize(nextSize);
+      setListingsPage(1);
+    }
+  }, [paginationPreferences, listingsPageSize]);
 
   useEffect(() => {
     if (!offering || availableUnits.length === 0) return;
@@ -1013,7 +1030,16 @@ export function TraderListings({ userId }: TraderListingsProps) {
           <span style={{ fontSize: "0.85rem", color: "#666" }}>Per page:</span>
           <select
             value={listingsPageSize}
-            onChange={(e) => setListingsPageSize(Number(e.target.value))}
+            onChange={(e) => {
+              const nextSize = Number(e.target.value);
+              setListingsPageSize(nextSize);
+              setListingsPage(1);
+              updatePaginationPreferences({
+                userId,
+                listKey: "trader_marketplace_listings",
+                pageSize: nextSize,
+              } as any);
+            }}
             style={{
               padding: "0.4rem 0.6rem",
               border: "1px solid #ddd",

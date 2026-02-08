@@ -67,3 +67,62 @@ export const updateNotificationPreferences = mutation({
     return { success: true, preferences: updatedPreferences };
   },
 });
+
+/**
+ * Get user pagination preferences
+ */
+export const getPaginationPreferences = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    const roleDefault = user.role === "admin" ? 20 : 10;
+    const stored = (user as any).paginationPreferences || {};
+
+    return {
+      defaultPageSize: stored.defaultPageSize ?? roleDefault,
+      list: stored.list ?? {},
+    };
+  },
+});
+
+/**
+ * Update pagination preference for a list
+ */
+export const updatePaginationPreferences = mutation({
+  args: {
+    userId: v.id("users"),
+    listKey: v.string(),
+    pageSize: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    const allowed = new Set([10, 20, 50]);
+    if (!allowed.has(args.pageSize)) {
+      throw new Error("Invalid page size");
+    }
+
+    const roleDefault = user.role === "admin" ? 20 : 10;
+    const existing = (user as any).paginationPreferences || {};
+    const updated = {
+      defaultPageSize: existing.defaultPageSize ?? roleDefault,
+      list: {
+        ...(existing.list || {}),
+        [args.listKey]: args.pageSize,
+      },
+    };
+
+    await ctx.db.patch(args.userId, {
+      paginationPreferences: updated,
+    });
+
+    return { success: true, preferences: updated };
+  },
+});

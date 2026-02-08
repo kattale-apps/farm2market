@@ -27,6 +27,10 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
   const allUnitsLedger = useQuery(api.farmerDashboard.getAllUnitsLedger, { farmerId: userId });
   const communities = useQuery(api.communities.getActiveCommunities, { userId });
   const myAgroFreshDrafts = useQuery(api.farmValidation.getMyDrafts, { farmerId: userId });
+  const paginationPreferences = useQuery(
+    (api as any).userSettings.getPaginationPreferences,
+    { userId } as any
+  );
   
   const acceptOffer = useMutation(api.negotiations.acceptOffer);
   const rejectOffer = useMutation(api.negotiations.rejectOffer);
@@ -36,6 +40,9 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
   const cancelListing = useMutation(api.farmerDashboard.cancelListing);
   const farmerConfirmDelivery = useMutation(api.farmerDashboard.farmerConfirmDelivery);
   const messageThreads = useQuery(api.messages.getUserMessageThreads, { userId });
+  const updatePaginationPreferences = useMutation(
+    (api as any).userSettings.updatePaginationPreferences
+  );
   const createNewValidation = useMutation(api.farmValidation.createNewDraft) as (
     args: { farmerId: Id<"users"> }
   ) => Promise<Id<"agroFreshUGFarmValidations">>;
@@ -67,6 +74,10 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
   const [expiredUtidsPage, setExpiredUtidsPage] = useState(0);
   const [ledgerView, setLedgerView] = useState<"list" | "card">("list");
   const [ledgerPage, setLedgerPage] = useState(0);
+  const [transactionsPageSize, setTransactionsPageSize] = useState(10);
+  const [ledgerPageSize, setLedgerPageSize] = useState(10);
+  const transactionsPageKey = "farmer_transactions";
+  const ledgerPageKey = "farmer_ledger";
   const ITEMS_PER_PAGE = 5;
   const SUPPORT_THREAD = "SUPPORT";
   const [isMobile, setIsMobile] = useState(false);
@@ -127,6 +138,21 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
   }, []);
 
   useEffect(() => {
+    if (!paginationPreferences) return;
+    const defaultSize = paginationPreferences.defaultPageSize ?? 10;
+    const nextTransactions = paginationPreferences.list?.[transactionsPageKey] ?? defaultSize;
+    const nextLedger = paginationPreferences.list?.[ledgerPageKey] ?? defaultSize;
+    if (nextTransactions !== transactionsPageSize) {
+      setTransactionsPageSize(nextTransactions);
+      setTransactionsPage(0);
+    }
+    if (nextLedger !== ledgerPageSize) {
+      setLedgerPageSize(nextLedger);
+      setLedgerPage(0);
+    }
+  }, [paginationPreferences, transactionsPageKey, ledgerPageKey, transactionsPageSize, ledgerPageSize]);
+
+  useEffect(() => {
     if (!inboxRef.current || typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver((entries) => {
       const width = entries[0]?.contentRect?.width || 0;
@@ -178,9 +204,9 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
     return "🌾";
   };
 
-  const getTotalPages = (items: any[]) => Math.max(1, Math.ceil(items.length / ITEMS_PER_PAGE));
-  const getPageItems = (items: any[], page: number) =>
-    items.slice(page * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE + ITEMS_PER_PAGE);
+  const getTotalPages = (items: any[], pageSize = ITEMS_PER_PAGE) => Math.max(1, Math.ceil(items.length / pageSize));
+  const getPageItems = (items: any[], page: number, pageSize = ITEMS_PER_PAGE) =>
+    items.slice(page * pageSize, page * pageSize + pageSize);
 
   const listingsById = useMemo(() => {
     const map = new Map<string, any>();
@@ -428,8 +454,8 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
   }, [activeNegotiations]);
 
   const transactionItems = sortedListings;
-  const pagedTransactions = getPageItems(transactionItems, transactionsPage);
-  const transactionTotalPages = getTotalPages(transactionItems);
+  const pagedTransactions = getPageItems(transactionItems, transactionsPage, transactionsPageSize);
+  const transactionTotalPages = getTotalPages(transactionItems, transactionsPageSize);
 
   const pagedBatchedActiveNegotiations = getPageItems(
     batchedActiveNegotiations,
@@ -459,8 +485,8 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
 
   const ledgerItems = allUnitsLedger?.listings || [];
   const sortedLedgerItems = [...ledgerItems].sort((a: any, b: any) => getSortTimestamp(b) - getSortTimestamp(a));
-  const pagedLedgerItems = getPageItems(sortedLedgerItems, ledgerPage);
-  const ledgerTotalPages = getTotalPages(sortedLedgerItems);
+  const pagedLedgerItems = getPageItems(sortedLedgerItems, ledgerPage, ledgerPageSize);
+  const ledgerTotalPages = getTotalPages(sortedLedgerItems, ledgerPageSize);
 
   const user = useQuery(api.auth.getUser, { userId });
   const profile = useQuery(api.farmerProfile.getFarmerProfile, { farmerId: userId });
@@ -841,7 +867,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                   fontWeight: "500"
                 }}
               >
-                📊 Excel
+                Export Excel
               </button>
               <button
                 onClick={() => handleExportUTIDs("pdf")}
@@ -856,7 +882,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                   fontWeight: "500"
                 }}
               >
-                📄 PDF
+                Export PDF
               </button>
               <button
                 onClick={() => setTransactionsView("list")}
@@ -889,6 +915,27 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                 Card
               </button>
             </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
+            <span style={{ fontSize: "0.85rem", color: "#666" }}>Per page:</span>
+            <select
+              value={transactionsPageSize}
+              onChange={(e) => {
+                const nextSize = Number(e.target.value);
+                setTransactionsPageSize(nextSize);
+                setTransactionsPage(0);
+                updatePaginationPreferences({
+                  userId,
+                  listKey: transactionsPageKey,
+                  pageSize: nextSize,
+                } as any);
+              }}
+              style={{ padding: "0.35rem 0.6rem", borderRadius: 6, border: "1px solid #ddd", fontSize: "0.85rem" }}
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+            </select>
+          </div>
           )}
         </div>
         {listings === undefined ? (
@@ -2298,6 +2345,27 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
             </button>
           </div>
         </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
+          <span style={{ fontSize: "0.85rem", color: "#666" }}>Per page:</span>
+          <select
+            value={ledgerPageSize}
+            onChange={(e) => {
+              const nextSize = Number(e.target.value);
+              setLedgerPageSize(nextSize);
+              setLedgerPage(0);
+              updatePaginationPreferences({
+                userId,
+                listKey: ledgerPageKey,
+                pageSize: nextSize,
+              } as any);
+            }}
+            style={{ padding: "0.35rem 0.6rem", borderRadius: 6, border: "1px solid #ddd", fontSize: "0.85rem" }}
+          >
+            <option value={10}>10</option>
+            <option value={20}>20</option>
+            <option value={50}>50</option>
+          </select>
+        </div>
         {allUnitsLedger === undefined ? (
           <p style={{ color: "#999" }}>Loading...</p>
         ) : ledgerItems.length === 0 ? (
@@ -2315,7 +2383,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                   }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
                       <div style={{ fontWeight: "600" }}>
-                        {getProduceEmoji(listing.produceType)} {listing.produceType} • {listing.totalKilos} kg ({listing.totalUnits} units)
+                        {listing.produceType} • {listing.totalKilos} kg ({listing.totalUnits} units)
                       </div>
                       <div style={{ fontSize: "0.8rem", color: "#666" }}>
                         Open: {listing.totals.open} | Locked: {listing.totals.locked} | Delivered: {listing.totals.delivered}
@@ -2369,7 +2437,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                           color: "#2c2c2c",
                           fontWeight: "600"
                         }}>
-                          {getProduceEmoji(listing.produceType)} {listing.produceType} - {listing.totalKilos} kg ({listing.totalUnits} units)
+                          {listing.produceType} - {listing.totalKilos} kg ({listing.totalUnits} units)
                         </h4>
                       </div>
                       <div style={{ fontSize: "clamp(0.75rem, 2vw, 0.8rem)", color: "#666", marginBottom: "0.5rem" }}>

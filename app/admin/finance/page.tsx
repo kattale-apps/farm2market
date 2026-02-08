@@ -53,11 +53,28 @@ export default function FinanceDashboardPage() {
     (api as any).buyers.getSentifyDeliveryBatches,
     userId && (isSuperAdmin || isFinanceAdmin) ? { adminId: userId } : "skip"
   );
+  const paginationPreferences = useQuery(
+    (api as any).userSettings.getPaginationPreferences,
+    userId ? { userId } : "skip"
+  );
+  const updatePaginationPreferences = useMutation(
+    (api as any).userSettings.updatePaginationPreferences
+  );
 
   const updateFarmcoinPricing = useMutation((api as any).farmcoin.updateFarmcoinPricing);
   const grantFarmcoinTokens = useMutation((api as any).farmcoin.grantFarmcoinTokens);
   const setTraderVerificationStatus = useMutation((api as any).farmcoin.setTraderVerificationStatus);
   const superadminConfirmListingDelivery = useMutation((api as any).buyers.superadminConfirmListingDelivery);
+
+  const [sentifyPage, setSentifyPage] = useState(1);
+  const [sentifyPageSize, setSentifyPageSize] = useState(20);
+  const [grantsPage, setGrantsPage] = useState(1);
+  const [grantsPageSize, setGrantsPageSize] = useState(20);
+  const [returnsPage, setReturnsPage] = useState(1);
+  const [returnsPageSize, setReturnsPageSize] = useState(20);
+  const sentifyPageKey = "finance_sentify_batches";
+  const grantsPageKey = "finance_token_grants";
+  const returnsPageKey = "finance_token_returns";
 
   // Get current user from localStorage (pilot mode)
   useEffect(() => {
@@ -76,9 +93,72 @@ export default function FinanceDashboardPage() {
     }
   }, []);
 
+  useEffect(() => {
+    if (!paginationPreferences) return;
+    const defaultSize = paginationPreferences.defaultPageSize ?? 20;
+    const nextSentify = paginationPreferences.list?.[sentifyPageKey] ?? defaultSize;
+    const nextGrants = paginationPreferences.list?.[grantsPageKey] ?? defaultSize;
+    const nextReturns = paginationPreferences.list?.[returnsPageKey] ?? defaultSize;
+    if (nextSentify !== sentifyPageSize) {
+      setSentifyPageSize(nextSentify);
+      setSentifyPage(1);
+    }
+    if (nextGrants !== grantsPageSize) {
+      setGrantsPageSize(nextGrants);
+      setGrantsPage(1);
+    }
+    if (nextReturns !== returnsPageSize) {
+      setReturnsPageSize(nextReturns);
+      setReturnsPage(1);
+    }
+  }, [paginationPreferences, sentifyPageKey, grantsPageKey, returnsPageKey, sentifyPageSize, grantsPageSize, returnsPageSize]);
+
   const formatUGX = (amount: number) => {
     return new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX" }).format(amount);
   };
+
+  const sentifyTotal = sentifyBatches?.length ?? 0;
+  const sentifyTotalPages = Math.max(1, Math.ceil(sentifyTotal / sentifyPageSize));
+  const sentifyStart = sentifyTotal === 0 ? 0 : (sentifyPage - 1) * sentifyPageSize + 1;
+  const sentifyEnd = Math.min(sentifyPage * sentifyPageSize, sentifyTotal);
+  const pagedSentifyBatches = (sentifyBatches || []).slice(
+    (sentifyPage - 1) * sentifyPageSize,
+    sentifyPage * sentifyPageSize
+  );
+  const grantsTotal = superadminFarmcoinActivity?.grants?.length ?? 0;
+  const grantsTotalPages = Math.max(1, Math.ceil(grantsTotal / grantsPageSize));
+  const grantsStart = grantsTotal === 0 ? 0 : (grantsPage - 1) * grantsPageSize + 1;
+  const grantsEnd = Math.min(grantsPage * grantsPageSize, grantsTotal);
+  const pagedGrants = (superadminFarmcoinActivity?.grants || []).slice(
+    (grantsPage - 1) * grantsPageSize,
+    grantsPage * grantsPageSize
+  );
+  const returnsTotal = superadminFarmcoinActivity?.returns?.length ?? 0;
+  const returnsTotalPages = Math.max(1, Math.ceil(returnsTotal / returnsPageSize));
+  const returnsStart = returnsTotal === 0 ? 0 : (returnsPage - 1) * returnsPageSize + 1;
+  const returnsEnd = Math.min(returnsPage * returnsPageSize, returnsTotal);
+  const pagedReturns = (superadminFarmcoinActivity?.returns || []).slice(
+    (returnsPage - 1) * returnsPageSize,
+    returnsPage * returnsPageSize
+  );
+
+  useEffect(() => {
+    if (sentifyPage > sentifyTotalPages) {
+      setSentifyPage(sentifyTotalPages);
+    }
+  }, [sentifyPage, sentifyTotalPages]);
+
+  useEffect(() => {
+    if (grantsPage > grantsTotalPages) {
+      setGrantsPage(grantsTotalPages);
+    }
+  }, [grantsPage, grantsTotalPages]);
+
+  useEffect(() => {
+    if (returnsPage > returnsTotalPages) {
+      setReturnsPage(returnsTotalPages);
+    }
+  }, [returnsPage, returnsTotalPages]);
 
   const traderOptions = useMemo(() => {
     const traders = traderBalances?.traders ? [...traderBalances.traders] : [];
@@ -484,7 +564,7 @@ export default function FinanceDashboardPage() {
               <p style={{ color: "#666" }}>No delivery batches available.</p>
             ) : (
               <>
-                <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
+                <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", marginBottom: "0.75rem", alignItems: "center" }}>
                   <button
                     type="button"
                     onClick={handleSelectAllSentify}
@@ -517,6 +597,27 @@ export default function FinanceDashboardPage() {
                   >
                     Confirm Delivery (Release Escrow)
                   </button>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <span style={{ fontSize: "0.85rem", color: "#666" }}>Per page:</span>
+                    <select
+                      value={sentifyPageSize}
+                      onChange={(e) => {
+                        const nextSize = Number(e.target.value);
+                        setSentifyPageSize(nextSize);
+                        setSentifyPage(1);
+                        updatePaginationPreferences({
+                          userId: userId as any,
+                          listKey: sentifyPageKey,
+                          pageSize: nextSize,
+                        } as any);
+                      }}
+                      style={{ padding: "0.35rem 0.6rem", borderRadius: 6, border: "1px solid #ddd", fontSize: "0.85rem" }}
+                    >
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                      <option value={50}>50</option>
+                    </select>
+                  </div>
                 </div>
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
@@ -538,7 +639,7 @@ export default function FinanceDashboardPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {sentifyBatches.map((batch: any) => (
+                      {pagedSentifyBatches.map((batch: any) => (
                         <tr key={batch.batchUtid} style={{ borderBottom: "1px solid #f0f0f0" }}>
                           <td style={{ padding: "0.6rem" }}>
                             <input
@@ -558,6 +659,47 @@ export default function FinanceDashboardPage() {
                     </tbody>
                   </table>
                 </div>
+                {sentifyTotal > 0 && (
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
+                    <div style={{ fontSize: "0.85rem", color: "#666" }}>
+                      Showing {sentifyStart}-{sentifyEnd} of {sentifyTotal}
+                    </div>
+                    {sentifyTotalPages > 1 && (
+                      <div style={{ display: "flex", gap: "0.5rem" }}>
+                        <button
+                          type="button"
+                          onClick={() => setSentifyPage((p) => Math.max(1, p - 1))}
+                          disabled={sentifyPage === 1}
+                          style={{
+                            padding: "0.35rem 0.7rem",
+                            borderRadius: 6,
+                            border: "1px solid #ddd",
+                            background: sentifyPage === 1 ? "#f1f5f9" : "#fff",
+                            cursor: sentifyPage === 1 ? "not-allowed" : "pointer",
+                            fontWeight: 600,
+                          }}
+                        >
+                          Prev
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSentifyPage((p) => Math.min(sentifyTotalPages, p + 1))}
+                          disabled={sentifyPage >= sentifyTotalPages}
+                          style={{
+                            padding: "0.35rem 0.7rem",
+                            borderRadius: 6,
+                            border: "1px solid #ddd",
+                            background: sentifyPage >= sentifyTotalPages ? "#f1f5f9" : "#fff",
+                            cursor: sentifyPage >= sentifyTotalPages ? "not-allowed" : "pointer",
+                            fontWeight: 600,
+                          }}
+                        >
+                          Next
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -601,6 +743,27 @@ export default function FinanceDashboardPage() {
                     />
                     Select all
                   </label>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <span style={{ fontSize: "0.85rem", color: "#666" }}>Per page:</span>
+                    <select
+                      value={sentifyPageSize}
+                      onChange={(e) => {
+                        const nextSize = Number(e.target.value);
+                        setSentifyPageSize(nextSize);
+                        setSentifyPage(1);
+                        updatePaginationPreferences({
+                          userId: userId as any,
+                          listKey: sentifyPageKey,
+                          pageSize: nextSize,
+                        } as any);
+                      }}
+                      style={{ padding: "0.35rem 0.6rem", borderRadius: 6, border: "1px solid #ddd", fontSize: "0.85rem" }}
+                    >
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                      <option value={50}>50</option>
+                    </select>
+                  </div>
                   <button
                     type="button"
                     onClick={handleConfirmSentifyBatches}
@@ -633,7 +796,7 @@ export default function FinanceDashboardPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {sentifyBatches.map((batch: any) => (
+                      {pagedSentifyBatches.map((batch: any) => (
                         <tr key={batch.batchUtid} style={{ borderBottom: "1px solid #f0f0f0" }}>
                           <td style={{ padding: "0.6rem" }}>
                             <input
@@ -654,6 +817,47 @@ export default function FinanceDashboardPage() {
                     </tbody>
                   </table>
                 </div>
+                {sentifyTotal > 0 && (
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
+                    <div style={{ fontSize: "0.85rem", color: "#666" }}>
+                      Showing {sentifyStart}-{sentifyEnd} of {sentifyTotal}
+                    </div>
+                    {sentifyTotalPages > 1 && (
+                      <div style={{ display: "flex", gap: "0.5rem" }}>
+                        <button
+                          type="button"
+                          onClick={() => setSentifyPage((p) => Math.max(1, p - 1))}
+                          disabled={sentifyPage === 1}
+                          style={{
+                            padding: "0.35rem 0.7rem",
+                            borderRadius: 6,
+                            border: "1px solid #ddd",
+                            background: sentifyPage === 1 ? "#f1f5f9" : "#fff",
+                            cursor: sentifyPage === 1 ? "not-allowed" : "pointer",
+                            fontWeight: 600,
+                          }}
+                        >
+                          Prev
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSentifyPage((p) => Math.min(sentifyTotalPages, p + 1))}
+                          disabled={sentifyPage >= sentifyTotalPages}
+                          style={{
+                            padding: "0.35rem 0.7rem",
+                            borderRadius: 6,
+                            border: "1px solid #ddd",
+                            background: sentifyPage >= sentifyTotalPages ? "#f1f5f9" : "#fff",
+                            cursor: sentifyPage >= sentifyTotalPages ? "not-allowed" : "pointer",
+                            fontWeight: 600,
+                          }}
+                        >
+                          Next
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -693,6 +897,27 @@ export default function FinanceDashboardPage() {
                 {superadminFarmcoinActivity.grants.length === 0 ? (
                   <p style={{ color: "#666" }}>No token grants found.</p>
                 ) : (
+                  <div style={{ marginBottom: "0.75rem", display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: "0.85rem", color: "#666" }}>Per page:</span>
+                    <select
+                      value={grantsPageSize}
+                      onChange={(e) => {
+                        const nextSize = Number(e.target.value);
+                        setGrantsPageSize(nextSize);
+                        setGrantsPage(1);
+                        updatePaginationPreferences({
+                          userId: userId as any,
+                          listKey: grantsPageKey,
+                          pageSize: nextSize,
+                        } as any);
+                      }}
+                      style={{ padding: "0.35rem 0.6rem", borderRadius: 6, border: "1px solid #ddd", fontSize: "0.85rem" }}
+                    >
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                      <option value={50}>50</option>
+                    </select>
+                  </div>
                   <div style={{ overflowX: "auto" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse" }}>
                       <thead>
@@ -705,7 +930,7 @@ export default function FinanceDashboardPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {superadminFarmcoinActivity.grants.slice(0, 50).map((entry: any, idx: number) => (
+                        {pagedGrants.map((entry: any, idx: number) => (
                           <tr key={idx} style={{ borderBottom: "1px solid #eee" }}>
                             <td style={{ padding: "0.75rem" }}>
                               {entry.traderAlias || "Trader"}
@@ -724,6 +949,47 @@ export default function FinanceDashboardPage() {
                       </tbody>
                     </table>
                   </div>
+                  {grantsTotal > 0 && (
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
+                      <div style={{ fontSize: "0.85rem", color: "#666" }}>
+                        Showing {grantsStart}-{grantsEnd} of {grantsTotal}
+                      </div>
+                      {grantsTotalPages > 1 && (
+                        <div style={{ display: "flex", gap: "0.5rem" }}>
+                          <button
+                            type="button"
+                            onClick={() => setGrantsPage((p) => Math.max(1, p - 1))}
+                            disabled={grantsPage === 1}
+                            style={{
+                              padding: "0.35rem 0.7rem",
+                              borderRadius: 6,
+                              border: "1px solid #ddd",
+                              background: grantsPage === 1 ? "#f1f5f9" : "#fff",
+                              cursor: grantsPage === 1 ? "not-allowed" : "pointer",
+                              fontWeight: 600,
+                            }}
+                          >
+                            Prev
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setGrantsPage((p) => Math.min(grantsTotalPages, p + 1))}
+                            disabled={grantsPage >= grantsTotalPages}
+                            style={{
+                              padding: "0.35rem 0.7rem",
+                              borderRadius: 6,
+                              border: "1px solid #ddd",
+                              background: grantsPage >= grantsTotalPages ? "#f1f5f9" : "#fff",
+                              cursor: grantsPage >= grantsTotalPages ? "not-allowed" : "pointer",
+                              fontWeight: 600,
+                            }}
+                          >
+                            Next
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 )}
               </div>
 
@@ -732,6 +998,27 @@ export default function FinanceDashboardPage() {
                 {superadminFarmcoinActivity.returns.length === 0 ? (
                   <p style={{ color: "#666" }}>No returns recorded yet.</p>
                 ) : (
+                  <div style={{ marginBottom: "0.75rem", display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: "0.85rem", color: "#666" }}>Per page:</span>
+                    <select
+                      value={returnsPageSize}
+                      onChange={(e) => {
+                        const nextSize = Number(e.target.value);
+                        setReturnsPageSize(nextSize);
+                        setReturnsPage(1);
+                        updatePaginationPreferences({
+                          userId: userId as any,
+                          listKey: returnsPageKey,
+                          pageSize: nextSize,
+                        } as any);
+                      }}
+                      style={{ padding: "0.35rem 0.6rem", borderRadius: 6, border: "1px solid #ddd", fontSize: "0.85rem" }}
+                    >
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                      <option value={50}>50</option>
+                    </select>
+                  </div>
                   <div style={{ overflowX: "auto" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse" }}>
                       <thead>
@@ -743,7 +1030,7 @@ export default function FinanceDashboardPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {superadminFarmcoinActivity.returns.map((entry: any, idx: number) => (
+                        {pagedReturns.map((entry: any, idx: number) => (
                           <tr key={idx} style={{ borderBottom: "1px solid #eee" }}>
                             <td style={{ padding: "0.75rem" }}>{entry.source?.replace("_", " ")}</td>
                             <td style={{ padding: "0.75rem", textAlign: "right", fontWeight: 600 }}>
@@ -758,6 +1045,47 @@ export default function FinanceDashboardPage() {
                       </tbody>
                     </table>
                   </div>
+                  {returnsTotal > 0 && (
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
+                      <div style={{ fontSize: "0.85rem", color: "#666" }}>
+                        Showing {returnsStart}-{returnsEnd} of {returnsTotal}
+                      </div>
+                      {returnsTotalPages > 1 && (
+                        <div style={{ display: "flex", gap: "0.5rem" }}>
+                          <button
+                            type="button"
+                            onClick={() => setReturnsPage((p) => Math.max(1, p - 1))}
+                            disabled={returnsPage === 1}
+                            style={{
+                              padding: "0.35rem 0.7rem",
+                              borderRadius: 6,
+                              border: "1px solid #ddd",
+                              background: returnsPage === 1 ? "#f1f5f9" : "#fff",
+                              cursor: returnsPage === 1 ? "not-allowed" : "pointer",
+                              fontWeight: 600,
+                            }}
+                          >
+                            Prev
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setReturnsPage((p) => Math.min(returnsTotalPages, p + 1))}
+                            disabled={returnsPage >= returnsTotalPages}
+                            style={{
+                              padding: "0.35rem 0.7rem",
+                              borderRadius: 6,
+                              border: "1px solid #ddd",
+                              background: returnsPage >= returnsTotalPages ? "#f1f5f9" : "#fff",
+                              cursor: returnsPage >= returnsTotalPages ? "not-allowed" : "pointer",
+                              fontWeight: 600,
+                            }}
+                          >
+                            Next
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 )}
               </div>
             </>

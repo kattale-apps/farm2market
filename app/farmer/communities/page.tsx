@@ -387,13 +387,6 @@ export default function FarmerCommunitiesPage() {
                       />
                     )}
                     <div style={{ marginBottom: "1rem" }}>
-                    <p style={{
-                      margin: "0.5rem 0",
-                      fontSize: "0.9rem",
-                      color: "#666",
-                    }}>
-                      <strong>Members:</strong> {community.memberCount}
-                    </p>
                     {community.geoLocked && (
                       <p style={{
                         margin: "0.5rem 0",

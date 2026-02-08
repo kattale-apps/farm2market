@@ -248,6 +248,30 @@ export default function CommunityDashboardPage() {
             {message.text}
           </div>
         )}
+        {applicationsByCommunity?.some((c: any) => c.error) && (
+          <div style={{
+            padding: "1rem",
+            marginBottom: "1rem",
+            borderRadius: "8px",
+            background: "#ffebee",
+            color: "#c62828",
+            border: "1px solid #ffcdd2",
+          }}>
+            {applicationsByCommunity.find((c: any) => c.error)?.error}
+          </div>
+        )}
+        {approvedMembersByCommunity?.some((c: any) => c.error) && (
+          <div style={{
+            padding: "1rem",
+            marginBottom: "1rem",
+            borderRadius: "8px",
+            background: "#ffebee",
+            color: "#c62828",
+            border: "1px solid #ffcdd2",
+          }}>
+            {approvedMembersByCommunity.find((c: any) => c.error)?.error}
+          </div>
+        )}
 
         {/* Communities */}
         {communities === undefined ? (
@@ -924,6 +948,10 @@ export default function CommunityDashboardPage() {
 
             {!selectedApplicationDetails ? (
               <p style={{ color: "#666", marginTop: "1rem" }}>Loading details...</p>
+            ) : (selectedApplicationDetails as any).error ? (
+              <p style={{ color: "#c62828", marginTop: "1rem" }}>
+                {(selectedApplicationDetails as any).error}
+              </p>
             ) : (
               <div style={{ marginTop: "1rem" }}>
                 {(() => {

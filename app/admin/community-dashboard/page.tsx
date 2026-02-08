@@ -121,13 +121,15 @@ export default function CommunityDashboardPage() {
 
   // For community admin: get their managed community
   const userCommunities = useMemo(() => {
-    if (!communities || resolvedAdminCategory !== "community") return [];
-    // In a real app, we'd have a way to get the specific community managed by this admin
-    // For now, we'll show all communities they're associated with
+    if (!communities) return [];
+    // Backend already enforces community-admin access. Use the returned list.
     return communities;
-  }, [communities, resolvedAdminCategory]);
+  }, [communities]);
 
-  const communityIds = useMemo(() => userCommunities.map((c) => c.id), [userCommunities]);
+  const communityIds = useMemo(
+    () => userCommunities.map((c: any) => c._id ?? c.id).filter(Boolean),
+    [userCommunities]
+  );
   const applicationsByCommunity = useQuery(
     api.communityApplications.getApplicationsByCommunityIds,
     userId && communityIds.length > 0
@@ -158,7 +160,7 @@ export default function CommunityDashboardPage() {
   }
 
   // Only community admins can access this page
-  if (resolvedRole !== "admin" || resolvedAdminCategory !== "community") {
+  if (resolvedRole !== "admin") {
     return (
       <div style={{
         padding: "2rem",
@@ -170,7 +172,7 @@ export default function CommunityDashboardPage() {
         marginBottom: "2rem",
       }}>
         <h2>Access Denied</h2>
-        <p>Only community admins can access this page.</p>
+        <p>Only admins can access this page.</p>
         <Link href="/" style={{
           color: "#1976d2",
           textDecoration: "none",
@@ -289,9 +291,11 @@ export default function CommunityDashboardPage() {
             <p style={{ color: "#999" }}>No communities found.</p>
           </div>
         ) : (
-          userCommunities.map((community) => (
+          userCommunities.map((community: any) => {
+            const communityId = community?._id ?? community?.id;
+            return (
             <div
-              key={community.id}
+              key={communityId}
               style={{
                 background: "#fff",
                 borderRadius: "12px",
@@ -375,7 +379,7 @@ export default function CommunityDashboardPage() {
                 ) : (
                   (() => {
                     const pending =
-                      applicationsByCommunity?.find((c: any) => c.communityId === community.id)?.applications || [];
+                      applicationsByCommunity?.find((c: any) => c.communityId === communityId)?.applications || [];
                     const pendingTotal = pending.length;
                     const pendingTotalPages = Math.max(1, Math.ceil(pendingTotal / pendingPageSize));
                     const safePendingPage = Math.min(pendingPage, pendingTotalPages);
@@ -528,7 +532,7 @@ export default function CommunityDashboardPage() {
                 ) : (
                   (() => {
                     const approved =
-                      approvedMembersByCommunity?.find((c: any) => c.communityId === community.id)?.members || [];
+                      approvedMembersByCommunity?.find((c: any) => c.communityId === communityId)?.members || [];
                     const approvedTotal = approved.length;
                     const approvedTotalPages = Math.max(1, Math.ceil(approvedTotal / approvedPageSize));
                     const safeApprovedPage = Math.min(approvedPage, approvedTotalPages);
@@ -894,7 +898,8 @@ export default function CommunityDashboardPage() {
                 </div>
               )}
             </div>
-          ))
+          );
+          })
         )}
       </div>
 

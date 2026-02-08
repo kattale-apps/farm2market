@@ -326,6 +326,15 @@ export const getApplicationsByCommunityIds = query({
 
       if (!isSuperAdmin && adminUser.adminCategory === "community") {
         const assigned = (adminUser as any).assignedCommunityIds || [];
+        const normalizeAssignedId = (value: any) => {
+          if (!value) return "";
+          if (typeof value === "string") return value;
+          if (typeof value === "object") {
+            return String((value as any)._id ?? (value as any).id ?? value);
+          }
+          return String(value);
+        };
+        const assignedSet = new Set(assigned.map(normalizeAssignedId).filter(Boolean));
         const communityRecords = await Promise.all(
           communityIds.map((id) => ctx.db.get(id))
         );
@@ -333,11 +342,15 @@ export const getApplicationsByCommunityIds = query({
           communityRecords
             .filter(Boolean)
             .filter((c: any) => c.communityAdminId === adminId)
-            .map((c: any) => c._id)
+            .map((c: any) => String(c._id))
         );
-        allowedCommunityIds = communityIds.filter(
-          (id) => assigned.some((aid: string) => aid === id) || directAssigned.has(id)
-        );
+        allowedCommunityIds = communityIds.filter((id) => {
+          const normalizedId = String(id);
+          return assignedSet.has(normalizedId) || directAssigned.has(normalizedId);
+        });
+        if (allowedCommunityIds.length === 0) {
+          throw new Error("No assigned communities found for this admin.");
+        }
       } else if (!isSuperAdmin && adminUser.adminCategory !== "community") {
         throw new Error("Forbidden");
       }
@@ -438,6 +451,15 @@ export const getCommunityMembersByCommunityIds = query({
 
       if (!isSuperAdmin && adminUser.adminCategory === "community") {
         const assigned = (adminUser as any).assignedCommunityIds || [];
+        const normalizeAssignedId = (value: any) => {
+          if (!value) return "";
+          if (typeof value === "string") return value;
+          if (typeof value === "object") {
+            return String((value as any)._id ?? (value as any).id ?? value);
+          }
+          return String(value);
+        };
+        const assignedSet = new Set(assigned.map(normalizeAssignedId).filter(Boolean));
         const communityRecords = await Promise.all(
           communityIds.map((id) => ctx.db.get(id))
         );
@@ -445,11 +467,15 @@ export const getCommunityMembersByCommunityIds = query({
           communityRecords
             .filter(Boolean)
             .filter((c: any) => c.communityAdminId === adminId)
-            .map((c: any) => c._id)
+            .map((c: any) => String(c._id))
         );
-        allowedCommunityIds = communityIds.filter(
-          (id) => assigned.some((aid: string) => aid === id) || directAssigned.has(id)
-        );
+        allowedCommunityIds = communityIds.filter((id) => {
+          const normalizedId = String(id);
+          return assignedSet.has(normalizedId) || directAssigned.has(normalizedId);
+        });
+        if (allowedCommunityIds.length === 0) {
+          throw new Error("No assigned communities found for this admin.");
+        }
       } else if (!isSuperAdmin && adminUser.adminCategory !== "community") {
         throw new Error("Forbidden");
       }

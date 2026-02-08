@@ -412,7 +412,7 @@ export default function AgroFreshUGAdminPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row) => (
+                  {rows.map((row: any) => (
                     <tr
                       key={row.id}
                       style={{

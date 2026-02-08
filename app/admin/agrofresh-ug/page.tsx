@@ -329,6 +329,11 @@ export default function AgroFreshUGAdminPage() {
           {message.text}
         </div>
       )}
+      {applications && (applications as any).error && (
+        <div style={{ marginBottom: "1rem", color: "#c62828" }}>
+          {(applications as any).error}
+        </div>
+      )}
 
       <div style={{ display: "flex", gap: "1rem", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap" }}>
         <label>Status</label>
@@ -501,6 +506,8 @@ export default function AgroFreshUGAdminPage() {
             <p style={{ color: "#777" }}>Select a member to view details.</p>
           ) : !selectedDetails ? (
             <p style={{ color: "#777" }}>Loading profile...</p>
+          ) : (selectedDetails as any).error ? (
+            <p style={{ color: "#c62828" }}>{(selectedDetails as any).error}</p>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
               <div style={{ fontSize: "0.9rem", color: "#4b5563" }}>

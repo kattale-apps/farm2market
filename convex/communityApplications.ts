@@ -49,116 +49,126 @@ export const getPaginatedApplications = query({
     enterprise: v.optional(v.string()),
   },
   handler: async (ctx, { adminId, status, page, pageSize, startDate, endDate, district, subCounty, enterprise }) => {
-    const adminCheck = await verifyAdminRole({ userId: adminId, db: ctx.db });
-    if (!adminCheck.authorized) {
-      throw new Error("Not authorized");
-    }
-
-    const communityId = await getAgroFreshCommunityId(ctx);
-
-    const adminUser = await ctx.db.get(adminId);
-    if (!adminUser) {
-      throw new Error("Admin not found");
-    }
-
-    const isSuperAdmin = adminUser.adminLevel === "super" || adminUser.adminLevel === undefined;
-
-    if (!isSuperAdmin && adminUser.adminCategory === "community") {
-      const assigned = (adminUser as any).assignedCommunityIds || [];
-      const community = await ctx.db.get(communityId);
-      const isDirectAdmin = community?.communityAdminId === adminId;
-      const isAssigned = assigned.some((id: string) => id === communityId);
-      if (!isAssigned && !isDirectAdmin) {
-        throw new Error(`Not authorized. Admin not assigned to community ${communityId}`);
-      }
-    } else if (!isSuperAdmin && adminUser.adminCategory !== "community") {
-      throw new Error("Forbidden");
-    }
-
     const safePageSize = Math.min(Math.max(pageSize, 1), 20);
     const safePage = Math.max(page, 1);
 
-    const all = await ctx.db
-      .query("communityApplications")
-      .withIndex("by_community", (q: any) => q.eq("communityId", communityId))
-      .collect();
-
-    let filtered = status ? all.filter((a: any) => a.status === status) : all;
-    if (startDate || endDate) {
-      filtered = filtered.filter((a: any) => {
-        const created = a.createdAt || a.updatedAt || 0;
-        if (startDate && created < startDate) return false;
-        if (endDate && created > endDate) return false;
-        return true;
-      });
-    }
-
-    const sorted = [...filtered].sort((a: any, b: any) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt));
-
-    const latestByFarmer = new Map<Id<"users">, any>();
-    for (const app of sorted) {
-      if (!latestByFarmer.has(app.farmerId)) {
-        latestByFarmer.set(app.farmerId, app);
+    try {
+      const adminCheck = await verifyAdminRole({ userId: adminId, db: ctx.db });
+      if (!adminCheck.authorized) {
+        throw new Error("Not authorized");
       }
-    }
 
-    const deduped = Array.from(latestByFarmer.values());
+      const communityId = await getAgroFreshCommunityId(ctx);
 
-    const farmerIds = Array.from(new Set(deduped.map((a: any) => a.farmerId)));
-    const formIds = Array.from(new Set(deduped.map((a: any) => a.formId)));
+      const adminUser = await ctx.db.get(adminId);
+      if (!adminUser) {
+        throw new Error("Admin not found");
+      }
 
-    const farmers = await Promise.all(farmerIds.map((id) => ctx.db.get(id)));
-    const forms = await Promise.all(formIds.map((id) => ctx.db.get(id)));
+      const isSuperAdmin = adminUser.adminLevel === "super" || adminUser.adminLevel === undefined;
 
-    const farmerById = new Map(farmers.filter(Boolean).map((f: any) => [f._id, f]));
-    const formById = new Map(forms.filter(Boolean).map((f: any) => [f._id, f]));
+      if (!isSuperAdmin && adminUser.adminCategory === "community") {
+        const assigned = (adminUser as any).assignedCommunityIds || [];
+        const community = await ctx.db.get(communityId);
+        const isDirectAdmin = community?.communityAdminId === adminId;
+        const isAssigned = assigned.some((id: string) => id === communityId);
+        if (!isAssigned && !isDirectAdmin) {
+          throw new Error(`Not authorized. Admin not assigned to community ${communityId}`);
+        }
+      } else if (!isSuperAdmin && adminUser.adminCategory !== "community") {
+        throw new Error("Forbidden");
+      }
 
-    const items = deduped.map((app: any) => {
-      const farmer = farmerById.get(app.farmerId);
-      const form = formById.get(app.formId);
+      const all = await ctx.db
+        .query("communityApplications")
+        .withIndex("by_community", (q: any) => q.eq("communityId", communityId))
+        .collect();
+
+      let filtered = status ? all.filter((a: any) => a.status === status) : all;
+      if (startDate || endDate) {
+        filtered = filtered.filter((a: any) => {
+          const created = a.createdAt || a.updatedAt || 0;
+          if (startDate && created < startDate) return false;
+          if (endDate && created > endDate) return false;
+          return true;
+        });
+      }
+
+      const sorted = [...filtered].sort((a: any, b: any) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt));
+
+      const latestByFarmer = new Map<Id<"users">, any>();
+      for (const app of sorted) {
+        if (!latestByFarmer.has(app.farmerId)) {
+          latestByFarmer.set(app.farmerId, app);
+        }
+      }
+
+      const deduped = Array.from(latestByFarmer.values());
+
+      const farmerIds = Array.from(new Set(deduped.map((a: any) => a.farmerId)));
+      const formIds = Array.from(new Set(deduped.map((a: any) => a.formId)));
+
+      const farmers = await Promise.all(farmerIds.map((id) => ctx.db.get(id)));
+      const forms = await Promise.all(formIds.map((id) => ctx.db.get(id)));
+
+      const farmerById = new Map(farmers.filter(Boolean).map((f: any) => [f._id, f]));
+      const formById = new Map(forms.filter(Boolean).map((f: any) => [f._id, f]));
+
+      const items = deduped.map((app: any) => {
+        const farmer = farmerById.get(app.farmerId);
+        const form = formById.get(app.formId);
+        return {
+          id: app._id,
+          status: app.status,
+          createdAt: app.createdAt,
+          updatedAt: app.updatedAt,
+          farmerId: app.farmerId,
+          formId: app.formId,
+          farmer: farmer
+            ? {
+                id: farmer._id,
+                alias: farmer.alias,
+                email: farmer.email,
+                phoneNumber: farmer.phoneNumber,
+                districtText: farmer.districtText,
+                subCountyText: farmer.subCountyText,
+                county: farmer.county,
+                village: farmer.village,
+              }
+            : null,
+          form,
+        };
+      });
+
+      const normalize = (value?: string) => (value || "").trim().toLowerCase();
+      let finalItems = items;
+      if (district) {
+        const d = normalize(district);
+        finalItems = finalItems.filter((item: any) => normalize(item.form?.section1?.districtSubCounty).includes(d));
+      }
+      if (subCounty) {
+        const s = normalize(subCounty);
+        finalItems = finalItems.filter((item: any) => normalize(item.form?.section1?.districtSubCounty).includes(s));
+      }
+      if (enterprise) {
+        finalItems = finalItems.filter((item: any) =>
+          (item.form?.section1?.mainEnterprises || []).includes(enterprise)
+        );
+      }
+
+      const totalCount = finalItems.length;
+      const start = (safePage - 1) * safePageSize;
+      const sliced = finalItems.slice(start, start + safePageSize);
+      return { items: sliced, totalCount, page: safePage, pageSize: safePageSize };
+    } catch (error: any) {
       return {
-        id: app._id,
-        status: app.status,
-        createdAt: app.createdAt,
-        updatedAt: app.updatedAt,
-        farmerId: app.farmerId,
-        formId: app.formId,
-        farmer: farmer
-          ? {
-              id: farmer._id,
-              alias: farmer.alias,
-              email: farmer.email,
-              phoneNumber: farmer.phoneNumber,
-              districtText: farmer.districtText,
-              subCountyText: farmer.subCountyText,
-              county: farmer.county,
-              village: farmer.village,
-            }
-          : null,
-        form,
-      };
-    });
-
-    const normalize = (value?: string) => (value || "").trim().toLowerCase();
-    let finalItems = items;
-    if (district) {
-      const d = normalize(district);
-      finalItems = finalItems.filter((item: any) => normalize(item.form?.section1?.districtSubCounty).includes(d));
+        items: [],
+        totalCount: 0,
+        page: safePage,
+        pageSize: safePageSize,
+        error: error?.message || "Unable to load AgroFresh applications.",
+      } as any;
     }
-    if (subCounty) {
-      const s = normalize(subCounty);
-      finalItems = finalItems.filter((item: any) => normalize(item.form?.section1?.districtSubCounty).includes(s));
-    }
-    if (enterprise) {
-      finalItems = finalItems.filter((item: any) =>
-        (item.form?.section1?.mainEnterprises || []).includes(enterprise)
-      );
-    }
-
-    const totalCount = finalItems.length;
-    const start = (safePage - 1) * safePageSize;
-    const sliced = finalItems.slice(start, start + safePageSize);
-    return { items: sliced, totalCount, page: safePage, pageSize: safePageSize };
   },
 });
 
@@ -532,47 +542,51 @@ export const getMyApplicationStatus = query({
 export const getApplicationDetails = query({
   args: { adminId: v.id("users"), applicationId: v.id("communityApplications") },
   handler: async (ctx, { adminId, applicationId }) => {
-    const adminCheck = await verifyAdminRole({ userId: adminId, db: ctx.db });
-    if (!adminCheck.authorized) {
-      throw new Error("Not authorized");
-    }
+    try {
+      const adminCheck = await verifyAdminRole({ userId: adminId, db: ctx.db });
+      if (!adminCheck.authorized) {
+        throw new Error("Not authorized");
+      }
 
-    const adminUser = await ctx.db.get(adminId);
-    if (!adminUser) {
-      throw new Error("Admin not found");
-    }
+      const adminUser = await ctx.db.get(adminId);
+      if (!adminUser) {
+        throw new Error("Admin not found");
+      }
 
-    const app = await ctx.db.get(applicationId);
-    if (!app) {
-      throw new Error("Application not found");
-    }
+      const app = await ctx.db.get(applicationId);
+      if (!app) {
+        throw new Error("Application not found");
+      }
 
-    const isSuperAdmin = adminUser.adminLevel === "super" || adminUser.adminLevel === undefined;
-    if (!isSuperAdmin && adminUser.adminCategory === "community") {
-      const community = await ctx.db.get(app.communityId);
-      const assigned = (adminUser as any).assignedCommunityIds || [];
-      const isDirectAdmin = community?.communityAdminId === adminId;
-      const isAssigned = assigned.some((id: string) => id === app.communityId);
-      if (!isAssigned && !isDirectAdmin) {
+      const isSuperAdmin = adminUser.adminLevel === "super" || adminUser.adminLevel === undefined;
+      if (!isSuperAdmin && adminUser.adminCategory === "community") {
+        const community = await ctx.db.get(app.communityId);
+        const assigned = (adminUser as any).assignedCommunityIds || [];
+        const isDirectAdmin = community?.communityAdminId === adminId;
+        const isAssigned = assigned.some((id: string) => id === app.communityId);
+        if (!isAssigned && !isDirectAdmin) {
+          throw new Error("Forbidden");
+        }
+      } else if (!isSuperAdmin && adminUser.adminCategory !== "community") {
         throw new Error("Forbidden");
       }
-    } else if (!isSuperAdmin && adminUser.adminCategory !== "community") {
-      throw new Error("Forbidden");
+
+      const form = await ctx.db.get(app.formId);
+      const farmer = await ctx.db.get(app.farmerId);
+      const actions = await ctx.db
+        .query("adminActionLogs")
+        .withIndex("by_application", (q: any) => q.eq("applicationId", applicationId))
+        .collect();
+
+      return {
+        application: app,
+        form,
+        farmer,
+        actions: actions.sort((a: any, b: any) => b.createdAt - a.createdAt),
+      };
+    } catch (error: any) {
+      return { error: error?.message || "Unable to load application details." } as any;
     }
-
-    const form = await ctx.db.get(app.formId);
-    const farmer = await ctx.db.get(app.farmerId);
-    const actions = await ctx.db
-      .query("adminActionLogs")
-      .withIndex("by_application", (q: any) => q.eq("applicationId", applicationId))
-      .collect();
-
-    return {
-      application: app,
-      form,
-      farmer,
-      actions: actions.sort((a: any, b: any) => b.createdAt - a.createdAt),
-    };
   },
 });
 
@@ -896,67 +910,71 @@ export const getExportData = query({
     )),
   },
   handler: async (ctx, { adminId, status }) => {
-    const adminCheck = await verifyAdminRole({ userId: adminId, db: ctx.db });
-    if (!adminCheck.authorized) {
-      throw new Error("Not authorized");
-    }
+    try {
+      const adminCheck = await verifyAdminRole({ userId: adminId, db: ctx.db });
+      if (!adminCheck.authorized) {
+        throw new Error("Not authorized");
+      }
 
-    const communityId = await getAgroFreshCommunityId(ctx);
+      const communityId = await getAgroFreshCommunityId(ctx);
 
-    const adminUser = await ctx.db.get(adminId);
-    if (!adminUser) {
-      throw new Error("Admin not found");
-    }
+      const adminUser = await ctx.db.get(adminId);
+      if (!adminUser) {
+        throw new Error("Admin not found");
+      }
 
-    const isSuperAdmin = adminUser.adminLevel === "super" || adminUser.adminLevel === undefined;
-    if (!isSuperAdmin && adminUser.adminCategory === "community") {
-      const community = await ctx.db.get(communityId);
-      const assigned = (adminUser as any).assignedCommunityIds || [];
-      const isDirectAdmin = community?.communityAdminId === adminId;
-      const isAssigned = assigned.some((id: string) => id === communityId);
-      if (!isAssigned && !isDirectAdmin) {
+      const isSuperAdmin = adminUser.adminLevel === "super" || adminUser.adminLevel === undefined;
+      if (!isSuperAdmin && adminUser.adminCategory === "community") {
+        const community = await ctx.db.get(communityId);
+        const assigned = (adminUser as any).assignedCommunityIds || [];
+        const isDirectAdmin = community?.communityAdminId === adminId;
+        const isAssigned = assigned.some((id: string) => id === communityId);
+        if (!isAssigned && !isDirectAdmin) {
+          throw new Error("Forbidden");
+        }
+      } else if (!isSuperAdmin && adminUser.adminCategory !== "community") {
         throw new Error("Forbidden");
       }
-    } else if (!isSuperAdmin && adminUser.adminCategory !== "community") {
-      throw new Error("Forbidden");
-    }
-    const all = await ctx.db
-      .query("communityApplications")
-      .withIndex("by_community", (q: any) => q.eq("communityId", communityId))
-      .collect();
+      const all = await ctx.db
+        .query("communityApplications")
+        .withIndex("by_community", (q: any) => q.eq("communityId", communityId))
+        .collect();
 
-    const filtered = status ? all.filter((a: any) => a.status === status) : all;
+      const filtered = status ? all.filter((a: any) => a.status === status) : all;
 
-    const latestByFarmer = new Map<Id<"users">, any>();
-    const sorted = [...filtered].sort((a: any, b: any) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt));
-    for (const app of sorted) {
-      if (!latestByFarmer.has(app.farmerId)) {
-        latestByFarmer.set(app.farmerId, app);
+      const latestByFarmer = new Map<Id<"users">, any>();
+      const sorted = [...filtered].sort((a: any, b: any) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt));
+      for (const app of sorted) {
+        if (!latestByFarmer.has(app.farmerId)) {
+          latestByFarmer.set(app.farmerId, app);
+        }
       }
+
+      const deduped = Array.from(latestByFarmer.values());
+      const farmerIds = Array.from(new Set(deduped.map((a: any) => a.farmerId)));
+      const formIds = Array.from(new Set(deduped.map((a: any) => a.formId)));
+
+      const farmers = await Promise.all(farmerIds.map((id) => ctx.db.get(id)));
+      const forms = await Promise.all(formIds.map((id) => ctx.db.get(id)));
+
+      const farmerById = new Map(farmers.filter(Boolean).map((f: any) => [f._id, f]));
+      const formById = new Map(forms.filter(Boolean).map((f: any) => [f._id, f]));
+
+      return deduped.map((app: any) => {
+        const farmer = farmerById.get(app.farmerId);
+        const form = formById.get(app.formId);
+        return {
+          applicationId: app._id,
+          status: app.status,
+          createdAt: app.createdAt,
+          updatedAt: app.updatedAt,
+          farmer,
+          form,
+        };
+      });
+    } catch {
+      return [];
     }
-
-    const deduped = Array.from(latestByFarmer.values());
-    const farmerIds = Array.from(new Set(deduped.map((a: any) => a.farmerId)));
-    const formIds = Array.from(new Set(deduped.map((a: any) => a.formId)));
-
-    const farmers = await Promise.all(farmerIds.map((id) => ctx.db.get(id)));
-    const forms = await Promise.all(formIds.map((id) => ctx.db.get(id)));
-
-    const farmerById = new Map(farmers.filter(Boolean).map((f: any) => [f._id, f]));
-    const formById = new Map(forms.filter(Boolean).map((f: any) => [f._id, f]));
-
-    return deduped.map((app: any) => {
-      const farmer = farmerById.get(app.farmerId);
-      const form = formById.get(app.formId);
-      return {
-        applicationId: app._id,
-        status: app.status,
-        createdAt: app.createdAt,
-        updatedAt: app.updatedAt,
-        farmer,
-        form,
-      };
-    });
   },
 });
 

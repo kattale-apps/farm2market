@@ -375,7 +375,7 @@ export default function CommunityDashboardPage() {
                 ) : (
                   (() => {
                     const pending =
-                      applicationsByCommunity?.find((c) => c.communityId === community.id)?.applications || [];
+                      applicationsByCommunity?.find((c: any) => c.communityId === community.id)?.applications || [];
                     const pendingTotal = pending.length;
                     const pendingTotalPages = Math.max(1, Math.ceil(pendingTotal / pendingPageSize));
                     const safePendingPage = Math.min(pendingPage, pendingTotalPages);
@@ -528,7 +528,7 @@ export default function CommunityDashboardPage() {
                 ) : (
                   (() => {
                     const approved =
-                      approvedMembersByCommunity?.find((c) => c.communityId === community.id)?.members || [];
+                      approvedMembersByCommunity?.find((c: any) => c.communityId === community.id)?.members || [];
                     const approvedTotal = approved.length;
                     const approvedTotalPages = Math.max(1, Math.ceil(approvedTotal / approvedPageSize));
                     const safeApprovedPage = Math.min(approvedPage, approvedTotalPages);

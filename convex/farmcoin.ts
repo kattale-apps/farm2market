@@ -25,8 +25,9 @@ function isFinanceAdmin(user: { adminLevel?: "super" | "junior"; adminCategory?:
 
 async function getLatestFarmcoinBalance(
   ctx: any,
-  accountType: "central" | "trader",
-  traderId?: Id<"users">
+  accountType: "central" | "trader" | "sentify" | "buyer_reward",
+  traderId?: Id<"users">,
+  userId?: Id<"users">
 ): Promise<number> {
   let query = ctx.db
     .query("farmcoinLedger")
@@ -37,9 +38,18 @@ async function getLatestFarmcoinBalance(
     query = query.filter((q: any) => q.eq(q.field("traderId"), traderId));
   }
 
+  if ((accountType === "sentify" || accountType === "buyer_reward") && userId) {
+    query = query.filter((q: any) => q.eq(q.field("userId"), userId));
+  }
+
   const latest = await query.first();
 
   return latest?.balanceAfter ?? 0;
+}
+
+async function getFarmcoinCashoutRate(ctx: any): Promise<number> {
+  const settings = await ctx.db.query("systemSettings").first();
+  return settings?.farmcoinPostingCost ?? DEFAULT_POSTING_COST;
 }
 
 export const getFarmcoinSettings = query({
@@ -200,6 +210,7 @@ export const getFarmcoinLedger = query({
       listingId: entry.listingId,
       reason: entry.reason,
       utid: entry.utid,
+      batchUtid: entry.batchUtid,
       createdAt: entry.createdAt,
     }));
   },
@@ -323,6 +334,416 @@ export const getTraderFarmcoinSummary = query({
     const recent = entries.slice(0, 10);
 
     return { balance, recent };
+  },
+});
+
+export const getSentifyWalletSummary = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user || user.role !== "trader") {
+      throw new Error("User is not a trader");
+    }
+
+    const entries = await ctx.db
+      .query("farmcoinLedger")
+      .withIndex("by_user", (q: any) => q.eq("userId", args.userId))
+      .filter((q: any) => q.eq(q.field("accountType"), "sentify"))
+      .order("desc")
+      .collect();
+
+    const balance = entries[0]?.balanceAfter ?? 0;
+    const recent = entries.slice(0, 10);
+    const cashoutRate = await getFarmcoinCashoutRate(ctx);
+
+    return { balance, recent, cashoutRate };
+  },
+});
+
+export const getBuyerRewardSummary = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user || user.role !== "buyer") {
+      throw new Error("User is not a buyer");
+    }
+
+    const entries = await ctx.db
+      .query("farmcoinLedger")
+      .withIndex("by_user", (q: any) => q.eq("userId", args.userId))
+      .filter((q: any) => q.eq(q.field("accountType"), "buyer_reward"))
+      .order("desc")
+      .collect();
+
+    const balance = entries[0]?.balanceAfter ?? 0;
+    const recent = entries.slice(0, 10);
+    const cashoutRate = await getFarmcoinCashoutRate(ctx);
+
+    return { balance, recent, cashoutRate };
+  },
+});
+
+export const getSentifyReceipts = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user || user.role !== "trader") {
+      throw new Error("User is not a trader");
+    }
+
+    const entries = await ctx.db
+      .query("farmcoinLedger")
+      .withIndex("by_user", (q: any) => q.eq("userId", args.userId))
+      .filter((q: any) => q.eq(q.field("accountType"), "sentify"))
+      .order("desc")
+      .collect();
+
+    const cashouts = await ctx.db
+      .query("farmcoinLedger")
+      .withIndex("by_user", (q: any) => q.eq("userId", args.userId))
+      .filter((q: any) => q.eq(q.field("source"), "sentify_cashout"))
+      .collect();
+
+    const cashedOut = new Set(cashouts.map((entry: any) => entry.relatedUtid).filter(Boolean));
+
+    return entries
+      .filter((entry: any) => entry.delta > 0 && !cashedOut.has(entry.utid))
+      .map((entry: any) => ({
+        utid: entry.utid,
+        batchUtid: entry.batchUtid,
+        delta: entry.delta,
+        createdAt: entry.createdAt,
+        listingId: entry.listingId,
+      }));
+  },
+});
+
+export const getBuyerRewardReceipts = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user || user.role !== "buyer") {
+      throw new Error("User is not a buyer");
+    }
+
+    const entries = await ctx.db
+      .query("farmcoinLedger")
+      .withIndex("by_user", (q: any) => q.eq("userId", args.userId))
+      .filter((q: any) => q.eq(q.field("accountType"), "buyer_reward"))
+      .order("desc")
+      .collect();
+
+    const cashouts = await ctx.db
+      .query("farmcoinLedger")
+      .withIndex("by_user", (q: any) => q.eq("userId", args.userId))
+      .filter((q: any) => q.eq(q.field("source"), "buyer_reward_cashout"))
+      .collect();
+
+    const cashedOut = new Set(cashouts.map((entry: any) => entry.relatedUtid).filter(Boolean));
+
+    return entries
+      .filter((entry: any) => entry.delta > 0 && !cashedOut.has(entry.utid))
+      .map((entry: any) => ({
+        utid: entry.utid,
+        batchUtid: entry.batchUtid,
+        delta: entry.delta,
+        createdAt: entry.createdAt,
+      }));
+  },
+});
+
+export const cashOutSentifyReceipt = mutation({
+  args: {
+    traderId: v.id("users"),
+    receiptUtid: v.string(),
+    phoneNumber: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.traderId);
+    if (!user || user.role !== "trader") {
+      throw new Error("User is not a trader");
+    }
+
+    const receipt = await ctx.db
+      .query("farmcoinLedger")
+      .withIndex("by_utid", (q: any) => q.eq("utid", args.receiptUtid))
+      .first();
+
+    if (!receipt || receipt.accountType !== "sentify" || receipt.delta <= 0) {
+      throw new Error("Sentify receipt not found");
+    }
+
+    const priorCashout = await ctx.db
+      .query("farmcoinLedger")
+      .withIndex("by_user", (q: any) => q.eq("userId", args.traderId))
+      .filter((q: any) => q.eq(q.field("source"), "sentify_cashout"))
+      .filter((q: any) => q.eq(q.field("relatedUtid"), args.receiptUtid))
+      .first();
+
+    if (priorCashout) {
+      throw new Error("Receipt already cashed out");
+    }
+
+    const currentBalance = await getLatestFarmcoinBalance(ctx, "sentify", undefined, args.traderId);
+    if (currentBalance < receipt.delta) {
+      throw new Error("Insufficient Sentify balance");
+    }
+
+    const cashoutUtid = generateUTID(user.role);
+    const balanceAfter = currentBalance - receipt.delta;
+    const cashoutRate = await getFarmcoinCashoutRate(ctx);
+    const payoutAmount = receipt.delta * cashoutRate;
+
+    await ctx.db.insert("farmcoinLedger", {
+      accountType: "sentify",
+      traderId: args.traderId,
+      userId: args.traderId,
+      delta: -receipt.delta,
+      balanceAfter,
+      source: "sentify_cashout",
+      utid: cashoutUtid,
+      listingId: receipt.listingId,
+      batchUtid: receipt.batchUtid,
+      relatedUtid: receipt.utid,
+      reason: "Sentify cash-out",
+      createdAt: getUgandaTime(),
+    });
+
+    await ctx.db.insert("adminActions", {
+      adminId: args.traderId,
+      actionType: "sentify_cashout_request",
+      utid: cashoutUtid,
+      reason: "Sentify cash-out request",
+      metadata: {
+        role: "trader",
+        phoneNumber: args.phoneNumber,
+        receiptUtid: receipt.utid,
+        batchUtid: receipt.batchUtid,
+        tokenAmount: receipt.delta,
+        payoutAmount,
+      },
+      timestamp: getUgandaTime(),
+    });
+
+    const superAdmins = await ctx.db
+      .query("users")
+      .withIndex("by_role", (q: any) => q.eq("role", "admin"))
+      .collect();
+
+    const targetAdmins = superAdmins.filter((admin: any) => admin.adminLevel === "super" || admin.adminLevel === undefined);
+
+    await Promise.all(
+      targetAdmins.map((admin: any) =>
+        ctx.db.insert("notifications", {
+          userId: admin._id,
+          type: "system",
+          category: "pending_sentify_request",
+          priority: "high",
+          reminderFlag: true,
+          title: "Pending Sentify Request",
+          message: `Sentify cash-out request from ${user.alias} for ${receipt.delta} token(s) (UGX ${payoutAmount.toFixed(2)}).`,
+          utid: cashoutUtid,
+          metadata: {
+            role: "trader",
+            phoneNumber: args.phoneNumber,
+            receiptUtid: receipt.utid,
+            batchUtid: receipt.batchUtid,
+            tokenAmount: receipt.delta,
+            payoutAmount,
+            futureEmail: true,
+          },
+          read: false,
+          createdAt: getUgandaTime(),
+        })
+      )
+    );
+
+    return { success: true, utid: cashoutUtid, payoutAmount, balanceAfter };
+  },
+});
+
+export const cashOutBuyerRewardReceipt = mutation({
+  args: {
+    buyerId: v.id("users"),
+    receiptUtid: v.string(),
+    phoneNumber: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.buyerId);
+    if (!user || user.role !== "buyer") {
+      throw new Error("User is not a buyer");
+    }
+
+    const receipt = await ctx.db
+      .query("farmcoinLedger")
+      .withIndex("by_utid", (q: any) => q.eq("utid", args.receiptUtid))
+      .first();
+
+    if (!receipt || receipt.accountType !== "buyer_reward" || receipt.delta <= 0) {
+      throw new Error("Buyer reward receipt not found");
+    }
+
+    const priorCashout = await ctx.db
+      .query("farmcoinLedger")
+      .withIndex("by_user", (q: any) => q.eq("userId", args.buyerId))
+      .filter((q: any) => q.eq(q.field("source"), "buyer_reward_cashout"))
+      .filter((q: any) => q.eq(q.field("relatedUtid"), args.receiptUtid))
+      .first();
+
+    if (priorCashout) {
+      throw new Error("Receipt already cashed out");
+    }
+
+    const currentBalance = await getLatestFarmcoinBalance(ctx, "buyer_reward", undefined, args.buyerId);
+    if (currentBalance < receipt.delta) {
+      throw new Error("Insufficient buyer reward balance");
+    }
+
+    const cashoutUtid = generateUTID(user.role);
+    const balanceAfter = currentBalance - receipt.delta;
+    const cashoutRate = await getFarmcoinCashoutRate(ctx);
+    const payoutAmount = receipt.delta * cashoutRate;
+
+    await ctx.db.insert("farmcoinLedger", {
+      accountType: "buyer_reward",
+      userId: args.buyerId,
+      delta: -receipt.delta,
+      balanceAfter,
+      source: "buyer_reward_cashout",
+      utid: cashoutUtid,
+      batchUtid: receipt.batchUtid,
+      relatedUtid: receipt.utid,
+      reason: "Buyer reward cash-out",
+      createdAt: getUgandaTime(),
+    });
+
+    await ctx.db.insert("adminActions", {
+      adminId: args.buyerId,
+      actionType: "buyer_reward_cashout_request",
+      utid: cashoutUtid,
+      reason: "Buyer reward cash-out request",
+      metadata: {
+        role: "buyer",
+        phoneNumber: args.phoneNumber,
+        receiptUtid: receipt.utid,
+        tokenAmount: receipt.delta,
+        payoutAmount,
+      },
+      timestamp: getUgandaTime(),
+    });
+
+    const superAdmins = await ctx.db
+      .query("users")
+      .withIndex("by_role", (q: any) => q.eq("role", "admin"))
+      .collect();
+
+    const targetAdmins = superAdmins.filter((admin: any) => admin.adminLevel === "super" || admin.adminLevel === undefined);
+
+    await Promise.all(
+      targetAdmins.map((admin: any) =>
+        ctx.db.insert("notifications", {
+          userId: admin._id,
+          type: "system",
+          category: "pending_sentify_request",
+          priority: "high",
+          reminderFlag: true,
+          title: "Pending Sentify Request",
+          message: `Buyer reward cash-out request from ${user.alias} for ${receipt.delta} token(s) (UGX ${payoutAmount.toFixed(2)}).`,
+          utid: cashoutUtid,
+          metadata: {
+            role: "buyer",
+            phoneNumber: args.phoneNumber,
+            receiptUtid: receipt.utid,
+            tokenAmount: receipt.delta,
+            payoutAmount,
+            futureEmail: true,
+          },
+          read: false,
+          createdAt: getUgandaTime(),
+        })
+      )
+    );
+
+    return { success: true, utid: cashoutUtid, payoutAmount, balanceAfter };
+  },
+});
+
+export const creditSentifyReceipt = internalMutation({
+  args: {
+    traderId: v.id("users"),
+    listingId: v.optional(v.id("listings")),
+    batchUtid: v.string(),
+    tokenAmount: v.number(),
+    reason: v.string(),
+  },
+  handler: async (ctx, args) => {
+    if (args.tokenAmount <= 0) {
+      throw new Error("Token amount must be positive");
+    }
+
+    const currentBalance = await getLatestFarmcoinBalance(
+      ctx,
+      "sentify",
+      undefined,
+      args.traderId
+    );
+    const balanceAfter = currentBalance + args.tokenAmount;
+
+    const utid = generateUTID("admin");
+
+    await ctx.db.insert("farmcoinLedger", {
+      accountType: "sentify",
+      traderId: args.traderId,
+      userId: args.traderId,
+      delta: args.tokenAmount,
+      balanceAfter,
+      source: "sentify_receipt",
+      utid,
+      listingId: args.listingId,
+      batchUtid: args.batchUtid,
+      reason: args.reason,
+      createdAt: getUgandaTime(),
+    });
+
+    return { utid, balanceAfter };
+  },
+});
+
+export const creditBuyerReward = internalMutation({
+  args: {
+    buyerId: v.id("users"),
+    batchUtid: v.optional(v.string()),
+    tokenAmount: v.number(),
+    reason: v.string(),
+  },
+  handler: async (ctx, args) => {
+    if (args.tokenAmount <= 0) {
+      throw new Error("Token amount must be positive");
+    }
+
+    const currentBalance = await getLatestFarmcoinBalance(
+      ctx,
+      "buyer_reward",
+      undefined,
+      args.buyerId
+    );
+    const balanceAfter = currentBalance + args.tokenAmount;
+
+    const utid = generateUTID("admin");
+
+    await ctx.db.insert("farmcoinLedger", {
+      accountType: "buyer_reward",
+      userId: args.buyerId,
+      delta: args.tokenAmount,
+      balanceAfter,
+      source: "buyer_confirmation_reward",
+      utid,
+      batchUtid: args.batchUtid,
+      reason: args.reason,
+      createdAt: getUgandaTime(),
+    });
+
+    return { utid, balanceAfter };
   },
 });
 

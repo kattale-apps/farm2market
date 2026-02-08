@@ -18,6 +18,7 @@ export default function FinanceDashboardPage() {
   const [verificationFilter, setVerificationFilter] = useState<"all" | "verified" | "unverified">("all");
   const [verificationTraderId, setVerificationTraderId] = useState<string>("");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [selectedSentifyBatches, setSelectedSentifyBatches] = useState<Set<string>>(new Set());
   const currentUser = useQuery(api.auth.getUser, userId ? { userId } : "skip");
   const isSuperAdmin = currentUser?.role === "admin" && (
     currentUser?.adminLevel === "super" || currentUser?.adminLevel === undefined
@@ -48,10 +49,15 @@ export default function FinanceDashboardPage() {
     (api as any).farmcoin.getTraderVerificationList,
     userId ? { adminId: userId } : "skip"
   );
+  const sentifyBatches = useQuery(
+    (api as any).buyers.getSentifyDeliveryBatches,
+    userId && (isSuperAdmin || isFinanceAdmin) ? { adminId: userId } : "skip"
+  );
 
   const updateFarmcoinPricing = useMutation((api as any).farmcoin.updateFarmcoinPricing);
   const grantFarmcoinTokens = useMutation((api as any).farmcoin.grantFarmcoinTokens);
   const setTraderVerificationStatus = useMutation((api as any).farmcoin.setTraderVerificationStatus);
+  const superadminConfirmListingDelivery = useMutation((api as any).buyers.superadminConfirmListingDelivery);
 
   // Get current user from localStorage (pilot mode)
   useEffect(() => {
@@ -93,6 +99,39 @@ export default function FinanceDashboardPage() {
     return filtered.sort((a, b) => (a.alias || "").localeCompare(b.alias || ""));
   }, [traderVerificationList, verificationFilter]);
 
+  const handleToggleSentifyBatch = (batchUtid: string) => {
+    const updated = new Set(selectedSentifyBatches);
+    if (updated.has(batchUtid)) {
+      updated.delete(batchUtid);
+    } else {
+      updated.add(batchUtid);
+    }
+    setSelectedSentifyBatches(updated);
+  };
+
+  const handleSelectAllSentify = () => {
+    if (!sentifyBatches || sentifyBatches.length === 0) return;
+    if (selectedSentifyBatches.size === sentifyBatches.length) {
+      setSelectedSentifyBatches(new Set());
+      return;
+    }
+    setSelectedSentifyBatches(new Set(sentifyBatches.map((batch: any) => batch.batchUtid)));
+  };
+
+  const handleConfirmSentifyBatches = async () => {
+    if (!userId || selectedSentifyBatches.size === 0) return;
+    try {
+      await superadminConfirmListingDelivery({
+        adminId: userId as any,
+        batchUtids: Array.from(selectedSentifyBatches),
+      });
+      setMessage({ type: "success", text: "Sentify delivery confirmations processed." });
+      setSelectedSentifyBatches(new Set());
+    } catch (error: any) {
+      setMessage({ type: "error", text: error?.message || "Failed to confirm deliveries" });
+    }
+  };
+
   
 
   const handleExportFarmcoinLedger = () => {
@@ -101,10 +140,12 @@ export default function FinanceDashboardPage() {
     const ledgerRows = farmcoinLedger.map((entry: any) => ({
       AccountType: entry.accountType,
       TraderId: entry.traderId || "",
+      UserId: entry.userId || "",
       Delta: entry.delta,
       BalanceAfter: entry.balanceAfter,
       Source: entry.source,
       ListingId: entry.listingId || "",
+      BatchUTID: entry.batchUtid || "",
       Reason: entry.reason || "",
       UTID: entry.utid,
       CreatedAt: entry.createdAt ? new Date(entry.createdAt).toLocaleString() : "",
@@ -122,8 +163,23 @@ export default function FinanceDashboardPage() {
     const wb = XLSX.utils.book_new();
     const ledgerWs = XLSX.utils.json_to_sheet(ledgerRows);
     const pricingWs = XLSX.utils.json_to_sheet(pricingRows);
+    const sentifyRows = farmcoinLedger
+      .filter((entry: any) => entry.accountType === "sentify")
+      .map((entry: any) => ({
+        AccountType: entry.accountType,
+        UserId: entry.userId || entry.traderId || "",
+        Delta: entry.delta,
+        BalanceAfter: entry.balanceAfter,
+        Source: entry.source,
+        ListingId: entry.listingId || "",
+        BatchUTID: entry.batchUtid || "",
+        UTID: entry.utid,
+        CreatedAt: entry.createdAt ? new Date(entry.createdAt).toLocaleString() : "",
+      }));
+    const sentifyWs = XLSX.utils.json_to_sheet(sentifyRows);
     XLSX.utils.book_append_sheet(wb, ledgerWs, "FarmCoin Ledger");
     XLSX.utils.book_append_sheet(wb, pricingWs, "Token Pricing History");
+    XLSX.utils.book_append_sheet(wb, sentifyWs, "Sentify Wallet");
     XLSX.writeFile(wb, "farmcoin-ledger-export.xlsx");
   };
 
@@ -419,6 +475,94 @@ export default function FinanceDashboardPage() {
           </div>
         )}
 
+        {isSuperAdmin && (
+          <div style={{ marginTop: "2rem" }}>
+            <div style={{ fontWeight: 600, marginBottom: "0.75rem" }}>Pending Delivery Confirmations (Sentify)</div>
+            {sentifyBatches === undefined ? (
+              <p style={{ color: "#999" }}>Loading delivery batches...</p>
+            ) : !sentifyBatches || sentifyBatches.length === 0 ? (
+              <p style={{ color: "#666" }}>No delivery batches available.</p>
+            ) : (
+              <>
+                <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
+                  <button
+                    type="button"
+                    onClick={handleSelectAllSentify}
+                    style={{
+                      padding: "0.5rem 0.9rem",
+                      borderRadius: 8,
+                      border: "1px solid #ddd",
+                      background: "#f5f5f5",
+                      cursor: "pointer",
+                      fontWeight: 600,
+                      fontSize: "0.85rem",
+                    }}
+                  >
+                    {selectedSentifyBatches.size === sentifyBatches.length ? "Clear Selection" : "Select All"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmSentifyBatches}
+                    disabled={selectedSentifyBatches.size === 0}
+                    style={{
+                      padding: "0.5rem 0.9rem",
+                      borderRadius: 8,
+                      border: "none",
+                      background: selectedSentifyBatches.size === 0 ? "#ccc" : "#1976d2",
+                      color: "#fff",
+                      cursor: selectedSentifyBatches.size === 0 ? "not-allowed" : "pointer",
+                      fontWeight: 600,
+                      fontSize: "0.85rem",
+                    }}
+                  >
+                    Confirm Delivery (Release Escrow)
+                  </button>
+                </div>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
+                    <thead>
+                      <tr style={{ borderBottom: "2px solid #e0e0e0", background: "#f9f9f9" }}>
+                        <th style={{ padding: "0.6rem", textAlign: "left" }}>
+                          <input
+                            type="checkbox"
+                            checked={selectedSentifyBatches.size === sentifyBatches.length}
+                            onChange={handleSelectAllSentify}
+                          />
+                        </th>
+                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Batch UTID</th>
+                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Product</th>
+                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Total Cost (UGX)</th>
+                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Buyer Confirms</th>
+                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Trader Confirmed</th>
+                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Sentify Receipt</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sentifyBatches.map((batch: any) => (
+                        <tr key={batch.batchUtid} style={{ borderBottom: "1px solid #f0f0f0" }}>
+                          <td style={{ padding: "0.6rem" }}>
+                            <input
+                              type="checkbox"
+                              checked={selectedSentifyBatches.has(batch.batchUtid)}
+                              onChange={() => handleToggleSentifyBatch(batch.batchUtid)}
+                            />
+                          </td>
+                          <td style={{ padding: "0.6rem", fontFamily: "monospace" }}>{batch.batchUtid}</td>
+                          <td style={{ padding: "0.6rem" }}>{batch.productName}</td>
+                          <td style={{ padding: "0.6rem" }}>{formatUGX(batch.totalCost)}</td>
+                          <td style={{ padding: "0.6rem" }}>{batch.buyerConfirmedCount}/{batch.purchaseCount}</td>
+                          <td style={{ padding: "0.6rem" }}>{batch.traderConfirmedAt ? "Yes" : "No"}</td>
+                          <td style={{ padding: "0.6rem" }}>{batch.sentifyUtid || "Pending"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
         {(isSuperAdmin || isFinanceAdmin) && (
           <div style={{ marginTop: "1.5rem" }}>
             <button
@@ -436,6 +580,82 @@ export default function FinanceDashboardPage() {
             >
               Export FarmCoin Ledger (Excel)
             </button>
+          </div>
+        )}
+
+        {isSuperAdmin && (
+          <div style={{ marginTop: "2rem" }}>
+            <h3 style={{ marginTop: 0, marginBottom: "1rem" }}>Sentify Delivery Confirmations</h3>
+            {sentifyBatches === undefined ? (
+              <p style={{ color: "#999" }}>Loading batches...</p>
+            ) : sentifyBatches.length === 0 ? (
+              <p style={{ color: "#666" }}>No delivery batches found</p>
+            ) : (
+              <>
+                <div style={{ marginBottom: "0.75rem", display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.85rem" }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedSentifyBatches.size === sentifyBatches.length && sentifyBatches.length > 0}
+                      onChange={handleSelectAllSentify}
+                    />
+                    Select all
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleConfirmSentifyBatches}
+                    disabled={selectedSentifyBatches.size === 0}
+                    style={{
+                      padding: "0.5rem 0.9rem",
+                      background: selectedSentifyBatches.size === 0 ? "#ccc" : "#2e7d32",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: 6,
+                      fontWeight: 600,
+                      cursor: selectedSentifyBatches.size === 0 ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    Confirm Selected Deliveries
+                  </button>
+                </div>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
+                    <thead>
+                      <tr style={{ borderBottom: "2px solid #e0e0e0", background: "#f9f9f9" }}>
+                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Select</th>
+                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Batch UTID</th>
+                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Product</th>
+                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Purchases</th>
+                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Total Cost (UGX)</th>
+                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Trader Confirmed</th>
+                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Buyer Confirmed</th>
+                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Superadmin Confirmed</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sentifyBatches.map((batch: any) => (
+                        <tr key={batch.batchUtid} style={{ borderBottom: "1px solid #f0f0f0" }}>
+                          <td style={{ padding: "0.6rem" }}>
+                            <input
+                              type="checkbox"
+                              checked={selectedSentifyBatches.has(batch.batchUtid)}
+                              onChange={() => handleToggleSentifyBatch(batch.batchUtid)}
+                            />
+                          </td>
+                          <td style={{ padding: "0.6rem", fontFamily: "monospace" }}>{batch.batchUtid}</td>
+                          <td style={{ padding: "0.6rem" }}>{batch.productName || batch.produceType}</td>
+                          <td style={{ padding: "0.6rem" }}>{batch.purchaseCount}</td>
+                          <td style={{ padding: "0.6rem" }}>{formatUGX(batch.totalCost)}</td>
+                          <td style={{ padding: "0.6rem" }}>{batch.traderConfirmedAt ? "Yes" : "No"}</td>
+                          <td style={{ padding: "0.6rem" }}>{batch.buyerConfirmedCount || 0} / {batch.purchaseCount}</td>
+                          <td style={{ padding: "0.6rem" }}>{batch.superadminConfirmedAt ? "Yes" : "No"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>

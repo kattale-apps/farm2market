@@ -444,6 +444,10 @@ export default defineSchema({
       v.literal("utid_specific"),
       v.literal("system")
     ),
+    category: v.optional(v.string()),
+    priority: v.optional(v.string()),
+    reminderFlag: v.optional(v.boolean()),
+    metadata: v.optional(v.any()),
     title: v.string(),
     message: v.string(),
     utid: v.optional(v.string()), // If related to a specific transaction
@@ -510,8 +514,14 @@ export default defineSchema({
    * - Central ledger and per-trader ledger entries
    */
   farmcoinLedger: defineTable({
-    accountType: v.union(v.literal("central"), v.literal("trader")),
+    accountType: v.union(
+      v.literal("central"),
+      v.literal("trader"),
+      v.literal("sentify"),
+      v.literal("buyer_reward")
+    ),
     traderId: v.optional(v.id("users")),
+    userId: v.optional(v.id("users")),
     delta: v.number(),
     balanceAfter: v.number(),
     source: v.union(
@@ -520,18 +530,71 @@ export default defineSchema({
       v.literal("eta_change"),
       v.literal("admin_adjustment"),
       v.literal("transfer"),
-      v.literal("future_reward")
+      v.literal("future_reward"),
+      v.literal("sentify_receipt"),
+      v.literal("buyer_confirmation_reward"),
+      v.literal("sentify_cashout"),
+      v.literal("buyer_reward_cashout")
     ),
     utid: v.string(),
     listingId: v.optional(v.id("listings")),
+    batchUtid: v.optional(v.string()),
+    relatedUtid: v.optional(v.string()),
     adminId: v.optional(v.id("users")),
     reason: v.optional(v.string()),
     createdAt: v.number(),
   })
     .index("by_trader", ["traderId", "createdAt"])
+    .index("by_user", ["userId", "createdAt"])
     .index("by_utid", ["utid"])
     .index("by_source", ["source"])
     .index("by_account", ["accountType", "createdAt"]),
+
+  /**
+   * Buyer purchases of trader listings
+   * - Fixed price purchases (no negotiation)
+   * - Escrow lock with delivery confirmations
+   */
+  buyerListingPurchases: defineTable({
+    buyerId: v.id("users"),
+    listingId: v.id("listings"),
+    listingUtid: v.string(),
+    traderId: v.id("users"),
+    unitCount: v.number(),
+    unitSize: v.number(),
+    totalKilos: v.number(),
+    pricePerUnit: v.number(),
+    pricePerKilo: v.number(),
+    serviceFeePercentage: v.number(),
+    serviceFee: v.number(),
+    totalCost: v.number(),
+    utid: v.string(),
+    purchasedAt: v.number(),
+    etaType: v.optional(v.union(v.literal("duration"), v.literal("arrival_time"))),
+    etaValue: v.optional(v.number()),
+    etaBaseTime: v.optional(v.number()),
+    etaDeadline: v.optional(v.number()),
+    status: v.union(
+      v.literal("pending_delivery"),
+      v.literal("delivered"),
+      v.literal("cancelled")
+    ),
+    traderConfirmedAt: v.optional(v.number()),
+    buyerConfirmedAt: v.optional(v.number()),
+    superadminConfirmedAt: v.optional(v.number()),
+    traderConfirmationUtid: v.optional(v.string()),
+    buyerConfirmationUtid: v.optional(v.string()),
+    superadminConfirmationUtid: v.optional(v.string()),
+    buyerOverrideBySuperadmin: v.optional(v.boolean()),
+    sentifyUtid: v.optional(v.string()),
+    buyerRewardUtid: v.optional(v.string()),
+    escrowReleasedAt: v.optional(v.number()),
+  })
+    .index("by_buyer", ["buyerId", "purchasedAt"])
+    .index("by_listing", ["listingId", "purchasedAt"])
+    .index("by_listing_utid", ["listingUtid", "purchasedAt"])
+    .index("by_utid", ["utid"])
+    .index("by_status", ["status"]),
 
   /**
    * FarmCoin Pricing History

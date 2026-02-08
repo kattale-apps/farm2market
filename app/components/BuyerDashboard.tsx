@@ -16,31 +16,37 @@ interface BuyerDashboardProps {
 
 export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   const inventory = useQuery(api.buyerDashboard.getAvailableInventory, { buyerId: userId });
+  const traderListings = useQuery(api.buyerDashboard.getAvailableTraderListingsForBuyers, { buyerId: userId });
   const windowStatus = useQuery(api.buyerDashboard.getPurchaseWindowStatus, { buyerId: userId });
   const orders = useQuery(api.buyerDashboard.getBuyerOrders, { buyerId: userId });
+  const listingOrders = useQuery(api.buyerDashboard.getBuyerListingOrders, { buyerId: userId });
   const walletBalance = useQuery(api.buyerDashboard.getBuyerWalletBalance, { buyerId: userId });
   const storageFeeRate = useQuery(api.buyerDashboard.getBuyerStorageFeeRate, { buyerId: userId });
   const serviceFeePercentage = useQuery(api.buyerDashboard.getBuyerServiceFeePercentageQuery, { buyerId: userId });
   const transactionLedger = useQuery(api.buyerDashboard.getBuyerTransactionLedger, { buyerId: userId });
   const walletReport = useQuery(api.buyerDashboard.getBuyerWalletReport, { buyerId: userId });
+  const buyerRewardSummary = useQuery((api as any).farmcoin.getBuyerRewardSummary, { userId } as any);
+  const buyerRewardReceipts = useQuery((api as any).farmcoin.getBuyerRewardReceipts, { userId } as any);
   const createPurchase = useMutation(api.buyers.createBuyerPurchase);
-  const makeBuyerOffer = useMutation(api.traderBuyerNegotiations.makeBuyerOffer);
+  const createListingPurchase = useMutation((api as any).buyers.createBuyerListingPurchase);
+  const buyerConfirmListingDelivery = useMutation((api as any).buyers.buyerConfirmListingDelivery);
+  const cashOutBuyerRewardReceipt = useMutation((api as any).farmcoin.cashOutBuyerRewardReceipt);
   const messageThreads = useQuery(api.messages.getUserMessageThreads, { userId });
   
-  const [selectedInventoryUtids, setSelectedInventoryUtids] = useState<Set<string>>(new Set());
-  const [bulkOfferPrice, setBulkOfferPrice] = useState<string>("");
-  const [bulkOfferKilos, setBulkOfferKilos] = useState<string>("");
-  const [isMakingBulkOffer, setIsMakingBulkOffer] = useState(false);
-  const [bulkOfferMessage, setBulkOfferMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const initiateDeposit = useAction(api.pesapal.initiateBuyerDeposit);
   const paymentTransactions = useQuery(api.pesapal.getUserPaymentTransactions, { userId });
   
   const [purchasing, setPurchasing] = useState<Id<"traderInventory"> | null>(null);
   const [purchaseMessage, setPurchaseMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [kilosInput, setKilosInput] = useState<{ [key: string]: string }>({});
+  const [listingUnitsInput, setListingUnitsInput] = useState<{ [key: string]: string }>({});
   const [depositAmount, setDepositAmount] = useState<string>("");
   const [isDepositing, setIsDepositing] = useState(false);
   const [depositMessage, setDepositMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [listingPurchaseMessage, setListingPurchaseMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [rewardCashoutPhone, setRewardCashoutPhone] = useState<string>("");
+  const [rewardReceiptUtid, setRewardReceiptUtid] = useState<string>("");
+  const [rewardCashoutMessage, setRewardCashoutMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [messageInboxOpen, setMessageInboxOpen] = useState(false);
   const [selectedMessageUtid, setSelectedMessageUtid] = useState<string | null>(null);
   const SUPPORT_THREAD = "SUPPORT";
@@ -495,107 +501,70 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
     }
   };
 
-  const handleToggleSelection = (inventoryUtid: string) => {
-    const newSelection = new Set(selectedInventoryUtids);
-    if (newSelection.has(inventoryUtid)) {
-      newSelection.delete(inventoryUtid);
-    } else {
-      newSelection.add(inventoryUtid);
-    }
-    setSelectedInventoryUtids(newSelection);
-  };
+  const handleListingPurchase = async (listingId: string, availableUnits: number) => {
+    const unitsStr = listingUnitsInput[listingId] || "";
+    const units = parseInt(unitsStr, 10);
 
-  const handleSelectAll = () => {
-    if (inventory && inventory.inventory.length > 0) {
-      if (selectedInventoryUtids.size === inventory.inventory.length) {
-        setSelectedInventoryUtids(new Set());
-      } else {
-        setSelectedInventoryUtids(new Set(inventory?.inventory?.map((item: any) => item.inventoryUtid) || []));
-      }
-    }
-  };
-
-  const handleBulkOffer = async () => {
-    if (selectedInventoryUtids.size === 0) {
-      setBulkOfferMessage({ type: "error", text: "Please select at least one inventory item" });
+    if (!unitsStr || Number.isNaN(units) || units <= 0) {
+      setListingPurchaseMessage({ type: "error", text: "Please enter a valid number of units" });
       return;
     }
 
-    const offerPrice = parseFloat(bulkOfferPrice);
-    const offerKilos = parseFloat(bulkOfferKilos);
-
-    if (!bulkOfferPrice || isNaN(offerPrice) || offerPrice <= 0) {
-      setBulkOfferMessage({ type: "error", text: "Please enter a valid offer price per kilo" });
+    if (units > availableUnits) {
+      setListingPurchaseMessage({ type: "error", text: `Requested units (${units}) exceed available units (${availableUnits})` });
       return;
     }
 
-    if (!bulkOfferKilos || isNaN(offerKilos) || offerKilos <= 0) {
-      setBulkOfferMessage({ type: "error", text: "Please enter a valid quantity (kilos)" });
-      return;
-    }
-
-    setIsMakingBulkOffer(true);
-    setBulkOfferMessage(null);
+    setListingPurchaseMessage(null);
 
     try {
-      // Find inventory items by UTID
-      const selectedItems = inventory?.inventory.filter((item: any) => 
-        selectedInventoryUtids.has(item.inventoryUtid)
-      ) || [];
-
-      const results = [];
-      const errors = [];
-
-      for (const item of selectedItems) {
-        try {
-          // Validate kilos for this item
-          if (offerKilos > item.totalKilos) {
-            errors.push(`${item.inventoryUtid}: Requested ${offerKilos} kg exceeds available ${item.totalKilos} kg`);
-            continue;
-          }
-
-          const result = await makeBuyerOffer({
-            buyerId: userId,
-            inventoryId: item.inventoryId,
-            offerPricePerKilo: offerPrice,
-            kilos: offerKilos,
-          });
-
-          results.push({
-            utid: item.inventoryUtid,
-            negotiationUtid: result.negotiationUtid,
-          });
-        } catch (error: any) {
-          errors.push(`${item.inventoryUtid}: ${error.message}`);
-        }
-      }
-
-      if (results.length > 0) {
-        setBulkOfferMessage({
-          type: "success",
-          text: `Successfully made ${results.length} offer(s). ${errors.length > 0 ? `Errors: ${errors.length}` : ""}`,
-        });
-        // Clear selection and inputs
-        setSelectedInventoryUtids(new Set());
-        setBulkOfferPrice("");
-        setBulkOfferKilos("");
-      } else {
-        setBulkOfferMessage({
-          type: "error",
-          text: `Failed to make offers. ${errors.join("; ")}`,
-        });
-      }
-
-      setTimeout(() => {
-        setBulkOfferMessage(null);
-      }, 10000);
-    } catch (error: any) {
-      setBulkOfferMessage({
-        type: "error",
-        text: `Bulk offer failed: ${error.message}`,
+      const result = await createListingPurchase({
+        buyerId: userId,
+        listingId: listingId as any,
+        unitCount: units,
       });
-    } finally {
-      setIsMakingBulkOffer(false);
+
+      setListingPurchaseMessage({
+        type: "success",
+        text: `Purchase successful. UTID: ${result.purchaseUtid}. Await delivery confirmation flow.`,
+      });
+      setListingUnitsInput({ ...listingUnitsInput, [listingId]: "" });
+    } catch (error: any) {
+      setListingPurchaseMessage({
+        type: "error",
+        text: `Purchase failed: ${error.message}`,
+      });
+    }
+  };
+
+  const handleBuyerConfirmDelivery = async (purchaseId: string) => {
+    try {
+      await buyerConfirmListingDelivery({
+        buyerId: userId,
+        purchaseId: purchaseId as any,
+      });
+      setListingPurchaseMessage({ type: "success", text: "Delivery confirmed. You received a FarmCoin reward." });
+    } catch (error: any) {
+      setListingPurchaseMessage({ type: "error", text: error?.message || "Failed to confirm delivery" });
+    }
+  };
+
+  const handleBuyerRewardCashout = async () => {
+    if (!rewardReceiptUtid || !rewardCashoutPhone.trim()) {
+      setRewardCashoutMessage({ type: "error", text: "Select a receipt and enter a phone number" });
+      return;
+    }
+
+    try {
+      const result = await cashOutBuyerRewardReceipt({
+        buyerId: userId,
+        receiptUtid: rewardReceiptUtid,
+        phoneNumber: rewardCashoutPhone.trim(),
+      });
+      setRewardCashoutMessage({ type: "success", text: `Cash-out processed. UGX ${result.payoutAmount.toFixed(2)} requested.` });
+      setRewardReceiptUtid("");
+    } catch (error: any) {
+      setRewardCashoutMessage({ type: "error", text: error?.message || "Cash-out failed" });
     }
   };
 
@@ -650,6 +619,81 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
               : ""}
           </button>
         </div>
+      </div>
+
+      {/* Trader Listing Orders */}
+      <div style={{
+        padding: "clamp(1rem, 3vw, 1.5rem)",
+        background: "#fff",
+        borderRadius: "12px",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        border: "1px solid #e0e0e0",
+        marginBottom: "1.5rem"
+      }}>
+        <h3 style={{
+          marginTop: 0,
+          marginBottom: "1rem",
+          fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)",
+          color: "#2c2c2c",
+          fontFamily: '"Montserrat", sans-serif',
+          fontWeight: "600",
+          letterSpacing: "-0.01em"
+        }}>
+          Trader Listing Orders
+        </h3>
+        {listingOrders === undefined ? (
+          <p style={{ color: "#999" }}>Loading...</p>
+        ) : !listingOrders?.orders?.length ? (
+          <p style={{ color: "#666" }}>No trader listing orders yet</p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            {listingOrders.orders.map((order: any) => {
+              const canConfirm = order.traderConfirmedAt && !order.buyerConfirmedAt;
+              return (
+                <div key={order.purchaseId} style={{
+                  padding: "1rem",
+                  background: "#f8fafc",
+                  borderRadius: "8px",
+                  border: "1px solid #e2e8f0"
+                }}>
+                  <div style={{ fontWeight: "600", marginBottom: "0.5rem" }}>
+                    {order.productName || order.produceType} • {order.unitCount} unit(s) ({order.totalKilos} kg)
+                  </div>
+                  <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.25rem" }}>
+                    Price per unit: {formatUGX(order.pricePerUnit)} • Total: {formatUGX(order.totalCost)}
+                  </div>
+                  <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.25rem" }}>
+                    ETA: {order.etaType ? formatEtaLabel(order) : "N/A"}
+                  </div>
+                  <div style={{ fontSize: "0.8rem", color: "#475569", marginBottom: "0.5rem" }}>
+                    Trader confirmed: {order.traderConfirmedAt ? "Yes" : "No"} • Buyer confirmed: {order.buyerConfirmedAt ? "Yes" : "No"} • Superadmin confirmed: {order.superadminConfirmedAt ? "Yes" : "No"}
+                  </div>
+                  {canConfirm && (
+                    <button
+                      type="button"
+                      onClick={() => handleBuyerConfirmDelivery(order.purchaseId)}
+                      style={{
+                        padding: "0.5rem 1rem",
+                        background: "#1976d2",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: "4px",
+                        fontSize: "0.85rem",
+                        fontWeight: "600",
+                        cursor: "pointer"
+                      }}
+                    >
+                      Confirm Delivery (Earn FarmCoin)
+                    </button>
+                  )}
+                  <div style={{ marginTop: "0.75rem", fontFamily: "monospace", fontSize: "0.85rem", color: "#475569" }}>
+                    UTID: {order.purchaseUtid}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {messageInboxOpen && (
@@ -815,6 +859,106 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Buyer Reward Cash-out */}
+        <div style={{
+          padding: "clamp(1rem, 3vw, 1.5rem)",
+          background: "#fff",
+          borderRadius: "12px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+          border: "1px solid #e0e0e0"
+        }}>
+          <h3 style={{ marginTop: 0, marginBottom: "1rem", fontSize: "clamp(1rem, 3vw, 1.2rem)", color: "#1a1a1a" }}>
+            Buyer FarmCoin Rewards
+          </h3>
+          <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.75rem" }}>
+            Sentify is to turn your FarmCoin into cash via mobile money.
+          </div>
+          <div style={{ marginBottom: "0.75rem" }}>
+            <div style={{ color: "#666", fontSize: "0.9rem" }}>Reward Balance</div>
+            <div style={{ fontSize: "1.25rem", fontWeight: "600", color: "#1976d2" }}>
+              {buyerRewardSummary?.balance ?? 0} Token(s)
+            </div>
+            {buyerRewardSummary && (
+              <div style={{ fontSize: "0.8rem", color: "#64748b" }}>
+                Cash-out rate: UGX {buyerRewardSummary.cashoutRate} per token
+              </div>
+            )}
+          </div>
+          {buyerRewardSummary?.recent?.length ? (
+            <div style={{ marginBottom: "0.75rem" }}>
+              <div style={{ fontSize: "0.8rem", color: "#666", marginBottom: "0.35rem" }}>
+                Recent rewards
+              </div>
+              <div style={{ display: "grid", gap: "0.35rem" }}>
+                {buyerRewardSummary.recent.map((entry: any, idx: number) => (
+                  <div key={idx} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", color: "#475569" }}>
+                    <span>{entry.source?.replace("_", " ")}</span>
+                    <span style={{ fontWeight: 600 }}>{entry.delta > 0 ? `+${entry.delta}` : entry.delta}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+            <div>
+              <label style={{ display: "block", marginBottom: "0.4rem", fontSize: "0.85rem", color: "#666" }}>
+                Select Reward Receipt
+              </label>
+              <select
+                value={rewardReceiptUtid}
+                onChange={(e) => setRewardReceiptUtid(e.target.value)}
+                style={{ width: "100%", padding: "0.6rem", borderRadius: "6px", border: "1px solid #ddd" }}
+              >
+                <option value="">Select receipt</option>
+                {(buyerRewardReceipts || []).map((receipt: any) => (
+                  <option key={receipt.utid} value={receipt.utid}>
+                    {receipt.utid} • {receipt.delta} token(s)
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={{ display: "block", marginBottom: "0.4rem", fontSize: "0.85rem", color: "#666" }}>
+                Mobile Money Phone Number
+              </label>
+              <input
+                type="tel"
+                value={rewardCashoutPhone}
+                onChange={(e) => setRewardCashoutPhone(e.target.value)}
+                placeholder="e.g., 2567XXXXXXXX"
+                style={{ width: "100%", padding: "0.6rem", borderRadius: "6px", border: "1px solid #ddd" }}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleBuyerRewardCashout}
+              style={{
+                padding: "0.6rem 1rem",
+                background: "#1976d2",
+                color: "#fff",
+                border: "none",
+                borderRadius: "6px",
+                fontWeight: "600",
+                cursor: "pointer"
+              }}
+            >
+              Sentify Cash-out
+            </button>
+            {rewardCashoutMessage && (
+              <div style={{
+                padding: "0.6rem",
+                borderRadius: "6px",
+                fontSize: "0.85rem",
+                background: rewardCashoutMessage.type === "success" ? "#e8f5e9" : "#ffebee",
+                color: rewardCashoutMessage.type === "success" ? "#2e7d32" : "#c62828",
+                border: `1px solid ${rewardCashoutMessage.type === "success" ? "#c8e6c9" : "#ffcdd2"}`
+              }}>
+                {rewardCashoutMessage.text}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Deposit Section */}
@@ -1027,7 +1171,146 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
         </div>
       )}
 
-      {/* Available Inventory - Institutional Table View */}
+      {/* Trader-sourced Listings */}
+      <div style={{
+        marginBottom: "1.5rem",
+        padding: "clamp(1rem, 3vw, 1.5rem)",
+        background: "#fff",
+        borderRadius: "12px",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        border: "1px solid #e0e0e0"
+      }}>
+        <h3 style={{
+          marginTop: 0,
+          marginBottom: "1rem",
+          fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)",
+          color: "#2c2c2c",
+          fontFamily: '"Montserrat", sans-serif',
+          fontWeight: "600",
+          letterSpacing: "-0.01em"
+        }}>
+          Trader-sourced Listings (Fixed Price)
+        </h3>
+        <p style={{ color: "#666", fontSize: "0.9rem", marginBottom: "1rem" }}>
+          Traders set a fixed price per unit. Buy any number of units during the purchase window.
+        </p>
+
+        {listingPurchaseMessage && (
+          <div style={{
+            padding: "1rem",
+            marginBottom: "1.5rem",
+            background: listingPurchaseMessage.type === "success" ? "#e8f5e9" : "#ffebee",
+            borderRadius: "8px",
+            border: `1px solid ${listingPurchaseMessage.type === "success" ? "#4caf50" : "#ef5350"}`,
+            color: listingPurchaseMessage.type === "success" ? "#2e7d32" : "#c62828",
+          }}>
+            {listingPurchaseMessage.text}
+          </div>
+        )}
+
+        {traderListings === undefined ? (
+          <p style={{ color: "#999" }}>Loading...</p>
+        ) : !traderListings?.listings?.length ? (
+          <p style={{ color: "#666" }}>No trader listings available</p>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
+              <thead>
+                <tr style={{ borderBottom: "2px solid #e0e0e0", background: "#f9f9f9" }}>
+                  <th style={{ padding: "0.75rem", textAlign: "left", fontWeight: "600", color: "#333" }}>UTID</th>
+                  <th style={{ padding: "0.75rem", textAlign: "left", fontWeight: "600", color: "#333" }}>Product</th>
+                  <th style={{ padding: "0.75rem", textAlign: "left", fontWeight: "600", color: "#333" }}>Units</th>
+                  <th style={{ padding: "0.75rem", textAlign: "left", fontWeight: "600", color: "#333" }}>Unit Size</th>
+                  <th style={{ padding: "0.75rem", textAlign: "left", fontWeight: "600", color: "#333" }}>Price / Unit</th>
+                  <th style={{ padding: "0.75rem", textAlign: "left", fontWeight: "600", color: "#333" }}>ETA</th>
+                  <th style={{ padding: "0.75rem", textAlign: "left", fontWeight: "600", color: "#333" }}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {traderListings.listings.map((listing: any) => {
+                  const unitsAvailable = listing.availableUnits ?? 0;
+                  const etaLabel = listing.etaType && listing.etaValue
+                    ? listing.etaType === "arrival_time"
+                      ? formatDate(listing.etaValue)
+                      : `${listing.etaValue}h`
+                    : "N/A";
+
+                  return (
+                    <tr key={listing.listingId} style={{ borderBottom: "1px solid #f0f0f0" }}>
+                      <td style={{ padding: "0.75rem", fontFamily: "monospace", fontWeight: 700 }}>{listing.listingUtid}</td>
+                      <td style={{ padding: "0.75rem" }}>
+                        <div>{listing.productName || listing.produceType}</div>
+                        <div style={{ fontSize: "0.75rem", color: "#666" }}>{listing.traderAlias || "Trader"}</div>
+                      </td>
+                      <td style={{ padding: "0.75rem" }}>{unitsAvailable}</td>
+                      <td style={{ padding: "0.75rem" }}>{listing.unitSize} unit</td>
+                      <td style={{ padding: "0.75rem" }}>{formatUGX(listing.pricePerUnit)}</td>
+                      <td style={{ padding: "0.75rem" }}>{etaLabel}</td>
+                      <td style={{ padding: "0.75rem" }}>
+                        {windowStatus?.isOpen ? (
+                          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                            <input
+                              type="number"
+                              min="1"
+                              max={unitsAvailable}
+                              value={listingUnitsInput[listing.listingId] || ""}
+                              onChange={(e) => setListingUnitsInput({ ...listingUnitsInput, [listing.listingId]: e.target.value })}
+                              placeholder="Units"
+                              style={{
+                                padding: "0.5rem",
+                                border: "1px solid #ddd",
+                                borderRadius: "4px",
+                                fontSize: "0.85rem",
+                                width: "80px"
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setListingUnitsInput({ ...listingUnitsInput, [listing.listingId]: String(unitsAvailable) })}
+                              disabled={unitsAvailable <= 0}
+                              style={{
+                                padding: "0.5rem 0.75rem",
+                                background: "#f5f5f5",
+                                color: "#333",
+                                border: "1px solid #ddd",
+                                borderRadius: "4px",
+                                fontSize: "0.8rem",
+                                cursor: unitsAvailable <= 0 ? "not-allowed" : "pointer"
+                              }}
+                            >
+                              Buy All
+                            </button>
+                            <button
+                              onClick={() => handleListingPurchase(listing.listingId, unitsAvailable)}
+                              disabled={!listingUnitsInput[listing.listingId] || unitsAvailable <= 0}
+                              style={{
+                                padding: "0.5rem 1rem",
+                                background: !listingUnitsInput[listing.listingId] || unitsAvailable <= 0 ? "#ccc" : "#1976d2",
+                                color: "#fff",
+                                border: "none",
+                                borderRadius: "4px",
+                                fontSize: "0.85rem",
+                                fontWeight: "600",
+                                cursor: !listingUnitsInput[listing.listingId] || unitsAvailable <= 0 ? "not-allowed" : "pointer"
+                              }}
+                            >
+                              Purchase
+                            </button>
+                          </div>
+                        ) : (
+                          <span style={{ color: "#999", fontSize: "0.85rem" }}>Window Closed</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Farmer-sourced Inventory - Institutional Table View */}
       <div style={{
         marginBottom: "1.5rem",
         padding: "clamp(1rem, 3vw, 1.5rem)",
@@ -1045,10 +1328,10 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
             fontWeight: "600",
             letterSpacing: "-0.01em"
           }}>
-          Available Inventory (100kg Bags)
+          Farmer-sourced Inventory (100kg Bags)
         </h3>
         <p style={{ color: "#666", fontSize: "0.9rem", marginBottom: "1rem" }}>
-          All inventory is listed in 100kg bags. Select multiple UTIDs to make bulk offers.
+          All inventory is listed in 100kg bags. Purchase any quantity or buy the full bag.
         </p>
         
         {purchaseMessage && (
@@ -1070,124 +1353,11 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
           <p style={{ color: "#666" }}>No inventory available</p>
         ) : (
           <>
-            {/* Bulk Offer Section */}
-            {selectedInventoryUtids.size > 0 && (
-              <div style={{
-                padding: "1rem",
-                marginBottom: "1.5rem",
-                background: "#e3f2fd",
-                borderRadius: "8px",
-                border: "1px solid #2196f3"
-              }}>
-                <h4 style={{ marginTop: 0, marginBottom: "0.75rem", fontSize: "1rem", color: "#1565c0" }}>
-                  Make Bulk Offer ({selectedInventoryUtids.size} selected)
-                </h4>
-                <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", alignItems: "flex-end" }}>
-                  <div>
-                    <label style={{ display: "block", marginBottom: "0.25rem", fontSize: "0.85rem", color: "#666" }}>
-                      Offer Price per Kilo (UGX)
-                    </label>
-                    <input
-                      type="number"
-                      value={bulkOfferPrice}
-                      onChange={(e) => setBulkOfferPrice(e.target.value)}
-                      placeholder="Enter price"
-                      min="1"
-                      step="0.01"
-                      disabled={isMakingBulkOffer}
-                      style={{
-                        padding: "0.5rem",
-                        border: "1px solid #ddd",
-                        borderRadius: "4px",
-                        fontSize: "0.9rem",
-                        width: "150px"
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: "block", marginBottom: "0.25rem", fontSize: "0.85rem", color: "#666" }}>
-                      Quantity (kg)
-                    </label>
-                    <input
-                      type="number"
-                      value={bulkOfferKilos}
-                      onChange={(e) => setBulkOfferKilos(e.target.value)}
-                      placeholder="Enter kilos"
-                      min="1"
-                      step="0.01"
-                      disabled={isMakingBulkOffer}
-                      style={{
-                        padding: "0.5rem",
-                        border: "1px solid #ddd",
-                        borderRadius: "4px",
-                        fontSize: "0.9rem",
-                        width: "120px"
-                      }}
-                    />
-                  </div>
-                  <button
-                    onClick={handleBulkOffer}
-                    disabled={isMakingBulkOffer || !bulkOfferPrice || !bulkOfferKilos}
-                    style={{
-                      padding: "0.5rem 1rem",
-                      background: isMakingBulkOffer || !bulkOfferPrice || !bulkOfferKilos ? "#ccc" : "#1976d2",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: "4px",
-                      fontSize: "0.9rem",
-                      fontWeight: "600",
-                      cursor: isMakingBulkOffer || !bulkOfferPrice || !bulkOfferKilos ? "not-allowed" : "pointer"
-                    }}
-                  >
-                    {isMakingBulkOffer ? "Making Offers..." : "Make Bulk Offer"}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setSelectedInventoryUtids(new Set());
-                      setBulkOfferPrice("");
-                      setBulkOfferKilos("");
-                    }}
-                    style={{
-                      padding: "0.5rem 1rem",
-                      background: "#fff",
-                      color: "#666",
-                      border: "1px solid #ddd",
-                      borderRadius: "4px",
-                      fontSize: "0.9rem",
-                      cursor: "pointer"
-                    }}
-                  >
-                    Clear Selection
-                  </button>
-                </div>
-                {bulkOfferMessage && (
-                  <div style={{
-                    marginTop: "0.75rem",
-                    padding: "0.75rem",
-                    background: bulkOfferMessage.type === "success" ? "#e8f5e9" : "#ffebee",
-                    borderRadius: "4px",
-                    color: bulkOfferMessage.type === "success" ? "#2e7d32" : "#c62828",
-                    fontSize: "0.85rem"
-                  }}>
-                    {bulkOfferMessage.text}
-                  </div>
-                )}
-              </div>
-            )}
-
             {/* Table View for Desktop */}
             <div style={{ overflowX: "auto", marginBottom: "1.5rem" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
                 <thead>
                   <tr style={{ borderBottom: "2px solid #e0e0e0", background: "#f9f9f9" }}>
-                    <th style={{ padding: "0.75rem", textAlign: "left", fontWeight: "600", color: "#333", width: "40px" }}>
-                      <input
-                        type="checkbox"
-                        checked={inventory && selectedInventoryUtids.size === inventory.inventory.length && inventory.inventory.length > 0}
-                        onChange={handleSelectAll}
-                        style={{ cursor: "pointer" }}
-                      />
-                    </th>
                     <th style={{ padding: "0.75rem", textAlign: "left", fontWeight: "600", color: "#333" }}>UTID</th>
                     <th style={{ padding: "0.75rem", textAlign: "left", fontWeight: "600", color: "#333" }}>Produce</th>
                     <th style={{ padding: "0.75rem", textAlign: "left", fontWeight: "600", color: "#333" }}>Quantity (kg)</th>
@@ -1206,18 +1376,8 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                     const storageAge = item.storageStartTime 
                       ? Math.floor((getUgandaTime() - item.storageStartTime) / (1000 * 60 * 60 * 24))
                       : 0;
-                    const isSelected = selectedInventoryUtids.has(item.inventoryUtid);
-
                     return (
-                      <tr key={index} style={{ borderBottom: "1px solid #f0f0f0", background: isSelected ? "#e3f2fd" : "transparent" }}>
-                        <td style={{ padding: "0.75rem" }}>
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => handleToggleSelection(item.inventoryUtid)}
-                            style={{ cursor: "pointer" }}
-                          />
-                        </td>
+                      <tr key={index} style={{ borderBottom: "1px solid #f0f0f0" }}>
                         <td style={{ padding: "0.75rem" }}>
                           <div style={{
                             fontSize: "clamp(1rem, 3vw, 1.2rem)",
@@ -1273,6 +1433,21 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                                   width: "100px"
                                 }}
                               />
+                              <button
+                                onClick={() => setKilosInput({ ...kilosInput, [itemId]: String(item.totalKilos) })}
+                                disabled={isPurchasing}
+                                style={{
+                                  padding: "0.5rem 0.75rem",
+                                  background: "#f5f5f5",
+                                  color: "#333",
+                                  border: "1px solid #ddd",
+                                  borderRadius: "4px",
+                                  fontSize: "0.8rem",
+                                  cursor: isPurchasing ? "not-allowed" : "pointer"
+                                }}
+                              >
+                                Buy All
+                              </button>
                               <button
                                 onClick={() => handlePurchase(itemId, item.totalKilos)}
                                 disabled={isPurchasing || !kilosInput[itemId] || parseFloat(kilosInput[itemId] || "0") <= 0}

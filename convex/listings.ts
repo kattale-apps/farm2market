@@ -498,6 +498,7 @@ export const createTraderListing = mutation({
       pricePerKilo: args.pricePerKilo,
       unitSize: inventory.totalKilos, // Single-unit listing sized to inventory
       totalUnits: 1, // 1 unit = inventory size
+      availableUnits: 1,
       status: "active",
       createdAt: getUgandaTime(),
       deliverySLA: 0, // Not applicable for trader listings

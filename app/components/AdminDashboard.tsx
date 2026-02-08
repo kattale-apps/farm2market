@@ -1652,8 +1652,8 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           )}
         </div>
       </div>
-      )}
-
+    </div>
+  )}
     </div>
   );
 }

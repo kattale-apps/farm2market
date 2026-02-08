@@ -7,13 +7,13 @@
  * - Their orders and pickup deadlines
  * 
  * CRITICAL RULES:
- * - Buyers NEVER see prices
+ * - Buyers see fixed prices for trader listings only
  * - No trader identities exposed (only aliases)
  * - All queries are read-only (no mutations)
  * - Server-side filtering by buyerId
  * 
  * How this discourages side trading:
- * - No price visibility prevents price negotiation outside platform
+ * - Fixed price listings remove negotiation paths
  * - Purchase windows create controlled access (admin-controlled)
  * - All transactions tracked with UTIDs (audit trail)
  * - Platform is the only way to purchase (no alternative paths)
@@ -21,6 +21,7 @@
 
 import { v } from "convex/values";
 import { query } from "./_generated/server";
+import { Id } from "./_generated/dataModel";
 import { BUYER_BLOCK_SIZE_KG, BUYER_PICKUP_SLA_MS } from "./constants";
 import { getStorageFeeRate, getBuyerServiceFeePercentage } from "./utils";
 
@@ -36,7 +37,7 @@ import { getStorageFeeRate, getBuyerServiceFeePercentage } from "./utils";
  * - Inventory UTID
  * 
  * Buyers DO NOT see:
- * - Prices (never shown to buyers)
+ * - Trader real identity
  * - Trader real identity
  * - Other buyers' purchases
  * - Storage fees
@@ -111,6 +112,74 @@ export const getAvailableInventory = query({
       storageFeeRate: storageFeeRate, // Current kilo-shaving rate (visible to buyers before purchase)
       serviceFeePercentage: serviceFeePercentage, // Current service fee percentage
     };
+  },
+});
+
+/**
+ * Get available trader listings for buyers (fixed price)
+ */
+export const getAvailableTraderListingsForBuyers = query({
+  args: {
+    buyerId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.buyerId);
+    if (!user || user.role !== "buyer") {
+      throw new Error("User is not a buyer");
+    }
+
+    const listings = await ctx.db
+      .query("listings")
+      .withIndex("by_status", (q) => q.eq("status", "active"))
+      .collect();
+
+    const traderListings = listings.filter((listing) => listing.traderId);
+
+    const enriched = await Promise.all(
+      traderListings.map(async (listing) => {
+        const trader = listing.traderId ? await ctx.db.get(listing.traderId) : null;
+        const storageLocation = listing.storageLocationId
+          ? await ctx.db.get(listing.storageLocationId)
+          : null;
+
+        const availableUnits = listing.availableUnits ?? listing.totalUnits;
+        const unitSize = listing.unitSize || 1;
+        const pricePerUnit = listing.pricePerUnit ?? listing.pricePerKilo * unitSize;
+
+        return {
+          listingId: listing._id,
+          listingUtid: listing.utid,
+          produceType: listing.produceType,
+          productName: listing.productName || null,
+          totalUnits: listing.totalUnits,
+          availableUnits,
+          unitSize,
+          totalKilos: listing.totalKilos,
+          pricePerUnit,
+          pricePerKilo: listing.pricePerKilo,
+          pricingUnit: listing.pricingUnit || "per_package",
+          packagingTypeEnum: listing.packagingTypeEnum || null,
+          packagingTypeCustom: listing.packagingTypeCustom || null,
+          departureLocation: listing.departureLocation || null,
+          destinationLocation: listing.destinationLocation || null,
+          etaType: listing.etaType || null,
+          etaValue: listing.etaValue || null,
+          etaLastUpdatedAt: listing.etaLastUpdatedAt || null,
+          deliveryStatus: listing.deliveryStatus || null,
+          progressStage: listing.progressStage || null,
+          traderAlias: trader?.alias || null,
+          traderIsVerified: !!trader?.isVerifiedTrader && trader?.verificationStatus === "verified",
+          storageLocation: storageLocation
+            ? { districtName: storageLocation.districtName, code: storageLocation.code }
+            : null,
+          createdAt: listing.createdAt,
+        };
+      })
+    );
+
+    enriched.sort((a, b) => b.createdAt - a.createdAt);
+
+    return { listings: enriched };
   },
 });
 
@@ -284,6 +353,7 @@ export const getBuyerOrders = query({
 
         return {
           purchaseId: purchase._id,
+          orderType: "inventory",
           purchaseUtid: purchase.utid, // Purchase transaction UTID
           inventoryId: purchase.inventoryId,
           inventoryUtid: inventory?.utid || null, // Inventory creation UTID
@@ -321,7 +391,6 @@ export const getBuyerOrders = query({
           isPastDeadline,
           hoursRemaining: Math.round(hoursRemaining * 100) / 100, // Rounded to 2 decimals
           hoursOverdue: Math.round(hoursOverdue * 100) / 100, // Rounded to 2 decimals
-          // NO PRICES - buyers never see prices
         };
       })
     );
@@ -357,6 +426,80 @@ export const getBuyerOrders = query({
     return {
       totals,
       byStatus: Object.fromEntries(byStatus),
+      orders: enriched,
+    };
+  },
+});
+
+/**
+ * Get buyer orders for trader listings
+ */
+export const getBuyerListingOrders = query({
+  args: {
+    buyerId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.buyerId);
+    if (!user || user.role !== "buyer") {
+      throw new Error("User is not a buyer");
+    }
+
+    const purchases = await ctx.db
+      .query("buyerListingPurchases")
+      .withIndex("by_buyer", (q: any) => q.eq("buyerId", args.buyerId))
+      .order("desc")
+      .collect();
+
+    const now = Date.now();
+
+    const enriched = await Promise.all(
+      purchases.map(async (purchase) => {
+        const listing = await ctx.db.get(purchase.listingId);
+        const trader = listing?.traderId ? await ctx.db.get(listing.traderId) : null;
+
+        const etaTimestamp = purchase.etaDeadline ?? null;
+        const etaIsPast = etaTimestamp != null ? now > etaTimestamp : false;
+        const etaHoursRemaining = etaTimestamp != null
+          ? Math.max(0, (etaTimestamp - now) / (1000 * 60 * 60))
+          : null;
+        const etaHoursOverdue = etaTimestamp != null && now > etaTimestamp
+          ? (now - etaTimestamp) / (1000 * 60 * 60)
+          : null;
+
+        return {
+          purchaseId: purchase._id,
+          orderType: "trader_listing",
+          purchaseUtid: purchase.utid,
+          listingId: purchase.listingId,
+          listingUtid: purchase.listingUtid,
+          productName: listing?.productName || null,
+          produceType: listing?.produceType || null,
+          unitCount: purchase.unitCount,
+          totalKilos: purchase.totalKilos,
+          pricePerUnit: purchase.pricePerUnit,
+          pricePerKilo: purchase.pricePerKilo,
+          totalCost: purchase.totalCost,
+          traderAlias: trader?.alias || null,
+          traderIsVerified: !!trader?.isVerifiedTrader && trader?.verificationStatus === "verified",
+          purchasedAt: purchase.purchasedAt,
+          etaType: purchase.etaType ?? null,
+          etaValue: purchase.etaValue ?? null,
+          etaDeadline: purchase.etaDeadline ?? null,
+          etaIsPast,
+          etaHoursRemaining: etaHoursRemaining != null ? Math.round(etaHoursRemaining * 100) / 100 : null,
+          etaHoursOverdue: etaHoursOverdue != null ? Math.round(etaHoursOverdue * 100) / 100 : null,
+          traderConfirmedAt: purchase.traderConfirmedAt ?? null,
+          buyerConfirmedAt: purchase.buyerConfirmedAt ?? null,
+          superadminConfirmedAt: purchase.superadminConfirmedAt ?? null,
+          buyerRewardUtid: purchase.buyerRewardUtid ?? null,
+          sentifyUtid: purchase.sentifyUtid ?? null,
+          status: purchase.status,
+        };
+      })
+    );
+
+    return {
+      total: enriched.length,
       orders: enriched,
     };
   },
@@ -562,8 +705,14 @@ export const getBuyerTransactionLedger = query({
       .order("desc")
       .collect();
 
+    const listingPurchases = await ctx.db
+      .query("buyerListingPurchases")
+      .withIndex("by_buyer", (q: any) => q.eq("buyerId", args.buyerId))
+      .order("desc")
+      .collect();
+
     // Enrich purchases with price information from wallet ledger
-    const transactions = await Promise.all(
+    const inventoryTransactions = await Promise.all(
       purchases.map(async (purchase) => {
         // Get wallet ledger entry for this purchase (by UTID)
         const ledgerEntry = await ctx.db
@@ -585,6 +734,7 @@ export const getBuyerTransactionLedger = query({
         return {
           purchaseId: purchase._id,
           utid: purchase.utid,
+          orderType: "inventory",
           produceType: inventory?.produceType || null,
           quantityKilos: purchase.kilos,
           unitPricePerKilo: basePricePerKilo,
@@ -597,6 +747,45 @@ export const getBuyerTransactionLedger = query({
           traderIsVerified: !!trader?.isVerifiedTrader && trader?.verificationStatus === "verified",
         };
       })
+    );
+
+    const listingTransactions = await Promise.all(
+      listingPurchases.map(async (purchase: any) => {
+        const ledgerEntry = await ctx.db
+          .query("walletLedger")
+          .withIndex("by_utid", (q) => q.eq("utid", purchase.utid))
+          .first();
+
+        const listingId = purchase.listingId as Id<"listings">;
+        const listing = await ctx.db.get(listingId);
+        const trader = listing?.traderId ? await ctx.db.get(listing.traderId as Id<"users">) : null;
+
+        const metadata = ledgerEntry?.metadata as any;
+        const basePricePerKilo = metadata?.basePricePerKilo || purchase.pricePerKilo || 0;
+        const serviceFeePercentage = metadata?.serviceFeePercentage || purchase.serviceFeePercentage || 0;
+        const serviceFee = metadata?.serviceFee || purchase.serviceFee || 0;
+        const totalCost = ledgerEntry?.amount || purchase.totalCost || 0;
+
+        return {
+          purchaseId: purchase._id,
+          utid: purchase.utid,
+          orderType: "trader_listing",
+          produceType: listing?.produceType || null,
+          quantityKilos: purchase.totalKilos,
+          unitPricePerKilo: basePricePerKilo,
+          serviceFeePercentage: serviceFeePercentage,
+          serviceFee: serviceFee,
+          totalCost: totalCost,
+          timestamp: purchase.purchasedAt,
+          status: purchase.status,
+          traderAlias: trader?.alias || null,
+          traderIsVerified: !!trader?.isVerifiedTrader && trader?.verificationStatus === "verified",
+        };
+      })
+    );
+
+    const transactions = [...inventoryTransactions, ...listingTransactions].sort(
+      (a, b) => b.timestamp - a.timestamp
     );
 
     // Calculate totals
@@ -667,6 +856,8 @@ export const getBuyerWalletReport = query({
         ? "Demo seed deposit"
         : entry.metadata?.type === "buyer_purchase"
         ? `Purchase: ${entry.metadata.produceType || "Unknown"} (${entry.metadata.kilos || 0} kg)`
+        : entry.metadata?.type === "buyer_listing_purchase"
+        ? `Listing purchase: ${entry.metadata.listingUtid || "Listing"} (${entry.metadata.unitCount || 0} unit(s))`
         : entry.type === "capital_deposit"
         ? "Deposit"
         : entry.type === "capital_lock"

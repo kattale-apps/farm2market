@@ -16,6 +16,8 @@ export default function AgroFreshUGAdminPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("PENDING");
   const [selectedApplicationId, setSelectedApplicationId] = useState<Id<"communityApplications"> | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "ready" | "error">("idle");
+  const [syncError, setSyncError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [startDate, setStartDate] = useState("");
@@ -41,9 +43,37 @@ export default function AgroFreshUGAdminPage() {
     setPage(1);
   }, [statusFilter, startDate, endDate, districtFilter, subCountyFilter, enterpriseFilter, pageSize]);
 
+  const approveApplication = useMutation(api.communityApplications.approveApplication);
+  const rejectApplication = useMutation(api.communityApplications.rejectApplication);
+  const revokeMembership = useMutation(api.communityApplications.revokeMembership);
+  const syncAgroFreshAdmin = useMutation(api.communityApplications.syncAgroFreshAdmin);
+
+  useEffect(() => {
+    if (!adminId) return;
+    let cancelled = false;
+    setSyncStatus("syncing");
+    setSyncError(null);
+    syncAgroFreshAdmin({ adminId })
+      .then((res: any) => {
+        if (cancelled) return;
+        setSyncStatus("ready");
+        if (res?.message) {
+          setMessage({ type: "success", text: res.message });
+        }
+      })
+      .catch((err: any) => {
+        if (cancelled) return;
+        setSyncStatus("error");
+        setSyncError(err?.message || "Unable to synchronize admin access.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [adminId, syncAgroFreshAdmin]);
+
   const applications = useQuery(
     api.communityApplications.getPaginatedApplications,
-    adminId
+    adminId && syncStatus === "ready"
       ? {
           adminId,
           status: statusFilter === "all" ? undefined : statusFilter,
@@ -60,17 +90,16 @@ export default function AgroFreshUGAdminPage() {
 
   const selectedDetails = useQuery(
     api.communityApplications.getApplicationDetails,
-    adminId && selectedApplicationId
+    adminId && syncStatus === "ready" && selectedApplicationId
       ? { adminId, applicationId: selectedApplicationId }
       : "skip"
   );
 
-  const approveApplication = useMutation(api.communityApplications.approveApplication);
-  const rejectApplication = useMutation(api.communityApplications.rejectApplication);
-  const revokeMembership = useMutation(api.communityApplications.revokeMembership);
   const exportData = useQuery(
     api.communityApplications.getExportData,
-    adminId ? { adminId, status: statusFilter === "all" ? undefined : statusFilter } : "skip"
+    adminId && syncStatus === "ready"
+      ? { adminId, status: statusFilter === "all" ? undefined : statusFilter }
+      : "skip"
   );
 
   const rows = useMemo(() => {
@@ -234,6 +263,52 @@ export default function AgroFreshUGAdminPage() {
     return (
       <div style={{ padding: "2rem", textAlign: "center", color: "#666" }}>
         <p>Loading...</p>
+      </div>
+    );
+  }
+
+  if (syncStatus === "syncing") {
+    return (
+      <div style={{ padding: "2rem", textAlign: "center", color: "#666" }}>
+        <p>Preparing AgroFresh admin access…</p>
+      </div>
+    );
+  }
+
+  if (syncStatus === "error") {
+    return (
+      <div style={{ padding: "2rem", textAlign: "center", color: "#c62828" }}>
+        <p>{syncError || "Unable to load AgroFresh admin."}</p>
+        <button
+          type="button"
+          onClick={() => {
+            setSyncStatus("idle");
+            setSyncError(null);
+            syncAgroFreshAdmin({ adminId })
+              .then((res: any) => {
+                setSyncStatus("ready");
+                if (res?.message) {
+                  setMessage({ type: "success", text: res.message });
+                }
+              })
+              .catch((err: any) => {
+                setSyncStatus("error");
+                setSyncError(err?.message || "Unable to synchronize admin access.");
+              });
+          }}
+          style={{
+            marginTop: "0.75rem",
+            padding: "0.5rem 0.9rem",
+            background: "#1976d2",
+            color: "#fff",
+            border: "none",
+            borderRadius: 6,
+            cursor: "pointer",
+            fontWeight: 600,
+          }}
+        >
+          Retry Sync
+        </button>
       </div>
     );
   }

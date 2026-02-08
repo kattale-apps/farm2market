@@ -28,6 +28,8 @@ export function TraderListings({ userId }: TraderListingsProps) {
   const [expandedListings, setExpandedListings] = useState<Set<string>>(new Set());
   const [cancelTarget, setCancelTarget] = useState<{ negotiationId: Id<"negotiations">; unitLabel: string } | null>(null);
   const [cancelReason, setCancelReason] = useState("");
+  const [selectedNegotiations, setSelectedNegotiations] = useState<Set<string>>(new Set());
+  const [batchProcessing, setBatchProcessing] = useState<"lock" | "cancel" | null>(null);
   const [etaDrafts, setEtaDrafts] = useState<Record<string, { etaType: "duration" | "arrival_time"; etaValue: string; reason: string }>>({});
   const [statusDrafts, setStatusDrafts] = useState<Record<string, "departed" | "midway" | "delayed" | "arrived">>({});
   const [etaUpdating, setEtaUpdating] = useState<Record<string, boolean>>({});
@@ -222,6 +224,73 @@ export function TraderListings({ userId }: TraderListingsProps) {
     return Array.from(batches.values()).sort((a: any, b: any) => (b.latestCreatedAt || 0) - (a.latestCreatedAt || 0));
   }, [activeNegotiations, listingsById]);
 
+  const acceptedGroups = useMemo(() => {
+    const groups = new Map<string, { key: string; label: string; utid: string | null; items: any[] }>();
+    (acceptedNegotiations?.negotiations || []).forEach((neg: any) => {
+      const utid = neg.acceptedUtid || neg.negotiationUtid || null;
+      const key = utid || "MIXED";
+      if (!groups.has(key)) {
+        groups.set(key, {
+          key,
+          label: utid ? utid : "Mixed Batch",
+          utid,
+          items: [],
+        });
+      }
+      groups.get(key)!.items.push(neg);
+    });
+    return Array.from(groups.values());
+  }, [acceptedNegotiations]);
+
+  const acceptedById = useMemo(() => {
+    const map = new Map<string, any>();
+    (acceptedNegotiations?.negotiations || []).forEach((neg: any) => {
+      map.set(neg.negotiationId, neg);
+    });
+    return map;
+  }, [acceptedNegotiations]);
+
+  const activeById = useMemo(() => {
+    const map = new Map<string, any>();
+    batchedNegotiations.forEach((batch: any) => {
+      batch.items.forEach((item: any) => {
+        map.set(item.negotiationId, item);
+      });
+    });
+    return map;
+  }, [batchedNegotiations]);
+
+  const selectedAcceptedIds = useMemo(
+    () => Array.from(selectedNegotiations).filter((id) => acceptedById.has(id)),
+    [selectedNegotiations, acceptedById]
+  );
+
+  const toggleSelection = (id: string) => {
+    setSelectedNegotiations((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const setBatchSelection = (ids: string[], checked: boolean) => {
+    setSelectedNegotiations((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => {
+        if (checked) {
+          next.add(id);
+        } else {
+          next.delete(id);
+        }
+      });
+      return next;
+    });
+  };
+
   const handleMakeOffer = async (listingId: Id<"listings">) => {
     const price = parseFloat(offerPrice);
     if (isNaN(price) || price <= 0) {
@@ -360,6 +429,65 @@ export function TraderListings({ userId }: TraderListingsProps) {
       setCancelTarget(null);
       setCancelReason("");
     }
+  };
+
+  const handleBatchPayToLock = async () => {
+    if (selectedAcceptedIds.length === 0) return;
+    setBatchProcessing("lock");
+    setMessage(null);
+    let successCount = 0;
+    let failureCount = 0;
+
+    for (const negotiationId of selectedAcceptedIds) {
+      const neg = acceptedById.get(negotiationId);
+      if (!neg?.unitId) {
+        failureCount += 1;
+        continue;
+      }
+      try {
+        await lockUnit({ traderId: userId, unitId: neg.unitId });
+        successCount += 1;
+      } catch {
+        failureCount += 1;
+      }
+    }
+
+    setMessage({
+      type: successCount > 0 ? "success" : "error",
+      text: `Batch pay-to-lock complete: ${successCount} succeeded${failureCount ? `, ${failureCount} failed` : ""}.`,
+    });
+    setSelectedNegotiations(new Set());
+    setBatchProcessing(null);
+  };
+
+  const handleBatchCancel = async () => {
+    const idsToCancel = Array.from(selectedNegotiations).filter(
+      (id) => activeById.has(id) || acceptedById.has(id)
+    );
+    if (idsToCancel.length === 0) return;
+    setBatchProcessing("cancel");
+    setMessage(null);
+    let successCount = 0;
+    let failureCount = 0;
+
+    for (const negotiationId of idsToCancel) {
+      try {
+        await cancelNegotiation({
+          traderId: userId,
+          negotiationId: negotiationId as Id<"negotiations">,
+        });
+        successCount += 1;
+      } catch {
+        failureCount += 1;
+      }
+    }
+
+    setMessage({
+      type: successCount > 0 ? "success" : "error",
+      text: `Batch cancel complete: ${successCount} cancelled${failureCount ? `, ${failureCount} failed` : ""}.`,
+    });
+    setSelectedNegotiations(new Set());
+    setBatchProcessing(null);
   };
 
   const handleUpdateEta = async (listingId: Id<"listings">) => {
@@ -691,6 +819,78 @@ export function TraderListings({ userId }: TraderListingsProps) {
         </div>
       )}
 
+      {(batchedNegotiations.length > 0 || (acceptedNegotiations && acceptedNegotiations.negotiations.length > 0)) && (
+        <div style={{
+          marginBottom: "1rem",
+          padding: "0.75rem 1rem",
+          background: "#f8fafc",
+          borderRadius: "10px",
+          border: "1px solid #e2e8f0",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "0.75rem",
+          flexWrap: "wrap",
+        }}>
+          <div style={{ fontSize: "0.9rem", color: "#475569", fontWeight: 600 }}>
+            Batch Actions • Selected: {selectedNegotiations.size}
+          </div>
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={handleBatchPayToLock}
+              disabled={selectedAcceptedIds.length === 0 || batchProcessing !== null}
+              style={{
+                padding: "0.45rem 0.9rem",
+                background: selectedAcceptedIds.length === 0 || batchProcessing ? "#cbd5f5" : "#2563eb",
+                color: "#fff",
+                border: "none",
+                borderRadius: "6px",
+                cursor: selectedAcceptedIds.length === 0 || batchProcessing ? "not-allowed" : "pointer",
+                fontWeight: 600,
+                fontSize: "0.85rem",
+              }}
+            >
+              {batchProcessing === "lock" ? "Locking..." : "Pay-to-Lock Selected"}
+            </button>
+            <button
+              type="button"
+              onClick={handleBatchCancel}
+              disabled={selectedNegotiations.size === 0 || batchProcessing !== null}
+              style={{
+                padding: "0.45rem 0.9rem",
+                background: selectedNegotiations.size === 0 || batchProcessing ? "#f1b5b5" : "#dc2626",
+                color: "#fff",
+                border: "none",
+                borderRadius: "6px",
+                cursor: selectedNegotiations.size === 0 || batchProcessing ? "not-allowed" : "pointer",
+                fontWeight: 600,
+                fontSize: "0.85rem",
+              }}
+            >
+              {batchProcessing === "cancel" ? "Cancelling..." : "Cancel Selected"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedNegotiations(new Set())}
+              disabled={selectedNegotiations.size === 0 || batchProcessing !== null}
+              style={{
+                padding: "0.45rem 0.9rem",
+                background: "#e2e8f0",
+                color: "#334155",
+                border: "none",
+                borderRadius: "6px",
+                cursor: selectedNegotiations.size === 0 || batchProcessing ? "not-allowed" : "pointer",
+                fontWeight: 600,
+                fontSize: "0.85rem",
+              }}
+            >
+              Clear Selection
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Active Negotiations */}
       {batchedNegotiations.length > 0 && (
         <div style={{
@@ -714,6 +914,12 @@ export function TraderListings({ userId }: TraderListingsProps) {
                 : unitSize * batch.count;
               const unitLabel = batch.isGardenNegotiation ? "🌿 Garden Sale" : "⚖️ Kilo Sale";
               const isExpanded = expandedBatches.has(batch.key);
+              const batchItemIds = batch.items.map((item: any) => item.negotiationId);
+              const selectedCount = batchItemIds.filter((id: string) => selectedNegotiations.has(id)).length;
+              const allSelected = batchItemIds.length > 0 && selectedCount === batchItemIds.length;
+              const batchUtidLabel = batch.utids.length > 0
+                ? `Batch UTIDs: ${batch.utids.slice(0, 3).join(", ")}${batch.utids.length > 3 ? ` +${batch.utids.length - 3}` : ""}`
+                : "Batch UTIDs: Mixed Batch";
               const unitLabelStyle = {
                 padding: "0.25rem 0.6rem",
                 borderRadius: "999px",
@@ -751,6 +957,19 @@ export function TraderListings({ userId }: TraderListingsProps) {
                       {isExpanded ? "Hide details" : "View details"}
                     </span>
                   </div>
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.5rem" }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.75rem", color: "#475569" }}>
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        onChange={(e) => setBatchSelection(batchItemIds, e.target.checked)}
+                      />
+                      Select batch ({selectedCount}/{batchItemIds.length})
+                    </label>
+                  </div>
                   <div style={{ fontSize: "clamp(0.8rem, 2.5vw, 0.85rem)", color: "#666", marginBottom: "0.5rem" }}>
                     {batch.isGardenNegotiation
                       ? `Garden total: ${totalKilos} kg | Status: `
@@ -758,7 +977,7 @@ export function TraderListings({ userId }: TraderListingsProps) {
                     <strong>{batch.status}</strong>
                   </div>
                   <div style={{ fontSize: "clamp(0.7rem, 2vw, 0.75rem)", color: "#999", fontFamily: "monospace", wordBreak: "break-all" }}>
-                    Batch UTIDs: {batch.utids.slice(0, 3).join(", ")}{batch.utids.length > 3 ? ` +${batch.utids.length - 3}` : ""}
+                    {batchUtidLabel}
                   </div>
                   {isExpanded && (
                     <div style={{
@@ -768,6 +987,28 @@ export function TraderListings({ userId }: TraderListingsProps) {
                       borderRadius: "6px",
                       border: "1px solid #e0e0e0"
                     }}>
+                      <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.5rem", fontWeight: "600" }}>
+                        Batch Selection
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", marginBottom: "0.75rem" }}>
+                        {batch.items.map((item: any) => (
+                          <label
+                            key={`select-${item.negotiationId}`}
+                            style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.8rem", color: "#475569" }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedNegotiations.has(item.negotiationId)}
+                              onChange={() => toggleSelection(item.negotiationId)}
+                            />
+                            <span>
+                              {item.unitNumber ? `Unit #${item.unitNumber}` : "Unit"}
+                              {item.utid ? ` • ${item.utid}` : " • Mixed Batch"}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
                       <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.5rem", fontWeight: "600" }}>
                         Offer History
                       </div>
@@ -889,79 +1130,115 @@ export function TraderListings({ userId }: TraderListingsProps) {
           <h4 style={{ marginTop: 0, marginBottom: "1rem", fontSize: "clamp(1rem, 3vw, 1.1rem)", color: "#155724" }}>
             Accepted Offers - Ready to Lock
           </h4>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-            {acceptedNegotiations.negotiations.map((neg: any) => {
-              const listingForNeg = listingsById.get(neg.listingId);
-              const isGardenNegotiation =
-                listingForNeg?.listingMode === "garden" ||
-                listingForNeg?.gardenSize != null ||
-                listingForNeg?.gardenDimensions != null ||
-                listingForNeg?.totalPrice != null;
-              const gardenTotalKilos = listingForNeg?.totalKilos || listingForNeg?.unitSize || 1;
-              const finalGardenTotal =
-                listingForNeg?.totalPrice ?? (neg.finalPricePerKilo * gardenTotalKilos);
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            {acceptedGroups.map((group: any) => {
+              const groupIds = group.items.map((item: any) => item.negotiationId);
+              const selectedCount = groupIds.filter((id: string) => selectedNegotiations.has(id)).length;
+              const allSelected = groupIds.length > 0 && selectedCount === groupIds.length;
 
               return (
-                <div key={neg.negotiationId} style={{
-                  padding: "0.75rem",
-                  background: "#fff",
-                  borderRadius: "8px",
-                  border: "1px solid #e0e0e0"
-                }}>
-                  <div style={{ fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", marginBottom: "0.5rem" }}>
-                    <strong>{neg.produceType}</strong>{" "}
-                    {isGardenNegotiation ? "- 🌿 Garden Sale" : `- ⚖️ Unit #${neg.unitNumber} (${neg.unitSize}kg)`}
+                <div key={group.key} style={{ padding: "0.75rem", background: "#f7fff8", borderRadius: "8px", border: "1px solid #cde7d0" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
+                    <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#166534", wordBreak: "break-all" }}>
+                      Batch UTID: {group.label}
+                    </div>
+                    <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.75rem", color: "#475569" }}>
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        onChange={(e) => setBatchSelection(groupIds, e.target.checked)}
+                      />
+                      Select batch ({selectedCount}/{groupIds.length})
+                    </label>
                   </div>
-                  <div style={{ fontSize: "clamp(0.8rem, 2.5vw, 0.85rem)", color: "#666", marginBottom: "0.5rem" }}>
-                    {isGardenNegotiation
-                      ? `Final Offer: ${formatUGX(finalGardenTotal)}`
-                      : `Final Price: ${formatUGX(neg.finalPricePerKilo)}/kg | Total: ${formatUGX(neg.totalPrice)}`}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                    {group.items.map((neg: any) => {
+                      const listingForNeg = listingsById.get(neg.listingId);
+                      const isGardenNegotiation =
+                        listingForNeg?.listingMode === "garden" ||
+                        listingForNeg?.gardenSize != null ||
+                        listingForNeg?.gardenDimensions != null ||
+                        listingForNeg?.totalPrice != null;
+                      const gardenTotalKilos = listingForNeg?.totalKilos || listingForNeg?.unitSize || 1;
+                      const finalGardenTotal =
+                        listingForNeg?.totalPrice ?? (neg.finalPricePerKilo * gardenTotalKilos);
+
+                      return (
+                        <div key={neg.negotiationId} style={{
+                          padding: "0.75rem",
+                          background: "#fff",
+                          borderRadius: "8px",
+                          border: "1px solid #e0e0e0"
+                        }}>
+                          <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem", fontSize: "0.8rem", color: "#475569" }}>
+                            <input
+                              type="checkbox"
+                              checked={selectedNegotiations.has(neg.negotiationId)}
+                              onChange={() => toggleSelection(neg.negotiationId)}
+                            />
+                            Select this offer
+                          </label>
+                          <div style={{ fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", marginBottom: "0.5rem" }}>
+                            <strong>{neg.produceType}</strong>{" "}
+                            {isGardenNegotiation ? "- 🌿 Garden Sale" : `- ⚖️ Unit #${neg.unitNumber} (${neg.unitSize}kg)`}
+                          </div>
+                          <div style={{ fontSize: "clamp(0.8rem, 2.5vw, 0.85rem)", color: "#666", marginBottom: "0.5rem" }}>
+                            {isGardenNegotiation
+                              ? `Final Offer: ${formatUGX(finalGardenTotal)}`
+                              : `Final Price: ${formatUGX(neg.finalPricePerKilo)}/kg | Total: ${formatUGX(neg.totalPrice)}`}
+                          </div>
+                          <div style={{ fontSize: "0.75rem", color: "#64748b", marginBottom: "0.5rem", fontFamily: "monospace", wordBreak: "break-all" }}>
+                            UTID: {neg.acceptedUtid || neg.negotiationUtid || "Mixed Batch"}
+                          </div>
+                          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                            <button
+                              onClick={() => handleLockUnit(neg.unitId)}
+                              disabled={locking === neg.unitId}
+                              style={{
+                                padding: "0.5rem 1rem",
+                                background: locking === neg.unitId ? "#ccc" : "#28a745",
+                                color: "#fff",
+                                border: "none",
+                                borderRadius: "6px",
+                                cursor: locking === neg.unitId ? "not-allowed" : "pointer",
+                                fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)",
+                                fontWeight: "600",
+                              }}
+                            >
+                              {locking === neg.unitId
+                                ? "Locking..."
+                                : `Pay-to-Lock (${formatUGX(isGardenNegotiation ? finalGardenTotal : neg.totalPrice)})`}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCancelTarget({
+                                  negotiationId: neg.negotiationId,
+                                  unitLabel: neg.unitNumber ? `Unit #${neg.unitNumber}` : "Unit",
+                                });
+                                setCancelReason("");
+                              }}
+                              style={{
+                                padding: "0.5rem 1rem",
+                                background: "#d32f2f",
+                                color: "#fff",
+                                border: "none",
+                                borderRadius: "6px",
+                                cursor: "pointer",
+                                fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)",
+                                fontWeight: "600",
+                              }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                          <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.75rem", color: "#666" }}>
+                            ⚠️ After payment, farmer must deliver within 6 hours. Delivery countdown starts from payment time.
+                          </p>
+                        </div>
+                      );
+                    })}
                   </div>
-                  <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                    <button
-                      onClick={() => handleLockUnit(neg.unitId)}
-                      disabled={locking === neg.unitId}
-                      style={{
-                        padding: "0.5rem 1rem",
-                        background: locking === neg.unitId ? "#ccc" : "#28a745",
-                        color: "#fff",
-                        border: "none",
-                        borderRadius: "6px",
-                        cursor: locking === neg.unitId ? "not-allowed" : "pointer",
-                        fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)",
-                        fontWeight: "600",
-                      }}
-                    >
-                      {locking === neg.unitId
-                        ? "Locking..."
-                        : `Pay-to-Lock (${formatUGX(isGardenNegotiation ? finalGardenTotal : neg.totalPrice)})`}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCancelTarget({
-                          negotiationId: neg.negotiationId,
-                          unitLabel: neg.unitNumber ? `Unit #${neg.unitNumber}` : "Unit",
-                        });
-                        setCancelReason("");
-                      }}
-                      style={{
-                        padding: "0.5rem 1rem",
-                        background: "#d32f2f",
-                        color: "#fff",
-                        border: "none",
-                        borderRadius: "6px",
-                        cursor: "pointer",
-                        fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)",
-                        fontWeight: "600",
-                      }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                  <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.75rem", color: "#666" }}>
-                    ⚠️ After payment, farmer must deliver within 6 hours. Delivery countdown starts from payment time.
-                  </p>
                 </div>
               );
             })}

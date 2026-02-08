@@ -84,34 +84,34 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   }, []);
 
   useEffect(() => {
+    if (!paginationPreferences) return;
+    const defaultSize = paginationPreferences.defaultPageSize ?? 10;
+    const nextOrders = paginationPreferences.list?.["buyer_orders"] ?? defaultSize;
+    const nextLedger = paginationPreferences.list?.["buyer_ledger"] ?? defaultSize;
+    const nextListingOrders = paginationPreferences.list?.["buyer_listing_orders"] ?? defaultSize;
+    if (nextOrders !== ordersPageSize) {
+      setOrdersPageSize(nextOrders);
+      setOrdersPage(1);
+    }
+    if (nextLedger !== ledgerPageSize) {
+      setLedgerPageSize(nextLedger);
+      setLedgerPage(1);
+    }
+    if (nextListingOrders !== listingOrdersPageSize) {
+      setListingOrdersPageSize(nextListingOrders);
+      setListingOrdersPage(1);
+    }
+  }, [paginationPreferences, ordersPageSize, ledgerPageSize, listingOrdersPageSize]);
+
+  useEffect(() => {
     if (!inboxRef.current || typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver((entries) => {
       const width = entries[0]?.contentRect?.width || 0;
       setIsInboxNarrow(width <= 720);
     });
     observer.observe(inboxRef.current);
-          <div style={{ fontSize: "0.85rem", color: "#666" }}>Per page:</div>
-          <select
-            value={ledgerPageSize}
-            onChange={(e) => {
-              const nextSize = Number(e.target.value);
-              setLedgerPageSize(nextSize);
-              setLedgerPage(1);
-              updatePaginationPreferences({
-                userId,
-                listKey: "buyer_ledger",
-                pageSize: nextSize,
-              } as any);
-            }}
-            style={{ padding: "0.4rem 0.6rem", borderRadius: 6, border: "1px solid #ddd", fontSize: "0.85rem" }}
-          >
-            <option value={10}>10</option>
-            <option value={20}>20</option>
-            <option value={50}>50</option>
-          </select>
-      setListingOrdersPage(1);
-    }
-  }, [paginationPreferences, ordersPageSize, ledgerPageSize, listingOrdersPageSize]);
+    return () => observer.disconnect();
+  }, []);
 
   const formatUGX = (amount: number) => {
     return new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX" }).format(amount);

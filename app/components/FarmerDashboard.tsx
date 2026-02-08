@@ -853,89 +853,91 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
             Your Transactions
           </h3>
           {listings && listings.listings && listings.listings.length > 0 && (
-            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-              <button
-                onClick={() => handleExportUTIDs("excel")}
-                style={{
-                  padding: "0.5rem 1rem",
-                  background: "#000000",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontSize: "0.85rem",
-                  fontWeight: "500"
-                }}
-              >
-                Export Excel
-              </button>
-              <button
-                onClick={() => handleExportUTIDs("pdf")}
-                style={{
-                  padding: "0.5rem 1rem",
-                  background: "#ffc107",
-                  color: "#000",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontSize: "0.85rem",
-                  fontWeight: "500"
-                }}
-              >
-                Export PDF
-              </button>
-              <button
-                onClick={() => setTransactionsView("list")}
-                style={{
-                  padding: "0.5rem 0.75rem",
-                  background: transactionsView === "list" ? "#1976d2" : "#f5f5f5",
-                  color: transactionsView === "list" ? "#fff" : "#333",
-                  border: "1px solid #ddd",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontSize: "0.85rem",
-                  fontWeight: "500"
-                }}
-              >
-                List
-              </button>
-              <button
-                onClick={() => setTransactionsView("card")}
-                style={{
-                  padding: "0.5rem 0.75rem",
-                  background: transactionsView === "card" ? "#1976d2" : "#f5f5f5",
-                  color: transactionsView === "card" ? "#fff" : "#333",
-                  border: "1px solid #ddd",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontSize: "0.85rem",
-                  fontWeight: "500"
-                }}
-              >
-                Card
-              </button>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                <button
+                  onClick={() => handleExportUTIDs("excel")}
+                  style={{
+                    padding: "0.5rem 1rem",
+                    background: "#000000",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    fontSize: "0.85rem",
+                    fontWeight: "500"
+                  }}
+                >
+                  Export Excel
+                </button>
+                <button
+                  onClick={() => handleExportUTIDs("pdf")}
+                  style={{
+                    padding: "0.5rem 1rem",
+                    background: "#ffc107",
+                    color: "#000",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    fontSize: "0.85rem",
+                    fontWeight: "500"
+                  }}
+                >
+                  Export PDF
+                </button>
+                <button
+                  onClick={() => setTransactionsView("list")}
+                  style={{
+                    padding: "0.5rem 0.75rem",
+                    background: transactionsView === "list" ? "#1976d2" : "#f5f5f5",
+                    color: transactionsView === "list" ? "#fff" : "#333",
+                    border: "1px solid #ddd",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    fontSize: "0.85rem",
+                    fontWeight: "500"
+                  }}
+                >
+                  List
+                </button>
+                <button
+                  onClick={() => setTransactionsView("card")}
+                  style={{
+                    padding: "0.5rem 0.75rem",
+                    background: transactionsView === "card" ? "#1976d2" : "#f5f5f5",
+                    color: transactionsView === "card" ? "#fff" : "#333",
+                    border: "1px solid #ddd",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    fontSize: "0.85rem",
+                    fontWeight: "500"
+                  }}
+                >
+                  Card
+                </button>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
+                <span style={{ fontSize: "0.85rem", color: "#666" }}>Per page:</span>
+                <select
+                  value={transactionsPageSize}
+                  onChange={(e) => {
+                    const nextSize = Number(e.target.value);
+                    setTransactionsPageSize(nextSize);
+                    setTransactionsPage(0);
+                    updatePaginationPreferences({
+                      userId,
+                      listKey: transactionsPageKey,
+                      pageSize: nextSize,
+                    } as any);
+                  }}
+                  style={{ padding: "0.35rem 0.6rem", borderRadius: 6, border: "1px solid #ddd", fontSize: "0.85rem" }}
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                </select>
+              </div>
             </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
-            <span style={{ fontSize: "0.85rem", color: "#666" }}>Per page:</span>
-            <select
-              value={transactionsPageSize}
-              onChange={(e) => {
-                const nextSize = Number(e.target.value);
-                setTransactionsPageSize(nextSize);
-                setTransactionsPage(0);
-                updatePaginationPreferences({
-                  userId,
-                  listKey: transactionsPageKey,
-                  pageSize: nextSize,
-                } as any);
-              }}
-              style={{ padding: "0.35rem 0.6rem", borderRadius: 6, border: "1px solid #ddd", fontSize: "0.85rem" }}
-            >
-              <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-            </select>
-          </div>
           )}
         </div>
         {listings === undefined ? (

@@ -18,6 +18,14 @@ export default function CommunityDashboardPage() {
   const [selectedApplicationId, setSelectedApplicationId] = useState<Id<"communityApplications"> | null>(null);
   const [isMobile, setIsMobile] = useState(false);
 
+  const paginationPreferences = useQuery(
+    (api as any).userSettings.getPaginationPreferences,
+    userId ? { userId } : "skip"
+  );
+  const updatePaginationPreferences = useMutation(
+    (api as any).userSettings.updatePaginationPreferences
+  );
+
   // Filter state
   const [filterType, setFilterType] = useState<"all" | "phone" | "email" | "location">( "all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -50,26 +58,6 @@ export default function CommunityDashboardPage() {
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  useEffect(() => {
-    if (!paginationPreferences) return;
-    const defaultSize = paginationPreferences.defaultPageSize ?? 20;
-    const nextPending = paginationPreferences.list?.[pendingPageKey] ?? defaultSize;
-    const nextApproved = paginationPreferences.list?.[approvedPageKey] ?? defaultSize;
-    const nextMembers = paginationPreferences.list?.[membersPageKey] ?? defaultSize;
-    if (nextPending !== pendingPageSize) {
-      setPendingPageSize(nextPending);
-      setPendingPage(1);
-    }
-    if (nextApproved !== approvedPageSize) {
-      setApprovedPageSize(nextApproved);
-      setApprovedPage(1);
-    }
-    if (nextMembers !== membersPageSize) {
-      setMembersPageSize(nextMembers);
-      setMembersPage(1);
-    }
-  }, [paginationPreferences, pendingPageKey, approvedPageKey, membersPageKey, pendingPageSize, approvedPageSize, membersPageSize]);
-
   const currentUser = useQuery(
     api.auth.getUser,
     userId ? { userId } : "skip"
@@ -93,13 +81,6 @@ export default function CommunityDashboardPage() {
   const approveApplication = useMutation(api.communityApplications.approveApplication);
   const rejectApplication = useMutation(api.communityApplications.rejectApplication);
   const revokeMembership = useMutation(api.communityApplications.revokeMembership);
-  const paginationPreferences = useQuery(
-    (api as any).userSettings.getPaginationPreferences,
-    userId ? { userId } : "skip"
-  );
-  const updatePaginationPreferences = useMutation(
-    (api as any).userSettings.updatePaginationPreferences
-  );
 
   const [pendingPage, setPendingPage] = useState(1);
   const [pendingPageSize, setPendingPageSize] = useState(20);
@@ -110,6 +91,26 @@ export default function CommunityDashboardPage() {
   const pendingPageKey = "community_pending_applications";
   const approvedPageKey = "community_approved_members";
   const membersPageKey = "community_members_list";
+
+  useEffect(() => {
+    if (!paginationPreferences) return;
+    const defaultSize = paginationPreferences.defaultPageSize ?? 20;
+    const nextPending = paginationPreferences.list?.[pendingPageKey] ?? defaultSize;
+    const nextApproved = paginationPreferences.list?.[approvedPageKey] ?? defaultSize;
+    const nextMembers = paginationPreferences.list?.[membersPageKey] ?? defaultSize;
+    if (nextPending !== pendingPageSize) {
+      setPendingPageSize(nextPending);
+      setPendingPage(1);
+    }
+    if (nextApproved !== approvedPageSize) {
+      setApprovedPageSize(nextApproved);
+      setApprovedPage(1);
+    }
+    if (nextMembers !== membersPageSize) {
+      setMembersPageSize(nextMembers);
+      setMembersPage(1);
+    }
+  }, [paginationPreferences, pendingPageKey, approvedPageKey, membersPageKey, pendingPageSize, approvedPageSize, membersPageSize]);
 
   const selectedApplicationDetails = useQuery(
     api.communityApplications.getApplicationDetails,
@@ -648,77 +649,15 @@ export default function CommunityDashboardPage() {
                       borderCollapse: "collapse",
                       fontSize: "0.9rem",
                     }}>
-                      <tbody>
-                        {(() => {
-                          const members = community.members || [];
-                          const membersTotal = members.length;
-                          const membersTotalPages = Math.max(1, Math.ceil(membersTotal / membersPageSize));
-                          const safeMembersPage = Math.min(membersPage, membersTotalPages);
-                          const pagedMembers = members.slice(
-                            (safeMembersPage - 1) * membersPageSize,
-                            safeMembersPage * membersPageSize
-                          );
-                          return pagedMembers.map((member, idx) => (
-                          background: "#f5f5f5",
-                          borderBottom: "2px solid #e0e0e0",
-                        }}>
+                      <thead>
+                        <tr style={{ background: "#f5f5f5", borderBottom: "2px solid #e0e0e0" }}>
                           <th style={{
                             padding: "0.75rem",
                             textAlign: "left",
                             fontWeight: "600",
-                          ));
-                        })()}
+                            color: "#2c2c2c",
                           }}>
                             Farmer Name
-                    {(() => {
-                      const members = community.members || [];
-                      const membersTotal = members.length;
-                      const membersTotalPages = Math.max(1, Math.ceil(membersTotal / membersPageSize));
-                      const safeMembersPage = Math.min(membersPage, membersTotalPages);
-                      const membersStart = membersTotal === 0 ? 0 : (safeMembersPage - 1) * membersPageSize + 1;
-                      const membersEnd = Math.min(safeMembersPage * membersPageSize, membersTotal);
-                      return (
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
-                          <div style={{ fontSize: "0.85rem", color: "#666" }}>
-                            Showing {membersStart}-{membersEnd} of {membersTotal}
-                          </div>
-                          {membersTotalPages > 1 && (
-                            <div style={{ display: "flex", gap: "0.5rem" }}>
-                              <button
-                                type="button"
-                                onClick={() => setMembersPage((p) => Math.max(1, p - 1))}
-                                disabled={safeMembersPage === 1}
-                                style={{
-                                  padding: "0.35rem 0.7rem",
-                                  borderRadius: 6,
-                                  border: "1px solid #ddd",
-                                  background: safeMembersPage === 1 ? "#f1f5f9" : "#fff",
-                                  cursor: safeMembersPage === 1 ? "not-allowed" : "pointer",
-                                  fontWeight: 600,
-                                }}
-                              >
-                                Prev
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setMembersPage((p) => Math.min(membersTotalPages, p + 1))}
-                                disabled={safeMembersPage >= membersTotalPages}
-                                style={{
-                                  padding: "0.35rem 0.7rem",
-                                  borderRadius: 6,
-                                  border: "1px solid #ddd",
-                                  background: safeMembersPage >= membersTotalPages ? "#f1f5f9" : "#fff",
-                                  cursor: safeMembersPage >= membersTotalPages ? "not-allowed" : "pointer",
-                                  fontWeight: 600,
-                                }}
-                              >
-                                Next
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()}
                           </th>
                           <th style={{
                             padding: "0.75rem",
@@ -739,28 +678,88 @@ export default function CommunityDashboardPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {community.members.map((member, idx) => (
-                          <tr
-                            key={member.userId}
-                            style={{
-                              background: idx % 2 === 0 ? "#fff" : "#fafafa",
-                              borderBottom: "1px solid #eee",
-                            }}
-                          >
-                            <td style={{ padding: "0.75rem", color: "#2c2c2c" }}>
-                              {member.alias}
-                            </td>
-                            <td style={{ padding: "0.75rem", color: "#666" }}>
-                              {member.phoneNumber || "—"}
-                            </td>
-                            <td style={{ padding: "0.75rem", color: "#666" }}>
-                              {member.email || "—"}
-                            </td>
-                          </tr>
-                        ))}
+                        {(() => {
+                          const members = community.members || [];
+                          const membersTotal = members.length;
+                          const membersTotalPages = Math.max(1, Math.ceil(membersTotal / membersPageSize));
+                          const safeMembersPage = Math.min(membersPage, membersTotalPages);
+                          const pagedMembers = members.slice(
+                            (safeMembersPage - 1) * membersPageSize,
+                            safeMembersPage * membersPageSize
+                          );
+                          return pagedMembers.map((member, idx) => (
+                            <tr
+                              key={member.userId || `${idx}-${member.alias || "member"}`}
+                              style={{
+                                background: idx % 2 === 0 ? "#fff" : "#fafafa",
+                                borderBottom: "1px solid #eee",
+                              }}
+                            >
+                              <td style={{ padding: "0.75rem", color: "#2c2c2c" }}>
+                                {member.alias}
+                              </td>
+                              <td style={{ padding: "0.75rem", color: "#666" }}>
+                                {member.phoneNumber || "—"}
+                              </td>
+                              <td style={{ padding: "0.75rem", color: "#666" }}>
+                                {member.email || "—"}
+                              </td>
+                            </tr>
+                          ));
+                        })()}
                       </tbody>
                     </table>
                   </div>
+
+                  {(() => {
+                    const members = community.members || [];
+                    const membersTotal = members.length;
+                    const membersTotalPages = Math.max(1, Math.ceil(membersTotal / membersPageSize));
+                    const safeMembersPage = Math.min(membersPage, membersTotalPages);
+                    const membersStart = membersTotal === 0 ? 0 : (safeMembersPage - 1) * membersPageSize + 1;
+                    const membersEnd = Math.min(safeMembersPage * membersPageSize, membersTotal);
+                    return (
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
+                        <div style={{ fontSize: "0.85rem", color: "#666" }}>
+                          Showing {membersStart}-{membersEnd} of {membersTotal}
+                        </div>
+                        {membersTotalPages > 1 && (
+                          <div style={{ display: "flex", gap: "0.5rem" }}>
+                            <button
+                              type="button"
+                              onClick={() => setMembersPage((p) => Math.max(1, p - 1))}
+                              disabled={safeMembersPage === 1}
+                              style={{
+                                padding: "0.35rem 0.7rem",
+                                borderRadius: 6,
+                                border: "1px solid #ddd",
+                                background: safeMembersPage === 1 ? "#f1f5f9" : "#fff",
+                                cursor: safeMembersPage === 1 ? "not-allowed" : "pointer",
+                                fontWeight: 600,
+                              }}
+                            >
+                              Prev
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setMembersPage((p) => Math.min(membersTotalPages, p + 1))}
+                              disabled={safeMembersPage >= membersTotalPages}
+                              style={{
+                                padding: "0.35rem 0.7rem",
+                                borderRadius: 6,
+                                border: "1px solid #ddd",
+                                background: safeMembersPage >= membersTotalPages ? "#f1f5f9" : "#fff",
+                                cursor: safeMembersPage >= membersTotalPages ? "not-allowed" : "pointer",
+                                fontWeight: 600,
+                              }}
+                            >
+                              Next
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* Export Quota Info */}
                   {exportQuota && (

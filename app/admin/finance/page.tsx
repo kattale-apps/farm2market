@@ -394,17 +394,17 @@ export default function FinanceDashboardPage() {
         )}
 
         {isSuperAdmin && (
-          <div style={{ marginTop: "1.5rem", display: "grid", gap: "0.75rem", maxWidth: 520 }}>
+          <div style={{ marginTop: "1.5rem", display: "grid", gap: "0.75rem", maxWidth: 520, width: "100%" }}>
             <div style={{ fontWeight: 600 }}>Grant FarmCoin Tokens</div>
             <select
               value={grantTraderId}
               onChange={(e) => setGrantTraderId(e.target.value)}
-              style={{ padding: "0.6rem", borderRadius: 8, border: "1px solid #ddd" }}
+              style={{ padding: "0.6rem", borderRadius: 8, border: "1px solid #ddd", width: "100%", minWidth: 0 }}
             >
               <option value="">Select trader</option>
               {traderOptions.map((trader: any) => (
                 <option key={trader._id} value={trader._id}>
-                  {trader.alias || "Trader"} • {trader._id}
+                  {trader.alias || "Trader"} • {trader._id?.slice(0, 6)}…{trader._id?.slice(-4)}
                 </option>
               ))}
             </select>
@@ -419,14 +419,14 @@ export default function FinanceDashboardPage() {
               placeholder="Amount"
               value={grantAmount}
               onChange={(e) => setGrantAmount(e.target.value)}
-              style={{ padding: "0.6rem", borderRadius: 8, border: "1px solid #ddd" }}
+              style={{ padding: "0.6rem", borderRadius: 8, border: "1px solid #ddd", width: "100%", minWidth: 0 }}
             />
             <input
               type="text"
               placeholder="Reason"
               value={grantReason}
               onChange={(e) => setGrantReason(e.target.value)}
-              style={{ padding: "0.6rem", borderRadius: 8, border: "1px solid #ddd" }}
+              style={{ padding: "0.6rem", borderRadius: 8, border: "1px solid #ddd", width: "100%", minWidth: 0 }}
             />
             <button
               type="button"
@@ -455,6 +455,7 @@ export default function FinanceDashboardPage() {
                 borderRadius: 8,
                 fontWeight: 600,
                 cursor: "pointer",
+                width: "100%",
               }}
             >
               Grant Tokens
@@ -897,99 +898,101 @@ export default function FinanceDashboardPage() {
                 {superadminFarmcoinActivity.grants.length === 0 ? (
                   <p style={{ color: "#666" }}>No token grants found.</p>
                 ) : (
-                  <div style={{ marginBottom: "0.75rem", display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                    <span style={{ fontSize: "0.85rem", color: "#666" }}>Per page:</span>
-                    <select
-                      value={grantsPageSize}
-                      onChange={(e) => {
-                        const nextSize = Number(e.target.value);
-                        setGrantsPageSize(nextSize);
-                        setGrantsPage(1);
-                        updatePaginationPreferences({
-                          userId: userId as any,
-                          listKey: grantsPageKey,
-                          pageSize: nextSize,
-                        } as any);
-                      }}
-                      style={{ padding: "0.35rem 0.6rem", borderRadius: 6, border: "1px solid #ddd", fontSize: "0.85rem" }}
-                    >
-                      <option value={10}>10</option>
-                      <option value={20}>20</option>
-                      <option value={50}>50</option>
-                    </select>
-                  </div>
-                  <div style={{ overflowX: "auto" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                      <thead>
-                        <tr style={{ borderBottom: "2px solid #ddd" }}>
-                          <th style={{ padding: "0.75rem", textAlign: "left" }}>Trader</th>
-                          <th style={{ padding: "0.75rem", textAlign: "right" }}>Amount</th>
-                          <th style={{ padding: "0.75rem", textAlign: "left" }}>Reason</th>
-                          <th style={{ padding: "0.75rem", textAlign: "left" }}>UTID</th>
-                          <th style={{ padding: "0.75rem", textAlign: "left" }}>Date</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {pagedGrants.map((entry: any, idx: number) => (
-                          <tr key={idx} style={{ borderBottom: "1px solid #eee" }}>
-                            <td style={{ padding: "0.75rem" }}>
-                              {entry.traderAlias || "Trader"}
-                              <div style={{ fontSize: "0.8rem", color: "#666" }}>{entry.traderId}</div>
-                            </td>
-                            <td style={{ padding: "0.75rem", textAlign: "right", fontWeight: 600 }}>
-                              +{entry.delta}
-                            </td>
-                            <td style={{ padding: "0.75rem", color: "#666" }}>{entry.reason || "-"}</td>
-                            <td style={{ padding: "0.75rem", fontFamily: "monospace" }}>{entry.utid}</td>
-                            <td style={{ padding: "0.75rem", color: "#666" }}>
-                              {entry.createdAt ? new Date(entry.createdAt).toLocaleString() : ""}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  {grantsTotal > 0 && (
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
-                      <div style={{ fontSize: "0.85rem", color: "#666" }}>
-                        Showing {grantsStart}-{grantsEnd} of {grantsTotal}
-                      </div>
-                      {grantsTotalPages > 1 && (
-                        <div style={{ display: "flex", gap: "0.5rem" }}>
-                          <button
-                            type="button"
-                            onClick={() => setGrantsPage((p) => Math.max(1, p - 1))}
-                            disabled={grantsPage === 1}
-                            style={{
-                              padding: "0.35rem 0.7rem",
-                              borderRadius: 6,
-                              border: "1px solid #ddd",
-                              background: grantsPage === 1 ? "#f1f5f9" : "#fff",
-                              cursor: grantsPage === 1 ? "not-allowed" : "pointer",
-                              fontWeight: 600,
-                            }}
-                          >
-                            Prev
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setGrantsPage((p) => Math.min(grantsTotalPages, p + 1))}
-                            disabled={grantsPage >= grantsTotalPages}
-                            style={{
-                              padding: "0.35rem 0.7rem",
-                              borderRadius: 6,
-                              border: "1px solid #ddd",
-                              background: grantsPage >= grantsTotalPages ? "#f1f5f9" : "#fff",
-                              cursor: grantsPage >= grantsTotalPages ? "not-allowed" : "pointer",
-                              fontWeight: 600,
-                            }}
-                          >
-                            Next
-                          </button>
-                        </div>
-                      )}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                    <div style={{ marginBottom: "0.75rem", display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                      <span style={{ fontSize: "0.85rem", color: "#666" }}>Per page:</span>
+                      <select
+                        value={grantsPageSize}
+                        onChange={(e) => {
+                          const nextSize = Number(e.target.value);
+                          setGrantsPageSize(nextSize);
+                          setGrantsPage(1);
+                          updatePaginationPreferences({
+                            userId: userId as any,
+                            listKey: grantsPageKey,
+                            pageSize: nextSize,
+                          } as any);
+                        }}
+                        style={{ padding: "0.35rem 0.6rem", borderRadius: 6, border: "1px solid #ddd", fontSize: "0.85rem" }}
+                      >
+                        <option value={10}>10</option>
+                        <option value={20}>20</option>
+                        <option value={50}>50</option>
+                      </select>
                     </div>
-                  )}
+                    <div style={{ overflowX: "auto" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                        <thead>
+                          <tr style={{ borderBottom: "2px solid #ddd" }}>
+                            <th style={{ padding: "0.75rem", textAlign: "left" }}>Trader</th>
+                            <th style={{ padding: "0.75rem", textAlign: "right" }}>Amount</th>
+                            <th style={{ padding: "0.75rem", textAlign: "left" }}>Reason</th>
+                            <th style={{ padding: "0.75rem", textAlign: "left" }}>UTID</th>
+                            <th style={{ padding: "0.75rem", textAlign: "left" }}>Date</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pagedGrants.map((entry: any, idx: number) => (
+                            <tr key={idx} style={{ borderBottom: "1px solid #eee" }}>
+                              <td style={{ padding: "0.75rem" }}>
+                                {entry.traderAlias || "Trader"}
+                                <div style={{ fontSize: "0.8rem", color: "#666" }}>{entry.traderId}</div>
+                              </td>
+                              <td style={{ padding: "0.75rem", textAlign: "right", fontWeight: 600 }}>
+                                +{entry.delta}
+                              </td>
+                              <td style={{ padding: "0.75rem", color: "#666" }}>{entry.reason || "-"}</td>
+                              <td style={{ padding: "0.75rem", fontFamily: "monospace" }}>{entry.utid}</td>
+                              <td style={{ padding: "0.75rem", color: "#666" }}>
+                                {entry.createdAt ? new Date(entry.createdAt).toLocaleString() : ""}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {grantsTotal > 0 && (
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
+                        <div style={{ fontSize: "0.85rem", color: "#666" }}>
+                          Showing {grantsStart}-{grantsEnd} of {grantsTotal}
+                        </div>
+                        {grantsTotalPages > 1 && (
+                          <div style={{ display: "flex", gap: "0.5rem" }}>
+                            <button
+                              type="button"
+                              onClick={() => setGrantsPage((p) => Math.max(1, p - 1))}
+                              disabled={grantsPage === 1}
+                              style={{
+                                padding: "0.35rem 0.7rem",
+                                borderRadius: 6,
+                                border: "1px solid #ddd",
+                                background: grantsPage === 1 ? "#f1f5f9" : "#fff",
+                                cursor: grantsPage === 1 ? "not-allowed" : "pointer",
+                                fontWeight: 600,
+                              }}
+                            >
+                              Prev
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setGrantsPage((p) => Math.min(grantsTotalPages, p + 1))}
+                              disabled={grantsPage >= grantsTotalPages}
+                              style={{
+                                padding: "0.35rem 0.7rem",
+                                borderRadius: 6,
+                                border: "1px solid #ddd",
+                                background: grantsPage >= grantsTotalPages ? "#f1f5f9" : "#fff",
+                                cursor: grantsPage >= grantsTotalPages ? "not-allowed" : "pointer",
+                                fontWeight: 600,
+                              }}
+                            >
+                              Next
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -998,94 +1001,96 @@ export default function FinanceDashboardPage() {
                 {superadminFarmcoinActivity.returns.length === 0 ? (
                   <p style={{ color: "#666" }}>No returns recorded yet.</p>
                 ) : (
-                  <div style={{ marginBottom: "0.75rem", display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                    <span style={{ fontSize: "0.85rem", color: "#666" }}>Per page:</span>
-                    <select
-                      value={returnsPageSize}
-                      onChange={(e) => {
-                        const nextSize = Number(e.target.value);
-                        setReturnsPageSize(nextSize);
-                        setReturnsPage(1);
-                        updatePaginationPreferences({
-                          userId: userId as any,
-                          listKey: returnsPageKey,
-                          pageSize: nextSize,
-                        } as any);
-                      }}
-                      style={{ padding: "0.35rem 0.6rem", borderRadius: 6, border: "1px solid #ddd", fontSize: "0.85rem" }}
-                    >
-                      <option value={10}>10</option>
-                      <option value={20}>20</option>
-                      <option value={50}>50</option>
-                    </select>
-                  </div>
-                  <div style={{ overflowX: "auto" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                      <thead>
-                        <tr style={{ borderBottom: "2px solid #ddd" }}>
-                          <th style={{ padding: "0.75rem", textAlign: "left" }}>Source</th>
-                          <th style={{ padding: "0.75rem", textAlign: "right" }}>Amount</th>
-                          <th style={{ padding: "0.75rem", textAlign: "left" }}>UTID</th>
-                          <th style={{ padding: "0.75rem", textAlign: "left" }}>Date</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {pagedReturns.map((entry: any, idx: number) => (
-                          <tr key={idx} style={{ borderBottom: "1px solid #eee" }}>
-                            <td style={{ padding: "0.75rem" }}>{entry.source?.replace("_", " ")}</td>
-                            <td style={{ padding: "0.75rem", textAlign: "right", fontWeight: 600 }}>
-                              +{entry.delta}
-                            </td>
-                            <td style={{ padding: "0.75rem", fontFamily: "monospace" }}>{entry.utid}</td>
-                            <td style={{ padding: "0.75rem", color: "#666" }}>
-                              {entry.createdAt ? new Date(entry.createdAt).toLocaleString() : ""}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  {returnsTotal > 0 && (
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
-                      <div style={{ fontSize: "0.85rem", color: "#666" }}>
-                        Showing {returnsStart}-{returnsEnd} of {returnsTotal}
-                      </div>
-                      {returnsTotalPages > 1 && (
-                        <div style={{ display: "flex", gap: "0.5rem" }}>
-                          <button
-                            type="button"
-                            onClick={() => setReturnsPage((p) => Math.max(1, p - 1))}
-                            disabled={returnsPage === 1}
-                            style={{
-                              padding: "0.35rem 0.7rem",
-                              borderRadius: 6,
-                              border: "1px solid #ddd",
-                              background: returnsPage === 1 ? "#f1f5f9" : "#fff",
-                              cursor: returnsPage === 1 ? "not-allowed" : "pointer",
-                              fontWeight: 600,
-                            }}
-                          >
-                            Prev
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setReturnsPage((p) => Math.min(returnsTotalPages, p + 1))}
-                            disabled={returnsPage >= returnsTotalPages}
-                            style={{
-                              padding: "0.35rem 0.7rem",
-                              borderRadius: 6,
-                              border: "1px solid #ddd",
-                              background: returnsPage >= returnsTotalPages ? "#f1f5f9" : "#fff",
-                              cursor: returnsPage >= returnsTotalPages ? "not-allowed" : "pointer",
-                              fontWeight: 600,
-                            }}
-                          >
-                            Next
-                          </button>
-                        </div>
-                      )}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                    <div style={{ marginBottom: "0.75rem", display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                      <span style={{ fontSize: "0.85rem", color: "#666" }}>Per page:</span>
+                      <select
+                        value={returnsPageSize}
+                        onChange={(e) => {
+                          const nextSize = Number(e.target.value);
+                          setReturnsPageSize(nextSize);
+                          setReturnsPage(1);
+                          updatePaginationPreferences({
+                            userId: userId as any,
+                            listKey: returnsPageKey,
+                            pageSize: nextSize,
+                          } as any);
+                        }}
+                        style={{ padding: "0.35rem 0.6rem", borderRadius: 6, border: "1px solid #ddd", fontSize: "0.85rem" }}
+                      >
+                        <option value={10}>10</option>
+                        <option value={20}>20</option>
+                        <option value={50}>50</option>
+                      </select>
                     </div>
-                  )}
+                    <div style={{ overflowX: "auto" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                        <thead>
+                          <tr style={{ borderBottom: "2px solid #ddd" }}>
+                            <th style={{ padding: "0.75rem", textAlign: "left" }}>Source</th>
+                            <th style={{ padding: "0.75rem", textAlign: "right" }}>Amount</th>
+                            <th style={{ padding: "0.75rem", textAlign: "left" }}>UTID</th>
+                            <th style={{ padding: "0.75rem", textAlign: "left" }}>Date</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pagedReturns.map((entry: any, idx: number) => (
+                            <tr key={idx} style={{ borderBottom: "1px solid #eee" }}>
+                              <td style={{ padding: "0.75rem" }}>{entry.source?.replace("_", " ")}</td>
+                              <td style={{ padding: "0.75rem", textAlign: "right", fontWeight: 600 }}>
+                                +{entry.delta}
+                              </td>
+                              <td style={{ padding: "0.75rem", fontFamily: "monospace" }}>{entry.utid}</td>
+                              <td style={{ padding: "0.75rem", color: "#666" }}>
+                                {entry.createdAt ? new Date(entry.createdAt).toLocaleString() : ""}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {returnsTotal > 0 && (
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
+                        <div style={{ fontSize: "0.85rem", color: "#666" }}>
+                          Showing {returnsStart}-{returnsEnd} of {returnsTotal}
+                        </div>
+                        {returnsTotalPages > 1 && (
+                          <div style={{ display: "flex", gap: "0.5rem" }}>
+                            <button
+                              type="button"
+                              onClick={() => setReturnsPage((p) => Math.max(1, p - 1))}
+                              disabled={returnsPage === 1}
+                              style={{
+                                padding: "0.35rem 0.7rem",
+                                borderRadius: 6,
+                                border: "1px solid #ddd",
+                                background: returnsPage === 1 ? "#f1f5f9" : "#fff",
+                                cursor: returnsPage === 1 ? "not-allowed" : "pointer",
+                                fontWeight: 600,
+                              }}
+                            >
+                              Prev
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setReturnsPage((p) => Math.min(returnsTotalPages, p + 1))}
+                              disabled={returnsPage >= returnsTotalPages}
+                              style={{
+                                padding: "0.35rem 0.7rem",
+                                borderRadius: 6,
+                                border: "1px solid #ddd",
+                                background: returnsPage >= returnsTotalPages ? "#f1f5f9" : "#fff",
+                                cursor: returnsPage >= returnsTotalPages ? "not-allowed" : "pointer",
+                                fontWeight: 600,
+                              }}
+                            >
+                              Next
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </>

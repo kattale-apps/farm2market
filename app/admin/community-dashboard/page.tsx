@@ -715,7 +715,7 @@ export default function CommunityDashboardPage() {
                             (safeMembersPage - 1) * membersPageSize,
                             safeMembersPage * membersPageSize
                           );
-                          return pagedMembers.map((member, idx) => (
+                          return pagedMembers.map((member: any, idx: number) => (
                             <tr
                               key={member.userId || `${idx}-${member.alias || "member"}`}
                               style={{
@@ -844,7 +844,7 @@ export default function CommunityDashboardPage() {
                           });
 
                           // Export data
-                          const exportData = community.members.map(m => ({
+                          const exportData = community.members.map((m: any) => ({
                             "Farmer Name": m.alias,
                             "Phone": m.phoneNumber || "",
                             "Email": m.email || "",

@@ -165,7 +165,16 @@ export const getActiveCommunities = query({
       const isJuniorCommunityAdminCheck = userRecord && isCommunityAdmin(userRecord);
       if (isJuniorCommunityAdminCheck) {
         const assignedIds = (userRecord as any).assignedCommunityIds || [];
-        return assignedIds.includes(c._id) || c.communityAdminId === args.userId;
+        const normalizeAssignedId = (value: any) => {
+          if (!value) return "";
+          if (typeof value === "string") return value;
+          if (typeof value === "object") {
+            return String((value as any)._id ?? (value as any).id ?? value);
+          }
+          return String(value);
+        };
+        const assignedSet = new Set(assignedIds.map(normalizeAssignedId).filter(Boolean));
+        return assignedSet.has(String(c._id)) || c.communityAdminId === args.userId;
       }
       
       // Other junior admins see all

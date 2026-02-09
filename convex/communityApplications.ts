@@ -200,8 +200,17 @@ export const getCommunityMemberExportData = query({
     if (!isSuperAdmin && adminUser.adminCategory === "community") {
       const community = await ctx.db.get(communityId);
       const assigned = (adminUser as any).assignedCommunityIds || [];
+      const normalizeAssignedId = (value: any) => {
+        if (!value) return "";
+        if (typeof value === "string") return value;
+        if (typeof value === "object") {
+          return String((value as any)._id ?? (value as any).id ?? value);
+        }
+        return String(value);
+      };
+      const assignedSet = new Set(assigned.map(normalizeAssignedId).filter(Boolean));
       const isDirectAdmin = community?.communityAdminId === adminId;
-      const isAssigned = assigned.some((id: string) => id === communityId);
+      const isAssigned = assignedSet.has(String(communityId));
       if (!isAssigned && !isDirectAdmin) {
         throw new Error("Forbidden");
       }

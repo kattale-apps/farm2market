@@ -108,6 +108,7 @@ export const createUser = mutation({
     adminLevel: v.optional(v.union(v.literal("super"), v.literal("junior"))),
     adminCategory: v.optional(v.union(v.literal("store"), v.literal("message"), v.literal("community"), v.literal("finance"))),
     allowedStorageLocationIds: v.optional(v.array(v.id("storageLocations"))),
+    assignedCommunityIds: v.optional(v.array(v.id("communities"))),
     creatorAdminId: v.optional(v.id("users")), // Admin creating this user (for permission check)
   },
   handler: async (ctx, args) => {
@@ -151,6 +152,11 @@ export const createUser = mutation({
         if (args.adminCategory === "store") {
           if (!args.allowedStorageLocationIds || args.allowedStorageLocationIds.length === 0) {
             throw new Error("Store admins must have at least one assigned storage location");
+          }
+        }
+        if (args.adminCategory === "community") {
+          if (!args.assignedCommunityIds || args.assignedCommunityIds.length === 0) {
+            throw new Error("Community admins must have at least one assigned community");
           }
         }
         
@@ -207,6 +213,9 @@ export const createUser = mutation({
       }
       if (args.adminLevel === "junior" && args.allowedStorageLocationIds) {
         userData.allowedStorageLocationIds = args.allowedStorageLocationIds;
+      }
+      if (args.adminLevel === "junior" && args.assignedCommunityIds) {
+        userData.assignedCommunityIds = args.assignedCommunityIds;
       }
     }
 
@@ -527,5 +536,47 @@ export const updateUserRoleAndAssignment = mutation({
     if (args.adminCategory !== undefined) updates.adminCategory = args.adminCategory;
     if (args.assignedCommunityIds !== undefined) updates.assignedCommunityIds = args.assignedCommunityIds;
     await ctx.db.patch(args.userId, updates);
+  },
+});
+
+/**
+ * Backward Integration: Fix existing community admins who are missing assignments
+ * Run this once via the Convex Dashboard to fix deigaroadmin and agrofreshadmin
+ */
+export const backfillCommunityAdmins = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const targets = [
+      { email: "deigaroadmin@community.farm2market", communityName: "Deigaro" },
+      { email: "agrofreshadmin@community.farm2market", communityName: "AgroFresh" },
+    ];
+
+    const results = [];
+    const allCommunities = await ctx.db.query("communities").collect();
+
+    for (const target of targets) {
+      const user = await ctx.db
+        .query("users")
+        .withIndex("by_email", (q) => q.eq("email", target.email))
+        .first();
+
+      if (!user) {
+        results.push(`User not found: ${target.email}`);
+        continue;
+      }
+
+      // Fuzzy match community name
+      const community = allCommunities.find(c => 
+        c.name.toLowerCase().includes(target.communityName.toLowerCase())
+      );
+
+      if (community) {
+        await ctx.db.patch(user._id, { assignedCommunityIds: [community._id] });
+        results.push(`Fixed ${target.email} -> Assigned to ${community.name}`);
+      } else {
+        results.push(`Community not found for ${target.communityName}`);
+      }
+    }
+    return results;
   },
 });

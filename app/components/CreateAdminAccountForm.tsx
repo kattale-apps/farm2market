@@ -13,11 +13,13 @@ export function CreateAdminAccountForm({ adminId }: CreateAdminAccountFormProps)
   const createUser = useMutation(api.auth.createUser);
   // Using the listings query to get active locations for the dropdown
   const storageLocations = useQuery(api.listings.getActiveStorageLocations, {});
+  const communities = useQuery(api.communities.getActiveCommunities, { userId: adminId });
   
   const [email, setEmail] = useState("");
   const [adminLevel, setAdminLevel] = useState<"super" | "junior">("junior");
   const [adminCategory, setAdminCategory] = useState<"store" | "message" | "community">("store");
   const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([]);
+  const [selectedCommunityIds, setSelectedCommunityIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
@@ -35,11 +37,15 @@ export function CreateAdminAccountForm({ adminId }: CreateAdminAccountFormProps)
         allowedStorageLocationIds: adminLevel === "junior" && adminCategory === "store" 
           ? selectedLocationIds.map(id => id as Id<"storageLocations">) 
           : undefined,
+        assignedCommunityIds: adminLevel === "junior" && adminCategory === "community"
+          ? selectedCommunityIds.map(id => id as Id<"communities">)
+          : undefined,
         creatorAdminId: adminId,
       });
       setMessage({ type: "success", text: "Admin account created successfully!" });
       setEmail("");
       setSelectedLocationIds([]);
+      setSelectedCommunityIds([]);
     } catch (err: any) {
       setMessage({ type: "error", text: err.message });
     } finally {
@@ -101,6 +107,44 @@ export function CreateAdminAccountForm({ adminId }: CreateAdminAccountFormProps)
               {storageLocations?.map((loc: any) => (
                 <option key={loc.locationId} value={loc.locationId}>
                   {loc.districtName} ({loc.code})
+                </option>
+              ))}
+            </select>
+            <small style={{ color: "#666" }}>Hold Ctrl/Cmd to select multiple</small>
+          </div>
+        )}
+
+        {adminLevel === "junior" && adminCategory === "community" && (
+          <div>
+            <label style={{ display: "block", marginBottom: "0.5rem" }}>Assigned Communities:</label>
+            <select 
+              multiple
+              value={selectedCommunityIds}
+              onChange={(e) => setSelectedCommunityIds(Array.from(e.target.selectedOptions, option => option.value))}
+              style={{ width: "100%", padding: "0.5rem", minHeight: "100px" }}
+            >
+              {communities?.map((comm: any) => (
+                <option key={comm.id} value={comm.id}>
+                  {comm.name}
+                </option>
+              ))}
+            </select>
+            <small style={{ color: "#666" }}>Hold Ctrl/Cmd to select multiple</small>
+          </div>
+        )}
+
+        {adminLevel === "junior" && adminCategory === "community" && (
+          <div>
+            <label style={{ display: "block", marginBottom: "0.5rem" }}>Assigned Communities:</label>
+            <select 
+              multiple
+              value={selectedCommunityIds}
+              onChange={(e) => setSelectedCommunityIds(Array.from(e.target.selectedOptions, option => option.value))}
+              style={{ width: "100%", padding: "0.5rem", minHeight: "100px" }}
+            >
+              {communities?.map((comm: any) => (
+                <option key={comm.id} value={comm.id}>
+                  {comm.name}
                 </option>
               ))}
             </select>

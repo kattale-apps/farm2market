@@ -3,7 +3,7 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import * as XLSX from "xlsx";
@@ -17,6 +17,8 @@ export default function CommunityDashboardPage() {
   const [loading, setLoading] = useState(false);
   const [selectedApplicationId, setSelectedApplicationId] = useState<Id<"communityApplications"> | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [exportCommunityId, setExportCommunityId] = useState<Id<"communities"> | null>(null);
+  const [exportCommunityName, setExportCommunityName] = useState<string>("");
 
   const paginationPreferences = useQuery(
     (api as any).userSettings.getPaginationPreferences,
@@ -150,6 +152,157 @@ export default function CommunityDashboardPage() {
         }
       : "skip"
   );
+
+  const exportMembersData = useQuery(
+    api.communityApplications.getCommunityMemberExportData,
+    userId && exportCommunityId
+      ? {
+          adminId: userId,
+          communityId: exportCommunityId,
+          status: "APPROVED",
+        }
+      : "skip"
+  );
+
+  const flattenForExport = (
+    value: any,
+    prefix = "",
+    result: Record<string, any> = {}
+  ) => {
+    if (value === null || value === undefined) return result;
+    if (Array.isArray(value)) {
+      if (value.length === 0) {
+        result[prefix] = "";
+        return result;
+      }
+      const hasObjects = value.some((item) => typeof item === "object" && item !== null);
+      result[prefix] = hasObjects ? JSON.stringify(value) : value.join(", ");
+      return result;
+    }
+    if (typeof value === "object") {
+      Object.entries(value).forEach(([key, child]) => {
+        const nextPrefix = prefix ? `${prefix}.${key}` : key;
+        flattenForExport(child, nextPrefix, result);
+      });
+      return result;
+    }
+    result[prefix] = value;
+    return result;
+  };
+
+  const buildExportRows = useCallback((items: any[]) => {
+    const flatten = (
+      value: any,
+      prefix = "",
+      result: Record<string, any> = {}
+    ) => {
+      if (value === null || value === undefined) return result;
+      if (Array.isArray(value)) {
+        if (value.length === 0) {
+          result[prefix] = "";
+          return result;
+        }
+        const hasObjects = value.some((item) => typeof item === "object" && item !== null);
+        result[prefix] = hasObjects ? JSON.stringify(value) : value.join(", ");
+        return result;
+      }
+      if (typeof value === "object") {
+        Object.entries(value).forEach(([key, child]) => {
+          const nextPrefix = prefix ? `${prefix}.${key}` : key;
+          flatten(child, nextPrefix, result);
+        });
+        return result;
+      }
+      result[prefix] = value;
+      return result;
+    };
+
+    return items.map((item: any) => {
+      const farmer = item.farmer || {};
+      const application = item.application || {};
+      const form = item.form || {};
+
+      const base = {
+        "Application Id": application?._id || "",
+        "Form Id": form?._id || application?.formId || "",
+        "Application Status": item.status || application?.status || "",
+        "Application Created": application?.createdAt
+          ? new Date(application.createdAt).toLocaleString()
+          : "",
+        "Application Updated": application?.updatedAt
+          ? new Date(application.updatedAt).toLocaleString()
+          : "",
+        "Membership Joined": item.joinedAt ? new Date(item.joinedAt).toLocaleString() : "",
+      };
+
+      const profile = {
+        "Profile Alias": farmer.alias || "",
+        "Profile Email": farmer.email || "",
+        "Profile Phone": farmer.phoneNumber || "",
+        "Profile Region": farmer.region || "",
+        "Profile District": farmer.districtText || "",
+        "Profile Subcounty": farmer.subCountyText || "",
+        "Profile County": farmer.county || "",
+        "Profile Village": farmer.village || "",
+        "Profile Farm Size (Acres)": farmer.farmSizeAcres ?? "",
+        "Profile Farm Size Raw": farmer.farmSizeRaw ? JSON.stringify(farmer.farmSizeRaw) : "",
+        "Profile Water Source": farmer.waterSource || "",
+      };
+
+      const flattenedForm = flatten(form, "form");
+
+      return {
+        ...base,
+        ...profile,
+        ...flattenedForm,
+      };
+    });
+  }, []);
+
+  const handleExportMembers = (communityId: Id<"communities">, communityName: string) => {
+    if (!userId) return;
+    setLoading(true);
+    setMessage(null);
+    setExportCommunityId(communityId);
+    setExportCommunityName(communityName);
+  };
+
+  useEffect(() => {
+    if (!exportCommunityId) return;
+    if (exportMembersData === undefined) return;
+
+    if ((exportMembersData as any)?.error) {
+      setMessage({ type: "error", text: (exportMembersData as any).error });
+      setLoading(false);
+      setExportCommunityId(null);
+      return;
+    }
+
+    if (!Array.isArray(exportMembersData)) return;
+
+    const rows = buildExportRows(exportMembersData);
+
+    try {
+      logExport({
+        userId: userId as any,
+        exportType: "community_members",
+        dataCount: rows.length,
+      });
+
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Members");
+      const safeName = exportCommunityName || "community";
+      XLSX.writeFile(wb, `${safeName}-members-full.xlsx`);
+      setMessage({ type: "success", text: "Members exported successfully!" });
+    } catch (error: any) {
+      setMessage({ type: "error", text: error?.message || "Failed to export members" });
+    } finally {
+      setLoading(false);
+      setExportCommunityId(null);
+      setExportCommunityName("");
+    }
+  }, [exportMembersData, exportCommunityId, exportCommunityName, logExport, userId, buildExportRows]);
 
   if (!userId) {
     return (
@@ -829,37 +982,7 @@ export default function CommunityDashboardPage() {
                   {/* Export Button */}
                   <div style={{ marginTop: "1.5rem" }}>
                     <button
-                      onClick={async () => {
-                        if (!userId || !community.members) return;
-
-                        setLoading(true);
-                        setMessage(null);
-
-                        try {
-                          // Check quota and log export
-                          await logExport({
-                            userId,
-                            exportType: "community_members",
-                            dataCount: community.members.length,
-                          });
-
-                          // Export data
-                          const exportData = community.members.map((m: any) => ({
-                            "Farmer Name": m.alias,
-                            "Phone": m.phoneNumber || "",
-                            "Email": m.email || "",
-                          }));
-                          const ws = XLSX.utils.json_to_sheet(exportData);
-                          const wb = XLSX.utils.book_new();
-                          XLSX.utils.book_append_sheet(wb, ws, "Members");
-                          XLSX.writeFile(wb, `${community.name}-members.xlsx`);
-                          setMessage({ type: "success", text: "Members exported successfully!" });
-                        } catch (error: any) {
-                          setMessage({ type: "error", text: error.message || "Failed to export members" });
-                        } finally {
-                          setLoading(false);
-                        }
-                      }}
+                      onClick={() => handleExportMembers(communityId as any, community.name)}
                       disabled={loading || (exportQuota?.remaining === 0 && exportQuota?.serviceLevel === "Standard")}
                       style={{
                         padding: "0.75rem 1.5rem",

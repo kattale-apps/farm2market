@@ -223,9 +223,13 @@ export default function Home() {
             >
               Privacy Policy
             </a>
-            {(user?.role === "farmer" || isSuperAdmin) && (
+            {(user?.role === "farmer" || isSuperAdmin || (user?.role === "admin" && user?.adminCategory === "community")) && (
               <a
-                href={isSuperAdmin ? "/admin/communities" : "/farmer/communities"}
+                href={
+                  isSuperAdmin ? "/admin/communities" :
+                  user?.adminCategory === "community" ? "/admin/community-dashboard" :
+                  "/farmer/communities"
+                }
                 style={{
                   display: "inline-block",
                   padding: "0.5rem 1rem",
@@ -245,7 +249,7 @@ export default function Home() {
                   e.currentTarget.style.background = "#1976d2";
                 }}
               >
-                {isSuperAdmin ? "Create a Community" : "Join A Growers Community"}
+                {isSuperAdmin ? "Create a Community" : user?.adminCategory === "community" ? "Community Dashboard" : "Join A Growers Community"}
               </a>
             )}
           </div>

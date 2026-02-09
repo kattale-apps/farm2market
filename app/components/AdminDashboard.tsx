@@ -176,6 +176,8 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
     adminUser?.adminLevel === "super" || 
     (adminUser?.adminLevel === undefined && !adminUser?.adminCategory)
   );
+  const isCommunityAdmin = adminUser?.role === "admin" &&
+    adminUser?.adminCategory === "community";
   const isMessageAdmin = adminUser?.role === "admin" &&
     adminUser?.adminLevel === "junior" &&
     adminUser?.adminCategory === "message";
@@ -1057,6 +1059,407 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
       {isMessageAdmin && !isSuperAdmin && (
         <div style={{ marginBottom: "2rem" }}>
           {messagesPanel}
+        </div>
+      )}
+
+      {/* Community Admin Dashboard - for junior community admins */}
+      {isCommunityAdmin && !isSuperAdmin && (
+        <div style={{ marginBottom: "2rem" }}>
+          <h2 style={{ marginBottom: "1rem", fontSize: "1.8rem", fontWeight: "700" }}>
+            Community Admin Dashboard
+          </h2>
+          <div style={{ marginBottom: "1rem" }}>
+            <a
+              href="/admin/community-dashboard"
+              style={{
+                display: "inline-block",
+                padding: "0.6rem 1rem",
+                borderRadius: 8,
+                background: "linear-gradient(135deg, #1976d2 0%, #1565c0 100%)",
+                color: "#fff",
+                textDecoration: "none",
+                fontSize: "0.95rem",
+                fontWeight: 600,
+                boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+              }}
+            >
+              Open Full Community Dashboard →
+            </a>
+          </div>
+          <div style={farmCardStyle}>
+            <div style={glassPanelStyle}>
+              {selectedCommunityId ? (
+                <>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      flexWrap: "wrap",
+                      gap: "0.75rem",
+                      marginBottom: "1.25rem",
+                    }}
+                  >
+                    <button
+                      onClick={() => setSelectedCommunityId(null)}
+                      style={{
+                        padding: "0.5rem 1rem",
+                        borderRadius: "6px",
+                        border: "1px solid #ccc",
+                        background: "#ffffff",
+                        cursor: "pointer",
+                        fontWeight: 600,
+                      }}
+                    >
+                      ← Back to Communities
+                    </button>
+                    <button
+                      onClick={() => handleExport("excel")}
+                      style={{
+                        background: "#2e7d32",
+                        color: "#fff",
+                        padding: "0.5rem 1rem",
+                        borderRadius: 6,
+                        border: "none",
+                        fontWeight: 600,
+                      }}
+                    >
+                      Export Excel
+                    </button>
+                  </div>
+                  <h4 style={{ marginBottom: "0.75rem" }}>
+                    Members ({communityMembers?.length ?? 0})
+                  </h4>
+                  <div
+                    style={{
+                      marginBottom: "0.75rem",
+                      display: "flex",
+                      gap: "0.5rem",
+                      alignItems: "center",
+                    }}
+                  >
+                    <label style={{ fontWeight: 600 }}>Status:</label>
+                    <select
+                      value={memberStatusFilter}
+                      onChange={(e) => setMemberStatusFilter(e.target.value as any)}
+                      style={{
+                        padding: "0.35rem 0.6rem",
+                        borderRadius: 6,
+                        border: "1px solid #ddd",
+                      }}
+                    >
+                      <option value="all">All</option>
+                      <option value="PENDING">Pending</option>
+                      <option value="APPROVED">Approved</option>
+                      <option value="REJECTED">Rejected</option>
+                      <option value="REVOKED">Revoked</option>
+                    </select>
+                    <label style={{ fontWeight: 600 }}>Per page:</label>
+                    <select
+                      value={communityMembersPageSize}
+                      onChange={(e) => {
+                        const nextSize = Number(e.target.value);
+                        setCommunityMembersPageSize(nextSize);
+                        setCommunityMembersPage(1);
+                        updatePaginationPreferences({
+                          userId: adminId,
+                          listKey: communityMembersPageSizeKey,
+                          pageSize: nextSize,
+                        } as any);
+                      }}
+                      style={{
+                        padding: "0.35rem 0.6rem",
+                        borderRadius: 6,
+                        border: "1px solid #ddd",
+                      }}
+                    >
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                      <option value={50}>50</option>
+                    </select>
+                  </div>
+                  {!communityMembers ? (
+                    <p>Loading members…</p>
+                  ) : (
+                    <div style={{ overflowX: "auto", maxWidth: "100%" }}>
+                      <table
+                        style={{
+                          width: "100%",
+                          borderCollapse: "collapse",
+                          background: "#ffffff",
+                          borderRadius: "10px",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <thead>
+                          <tr style={{ background: "#f5f5f5" }}>
+                            {["Alias", "Status", "Phone", "Email", "Joined", "Actions"].map((h) => (
+                              <th
+                                key={h}
+                                style={{
+                                  padding: "0.75rem",
+                                  textAlign: "left",
+                                  borderBottom: "1px solid #ddd",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {h}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pagedCommunityMembers.map((m: any) => (
+                            <tr key={m._id ?? m.farmerId ?? Math.random()}>
+                              <td style={{ padding: "0.75rem" }}>{m.alias ?? "-"}</td>
+                              <td style={{ padding: "0.75rem" }}>{m.status ?? "-"}</td>
+                              <td style={{ padding: "0.75rem" }}>{m.phoneNumber ?? "-"}</td>
+                              <td style={{ padding: "0.75rem" }}>{m.email ?? "-"}</td>
+                              <td style={{ padding: "0.75rem" }}>
+                                {m.joinedAt ? formatUgandaDate(m.joinedAt) : "-"}
+                              </td>
+                              <td style={{ padding: "0.75rem", display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+                                <button
+                                  onClick={() =>
+                                    m.applicationId && setSelectedApplicationId(m.applicationId)
+                                  }
+                                  style={{ padding: "0.35rem 0.6rem" }}
+                                  disabled={!m.applicationId}
+                                >
+                                  View
+                                </button>
+                                {m.status === "PENDING" && m.applicationId && (
+                                  <>
+                                    <button
+                                      onClick={async () => {
+                                        await approveApplication({
+                                          adminId,
+                                          applicationId: m.applicationId,
+                                        });
+                                      }}
+                                      style={{ padding: "0.35rem 0.6rem" }}
+                                    >
+                                      Approve
+                                    </button>
+                                    <button
+                                      onClick={async () => {
+                                        await rejectApplication({
+                                          adminId,
+                                          applicationId: m.applicationId,
+                                        });
+                                      }}
+                                      style={{ padding: "0.35rem 0.6rem" }}
+                                    >
+                                      Reject
+                                    </button>
+                                  </>
+                                )}
+                                <button
+                                  onClick={async () => {
+                                    if (!selectedCommunityId) return;
+                                    await deleteCommunityMember({
+                                      adminId,
+                                      communityId: selectedCommunityId,
+                                      farmerId: m._id,
+                                      applicationId: m.applicationId,
+                                    });
+                                  }}
+                                  style={{ padding: "0.35rem 0.6rem" }}
+                                >
+                                  Delete
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
+                        <div style={{ fontSize: "0.85rem", color: "#666" }}>
+                          Showing {communityMembersStart}-{communityMembersEnd} of {communityMembersList.length}
+                        </div>
+                        {communityMembersTotalPages > 1 && (
+                          <div style={{ display: "flex", gap: "0.5rem" }}>
+                            <button
+                              type="button"
+                              onClick={() => setCommunityMembersPage((p) => Math.max(1, p - 1))}
+                              disabled={communityMembersPage === 1}
+                              style={{
+                                padding: "0.35rem 0.7rem",
+                                borderRadius: 6,
+                                border: "1px solid #ddd",
+                                background: communityMembersPage === 1 ? "#f1f5f9" : "#fff",
+                                cursor: communityMembersPage === 1 ? "not-allowed" : "pointer",
+                                fontWeight: 600,
+                              }}
+                            >
+                              Prev
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setCommunityMembersPage((p) => Math.min(communityMembersTotalPages, p + 1))}
+                              disabled={communityMembersPage >= communityMembersTotalPages}
+                              style={{
+                                padding: "0.35rem 0.7rem",
+                                borderRadius: 6,
+                                border: "1px solid #ddd",
+                                background: communityMembersPage >= communityMembersTotalPages ? "#f1f5f9" : "#fff",
+                                cursor: communityMembersPage >= communityMembersTotalPages ? "not-allowed" : "pointer",
+                                fontWeight: 600,
+                              }}
+                            >
+                              Next
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 260px), 1fr))",
+                    gap: "1rem",
+                  }}
+                >
+                  {communities === undefined ? (
+                    <p style={{ color: "#666" }}>Loading communities...</p>
+                  ) : communities.length === 0 ? (
+                    <p style={{ color: "#666" }}>
+                      No communities assigned. Contact your administrator to be assigned to a community.
+                    </p>
+                  ) : (
+                    communities.map((c: any) => (
+                      <div
+                        key={c._id}
+                        style={{
+                          background: "#ffffff",
+                          borderRadius: "12px",
+                          padding: "1rem",
+                          border: "1px solid #e0e0e0",
+                        }}
+                      >
+                        <h4>{c.name}</h4>
+                        <p>{c.description}</p>
+                        <p>
+                          <strong>Members:</strong> {c.memberCount ?? 0}
+                        </p>
+                        <button
+                          onClick={() => setSelectedCommunityId(c._id)}
+                          style={{
+                            marginTop: "0.75rem",
+                            padding: "0.6rem",
+                            background: "#1976d2",
+                            color: "#fff",
+                            borderRadius: 6,
+                            border: "none",
+                            fontWeight: 600,
+                            width: "100%",
+                          }}
+                        >
+                          Manage & View Members
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+          {selectedApplicationId && (
+            <div
+              style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(0,0,0,0.45)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 50,
+                padding: "1rem",
+              }}
+              onClick={() => setSelectedApplicationId(null)}
+            >
+              <div
+                style={{
+                  background: "#fff",
+                  borderRadius: 12,
+                  maxWidth: 900,
+                  width: "100%",
+                  padding: "1.25rem",
+                  boxShadow: "0 12px 30px rgba(0,0,0,0.2)",
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <h3 style={{ margin: 0 }}>Application Review</h3>
+                  <button
+                    onClick={() => setSelectedApplicationId(null)}
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      fontSize: "1.25rem",
+                      cursor: "pointer",
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+                {!selectedApplicationDetails ? (
+                  <p style={{ color: "#666", marginTop: "1rem" }}>Loading details...</p>
+                ) : (
+                  <div style={{ marginTop: "1rem" }}>
+                    {(() => {
+                      const section1 = (selectedApplicationDetails as any)?.form?.section1 || {};
+                      const farmer = (selectedApplicationDetails as any)?.farmer || {};
+                      return (
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                          <div><strong>Farmer Name:</strong> {section1.farmerFullName || farmer.alias || "-"}</div>
+                          <div><strong>Farm Name:</strong> {section1.farmName || "-"}</div>
+                          <div><strong>Phone:</strong> {section1.phoneNumber || farmer.phoneNumber || "-"}</div>
+                          <div><strong>Email:</strong> {section1.emailAddress || farmer.email || "-"}</div>
+                          <div><strong>County:</strong> {section1.county || farmer.county || "-"}</div>
+                          <div><strong>District/Subcounty:</strong> {section1.districtSubCounty || farmer.districtText || "-"}</div>
+                          <div><strong>Village:</strong> {section1.village || farmer.village || "-"}</div>
+                          <div><strong>Farm Size (Acres):</strong> {section1.farmSizeAcres || "-"}</div>
+                          <div><strong>Main Enterprises:</strong> {(section1.mainEnterprises || []).join(", ") || "-"}</div>
+                          <div><strong>System of Farming:</strong> {section1.systemOfFarming || "-"}</div>
+                          <div><strong>Years of Experience:</strong> {section1.yearsOfExperience || "-"}</div>
+                          <div><strong>Water Source:</strong> {section1.waterSource || farmer.waterSource || "-"}</div>
+                        </div>
+                      );
+                    })()}
+                    <div style={{ marginTop: "1rem", display: "flex", gap: "0.5rem" }}>
+                      <button
+                        onClick={async () => {
+                          await approveApplication({
+                            adminId,
+                            applicationId: selectedApplicationId,
+                          });
+                          setSelectedApplicationId(null);
+                        }}
+                        style={{ padding: "0.5rem 0.9rem" }}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={async () => {
+                          await rejectApplication({
+                            adminId,
+                            applicationId: selectedApplicationId,
+                          });
+                          setSelectedApplicationId(null);
+                        }}
+                        style={{ padding: "0.5rem 0.9rem" }}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

@@ -177,9 +177,6 @@ export default function AdminRoleManagementPage() {
         role: "admin",
         adminLevel: "junior",
         adminCategory: createData.adminCategory || undefined,
-        assignedCommunityIds: createData.assignedCommunityIds.length > 0 ? createData.assignedCommunityIds.map(
-          (id) => id as Id<"communities">
-        ) : undefined,
         creatorAdminId: userId,
       });
 
@@ -372,42 +369,10 @@ export default function AdminRoleManagementPage() {
                     <option value="message">Message Admin</option>
                     <option value="finance">Finance Admin</option>
                   </select>
+                  <small style={{ color: "#666", marginTop: "0.25rem", display: "block" }}>
+                    Community and location assignments can be managed from the admin list
+                  </small>
                 </div>
-
-                {/* Assigned Communities (for community admins) */}
-                {createData.adminCategory === "community" && (
-                  <div style={{ gridColumn: isMobile ? "1" : "1 / 3" }}>
-                    <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
-                      Assign Communities (Optional) - Can be assigned later
-                    </label>
-                    <select
-                      multiple
-                      value={createData.assignedCommunityIds}
-                      onChange={(e) =>
-                        setCreateData({
-                          ...createData,
-                          assignedCommunityIds: Array.from(e.target.selectedOptions, (opt) => opt.value),
-                        })
-                      }
-                      style={{
-                        width: "100%",
-                        padding: "0.6rem",
-                        border: "1px solid #ccc",
-                        borderRadius: "6px",
-                        fontSize: "0.9rem",
-                        boxSizing: "border-box",
-                        minHeight: "100px",
-                      }}
-                    >
-                      {communities?.map((comm: any) => (
-                        <option key={comm.id} value={comm.id}>
-                          {comm.name}
-                        </option>
-                      ))}
-                    </select>
-                    <small style={{ color: "#666" }}>Hold Ctrl/Cmd to select multiple</small>
-                  </div>
-                )}
               </div>
 
               {/* Buttons */}

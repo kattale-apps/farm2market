@@ -28,6 +28,13 @@ type EditAdminState = {
   assignedCommunityIds: string[];
 };
 
+type CreateAdminState = {
+  email: string;
+  adminLevel: "junior";
+  adminCategory: AdminCategory;
+  assignedCommunityIds: string[];
+};
+
 /* ───────────────── Styles ───────────────── */
 
 const containerStyle: React.CSSProperties = {
@@ -66,6 +73,15 @@ export default function AdminRoleManagementPage() {
   const [editData, setEditData] = useState<EditAdminState | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [createData, setCreateData] = useState<CreateAdminState>({
+    email: "",
+    adminLevel: "junior",
+    adminCategory: "community",
+    assignedCommunityIds: [],
+  });
+  const [createMessage, setCreateMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
 
   /* Load pilot user */
   useEffect(() => {
@@ -94,7 +110,13 @@ export default function AdminRoleManagementPage() {
     userId ? { adminId: userId } : "skip"
   );
 
+  const communities = useQuery(
+    api.communities.getActiveCommunities,
+    userId ? { userId } : "skip"
+  );
+
   const updateUser = useMutation(api.auth.updateUserRoleAndAssignment);
+  const createUser = useMutation(api.auth.createUser);
 
   /* ✅ Filter admins WITHOUT retyping */
   const admins = useMemo(
@@ -134,6 +156,40 @@ export default function AdminRoleManagementPage() {
       setEditData(null);
     } catch (err: any) {
       setMessage(err?.message ?? "Failed to update admin");
+    }
+  };
+
+  const handleCreateAdmin = async () => {
+    if (!userId || !createData.email.trim()) {
+      setCreateMessage({ type: "error", text: "Email is required" });
+      return;
+    }
+
+    setIsCreating(true);
+    try {
+      await createUser({
+        email: createData.email.trim(),
+        role: "admin",
+        adminLevel: "junior",
+        adminCategory: createData.adminCategory || undefined,
+        assignedCommunityIds: createData.assignedCommunityIds.map(
+          (id) => id as Id<"communities">
+        ),
+        creatorAdminId: userId,
+      });
+
+      setCreateMessage({ type: "success", text: "Junior admin created successfully!" });
+      setCreateData({
+        email: "",
+        adminLevel: "junior",
+        adminCategory: "community",
+        assignedCommunityIds: [],
+      });
+      setShowCreateForm(false);
+    } catch (err: any) {
+      setCreateMessage({ type: "error", text: err.message || "Failed to create admin" });
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -207,6 +263,191 @@ export default function AdminRoleManagementPage() {
               }}
             >
               ✓ {message}
+            </div>
+          )}
+
+          {/* Create New Admin Section */}
+          <div style={{ marginBottom: "1.5rem" }}>
+            <button
+              onClick={() => setShowCreateForm(!showCreateForm)}
+              style={{
+                padding: "0.75rem 1.5rem",
+                background: showCreateForm ? "#ff9800" : "#4caf50",
+                color: "#fff",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "0.95rem",
+                transition: "background 0.2s",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.background = showCreateForm ? "#f57c00" : "#388e3c")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.background = showCreateForm ? "#ff9800" : "#4caf50")
+              }
+            >
+              {showCreateForm ? "✕ Cancel" : "+ Create Junior Admin"}
+            </button>
+          </div>
+
+          {/* Create Admin Form */}
+          {showCreateForm && !selectedAdmin && (
+            <div
+              style={{
+                marginBottom: "1.5rem",
+                background: "#fafafa",
+                padding: "1.5rem",
+                borderRadius: "12px",
+                border: "1px solid #e0e0e0",
+              }}
+            >
+              <h2 style={{ margin: "0 0 1rem 0", color: "#1a1a1a" }}>
+                Create New Junior Admin
+              </h2>
+
+              {createMessage && (
+                <div
+                  style={{
+                    marginBottom: "1rem",
+                    padding: "0.75rem 1rem",
+                    background: createMessage.type === "success" ? "#e8f5e9" : "#ffebee",
+                    color: createMessage.type === "success" ? "#2e7d32" : "#c62828",
+                    borderRadius: "8px",
+                    fontSize: "0.9rem",
+                  }}
+                >
+                  {createMessage.text}
+                </div>
+              )}
+
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "1rem", marginBottom: "1.5rem" }}>
+                {/* Email */}
+                <div style={{ gridColumn: isMobile ? "1" : "1 / 3" }}>
+                  <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                    Email Address *
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="admin@example.com"
+                    value={createData.email}
+                    onChange={(e) => setCreateData({ ...createData, email: e.target.value })}
+                    style={{
+                      width: "100%",
+                      padding: "0.6rem",
+                      border: "1px solid #ccc",
+                      borderRadius: "6px",
+                      fontSize: "0.9rem",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+
+                {/* Category */}
+                <div>
+                  <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                    Admin Category *
+                  </label>
+                  <select
+                    value={createData.adminCategory}
+                    onChange={(e) => setCreateData({ ...createData, adminCategory: e.target.value as AdminCategory })}
+                    style={{
+                      width: "100%",
+                      padding: "0.6rem",
+                      border: "1px solid #ccc",
+                      borderRadius: "6px",
+                      fontSize: "0.9rem",
+                      boxSizing: "border-box",
+                    }}
+                  >
+                    <option value="">Select category...</option>
+                    <option value="community">Community Admin</option>
+                    <option value="store">Store Admin</option>
+                    <option value="message">Message Admin</option>
+                    <option value="finance">Finance Admin</option>
+                  </select>
+                </div>
+
+                {/* Assigned Communities (for community admins) */}
+                {createData.adminCategory === "community" && (
+                  <div style={{ gridColumn: isMobile ? "1" : "1 / 3" }}>
+                    <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                      Assign Communities (Optional)
+                    </label>
+                    <select
+                      multiple
+                      value={createData.assignedCommunityIds}
+                      onChange={(e) =>
+                        setCreateData({
+                          ...createData,
+                          assignedCommunityIds: Array.from(e.target.selectedOptions, (opt) => opt.value),
+                        })
+                      }
+                      style={{
+                        width: "100%",
+                        padding: "0.6rem",
+                        border: "1px solid #ccc",
+                        borderRadius: "6px",
+                        fontSize: "0.9rem",
+                        boxSizing: "border-box",
+                        minHeight: "100px",
+                      }}
+                    >
+                      {communities?.map((comm: any) => (
+                        <option key={comm.id} value={comm.id}>
+                          {comm.name}
+                        </option>
+                      ))}
+                    </select>
+                    <small style={{ color: "#666" }}>Hold Ctrl/Cmd to select multiple</small>
+                  </div>
+                )}
+              </div>
+
+              {/* Buttons */}
+              <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+                <button
+                  onClick={handleCreateAdmin}
+                  disabled={isCreating}
+                  style={{
+                    padding: "0.75rem 1.5rem",
+                    background: "#4caf50",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: isCreating ? "not-allowed" : "pointer",
+                    fontWeight: "600",
+                    fontSize: "0.9rem",
+                    opacity: isCreating ? 0.6 : 1,
+                  }}
+                >
+                  {isCreating ? "Creating..." : "Create Admin"}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowCreateForm(false);
+                    setCreateData({
+                      email: "",
+                      adminLevel: "junior",
+                      adminCategory: "community",
+                      assignedCommunityIds: [],
+                    });
+                    setCreateMessage(null);
+                  }}
+                  style={{
+                    padding: "0.75rem 1.5rem",
+                    background: "#e0e0e0",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    fontWeight: "600",
+                    fontSize: "0.9rem",
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           )}
 

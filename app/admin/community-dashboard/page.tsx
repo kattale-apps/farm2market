@@ -337,33 +337,58 @@ export default function CommunityDashboardPage() {
   }
 
   return (
-    <div style={{
-      minHeight: "100vh",
-      background: "#fafafa",
-      padding: "2rem",
-    }}>
-      <div style={{
-        maxWidth: "1400px",
-        margin: "0 auto",
-      }}>
+    <div
+      style={{
+        minHeight: "100vh",
+        padding: "2rem",
+        backgroundImage: "url('/background/farm-bg.jpg')",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+        backgroundColor: "#f5f5f5",
+      }}
+    >
+      <div
+        style={{
+          maxWidth: "1400px",
+          margin: "0 auto",
+          background: "rgba(255,255,255,0.9)",
+          borderRadius: "16px",
+          boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
+          padding: isMobile ? "1.25rem" : "2rem",
+        }}
+      >
         {/* Header */}
-        <div style={{
-          marginBottom: "2rem",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: isMobile ? "flex-start" : "center",
-          flexDirection: isMobile ? "column" : "row",
-          gap: isMobile ? "0.75rem" : "0",
-        }}>
+        <div
+          style={{
+            marginBottom: "2rem",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: isMobile ? "flex-start" : "center",
+            flexDirection: isMobile ? "column" : "row",
+            gap: isMobile ? "0.75rem" : "0",
+          }}
+        >
           <div>
-            <Link href="/" style={{
-              fontSize: "0.9rem",
-              color: "#1976d2",
-              textDecoration: "none",
-              marginBottom: "1rem",
-              display: "inline-block",
-            }}>
-              ← Back
+            <Link
+              href="/"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.35rem",
+                padding: "0.45rem 0.9rem",
+                borderRadius: "999px",
+                background: "#111827",
+                color: "#ffffff",
+                textDecoration: "none",
+                fontSize: "0.85rem",
+                fontWeight: 600,
+                marginBottom: "1rem",
+                boxShadow: "0 4px 10px rgba(15,23,42,0.4)",
+              }}
+            >
+              <span style={{ fontSize: "1rem" }}>←</span>
+              <span>Back</span>
             </Link>
             <h1 style={{
               fontSize: "clamp(1.8rem, 5vw, 2.2rem)",
@@ -447,54 +472,127 @@ export default function CommunityDashboardPage() {
           userCommunities.map((community: any) => {
             const communityId = community?._id ?? community?.id;
             return (
-            <div
-              key={communityId}
-              style={{
-                background: "#fff",
-                borderRadius: "12px",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-                marginBottom: "2rem",
-                overflow: "hidden",
-              }}
-            >
-              {/* Community Header */}
-              <div style={{
-                padding: "1.5rem",
-                background: "#f5f5f5",
-                borderBottom: "2px solid #e0e0e0",
-              }}>
-                <h2 style={{
-                  margin: "0 0 0.5rem 0",
-                  fontSize: "1.5rem",
-                  fontFamily: '"Montserrat", sans-serif',
-                  fontWeight: "700",
-                  color: "#2c2c2c",
-                }}>
-                  {community.name}
-                </h2>
-                {community.description && (
-                  <p style={{
-                    margin: "0",
-                    color: "#666",
-                    fontSize: "0.95rem",
-                  }}>
-                    {community.description}
-                  </p>
-                )}
-                <div style={{
-                  marginTop: "1rem",
-                  display: "flex",
-                  gap: "2rem",
-                  fontSize: "0.9rem",
-                  color: "#666",
-                }}>
-                  <div>
-                    <strong>Members:</strong> {community.memberCount}
+              <div
+                key={communityId}
+                style={{
+                  background: "#fff",
+                  borderRadius: "12px",
+                  boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
+                  marginBottom: "2rem",
+                  overflow: "hidden",
+                }}
+              >
+                {/* Community Header */}
+                <div
+                  style={{
+                    padding: "1.5rem",
+                    background: "linear-gradient(135deg, #f5f5f5 0%, #e8f5e9 100%)",
+                    borderBottom: "2px solid #e0e0e0",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "1.25rem",
+                      marginBottom: "0.75rem",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: "80px",
+                        height: "80px",
+                        borderRadius: "16px",
+                        background: "#ffffff",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        boxShadow: "0 4px 12px rgba(0, 0, 0, 0.18)",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <img
+                        src="/agrofreshlogo.png"
+                        alt={`${community.name} logo`}
+                        style={{
+                          maxWidth: "100%",
+                          maxHeight: "100%",
+                          objectFit: "contain",
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <h2
+                        style={{
+                          margin: "0 0 0.4rem 0",
+                          fontSize: "1.6rem",
+                          fontFamily: '"Montserrat", sans-serif',
+                          fontWeight: 800,
+                          color: "#1b5e20",
+                          letterSpacing: "-0.03em",
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        {community.name}
+                      </h2>
+                      {community.description && (
+                        <p
+                          style={{
+                            margin: 0,
+                            color: "#374151",
+                            fontSize: "0.95rem",
+                            maxWidth: "32rem",
+                          }}
+                        >
+                          {community.description}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  {community.isGlobal && <div>Global Community</div>}
-                  {community.geoLocked && <div>Geo-locked</div>}
+                  <div
+                    style={{
+                      marginTop: "0.5rem",
+                      display: "flex",
+                      gap: "1.5rem",
+                      fontSize: "0.9rem",
+                      color: "#424242",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <div>
+                      <strong>Members:</strong> {community.memberCount}
+                    </div>
+                    {community.isGlobal && (
+                      <div
+                        style={{
+                          padding: "0.25rem 0.6rem",
+                          borderRadius: "999px",
+                          background: "#e3f2fd",
+                          color: "#1565c0",
+                          fontWeight: 600,
+                          fontSize: "0.8rem",
+                        }}
+                      >
+                        Global Community
+                      </div>
+                    )}
+                    {community.geoLocked && (
+                      <div
+                        style={{
+                          padding: "0.25rem 0.6rem",
+                          borderRadius: "999px",
+                          background: "#fff3e0",
+                          color: "#ef6c00",
+                          fontWeight: 600,
+                          fontSize: "0.8rem",
+                        }}
+                      >
+                        Geo-locked
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
 
               {/* Pending Applications */}
               <div style={{ padding: "1.5rem", borderBottom: "1px solid #eee" }}>

@@ -359,10 +359,7 @@ export const createCommunity = mutation({
       if (targetAdmin.role !== "admin" || targetAdmin.adminLevel !== "junior" || targetAdmin.adminCategory !== "community") {
         throw new Error("Assigned admin must be a junior community admin");
       }
-      const currentAssigned = (targetAdmin as any).assignedCommunityIds || [];
-      if (currentAssigned.length > 0) {
-        throw new Error("Community admin already assigned to another community");
-      }
+      // Allow multiple community assignments to the same admin
       assignedAdminId = args.assignAdminId;
     }
 

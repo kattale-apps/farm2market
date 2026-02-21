@@ -1064,7 +1064,15 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
 
       {/* Community Admin Dashboard - for junior community admins */}
       {isCommunityAdmin && !isSuperAdmin && (
-        <div style={{ marginBottom: "2rem" }}>
+        <div
+          style={{
+            marginBottom: "2rem",
+            background: "#ffffff",
+            borderRadius: 18,
+            boxShadow: "0 10px 24px rgba(0,0,0,0.10)",
+            padding: "1.5rem",
+          }}
+        >
           <h2 style={{ marginBottom: "1rem", fontSize: "1.8rem", fontWeight: "700" }}>
             Community Admin Dashboard
           </h2>
@@ -1088,6 +1096,69 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           </div>
           <div style={farmCardStyle}>
             <div style={glassPanelStyle}>
+              {/* Community summary card with logo */}
+              <div
+                style={{
+                  marginBottom: "1.25rem",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "1rem",
+                  padding: "0.75rem 1rem",
+                  borderRadius: 16,
+                  background:
+                    "linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(232,245,233,0.95) 100%)",
+                  boxShadow: "0 4px 14px rgba(0,0,0,0.12)",
+                  flexWrap: "wrap",
+                }}
+              >
+                <div
+                  style={{
+                    width: 72,
+                    height: 72,
+                    borderRadius: 18,
+                    background: "#ffffff",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    boxShadow: "0 4px 10px rgba(0,0,0,0.16)",
+                    overflow: "hidden",
+                    flexShrink: 0,
+                  }}
+                >
+                  <img
+                    src="/agrofreshlogo.png"
+                    alt="AGROFRESH UG logo"
+                    style={{
+                      maxWidth: "100%",
+                      maxHeight: "100%",
+                      objectFit: "contain",
+                    }}
+                  />
+                </div>
+                <div>
+                  <div
+                    style={{
+                      fontSize: "1.1rem",
+                      fontWeight: 800,
+                      letterSpacing: "-0.03em",
+                      textTransform: "uppercase",
+                      color: "#1b5e20",
+                    }}
+                  >
+                    AGROFRESH UG
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "0.9rem",
+                      color: "#374151",
+                      maxWidth: "28rem",
+                    }}
+                  >
+                    AGROFRESH UG is a nationwide community of Farmers.
+                  </div>
+                </div>
+              </div>
+
               {selectedCommunityId ? (
                 <>
                   <div

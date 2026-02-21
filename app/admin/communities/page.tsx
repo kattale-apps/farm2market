@@ -125,7 +125,7 @@ export default function CommunitiesPage() {
   // ✅ UI
   return (
     <div style={{ padding: "2rem", maxWidth: "1200px", margin: "0 auto" }}>
-      {/* Header with Back Button */}
+      {/* Header with Back Button and Create Button */}
       <div
         style={{
           display: "flex",
@@ -139,15 +139,41 @@ export default function CommunitiesPage() {
         <h1 style={{ margin: 0, fontSize: "clamp(1.75rem, 5vw, 2.25rem)", fontWeight: "700" }}>
           Grower Communities
         </h1>
-        <button
-          onClick={() => router.push("/")}
-          style={{
-            padding: "0.6rem 1.2rem",
-            background: "#f5f5f5",
-            border: "1px solid #ccc",
-            borderRadius: "6px",
-            cursor: "pointer",
-            fontWeight: "600",
+        <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+          {isSuperAdmin && (
+            <button
+              onClick={() => setShowCreateForm(!showCreateForm)}
+              style={{
+                padding: "0.6rem 1.2rem",
+                background: "#4caf50",
+                color: "#fff",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "0.9rem",
+                transition: "background 0.2s",
+                whiteSpace: "nowrap",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.background = "#388e3c")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.background = "#4caf50")
+              }
+            >
+              {showCreateForm ? "Cancel" : "+ Create Community"}
+            </button>
+          )}
+          <button
+            onClick={() => router.push("/")}
+            style={{
+              padding: "0.6rem 1.2rem",
+              background: "#f5f5f5",
+              border: "1px solid #ccc",
+              borderRadius: "6px",
+              cursor: "pointer",
+              fontWeight: "600",
             fontSize: "0.9rem",
             transition: "background 0.2s",
             whiteSpace: "nowrap",
@@ -161,7 +187,259 @@ export default function CommunitiesPage() {
         >
           ← Back to Dashboard
         </button>
+        </div>
       </div>
+
+      {/* Create Community Form */}
+      {showCreateForm && isSuperAdmin && (
+        <div
+          style={{
+            marginBottom: "2rem",
+            padding: "1.5rem",
+            background: "#fff",
+            border: "1px solid #e0e0e0",
+            borderRadius: "10px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+          }}
+        >
+          <h2 style={{ margin: "0 0 1rem 0", color: "#1a1a1a" }}>
+            Create New Community
+          </h2>
+
+          {message && (
+            <div
+              style={{
+                margin: "0 0 1rem 0",
+                padding: "0.75rem 1rem",
+                background: message.type === "success" ? "#e8f5e9" : "#ffebee",
+                color: message.type === "success" ? "#2e7d32" : "#c62828",
+                borderRadius: "6px",
+                fontSize: "0.9rem",
+              }}
+            >
+              {message.text}
+            </div>
+          )}
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "1rem", marginBottom: "1.5rem" }}>
+            <div>
+              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                Community Name *
+              </label>
+              <input
+                type="text"
+                placeholder="e.g., Main Farmers Community"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "0.6rem",
+                  border: "1px solid #ccc",
+                  borderRadius: "6px",
+                  fontSize: "0.9rem",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                Description
+              </label>
+              <textarea
+                placeholder="Describe this community..."
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "0.6rem",
+                  border: "1px solid #ccc",
+                  borderRadius: "6px",
+                  fontSize: "0.9rem",
+                  minHeight: "80px",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                Community Type *
+              </label>
+              <select
+                value={formData.communityType}
+                onChange={(e) => setFormData({ ...formData, communityType: e.target.value as "farmer" | "trader" | "buyer" })}
+                style={{
+                  width: "100%",
+                  padding: "0.6rem",
+                  border: "1px solid #ccc",
+                  borderRadius: "6px",
+                  fontSize: "0.9rem",
+                  boxSizing: "border-box",
+                }}
+              >
+                <option value="farmer">Farmer</option>
+                <option value="trader">Trader</option>
+                <option value="buyer">Buyer</option>
+              </select>
+            </div>
+
+            <div>
+              <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontWeight: "600", color: "#333", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={formData.isGlobal}
+                  onChange={(e) => setFormData({ ...formData, isGlobal: e.target.checked, geoLocked: false })}
+                  style={{ cursor: "pointer" }}
+                />
+                Global Community
+              </label>
+              <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.85rem", color: "#666" }}>
+                Accessible to all users. Disable to make it geo-locked.
+              </p>
+            </div>
+
+            {!formData.isGlobal && (
+              <div>
+                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                  Region (for geo-locked communities)
+                </label>
+                <select
+                  value={formData.regionKey}
+                  onChange={(e) => setFormData({ ...formData, regionKey: e.target.value })}
+                  style={{
+                    width: "100%",
+                    padding: "0.6rem",
+                    border: "1px solid #ccc",
+                    borderRadius: "6px",
+                    fontSize: "0.9rem",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  <option value="">Select a region...</option>
+                  <option value="central_buganda">Central Buganda</option>
+                  <option value="eastern_region">Eastern Region</option>
+                  <option value="northern_region">Northern Region</option>
+                  <option value="western_region">Western Region</option>
+                </select>
+              </div>
+            )}
+
+            <div>
+              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                Assign Junior Community Admin *
+              </label>
+              <select
+                value={formData.assignAdminId}
+                onChange={(e) => setFormData({ ...formData, assignAdminId: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "0.6rem",
+                  border: "1px solid #ccc",
+                  borderRadius: "6px",
+                  fontSize: "0.9rem",
+                  boxSizing: "border-box",
+                }}
+              >
+                <option value="">Select an admin...</option>
+                {allAdmins && allAdmins
+                  .filter((admin: any) => admin.role === "admin" && admin.adminLevel === "junior" && admin.adminCategory === "community")
+                  .map((admin: any) => (
+                    <option key={admin._id} value={admin._id}>
+                      {admin.alias} ({admin.email})
+                    </option>
+                  ))}
+              </select>
+              <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.85rem", color: "#666" }}>
+                Select a junior community admin to manage this community.
+              </p>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+            <button
+              onClick={async () => {
+                if (!formData.name.trim()) {
+                  setMessage({ type: "error", text: "Community name is required" });
+                  return;
+                }
+                if (!formData.assignAdminId) {
+                  setMessage({ type: "error", text: "You must assign a junior community admin" });
+                  return;
+                }
+                setLoading(true);
+                try {
+                  await createCommunity({
+                    adminId: userId,
+                    name: formData.name,
+                    description: formData.description || undefined,
+                    isGlobal: formData.isGlobal,
+                    geoLocked: !formData.isGlobal,
+                    regionKey: formData.regionKey || undefined,
+                    communityType: formData.communityType,
+                    assignAdminId: formData.assignAdminId as Id<"users">,
+                  });
+                  setMessage({ type: "success", text: "Community created successfully!" });
+                  setFormData({
+                    name: "",
+                    description: "",
+                    isGlobal: false,
+                    geoLocked: false,
+                    regionKey: "",
+                    communityType: "farmer",
+                    assignAdminId: "",
+                  });
+                  setShowCreateForm(false);
+                } catch (err: any) {
+                  setMessage({ type: "error", text: err.message || "Failed to create community" });
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              disabled={loading}
+              style={{
+                padding: "0.75rem 1.5rem",
+                background: "#4caf50",
+                color: "#fff",
+                border: "none",
+                borderRadius: "6px",
+                cursor: loading ? "not-allowed" : "pointer",
+                fontWeight: "600",
+                fontSize: "0.9rem",
+                opacity: loading ? 0.6 : 1,
+              }}
+            >
+              {loading ? "Creating..." : "Create Community"}
+            </button>
+            <button
+              onClick={() => {
+                setShowCreateForm(false);
+                setFormData({
+                  name: "",
+                  description: "",
+                  isGlobal: false,
+                  geoLocked: false,
+                  regionKey: "",
+                  communityType: "farmer",
+                  assignAdminId: "",
+                });
+                setMessage(null);
+              }}
+              style={{
+                padding: "0.75rem 1.5rem",
+                background: "#e0e0e0",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "0.9rem",
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {filteredCommunities === undefined ? (
         <p>Loading communities...</p>

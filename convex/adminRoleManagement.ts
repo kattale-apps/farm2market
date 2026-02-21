@@ -102,6 +102,51 @@ export const updateAdmin = mutation({
   },
 });
 
+// --- Delete Admin (SuperAdmin only) ---
+export const deleteAdmin = mutation({
+  args: {
+    adminId: v.id("users"), // superadmin performing the action
+    targetAdminId: v.id("users"), // admin to delete
+  },
+  handler: async (ctx, args) => {
+    // Verify requesting user is superadmin
+    const admin = await ctx.db.get(args.adminId);
+    if (!admin || admin.adminLevel !== "super") {
+      throw new Error("Only superadmin can delete admins");
+    }
+
+    // Prevent self-deletion
+    if (args.adminId === args.targetAdminId) {
+      throw new Error("Cannot delete yourself");
+    }
+
+    // Get target admin
+    const targetAdmin = await ctx.db.get(args.targetAdminId);
+    if (!targetAdmin || targetAdmin.role !== "admin") {
+      throw new Error("Target user is not an admin");
+    }
+
+    // Prevent deletion of superadmin
+    if (targetAdmin.adminLevel === "super") {
+      throw new Error("Cannot delete a superadmin");
+    }
+
+    // Delete the admin user
+    await ctx.db.delete(args.targetAdminId);
+
+    // Log admin action
+    await ctx.db.insert("adminActions", {
+      adminId: args.adminId,
+      action: "delete_admin",
+      targetUserId: args.targetAdminId,
+      details: `Deleted admin ${targetAdmin.alias} (${targetAdmin.email}) - ${targetAdmin.adminLevel} ${targetAdmin.adminCategory} admin`,
+      timestamp: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
 // --- Get Audit Log ---
 export const getAdminAuditLog = query({
   args: {},

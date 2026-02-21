@@ -117,6 +117,7 @@ export default function AdminRoleManagementPage() {
 
   const updateUser = useMutation(api.auth.updateUserRoleAndAssignment);
   const createUser = useMutation(api.auth.createUser);
+  const deleteAdmin = useMutation(api.adminRoleManagement.deleteAdmin);
 
   /* ✅ Filter admins WITHOUT retyping */
   const admins = useMemo(
@@ -192,6 +193,33 @@ export default function AdminRoleManagementPage() {
       setCreateMessage({ type: "error", text: err.message || "Failed to create admin" });
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  const handleDeleteAdmin = async () => {
+    if (!selectedAdmin || !userId) return;
+    
+    // Prevent deletion of superadmin
+    if (selectedAdmin.adminLevel === "super") {
+      setMessage("Cannot delete a superadmin");
+      return;
+    }
+
+    if (!window.confirm(`Are you sure you want to delete ${selectedAdmin.alias} (${selectedAdmin.email})? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      await deleteAdmin({
+        adminId: userId,
+        targetAdminId: selectedAdmin.userId,
+      });
+
+      setMessage("Admin deleted successfully");
+      setSelectedAdmin(null);
+      setEditData(null);
+    } catch (err: any) {
+      setMessage(err?.message ?? "Failed to delete admin");
     }
   };
 
@@ -914,6 +942,27 @@ export default function AdminRoleManagementPage() {
                 >
                   Cancel
                 </button>
+                {selectedAdmin?.adminLevel !== "super" && (
+                  <button
+                    onClick={handleDeleteAdmin}
+                    style={{
+                      flex: isMobile ? "1 1 100%" : "0 1 auto",
+                      padding: "0.75rem 1.5rem",
+                      background: "#d32f2f",
+                      color: "#fff",
+                      borderRadius: 6,
+                      border: "none",
+                      fontWeight: "600",
+                      cursor: "pointer",
+                      fontSize: "0.9rem",
+                      transition: "background 0.2s",
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "#c62828")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "#d32f2f")}
+                  >
+                    🗑️ Delete Admin
+                  </button>
+                )}
               </div>
             </div>
           )}

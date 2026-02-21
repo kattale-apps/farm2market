@@ -331,7 +331,11 @@ export default function CommunitiesPage() {
               </label>
               <select
                 value={formData.assignAdminId}
-                onChange={(e) => setFormData({ ...formData, assignAdminId: e.target.value })}
+                onChange={(e) => {
+                  // Ensure we only get the ID value, not the display text
+                  const selectedValue = e.target.value;
+                  setFormData({ ...formData, assignAdminId: selectedValue });
+                }}
                 style={{
                   width: "100%",
                   padding: "0.6rem",
@@ -345,7 +349,7 @@ export default function CommunitiesPage() {
                 {allAdmins && allAdmins
                   .filter((admin: any) => admin.role === "admin" && admin.adminLevel === "junior" && admin.adminCategory === "community")
                   .map((admin: any) => (
-                    <option key={admin._id} value={admin._id}>
+                    <option key={admin._id} value={String(admin._id)}>
                       {admin.alias} ({admin.email})
                     </option>
                   ))}

@@ -149,19 +149,14 @@ export const createUser = mutation({
         if (!args.adminCategory) {
           throw new Error("Junior admins must have an adminCategory");
         }
+        
+        // Validate based on category
         if (args.adminCategory === "store") {
+          // Store admins REQUIRE at least one storage location
           if (!args.allowedStorageLocationIds || args.allowedStorageLocationIds.length === 0) {
             throw new Error("Store admins must have at least one assigned storage location");
           }
-        }
-        
-        // Explicitly allow community admins to be created without assignments
-        if (args.adminCategory === "community") {
-          // No validation required for assignedCommunityIds
-        }
-        
-        // Validate that all location IDs exist and are active (when provided)
-        if (args.allowedStorageLocationIds && args.allowedStorageLocationIds.length > 0) {
+          // Validate that all location IDs exist and are active
           for (const locationId of args.allowedStorageLocationIds) {
             const location = await ctx.db.get(locationId);
             if (!location) {
@@ -171,14 +166,34 @@ export const createUser = mutation({
               throw new Error(`Storage location ${locationId} is not active`);
             }
           }
+        } else if (args.adminCategory === "community") {
+          // ✅ IMPORTANT: Community admins do NOT require assigned communities at creation
+          // They can be assigned later via edit functionality
+          // assignedCommunityIds is OPTIONAL
+          
+          // But if communities ARE provided, validate them
+          if (args.assignedCommunityIds && args.assignedCommunityIds.length > 0) {
+            for (const communityId of args.assignedCommunityIds) {
+              const community = await ctx.db.get(communityId);
+              if (!community) {
+                throw new Error(`Community ${communityId} not found`);
+              }
+            }
+          }
+        } else if (args.adminCategory === "finance" || args.adminCategory === "message") {
+          // Finance and Message admins don't require any assignments
+          // (No special validation needed)
         }
         
-        // Validate assigned communities if provided
-        if (args.assignedCommunityIds && args.assignedCommunityIds.length > 0) {
-          for (const communityId of args.assignedCommunityIds) {
-            const community = await ctx.db.get(communityId);
-            if (!community) {
-              throw new Error(`Community ${communityId} not found`);
+        // Additional validation for any provided storage locations
+        if (args.allowedStorageLocationIds && args.allowedStorageLocationIds.length > 0) {
+          for (const locationId of args.allowedStorageLocationIds) {
+            const location = await ctx.db.get(locationId);
+            if (!location) {
+              throw new Error(`Storage location ${locationId} not found`);
+            }
+            if (!location.active) {
+              throw new Error(`Storage location ${locationId} is not active`);
             }
           }
         }

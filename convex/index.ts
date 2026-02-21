@@ -28,6 +28,7 @@ export * from "./pdfGeneration";
 export * from "./pilotMode";
 export * from "./pilotSetup";
 export * from "./seedUgandaLocations";
+export * from "./testJuniorAdminCreation";
 export * from "./userSettings";
 export * from "./utils";
 export * from "./wallet";

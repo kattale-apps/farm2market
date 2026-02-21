@@ -155,9 +155,6 @@ export const createUser = mutation({
           }
         }
         // ✅ Community admins can be created without assigned communities - they can be assigned later
-        if (args.adminCategory === "community") {
-          // Allow creation without assignedCommunityIds - admin can assign later
-        }
         // ✅ Finance and Message admins don't require any location or community assignments
         
         // Validate that all location IDs exist and are active (when provided)

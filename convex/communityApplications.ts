@@ -719,6 +719,22 @@ export const approveApplication = mutation({
       throw new Error("Application not found");
     }
 
+    // Enforce community authorization for junior community admins
+    const adminUser = await ctx.db.get(adminId);
+    if (!adminUser) {
+      throw new Error("Admin not found");
+    }
+    const isSuperAdmin = adminUser.adminLevel === "super" || adminUser.adminLevel === undefined;
+    if (!isSuperAdmin && adminUser.adminCategory === "community") {
+      const community = await ctx.db.get(app.communityId);
+      const assigned = (adminUser as any).assignedCommunityIds || [];
+      const isDirectAdmin = community?.communityAdminId === adminId;
+      const isAssigned = assigned.some((id: string) => String(id) === String(app.communityId));
+      if (!isAssigned && !isDirectAdmin) {
+        throw new Error("Forbidden: You can only approve applications for your assigned communities");
+      }
+    }
+
     const now = Date.now();
     await ctx.db.patch(applicationId, {
       status: "APPROVED",
@@ -759,6 +775,22 @@ export const rejectApplication = mutation({
       throw new Error("Application not found");
     }
 
+    // Enforce community authorization for junior community admins
+    const adminUser = await ctx.db.get(adminId);
+    if (!adminUser) {
+      throw new Error("Admin not found");
+    }
+    const isSuperAdmin = adminUser.adminLevel === "super" || adminUser.adminLevel === undefined;
+    if (!isSuperAdmin && adminUser.adminCategory === "community") {
+      const community = await ctx.db.get(app.communityId);
+      const assigned = (adminUser as any).assignedCommunityIds || [];
+      const isDirectAdmin = community?.communityAdminId === adminId;
+      const isAssigned = assigned.some((id: string) => String(id) === String(app.communityId));
+      if (!isAssigned && !isDirectAdmin) {
+        throw new Error("Forbidden: You can only reject applications for your assigned communities");
+      }
+    }
+
     const now = Date.now();
     await ctx.db.patch(applicationId, {
       status: "REJECTED",
@@ -797,6 +829,22 @@ export const revokeMembership = mutation({
     const app = await ctx.db.get(applicationId);
     if (!app) {
       throw new Error("Application not found");
+    }
+
+    // Enforce community authorization for junior community admins
+    const adminUser = await ctx.db.get(adminId);
+    if (!adminUser) {
+      throw new Error("Admin not found");
+    }
+    const isSuperAdmin = adminUser.adminLevel === "super" || adminUser.adminLevel === undefined;
+    if (!isSuperAdmin && adminUser.adminCategory === "community") {
+      const community = await ctx.db.get(app.communityId);
+      const assigned = (adminUser as any).assignedCommunityIds || [];
+      const isDirectAdmin = community?.communityAdminId === adminId;
+      const isAssigned = assigned.some((id: string) => String(id) === String(app.communityId));
+      if (!isAssigned && !isDirectAdmin) {
+        throw new Error("Forbidden: You can only revoke memberships for your assigned communities");
+      }
     }
 
     const now = Date.now();

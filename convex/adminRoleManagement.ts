@@ -39,18 +39,25 @@ export const createAdmin = mutation({
     // Only superadmin can create
     const admin = await ctx.db.get(args.adminId);
     if (!admin || admin.adminLevel !== "super") throw new Error("Only superadmin can create admins");
-    const userId = await ctx.db.insert("users", {
+    
+    const userData: any = {
       email: args.email,
       alias: args.alias,
       role: "admin",
       adminLevel: args.adminLevel,
       adminCategory: args.adminCategory,
-      assignedCommunityIds: args.assignedCommunityIds || [],
       exportLimit: args.exportLimit || 5,
       state: "active",
       createdAt: Date.now(),
       lastActiveAt: Date.now(),
-    });
+    };
+    
+    // ✅ Only set assignedCommunityIds if provided - allow community admins to be created without assignments
+    if (args.assignedCommunityIds && args.assignedCommunityIds.length > 0) {
+      userData.assignedCommunityIds = args.assignedCommunityIds;
+    }
+    
+    const userId = await ctx.db.insert("users", userData);
     await ctx.db.insert("adminActions", {
       adminId: args.adminId,
       action: "create_admin",

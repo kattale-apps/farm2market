@@ -154,7 +154,11 @@ export const createUser = mutation({
             throw new Error("Store admins must have at least one assigned storage location");
           }
         }
-        // Community admins can be created without assigned communities - they can be assigned later
+        // ✅ Community admins can be created without assigned communities - they can be assigned later
+        if (args.adminCategory === "community") {
+          // Allow creation without assignedCommunityIds - admin can assign later
+        }
+        // ✅ Finance and Message admins don't require any location or community assignments
         
         // Validate that all location IDs exist and are active (when provided)
         if (args.allowedStorageLocationIds && args.allowedStorageLocationIds.length > 0) {
@@ -165,6 +169,16 @@ export const createUser = mutation({
             }
             if (!location.active) {
               throw new Error(`Storage location ${locationId} is not active`);
+            }
+          }
+        }
+        
+        // Validate assigned communities if provided
+        if (args.assignedCommunityIds && args.assignedCommunityIds.length > 0) {
+          for (const communityId of args.assignedCommunityIds) {
+            const community = await ctx.db.get(communityId);
+            if (!community) {
+              throw new Error(`Community ${communityId} not found`);
             }
           }
         }

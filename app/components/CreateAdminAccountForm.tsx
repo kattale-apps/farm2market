@@ -34,10 +34,10 @@ export function CreateAdminAccountForm({ adminId }: CreateAdminAccountFormProps)
         role: "admin",
         adminLevel,
         adminCategory: adminLevel === "junior" ? adminCategory : undefined,
-        allowedStorageLocationIds: adminLevel === "junior" && adminCategory === "store" 
+        allowedStorageLocationIds: adminLevel === "junior" && adminCategory === "store" && selectedLocationIds.length > 0
           ? selectedLocationIds.map(id => id as Id<"storageLocations">) 
           : undefined,
-        assignedCommunityIds: adminLevel === "junior" && adminCategory === "community"
+        assignedCommunityIds: adminLevel === "junior" && adminCategory === "community" && selectedCommunityIds.length > 0
           ? selectedCommunityIds.map(id => id as Id<"communities">)
           : undefined,
         creatorAdminId: adminId,
@@ -116,7 +116,7 @@ export function CreateAdminAccountForm({ adminId }: CreateAdminAccountFormProps)
 
         {adminLevel === "junior" && adminCategory === "community" && (
           <div>
-            <label style={{ display: "block", marginBottom: "0.5rem" }}>Assigned Communities:</label>
+            <label style={{ display: "block", marginBottom: "0.5rem" }}>Assigned Communities (Optional):</label>
             <select 
               multiple
               value={selectedCommunityIds}
@@ -124,31 +124,12 @@ export function CreateAdminAccountForm({ adminId }: CreateAdminAccountFormProps)
               style={{ width: "100%", padding: "0.5rem", minHeight: "100px" }}
             >
               {communities?.map((comm: any) => (
-                <option key={comm.id} value={comm.id}>
+                <option key={comm._id} value={comm._id}>
                   {comm.name}
                 </option>
               ))}
             </select>
-            <small style={{ color: "#666" }}>Hold Ctrl/Cmd to select multiple</small>
-          </div>
-        )}
-
-        {adminLevel === "junior" && adminCategory === "community" && (
-          <div>
-            <label style={{ display: "block", marginBottom: "0.5rem" }}>Assigned Communities:</label>
-            <select 
-              multiple
-              value={selectedCommunityIds}
-              onChange={(e) => setSelectedCommunityIds(Array.from(e.target.selectedOptions, option => option.value))}
-              style={{ width: "100%", padding: "0.5rem", minHeight: "100px" }}
-            >
-              {communities?.map((comm: any) => (
-                <option key={comm.id} value={comm.id}>
-                  {comm.name}
-                </option>
-              ))}
-            </select>
-            <small style={{ color: "#666" }}>Hold Ctrl/Cmd to select multiple</small>
+            <small style={{ color: "#666" }}>Hold Ctrl/Cmd to select multiple. Leave empty to assign later.</small>
           </div>
         )}
 

@@ -154,8 +154,11 @@ export const createUser = mutation({
             throw new Error("Store admins must have at least one assigned storage location");
           }
         }
-        // ✅ Community admins can be created without assigned communities - they can be assigned later
-        // ✅ Finance and Message admins don't require any location or community assignments
+        
+        // Explicitly allow community admins to be created without assignments
+        if (args.adminCategory === "community") {
+          // No validation required for assignedCommunityIds
+        }
         
         // Validate that all location IDs exist and are active (when provided)
         if (args.allowedStorageLocationIds && args.allowedStorageLocationIds.length > 0) {

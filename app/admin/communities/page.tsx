@@ -367,12 +367,13 @@ export default function CommunitiesPage() {
                   setMessage({ type: "error", text: "Community name is required" });
                   return;
                 }
-                if (!formData.assignAdminId) {
+                if (!formData.assignAdminId || !formData.assignAdminId.trim()) {
                   setMessage({ type: "error", text: "You must assign a junior community admin" });
                   return;
                 }
                 setLoading(true);
                 try {
+                  const trimmedAdminId = formData.assignAdminId.trim();
                   await createCommunity({
                     adminId: userId,
                     name: formData.name,
@@ -381,7 +382,7 @@ export default function CommunitiesPage() {
                     geoLocked: !formData.isGlobal,
                     regionKey: formData.regionKey || undefined,
                     communityType: formData.communityType,
-                    assignAdminId: formData.assignAdminId as Id<"users">,
+                    assignAdminId: trimmedAdminId ? (trimmedAdminId as Id<"users">) : undefined,
                   });
                   setMessage({ type: "success", text: "Community created successfully!" });
                   setFormData({

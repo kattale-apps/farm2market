@@ -165,6 +165,11 @@ export default function AdminRoleManagementPage() {
       return;
     }
 
+    if (!createData.adminCategory) {
+      setCreateMessage({ type: "error", text: "Admin category is required" });
+      return;
+    }
+
     setIsCreating(true);
     try {
       await createUser({
@@ -172,9 +177,9 @@ export default function AdminRoleManagementPage() {
         role: "admin",
         adminLevel: "junior",
         adminCategory: createData.adminCategory || undefined,
-        assignedCommunityIds: createData.assignedCommunityIds.map(
+        assignedCommunityIds: createData.assignedCommunityIds.length > 0 ? createData.assignedCommunityIds.map(
           (id) => id as Id<"communities">
-        ),
+        ) : undefined,
         creatorAdminId: userId,
       });
 
@@ -373,7 +378,7 @@ export default function AdminRoleManagementPage() {
                 {createData.adminCategory === "community" && (
                   <div style={{ gridColumn: isMobile ? "1" : "1 / 3" }}>
                     <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
-                      Assign Communities (Optional)
+                      Assign Communities (Optional) - Can be assigned later
                     </label>
                     <select
                       multiple

@@ -154,11 +154,7 @@ export const createUser = mutation({
             throw new Error("Store admins must have at least one assigned storage location");
           }
         }
-        if (args.adminCategory === "community") {
-          if (!args.assignedCommunityIds || args.assignedCommunityIds.length === 0) {
-            throw new Error("Community admins must have at least one assigned community");
-          }
-        }
+        // Community admins can be created without assigned communities - they can be assigned later
         
         // Validate that all location IDs exist and are active (when provided)
         if (args.allowedStorageLocationIds && args.allowedStorageLocationIds.length > 0) {

@@ -41,7 +41,7 @@ export default function FarmerCommunitiesPage() {
   const [selectedCommunityId, setSelectedCommunityId] = useState<Id<"communities"> | null>(null);
   const agroFreshCommunityId = process.env.NEXT_PUBLIC_AGROFRESH_COMMUNITY_ID;
   const bioFarmCommunityId = "ms72de3njrrc9k43cf9h3yq70181ncp0";
-  const deiAgroCommunityId = "ms7d11zfqswjbcvqer43pdzf6x80aate";
+  const deiAgroCommunityId = "ms7b1qga2n0kwjvczv3n1dqwwx809p81";
   const communities = useQuery(api.communities.getActiveCommunities, userId ? { userId } : "skip");
   const myDrafts = useQuery(api.farmValidation.getMyDrafts, userId ? { farmerId: userId } : "skip");
   const latestForm = useQuery(api.farmValidation.getLatestFormForFarmer, userId ? { farmerId: userId } : "skip");

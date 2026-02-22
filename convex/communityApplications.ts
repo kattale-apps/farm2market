@@ -5,7 +5,7 @@ import { Id } from "./_generated/dataModel";
 
 // Community constants for sync operations
 const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
-const DEIGRO_COMMUNITY_ID = "ms7d11zfqswjbcvqer43pdzf6x80aate";
+const DEIGRO_COMMUNITY_ID = "ms7b1qga2n0kwjvczv3n1dqwwx809p81";
 
 const COMMUNITY_NAME = "AGROFRESH UG";
 const KNOWN_AGROFRESH_ID = "ms7d11zfqswjbcvqer43pdzf6x80aate";

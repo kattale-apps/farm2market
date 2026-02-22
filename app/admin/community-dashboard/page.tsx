@@ -486,7 +486,9 @@ export default function CommunityDashboardPage() {
               <div
                 key={communityId}
                 style={{
-                  background: "#fff",
+                  background: `linear-gradient(rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.96)), url('${getCommunityLogo(communityId)}')`,
+                  backgroundRepeat: "repeat",
+                  backgroundSize: "auto",
                   borderRadius: "12px",
                   boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
                   marginBottom: "2rem",
@@ -497,11 +499,7 @@ export default function CommunityDashboardPage() {
                 <div
                   style={{
                     padding: "1.5rem",
-                    background: `linear-gradient(135deg, rgba(245, 245, 245, 0.95) 0%, rgba(232, 245, 233, 0.95) 100%), url('${getCommunityLogo(communityId)}')`,
-                    backgroundSize: "cover, 200px 200px",
-                    backgroundPosition: "center, center",
-                    backgroundRepeat: "no-repeat",
-                    backgroundBlendMode: "overlay",
+                    background: "linear-gradient(135deg, #f5f5f5 0%, #e8f5e9 100%)",
                     borderBottom: "2px solid #e0e0e0",
                   }}
                 >

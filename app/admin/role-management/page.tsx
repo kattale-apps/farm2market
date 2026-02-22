@@ -397,11 +397,108 @@ export default function AdminRoleManagementPage() {
                     <option value="message">Message Admin</option>
                     <option value="finance">Finance Admin</option>
                   </select>
-                  <small style={{ color: "#666", marginTop: "0.25rem", display: "block" }}>
-                    Community and location assignments can be managed from the admin list
-                  </small>
                 </div>
               </div>
+
+              {/* Communities - Only show for Community Admins */}
+              {createData.adminCategory === "community" && (
+                <div style={{ marginBottom: "1.5rem" }}>
+                  <label
+                    style={{
+                      display: "block",
+                      marginBottom: "0.75rem",
+                      fontWeight: "600",
+                      color: "#333",
+                      fontSize: "0.95rem",
+                    }}
+                  >
+                    Assign Communities (Optional)
+                  </label>
+                  {communities && communities.length > 0 ? (
+                    <div style={{
+                      display: "grid",
+                      gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(250px, 1fr))",
+                      gap: "0.75rem",
+                    }}>
+                      {communities.map((community) => (
+                        <div
+                          key={community.id}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            padding: "0.75rem",
+                            background: "#f9f9f9",
+                            border: "1px solid #e0e0e0",
+                            borderRadius: "8px",
+                            cursor: "pointer",
+                            transition: "all 0.2s",
+                          }}
+                          onClick={() => {
+                            const assigned = createData.assignedCommunityIds;
+                            const isSelected = assigned.includes(community.id.toString());
+                            setCreateData({
+                              ...createData,
+                              assignedCommunityIds: isSelected
+                                ? assigned.filter((id) => id !== community.id.toString())
+                                : [...assigned, community.id.toString()],
+                            });
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = "#f0f7ff";
+                            e.currentTarget.style.borderColor = "#2196f3";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = "#f9f9f9";
+                            e.currentTarget.style.borderColor = "#e0e0e0";
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={createData.assignedCommunityIds.includes(community.id.toString())}
+                            onChange={() => {}} // Handled by parent click
+                            style={{
+                              width: "18px",
+                              height: "18px",
+                              marginRight: "0.75rem",
+                              cursor: "pointer",
+                            }}
+                          />
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: "600", color: "#1a1a1a", fontSize: "0.9rem" }}>
+                              {community.name}
+                            </div>
+                            <div style={{ fontSize: "0.75rem", color: "#999", fontFamily: "monospace" }}>
+                              {community.id}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{
+                      padding: "1rem",
+                      background: "#fafafa",
+                      borderRadius: "8px",
+                      color: "#999",
+                      fontSize: "0.9rem",
+                    }}>
+                      No communities available
+                    </div>
+                  )}
+                  {createData.assignedCommunityIds.length > 0 && (
+                    <div style={{
+                      marginTop: "0.75rem",
+                      padding: "0.75rem",
+                      background: "#e8f5e9",
+                      borderRadius: "6px",
+                      fontSize: "0.85rem",
+                      color: "#2e7d32",
+                    }}>
+                      <strong>{createData.assignedCommunityIds.length}</strong> community/communities will be assigned
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Buttons */}
               <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
@@ -550,7 +647,26 @@ export default function AdminRoleManagementPage() {
                             Communities:
                           </span>
                           <div style={{ color: "#1a1a1a", marginTop: "0.25rem" }}>
-                            {admin.assignedCommunityIds.length} assigned
+                            {admin.assignedCommunityIds.map((communityId) => {
+                              const community = communities?.find((c) => c.id.toString() === (typeof communityId === 'string' ? communityId : communityId.toString()));
+                              return (
+                                <div
+                                  key={communityId}
+                                  style={{
+                                    padding: "0.5rem",
+                                    marginTop: "0.5rem",
+                                    background: "#e3f2fd",
+                                    borderRadius: "4px",
+                                    fontSize: "0.8rem",
+                                  }}
+                                >
+                                  <strong>{community?.name || "Unknown Community"}</strong>
+                                  <div style={{ fontSize: "0.7rem", color: "#666", marginTop: "0.25rem", fontFamily: "monospace" }}>
+                                    ID: {communityId}
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       ) : null}
@@ -713,7 +829,10 @@ export default function AdminRoleManagementPage() {
                         </td>
                         <td style={{ padding: "0.75rem", fontSize: "0.9rem" }}>
                           {admin.assignedCommunityIds?.length
-                            ? `${admin.assignedCommunityIds.length} assigned`
+                            ? admin.assignedCommunityIds.map((communityId) => {
+                                const community = communities?.find((c) => c.id.toString() === (typeof communityId === 'string' ? communityId : communityId.toString()));
+                                return community?.name || "Unknown";
+                              }).join(", ")
                             : "-"}
                         </td>
                         <td
@@ -862,41 +981,101 @@ export default function AdminRoleManagementPage() {
                 <label
                   style={{
                     display: "block",
-                    marginBottom: "0.5rem",
+                    marginBottom: "0.75rem",
                     fontWeight: "600",
                     color: "#333",
-                    fontSize: "0.9rem",
+                    fontSize: "0.95rem",
                   }}
                 >
-                  Assigned Community IDs (comma-separated)
+                  Assign Communities
                 </label>
-                <textarea
-                  value={editData?.assignedCommunityIds.join(",") ?? ""}
-                  onChange={(e) =>
-                    setEditData({
-                      ...(editData || {
-                        adminLevel: "",
-                        adminCategory: "",
-                        assignedCommunityIds: [],
-                      }),
-                      assignedCommunityIds: e.target.value
-                        .split(",")
-                        .map((id) => id.trim())
-                        .filter(Boolean),
-                    })
-                  }
-                  style={{
-                    width: "100%",
-                    padding: "0.6rem",
-                    borderRadius: "6px",
-                    border: "1px solid #ccc",
+                {communities && communities.length > 0 ? (
+                  <div style={{
+                    display: "grid",
+                    gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(250px, 1fr))",
+                    gap: "0.75rem",
+                  }}>
+                    {communities.map((community) => (
+                      <div
+                        key={community.id}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          padding: "0.75rem",
+                          background: "#f9f9f9",
+                          border: "1px solid #e0e0e0",
+                          borderRadius: "8px",
+                          cursor: "pointer",
+                          transition: "all 0.2s",
+                        }}
+                        onClick={() => {
+                          const assigned = editData?.assignedCommunityIds ?? [];
+                          const isSelected = assigned.includes(community.id.toString());
+                          setEditData({
+                            ...(editData || {
+                              adminLevel: "",
+                              adminCategory: "",
+                              assignedCommunityIds: [],
+                            }),
+                            assignedCommunityIds: isSelected
+                              ? assigned.filter((id) => id !== community.id.toString())
+                              : [...assigned, community.id.toString()],
+                          });
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = "#f0f7ff";
+                          e.currentTarget.style.borderColor = "#2196f3";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = "#f9f9f9";
+                          e.currentTarget.style.borderColor = "#e0e0e0";
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={editData?.assignedCommunityIds?.includes(community.id.toString()) ?? false}
+                          onChange={() => {}} // Handled by parent click
+                          style={{
+                            width: "18px",
+                            height: "18px",
+                            marginRight: "0.75rem",
+                            cursor: "pointer",
+                          }}
+                        />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: "600", color: "#1a1a1a", fontSize: "0.9rem" }}>
+                            {community.name}
+                          </div>
+                          <div style={{ fontSize: "0.75rem", color: "#999", fontFamily: "monospace" }}>
+                            {community.id}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{
+                    padding: "1rem",
+                    background: "#fafafa",
+                    borderRadius: "8px",
+                    color: "#999",
                     fontSize: "0.9rem",
-                    fontFamily: "monospace",
-                    minHeight: "80px",
-                    boxSizing: "border-box",
-                  }}
-                  placeholder="Enter community IDs separated by commas"
-                />
+                  }}>
+                    No communities available
+                  </div>
+                )}
+                {editData?.assignedCommunityIds && editData.assignedCommunityIds.length > 0 && (
+                  <div style={{
+                    marginTop: "0.75rem",
+                    padding: "0.75rem",
+                    background: "#e8f5e9",
+                    borderRadius: "6px",
+                    fontSize: "0.85rem",
+                    color: "#2e7d32",
+                  }}>
+                    <strong>{editData.assignedCommunityIds.length}</strong> community/communities assigned
+                  </div>
+                )}
               </div>
 
               {/* Buttons */}

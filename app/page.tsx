@@ -166,13 +166,17 @@ export default function Home() {
               download
               style={{
                 display: "inline-block",
-                padding: "0.5rem 1rem",
+                padding: "0.6rem 1.2rem",
                 background: "#111827",
                 color: "white",
                 textDecoration: "none",
                 borderRadius: "6px",
-                fontSize: isMobile ? "0.85rem" : "0.9rem",
+                fontSize: "0.9rem",
                 fontWeight: "700",
+                minWidth: "130px",
+                textAlign: "center",
+                height: "auto",
+                lineHeight: "1.5",
                 transition: "background 0.3s"
               }}
               onMouseEnter={(e) => e.currentTarget.style.background = "#0f172a"}
@@ -184,13 +188,17 @@ export default function Home() {
               href="/contact"
               style={{
                 display: "inline-block",
-                padding: "0.5rem 1rem",
+                padding: "0.6rem 1.2rem",
                 background: "#2e7d32",
                 color: "white",
                 textDecoration: "none",
                 borderRadius: "6px",
-                fontSize: isMobile ? "0.85rem" : "0.9rem",
-                fontWeight: "600",
+                fontSize: "0.9rem",
+                fontWeight: "700",
+                minWidth: "130px",
+                textAlign: "center",
+                height: "auto",
+                lineHeight: "1.5",
                 transition: "background 0.3s"
               }}
               onMouseEnter={(e) => e.currentTarget.style.background = "#1b5e20"}
@@ -202,14 +210,18 @@ export default function Home() {
               href="/privacy-policy"
               style={{
                 display: "inline-block",
-                padding: "0.5rem 1rem",
+                padding: "0.6rem 1.2rem",
                 background: "transparent",
                 color: "#2e7d32",
                 textDecoration: "none",
                 borderRadius: "6px",
-                fontSize: isMobile ? "0.85rem" : "0.9rem",
-                fontWeight: "600",
+                fontSize: "0.9rem",
+                fontWeight: "700",
                 border: "1px solid #2e7d32",
+                minWidth: "130px",
+                textAlign: "center",
+                height: "auto",
+                lineHeight: "1.5",
                 transition: "background 0.3s"
               }}
               onMouseEnter={(e) => {
@@ -232,14 +244,18 @@ export default function Home() {
                 }
                 style={{
                   display: "inline-block",
-                  padding: "0.5rem 1rem",
+                  padding: "0.6rem 1.2rem",
                   background: "#1976d2",
                   color: "#ffffff",
                   textDecoration: "none",
                   borderRadius: "6px",
-                  fontSize: isMobile ? "0.85rem" : "0.9rem",
+                  fontSize: "0.9rem",
                   fontWeight: "700",
                   border: "1px solid #1565c0",
+                  minWidth: "130px",
+                  textAlign: "center",
+                  height: "auto",
+                  lineHeight: "1.5",
                   transition: "background 0.3s"
                 }}
                 onMouseEnter={(e) => {
@@ -346,16 +362,19 @@ export default function Home() {
               router.push("/login");
             }}
             style={{
-              padding: "clamp(0.6rem, 2vw, 0.75rem) clamp(1rem, 3vw, 1.5rem)",
+              padding: "0.6rem 1.2rem",
               background: "#dc3545",
               border: "none",
               borderRadius: "6px",
               cursor: "pointer",
-              fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)",
-              fontWeight: "600",
+              fontSize: "0.9rem",
+              fontWeight: "700",
               color: "#fff",
-              width: isMobile ? "100%" : "auto",
-              minWidth: "120px",
+              display: "inline-block",
+              minWidth: "130px",
+              textAlign: "center",
+              height: "auto",
+              lineHeight: "1.5",
               boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
               transition: "background 0.2s"
             }}

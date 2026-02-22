@@ -176,3 +176,112 @@ export const updateFarmerProfile = mutation({
     };
   },
 });
+
+/**
+ * Backfill location text fields for existing farmers
+ * Populates districtText and subCountyText from districtId/subcountyId references
+ * This enables proper export of location data for communities
+ * 
+ * Only callable by super admins
+ */
+export const backfillLocationText = mutation({
+  args: {
+    adminId: v.id("users"),
+    communityId: v.optional(v.id("communities")), // If provided, only backfill farmers in this community
+  },
+  handler: async (ctx, args) => {
+    // Verify super admin
+    const admin = await ctx.db.get(args.adminId);
+    if (!admin || admin.role !== "admin") {
+      throw new Error("Not authorized - admin role required");
+    }
+
+    const isSuperAdmin = admin.adminLevel === "super" || admin.adminLevel === undefined;
+    if (!isSuperAdmin) {
+      throw new Error("Not authorized - super admin required");
+    }
+
+    let farmersToBackfill: any[] = [];
+
+    if (args.communityId) {
+      // Backfill only farmers in specified community
+      const members = await ctx.db
+        .query("communityMembers")
+        .withIndex("by_community", (q: any) => q.eq("communityId", args.communityId))
+        .collect();
+
+      farmersToBackfill = await Promise.all(
+        members.map((m: any) => ctx.db.get(m.userId))
+      );
+    } else {
+      // Backfill all farmers
+      farmersToBackfill = await ctx.db
+        .query("users")
+        .withIndex("by_role", (q: any) => q.eq("role", "farmer"))
+        .collect();
+    }
+
+    // Filter to only farmers with districtId/subcountyId but missing text fields
+    const farmersNeedingBackfill = farmersToBackfill.filter(
+      (f: any) =>
+        f &&
+        f.districtId &&
+        (f.subcountyId || f.parishId) &&
+        (!f.districtText || !f.subCountyText)
+    );
+
+    if (farmersNeedingBackfill.length === 0) {
+      return {
+        success: true,
+        backfilledCount: 0,
+        message: "No farmers needed backfill",
+      };
+    }
+
+    // Backfill each farmer
+    let backfilledCount = 0;
+    const errors: string[] = [];
+
+    for (const farmer of farmersNeedingBackfill) {
+      try {
+        const updates: any = {};
+
+        // Look up district name if districtId exists
+        if (farmer.districtId && !farmer.districtText) {
+          const district = await ctx.db.get(farmer.districtId);
+          if (district?.name) {
+            updates.districtText = district.name;
+          } else {
+            errors.push(`Farmer ${farmer.alias}: Invalid districtId`);
+          }
+        }
+
+        // Look up subcounty name if subcountyId exists
+        if (farmer.subcountyId && !farmer.subCountyText) {
+          const subcounty = await ctx.db.get(farmer.subcountyId);
+          if (subcounty?.name) {
+            updates.subCountyText = subcounty.name;
+          } else {
+            errors.push(`Farmer ${farmer.alias}: Invalid subcountyId`);
+          }
+        }
+
+        // Apply updates if any
+        if (Object.keys(updates).length > 0) {
+          await ctx.db.patch(farmer._id, updates);
+          backfilledCount++;
+        }
+      } catch (err: any) {
+        errors.push(`Farmer ${farmer.alias}: ${err.message}`);
+      }
+    }
+
+    return {
+      success: true,
+      totalNeededBackfill: farmersNeedingBackfill.length,
+      backfilledCount,
+      errors: errors.length > 0 ? errors : undefined,
+      message: `Backfilled ${backfilledCount}/${farmersNeedingBackfill.length} farmers`,
+    };
+  },
+});

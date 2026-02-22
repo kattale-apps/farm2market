@@ -10,6 +10,7 @@ export * from "./farmerOnboarding";
 export * from "./farmerProfile";
 export * from "./farmcoin";
 export * from "./finance";
+export * from "./tempVerifyFarmerData"; // Temporary verification queries
 
 // ✅ Explicit introspection exports
 export {

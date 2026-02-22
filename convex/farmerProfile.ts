@@ -248,7 +248,7 @@ export const backfillLocationText = mutation({
 
         // Look up district name if districtId exists
         if (farmer.districtId && !farmer.districtText) {
-          const district = await ctx.db.get(farmer.districtId);
+          const district = (await ctx.db.get(farmer.districtId)) as any;
           if (district?.name) {
             updates.districtText = district.name;
           } else {
@@ -258,7 +258,7 @@ export const backfillLocationText = mutation({
 
         // Look up subcounty name if subcountyId exists
         if (farmer.subcountyId && !farmer.subCountyText) {
-          const subcounty = await ctx.db.get(farmer.subcountyId);
+          const subcounty = (await ctx.db.get(farmer.subcountyId)) as any;
           if (subcounty?.name) {
             updates.subCountyText = subcounty.name;
           } else {

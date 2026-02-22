@@ -19,6 +19,7 @@
     "@capacitor/core": "^8.0.0",
     "@capacitor/push-notifications": "^8.0.0",
     "@types/bcrypt": "^6.0.0",
+    "@vercel/analytics": "^1.6.1",
     "bcrypt": "^6.0.0",
     "convex": "^1.11.0",
     "jspdf": "^4.0.0",

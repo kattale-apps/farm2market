@@ -647,11 +647,12 @@ export default function AdminRoleManagementPage() {
                             Communities:
                           </span>
                           <div style={{ color: "#1a1a1a", marginTop: "0.25rem" }}>
-                            {admin.assignedCommunityIds.map((communityId) => {
-                              const community = communities?.find((c) => c.id.toString() === (typeof communityId === 'string' ? communityId : communityId.toString()));
+                            {admin.assignedCommunityIds.map((communityId: any) => {
+                              const communityIdStr = String(communityId);
+                              const community = communities?.find((c) => c.id === communityId);
                               return (
                                 <div
-                                  key={communityId}
+                                  key={communityIdStr}
                                   style={{
                                     padding: "0.5rem",
                                     marginTop: "0.5rem",
@@ -662,7 +663,7 @@ export default function AdminRoleManagementPage() {
                                 >
                                   <strong>{community?.name || "Unknown Community"}</strong>
                                   <div style={{ fontSize: "0.7rem", color: "#666", marginTop: "0.25rem", fontFamily: "monospace" }}>
-                                    ID: {communityId}
+                                    ID: {communityIdStr}
                                   </div>
                                 </div>
                               );
@@ -829,8 +830,8 @@ export default function AdminRoleManagementPage() {
                         </td>
                         <td style={{ padding: "0.75rem", fontSize: "0.9rem" }}>
                           {admin.assignedCommunityIds?.length
-                            ? admin.assignedCommunityIds.map((communityId) => {
-                                const community = communities?.find((c) => c.id.toString() === (typeof communityId === 'string' ? communityId : communityId.toString()));
+                            ? admin.assignedCommunityIds.map((communityId: any) => {
+                                const community = communities?.find((c) => c.id === communityId);
                                 return community?.name || "Unknown";
                               }).join(", ")
                             : "-"}

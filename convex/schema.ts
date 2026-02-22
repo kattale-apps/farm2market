@@ -81,6 +81,7 @@ export default defineSchema({
     waterSource: v.optional(v.string()),
     districtText: v.optional(v.string()),
     subCountyText: v.optional(v.string()),
+    parishText: v.optional(v.string()),
     // Trader verification
     isVerifiedTrader: v.optional(v.boolean()),
     verificationStatus: v.optional(v.union(v.literal("pending"), v.literal("verified"), v.literal("rejected"))),

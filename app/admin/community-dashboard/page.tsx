@@ -209,6 +209,7 @@ export default function CommunityDashboardPage() {
         "Region": farmer.region || "",
         "District": farmer.districtText || "",
         "Subcounty": farmer.subCountyText || "",
+        "Parish": farmer.parishText || "",
         "County": farmer.county || "",
         "Village": farmer.village || "",
         "Farm Size (Acres)": farmer.farmSizeAcres ?? "",

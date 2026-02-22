@@ -15,6 +15,17 @@ export default function CommunityDashboardPage() {
   const [userAdminCategory, setUserAdminCategory] = useState<string>("");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Community IDs and logo helpers
+  const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
+  const DEIGRO_COMMUNITY_ID = "ms7b1qga2n0kwjvczv3n1dqwwx809p81";
+
+  const getCommunityLogo = (communityId: string | Id<"communities">) => {
+    const idStr = String(communityId);
+    if (idStr === BIOFARM_COMMUNITY_ID) return "/biofarmlogo.jpeg";
+    if (idStr === DEIGRO_COMMUNITY_ID) return "/deilogo.png";
+    return "/agrofreshlogo.png";
+  };
   const [selectedApplicationId, setSelectedApplicationId] = useState<Id<"communityApplications"> | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [exportCommunityId, setExportCommunityId] = useState<Id<"communities"> | null>(null);
@@ -486,7 +497,11 @@ export default function CommunityDashboardPage() {
                 <div
                   style={{
                     padding: "1.5rem",
-                    background: "linear-gradient(135deg, #f5f5f5 0%, #e8f5e9 100%)",
+                    background: `linear-gradient(135deg, rgba(245, 245, 245, 0.95) 0%, rgba(232, 245, 233, 0.95) 100%), url('${getCommunityLogo(communityId)}')`,
+                    backgroundSize: "cover, 200px 200px",
+                    backgroundPosition: "center, center",
+                    backgroundRepeat: "no-repeat",
+                    backgroundBlendMode: "overlay",
                     borderBottom: "2px solid #e0e0e0",
                   }}
                 >
@@ -513,7 +528,7 @@ export default function CommunityDashboardPage() {
                       }}
                     >
                       <img
-                        src="/agrofreshlogo.png"
+                        src={getCommunityLogo(communityId)}
                         alt={`${community.name} logo`}
                         style={{
                           maxWidth: "100%",

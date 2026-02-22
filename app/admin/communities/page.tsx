@@ -373,7 +373,10 @@ export default function CommunitiesPage() {
                 }
                 setLoading(true);
                 try {
-                  const trimmedAdminId = formData.assignAdminId.trim();
+                  // Only send assignAdminId if it's a valid non-empty string and not 'undefined'
+                  const adminIdValue = formData.assignAdminId?.trim();
+                  const validAdminId = adminIdValue && adminIdValue !== "undefined" ? (adminIdValue as Id<"users">) : undefined;
+                  
                   await createCommunity({
                     adminId: userId,
                     name: formData.name,
@@ -382,7 +385,7 @@ export default function CommunitiesPage() {
                     geoLocked: !formData.isGlobal,
                     regionKey: formData.regionKey || undefined,
                     communityType: formData.communityType,
-                    assignAdminId: trimmedAdminId ? (trimmedAdminId as Id<"users">) : undefined,
+                    ...(validAdminId ? { assignAdminId: validAdminId } : {}),
                   });
                   setMessage({ type: "success", text: "Community created successfully!" });
                   setFormData({

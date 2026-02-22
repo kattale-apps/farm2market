@@ -94,9 +94,6 @@ export default function CommunityDashboardPage() {
   const approveApplication = useMutation(api.communityApplications.approveApplication);
   const rejectApplication = useMutation(api.communityApplications.rejectApplication);
   const revokeMembership = useMutation(api.communityApplications.revokeMembership);
-  
-  // Mutation for backfilling location data
-  const backfillLocationData = useMutation((api.farmerProfile as any).backfillLocationText);
 
   const [pendingPage, setPendingPage] = useState(1);
   const [pendingPageSize, setPendingPageSize] = useState(20);
@@ -231,35 +228,6 @@ export default function CommunityDashboardPage() {
     setMessage(null);
     setExportCommunityId(communityId);
     setExportCommunityName(communityName);
-  };
-
-  const handleBackfillLocationData = async (communityId: Id<"communities">, communityName: string) => {
-    if (!userId) return;
-    setLoading(true);
-    setMessage(null);
-
-    try {
-      const result = await backfillLocationData({
-        adminId: userId,
-        communityId,
-      });
-
-      if (result.success) {
-        setMessage({
-          type: "success",
-          text: `Backfill completed! Updated ${result.backfilledCount}/${result.totalNeededBackfill} farmers for ${communityName}. ${
-            result.errors ? `Errors: ${result.errors.join("; ")}` : ""
-          }`,
-        });
-      }
-    } catch (error: any) {
-      setMessage({
-        type: "error",
-        text: error?.message || "Failed to backfill location data",
-      });
-    } finally {
-      setLoading(false);
-    }
   };
 
   useEffect(() => {
@@ -1105,38 +1073,7 @@ export default function CommunityDashboardPage() {
                       {loading ? "Exporting..." : "Export Members (Excel)"}
                     </button>
 
-                    {/* Backfill Location Data Button (for DEI Agro and BioFarm) */}
-                    {(communityId === DEIGRO_COMMUNITY_ID || communityId === BIOFARM_COMMUNITY_ID) && (
-                      <button
-                        onClick={() => handleBackfillLocationData(communityId as any, community.name)}
-                        disabled={loading}
-                        style={{
-                          padding: "0.75rem 1.5rem",
-                          background: loading ? "#ccc" : "#4CAF50",
-                          color: "#fff",
-                          border: "none",
-                          borderRadius: "8px",
-                          fontSize: "0.95rem",
-                          fontWeight: "600",
-                          cursor: loading ? "not-allowed" : "pointer",
-                          opacity: loading ? 0.6 : 1,
-                          transition: "all 0.3s ease",
-                        }}
-                        onMouseEnter={(e) => {
-                          if (!loading) {
-                            (e.target as HTMLButtonElement).style.background = "#388e3c";
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (!loading) {
-                            (e.target as HTMLButtonElement).style.background = "#4CAF50";
-                          }
-                        }}
-                        title="Backfill missing location text fields (districtText, subCountyText) from farmer profiles"
-                      >
-                        {loading ? "Backfilling..." : "🔄 Backfill Location Data"}
-                      </button>
-                    )}
+
                   </div>
                 </div>
               ) : (

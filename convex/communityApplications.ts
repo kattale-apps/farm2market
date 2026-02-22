@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { verifyAdminRole } from "./auth";
 import { Id } from "./_generated/dataModel";
+import { filterCommunityForms } from "./types/communityForms";
 
 // Community constants for sync operations
 const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
@@ -291,22 +292,20 @@ export const getCommunityMemberExportData = query({
     const forms = await Promise.all(formIds.map((id) => ctx.db.get(id)));
     const farmers = await Promise.all(farmerIds.map((id) => ctx.db.get(id)));
 
-    // ✅ SECURITY: Verify forms belong to this community (future-proofing for custom forms)
-    // Currently only agroFreshUGFarmValidations exists (hardcoded to AGROFRESH_UG)
-    // When community-specific forms are added, this check ensures no cross-community data leaks
-    const formById = new Map(
-      forms
-        .filter(Boolean)
-        .filter((f: any) => {
-          // If form has communityId field, verify it matches (future-ready)
-          if (f.communityId && String(f.communityId) !== String(communityId)) {
-            console.warn(`[EXPORT] Form ${f._id} belongs to different community, excluding from export`);
-            return false;
-          }
-          return true;
-        })
-        .map((f: any) => [f._id, f])
-    );
+    // ✅ SECURITY: Use centralized validation to filter community forms
+    // Imported from convex/types/communityForms.ts for type-safe enforcement
+    // This ensures ALL community form tables have communityId (future-proof)
+    let validForms: any[] = [];
+    try {
+      // Will throw if any form is missing communityId (catches schema violations early)
+      validForms = filterCommunityForms(forms.filter(Boolean), String(communityId), true);
+    } catch (err) {
+      console.error(`[EXPORT] Form validation error:`, err);
+      // Fail-safe: Continue without forms rather than export cross-community data
+      validForms = [];
+    }
+
+    const formById = new Map(validForms.map((f: any) => [f._id, f]));
 
     const farmerById = new Map(farmers.filter(Boolean).map((f: any) => [f._id, f]));
 

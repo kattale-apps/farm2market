@@ -907,6 +907,39 @@ export default defineSchema({
     .index("by_admin", ["adminId"])
     .index("by_community", ["communityId"]),
 
+  // ───────────────────────────────────────────────────────────────────────────────
+  // ⚠️ COMMUNITY FORM TABLES - DATA ISOLATION REQUIRED
+  // ───────────────────────────────────────────────────────────────────────────────
+  //
+  // 🔐 SECURITY RULE: All community-specific form tables MUST have:
+  //    1. communityId: v.id("communities")  ← Links form to specific community
+  //    2. farmerId: v.id("users")           ← Links form to farmer
+  //    3. Indexes on: by_community, by_community_farmer, by_status
+  //
+  // This prevents cross-community data leaks in exports and queries.
+  // When adding a NEW community form table, use this TEMPLATE:
+  //
+  //   newCommunityFormTable: defineTable({
+  //     // ✅ REQUIRED - Data Isolation Fields (ALWAYS ADD THESE)
+  //     communityId: v.id("communities"),
+  //     farmerId: v.id("users"),
+  //     status: v.union(v.literal("DRAFT"), v.literal("SUBMITTED")),
+  //     createdAt: v.number(),
+  //     updatedAt: v.number(),
+  //
+  //     // Your form-specific fields below
+  //     section1: v.optional(v.object({...})),
+  //     section2: v.optional(v.object({...})),
+  //     // ...
+  //   })
+  //     .index("by_community", ["communityId"])
+  //     .index("by_community_farmer", ["communityId", "farmerId"])
+  //     .index("by_status", ["status"]),
+  //
+  // TypeScript & runtime validation in convex/types/communityForms.ts will
+  // automatically catch if you forget communityId.
+  // ───────────────────────────────────────────────────────────────────────────────
+
   agroFreshUGFarmValidations: defineTable({
     farmerId: v.id("users"),
     community: v.literal("AGROFRESH_UG"),

@@ -3,6 +3,10 @@ import { mutation, query } from "./_generated/server";
 import { verifyAdminRole } from "./auth";
 import { Id } from "./_generated/dataModel";
 
+// Community constants for sync operations
+const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
+const DEIGRO_COMMUNITY_ID = "ms7d11zfqswjbcvqer43pdzf6x80aate";
+
 const COMMUNITY_NAME = "AGROFRESH UG";
 const KNOWN_AGROFRESH_ID = "ms7d11zfqswjbcvqer43pdzf6x80aate";
 
@@ -1108,5 +1112,75 @@ export const syncAgroFreshAdmin = mutation({
       return { success: true, message: "Admin synchronized", communityId };
     }
     return { success: true, message: "Already synchronized", communityId };
+  },
+});
+
+/**
+ * Sync admin to BioFarm community
+ * Helper to ensure the admin is correctly assigned to BioFarm community ID in assignedCommunityIds
+ */
+export const syncBioFarmAdmin = mutation({
+  args: { adminId: v.id("users") },
+  handler: async (ctx, { adminId }) => {
+    const adminCheck = await verifyAdminRole({ userId: adminId, db: ctx.db });
+    if (!adminCheck.authorized) {
+      throw new Error("Not authorized");
+    }
+
+    const admin = await ctx.db.get(adminId);
+    if (!admin) throw new Error("Admin not found");
+
+    const community = await ctx.db.get(BIOFARM_COMMUNITY_ID as Id<"communities">);
+    if (!community) throw new Error("BioFarm community not found");
+
+    const isDirectAdmin = community.communityAdminId === adminId;
+    if (!isDirectAdmin) {
+      throw new Error("Forbidden: Only BioFarm's assigned admin can sync");
+    }
+
+    const assigned = (admin as any).assignedCommunityIds || [];
+
+    if (!assigned.some((id: any) => String(id) === BIOFARM_COMMUNITY_ID)) {
+      await ctx.db.patch(adminId, {
+        assignedCommunityIds: [...assigned, BIOFARM_COMMUNITY_ID as Id<"communities">],
+      });
+      return { success: true, message: "BioFarm admin synchronized", communityId: BIOFARM_COMMUNITY_ID };
+    }
+    return { success: true, message: "Already synchronized", communityId: BIOFARM_COMMUNITY_ID };
+  },
+});
+
+/**
+ * Sync admin to Dei Agro community
+ * Helper to ensure the admin is correctly assigned to Dei Agro community ID in assignedCommunityIds
+ */
+export const syncDeiAgroAdmin = mutation({
+  args: { adminId: v.id("users") },
+  handler: async (ctx, { adminId }) => {
+    const adminCheck = await verifyAdminRole({ userId: adminId, db: ctx.db });
+    if (!adminCheck.authorized) {
+      throw new Error("Not authorized");
+    }
+
+    const admin = await ctx.db.get(adminId);
+    if (!admin) throw new Error("Admin not found");
+
+    const community = await ctx.db.get(DEIGRO_COMMUNITY_ID as Id<"communities">);
+    if (!community) throw new Error("Dei Agro community not found");
+
+    const isDirectAdmin = community.communityAdminId === adminId;
+    if (!isDirectAdmin) {
+      throw new Error("Forbidden: Only Dei Agro's assigned admin can sync");
+    }
+
+    const assigned = (admin as any).assignedCommunityIds || [];
+
+    if (!assigned.some((id: any) => String(id) === DEIGRO_COMMUNITY_ID)) {
+      await ctx.db.patch(adminId, {
+        assignedCommunityIds: [...assigned, DEIGRO_COMMUNITY_ID as Id<"communities">],
+      });
+      return { success: true, message: "Dei Agro admin synchronized", communityId: DEIGRO_COMMUNITY_ID };
+    }
+    return { success: true, message: "Already synchronized", communityId: DEIGRO_COMMUNITY_ID };
   },
 });

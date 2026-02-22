@@ -221,13 +221,13 @@ export const backfillLocationText = mutation({
         .collect();
     }
 
-    // Filter to only farmers with districtId/subcountyId but missing text fields
+    // Filter to only farmers with locationIds but missing text fields
     const farmersNeedingBackfill = farmersToBackfill.filter(
       (f: any) =>
         f &&
         f.districtId &&
         (f.subcountyId || f.parishId) &&
-        (!f.districtText || !f.subCountyText)
+        (!f.districtText || !f.subCountyText || (f.parishId && !f.parishText))
     );
 
     if (farmersNeedingBackfill.length === 0) {
@@ -263,6 +263,16 @@ export const backfillLocationText = mutation({
             updates.subCountyText = subcounty.name;
           } else {
             errors.push(`Farmer ${farmer.alias}: Invalid subcountyId`);
+          }
+        }
+
+        // Look up parish name if parishId exists
+        if (farmer.parishId && !farmer.parishText) {
+          const parish = (await ctx.db.get(farmer.parishId)) as any;
+          if (parish?.name) {
+            updates.parishText = parish.name;
+          } else {
+            errors.push(`Farmer ${farmer.alias}: Invalid parishId`);
           }
         }
 

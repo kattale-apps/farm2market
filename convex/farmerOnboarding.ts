@@ -127,11 +127,13 @@ export const completeOnboarding = mutation({
       throw new Error("Farm size must be greater than 0");
     }
 
-    // Get district and subcounty names for export prefill
+    // Get location names for export prefill
     const districtRecord = await ctx.db.get(args.districtId);
     const subcountyRecord = await ctx.db.get(args.subcountyId);
+    const parishRecord = await ctx.db.get(args.parishId);
     const districtText = districtRecord?.name;
     const subCountyText = subcountyRecord?.name;
+    const parishText = parishRecord?.name;
 
     // Generate UTID for onboarding completion
     const utid = generateUTID(farmer.role);
@@ -144,6 +146,7 @@ export const completeOnboarding = mutation({
       subcountyId: args.subcountyId,
       subCountyText, // Store text name for export/prefill
       parishId: args.parishId,
+      parishText, // Store parish name for export
       farmSizeAcres,
       farmSizeRaw: args.farmSizeInput,
       onboardingCompleted: true,

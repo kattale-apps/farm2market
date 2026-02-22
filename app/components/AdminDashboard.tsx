@@ -371,7 +371,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
         District: section1.districtSubCounty ?? section1.district ?? farmer.districtText ?? "",
         County: section1.county ?? farmer.county ?? "",
         Subcounty: section1.subCounty ?? section1.districtSubCounty ?? farmer.subCountyText ?? "",
-        Parish: section1.parish ?? "",
+        Parish: section1.parish ?? farmer.parishText ?? "",
         Village: section1.village ?? farmer.village ?? "",
         WaterSource: section1.waterSource ?? farmer.waterSource ?? "",
         farmerFullName: section1.farmerFullName ?? "",

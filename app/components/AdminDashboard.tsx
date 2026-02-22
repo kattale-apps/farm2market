@@ -129,6 +129,26 @@ const utilityCardStyle: React.CSSProperties = {
 
 export function AdminDashboard({ userId }: AdminDashboardProps) {
   const adminId = userId as Id<"users">;
+  
+  // Community IDs and logo helpers
+  const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
+  const DEIGRO_COMMUNITY_ID = "ms7d11zfqswjbcvqer43pdzf6x80aate";
+
+  const getCommunityLogo = (communityId: string | Id<"communities">) => {
+    const idStr = String(communityId);
+    if (idStr === BIOFARM_COMMUNITY_ID) return "/biofarmlogo.jpeg";
+    if (idStr === DEIGRO_COMMUNITY_ID) return "/deilogo.png";
+    return "/agrofreshlogo.png";
+  };
+
+  const isBioFarmCommunity = (communityId: string | Id<"communities">) => {
+    return String(communityId) === BIOFARM_COMMUNITY_ID;
+  };
+
+  const isDeiAgroCommunity = (communityId: string | Id<"communities">) => {
+    return String(communityId) === DEIGRO_COMMUNITY_ID;
+  };
+
   const [selectedCommunityId, setSelectedCommunityId] =
     useState<Id<"communities"> | null>(null);
   const [memberStatusFilter, setMemberStatusFilter] = useState<
@@ -1096,7 +1116,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           </div>
           <div style={farmCardStyle}>
             <div style={glassPanelStyle}>
-              {/* Community summary card with logo */}
+              {/* Community summary card with logo - DYNAMIC */}
               <div
                 style={{
                   marginBottom: "1.25rem",
@@ -1111,52 +1131,60 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                   flexWrap: "wrap",
                 }}
               >
-                <div
-                  style={{
-                    width: 72,
-                    height: 72,
-                    borderRadius: 18,
-                    background: "#ffffff",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    boxShadow: "0 4px 10px rgba(0,0,0,0.16)",
-                    overflow: "hidden",
-                    flexShrink: 0,
-                  }}
-                >
-                  <img
-                    src="/agrofreshlogo.png"
-                    alt="AGROFRESH UG logo"
-                    style={{
-                      maxWidth: "100%",
-                      maxHeight: "100%",
-                      objectFit: "contain",
-                    }}
-                  />
-                </div>
-                <div>
-                  <div
-                    style={{
-                      fontSize: "1.1rem",
-                      fontWeight: 800,
-                      letterSpacing: "-0.03em",
-                      textTransform: "uppercase",
-                      color: "#1b5e20",
-                    }}
-                  >
-                    AGROFRESH UG
+                {communities && communities.length > 0 ? (
+                  <>
+                    <div
+                      style={{
+                        width: 72,
+                        height: 72,
+                        borderRadius: 18,
+                        background: "#ffffff",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        boxShadow: "0 4px 10px rgba(0,0,0,0.16)",
+                        overflow: "hidden",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <img
+                        src={getCommunityLogo(communities[0]._id || communities[0].id)}
+                        alt={`${communities[0].name} logo`}
+                        style={{
+                          maxWidth: "100%",
+                          maxHeight: "100%",
+                          objectFit: "contain",
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <div
+                        style={{
+                          fontSize: "1.1rem",
+                          fontWeight: 800,
+                          letterSpacing: "-0.03em",
+                          textTransform: "uppercase",
+                          color: "#1b5e20",
+                        }}
+                      >
+                        {communities[0].name}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "0.9rem",
+                          color: "#374151",
+                          maxWidth: "28rem",
+                        }}
+                      >
+                        {communities[0].description}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ color: "#999" }}>
+                    No communities assigned
                   </div>
-                  <div
-                    style={{
-                      fontSize: "0.9rem",
-                      color: "#374151",
-                      maxWidth: "28rem",
-                    }}
-                  >
-                    AGROFRESH UG is a nationwide community of Farmers.
-                  </div>
-                </div>
+                )}
               </div>
 
               {selectedCommunityId ? (

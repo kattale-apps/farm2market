@@ -175,67 +175,17 @@ export default function CommunityDashboardPage() {
       : "skip"
   );
 
-  const flattenForExport = (
-    value: any,
-    prefix = "",
-    result: Record<string, any> = {}
-  ) => {
-    if (value === null || value === undefined) return result;
-    if (Array.isArray(value)) {
-      if (value.length === 0) {
-        result[prefix] = "";
-        return result;
-      }
-      const hasObjects = value.some((item) => typeof item === "object" && item !== null);
-      result[prefix] = hasObjects ? JSON.stringify(value) : value.join(", ");
-      return result;
-    }
-    if (typeof value === "object") {
-      Object.entries(value).forEach(([key, child]) => {
-        const nextPrefix = prefix ? `${prefix}.${key}` : key;
-        flattenForExport(child, nextPrefix, result);
-      });
-      return result;
-    }
-    result[prefix] = value;
-    return result;
-  };
-
+  // ✅ OPTION A: Conservative Export - Profile Only + Metadata
+  // Excludes all nested form fields to prevent data leaks across communities
+  // Ensures clean, auditable row/column counts for future billing
   const buildExportRows = useCallback((items: any[]) => {
-    const flatten = (
-      value: any,
-      prefix = "",
-      result: Record<string, any> = {}
-    ) => {
-      if (value === null || value === undefined) return result;
-      if (Array.isArray(value)) {
-        if (value.length === 0) {
-          result[prefix] = "";
-          return result;
-        }
-        const hasObjects = value.some((item) => typeof item === "object" && item !== null);
-        result[prefix] = hasObjects ? JSON.stringify(value) : value.join(", ");
-        return result;
-      }
-      if (typeof value === "object") {
-        Object.entries(value).forEach(([key, child]) => {
-          const nextPrefix = prefix ? `${prefix}.${key}` : key;
-          flatten(child, nextPrefix, result);
-        });
-        return result;
-      }
-      result[prefix] = value;
-      return result;
-    };
-
     return items.map((item: any) => {
       const farmer = item.farmer || {};
       const application = item.application || {};
-      const form = item.form || {};
 
-      const base = {
+      // ✅ SECURITY: Only export application metadata (no form fields)
+      const applicationMetadata = {
         "Application Id": application?._id || "",
-        "Form Id": form?._id || application?.formId || "",
         "Application Status": item.status || application?.status || "",
         "Application Created": application?.createdAt
           ? new Date(application.createdAt).toLocaleString()
@@ -243,29 +193,30 @@ export default function CommunityDashboardPage() {
         "Application Updated": application?.updatedAt
           ? new Date(application.updatedAt).toLocaleString()
           : "",
-        "Membership Joined": item.joinedAt ? new Date(item.joinedAt).toLocaleString() : "",
+        "Member Since": item.joinedAt ? new Date(item.joinedAt).toLocaleString() : "",
       };
 
-      const profile = {
-        "Profile Alias": farmer.alias || "",
-        "Profile Email": farmer.email || "",
-        "Profile Phone": farmer.phoneNumber || "",
-        "Profile Region": farmer.region || "",
-        "Profile District": farmer.districtText || "",
-        "Profile Subcounty": farmer.subCountyText || "",
-        "Profile County": farmer.county || "",
-        "Profile Village": farmer.village || "",
-        "Profile Farm Size (Acres)": farmer.farmSizeAcres ?? "",
-        "Profile Farm Size Raw": farmer.farmSizeRaw ? JSON.stringify(farmer.farmSizeRaw) : "",
-        "Profile Water Source": farmer.waterSource || "",
+      // ✅ SECURITY: Only export profile onboarding fields from farmer record
+      // These are the standard fields every farmer fills during registration
+      // No community-specific form fields are included
+      const profileOnboarding = {
+        "Farmer Name": farmer.alias || "",
+        "Email": farmer.email || "",
+        "Phone": farmer.phoneNumber || "",
+        "Region": farmer.region || "",
+        "District": farmer.districtText || "",
+        "Subcounty": farmer.subCountyText || "",
+        "County": farmer.county || "",
+        "Village": farmer.village || "",
+        "Farm Size (Acres)": farmer.farmSizeAcres ?? "",
+        "Water Source": farmer.waterSource || "",
       };
 
-      const flattenedForm = flatten(form, "form");
-
+      // Combine: metadata first, then profile fields
+      // Clean, flat structure - easy to audit for billing
       return {
-        ...base,
-        ...profile,
-        ...flattenedForm,
+        ...applicationMetadata,
+        ...profileOnboarding,
       };
     });
   }, []);

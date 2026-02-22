@@ -291,7 +291,23 @@ export const getCommunityMemberExportData = query({
     const forms = await Promise.all(formIds.map((id) => ctx.db.get(id)));
     const farmers = await Promise.all(farmerIds.map((id) => ctx.db.get(id)));
 
-    const formById = new Map(forms.filter(Boolean).map((f: any) => [f._id, f]));
+    // ✅ SECURITY: Verify forms belong to this community (future-proofing for custom forms)
+    // Currently only agroFreshUGFarmValidations exists (hardcoded to AGROFRESH_UG)
+    // When community-specific forms are added, this check ensures no cross-community data leaks
+    const formById = new Map(
+      forms
+        .filter(Boolean)
+        .filter((f: any) => {
+          // If form has communityId field, verify it matches (future-ready)
+          if (f.communityId && String(f.communityId) !== String(communityId)) {
+            console.warn(`[EXPORT] Form ${f._id} belongs to different community, excluding from export`);
+            return false;
+          }
+          return true;
+        })
+        .map((f: any) => [f._id, f])
+    );
+
     const farmerById = new Map(farmers.filter(Boolean).map((f: any) => [f._id, f]));
 
     return filtered.map((m: any) => {

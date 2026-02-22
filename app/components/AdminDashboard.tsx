@@ -136,12 +136,6 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
 
   const getCommunityLogo = (communityId: string | Id<"communities">) => {
     const idStr = String(communityId);
-    console.log("🔍 getCommunityLogo - ID:", {
-      raw: communityId,
-      stringified: idStr,
-      bioMatch: idStr === BIOFARM_COMMUNITY_ID,
-      deiMatch: idStr === DEIGRO_COMMUNITY_ID,
-    });
     if (idStr === BIOFARM_COMMUNITY_ID) return "/biofarmlogo.jpeg";
     if (idStr === DEIGRO_COMMUNITY_ID) return "/deilogo.png";
     return "/agrofreshlogo.png";
@@ -1139,11 +1133,6 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
               >
                 {communities && communities.length > 0 ? (
                   <>
-                    {console.log("📦 Communities data:", communities.map(c => ({
-                      name: c.name,
-                      _id: c._id,
-                      id: c.id,
-                    })))}
                     <div
                       style={{
                         width: 72,

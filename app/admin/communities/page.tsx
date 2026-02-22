@@ -78,7 +78,7 @@ export default function CommunitiesPage() {
     const admin = allAdmins.find((a: any) =>
       a.role === "admin" &&
       Array.isArray(a.assignedCommunityIds) &&
-      a.assignedCommunityIds.some((id: any) => id === communityId)
+      a.assignedCommunityIds.some((id: any) => String(id) === String(communityId))
     );
     return admin ? { alias: admin.alias, email: admin.email } : { alias: "Unassigned", email: "" };
   };
@@ -479,6 +479,9 @@ export default function CommunitiesPage() {
               <h3 style={{ margin: "0 0 0.5rem 0", color: "#1a1a1a" }}>
                 {community.name}
               </h3>
+              <p style={{ margin: "0.25rem 0 0.5rem 0", color: "#999", fontSize: "0.8rem", fontFamily: "monospace" }}>
+                ID: {community.id}
+              </p>
               {community.description && (
                 <p style={{ margin: "0.5rem 0", color: "#666", fontSize: "0.95rem" }}>
                   {community.description}

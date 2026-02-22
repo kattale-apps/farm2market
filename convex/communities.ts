@@ -111,7 +111,85 @@ export const deleteCommunity = mutation({
     communityId: v.id("communities"),
   },
   handler: async (ctx, args) => {
-    // ...
+    // Verify admin is superadmin
+    const adminCheck = await verifyAdminRole({
+      userId: args.adminId,
+      db: ctx.db,
+    });
+    if (!adminCheck.authorized) {
+      throw new Error("Only admins can delete communities");
+    }
+
+    const adminUser = await ctx.db.get(args.adminId);
+    if (!adminUser || adminUser.role !== "admin") {
+      throw new Error("User is not an admin");
+    }
+
+    // Only SuperAdmin can delete communities
+    if (!isSuperAdmin(adminUser)) {
+      throw new Error("Only SuperAdmin can delete communities");
+    }
+
+    // Verify community exists
+    const community = await ctx.db.get(args.communityId);
+    if (!community) {
+      throw new Error("Community not found");
+    }
+
+    // Delete all community memberships
+    const memberships = await ctx.db
+      .query("communityMemberships")
+      .withIndex("by_community", (q) => q.eq("communityId", args.communityId))
+      .collect();
+    for (const membership of memberships) {
+      await ctx.db.delete(membership._id);
+    }
+
+    // Delete all community applications
+    const applications = await ctx.db
+      .query("communityApplications")
+      .withIndex("by_community", (q) => q.eq("communityId", args.communityId))
+      .collect();
+    for (const application of applications) {
+      await ctx.db.delete(application._id);
+    }
+
+    // Delete all community listing tags
+    const tags = await ctx.db
+      .query("communityListingTags")
+      .withIndex("by_community", (q) => q.eq("communityId", args.communityId))
+      .collect();
+    for (const tag of tags) {
+      await ctx.db.delete(tag._id);
+    }
+
+    // Remove community from all admin's assignedCommunityIds
+    const admins = await ctx.db
+      .query("users")
+      .withIndex("by_role", (q) => q.eq("role", "admin"))
+      .collect();
+    for (const admin of admins) {
+      const assigned = (admin as any).assignedCommunityIds || [];
+      const updated = assigned.filter((id: any) => String(id) !== String(args.communityId));
+      if (updated.length !== assigned.length) {
+        await ctx.db.patch(admin._id, {
+          assignedCommunityIds: updated,
+        });
+      }
+    }
+
+    // Delete the community itself
+    await ctx.db.delete(args.communityId);
+
+    // Log admin action
+    await ctx.db.insert("adminActions", {
+      adminId: args.adminId,
+      action: "delete_community",
+      details: `Deleted community: ${community.name}`,
+      timestamp: getUgandaTime(),
+    });
+
+    return { success: true };
   },
 });
 

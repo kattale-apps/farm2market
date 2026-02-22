@@ -40,6 +40,8 @@ export default function FarmerCommunitiesPage() {
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [selectedCommunityId, setSelectedCommunityId] = useState<Id<"communities"> | null>(null);
   const agroFreshCommunityId = process.env.NEXT_PUBLIC_AGROFRESH_COMMUNITY_ID;
+  const bioFarmCommunityId = "ms72de3njrrc9k43cf9h3yq70181ncp0";
+  const deiAgroCommunityId = "ms7d11zfqswjbcvqer43pdzf6x80aate";
   const communities = useQuery(api.communities.getActiveCommunities, userId ? { userId } : "skip");
   const myDrafts = useQuery(api.farmValidation.getMyDrafts, userId ? { farmerId: userId } : "skip");
   const latestForm = useQuery(api.farmValidation.getLatestFormForFarmer, userId ? { farmerId: userId } : "skip");
@@ -84,6 +86,22 @@ export default function FarmerCommunitiesPage() {
     const nameKey = normalizeCommunityKey(community.name);
     const descriptionKey = normalizeCommunityKey(community.description);
     return nameKey.includes("agrofresh") || descriptionKey.includes("agrofresh");
+  };
+
+  const isBioFarmCommunity = (community: { id: Id<"communities">; name?: string; description?: string }) => {
+    return community.id === bioFarmCommunityId;
+  };
+
+  const isDeiAgroCommunity = (community: { id: Id<"communities">; name?: string; description?: string }) => {
+    return community.id === deiAgroCommunityId;
+  };
+
+  const getCommunityLogo = (community: { id: Id<"communities">; name?: string; description?: string; logoPath?: string }) => {
+    if (community.logoPath) return community.logoPath;
+    if (isAgroFreshCommunity(community)) return "/agrofreshlogo.png";
+    if (isBioFarmCommunity(community)) return "/biofarmlogo.jpeg";
+    if (isDeiAgroCommunity(community)) return "/deilogo.png";
+    return undefined;
   };
 
   const getCommunityStatus = (community: { id: Id<"communities">; name?: string; description?: string; isMember?: boolean }) => {
@@ -272,8 +290,7 @@ export default function FarmerCommunitiesPage() {
             className="farmer-communities-grid"
           >
             {communities.map((community) => {
-              const headerLogo =
-                community.logoPath || (isAgroFreshCommunity(community) ? "/agrofreshlogo.png" : "");
+              const headerLogo = getCommunityLogo(community);
 
               return (
                 <div
@@ -372,12 +389,12 @@ export default function FarmerCommunitiesPage() {
                     flex: "1",
                     position: "relative",
                   }}>
-                    {(community.logoPath || isAgroFreshCommunity(community)) && (
+                    {headerLogo && (
                       <div
                         style={{
                           position: "absolute",
                           inset: 0,
-                          backgroundImage: `url('${community.logoPath || "/agrofreshlogo.png"}')`,
+                          backgroundImage: `url('${headerLogo}')`,
                           backgroundSize: "cover",
                           backgroundPosition: "center",
                           backgroundRepeat: "no-repeat",

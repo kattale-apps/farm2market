@@ -233,6 +233,7 @@ export const backfillLocationText = mutation({
     if (farmersNeedingBackfill.length === 0) {
       return {
         success: true,
+        totalNeededBackfill: 0,
         backfilledCount: 0,
         message: "No farmers needed backfill",
       };

@@ -175,6 +175,8 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   const [notificationMessage, setNotificationMessage] = useState("");
   const [notificationReason, setNotificationReason] = useState("");
   const [notificationStatus, setNotificationStatus] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [backfillLoading, setBackfillLoading] = useState(false);
+  const [backfillMessage, setBackfillMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const paginationPreferences = useQuery(
     (api as any).userSettings.getPaginationPreferences,
@@ -289,7 +291,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   const sendRoleBasedNotification = useMutation(api.notifications.sendRoleBasedNotification);
   const sendNotificationToSelectedUsers = useMutation(api.notifications.sendNotificationToSelectedUsers);
   const notifyCommunity = useMutation(api.communities.notifyCommunity);
-
+  const backfillLocationData = useMutation((api.farmerProfile as any).backfillLocationText);
 
   const logExport = useMutation(api.communities.logExport);
 
@@ -520,6 +522,30 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
       message: adminMessageText.trim(),
     });
     setAdminMessageText("");
+  };
+
+  const handleBackfillLocationData = async (communityId?: string) => {
+    try {
+      setBackfillLoading(true);
+      setBackfillMessage(null);
+      const result = await backfillLocationData({
+        adminId,
+        communityId: communityId ?? undefined,
+      });
+      setBackfillMessage({
+        type: "success",
+        text: `Successfully backfilled location data for ${result.backfilledCount} out of ${result.totalNeededBackfill} farmers${communityId ? " in selected community" : ""}. ${
+          result.errors && result.errors.length > 0 ? `${result.errors.length} errors occurred.` : "No errors."
+        }`,
+      });
+    } catch (error: any) {
+      setBackfillMessage({
+        type: "error",
+        text: error?.message || "Failed to backfill location data",
+      });
+    } finally {
+      setBackfillLoading(false);
+    }
   };
 
   const messagesPanel = (
@@ -861,6 +887,23 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
             SuperAdmin Dashboard
           </h2>
           
+          {/* Backfill Status Message */}
+          {backfillMessage && (
+            <div
+              style={{
+                padding: "0.75rem 1rem",
+                borderRadius: 8,
+                background: backfillMessage.type === "success" ? "#e8f5e9" : "#ffebee",
+                color: backfillMessage.type === "success" ? "#2e7d32" : "#c62828",
+                border: `1px solid ${backfillMessage.type === "success" ? "#c8e6c9" : "#ffcdd2"}`,
+                marginBottom: "1rem",
+                fontSize: "0.95rem",
+              }}
+            >
+              {backfillMessage.text}
+            </div>
+          )}
+          
           {/* Admin Action Cards */}
           <div
             style={{
@@ -1036,6 +1079,49 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                 </div>
               </div>
             </a>
+
+            {/* Data Maintenance - Backfill Location Data */}
+            <button
+              type="button"
+              onClick={() => handleBackfillLocationData()}
+              disabled={backfillLoading}
+              style={{
+                ...utilityCardStyle,
+                cursor: backfillLoading ? "not-allowed" : "pointer",
+                transition: "transform 0.2s, box-shadow 0.2s",
+                background: backfillLoading
+                  ? "linear-gradient(135deg, #bbb 0%, #999 100%)"
+                  : "linear-gradient(135deg, #4CAF50 0%, #2e7d32 100%)",
+                color: "#fff",
+                minHeight: "140px",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "space-between",
+                textAlign: "left",
+                border: "none",
+                opacity: backfillLoading ? 0.7 : 1,
+              }}
+              onMouseEnter={(e) => {
+                if (!backfillLoading) {
+                  e.currentTarget.style.transform = "translateY(-4px)";
+                  e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.15)";
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.06)";
+              }}
+            >
+              <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>🔄</div>
+              <div>
+                <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>
+                  {backfillLoading ? "Backfilling..." : "Backfill Location Data"}
+                </h3>
+                <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.95 }}>
+                  {backfillLoading ? "Processing farmers..." : "Populate location names for all farmers"}
+                </p>
+              </div>
+            </button>
 
             {/* Messages & Notifications */}
             <button

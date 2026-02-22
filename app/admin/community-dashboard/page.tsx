@@ -1105,13 +1105,13 @@ export default function CommunityDashboardPage() {
                     </button>
 
                     {/* Backfill Location Data Button (for DEI Agro and BioFarm) */}
-                    {true && (
+                    {(communityId === DEIGRO_COMMUNITY_ID || communityId === BIOFARM_COMMUNITY_ID) && (
                       <button
                         onClick={() => handleBackfillLocationData(communityId as any, community.name)}
                         disabled={loading}
                         style={{
                           padding: "0.75rem 1.5rem",
-                          background: loading ? "#ccc" : "#FF9800",
+                          background: loading ? "#ccc" : "#4CAF50",
                           color: "#fff",
                           border: "none",
                           borderRadius: "8px",
@@ -1123,15 +1123,15 @@ export default function CommunityDashboardPage() {
                         }}
                         onMouseEnter={(e) => {
                           if (!loading) {
-                            (e.target as HTMLButtonElement).style.background = "#F57C00";
+                            (e.target as HTMLButtonElement).style.background = "#388e3c";
                           }
                         }}
                         onMouseLeave={(e) => {
                           if (!loading) {
-                            (e.target as HTMLButtonElement).style.background = "#FF9800";
+                            (e.target as HTMLButtonElement).style.background = "#4CAF50";
                           }
                         }}
-                        title={`Backfill location data (ID: ${String(communityId).substring(0,10)}... | Type: ${typeof communityId})`}
+                        title="Backfill missing location text fields (districtText, subCountyText) from farmer profiles"
                       >
                         {loading ? "Backfilling..." : "🔄 Backfill Location Data"}
                       </button>

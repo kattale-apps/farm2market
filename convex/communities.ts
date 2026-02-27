@@ -25,6 +25,49 @@ function isCommunityAdmin(user: { adminLevel?: "super" | "junior"; adminCategory
          (user.adminLevel === undefined && user.adminCategory === "community");
 }
 
+/**
+ * Generate a unique alias for a user
+ */
+function generateAlias(role: string): string {
+  const prefix = role.substring(0, 3); // "farmer" -> "far", "trader" -> "tra"
+  const random = Math.random().toString(36).substring(2, 8);
+  return `${prefix}_${random}`;
+}
+
+/**
+ * Simple hash function for passwords (NOT production-grade)
+ * ⚠️ PILOT ONLY - Use proper password hashing in production
+ */
+function simpleHash(password: string): string {
+  // Simple hash for pilot - NOT secure, just for testing
+  let hash = 0;
+  for (let i = 0; i < password.length; i++) {
+    const char = password.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return hash.toString(36);
+}
+
+/**
+ * Normalize phone number to a consistent format
+ * Removes spaces, dashes, and ensures it starts with country code
+ */
+function normalizePhoneNumber(phone: string): string {
+  // Remove all non-digit characters
+  let cleaned = phone.replace(/\D/g, '');
+  
+  // If it doesn't start with country code, assume Uganda (+256)
+  // Uganda format: +256 7XX XXX XXX (remove leading 0 from local format)
+  if (cleaned.startsWith('0')) {
+    cleaned = '256' + cleaned.substring(1);
+  } else if (!cleaned.startsWith('256')) {
+    cleaned = '256' + cleaned;
+  }
+  
+  return cleaned;
+}
+
 const normalizeName = (name: string) => name.trim().toLowerCase();
 
 const REGION_GROUPS: { key: string; districts: string[] }[] = [
@@ -333,6 +376,334 @@ export const getActiveCommunities = query({
     );
 
     return communitiesWithMembership;
+  },
+});
+
+/**
+ * Get community by QR slug (public query for QR code join flows)
+ * Returns community details needed for QR join functionality
+ */
+export const getCommunityByQrSlug = query({
+  args: {
+    slug: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const community = await ctx.db
+      .query("communities")
+      .filter((q) => q.eq(q.field("qrSlug"), args.slug))
+      .first();
+
+    if (!community) {
+      return null;
+    }
+
+    return {
+      _id: community._id,
+      name: community.name,
+      qrLogoUrl: (community as any).qrLogoUrl,
+      qrEnabled: (community as any).qrEnabled,
+    };
+  },
+});
+
+/**
+ * Search communities by name or description
+ * Filters by user's access level (geo-locked vs global)
+ */
+export const searchCommunities = query({
+  args: {
+    query: v.string(),
+    userId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, args) => {
+    if (!args.query.trim()) {
+      return [];
+    }
+
+    const searchTerm = args.query.trim().toLowerCase();
+    const allCommunities = await ctx.db.query("communities").collect();
+
+    // Get user's location if provided
+    let userDistrictId: Id<"districts"> | undefined;
+    let userSubcountyId: Id<"subcounties"> | undefined;
+    let userParishId: Id<"parishes"> | undefined;
+    let isAdmin = false;
+    let userRecord: { role?: string; adminLevel?: "super" | "junior"; adminCategory?: string } | null = null;
+
+    if (args.userId) {
+      const user = await ctx.db.get(args.userId);
+      if (user) {
+        userRecord = user;
+        isAdmin = user.role === "admin";
+        userDistrictId = user.districtId;
+        userSubcountyId = user.subcountyId;
+        userParishId = user.parishId;
+      }
+    }
+
+    // Filter and search communities
+    const results = allCommunities.filter((c) => {
+      // Check access
+      if (!isAdmin) {
+        if (!c.isGlobal && c.geoLocked) {
+          const hasAccess =
+            (userDistrictId && c.districtIds?.includes(userDistrictId)) ||
+            (userSubcountyId && c.subcountyIds?.includes(userSubcountyId)) ||
+            (userParishId && c.parishIds?.includes(userParishId));
+          if (!hasAccess) return false;
+        }
+      }
+
+      // Search in name and description
+      const name = c.name.toLowerCase();
+      const description = (c.description || "").toLowerCase();
+      return name.includes(searchTerm) || description.includes(searchTerm);
+    });
+
+    // Return limited results with essential info
+    return results.slice(0, 10).map((c) => ({
+      _id: c._id,
+      name: c.name,
+      description: c.description,
+      logoPath: (c as any).logoPath,
+      isGlobal: c.isGlobal,
+    }));
+  },
+});
+
+/**
+ * Search QR-enabled communities by name
+ * Searches communities with QR feature enabled, ordered by priority and name
+ */
+export const searchQrCommunities = query({
+  args: {
+    searchText: v.string(),
+  },
+  handler: async (ctx, args) => {
+    if (!args.searchText.trim()) {
+      return [];
+    }
+
+    const searchTerm = args.searchText.trim().toLowerCase();
+    
+    // Get all communities with QR enabled
+    const communities = await ctx.db
+      .query("communities")
+      .filter((q) => q.eq(q.field("qrEnabled"), true))
+      .collect();
+
+    // Filter by name match and sort
+    const results = communities
+      .filter((c) => c.name.toLowerCase().includes(searchTerm))
+      .sort((a, b) => {
+        // Sort by searchPriorityScore descending
+        const scoreA = a.searchPriorityScore ?? 0;
+        const scoreB = b.searchPriorityScore ?? 0;
+        if (scoreB !== scoreA) {
+          return scoreB - scoreA;
+        }
+        // Then by name ascending
+        return a.name.localeCompare(b.name);
+      })
+      .slice(0, 10)
+      .map((c) => ({
+        _id: c._id,
+        name: c.name,
+        description: c.description,
+        logoPath: (c as any).logoPath,
+        qrSlug: c.qrSlug,
+        qrLogoUrl: c.qrLogoUrl,
+      }));
+
+    return results;
+  },
+});
+
+/**
+ * Get user's joined communities
+ */
+export const getUserCommunities = query({
+  args: {
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    // Get all community memberships for the user
+    const memberships = await ctx.db
+      .query("communityMemberships")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+
+    // Get community details for each membership
+    const communities = await Promise.all(
+      memberships.map(async (m) => {
+        const community = await ctx.db.get(m.communityId);
+        if (!community) return null;
+        return {
+          _id: community._id,
+          name: community.name,
+          description: community.description,
+          logoPath: (community as any).logoPath,
+          isGlobal: community.isGlobal,
+          joinedAt: m.joinedAt,
+        };
+      })
+    );
+
+    return communities.filter((c) => c !== null);
+  },
+});
+
+/**
+ * Join community via QR code
+ * 
+ * Flow:
+ * 1. Find community by slug
+ * 2. If user does not exist → create with email/phone
+ * 3. Set accountScope = "community_only"
+ * 4. Save onboardedViaCommunityId
+ * 5. Join user to community
+ */
+export const joinCommunityByQr = mutation({
+  args: {
+    slug: v.string(),
+    email: v.optional(v.string()),
+    phoneNumber: v.optional(v.string()),
+    password: v.optional(v.string()), // Required if user is new
+    userId: v.optional(v.id("users")), // If existing user is joining
+  },
+  handler: async (ctx, args) => {
+    // 1. Find community by slug
+    const community = await ctx.db
+      .query("communities")
+      .filter((q) => q.eq(q.field("qrSlug"), args.slug))
+      .first();
+
+    if (!community) {
+      throw new Error("Community not found");
+    }
+
+    if (!(community as any).qrEnabled) {
+      throw new Error("QR code feature is not enabled for this community");
+    }
+
+    let userId: Id<"users"> | undefined;
+
+    if (args.userId) {
+      // Existing user joining
+      userId = args.userId;
+      const user = await ctx.db.get(userId);
+      if (!user) {
+        throw new Error("User not found");
+      }
+    } else {
+      // Need to create or find user
+      if (!args.email && !args.phoneNumber) {
+        throw new Error("Either email or phone number is required");
+      }
+
+      // Try to find existing user by email or phone
+      let user = null;
+      if (args.email) {
+        const normalizedEmail = args.email.trim().toLowerCase();
+        user = await ctx.db
+          .query("users")
+          .withIndex("by_email", (q) => q.eq("email", normalizedEmail))
+          .first();
+      }
+
+      if (!user && args.phoneNumber) {
+        const normalizedPhone = normalizePhoneNumber(args.phoneNumber);
+        user = await ctx.db
+          .query("users")
+          .withIndex("by_phone", (q) => q.eq("phoneNumber", normalizedPhone))
+          .first();
+      }
+
+      if (user) {
+        // User exists, use their ID
+        userId = user._id;
+      } else {
+        // Create new user
+        if (!args.password) {
+          throw new Error("Password is required to create a new account");
+        }
+
+        const normalizedEmail = args.email ? args.email.trim().toLowerCase() : undefined;
+        const normalizedPhone = args.phoneNumber ? normalizePhoneNumber(args.phoneNumber) : undefined;
+
+        // Generate alias
+        const alias = generateAlias("farmer");
+
+        // Hash password (using simple hash for now - in production should use bcrypt)
+        const passwordHash = simpleHash(args.password.trim());
+
+        userId = await ctx.db.insert("users", {
+          email: normalizedEmail,
+          phoneNumber: normalizedPhone,
+          role: "farmer",
+          alias,
+          state: "active",
+          createdAt: getUgandaTime(),
+          lastActiveAt: getUgandaTime(),
+          passwordHash,
+          accountScope: "community_only",
+          onboardedViaCommunityId: community._id,
+        });
+      }
+    }
+
+    // 3-4. Update user with community scope fields
+    const user = await ctx.db.get(userId);
+    if (!user) {
+      throw new Error("Failed to get user after creation");
+    }
+
+    // Update accountScope and onboardedViaCommunityId if not already set
+    const updates: any = {};
+    if (!user.accountScope) {
+      updates.accountScope = "community_only";
+    }
+    if (!user.onboardedViaCommunityId) {
+      updates.onboardedViaCommunityId = community._id;
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await ctx.db.patch(userId, updates);
+    }
+
+    // 5. Join user to community
+    // Check if already a member
+    const existing = await ctx.db
+      .query("communityMemberships")
+      .withIndex("by_community_user", (q) =>
+        q.eq("communityId", community._id).eq("userId", userId)
+      )
+      .first();
+
+    if (existing) {
+      return {
+        success: true,
+        userId,
+        communityId: community._id,
+        message: "Already a member of this community",
+        alreadyMember: true,
+      };
+    }
+
+    // Add to community memberships
+    await ctx.db.insert("communityMemberships", {
+      communityId: community._id,
+      userId,
+      joinedAt: getUgandaTime(),
+    });
+
+    return {
+      success: true,
+      userId,
+      communityId: community._id,
+      message: "Successfully joined community",
+      alreadyMember: false,
+    };
   },
 });
 
@@ -988,5 +1359,327 @@ export const setUserServiceLevel = mutation({
     });
 
     return { success: true, utid };
+  },
+});
+
+/**
+ * Get communities with billing configuration for SuperAdmin dashboard
+ * Returns all communities with their pricing and quota settings (no usage totals)
+ * For SuperAdmin community management dashboard
+ */
+export const getCommunitiesWithUsageForSuperadmin = query({
+  args: {
+    adminId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    // Verify user is SuperAdmin
+    const adminUser = await ctx.db.get(args.adminId);
+    if (!adminUser || adminUser.role !== "admin") {
+      throw new Error("Only admins can view community billing info");
+    }
+
+    if (!isSuperAdmin(adminUser)) {
+      throw new Error("Only SuperAdmin can view community billing info");
+    }
+
+    // Get all communities and their monetisation settings
+    const communities = await ctx.db.query("communities").collect();
+
+    // Fetch monetisation settings for each community
+    const communitiesWithPricing = await Promise.all(
+      communities.map(async (c) => {
+        const settings = await ctx.db
+          .query("communityMonetisationSettings")
+          .withIndex("by_community", (q) => q.eq("communityId", c._id))
+          .first();
+
+        return {
+          _id: c._id,
+          name: c.name,
+          slug: c.qrSlug || c.name.toLowerCase().replace(/\s+/g, "-"),
+          logo: c.logoPath,
+          juniorAdminFreeMonthlyImageQuota: settings?.juniorAdminFreeMonthlyImageQuota || 0,
+          juniorAdminImagePrice: settings?.juniorAdminImagePrice || 0,
+          memberImageMessagePrice: settings?.memberImageMessagePrice || 0,
+        };
+      })
+    );
+
+    return communitiesWithPricing;
+  },
+});
+
+/**
+ * Update community pricing and quota settings (SuperAdmin only)
+ */
+export const updateCommunityPricing = mutation({
+  args: {
+    communityId: v.id("communities"),
+    juniorAdminFreeMonthlyImageQuota: v.number(),
+    juniorAdminImagePrice: v.number(),
+    memberImageMessagePrice: v.number(),
+    adminId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    // Get admin user
+    const adminUser = await ctx.db.get(args.adminId);
+    if (!adminUser) {
+      throw new Error("Admin user not found");
+    }
+
+    // Verify admin is superadmin
+    const isAdmin = adminUser.role === "admin";
+    if (!isAdmin || !isSuperAdmin(adminUser)) {
+      throw new Error("Only SuperAdmin can update community pricing");
+    }
+
+    // Get community
+    const community = await ctx.db.get(args.communityId);
+    if (!community) {
+      throw new Error("Community not found");
+    }
+
+    // Check if monetisation settings exist
+    const existing = await ctx.db
+      .query("communityMonetisationSettings")
+      .withIndex("by_community", (q) => q.eq("communityId", args.communityId))
+      .first();
+
+    const now = Date.now();
+
+    if (existing) {
+      // Update existing settings
+      await ctx.db.patch(existing._id, {
+        juniorAdminFreeMonthlyImageQuota: args.juniorAdminFreeMonthlyImageQuota,
+        juniorAdminImagePrice: args.juniorAdminImagePrice,
+        memberImageMessagePrice: args.memberImageMessagePrice,
+        updatedAt: now,
+        updatedBy: args.adminId,
+      });
+    } else {
+      // Create new settings
+      await ctx.db.insert("communityMonetisationSettings", {
+        communityId: args.communityId,
+        juniorAdminFreeMonthlyImageQuota: args.juniorAdminFreeMonthlyImageQuota,
+        juniorAdminImagePrice: args.juniorAdminImagePrice,
+        memberImageMessagePrice: args.memberImageMessagePrice,
+        createdAt: now,
+        updatedAt: now,
+        updatedBy: args.adminId,
+      });
+    }
+
+    return {
+      _id: args.communityId,
+      juniorAdminFreeMonthlyImageQuota: args.juniorAdminFreeMonthlyImageQuota,
+      juniorAdminImagePrice: args.juniorAdminImagePrice,
+      memberImageMessagePrice: args.memberImageMessagePrice,
+    };
+  },
+});
+
+/**
+ * Create a QR Community
+ * Simplified version for WhatsApp-style communities with QR code access
+ */
+export const createQRCommunity = mutation({
+  args: {
+    adminId: v.id("users"),
+    name: v.string(),
+    slug: v.string(),
+    logoUrl: v.optional(v.string()),
+    juniorAdminFreeMonthlyImageQuota: v.number(),
+    juniorAdminImagePrice: v.number(),
+    memberImageMessagePrice: v.number(),
+  },
+  handler: async (ctx, args) => {
+    // Verify admin role
+    const adminCheck = await verifyAdminRole({
+      userId: args.adminId,
+      db: ctx.db,
+    });
+    if (!adminCheck.authorized) {
+      throw new Error("Only admins can create communities");
+    }
+
+    const adminUser = await ctx.db.get(args.adminId);
+    if (!adminUser || adminUser.role !== "admin") {
+      throw new Error("User is not an admin");
+    }
+
+    // Only SuperAdmin can create communities
+    if (!isSuperAdmin(adminUser)) {
+      throw new Error("Only SuperAdmin can create QR communities");
+    }
+
+    // Validate inputs
+    if (!args.name.trim()) {
+      throw new Error("Community name cannot be empty");
+    }
+
+    if (!args.slug.trim()) {
+      throw new Error("Community slug cannot be empty");
+    }
+
+    // Check if slug is unique
+    const existingCommunity = await ctx.db
+      .query("communities")
+      .filter((q) => q.eq(q.field("qrSlug"), args.slug))
+      .first();
+
+    if (existingCommunity) {
+      throw new Error("Community slug already exists. Please choose a different one.");
+    }
+
+    // Validate pricing
+    if (args.juniorAdminFreeMonthlyImageQuota < 0 || args.juniorAdminImagePrice < 0 || args.memberImageMessagePrice < 0) {
+      throw new Error("Prices and quotas cannot be negative");
+    }
+
+    // Generate UTID
+    const utid = generateUTID(adminUser.role);
+
+    // Create QR community
+    const communityId = await ctx.db.insert("communities", {
+      name: args.name.trim(),
+      logoPath: args.logoUrl?.trim(),
+      createdBy: args.adminId,
+      createdAt: getUgandaTime(),
+      utid,
+      isGlobal: true, // QR communities are global by default
+      geoLocked: false,
+      communityType: "farmer",
+      // QR-specific fields
+      qrEnabled: true,
+      qrSlug: args.slug,
+      qrLogoUrl: args.logoUrl?.trim(),
+      searchPriorityScore: 100, // High priority for QR communities
+    });
+
+    // Create monetisation settings for the new community
+    await ctx.db.insert("communityMonetisationSettings", {
+      communityId: communityId,
+      juniorAdminFreeMonthlyImageQuota: args.juniorAdminFreeMonthlyImageQuota,
+      juniorAdminImagePrice: args.juniorAdminImagePrice,
+      memberImageMessagePrice: args.memberImageMessagePrice,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      updatedBy: args.adminId,
+    });
+
+    // Log admin action
+    await ctx.db.insert("adminActions", {
+      adminId: args.adminId,
+      action: "create_qr_community",
+      details: `Created QR community: ${args.name} (slug: ${args.slug}, UTID: ${utid})`,
+      timestamp: getUgandaTime(),
+    });
+
+    return {
+      _id: communityId,
+      name: args.name,
+      slug: args.slug,
+      logoUrl: args.logoUrl,
+      qrEnabled: true,
+    };
+  },
+});
+
+/**
+ * Get navigation context for the current user
+ * 
+ * Returns all information needed for role-based routing:
+ * - Communities user is admin of
+ * - Communities user is a member of
+ * - Default community to navigate to
+ * - Whether user is superadmin
+ */
+export const getMyNavigationContext = query({
+  args: {},
+  handler: async (ctx) => {
+    const adminUser = await ctx.auth.getUserIdentity();
+    if (!adminUser) {
+      throw new Error("Not authenticated");
+    }
+
+    // Get user from DB - try email first, fall back to any user lookup
+    let user = null;
+    
+    // Try to find by email if available
+    if (adminUser.email) {
+      user = await ctx.db
+        .query("users")
+        .withIndex("by_email", (q) => q.eq("email", adminUser.email))
+        .first();
+    }
+    
+    // If not found and we have phone, try that
+    if (!user && adminUser.phoneNumber) {
+      user = await ctx.db
+        .query("users")
+        .withIndex("by_phone", (q) => q.eq("phoneNumber", adminUser.phoneNumber))
+        .first();
+    }
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    const userId = user._id;
+    const isSuperadmin = user.adminLevel === "super" || user.adminLevel === undefined;
+
+    // Get communities where user is the admin
+    const adminCommunities = await ctx.db
+      .query("communities")
+      .filter((q) => q.eq(q.field("communityAdminId"), userId))
+      .collect();
+
+    const adminCommunitiesMapped = adminCommunities.map((c) => ({
+      communityId: c._id,
+      name: c.name,
+      slug: c.qrSlug || c.name.toLowerCase().replace(/\s+/g, "-"),
+      logo: c.qrLogoUrl || c.logoPath,
+    }));
+
+    // Get communities where user is a member
+    const membershipRecords = await ctx.db
+      .query("communityMemberships")
+      .filter((q) => q.eq(q.field("userId"), userId))
+      .collect();
+
+    const joinedCommunities = [];
+    for (const membership of membershipRecords) {
+      const community = await ctx.db.get(membership.communityId);
+      if (community) {
+        joinedCommunities.push({
+          communityId: community._id,
+          name: community.name,
+          slug: community.qrSlug || community.name.toLowerCase().replace(/\s+/g, "-"),
+          logo: community.qrLogoUrl || community.logoPath,
+        });
+      }
+    }
+
+    // Determine default community ID
+    let defaultCommunityId: Id<"communities"> | null = null;
+    if (adminCommunitiesMapped.length > 0) {
+      // Prefer admin communities
+      const firstAdminCommunity = adminCommunities.find((c) =>
+        adminCommunitiesMapped.some((mc) => mc.communityId === c._id)
+      );
+      defaultCommunityId = firstAdminCommunity?._id || null;
+    } else if (joinedCommunities.length > 0) {
+      // Fall back to first joined community
+      const firstJoinedMembership = membershipRecords[0];
+      defaultCommunityId = firstJoinedMembership?.communityId || null;
+    }
+
+    return {
+      userId,
+      isSuperadmin,
+      adminCommunities: adminCommunitiesMapped,
+      joinedCommunities,
+      defaultCommunityId,
+    };
   },
 });

@@ -177,3 +177,54 @@ export const updateFarmerProfile = mutation({
   },
 });
 
+/**
+ * Get active supply chain roles
+ */
+export const getActiveSupplyChainRoles = query({
+  args: {},
+  handler: async (ctx) => {
+    return [
+      { id: "producer", label: "Producer" },
+      { id: "aggregator", label: "Aggregator" },
+      { id: "processor", label: "Processor" },
+      { id: "exporter", label: "Exporter" },
+      { id: "transporter", label: "Transporter" },
+      { id: "trader", label: "Trader" },
+      { id: "other", label: "Other (please specify)" },
+    ];
+  },
+});
+
+/**
+ * Update user's supply chain role
+ */
+export const updateSupplyChainRole = mutation({
+  args: {
+    userId: v.id("users"),
+    supplyChainRole: v.optional(v.string()),
+    supplyChainRoleOther: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    const updates: any = {};
+
+    if (args.supplyChainRole !== undefined) {
+      updates.supplyChainRole = args.supplyChainRole;
+    }
+
+    if (args.supplyChainRoleOther !== undefined) {
+      updates.supplyChainRoleOther = args.supplyChainRoleOther;
+    }
+
+    await ctx.db.patch(args.userId, updates);
+
+    return {
+      success: true,
+      message: "Supply chain role updated successfully",
+    };
+  },
+});

@@ -2,9 +2,11 @@
 
 import React, { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
+import { useRouter } from "next/navigation";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import * as XLSX from "xlsx";
+import QRCode from "qrcode";
 import { formatUgandaDate } from "../utils/dateUtils";
 import { NotificationMailbox } from "./NotificationMailbox";
 const REGION_GROUPS: { label: string; districts: string[] }[] = [
@@ -128,6 +130,7 @@ const utilityCardStyle: React.CSSProperties = {
 /* ───────────────── Component ───────────────── */
 
 export function AdminDashboard({ userId }: AdminDashboardProps) {
+  const router = useRouter();
   const adminId = userId as Id<"users">;
   
   // Community IDs and logo helpers
@@ -163,6 +166,18 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   const [communityMembersPage, setCommunityMembersPage] = useState(1);
   const [communityMembersPageSize, setCommunityMembersPageSize] = useState(20);
   const [showCommunityManager, setShowCommunityManager] = useState(false);
+  const [showQRCommunityCreation, setShowQRCommunityCreation] = useState(false);
+  const [qrCommunityForm, setQRCommunityForm] = useState({
+    name: "",
+    slug: "",
+    logoFile: null as File | null,
+    logoPreview: "",
+    juniorAdminFreeMonthlyImageQuota: 2,
+    juniorAdminImagePrice: 5000,
+    memberImageMessagePrice: 1000,
+  });
+  const [qrCommunityStatus, setQRCommunityStatus] = useState<{ type: "loading" | "success" | "error"; message: string } | null>(null);
+  const [generatedQRCode, setGeneratedQRCode] = useState<{ qrDataUrl: string; joinLink: string } | null>(null);
   const [selectedMember, setSelectedMember] = useState<any | null>(null);
   const [selectedMessageThread, setSelectedMessageThread] = useState<{ utid: string; otherUserId: Id<"users"> } | null>(null);
   const [adminMessageText, setAdminMessageText] = useState("");
@@ -291,6 +306,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   const notifyCommunity = useMutation(api.communities.notifyCommunity);
 
   const logExport = useMutation(api.communities.logExport);
+  const createQRCommunity = useMutation(api.communities.createQRCommunity);
 
   const notificationRecipients = useQuery(
     api.notifications.getNotificationRecipients,
@@ -970,6 +986,41 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
               </div>
             </button>
 
+            {/* Create QR Community */}
+            <button
+              type="button"
+              onClick={() => router.push("/superadmin/qr-communities/create")}
+              style={{
+                ...utilityCardStyle,
+                cursor: "pointer",
+                transition: "transform 0.2s, box-shadow 0.2s",
+                background: "linear-gradient(135deg, #00bcd4 0%, #0097a7 100%)",
+                color: "#fff",
+                minHeight: "140px",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "space-between",
+                textAlign: "left",
+                border: "none",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = "translateY(-4px)";
+                e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.15)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.06)";
+              }}
+            >
+              <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>🤖</div>
+              <div>
+                <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Create QR Community</h3>
+                <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.95 }}>
+                  Create new QR-joinable communities
+                </p>
+              </div>
+            </button>
+
             {/* StoreAdmin Audit */}
             <a href="/admin/storeadmin-audit" style={{ textDecoration: "none" }}>
               <div
@@ -1070,6 +1121,189 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                 </p>
               </div>
             </button>
+
+            {/* QR Communities - Usage & Billing */}
+            <a href="/superadmin/usage" style={{ textDecoration: "none" }}>
+              <div
+                style={{
+                  ...utilityCardStyle,
+                  cursor: "pointer",
+                  transition: "transform 0.2s, box-shadow 0.2s",
+                  background: "linear-gradient(135deg, #7b1fa2 0%, #4a148c 100%)",
+                  color: "#fff",
+                  minHeight: "140px",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-4px)";
+                  e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.15)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.06)";
+                }}
+              >
+                <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>💳</div>
+                <div>
+                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>QR Communities Billing</h3>
+                  <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.95 }}>
+                    Manage pricing, quotas, and usage tracking
+                  </p>
+                </div>
+              </div>
+            </a>
+
+          </div>
+
+          {/* QR COMMUNITIES SECTION */}
+          <h2 style={{ marginBottom: "1rem", fontSize: "1.8rem", fontWeight: "700", marginTop: "2rem" }}>
+            QR Communities Platform
+          </h2>
+          <p style={{ marginBottom: "1.5rem", color: "#666", fontSize: "0.95rem" }}>
+            New WhatsApp-style messaging and billing system for community members
+          </p>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 280px), 1fr))",
+              gap: "1.25rem",
+              marginBottom: "2rem",
+            }}
+          >
+            {/* Community Messaging */}
+            <a href="/community-only/messages" style={{ textDecoration: "none" }}>
+              <div
+                style={{
+                  ...utilityCardStyle,
+                  cursor: "pointer",
+                  transition: "transform 0.2s, box-shadow 0.2s",
+                  background: "linear-gradient(135deg, #0097a7 0%, #00838f 100%)",
+                  color: "#fff",
+                  minHeight: "140px",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-4px)";
+                  e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.15)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.06)";
+                }}
+              >
+                <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>💬</div>
+                <div>
+                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Community Messaging</h3>
+                  <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.95 }}>
+                    Text messages free • Image messages billable
+                  </p>
+                </div>
+              </div>
+            </a>
+
+            {/* Community Noticeboard */}
+            <a href="/community-only/noticeboard" style={{ textDecoration: "none" }}>
+              <div
+                style={{
+                  ...utilityCardStyle,
+                  cursor: "pointer",
+                  transition: "transform 0.2s, box-shadow 0.2s",
+                  background: "linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%)",
+                  color: "#fff",
+                  minHeight: "140px",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-4px)";
+                  e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.15)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.06)";
+                }}
+              >
+                <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>📰</div>
+                <div>
+                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Community Noticeboard</h3>
+                  <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.95 }}>
+                    Admin posts with quotas and billing
+                  </p>
+                </div>
+              </div>
+            </a>
+
+            {/* My Communities */}
+            <a href="/my-communities" style={{ textDecoration: "none" }}>
+              <div
+                style={{
+                  ...utilityCardStyle,
+                  cursor: "pointer",
+                  transition: "transform 0.2s, box-shadow 0.2s",
+                  background: "linear-gradient(135deg, #388e3c 0%, #2e7d32 100%)",
+                  color: "#fff",
+                  minHeight: "140px",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-4px)";
+                  e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.15)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.06)";
+                }}
+              >
+                <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>👥</div>
+                <div>
+                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>My Communities</h3>
+                  <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.95 }}>
+                    Discover • Join • Manage communities
+                  </p>
+                </div>
+              </div>
+            </a>
+
+            {/* Community Profile */}
+            <a href="/community-only/profile" style={{ textDecoration: "none" }}>
+              <div
+                style={{
+                  ...utilityCardStyle,
+                  cursor: "pointer",
+                  transition: "transform 0.2s, box-shadow 0.2s",
+                  background: "linear-gradient(135deg, #f57f17 0%, #f57c00 100%)",
+                  color: "#fff",
+                  minHeight: "140px",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-4px)";
+                  e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.15)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.06)";
+                }}
+              >
+                <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>👤</div>
+                <div>
+                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>My Profile</h3>
+                  <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.95 }}>
+                    Manage supply chain role & settings
+                  </p>
+                </div>
+              </div>
+            </a>
 
           </div>
         </>
@@ -2274,6 +2508,381 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
             </div>
           )}
         </div>
+      </div>
+    </div>
+  )}
+
+  {/* QR COMMUNITY CREATION MODAL */}
+  {isSuperAdmin && showQRCommunityCreation && (
+    <div style={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: "rgba(0,0,0,0.5)",
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+      zIndex: 1000,
+      padding: "1rem",
+    }}>
+      <div style={{
+        background: "#fff",
+        borderRadius: "12px",
+        padding: "2rem",
+        maxWidth: "600px",
+        width: "100%",
+        maxHeight: "90vh",
+        overflowY: "auto",
+        boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+      }}>
+        {/* Modal Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
+          <h2 style={{ margin: 0 }}>Create QR Community</h2>
+          <button
+            onClick={() => {
+              setShowQRCommunityCreation(false);
+              setGeneratedQRCode(null);
+              setQRCommunityStatus(null);
+            }}
+            style={{
+              background: "none",
+              border: "none",
+              fontSize: "1.5rem",
+              cursor: "pointer",
+            }}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Success State - Show Generated QR */}
+        {generatedQRCode ? (
+          <div style={{ textAlign: "center" }}>
+            <h3>QR Community Created Successfully! 🎉</h3>
+            
+            {/* QR Code Display */}
+            <div style={{
+              background: "#f5f5f5",
+              padding: "1.5rem",
+              borderRadius: "8px",
+              marginBottom: "1.5rem",
+            }}>
+              <img 
+                src={generatedQRCode.qrDataUrl} 
+                alt="QR Code for community"
+                style={{ maxWidth: "300px", height: "auto" }}
+              />
+            </div>
+
+            {/* Join Link */}
+            <div style={{ marginBottom: "1.5rem" }}>
+              <label style={{ display: "block", fontWeight: "600", marginBottom: "0.5rem" }}>Join Link:</label>
+              <input
+                type="text"
+                value={generatedQRCode.joinLink}
+                readOnly
+                onClick={(e) => (e.target as HTMLInputElement).select()}
+                style={{
+                  width: "100%",
+                  padding: "0.5rem",
+                  border: "1px solid #ddd",
+                  borderRadius: "6px",
+                  fontFamily: "monospace",
+                  fontSize: "0.85rem",
+                }}
+              />
+            </div>
+
+            {/* Download QR Button */}
+            <button
+              onClick={() => {
+                const link = document.createElement("a");
+                link.href = generatedQRCode.qrDataUrl;
+                link.download = `${qrCommunityForm.slug}-qr.png`;
+                link.click();
+              }}
+              style={{
+                padding: "0.75rem 1.5rem",
+                background: "#00bcd4",
+                color: "#fff",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontWeight: "600",
+                marginRight: "0.75rem",
+              }}
+            >
+              📥 Download QR as PNG
+            </button>
+
+            <button
+              onClick={() => {
+                setShowQRCommunityCreation(false);
+                setGeneratedQRCode(null);
+                setQRCommunityStatus(null);
+                setQRCommunityForm({
+                  name: "",
+                  slug: "",
+                  logoFile: null,
+                  logoPreview: "",
+                  juniorAdminFreeMonthlyImageQuota: 2,
+                  juniorAdminImagePrice: 5000,
+                  memberImageMessagePrice: 1000,
+                });
+              }}
+              style={{
+                padding: "0.75rem 1.5rem",
+                background: "#f5f5f5",
+                color: "#333",
+                border: "1px solid #ddd",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontWeight: "600",
+              }}
+            >
+              Close
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* Form */}
+            <div style={{ display: "grid", gap: "1rem", marginBottom: "1.5rem" }}>
+              {/* Community Name */}
+              <div>
+                <label style={{ display: "block", fontWeight: "600", marginBottom: "0.3rem" }}>Community Name *</label>
+                <input
+                  type="text"
+                  value={qrCommunityForm.name}
+                  onChange={(e) => setQRCommunityForm({ ...qrCommunityForm, name: e.target.value })}
+                  placeholder="e.g., Kampala Farmers Co-op"
+                  style={{
+                    width: "100%",
+                    padding: "0.5rem",
+                    border: "1px solid #ddd",
+                    borderRadius: "6px",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+
+              {/* Slug */}
+              <div>
+                <label style={{ display: "block", fontWeight: "600", marginBottom: "0.3rem" }}>URL Slug *</label>
+                <input
+                  type="text"
+                  value={qrCommunityForm.slug}
+                  onChange={(e) => setQRCommunityForm({ ...qrCommunityForm, slug: e.target.value.toLowerCase().replace(/\s+/g, "-") })}
+                  placeholder="e.g., kampala-farmers"
+                  style={{
+                    width: "100%",
+                    padding: "0.5rem",
+                    border: "1px solid #ddd",
+                    borderRadius: "6px",
+                    boxSizing: "border-box",
+                  }}
+                />
+                <small style={{ color: "#666" }}>Join link: {qrCommunityForm.slug ? `.../${qrCommunityForm.slug}` : "(auto-generated)"}</small>
+              </div>
+
+              {/* Logo Upload */}
+              <div>
+                <label style={{ display: "block", fontWeight: "600", marginBottom: "0.3rem" }}>Community Logo</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onload = (event) => {
+                        setQRCommunityForm({
+                          ...qrCommunityForm,
+                          logoFile: file,
+                          logoPreview: event.target?.result as string,
+                        });
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "0.5rem",
+                    border: "1px solid #ddd",
+                    borderRadius: "6px",
+                  }}
+                />
+                {qrCommunityForm.logoPreview && (
+                  <div style={{ marginTop: "0.5rem" }}>
+                    <img
+                      src={qrCommunityForm.logoPreview}
+                      alt="Logo preview"
+                      style={{
+                        maxWidth: "100px",
+                        maxHeight: "100px",
+                        borderRadius: "6px",
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Free Quota */}
+              <div>
+                <label style={{ display: "block", fontWeight: "600", marginBottom: "0.3rem" }}>Free Image Posts/Month *</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={qrCommunityForm.juniorAdminFreeMonthlyImageQuota}
+                  onChange={(e) => setQRCommunityForm({ ...qrCommunityForm, juniorAdminFreeMonthlyImageQuota: parseInt(e.target.value) || 0 })}
+                  style={{
+                    width: "100%",
+                    padding: "0.5rem",
+                    border: "1px solid #ddd",
+                    borderRadius: "6px",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+
+              {/* Noticeboard Image Post Price */}
+              <div>
+                <label style={{ display: "block", fontWeight: "600", marginBottom: "0.3rem" }}>Noticeboard Image Post Price (UGX) *</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={qrCommunityForm.juniorAdminImagePrice}
+                  onChange={(e) => setQRCommunityForm({ ...qrCommunityForm, juniorAdminImagePrice: parseInt(e.target.value) || 0 })}
+                  style={{
+                    width: "100%",
+                    padding: "0.5rem",
+                    border: "1px solid #ddd",
+                    borderRadius: "6px",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+
+              {/* Message Image Price */}
+              <div>
+                <label style={{ display: "block", fontWeight: "600", marginBottom: "0.3rem" }}>Message Image Price (UGX) *</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={qrCommunityForm.memberImageMessagePrice}
+                  onChange={(e) => setQRCommunityForm({ ...qrCommunityForm, memberImageMessagePrice: parseInt(e.target.value) || 0 })}
+                  style={{
+                    width: "100%",
+                    padding: "0.5rem",
+                    border: "1px solid #ddd",
+                    borderRadius: "6px",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Status Message */}
+            {qrCommunityStatus && (
+              <div style={{
+                padding: "0.75rem",
+                borderRadius: "6px",
+                marginBottom: "1rem",
+                background: qrCommunityStatus.type === "error" ? "#ffebee" : "#e8f5e9",
+                color: qrCommunityStatus.type === "error" ? "#c62828" : "#2e7d32",
+                border: `1px solid ${qrCommunityStatus.type === "error" ? "#ef5350" : "#66bb6a"}`,
+              }}>
+                {qrCommunityStatus.message}
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div style={{ display: "flex", gap: "0.75rem" }}>
+              <button
+                onClick={async () => {
+                  // Validate form
+                  if (!qrCommunityForm.name.trim()) {
+                    setQRCommunityStatus({ type: "error", message: "Community name is required" });
+                    return;
+                  }
+                  if (!qrCommunityForm.slug.trim()) {
+                    setQRCommunityStatus({ type: "error", message: "URL slug is required" });
+                    return;
+                  }
+
+                  setQRCommunityStatus({ type: "loading", message: "Creating community and generating QR code..." });
+
+                  try {
+                    // Call backend mutation to create the community
+                    const result = await createQRCommunity({
+                      adminId: adminId as Id<"users">,
+                      name: qrCommunityForm.name.trim(),
+                      slug: qrCommunityForm.slug.trim(),
+                      logoUrl: qrCommunityForm.logoPreview,
+                      juniorAdminFreeMonthlyImageQuota: qrCommunityForm.juniorAdminFreeMonthlyImageQuota,
+                      juniorAdminImagePrice: qrCommunityForm.juniorAdminImagePrice,
+                      memberImageMessagePrice: qrCommunityForm.memberImageMessagePrice,
+                    });
+
+                    // Generate QR code
+                    const joinLink = `${window.location.origin}/join/${qrCommunityForm.slug}`;
+                    const qrDataUrl = await QRCode.toDataURL(joinLink);
+
+                    setGeneratedQRCode({
+                      qrDataUrl,
+                      joinLink,
+                    });
+
+                    setQRCommunityStatus({ 
+                      type: "success", 
+                      message: `QR community "${result.name}" created successfully!` 
+                    });
+                  } catch (error) {
+                    setQRCommunityStatus({
+                      type: "error",
+                      message: `Error: ${(error as Error).message}`,
+                    });
+                  }
+                }}
+                disabled={qrCommunityStatus?.type === "loading"}
+                style={{
+                  flex: 1,
+                  padding: "0.75rem",
+                  background: "#00bcd4",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: qrCommunityStatus?.type === "loading" ? "not-allowed" : "pointer",
+                  fontWeight: "600",
+                  opacity: qrCommunityStatus?.type === "loading" ? 0.6 : 1,
+                }}
+              >
+                {qrCommunityStatus?.type === "loading" ? "Creating..." : "Create Community & Generate QR"}
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowQRCommunityCreation(false);
+                  setQRCommunityStatus(null);
+                  setGeneratedQRCode(null);
+                }}
+                style={{
+                  flex: 1,
+                  padding: "0.75rem",
+                  background: "#f5f5f5",
+                  color: "#333",
+                  border: "1px solid #ddd",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )}

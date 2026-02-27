@@ -51,6 +51,7 @@ export default defineSchema({
    * - System-generated aliases for anonymity
    */
   users: defineTable({
+    userId: v.optional(v.string()), // Unique identifier from auth system (tokenIdentifier)
     email: v.optional(v.string()), // Optional - user can use email or phone number
     phoneNumber: v.optional(v.string()), // Optional - user can use email or phone number
     sex: v.optional(v.union(v.literal("M"), v.literal("F"))), // Optional - farmer profile field
@@ -92,7 +93,13 @@ export default defineSchema({
     notificationPreferences: v.optional(v.any()), // { newListings: boolean, offers: boolean, etc. }
     // Pagination preferences (per user)
     paginationPreferences: v.optional(v.any()), // { defaultPageSize: number, list: { [key: string]: number } }
+    // Community scope and onboarding
+    accountScope: v.optional(v.union(v.literal("full"), v.literal("community_only"))), // Whether account is restricted to a single community
+    onboardedViaCommunityId: v.optional(v.id("communities")), // The community through which user was onboarded (for community_only accounts)
+    supplyChainRole: v.optional(v.string()), // Role in the supply chain (e.g., "producer", "aggregator", "processor")
+    supplyChainRoleOther: v.optional(v.string()), // Custom supply chain role if not in standard list
   })
+    .index("by_userId", ["userId"])
     .index("by_email", ["email"])
     .index("by_phone", ["phoneNumber"])
     .index("by_role", ["role"])
@@ -833,6 +840,12 @@ export default defineSchema({
     createdAt: v.number(),
     utid: v.string(), // Admin action UTID
     communityType: v.optional(v.union(v.literal("farmer"), v.literal("trader"), v.literal("buyer"))), // Type of community (optional for backward-compatibility)
+    // QR code and community features
+    qrEnabled: v.optional(v.boolean()), // Whether community has QR code feature enabled
+    qrSlug: v.optional(v.string()), // Slug for community QR code (e.g., "biofarm-ug")
+    qrLogoUrl: v.optional(v.string()), // URL to logo displayed in QR code join flow
+    // Discovery and search
+    searchPriorityScore: v.optional(v.number()), // Higher scores appear first in community search results
   })
     .index("by_active", ["isGlobal", "geoLocked"])
     .index("by_created_by", ["createdBy"]),
@@ -1235,4 +1248,154 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_user_month", ["userId", "month"])
     .index("by_exported_at", ["exportedAt"]),
+
+  /**
+   * Usage Events
+   * - Track user actions for billing and analytics
+   * - Used for community-only features pricing
+   */
+  usageEvents: defineTable({
+    communityId: v.id("communities"), // Community where event occurred
+    userId: v.id("users"), // User who performed the action
+    eventType: v.string(), // e.g., "post_image", "send_message", etc.
+    isBillable: v.boolean(), // Whether this event should be charged
+    createdAt: v.number(), // Timestamp
+    sourceModule: v.optional(v.string()), // e.g., "qr_community"
+    apkFlavourId: v.optional(v.id("_storage")), // Optional APK flavour identifier
+  })
+    .index("by_community", ["communityId"])
+    .index("by_user", ["userId"])
+    .index("by_community_user", ["communityId", "userId"])
+    .index("by_created_at", ["createdAt"]),
+
+  /**
+   * Noticeboard Posts
+   * - Images posted by community admin
+   * - Subject to freeImageQuotaPerMonth
+   * - Tracks monthly usage (monthKey for quota enforcement)
+   */
+  noticeboardPosts: defineTable({
+    communityId: v.id("communities"),
+    adminId: v.id("users"),
+    imageStorageId: v.id("_storage"),
+    caption: v.optional(v.string()),
+    monthKey: v.string(), // "YYYY-MM" for monthly quota tracking
+    createdAt: v.number(),
+  })
+    .index("by_community", ["communityId"])
+    .index("by_admin", ["adminId"])
+    .index("by_month", ["monthKey"])
+    .index("by_created_at", ["createdAt"]),
+
+  /**
+   * Community Messages
+   * - Text and image messages sent by members in a community
+   * - Can be replies to noticeboard posts
+   * - Image messages trigger billable events
+   */
+  communityMessages: defineTable({
+    communityId: v.id("communities"),
+    userId: v.id("users"),
+    imageStorageId: v.optional(v.id("_storage")), // null for text-only messages
+    text: v.optional(v.string()),
+    replyToPostId: v.optional(v.id("noticeboardPosts")),
+    createdAt: v.number(),
+  })
+    .index("by_community", ["communityId"])
+    .index("by_user", ["userId"])
+    .index("by_post", ["replyToPostId"])
+    .index("by_created_at", ["createdAt"]),
+
+  /**
+   * Post Likes
+   * - Members can like noticeboard posts (free engagement)
+   */
+  postLikes: defineTable({
+    postId: v.id("noticeboardPosts"),
+    userId: v.id("users"),
+    communityId: v.id("communities"),
+    createdAt: v.number(),
+  })
+    .index("by_post", ["postId"])
+    .index("by_user", ["userId"])
+    .index("by_post_user", ["postId", "userId"])
+    .index("by_community", ["communityId"]),
+
+  /**
+   * Post Dislikes
+   * - Members can dislike noticeboard posts (free engagement)
+   */
+  postDislikes: defineTable({
+    postId: v.id("noticeboardPosts"),
+    userId: v.id("users"),
+    communityId: v.id("communities"),
+    createdAt: v.number(),
+  })
+    .index("by_post", ["postId"])
+    .index("by_user", ["userId"])
+    .index("by_post_user", ["postId", "userId"])
+    .index("by_community", ["communityId"]),
+
+  /**
+   * Community Monetisation Settings
+   * - Store pricing and quota configuration per community
+   * - Set by superadmin when creating/configuring QR community
+   */
+  communityMonetisationSettings: defineTable({
+    communityId: v.id("communities"),
+    juniorAdminFreeMonthlyImageQuota: v.number(), // Free image posts per month for junior admin
+    juniorAdminImagePrice: v.number(), // Price in UGX for junior admin image post after quota exhausted
+    memberImageMessagePrice: v.number(), // Price in UGX for member image message
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    updatedBy: v.id("users"), // Superadmin who updated settings
+  })
+    .index("by_community", ["communityId"]),
+
+  /**
+   * Junior Admin Image Quota Tracker
+   * - Track monthly quota usage and reset date
+   */
+  juniorAdminImageQuota: defineTable({
+    communityId: v.id("communities"),
+    adminId: v.id("users"),
+    monthKey: v.string(), // "YYYY-MM" format
+    usedQuota: v.number(), // Number of free image posts used this month
+    lastQuotaResetAt: v.number(), // Timestamp of last quota reset
+    resetsAt: v.number(), // Timestamp when quota will reset next month
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_community_admin", ["communityId", "adminId"])
+    .index("by_month", ["monthKey"]),
+
+  /**
+   * Payments
+   * - Track payment transactions for gated features
+   * - Used for junior admin image posts and member image messages
+   */
+  payments: defineTable({
+    communityId: v.id("communities"),
+    userId: v.id("users"),
+    paymentType: v.union(
+      v.literal("juniorAdminImagePost"),
+      v.literal("memberImageMessage"),
+      v.literal("other")
+    ), // Type of action requiring payment
+    payableAmount: v.number(), // Amount required to access feature (in UGX)
+    billedAmount: v.number(), // Amount actually paid (in UGX)
+    status: v.union(v.literal("pending"), v.literal("paid"), v.literal("failed")), // Payment status
+    pesapalTrackingId: v.optional(v.string()), // Pesapal tracking ID for verification
+    pesapalOrderId: v.optional(v.string()), // Pesapal order ID
+    relatedEntityId: v.optional(v.string()), // ID of related post/message
+    createdAt: v.number(),
+    paidAt: v.optional(v.number()), // Timestamp when payment was confirmed
+    failedReason: v.optional(v.string()), // Reason for failure if status is failed
+  })
+    .index("by_community", ["communityId"])
+    .index("by_user", ["userId"])
+    .index("by_community_user", ["communityId", "userId"])
+    .index("by_status", ["status"])
+    .index("by_type", ["paymentType"])
+    .index("by_pesapal_tracking", ["pesapalTrackingId"]),
 });

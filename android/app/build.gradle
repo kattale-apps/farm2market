@@ -4,7 +4,6 @@ android {
     namespace = "com.farm2market.uganda"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.farm2market.uganda"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
@@ -14,6 +13,31 @@ android {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    
+    // Product flavors for community-specific APKs
+    flavorDimensions "community"
+    productFlavors {
+        defaultCommunity {
+            dimension "community"
+            buildConfigField "String", "DEFAULT_COMMUNITY_SLUG", '""'
+        }
+
+        kakira {
+            dimension "community"
+            applicationIdSuffix ".kakira"
+            versionNameSuffix "-kakira"
+            buildConfigField "String", "DEFAULT_COMMUNITY_SLUG", '"kakira"'
+            resValue "string", "app_name", "Kakira Farmers"
+        }
+
+        kyagalanyi {
+            dimension "community"
+            applicationIdSuffix ".kyagalanyi"
+            versionNameSuffix "-kyagalanyi"
+            buildConfigField "String", "DEFAULT_COMMUNITY_SLUG", '"kyagalanyi"'
+            resValue "string", "app_name", "Kyagalanyi Farmers"
         }
     }
     

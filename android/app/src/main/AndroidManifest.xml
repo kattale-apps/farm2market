@@ -21,6 +21,29 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            
+            <!-- Deep link support for community auto-join -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                
+                <!-- farm2market://community/{communityId} -->
+                <data android:scheme="farm2market"
+                      android:host="community" />
+            </intent-filter>
+            
+            <!-- HTTPS deep link support -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                
+                <!-- https://farm2market-dev.vercel.app/join/{communityId} -->
+                <data android:scheme="https"
+                      android:host="farm2market-dev.vercel.app"
+                      android:pathPrefix="/join" />
+            </intent-filter>
 
         </activity>
 

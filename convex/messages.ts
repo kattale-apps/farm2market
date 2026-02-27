@@ -346,3 +346,373 @@ async function validateUTID(ctx: any, utid: string): Promise<boolean> {
 
   return false;
 }
+
+/**
+ * Send a message with image in community (members only)
+ *
+ * Rules:
+ * - Members are allowed to send image messages
+ * - Every image message sent by a member is ALWAYS billable (no free quota)
+ * - Read messageImagePrice from the community
+ * - Text-only messages remain free
+ */
+export const sendMessageWithImage = mutation({
+  args: {
+    communityId: v.id("communities"),
+    userId: v.id("users"),
+    imageStorageId: v.id("_storage"),
+    text: v.optional(v.string()),
+    replyToPostId: v.optional(v.id("noticeboardPosts")),
+  },
+  handler: async (ctx, args) => {
+    // Fetch community to get monetisation settings
+    const community = await ctx.db.get(args.communityId);
+    if (!community) {
+      throw new Error("Community not found");
+    }
+
+    // Fetch monetisation settings for the community
+    const monetisationSettings = await ctx.db
+      .query("communityMonetisationSettings")
+      .withIndex("by_community", (q) => q.eq("communityId", args.communityId))
+      .first();
+
+    // Verify user is a member of the community
+    const membership = await ctx.db
+      .query("communityMemberships")
+      .withIndex("by_community_user", (q) =>
+        q.eq("communityId", args.communityId).eq("userId", args.userId)
+      )
+      .first();
+
+    if (!membership) {
+      throw new Error("User is not a member of this community");
+    }
+
+    const createdAt = getUgandaTime();
+
+    // Create the message
+    const messageId = await ctx.db.insert("communityMessages", {
+      communityId: args.communityId,
+      userId: args.userId,
+      imageStorageId: args.imageStorageId,
+      text: args.text,
+      replyToPostId: args.replyToPostId,
+      createdAt,
+    });
+
+    // ALWAYS log billable event for image messages
+    const messageImagePrice = monetisationSettings?.memberImageMessagePrice ?? 0;
+    await ctx.db.insert("usageEvents", {
+      communityId: args.communityId,
+      userId: args.userId,
+      eventType: "message_image",
+      isBillable: true,
+      createdAt,
+      sourceModule: "qr_community",
+    });
+
+    return {
+      _id: messageId,
+      communityId: args.communityId,
+      userId: args.userId,
+      text: args.text,
+      createdAt,
+      isBillable: true,
+      imagePrice: messageImagePrice,
+    };
+  },
+});
+
+/**
+ * Send a text-only message in community (members only) - NO BILLING
+ */
+export const sendTextMessage = mutation({
+  args: {
+    communityId: v.id("communities"),
+    userId: v.id("users"),
+    text: v.string(),
+    replyToPostId: v.optional(v.id("noticeboardPosts")),
+  },
+  handler: async (ctx, args) => {
+    // Verify user is a member of the community
+    const membership = await ctx.db
+      .query("communityMemberships")
+      .withIndex("by_community_user", (q) =>
+        q.eq("communityId", args.communityId).eq("userId", args.userId)
+      )
+      .first();
+
+    if (!membership) {
+      throw new Error("User is not a member of this community");
+    }
+
+    const createdAt = getUgandaTime();
+
+    // Create the message - NO BILLING for text-only
+    const messageId = await ctx.db.insert("communityMessages", {
+      communityId: args.communityId,
+      userId: args.userId,
+      imageStorageId: undefined,
+      text: args.text,
+      replyToPostId: args.replyToPostId,
+      createdAt,
+    });
+
+    return {
+      _id: messageId,
+      communityId: args.communityId,
+      userId: args.userId,
+      text: args.text,
+      createdAt,
+      isBillable: false,
+    };
+  },
+});
+
+/**
+ * Like a noticeboard post in community (members only) - NO BILLING
+ */
+export const likeNoticeboardPost = mutation({
+  args: {
+    communityId: v.id("communities"),
+    postId: v.id("noticeboardPosts"),
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    // Verify user is a member of the community
+    const membership = await ctx.db
+      .query("communityMemberships")
+      .withIndex("by_community_user", (q) =>
+        q.eq("communityId", args.communityId).eq("userId", args.userId)
+      )
+      .first();
+
+    if (!membership) {
+      throw new Error("User is not a member of this community");
+    }
+
+    // Check if user already liked this post
+    const existingLike = await ctx.db
+      .query("postLikes")
+      .withIndex("by_post_user", (q) =>
+        q.eq("postId", args.postId).eq("userId", args.userId)
+      )
+      .first();
+
+    if (existingLike) {
+      throw new Error("User already liked this post");
+    }
+
+    const createdAt = getUgandaTime();
+
+    const likeId = await ctx.db.insert("postLikes", {
+      postId: args.postId,
+      userId: args.userId,
+      communityId: args.communityId,
+      createdAt,
+    });
+
+    return {
+      _id: likeId,
+      postId: args.postId,
+      userId: args.userId,
+      createdAt,
+      isBillable: false,
+    };
+  },
+});
+
+/**
+ * Dislike a noticeboard post in community (members only) - NO BILLING
+ */
+export const dislikeNoticeboardPost = mutation({
+  args: {
+    communityId: v.id("communities"),
+    postId: v.id("noticeboardPosts"),
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    // Verify user is a member of the community
+    const membership = await ctx.db
+      .query("communityMemberships")
+      .withIndex("by_community_user", (q) =>
+        q.eq("communityId", args.communityId).eq("userId", args.userId)
+      )
+      .first();
+
+    if (!membership) {
+      throw new Error("User is not a member of this community");
+    }
+
+    // Check if user already disliked this post
+    const existingDislike = await ctx.db
+      .query("postDislikes")
+      .withIndex("by_post_user", (q) =>
+        q.eq("postId", args.postId).eq("userId", args.userId)
+      )
+      .first();
+
+    if (existingDislike) {
+      throw new Error("User already disliked this post");
+    }
+
+    const createdAt = getUgandaTime();
+
+    const dislikeId = await ctx.db.insert("postDislikes", {
+      postId: args.postId,
+      userId: args.userId,
+      communityId: args.communityId,
+      createdAt,
+    });
+
+    return {
+      _id: dislikeId,
+      postId: args.postId,
+      userId: args.userId,
+      createdAt,
+      isBillable: false,
+    };
+  },
+});
+
+/**
+ * Unlike a noticeboard post (toggle dislike) - NO BILLING
+ */
+export const unlikeNoticeboardPost = mutation({
+  args: {
+    communityId: v.id("communities"),
+    postId: v.id("noticeboardPosts"),
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const existingLike = await ctx.db
+      .query("postLikes")
+      .withIndex("by_post_user", (q) =>
+        q.eq("postId", args.postId).eq("userId", args.userId)
+      )
+      .first();
+
+    if (existingLike) {
+      await ctx.db.delete(existingLike._id);
+    }
+
+    return { removed: !!existingLike };
+  },
+});
+
+/**
+ * Undislike a noticeboard post (toggle dislike) - NO BILLING
+ */
+export const undislikeNoticeboardPost = mutation({
+  args: {
+    communityId: v.id("communities"),
+    postId: v.id("noticeboardPosts"),
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const existingDislike = await ctx.db
+      .query("postDislikes")
+      .withIndex("by_post_user", (q) =>
+        q.eq("postId", args.postId).eq("userId", args.userId)
+      )
+      .first();
+
+    if (existingDislike) {
+      await ctx.db.delete(existingDislike._id);
+    }
+
+    return { removed: !!existingDislike };
+  },
+});
+
+/**
+ * Get like count for a post
+ */
+export const getPostLikeCount = query({
+  args: {
+    postId: v.id("noticeboardPosts"),
+  },
+  handler: async (ctx, args) => {
+    const likes = await ctx.db
+      .query("postLikes")
+      .withIndex("by_post_user", (q) => q.eq("postId", args.postId))
+      .collect();
+
+    return likes.length;
+  },
+});
+
+/**
+ * Get dislike count for a post
+ */
+export const getPostDislikeCount = query({
+  args: {
+    postId: v.id("noticeboardPosts"),
+  },
+  handler: async (ctx, args) => {
+    const dislikes = await ctx.db
+      .query("postDislikes")
+      .withIndex("by_post_user", (q) => q.eq("postId", args.postId))
+      .collect();
+
+    return dislikes.length;
+  },
+});
+
+/**
+ * Check user's engagement status with a post
+ */
+export const getUserPostEngagement = query({
+  args: {
+    postId: v.id("noticeboardPosts"),
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const like = await ctx.db
+      .query("postLikes")
+      .withIndex("by_post_user", (q) =>
+        q.eq("postId", args.postId).eq("userId", args.userId)
+      )
+      .first();
+
+    const dislike = await ctx.db
+      .query("postDislikes")
+      .withIndex("by_post_user", (q) =>
+        q.eq("postId", args.postId).eq("userId", args.userId)
+      )
+      .first();
+
+    return {
+      liked: !!like,
+      disliked: !!dislike,
+    };
+  },
+});
+
+/**
+ * Get community messages (for noticeboard post replies)
+ */
+export const getCommunityMessages = query({
+  args: {
+    communityId: v.id("communities"),
+    replyToPostId: v.optional(v.id("noticeboardPosts")),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    let query = ctx.db
+      .query("communityMessages")
+      .withIndex("by_community", (q) => q.eq("communityId", args.communityId));
+
+    // Filter by reply target if specified
+    if (args.replyToPostId) {
+      const allMessages = await query.collect();
+      const filtered = allMessages.filter((m) =>
+        m.replyToPostId === args.replyToPostId
+      );
+      return filtered.slice(0, args.limit ?? 100);
+    }
+
+    return query.order("desc").take(args.limit ?? 100);
+  },
+});

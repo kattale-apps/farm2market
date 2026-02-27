@@ -1575,7 +1575,7 @@ export const createQRCommunity = mutation({
     const communityId = await ctx.db.insert("communities", {
       name: args.name.trim(),
       logoPath: args.logoUrl?.trim(),
-      createdBy: args.adminId,
+      createdBy: adminId,
       createdAt: getUgandaTime(),
       utid,
       isGlobal: true, // QR communities are global by default
@@ -1596,12 +1596,12 @@ export const createQRCommunity = mutation({
       memberImageMessagePrice: args.memberImageMessagePrice,
       createdAt: Date.now(),
       updatedAt: Date.now(),
-      updatedBy: args.adminId,
+      updatedBy: adminId,
     });
 
     // Log admin action
     await ctx.db.insert("adminActions", {
-      adminId: args.adminId,
+      adminId: adminId,
       action: "create_qr_community",
       details: `Created QR community: ${args.name} (slug: ${args.slug}, UTID: ${utid})`,
       timestamp: getUgandaTime(),

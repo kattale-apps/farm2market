@@ -1,13 +1,18 @@
 "use client";
 
 import React, { useState } from "react";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useRouter } from "next/navigation";
 
 export default function CreateQRCommunity() {
   const router = useRouter();
   const createQRCommunity = useMutation(api.communities.createQRCommunity as any);
+  
+  // Get current user ID with simple, reliable query
+  const userContext = useQuery(api.communities.getCurrentUserId as any);
+  const currentUserId = userContext?.userId;
+  const isSuperadmin = userContext?.isSuperadmin;
 
   const [formData, setFormData] = useState({
     name: "",
@@ -58,6 +63,23 @@ export default function CreateQRCommunity() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Check if user is authenticated and is a superadmin
+    if (!currentUserId) {
+      setStatus({
+        type: "error",
+        message: "Not authenticated. Please log in.",
+      });
+      return;
+    }
+
+    if (!isSuperadmin) {
+      setStatus({
+        type: "error",
+        message: "Only superadmins can create QR communities",
+      });
+      return;
+    }
+
     if (!formData.name.trim() || !formData.slug.trim()) {
       setStatus({
         type: "error",
@@ -69,9 +91,8 @@ export default function CreateQRCommunity() {
     setStatus({ type: "loading", message: "Creating community..." });
 
     try {
-      // The mutation will automatically get the user ID from Convex auth
-      // Pass undefined for adminId - the mutation handles auth internally
       const community = await createQRCommunity({
+        adminId: currentUserId,
         name: formData.name.trim(),
         slug: formData.slug.trim(),
         logoUrl: formData.logoPreview,
@@ -118,8 +139,8 @@ export default function CreateQRCommunity() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <div className="max-w-2xl mx-auto">
-          {/* Header */}
-          <div className="mb-8">
+          {/* Header Card */}
+          <div className="mb-8 bg-white rounded-lg shadow-md p-6">
             <h1 className="text-4xl font-bold text-gray-900">Create QR Community</h1>
             <p className="text-gray-600 mt-2">
               Set up a new community with monetisation controls
@@ -183,6 +204,27 @@ export default function CreateQRCommunity() {
           ) : (
             // Form State
             <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Loading Auth Context */}
+              {currentUserId === undefined && (
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-blue-800">Loading authentication...</p>
+                </div>
+              )}
+
+              {/* Auth Error */}
+              {currentUserId === null && (
+                <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-red-800">Not authenticated. Please log in.</p>
+                </div>
+              )}
+
+              {/* Superadmin Check */}
+              {currentUserId !== undefined && currentUserId !== null && !isSuperadmin && (
+                <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-red-800">Only superadmins can create QR communities.</p>
+                </div>
+              )}
+
               {/* Error Display */}
               {status.type === "error" && (
                 <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
@@ -206,8 +248,8 @@ export default function CreateQRCommunity() {
                     value={formData.name}
                     onChange={handleInputChange}
                     placeholder="e.g., BioFarm Uganda"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    disabled={status.type === "loading"}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50"
+                    disabled={!currentUserId || !isSuperadmin || status.type === "loading"}
                   />
                 </div>
 
@@ -221,8 +263,8 @@ export default function CreateQRCommunity() {
                     value={formData.slug}
                     onChange={handleInputChange}
                     placeholder="e.g., biofarm-ug"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    disabled={status.type === "loading"}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50"
+                    disabled={!currentUserId || !isSuperadmin || status.type === "loading"}
                   />
                   <p className="text-xs text-gray-500 mt-1">
                     Used in join links: /join/{formData.slug}
@@ -237,8 +279,8 @@ export default function CreateQRCommunity() {
                     type="file"
                     accept="image/*"
                     onChange={handleLogoUpload}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                    disabled={status.type === "loading"}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg disabled:bg-gray-50"
+                    disabled={!currentUserId || !isSuperadmin || status.type === "loading"}
                   />
                   {formData.logoPreview && (
                     <img
@@ -266,8 +308,8 @@ export default function CreateQRCommunity() {
                     value={formData.juniorAdminFreeMonthlyImageQuota}
                     onChange={handleInputChange}
                     min="0"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    disabled={status.type === "loading"}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50"
+                    disabled={!currentUserId || !isSuperadmin || status.type === "loading"}
                   />
                   <p className="text-xs text-gray-500 mt-1">
                     Free image posts per month for junior admin
@@ -284,8 +326,8 @@ export default function CreateQRCommunity() {
                     value={formData.juniorAdminImagePrice}
                     onChange={handleInputChange}
                     min="0"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    disabled={status.type === "loading"}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50"
+                    disabled={!currentUserId || !isSuperadmin || status.type === "loading"}
                   />
                   <p className="text-xs text-gray-500 mt-1">
                     Price per image post after free quota
@@ -302,8 +344,8 @@ export default function CreateQRCommunity() {
                     value={formData.memberImageMessagePrice}
                     onChange={handleInputChange}
                     min="0"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    disabled={status.type === "loading"}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50"
+                    disabled={!currentUserId || !isSuperadmin || status.type === "loading"}
                   />
                   <p className="text-xs text-gray-500 mt-1">
                     Price per image in member messages
@@ -314,7 +356,7 @@ export default function CreateQRCommunity() {
               {/* Submit Button */}
               <button
                 type="submit"
-                disabled={status.type === "loading"}
+                disabled={!currentUserId || !isSuperadmin || status.type === "loading"}
                 className="w-full px-4 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition min-h-[44px]"
               >
                 {status.type === "loading"

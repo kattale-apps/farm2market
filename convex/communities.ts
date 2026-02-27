@@ -1484,7 +1484,7 @@ export const updateCommunityPricing = mutation({
  */
 export const createQRCommunity = mutation({
   args: {
-    adminId: v.optional(v.id("users")), // Make optional - will get from auth if not provided
+    adminId: v.id("users"), // Now required - must be passed from front-end
     name: v.string(),
     slug: v.string(),
     logoUrl: v.optional(v.string()),
@@ -1493,37 +1493,7 @@ export const createQRCommunity = mutation({
     memberImageMessagePrice: v.number(),
   },
   handler: async (ctx, args) => {
-    // Get user from auth if not provided
-    let adminId = args.adminId;
-    
-    if (!adminId) {
-      const authUser = await ctx.auth.getUserIdentity();
-      if (!authUser) {
-        throw new Error("Not authenticated");
-      }
-      
-      // Find user in DB by email or phone
-      let user = null;
-      if (authUser.email) {
-        user = await ctx.db
-          .query("users")
-          .withIndex("by_email", (q) => q.eq("email", authUser.email))
-          .first();
-      }
-      
-      if (!user && authUser.phoneNumber) {
-        user = await ctx.db
-          .query("users")
-          .withIndex("by_phone", (q) => q.eq("phoneNumber", authUser.phoneNumber))
-          .first();
-      }
-      
-      if (!user) {
-        throw new Error("User not found in database");
-      }
-      
-      adminId = user._id;
-    }
+    const adminId = args.adminId;
 
     // Verify admin role
     const adminCheck = await verifyAdminRole({
@@ -1626,6 +1596,43 @@ export const createQRCommunity = mutation({
  * - Default community to navigate to
  * - Whether user is superadmin
  */
+/**
+ * Simple query to get the current user's ID for APIs that need it
+ * This is much more reliable than getMyNavigationContext
+ */
+export const getCurrentUserId = query({
+  args: {},
+  handler: async (ctx) => {
+    const authUser = await ctx.auth.getUserIdentity();
+    if (!authUser) {
+      return { userId: null, isSuperadmin: false, error: "Not authenticated" };
+    }
+
+    // Find user in DB by email or phone
+    let user = null;
+    if (authUser.email) {
+      user = await ctx.db
+        .query("users")
+        .withIndex("by_email", (q) => q.eq("email", authUser.email))
+        .first();
+    }
+
+    if (!user && authUser.phoneNumber) {
+      user = await ctx.db
+        .query("users")
+        .withIndex("by_phone", (q) => q.eq("phoneNumber", authUser.phoneNumber))
+        .first();
+    }
+
+    if (!user) {
+      return { userId: null, isSuperadmin: false, error: "User not found" };
+    }
+
+    const isSuperadmin = user.adminLevel === "super" || user.adminLevel === undefined;
+    return { userId: user._id, isSuperadmin, error: undefined };
+  },
+});
+
 export const getMyNavigationContext = query({
   args: {},
   handler: async (ctx) => {

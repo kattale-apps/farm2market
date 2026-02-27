@@ -1484,7 +1484,7 @@ export const updateCommunityPricing = mutation({
  */
 export const createQRCommunity = mutation({
   args: {
-    adminId: v.id("users"),
+    adminId: v.optional(v.id("users")), // Make optional - will get from auth if not provided
     name: v.string(),
     slug: v.string(),
     logoUrl: v.optional(v.string()),
@@ -1493,16 +1493,48 @@ export const createQRCommunity = mutation({
     memberImageMessagePrice: v.number(),
   },
   handler: async (ctx, args) => {
+    // Get user from auth if not provided
+    let adminId = args.adminId;
+    
+    if (!adminId) {
+      const authUser = await ctx.auth.getUserIdentity();
+      if (!authUser) {
+        throw new Error("Not authenticated");
+      }
+      
+      // Find user in DB by email or phone
+      let user = null;
+      if (authUser.email) {
+        user = await ctx.db
+          .query("users")
+          .withIndex("by_email", (q) => q.eq("email", authUser.email))
+          .first();
+      }
+      
+      if (!user && authUser.phoneNumber) {
+        user = await ctx.db
+          .query("users")
+          .withIndex("by_phone", (q) => q.eq("phoneNumber", authUser.phoneNumber))
+          .first();
+      }
+      
+      if (!user) {
+        throw new Error("User not found in database");
+      }
+      
+      adminId = user._id;
+    }
+
     // Verify admin role
     const adminCheck = await verifyAdminRole({
-      userId: args.adminId,
+      userId: adminId,
       db: ctx.db,
     });
     if (!adminCheck.authorized) {
       throw new Error("Only admins can create communities");
     }
 
-    const adminUser = await ctx.db.get(args.adminId);
+    const adminUser = await ctx.db.get(adminId);
     if (!adminUser || adminUser.role !== "admin") {
       throw new Error("User is not an admin");
     }

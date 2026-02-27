@@ -1,14 +1,12 @@
 "use client";
 
 import React, { useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
 import { useRouter } from "next/navigation";
 
 export default function CreateQRCommunity() {
   const router = useRouter();
-  const navContext = useQuery(api.communities.getMyNavigationContext);
   const createQRCommunity = useMutation(api.communities.createQRCommunity as any);
 
   const [formData, setFormData] = useState({
@@ -30,9 +28,6 @@ export default function CreateQRCommunity() {
     qrDataUrl: string;
     joinLink: string;
   } | null>(null);
-
-  // Get adminId from navContext
-  const adminId = navContext?.userId as Id<"users"> | null;
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -63,14 +58,6 @@ export default function CreateQRCommunity() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!adminId) {
-      setStatus({
-        type: "error",
-        message: "Not authenticated",
-      });
-      return;
-    }
-
     if (!formData.name.trim() || !formData.slug.trim()) {
       setStatus({
         type: "error",
@@ -82,9 +69,9 @@ export default function CreateQRCommunity() {
     setStatus({ type: "loading", message: "Creating community..." });
 
     try {
-      // Step 1: Create the community
+      // The mutation will automatically get the user ID from Convex auth
+      // Pass undefined for adminId - the mutation handles auth internally
       const community = await createQRCommunity({
-        adminId,
         name: formData.name.trim(),
         slug: formData.slug.trim(),
         logoUrl: formData.logoPreview,
@@ -127,41 +114,6 @@ export default function CreateQRCommunity() {
   const handleDone = () => {
     router.push("/superadmin");
   };
-
-  // Show loading state while navContext is being fetched
-  if (!navContext) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Show error if not authenticated
-  if (navContext.error) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
-        <div className="max-w-md w-full text-center">
-          <div className="flex justify-center mb-6">
-            <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center">
-              <span className="text-2xl">⚠️</span>
-            </div>
-          </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-3">Not Authenticated</h1>
-          <p className="text-gray-600 mb-6">{navContext.error}</p>
-          <button
-            onClick={() => router.push("/")}
-            className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
-          >
-            Go to Home
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">

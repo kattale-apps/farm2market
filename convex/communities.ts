@@ -1484,7 +1484,7 @@ export const updateCommunityPricing = mutation({
  */
 export const createQRCommunity = mutation({
   args: {
-    adminId: v.optional(v.id("users")), // Optional - will try to get from auth if not provided
+    adminId: v.id("users"), // Required - passed from frontend localStorage
     name: v.string(),
     slug: v.string(),
     logoUrl: v.optional(v.string()),
@@ -1493,37 +1493,7 @@ export const createQRCommunity = mutation({
     memberImageMessagePrice: v.number(),
   },
   handler: async (ctx, args) => {
-    let adminId = args.adminId;
-
-    // If no adminId provided, try to get from auth context
-    if (!adminId) {
-      const authUser = await ctx.auth.getUserIdentity();
-      if (!authUser) {
-        throw new Error("Not authenticated");
-      }
-
-      // Find user in DB
-      let user = null;
-      if (authUser.email) {
-        user = await ctx.db
-          .query("users")
-          .withIndex("by_email", (q) => q.eq("email", authUser.email))
-          .first();
-      }
-
-      if (!user && authUser.phoneNumber) {
-        user = await ctx.db
-          .query("users")
-          .withIndex("by_phone", (q) => q.eq("phoneNumber", authUser.phoneNumber))
-          .first();
-      }
-
-      if (!user) {
-        throw new Error("User not found");
-      }
-
-      adminId = user._id;
-    }
+    const adminId = args.adminId;
 
     // Verify admin role
     const adminCheck = await verifyAdminRole({

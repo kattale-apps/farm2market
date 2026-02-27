@@ -1,19 +1,17 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { useMutation } from "convex/react";
+import React, { useState } from "react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useRouter } from "next/navigation";
 import RoleGuard from "@/app/components/RoleGuard";
 
-export const dynamic = "force-dynamic";
-
-export default function CreateQRCommunity() {
+function CreateQRCommunityContent() {
   const router = useRouter();
+  const navContext = useQuery(api.communities.getMyNavigationContext);
   const createQRCommunity = useMutation(api.communities.createQRCommunity as any);
 
-  const [adminId, setAdminId] = useState<Id<"users"> | null>(null);
   const [formData, setFormData] = useState({
     name: "",
     slug: "",
@@ -34,12 +32,8 @@ export default function CreateQRCommunity() {
     joinLink: string;
   } | null>(null);
 
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const uid = localStorage.getItem("pilot_user");
-      if (uid) setAdminId(uid as Id<"users">);
-    }
-  }, []);
+  // Get adminId from navContext instead of localStorage
+  const adminId = navContext?.userId;
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -136,9 +130,8 @@ export default function CreateQRCommunity() {
   };
 
   return (
-    <RoleGuard allowedRoles={["superadmin"]}>
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-        <div className="max-w-2xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+      <div className="max-w-2xl mx-auto">
           {/* Header */}
           <div className="mb-8">
             <h1 className="text-4xl font-bold text-gray-900">Create QR Community</h1>
@@ -347,6 +340,13 @@ export default function CreateQRCommunity() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function CreateQRCommunity() {
+  return (
+    <RoleGuard allowedRoles={["superadmin"]}>
+      <CreateQRCommunityContent />
     </RoleGuard>
   );
 }

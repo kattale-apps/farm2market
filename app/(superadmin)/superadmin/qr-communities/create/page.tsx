@@ -130,7 +130,7 @@ export default function CreateQRCommunity() {
   };
 
   const handleDone = () => {
-    router.push("/superadmin");
+    router.push("/superadmin/usage");
   };
 
   return (
@@ -142,9 +142,12 @@ export default function CreateQRCommunity() {
             <h1 className="text-2xl font-bold text-gray-900">Create QR Community</h1>
             <p className="text-sm text-gray-600">Create joinable communities with QR codes</p>
           </div>
-          <Link href="/superadmin" className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg font-medium transition">
+          <button 
+            onClick={() => router.push("/superadmin/usage")}
+            className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg font-medium transition"
+          >
             ← Back to Dashboard
-          </Link>
+          </button>
         </div>
       </div>
 

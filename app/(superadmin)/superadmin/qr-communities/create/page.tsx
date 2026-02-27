@@ -1,18 +1,13 @@
 "use client";
 
 import React, { useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useRouter } from "next/navigation";
 
 export default function CreateQRCommunity() {
   const router = useRouter();
   const createQRCommunity = useMutation(api.communities.createQRCommunity as any);
-  
-  // Get current user ID with simple, reliable query
-  const userContext = useQuery(api.communities.getCurrentUserId as any);
-  const currentUserId = userContext?.userId;
-  const isSuperadmin = userContext?.isSuperadmin;
 
   const [formData, setFormData] = useState({
     name: "",
@@ -25,9 +20,9 @@ export default function CreateQRCommunity() {
   });
 
   const [status, setStatus] = useState<{
-    type: "loading" | "error" | "success" | null;
+    type: "idle" | "loading" | "error" | "success";
     message: string;
-  }>({ type: null, message: "" });
+  }>({ type: "idle", message: "" });
 
   const [generatedQR, setGeneratedQR] = useState<{
     qrDataUrl: string;
@@ -63,23 +58,6 @@ export default function CreateQRCommunity() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Check if user is authenticated and is a superadmin
-    if (!currentUserId) {
-      setStatus({
-        type: "error",
-        message: "Not authenticated. Please log in.",
-      });
-      return;
-    }
-
-    if (!isSuperadmin) {
-      setStatus({
-        type: "error",
-        message: "Only superadmins can create QR communities",
-      });
-      return;
-    }
-
     if (!formData.name.trim() || !formData.slug.trim()) {
       setStatus({
         type: "error",
@@ -92,7 +70,7 @@ export default function CreateQRCommunity() {
 
     try {
       const community = await createQRCommunity({
-        adminId: currentUserId,
+        adminId: undefined as any, // Will be fetched by mutation from auth context
         name: formData.name.trim(),
         slug: formData.slug.trim(),
         logoUrl: formData.logoPreview,
@@ -137,50 +115,54 @@ export default function CreateQRCommunity() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <div className="max-w-2xl mx-auto">
-          {/* Header Card */}
-          <div className="mb-8 bg-white rounded-lg shadow-md p-6">
-            <h1 className="text-4xl font-bold text-gray-900">Create QR Community</h1>
-            <p className="text-gray-600 mt-2">
-              Set up a new community with monetisation controls
-            </p>
-          </div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-6">
+      <div className="max-w-4xl mx-auto">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-5xl font-bold text-gray-900">Create QR Community</h1>
+          <p className="text-lg text-gray-600 mt-3">
+            Set up a new community joinable via QR code with flexible monetisation controls
+          </p>
+        </div>
 
         {/* Form Card */}
-        <div className="bg-white rounded-lg shadow-lg p-6 max-w-2xl mx-auto">
+        <div className="bg-white rounded-xl shadow-md border border-gray-100 p-8">
           {status.type === "success" && generatedQR ? (
             // Success State
             <div className="space-y-6">
-              <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                <p className="text-green-800 font-medium">{status.message}</p>
+              <div className="p-5 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg">
+                <p className="text-green-900 font-semibold text-lg">{status.message}</p>
               </div>
 
               {/* QR Code Display */}
-              <div className="text-center space-y-4">
-                <h2 className="text-2xl font-bold">Your QR Code</h2>
-                <img
-                  src={generatedQR.qrDataUrl}
-                  alt="Community QR Code"
-                  className="w-64 h-64 mx-auto border-4 border-gray-200 rounded-lg"
-                />
+              <div className="text-center space-y-6">
+                <div>
+                  <h2 className="text-3xl font-bold text-gray-900 mb-4">Your QR Code</h2>
+                  <div className="flex justify-center p-8 bg-gray-50 rounded-lg border-2 border-gray-200">
+                    <img
+                      src={generatedQR.qrDataUrl}
+                      alt="Community QR Code"
+                      className="w-80 h-80 border-4 border-white rounded-lg shadow-lg"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Join Link */}
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <p className="text-sm text-gray-600 mb-2">Join Link:</p>
-                <div className="flex gap-2">
+              <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
+                <p className="text-sm font-semibold text-gray-700 mb-3">Join Link:</p>
+                <div className="flex gap-3">
                   <input
                     type="text"
                     value={generatedQR.joinLink}
                     readOnly
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg bg-white"
+                    className="flex-1 px-4 py-3 border border-gray-300 rounded-lg bg-white text-gray-700 font-mono text-sm"
                   />
                   <button
                     onClick={() => navigator.clipboard.writeText(generatedQR.joinLink)}
-                    className="px-4 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition min-h-[44px] flex items-center justify-center"
+                    className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition min-h-[44px] flex items-center whitespace-nowrap"
                   >
-                    Copy
+                    Copy Link
                   </button>
                 </div>
               </div>
@@ -188,180 +170,167 @@ export default function CreateQRCommunity() {
               {/* Download Button */}
               <button
                 onClick={handleDownloadQR}
-                className="w-full px-4 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition min-h-[44px]"
+                className="w-full px-4 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition min-h-[44px] text-lg"
               >
-                Download QR Code (PNG)
+                ⬇ Download QR Code (PNG)
               </button>
 
               {/* Done Button */}
               <button
                 onClick={handleDone}
-                className="w-full px-4 py-3 bg-gray-600 text-white font-medium rounded-lg hover:bg-gray-700 transition min-h-[44px]"
+                className="w-full px-4 py-3 bg-gray-100 text-gray-900 font-semibold rounded-lg hover:bg-gray-200 transition min-h-[44px] text-lg"
               >
-                Done
+                Back to Dashboard
               </button>
             </div>
           ) : (
             // Form State
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Loading Auth Context */}
-              {currentUserId === undefined && (
-                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-blue-800">Loading authentication...</p>
-                </div>
-              )}
-
-              {/* Auth Error */}
-              {currentUserId === null && (
-                <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                  <p className="text-red-800">Not authenticated. Please log in.</p>
-                </div>
-              )}
-
-              {/* Superadmin Check */}
-              {currentUserId !== undefined && currentUserId !== null && !isSuperadmin && (
-                <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                  <p className="text-red-800">Only superadmins can create QR communities.</p>
-                </div>
-              )}
-
+            <form onSubmit={handleSubmit} className="space-y-8">
               {/* Error Display */}
               {status.type === "error" && (
-                <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                  <p className="text-red-800">{status.message}</p>
+                <div className="p-4 bg-red-50 border-l-4 border-red-500 rounded-lg">
+                  <p className="text-red-800 font-semibold">{status.message}</p>
                 </div>
               )}
 
               {/* Community Information Section */}
-              <div className="space-y-4">
-                <h2 className="text-lg font-semibold text-gray-900">
-                  Community Information
-                </h2>
-
+              <div className="space-y-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Community Name *
-                  </label>
-                  <input
-                    type="text"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleInputChange}
-                    placeholder="e.g., BioFarm Uganda"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50"
-                    disabled={!currentUserId || !isSuperadmin || status.type === "loading"}
-                  />
-                </div>
+                  <h2 className="text-2xl font-bold text-gray-900 mb-6">Community Information</h2>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    URL Slug *
-                  </label>
-                  <input
-                    type="text"
-                    name="slug"
-                    value={formData.slug}
-                    onChange={handleInputChange}
-                    placeholder="e.g., biofarm-ug"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50"
-                    disabled={!currentUserId || !isSuperadmin || status.type === "loading"}
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Used in join links: /join/{formData.slug}
-                  </p>
-                </div>
+                  <div className="space-y-5">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Community Name<span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="name"
+                        value={formData.name}
+                        onChange={handleInputChange}
+                        placeholder="e.g., BioFarm Uganda"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 placeholder-gray-400"
+                        disabled={status.type === "loading"}
+                      />
+                    </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Community Logo
-                  </label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleLogoUpload}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg disabled:bg-gray-50"
-                    disabled={!currentUserId || !isSuperadmin || status.type === "loading"}
-                  />
-                  {formData.logoPreview && (
-                    <img
-                      src={formData.logoPreview}
-                      alt="Logo Preview"
-                      className="mt-3 w-24 h-24 object-cover rounded-lg border border-gray-200"
-                    />
-                  )}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        URL Slug<span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="slug"
+                        value={formData.slug}
+                        onChange={handleInputChange}
+                        placeholder="e.g., biofarm-ug"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 placeholder-gray-400"
+                        disabled={status.type === "loading"}
+                      />
+                      <p className="text-xs text-gray-500 mt-2">
+                        Join link will be: <span className="font-mono text-gray-700">/join/{formData.slug}</span>
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Community Logo (Optional)
+                      </label>
+                      <div className="flex items-center gap-4">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleLogoUpload}
+                          className="flex-1 px-4 py-3 border border-gray-300 rounded-lg"
+                          disabled={status.type === "loading"}
+                        />
+                        {formData.logoPreview && (
+                          <img
+                            src={formData.logoPreview}
+                            alt="Logo Preview"
+                            className="w-16 h-16 object-cover rounded-lg border-2 border-gray-300 flex-shrink-0"
+                          />
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
               {/* Monetisation Settings Section */}
-              <div className="space-y-4 border-t pt-6">
-                <h2 className="text-lg font-semibold text-gray-900">
-                  Monetisation Settings
-                </h2>
-
+              <div className="space-y-6 border-t-2 pt-8">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Junior Admin Free Monthly Image Quota
-                  </label>
-                  <input
-                    type="number"
-                    name="juniorAdminFreeMonthlyImageQuota"
-                    value={formData.juniorAdminFreeMonthlyImageQuota}
-                    onChange={handleInputChange}
-                    min="0"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50"
-                    disabled={!currentUserId || !isSuperadmin || status.type === "loading"}
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Free image posts per month for junior admin
-                  </p>
-                </div>
+                  <h2 className="text-2xl font-bold text-gray-900 mb-6">Monetisation Settings</h2>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Junior Admin Image Price (UGX)
-                  </label>
-                  <input
-                    type="number"
-                    name="juniorAdminImagePrice"
-                    value={formData.juniorAdminImagePrice}
-                    onChange={handleInputChange}
-                    min="0"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50"
-                    disabled={!currentUserId || !isSuperadmin || status.type === "loading"}
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Price per image post after free quota
-                  </p>
-                </div>
+                  <div className="space-y-5 bg-blue-50 p-6 rounded-lg border border-blue-100">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Junior Admin Free Monthly Image Quota
+                        </label>
+                        <input
+                          type="number"
+                          name="juniorAdminFreeMonthlyImageQuota"
+                          value={formData.juniorAdminFreeMonthlyImageQuota}
+                          onChange={handleInputChange}
+                          min="0"
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                          disabled={status.type === "loading"}
+                        />
+                        <p className="text-xs text-gray-600 mt-2">
+                          Free posts per month for junior admin
+                        </p>
+                      </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Member Image Message Price (UGX)
-                  </label>
-                  <input
-                    type="number"
-                    name="memberImageMessagePrice"
-                    value={formData.memberImageMessagePrice}
-                    onChange={handleInputChange}
-                    min="0"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50"
-                    disabled={!currentUserId || !isSuperadmin || status.type === "loading"}
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Price per image in member messages
-                  </p>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Junior Admin Image Post Price (UGX)
+                        </label>
+                        <input
+                          type="number"
+                          name="juniorAdminImagePrice"
+                          value={formData.juniorAdminImagePrice}
+                          onChange={handleInputChange}
+                          min="0"
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                          disabled={status.type === "loading"}
+                        />
+                        <p className="text-xs text-gray-600 mt-2">
+                          Price after free quota exceeded
+                        </p>
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Member Image Message Price (UGX)
+                        </label>
+                        <input
+                          type="number"
+                          name="memberImageMessagePrice"
+                          value={formData.memberImageMessagePrice}
+                          onChange={handleInputChange}
+                          min="0"
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+                          disabled={status.type === "loading"}
+                        />
+                        <p className="text-xs text-gray-600 mt-2">
+                          Member messaging image fee
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
               {/* Submit Button */}
               <button
                 type="submit"
-                disabled={!currentUserId || !isSuperadmin || status.type === "loading"}
-                className="w-full px-4 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition min-h-[44px]"
+                disabled={status.type === "loading"}
+                className="w-full px-6 py-4 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition min-h-[44px] text-lg mt-2"
               >
                 {status.type === "loading"
                   ? "Creating Community & Generating QR..."
-                  : "Create Community & Generate QR"}
+                  : "✓ Create Community & Generate QR"}
               </button>
             </form>
           )}

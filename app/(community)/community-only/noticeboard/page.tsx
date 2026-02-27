@@ -1,13 +1,13 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useState, useEffect } from "react";
 import { Id } from "@/convex/_generated/dataModel";
 import RoleGuard from "@/app/components/RoleGuard";
 import { useSearchParams } from "next/navigation";
-
-export const dynamic = "force-dynamic";
 
 function QuotaWidget({ communityId }: { communityId: Id<"communities"> }) {
   const quotaStatus = useQuery(api.noticeboard.getAdminNoticeboardQuotaStatus, {

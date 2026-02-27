@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import React, { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -7,8 +9,6 @@ import { Id } from "@/convex/_generated/dataModel";
 import { useSearchParams } from "next/navigation";
 import CommunitySwitcher from "@/app/components/CommunitySwitcher";
 import RoleGuard from "@/app/components/RoleGuard";
-
-export const dynamic = "force-dynamic";
 
 export default function MemberMessagingFeed() {
   const searchParams = useSearchParams();

@@ -11,12 +11,27 @@ export default function CreateQRCommunity() {
   const router = useRouter();
   const createQRCommunity = useMutation(api.communities.createQRCommunity as any);
   const [userId, setUserId] = useState<Id<"users"> | null>(null);
+  const [baseUrl, setBaseUrl] = useState<string>("");
 
-  // Get user ID from localStorage on mount (same pattern as working page)
+  // Get user ID from localStorage on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const uid = localStorage.getItem("pilot_user");
-      if (uid) setUserId(uid as Id<"users">);
+      // Set base URL for SSR safety
+      setBaseUrl(window.location.origin);
+      
+      const storedUser = localStorage.getItem("pilot_user");
+      if (storedUser) {
+        try {
+          // Parse JSON object and extract userId
+          const userObj = JSON.parse(storedUser);
+          if (userObj.userId) {
+            setUserId(userObj.userId as Id<"users">);
+          }
+        } catch {
+          // If parsing fails, try using directly (backward compatibility)
+          setUserId(storedUser as Id<"users">);
+        }
+      }
     }
   }, []);
 
@@ -100,7 +115,8 @@ export default function CreateQRCommunity() {
 
       // Step 2: Generate QR code (import dynamically to avoid SSR issues)
       const QRCode = (await import("qrcode")).default;
-      const joinLink = `${window.location.origin}/join/${formData.slug}`;
+      // Use full URL with origin for QR code
+      const joinLink = `${baseUrl}/join/${formData.slug}`;
       const qrDataUrl = await QRCode.toDataURL(joinLink);
 
       setGeneratedQR({

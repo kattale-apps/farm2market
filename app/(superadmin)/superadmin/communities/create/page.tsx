@@ -25,6 +25,7 @@ type CreateStatus = "idle" | "loading" | "success" | "error";
 export default function CreateCommunityPage() {
   const router = useRouter();
   const [userId, setUserId] = useState<Id<"users"> | null>(null);
+  const [baseUrl, setBaseUrl] = useState<string>(""); // For SSR safety
   const [status, setStatus] = useState<CreateStatus>("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [successCommunityId, setSuccessCommunityId] = useState<string>("");
@@ -32,8 +33,22 @@ export default function CreateCommunityPage() {
   // Get user ID from localStorage on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const uid = localStorage.getItem("pilot_user");
-      if (uid) setUserId(uid as Id<"users">);
+      // Set base URL for SSR safety
+      setBaseUrl(window.location.origin);
+      
+      const storedUser = localStorage.getItem("pilot_user");
+      if (storedUser) {
+        try {
+          // Parse JSON object and extract userId
+          const userObj = JSON.parse(storedUser);
+          if (userObj.userId) {
+            setUserId(userObj.userId as Id<"users">);
+          }
+        } catch {
+          // If parsing fails, try using directly (backward compatibility)
+          setUserId(storedUser as Id<"users">);
+        }
+      }
     }
   }, []);
   
@@ -143,9 +158,9 @@ export default function CreateCommunityPage() {
   // Generate QR code
   useEffect(() => {
     const generateQR = async () => {
-      if (formData.slug && qrCanvasRef.current) {
+      if (formData.slug && qrCanvasRef.current && baseUrl) {
         try {
-          const joinUrl = `${window.location.origin}/join/community/${formData.slug}`;
+          const joinUrl = `${baseUrl}/join/community/${formData.slug}`;
           const canvas = qrCanvasRef.current;
           await QRCode.toCanvas(canvas, joinUrl, {
             errorCorrectionLevel: "H",
@@ -299,12 +314,12 @@ export default function CreateCommunityPage() {
                 <div className="flex-1">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Join Link</h3>
                   <div className="bg-gray-100 p-4 rounded-lg mb-4 break-all font-mono text-sm text-gray-700">
-                    {`${window.location.origin}/join/community/${formData.slug}`}
+                    {baseUrl && `${baseUrl}/join/community/${formData.slug}`}
                   </div>
                   <button
                     onClick={() => {
                       navigator.clipboard.writeText(
-                        `${window.location.origin}/join/community/${formData.slug}`
+                        `${baseUrl}/join/community/${formData.slug}`
                       );
                       alert("Link copied to clipboard!");
                     }}
@@ -437,7 +452,7 @@ export default function CreateCommunityPage() {
                       />
                       {formData.slug && (
                         <p className="text-sm text-gray-600 mt-2">
-                          Join URL: {`${window.location.origin}/join/community/${formData.slug}`}
+                          Join URL: {baseUrl && `${baseUrl}/join/community/${formData.slug}`}
                         </p>
                       )}
                     </div>
@@ -786,7 +801,7 @@ export default function CreateCommunityPage() {
                       onClick={() => {
                         if (qrCanvasRef.current) {
                           const canvas = qrCanvasRef.current;
-                          const joinUrl = `${window.location.origin}/join/community/${formData.slug}`;
+                          const joinUrl = `${baseUrl}/join/community/${formData.slug}`;
                           QRCode.toCanvas(canvas, joinUrl, {
                             errorCorrectionLevel: "H",
                             type: "image/png",
@@ -811,7 +826,7 @@ export default function CreateCommunityPage() {
                       <div className="bg-gray-50 p-4 rounded-lg text-center">
                         <p className="text-xs text-gray-600 mb-2">Join URL</p>
                         <p className="text-xs font-mono text-gray-700 break-all">
-                          {`${window.location.origin}/join/community/${formData.slug}`}
+                          {baseUrl && `${baseUrl}/join/community/${formData.slug}`}
                         </p>
                       </div>
                     )}

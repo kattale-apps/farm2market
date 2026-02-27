@@ -20,6 +20,9 @@ export default function RoleGuard({ children, allowedRoles, communityId }: RoleG
   // Determine user role from nav context
   const getUserRole = (): UserRole | null => {
     if (!navContext) return null;
+    
+    // Handle error case
+    if (navContext.error) return null;
 
     // Check if superadmin
     if (navContext.isSuperadmin) {
@@ -82,6 +85,39 @@ export default function RoleGuard({ children, allowedRoles, communityId }: RoleG
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Authentication error state
+  if (navContext.error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
+        <div className="max-w-md w-full text-center">
+          <div className="flex justify-center mb-6">
+            <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center">
+              <svg
+                className="w-8 h-8 text-yellow-600"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </div>
+          </div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-3">Authentication Required</h1>
+          <p className="text-gray-600 mb-6">Please log in or sign up to continue.</p>
+          <button
+            onClick={() => router.push("/")}
+            className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+          >
+            Go to Home
+          </button>
         </div>
       </div>
     );

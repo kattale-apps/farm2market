@@ -1599,7 +1599,15 @@ export const getMyNavigationContext = query({
   handler: async (ctx) => {
     const adminUser = await ctx.auth.getUserIdentity();
     if (!adminUser) {
-      throw new Error("Not authenticated");
+      // Return empty context instead of throwing - allows graceful handling
+      return {
+        userId: null,
+        isSuperadmin: false,
+        adminCommunities: [],
+        joinedCommunities: [],
+        defaultCommunityId: null,
+        error: "Not authenticated",
+      };
     }
 
     // Get user from DB - try email first, fall back to any user lookup
@@ -1622,7 +1630,15 @@ export const getMyNavigationContext = query({
     }
 
     if (!user) {
-      throw new Error("User not found");
+      // Return empty context instead of throwing
+      return {
+        userId: null,
+        isSuperadmin: false,
+        adminCommunities: [],
+        joinedCommunities: [],
+        defaultCommunityId: null,
+        error: "User not found",
+      };
     }
 
     const userId = user._id;
@@ -1680,6 +1696,7 @@ export const getMyNavigationContext = query({
       adminCommunities: adminCommunitiesMapped,
       joinedCommunities,
       defaultCommunityId,
+      error: undefined,
     };
   },
 });

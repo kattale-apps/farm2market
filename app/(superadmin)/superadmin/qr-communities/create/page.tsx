@@ -247,7 +247,21 @@ export default function CreateQRCommunity() {
                     disabled={status.type === "loading"}
                   />
                   <p className="text-xs text-gray-600 mt-2">
-                        Join link: <span className="font-mono font-bold">/join/{formData.slug || "slug"}</span>
+                    Join link: <span className="font-mono font-bold">/join/{formData.slug || "slug"}</span>
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">
+                    Community Logo
+                  </label>
+                  <div className="flex items-center gap-4">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleLogoUpload}
+                      className="flex-1 px-4 py-3 border border-gray-300 rounded-lg bg-white cursor-pointer"
+                      disabled={status.type === "loading"}
                     />
                     {formData.logoPreview && (
                       <img

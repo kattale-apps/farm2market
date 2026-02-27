@@ -157,7 +157,7 @@ export default function CreateQRCommunity() {
                   />
                   <button
                     onClick={() => navigator.clipboard.writeText(generatedQR.joinLink)}
-                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                    className="px-4 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition min-h-[44px] flex items-center justify-center"
                   >
                     Copy
                   </button>
@@ -167,7 +167,7 @@ export default function CreateQRCommunity() {
               {/* Download Button */}
               <button
                 onClick={handleDownloadQR}
-                className="w-full px-4 py-3 bg-green-500 text-white font-medium rounded-lg hover:bg-green-600 transition"
+                className="w-full px-4 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition min-h-[44px]"
               >
                 Download QR Code (PNG)
               </button>
@@ -175,7 +175,7 @@ export default function CreateQRCommunity() {
               {/* Done Button */}
               <button
                 onClick={handleDone}
-                className="w-full px-4 py-3 bg-gray-500 text-white font-medium rounded-lg hover:bg-gray-600 transition"
+                className="w-full px-4 py-3 bg-gray-600 text-white font-medium rounded-lg hover:bg-gray-700 transition min-h-[44px]"
               >
                 Done
               </button>
@@ -315,7 +315,7 @@ export default function CreateQRCommunity() {
               <button
                 type="submit"
                 disabled={status.type === "loading"}
-                className="w-full px-4 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
+                className="w-full px-4 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition min-h-[44px]"
               >
                 {status.type === "loading"
                   ? "Creating Community & Generating QR..."

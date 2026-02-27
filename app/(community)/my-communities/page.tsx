@@ -259,9 +259,16 @@ export default function MyCommunities() {
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    const userIdFromStorage = localStorage.getItem("pilot_user");
-    if (userIdFromStorage) {
-      setUserId(userIdFromStorage as Id<"users">);
+    const storedUser = localStorage.getItem("pilot_user");
+    if (storedUser) {
+      try {
+        const userObj = JSON.parse(storedUser);
+        if (userObj.userId) {
+          setUserId(userObj.userId as Id<"users">);
+        }
+      } catch {
+        setUserId(storedUser as Id<"users">);
+      }
     } else {
       router.push("/join/community");
     }

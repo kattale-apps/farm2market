@@ -34,12 +34,19 @@ export default function MemberMessagingFeed() {
   // Get user ID from localStorage
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const uid = localStorage.getItem("pilot_user");
+      const storedUser = localStorage.getItem("pilot_user");
       const email = localStorage.getItem("pilot_email") || "member@farm2market.ug";
-      if (uid) {
-        setUserId(uid as Id<"users">);
-        setUserEmail(email);
+      if (storedUser) {
+        try {
+          const userObj = JSON.parse(storedUser);
+          if (userObj.userId) {
+            setUserId(userObj.userId as Id<"users">);
+          }
+        } catch {
+          setUserId(storedUser as Id<"users">);
+        }
       }
+      setUserEmail(email);
       setIsLoading(false);
     }
   }, []);

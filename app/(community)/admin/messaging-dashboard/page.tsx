@@ -29,8 +29,17 @@ export default function MessagingDashboard() {
   // Get user ID from localStorage (set during auth)
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const uid = localStorage.getItem("pilot_user");
-      if (uid) setUserId(uid as Id<"users">);
+      const storedUser = localStorage.getItem("pilot_user");
+      if (storedUser) {
+        try {
+          const userObj = JSON.parse(storedUser);
+          if (userObj.userId) {
+            setUserId(userObj.userId as Id<"users">);
+          }
+        } catch {
+          setUserId(storedUser as Id<"users">);
+        }
+      }
       setIsLoading(false);
     }
   }, []);

@@ -8,6 +8,8 @@ import { Id } from "@/convex/_generated/dataModel";
 import CommunitySwitcher from "@/app/components/CommunitySwitcher";
 import RoleGuard from "@/app/components/RoleGuard";
 
+export const dynamic = "force-dynamic";
+
 export default function MessagingDashboard() {
   const searchParams = useSearchParams();
   const communityIdParam = (searchParams.get("communityId") || "") as Id<"communities">;

@@ -1,16 +1,19 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useRouter } from "next/navigation";
 import RoleGuard from "@/app/components/RoleGuard";
 
+export const dynamic = "force-dynamic";
+
 export default function CreateQRCommunity() {
   const router = useRouter();
   const createQRCommunity = useMutation(api.communities.createQRCommunity as any);
 
+  const [adminId, setAdminId] = useState<Id<"users"> | null>(null);
   const [formData, setFormData] = useState({
     name: "",
     slug: "",
@@ -31,7 +34,12 @@ export default function CreateQRCommunity() {
     joinLink: string;
   } | null>(null);
 
-  const adminId = localStorage.getItem("pilot_user") as Id<"users"> | null;
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const uid = localStorage.getItem("pilot_user");
+      if (uid) setAdminId(uid as Id<"users">);
+    }
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;

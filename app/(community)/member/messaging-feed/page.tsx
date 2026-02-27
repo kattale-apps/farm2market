@@ -8,6 +8,8 @@ import { useSearchParams } from "next/navigation";
 import CommunitySwitcher from "@/app/components/CommunitySwitcher";
 import RoleGuard from "@/app/components/RoleGuard";
 
+export const dynamic = "force-dynamic";
+
 export default function MemberMessagingFeed() {
   const searchParams = useSearchParams();
   const communityId = (searchParams.get("communityId") || "") as Id<"communities">;

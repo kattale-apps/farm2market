@@ -7,6 +7,8 @@ import { Id } from "@/convex/_generated/dataModel";
 import RoleGuard from "@/app/components/RoleGuard";
 import { useSearchParams } from "next/navigation";
 
+export const dynamic = "force-dynamic";
+
 function QuotaWidget({ communityId }: { communityId: Id<"communities"> }) {
   const quotaStatus = useQuery(api.noticeboard.getAdminNoticeboardQuotaStatus, {
     communityId,

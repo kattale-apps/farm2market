@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
@@ -26,6 +28,22 @@ export default function LoginPage() {
   
   const login = useMutation(api.auth.login);
   const signup = useMutation(api.auth.signup);
+
+  const getDefaultRedirectForUser = (user: any) => {
+    if (user?.role === "admin" && user?.adminLevel === "super") {
+      return "/superadmin/dashboard";
+    }
+    if (user?.role === "admin") {
+      if (user?.defaultCommunityId) {
+        return `/community-admin/${user.defaultCommunityId}/dashboard`;
+      }
+      if (user?.assignedCommunityIds?.length > 0) {
+        return `/community-admin/${user.assignedCommunityIds[0]}/dashboard`;
+      }
+      return "/my-communities";
+    }
+    return "/my-communities";
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,8 +92,11 @@ export default function LoginPage() {
         // Store user info in localStorage
         localStorage.setItem("pilot_user", JSON.stringify(result));
         
-        // Redirect to dashboard
-        router.push("/");
+        // Redirect after signup/login
+        const redirect = typeof window !== "undefined"
+          ? new URLSearchParams(window.location.search).get("redirect")
+          : null;
+        router.push(redirect || getDefaultRedirectForUser(result));
       } else {
         // Login
         const result = await login({
@@ -87,8 +108,11 @@ export default function LoginPage() {
         // Store user info in localStorage
         localStorage.setItem("pilot_user", JSON.stringify(result));
         
-        // Redirect to dashboard
-        router.push("/");
+        // Redirect after signup/login
+        const redirect = typeof window !== "undefined"
+          ? new URLSearchParams(window.location.search).get("redirect")
+          : null;
+        router.push(redirect || getDefaultRedirectForUser(result));
       }
     } catch (err: any) {
       console.error("Auth error:", err);

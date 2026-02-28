@@ -55,19 +55,14 @@ export default function Home() {
           if (parsed && parsed.userId && parsed.role && parsed.alias) {
             setUser(parsed);
           } else {
-            // Invalid user data, clear and redirect
+            // Invalid user data, clear to remain public
             localStorage.removeItem("pilot_user");
-            router.push("/login");
           }
-        } else {
-          // Redirect to login if not logged in
-          router.push("/login");
         }
       } catch (error) {
         // JSON parse failed, clear corrupted data
         console.error("Failed to parse user data:", error);
         localStorage.removeItem("pilot_user");
-        router.push("/login");
       }
     }
   }, [router]);
@@ -94,19 +89,20 @@ export default function Home() {
     }
   }, [user?.role, onboardingStatus, router]);
   
-  // Show loading if checking auth
+  // Public homepage for non-authenticated users
   if (!user || !user.userId || !user.role || !user.alias) {
     return (
-      <main style={{ 
-        padding: "2rem", 
-        textAlign: "center",
-        background: "rgba(255, 255, 255, 0.95)",
-        borderRadius: "12px",
-        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        margin: "2rem auto",
-        maxWidth: "400px"
-      }}>
-        <p style={{ color: "#2c2c2c", fontSize: "1rem", fontWeight: "500" }}>Loading...</p>
+      <main style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem" }}>
+        <div style={{ textAlign: "center", background: "rgba(255, 255, 255, 0.95)", borderRadius: "12px", boxShadow: "0 2px 8px rgba(0,0,0,0.1)", padding: "2rem", maxWidth: "520px", width: "100%" }}>
+          <h1 style={{ fontSize: "2rem", color: "#2c2c2c", marginBottom: "0.75rem", fontWeight: "800" }}>Farm2Market Uganda</h1>
+          <p style={{ color: "#555", marginBottom: "1.5rem" }}>Welcome. Sign in to access your dashboard, communities, and messaging.</p>
+          <button
+            onClick={() => router.push("/login")}
+            style={{ padding: "0.75rem 1.25rem", borderRadius: "8px", background: "#1976d2", color: "#fff", border: "none", fontWeight: "600", cursor: "pointer" }}
+          >
+            Go to Login
+          </button>
+        </div>
       </main>
     );
   }

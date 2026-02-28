@@ -5,20 +5,17 @@ import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useRouter } from "next/navigation";
 import { Id } from "@/convex/_generated/dataModel";
-import Link from "next/link";
+
+const QR_JOIN_BASE_URL = "https://www.farm2marketuganda.com";
 
 export default function CreateQRCommunity() {
   const router = useRouter();
   const createQRCommunity = useMutation(api.communities.createQRCommunity as any);
   const [userId, setUserId] = useState<Id<"users"> | null>(null);
-  const [baseUrl, setBaseUrl] = useState<string>("");
 
   // Get user ID from localStorage on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
-      // Set base URL for SSR safety
-      setBaseUrl(window.location.origin);
-      
       const storedUser = localStorage.getItem("pilot_user");
       if (storedUser) {
         try {
@@ -55,12 +52,23 @@ export default function CreateQRCommunity() {
     joinLink: string;
   } | null>(null);
 
+  const toUrlSafeSlug = (value: string) =>
+    value
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "");
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
       [name]:
-        name.startsWith("juniorAdmin") || name.startsWith("member")
+        name === "slug"
+          ? toUrlSafeSlug(value)
+          : name.startsWith("juniorAdmin") || name.startsWith("member")
           ? parseInt(value, 10)
           : value,
     }));
@@ -92,7 +100,9 @@ export default function CreateQRCommunity() {
       return;
     }
 
-    if (!formData.name.trim() || !formData.slug.trim()) {
+    const normalizedSlug = toUrlSafeSlug(formData.slug || formData.name);
+
+    if (!formData.name.trim() || !normalizedSlug) {
       setStatus({
         type: "error",
         message: "Community name and slug are required",
@@ -103,10 +113,10 @@ export default function CreateQRCommunity() {
     setStatus({ type: "loading", message: "Creating community..." });
 
     try {
-      const community = await createQRCommunity({
+      await createQRCommunity({
         adminId: userId, // Pass the user ID from localStorage
         name: formData.name.trim(),
-        slug: formData.slug.trim(),
+        slug: normalizedSlug,
         logoUrl: formData.logoPreview,
         juniorAdminFreeMonthlyImageQuota: formData.juniorAdminFreeMonthlyImageQuota,
         juniorAdminImagePrice: formData.juniorAdminImagePrice,
@@ -115,9 +125,15 @@ export default function CreateQRCommunity() {
 
       // Step 2: Generate QR code (import dynamically to avoid SSR issues)
       const QRCode = (await import("qrcode")).default;
-      // Use full URL with origin for QR code
-      const joinLink = `${baseUrl}/join/${formData.slug}`;
-      const qrDataUrl = await QRCode.toDataURL(joinLink);
+      const joinLink = `${QR_JOIN_BASE_URL}/join/community/${normalizedSlug}`;
+      const qrDataUrl = await QRCode.toDataURL(joinLink, {
+        width: 1024,
+        margin: 2,
+        color: {
+          dark: "#000000",
+          light: "#FFFFFF",
+        },
+      });
 
       setGeneratedQR({
         qrDataUrl,
@@ -141,7 +157,7 @@ export default function CreateQRCommunity() {
 
     const link = document.createElement("a");
     link.href = generatedQR.qrDataUrl;
-    link.download = `${formData.slug}-qr.png`;
+    link.download = `${toUrlSafeSlug(formData.slug || formData.name)}-qr.png`;
     link.click();
   };
 
@@ -266,7 +282,7 @@ export default function CreateQRCommunity() {
                     disabled={status.type === "loading"}
                   />
                   <p className="text-xs text-gray-600 mt-2">
-                    Join link: <span className="font-mono font-bold">/join/{formData.slug || "slug"}</span>
+                    Join link: <span className="font-mono font-bold">{QR_JOIN_BASE_URL}/join/community/{formData.slug || "slug"}</span>
                   </p>
                 </div>
 

@@ -388,9 +388,10 @@ export const getCommunityByQrSlug = query({
     slug: v.string(),
   },
   handler: async (ctx, args) => {
+    const normalizedSlug = args.slug.trim().toLowerCase();
     const community = await ctx.db
       .query("communities")
-      .filter((q) => q.eq(q.field("qrSlug"), args.slug))
+      .filter((q) => q.eq(q.field("qrSlug"), normalizedSlug))
       .first();
 
     if (!community) {
@@ -402,6 +403,49 @@ export const getCommunityByQrSlug = query({
       name: community.name,
       qrLogoUrl: (community as any).qrLogoUrl,
       qrEnabled: (community as any).qrEnabled,
+    };
+  },
+});
+
+/**
+ * Get basic community dashboard data
+ */
+export const getCommunityDashboardSummary = query({
+  args: {
+    communityId: v.id("communities"),
+  },
+  handler: async (ctx, args) => {
+    const community = await ctx.db.get(args.communityId);
+    if (!community) {
+      return null;
+    }
+
+    const settings = await ctx.db
+      .query("communityMonetisationSettings")
+      .withIndex("by_community", (q) => q.eq("communityId", args.communityId))
+      .first();
+
+    const now = new Date();
+    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+    const monthPosts = await ctx.db
+      .query("noticeboardPosts")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("communityId"), args.communityId),
+          q.eq(q.field("monthKey"), monthKey)
+        )
+      )
+      .collect();
+
+    const freeImageQuotaPerMonth = settings?.juniorAdminFreeMonthlyImageQuota ?? 0;
+    const used = monthPosts.length;
+
+    return {
+      communityId: community._id,
+      communityName: community.name,
+      freeImageQuotaPerMonth,
+      used,
     };
   },
 });
@@ -572,10 +616,12 @@ export const joinCommunityByQr = mutation({
     userId: v.optional(v.id("users")), // If existing user is joining
   },
   handler: async (ctx, args) => {
+    const normalizedSlug = args.slug.trim().toLowerCase();
+
     // 1. Find community by slug
     const community = await ctx.db
       .query("communities")
-      .filter((q) => q.eq(q.field("qrSlug"), args.slug))
+      .filter((q) => q.eq(q.field("qrSlug"), normalizedSlug))
       .first();
 
     if (!community) {
@@ -1493,6 +1539,7 @@ export const createQRCommunity = mutation({
     memberImageMessagePrice: v.number(),
   },
   handler: async (ctx, args) => {
+    const normalizedSlug = args.slug.trim().toLowerCase();
     const adminId = args.adminId;
 
     // Verify admin role
@@ -1519,14 +1566,18 @@ export const createQRCommunity = mutation({
       throw new Error("Community name cannot be empty");
     }
 
-    if (!args.slug.trim()) {
+    if (!normalizedSlug) {
       throw new Error("Community slug cannot be empty");
+    }
+
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(normalizedSlug)) {
+      throw new Error("Slug must be lowercase, hyphen-separated, and URL-safe");
     }
 
     // Check if slug is unique
     const existingCommunity = await ctx.db
       .query("communities")
-      .filter((q) => q.eq(q.field("qrSlug"), args.slug))
+      .filter((q) => q.eq(q.field("qrSlug"), normalizedSlug))
       .first();
 
     if (existingCommunity) {
@@ -1553,7 +1604,7 @@ export const createQRCommunity = mutation({
       communityType: "farmer",
       // QR-specific fields
       qrEnabled: true,
-      qrSlug: args.slug,
+      qrSlug: normalizedSlug,
       qrLogoUrl: args.logoUrl?.trim(),
       searchPriorityScore: 100, // High priority for QR communities
     });
@@ -1573,14 +1624,14 @@ export const createQRCommunity = mutation({
     await ctx.db.insert("adminActions", {
       adminId: adminId,
       action: "create_qr_community",
-      details: `Created QR community: ${args.name} (slug: ${args.slug}, UTID: ${utid})`,
+      details: `Created QR community: ${args.name} (slug: ${normalizedSlug}, UTID: ${utid})`,
       timestamp: getUgandaTime(),
     });
 
     return {
       _id: communityId,
       name: args.name,
-      slug: args.slug,
+      slug: normalizedSlug,
       logoUrl: args.logoUrl,
       qrEnabled: true,
     };
@@ -1717,12 +1768,9 @@ export const getMyNavigationContext = query({
 
     // Determine default community ID
     let defaultCommunityId: Id<"communities"> | null = null;
-    if (adminCommunitiesMapped.length > 0) {
-      // Prefer admin communities
-      const firstAdminCommunity = adminCommunities.find((c) =>
-        adminCommunitiesMapped.some((mc) => mc.communityId === c._id)
-      );
-      defaultCommunityId = firstAdminCommunity?._id || null;
+    if (adminCommunities.length > 0) {
+      // Admin users default to their first admin community
+      defaultCommunityId = adminCommunities[0]._id;
     } else if (joinedCommunities.length > 0) {
       // Fall back to first joined community
       const firstJoinedMembership = membershipRecords[0];

@@ -3,7 +3,7 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 interface CommunityInfo {
@@ -15,7 +15,6 @@ interface CommunityInfo {
 
 export default function JoinCommunityPage({ params }: { params: { slug: string } }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [userId, setUserId] = useState<Id<"users"> | null>(null);
   const [isJoining, setIsJoining] = useState(false);
   const [joinMessage, setJoinMessage] = useState("");
@@ -45,49 +44,33 @@ export default function JoinCommunityPage({ params }: { params: { slug: string }
     }
   }, []);
 
-  // Handle after signup - check for joining intent
-  useEffect(() => {
-    if (!userId) return;
+  const handleJoin = async () => {
     if (!community) return;
 
-    // Check if this is a post-signup redirect
-    const fromSignup = searchParams.get("from_signup");
-    if (!fromSignup) return;
+    if (!userId) {
+      const redirectTarget = encodeURIComponent(`/join/community/${params.slug}`);
+      router.push(`/login?redirect=${redirectTarget}`);
+      return;
+    }
 
     setIsJoining(true);
-    (async () => {
-      try {
-        const result = await joinCommunityByQr({
-          slug: params.slug,
-          userId: userId as any,
-        });
+    setJoinMessage("");
+    try {
+      const result = await joinCommunityByQr({
+        slug: params.slug,
+        userId,
+      });
 
-        setJoinMessage(result.message);
-
-        // Redirect to my-communities after successful join
-        setTimeout(() => {
-          router.push("/my-communities");
-        }, 1500);
-      } catch (error: any) {
-        setJoinMessage(`Error joining community: ${error.message}`);
-        setIsJoining(false);
-      }
-    })();
-  }, [userId, community, params.slug, searchParams, joinCommunityByQr, router]);
-
-  // Handle redirect to signup if not authenticated
-  useEffect(() => {
-    if (!community) return;
-
-    // If not logged in and not already redirecting, go to signup
-    if (!userId) {
-      const redirectUrl = `/login?qrCommunityId=${params.slug}`;
-      router.push(redirectUrl);
+      setJoinMessage(result.message || "Joined successfully");
+      router.push("/my-communities");
+    } catch (error: any) {
+      setJoinMessage(`Error joining community: ${error.message}`);
+      setIsJoining(false);
     }
-  }, [userId, community, params.slug, router]);
+  };
 
   // Loading state
-  if (!community) {
+  if (community === undefined) {
     return (
       <div
         style={{
@@ -118,6 +101,23 @@ export default function JoinCommunityPage({ params }: { params: { slug: string }
               100% { transform: rotate(360deg); }
             }
           `}</style>
+        </div>
+      </div>
+    );
+  }
+
+  if (!community) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+        <div className="bg-white p-8 rounded-xl border border-gray-200 shadow-sm text-center max-w-md w-full">
+          <h1 className="text-2xl font-bold text-gray-900 mb-3">Community Not Found</h1>
+          <p className="text-gray-600 mb-6">This join link is invalid or the community is no longer available.</p>
+          <button
+            onClick={() => router.push("/")}
+            className="px-5 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700"
+          >
+            Go Home
+          </button>
         </div>
       </div>
     );
@@ -158,52 +158,26 @@ export default function JoinCommunityPage({ params }: { params: { slug: string }
 
   // Community info display (shouldn't reach here, but just in case)
   return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        minHeight: "100vh",
-        flexDirection: "column",
-        backgroundColor: "#f5f5f5",
-        padding: "1rem",
-      }}
-    >
-      <div
-        style={{
-          background: "#fff",
-          borderRadius: "12px",
-          padding: "2rem",
-          maxWidth: "400px",
-          textAlign: "center",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        }}
-      >
+    <div className="min-h-screen bg-gray-50 p-4 flex items-center justify-center">
+      <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-8 max-w-md w-full text-center">
         {community.qrLogoUrl && (
           <img
             src={community.qrLogoUrl}
             alt={community.name}
-            style={{
-              maxWidth: "150px",
-              height: "auto",
-              marginBottom: "1.5rem",
-              borderRadius: "8px",
-            }}
+            className="w-28 h-28 object-cover rounded-xl mx-auto mb-5 border border-gray-200"
           />
         )}
-        <h1 style={{ fontSize: "1.8rem", marginBottom: "1rem", margin: "0 0 1rem 0" }}>
-          {community.name}
-        </h1>
-        <p style={{ color: "#666", marginBottom: "2rem" }}>
-          Welcome! You are being redirected to join this community.
-        </p>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">{community.name}</h1>
+        <p className="text-gray-600 mb-6">Join this community to access updates, messaging, and member features.</p>
+        <button
+          onClick={handleJoin}
+          disabled={isJoining}
+          className="w-full px-5 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50"
+        >
+          Join this community
+        </button>
         {joinMessage && (
-          <p
-            style={{
-              color: joinMessage.includes("Error") ? "#d32f2f" : "#4CAF50",
-              fontSize: "0.9rem",
-            }}
-          >
+          <p className={`mt-4 text-sm ${joinMessage.includes("Error") ? "text-red-600" : "text-green-600"}`}>
             {joinMessage}
           </p>
         )}

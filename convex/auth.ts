@@ -359,6 +359,8 @@ export const signup = mutation({
       throw new Error("Failed to create user");
     }
 
+    const defaultCommunityId = user.assignedCommunityIds?.[0] ?? null;
+
     // Return user info
     return {
       userId: user._id,
@@ -367,6 +369,7 @@ export const signup = mutation({
       adminLevel: user.adminLevel,
       adminCategory: user.adminCategory,
       assignedCommunityIds: user.assignedCommunityIds,
+      defaultCommunityId,
       isVerifiedTrader: user.isVerifiedTrader ?? false,
       verificationStatus: user.verificationStatus ?? "pending",
     };
@@ -433,6 +436,17 @@ export const login = mutation({
       lastActiveAt: getUgandaTime(),
     });
 
+    let defaultCommunityId = user.assignedCommunityIds?.[0] ?? null;
+    if (user.role === "admin") {
+      const adminCommunity = await ctx.db
+        .query("communities")
+        .filter((q) => q.eq(q.field("communityAdminId"), user._id))
+        .first();
+      if (adminCommunity) {
+        defaultCommunityId = adminCommunity._id;
+      }
+    }
+
     // Return user info
     return {
       userId: user._id,
@@ -441,6 +455,7 @@ export const login = mutation({
       adminLevel: user.adminLevel,
       adminCategory: user.adminCategory,
       assignedCommunityIds: user.assignedCommunityIds,
+      defaultCommunityId,
     };
   },
 });

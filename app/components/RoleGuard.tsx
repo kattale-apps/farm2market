@@ -66,8 +66,8 @@ export default function RoleGuard({ children, allowedRoles, communityId }: RoleG
 
     // Community admin
     if (navContext.adminCommunities.length > 0) {
-      const firstAdmin = navContext.adminCommunities[0];
-      return `/community-admin/${firstAdmin.communityId}/dashboard`;
+      const communityId = navContext.defaultCommunityId || navContext.adminCommunities[0].communityId;
+      return `/community-admin/${communityId}/dashboard`;
     }
 
     // Regular member

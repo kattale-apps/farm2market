@@ -26,13 +26,12 @@ export default function RoleBasedRouter() {
     const { isSuperadmin, adminCommunities, joinedCommunities, defaultCommunityId } = navContext;
 
     // Route based on role
-    if (isSuperadmin && adminCommunities.length === 0 && joinedCommunities.length === 0) {
-      // Superadmin with no communities - go to admin dashboard
+    if (isSuperadmin) {
+      // Superadmin always goes to superadmin dashboard
       router.push("/superadmin/dashboard");
-    } else if (adminCommunities.length > 0) {
-      // Has communities to manage - go to community admin dashboard
-      const firstAdminCommunity = adminCommunities[0];
-      router.push(`/community-admin/${firstAdminCommunity.communityId}/dashboard`);
+    } else if (adminCommunities.length > 0 && defaultCommunityId) {
+      // Community admin -> default community dashboard
+      router.push(`/community-admin/${defaultCommunityId}/dashboard`);
     } else if (joinedCommunities.length > 0) {
       // Member with joined communities - go to my communities
       router.push("/my-communities");

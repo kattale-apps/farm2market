@@ -1855,13 +1855,34 @@ export const getMyNavigationContext = query({
     const userId = user._id;
     const isSuperadmin = user.adminLevel === "super" || user.adminLevel === undefined;
 
-    // Get communities where user is the admin
-    const adminCommunities = await ctx.db
+    // Get communities where user is the admin (by communityAdminId)
+    const adminCommunitiesByRole = await ctx.db
       .query("communities")
       .filter((q) => q.eq(q.field("communityAdminId"), userId))
       .collect();
 
-    const adminCommunitiesMapped = adminCommunities.map((c) => ({
+    // Also get communities where user is assigned via assignedCommunityIds
+    const assignedCommunityIds = (user as any)?.assignedCommunityIds || [];
+    const assignedCommunitiesMap = new Map<string, any>();
+    
+    for (const communityId of assignedCommunityIds) {
+      const community = await ctx.db.get(communityId as Id<"communities">);
+      if (community) {
+        assignedCommunitiesMap.set(communityId.toString(), community);
+      }
+    }
+
+    // Combine both lists and remove duplicates
+    const allAdminCommunities: any[] = [...adminCommunitiesByRole];
+    const seenIds = new Set(adminCommunitiesByRole.map(c => c._id.toString()));
+    
+    for (const [communityIdStr, community] of assignedCommunitiesMap.entries()) {
+      if (!seenIds.has(communityIdStr)) {
+        allAdminCommunities.push(community);
+      }
+    }
+
+    const adminCommunitiesMapped = allAdminCommunities.map((c) => ({
       communityId: c._id,
       name: c.name,
       slug: c.qrSlug || c.name.toLowerCase().replace(/\s+/g, "-"),
@@ -1889,9 +1910,9 @@ export const getMyNavigationContext = query({
 
     // Determine default community ID
     let defaultCommunityId: Id<"communities"> | null = null;
-    if (adminCommunities.length > 0) {
+    if (allAdminCommunities.length > 0) {
       // Admin users default to their first admin community
-      defaultCommunityId = adminCommunities[0]._id;
+      defaultCommunityId = allAdminCommunities[0]._id;
     } else if (joinedCommunities.length > 0) {
       // Fall back to first joined community
       const firstJoinedMembership = membershipRecords[0];

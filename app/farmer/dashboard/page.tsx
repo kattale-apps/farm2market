@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
@@ -9,7 +9,6 @@ import { JoinCommunityCard } from "@/app/components/community/JoinCommunityCard"
 
 export default function FarmerDashboardPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [userId, setUserId] = useState<Id<"users"> | null>(null);
   const [loading, setLoading] = useState(true);
 

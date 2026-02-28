@@ -152,13 +152,38 @@ export default function CreateQRCommunity() {
     }
   };
 
-  const handleDownloadQR = () => {
+  const handleDownloadQR = async () => {
     if (!generatedQR) return;
 
-    const link = document.createElement("a");
-    link.href = generatedQR.qrDataUrl;
-    link.download = `${toUrlSafeSlug(formData.slug || formData.name)}-qr.png`;
-    link.click();
+    try {
+      const filename = `${toUrlSafeSlug(formData.slug || formData.name)}-qr.png`;
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+        navigator.userAgent
+      );
+
+      const response = await fetch(generatedQR.qrDataUrl);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      if (isMobile) {
+        setTimeout(() => {
+          window.open(url, "_blank");
+        }, 500);
+      }
+
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+      }, 2000);
+    } catch {
+      window.open(generatedQR.qrDataUrl, "_blank");
+    }
   };
 
   const handleDone = () => {
@@ -166,56 +191,59 @@ export default function CreateQRCommunity() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 overflow-x-hidden">
       {/* Navigation Bar */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-50">
-        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Create QR Community</h1>
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Create QR Community</h1>
             <p className="text-sm text-gray-600">Create joinable communities with QR codes</p>
           </div>
           <button 
             onClick={() => router.push("/superadmin/usage")}
-            className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg font-medium transition"
+            className="w-full sm:w-auto px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg font-medium transition text-left sm:text-center"
           >
             ← Back to Dashboard
           </button>
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-6 py-8">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-5 sm:py-8">
         {status.type === "success" && generatedQR ? (
           // Success State
-          <div className="space-y-6">
-            <div className="p-6 bg-green-50 border border-green-200 rounded-xl">
-              <p className="text-green-900 font-bold text-lg">{status.message}</p>
+          <div className="space-y-4 sm:space-y-6">
+            <div className="p-4 sm:p-6 bg-green-50 border border-green-200 rounded-xl">
+              <p className="text-green-900 font-bold text-base sm:text-lg break-words">{status.message}</p>
             </div>
 
             {/* QR Code Display Card */}
-            <div className="bg-white rounded-xl shadow-md border border-gray-200 p-8">
-              <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">Your QR Code</h2>
-              <div className="flex justify-center p-8 bg-gray-50 rounded-lg border border-gray-200">
+            <div className="bg-white rounded-xl shadow-md border border-gray-200 p-4 sm:p-8">
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4 sm:mb-6 text-center">Your QR Code</h2>
+              <div className="flex justify-center p-3 sm:p-6 bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
                 <img
                   src={generatedQR.qrDataUrl}
                   alt="Community QR Code"
-                  className="w-96 h-96 border-4 border-white rounded-lg shadow-lg"
+                  className="w-[80vw] max-w-[280px] sm:max-w-[360px] h-auto aspect-square border-4 border-white rounded-lg shadow-lg"
                 />
               </div>
+              <p className="text-xs text-gray-600 mt-3 text-center">
+                On mobile, tap Download and long-press the image if needed to save.
+              </p>
             </div>
 
             {/* Join Link Card */}
-            <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6">
+            <div className="bg-white rounded-xl shadow-md border border-gray-200 p-4 sm:p-6">
               <p className="text-sm font-bold text-gray-700 mb-3">Join Link:</p>
-              <div className="flex gap-3">
+              <div className="flex flex-col sm:flex-row gap-3">
                 <input
                   type="text"
                   value={generatedQR.joinLink}
                   readOnly
-                  className="flex-1 px-4 py-3 border border-gray-300 rounded-lg bg-white text-gray-700 font-mono text-sm"
+                  className="w-full min-w-0 px-3 sm:px-4 py-3 border border-gray-300 rounded-lg bg-white text-gray-700 font-mono text-xs sm:text-sm"
                 />
                 <button
                   onClick={() => navigator.clipboard.writeText(generatedQR.joinLink)}
-                  className="px-6 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition whitespace-nowrap"
+                  className="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition whitespace-nowrap"
                 >
                   Copy Link
                 </button>
@@ -223,16 +251,16 @@ export default function CreateQRCommunity() {
             </div>
 
             {/* Download & Close Buttons */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <button
                 onClick={handleDownloadQR}
-                className="px-6 py-4 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition text-lg"
+                className="w-full px-6 py-3 sm:py-4 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition text-base sm:text-lg min-h-12"
               >
                 ⬇ Download QR Code
               </button>
               <button
                 onClick={handleDone}
-                className="px-6 py-4 bg-gray-200 text-gray-900 font-bold rounded-lg hover:bg-gray-300 transition text-lg"
+                className="w-full px-6 py-3 sm:py-4 bg-gray-200 text-gray-900 font-bold rounded-lg hover:bg-gray-300 transition text-base sm:text-lg min-h-12"
               >
                 Done
               </button>
@@ -244,13 +272,13 @@ export default function CreateQRCommunity() {
             {/* Error Display */}
             {status.type === "error" && (
               <div className="p-4 bg-red-50 border-l-4 border-red-500 rounded-lg">
-                <p className="text-red-800 font-bold">{status.message}</p>
+                <p className="text-red-800 font-bold break-words">{status.message}</p>
               </div>
             )}
 
             {/* Community Information Card */}
-            <div className="bg-white rounded-xl shadow-md border border-gray-200 p-8">
-              <h2 className="text-xl font-bold text-gray-900 mb-6">Community Information</h2>
+            <div className="bg-white rounded-xl shadow-md border border-gray-200 p-4 sm:p-8">
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 sm:mb-6">Community Information</h2>
 
               <div className="space-y-6">
                 <div>
@@ -282,7 +310,7 @@ export default function CreateQRCommunity() {
                     disabled={status.type === "loading"}
                   />
                   <p className="text-xs text-gray-600 mt-2">
-                    Join link: <span className="font-mono font-bold">{QR_JOIN_BASE_URL}/join/community/{formData.slug || "slug"}</span>
+                    Join link: <span className="font-mono font-bold break-all">{QR_JOIN_BASE_URL}/join/community/{formData.slug || "slug"}</span>
                   </p>
                 </div>
 
@@ -290,12 +318,12 @@ export default function CreateQRCommunity() {
                   <label className="block text-sm font-bold text-gray-700 mb-2">
                     Community Logo
                   </label>
-                  <div className="flex items-center gap-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                     <input
                       type="file"
                       accept="image/*"
                       onChange={handleLogoUpload}
-                      className="flex-1 px-4 py-3 border border-gray-300 rounded-lg bg-white cursor-pointer"
+                      className="w-full sm:flex-1 px-4 py-3 border border-gray-300 rounded-lg bg-white cursor-pointer"
                       disabled={status.type === "loading"}
                     />
                     {formData.logoPreview && (
@@ -311,10 +339,10 @@ export default function CreateQRCommunity() {
             </div>
 
             {/* Monetisation Settings Card */}
-            <div className="bg-white rounded-xl shadow-md border border-gray-200 p-8">
-              <h2 className="text-xl font-bold text-gray-900 mb-6">Monetisation Settings</h2>
+            <div className="bg-white rounded-xl shadow-md border border-gray-200 p-4 sm:p-8">
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 sm:mb-6">Monetisation Settings</h2>
 
-              <div className="space-y-6 bg-blue-50 p-6 rounded-lg border border-blue-100">
+              <div className="space-y-6 bg-blue-50 p-4 sm:p-6 rounded-lg border border-blue-100">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-bold text-gray-700 mb-2">
@@ -371,7 +399,7 @@ export default function CreateQRCommunity() {
             <button
               type="submit"
               disabled={status.type === "loading"}
-              className="w-full px-6 py-4 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition text-lg"
+              className="w-full px-6 py-3 sm:py-4 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition text-base sm:text-lg min-h-12"
             >
               {status.type === "loading"
                 ? "Creating Community & Generating QR..."

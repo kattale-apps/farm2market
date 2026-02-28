@@ -257,11 +257,17 @@ export default function MemberMessagingFeed() {
               {/* Post Header */}
               <div className="px-4 py-3 border-b border-gray-100">
                 <div className="flex items-center gap-2">
-                  {community.logoPath && (
-                    <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold">
-                      {community.name.charAt(0)}
-                    </div>
-                  )}
+                  <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold overflow-hidden">
+                    {(community?.qrLogoUrl || community?.logoPath) ? (
+                      <img 
+                        src={community.qrLogoUrl || community.logoPath} 
+                        alt={community.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      community.name.charAt(0)
+                    )}
+                  </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-sm text-gray-900">Admin</p>
                     <p className="text-xs text-gray-500">{new Date(post.createdAt).toLocaleDateString()}</p>

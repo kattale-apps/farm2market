@@ -15,17 +15,6 @@ export default function CommunityDashboardPage() {
   const [userAdminCategory, setUserAdminCategory] = useState<string>("");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [loading, setLoading] = useState(false);
-
-  // Community IDs and logo helpers
-  const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
-  const DEIGRO_COMMUNITY_ID = "ms7b1qga2n0kwjvczv3n1dqwwx809p81";
-
-  const getCommunityLogo = (communityId: string | Id<"communities">) => {
-    const idStr = String(communityId);
-    if (idStr === BIOFARM_COMMUNITY_ID) return "/biofarmlogo.jpeg";
-    if (idStr === DEIGRO_COMMUNITY_ID) return "/deilogo.png";
-    return "/agrofreshlogo.png";
-  };
   const [selectedApplicationId, setSelectedApplicationId] = useState<Id<"communityApplications"> | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [exportCommunityId, setExportCommunityId] = useState<Id<"communities"> | null>(null);
@@ -434,11 +423,13 @@ export default function CommunityDashboardPage() {
         ) : (
           userCommunities.map((community: any) => {
             const communityId = community?._id ?? community?.id;
+            // Use qrLogoUrl first, then logoPath as fallback
+            const logoUrl = community?.qrLogoUrl || community?.logoPath || "/agrofreshlogo.png";
             return (
               <div
                 key={communityId}
                 style={{
-                  background: `linear-gradient(rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.96)), url('${getCommunityLogo(communityId)}')`,
+                  background: `linear-gradient(rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.96)), url('${logoUrl}')`,
                   backgroundRepeat: "repeat",
                   backgroundSize: "auto",
                   borderRadius: "12px",
@@ -478,7 +469,7 @@ export default function CommunityDashboardPage() {
                       }}
                     >
                       <img
-                        src={getCommunityLogo(communityId)}
+                        src={logoUrl}
                         alt={`${community.name} logo`}
                         style={{
                           maxWidth: "100%",

@@ -42,7 +42,15 @@ export default function LoginPage() {
       }
       return "/my-communities";
     }
-    return "/my-communities";
+    // Route end-users to their role-specific dashboard
+    if (user?.role === "trader") {
+      return "/trader/dashboard";
+    }
+    if (user?.role === "buyer") {
+      return "/buyer/dashboard";
+    }
+    // Default for farmers or any other role
+    return "/farmer/dashboard";
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

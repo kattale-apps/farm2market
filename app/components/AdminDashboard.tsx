@@ -9,6 +9,9 @@ import * as XLSX from "xlsx";
 import QRCode from "qrcode";
 import { formatUgandaDate } from "../utils/dateUtils";
 import { NotificationMailbox } from "./NotificationMailbox";
+
+const DEIGRO_COMMUNITY_ID = "ms7b1qga2n0kwjvczv3n1dqwwx809p81";
+
 const REGION_GROUPS: { label: string; districts: string[] }[] = [
   {
     label: "Central (Buganda)",
@@ -132,19 +135,9 @@ const utilityCardStyle: React.CSSProperties = {
 export function AdminDashboard({ userId }: AdminDashboardProps) {
   const router = useRouter();
   const adminId = userId as Id<"users">;
-  
-  // Community IDs and logo helpers
-  const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
-  const DEIGRO_COMMUNITY_ID = "ms7b1qga2n0kwjvczv3n1dqwwx809p81";
-
-  const getCommunityLogo = (communityId: string | Id<"communities">) => {
-    const idStr = String(communityId);
-    if (idStr === BIOFARM_COMMUNITY_ID) return "/biofarmlogo.jpeg";
-    if (idStr === DEIGRO_COMMUNITY_ID) return "/deilogo.png";
-    return "/agrofreshlogo.png";
-  };
 
   const isBioFarmCommunity = (communityId: string | Id<"communities">) => {
+    const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
     return String(communityId) === BIOFARM_COMMUNITY_ID;
   };
 
@@ -1381,7 +1374,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                       }}
                     >
                       <img
-                        src={getCommunityLogo(communities[0]._id || communities[0].id)}
+                        src={communities[0]?.qrLogoUrl || communities[0]?.logoPath || "/agrofreshlogo.png"}
                         alt={`${communities[0].name} logo`}
                         style={{
                           maxWidth: "100%",

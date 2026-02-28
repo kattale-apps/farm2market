@@ -9,15 +9,29 @@ import { useEffect, useState } from "react";
 interface CommunityInfo {
   _id: string;
   name: string;
+  description?: string;
   qrLogoUrl?: string;
   qrEnabled?: boolean;
 }
 
+const getRoleBadgeText = (role?: string): string => {
+  switch (role) {
+    case "trader":
+      return "Trader";
+    case "buyer":
+      return "Buyer";
+    default:
+      return "Farmer";
+  }
+};
+
 export default function JoinCommunityPage({ params }: { params: { slug: string } }) {
   const router = useRouter();
   const [userId, setUserId] = useState<Id<"users"> | null>(null);
+  const [userRole, setUserRole] = useState<string | undefined>();
   const [isJoining, setIsJoining] = useState(false);
   const [joinMessage, setJoinMessage] = useState("");
+  const [alreadyMember, setAlreadyMember] = useState(false);
 
   // Fetch community by QR slug
   const community = useQuery(api.communities.getCommunityByQrSlug, {
@@ -27,7 +41,7 @@ export default function JoinCommunityPage({ params }: { params: { slug: string }
   // Join community mutation
   const joinCommunityByQr = useMutation(api.communities.joinCommunityByQr);
 
-  // Get userId from localStorage
+  // Get userId and role from localStorage
   useEffect(() => {
     if (typeof window !== "undefined") {
       try {
@@ -36,6 +50,7 @@ export default function JoinCommunityPage({ params }: { params: { slug: string }
           const parsed = JSON.parse(stored);
           if (parsed && parsed.userId) {
             setUserId(parsed.userId);
+            setUserRole(parsed.role);
           }
         }
       } catch (error) {
@@ -59,10 +74,18 @@ export default function JoinCommunityPage({ params }: { params: { slug: string }
       const result = await joinCommunityByQr({
         slug: params.slug,
         userId,
+        role: (userRole as "farmer" | "trader" | "buyer" | undefined),
       });
 
-      setJoinMessage(result.message || "Joined successfully");
-      router.push("/my-communities");
+      if (result.alreadyMember) {
+        setAlreadyMember(true);
+        setJoinMessage(result.message || "You are already a member");
+      } else {
+        setJoinMessage(result.message || "Joined successfully");
+        setTimeout(() => {
+          router.push("/my-communities");
+        }, 1500);
+      }
     } catch (error: any) {
       setJoinMessage(`Error joining community: ${error.message}`);
       setIsJoining(false);
@@ -156,28 +179,56 @@ export default function JoinCommunityPage({ params }: { params: { slug: string }
     );
   }
 
-  // Community info display (shouldn't reach here, but just in case)
+  // Community info display
   return (
     <div className="min-h-screen bg-gray-50 p-4 flex items-center justify-center">
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-8 max-w-md w-full text-center">
+      <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-8 max-w-md w-full">
+        {/* 1. Community Logo (centered, large, 96-128px) */}
         {community.qrLogoUrl && (
-          <img
-            src={community.qrLogoUrl}
-            alt={community.name}
-            className="w-28 h-28 object-cover rounded-xl mx-auto mb-5 border border-gray-200"
-          />
+          <div className="flex justify-center mb-6">
+            <img
+              src={community.qrLogoUrl}
+              alt={community.name}
+              className="w-28 h-28 object-cover rounded-xl border border-gray-200"
+            />
+          </div>
         )}
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">{community.name}</h1>
-        <p className="text-gray-600 mb-6">Join this community to access updates, messaging, and member features.</p>
+
+        {/* 2. Community Name */}
+        <h1 className="text-3xl font-bold text-gray-900 mb-3 text-center">{community.name}</h1>
+
+        {/* 3. Short Description */}
+        {community.description && (
+          <p className="text-gray-600 text-center mb-6 text-sm">{community.description}</p>
+        )}
+
+        {/* 4. Join Button (primary, full-width) */}
         <button
           onClick={handleJoin}
-          disabled={isJoining}
-          className="w-full px-5 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50"
+          disabled={isJoining || alreadyMember}
+          className="w-full px-5 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition mb-6"
         >
-          Join this community
+          {alreadyMember ? "Open Community" : isJoining ? "Joining..." : "Join Community"}
         </button>
-        {joinMessage && (
-          <p className={`mt-4 text-sm ${joinMessage.includes("Error") ? "text-red-600" : "text-green-600"}`}>
+
+        {/* 5. Secondary Text: Role badge */}
+        <div className="flex items-center justify-center gap-2 text-sm text-gray-600 mb-4">
+          <span>Joining as:</span>
+          <span className="font-semibold text-gray-900">{getRoleBadgeText(userRole)}</span>
+        </div>
+
+        {/* 6. Already a member state */}
+        {alreadyMember && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+            <p className="text-sm text-blue-900 font-semibold">
+              ✓ You are already a member of this community
+            </p>
+          </div>
+        )}
+
+        {/* Error or success message */}
+        {joinMessage && !alreadyMember && (
+          <p className={`mt-4 text-center text-sm ${joinMessage.includes("Error") ? "text-red-600" : "text-green-600"}`}>
             {joinMessage}
           </p>
         )}

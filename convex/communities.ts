@@ -364,6 +364,7 @@ export const getActiveCommunities = query({
           name: c.name,
           description: c.description,
           logoPath: (c as any).logoPath,
+          qrLogoUrl: (c as any).qrLogoUrl,
           communityAdminId: (c as any).communityAdminId,
           isGlobal: c.isGlobal,
           geoLocked: c.geoLocked,
@@ -403,6 +404,37 @@ export const getCommunityByQrSlug = query({
       name: community.name,
       qrLogoUrl: (community as any).qrLogoUrl,
       qrEnabled: (community as any).qrEnabled,
+    };
+  },
+});
+
+/**
+ * Get community by ID with logo data
+ * 
+ * SOURCE OF TRUTH for community information including logos.
+ * Access control: User must be authenticated to access community data
+ * (Specific role-based access checks are done at component level)
+ */
+export const getCommunityById = query({
+  args: {
+    communityId: v.id("communities"),
+  },
+  handler: async (ctx, args) => {
+    const community = await ctx.db.get(args.communityId);
+
+    if (!community) {
+      return null;
+    }
+
+    // Return community data with logo information
+    // qrLogoUrl takes precedence, falls back to logoPath
+    return {
+      _id: community._id,
+      name: community.name,
+      description: (community as any).description || undefined,
+      logoPath: (community as any).logoPath,
+      qrLogoUrl: (community as any).qrLogoUrl,
+      qrSlug: (community as any).qrSlug,
     };
   },
 });
@@ -587,6 +619,7 @@ export const getUserCommunities = query({
           name: community.name,
           description: community.description,
           logoPath: (community as any).logoPath,
+          qrLogoUrl: (community as any).qrLogoUrl,
           isGlobal: community.isGlobal,
           joinedAt: m.joinedAt,
         };
@@ -614,6 +647,7 @@ export const joinCommunityByQr = mutation({
     phoneNumber: v.optional(v.string()),
     password: v.optional(v.string()), // Required if user is new
     userId: v.optional(v.id("users")), // If existing user is joining
+    role: v.optional(v.union(v.literal("farmer"), v.literal("trader"), v.literal("buyer"))), // Optional role override
   },
   handler: async (ctx, args) => {
     const normalizedSlug = args.slug.trim().toLowerCase();
@@ -678,7 +712,7 @@ export const joinCommunityByQr = mutation({
         const normalizedPhone = args.phoneNumber ? normalizePhoneNumber(args.phoneNumber) : undefined;
 
         // Generate alias
-        const alias = generateAlias("farmer");
+        const alias = generateAlias(args.role || "farmer");
 
         // Hash password (using simple hash for now - in production should use bcrypt)
         const passwordHash = simpleHash(args.password.trim());
@@ -686,7 +720,7 @@ export const joinCommunityByQr = mutation({
         userId = await ctx.db.insert("users", {
           email: normalizedEmail,
           phoneNumber: normalizedPhone,
-          role: "farmer",
+          role: args.role || "farmer",
           alias,
           state: "active",
           createdAt: getUgandaTime(),

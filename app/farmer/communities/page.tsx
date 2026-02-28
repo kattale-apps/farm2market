@@ -96,8 +96,11 @@ export default function FarmerCommunitiesPage() {
     return community.id === deiAgroCommunityId;
   };
 
-  const getCommunityLogo = (community: { id: Id<"communities">; name?: string; description?: string; logoPath?: string }) => {
-    if (community.logoPath) return community.logoPath;
+  const getCommunityLogo = (community: any) => {
+    // Use qrLogoUrl first, then logoPath (source of truth from database)
+    if (community?.qrLogoUrl) return community.qrLogoUrl;
+    if (community?.logoPath) return community.logoPath;
+    // Fallback to community-specific logos (for backward compatibility with older records)
     if (isAgroFreshCommunity(community)) return "/agrofreshlogo.png";
     if (isBioFarmCommunity(community)) return "/biofarmlogo.jpeg";
     if (isDeiAgroCommunity(community)) return "/deilogo.png";

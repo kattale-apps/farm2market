@@ -114,14 +114,14 @@ function SearchBar({ userId, onCommunityJoined }: { userId: Id<"users">; onCommu
                         disabled={isJoining}
                         className="w-full text-left p-3 hover:bg-gray-100 rounded-lg transition flex items-center gap-3 disabled:opacity-50"
                       >
-                        {community.logoPath && (
+                        {(community.qrLogoUrl || community.logoPath) && (
                           <img
-                            src={community.logoPath}
+                            src={community.qrLogoUrl || community.logoPath}
                             alt={community.name}
                             className="w-10 h-10 rounded-full object-cover flex-shrink-0"
                           />
                         )}
-                        {!community.logoPath && (
+                        {!(community.qrLogoUrl || community.logoPath) && (
                           <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0 text-xs font-bold text-gray-700">
                             {community.name.charAt(0).toUpperCase()}
                           </div>
@@ -166,9 +166,9 @@ function JoinedCommunityCard({
     >
       {/* Logo */}
       <div className="flex-shrink-0 w-16 h-16 rounded-xl bg-gradient-to-br from-blue-100 to-gray-100 flex items-center justify-center overflow-hidden">
-        {community.logoPath ? (
+        {(community.qrLogoUrl || community.logoPath) ? (
           <img
-            src={community.logoPath}
+            src={community.qrLogoUrl || community.logoPath}
             alt={community.name}
             className="w-full h-full object-cover"
           />

@@ -12,6 +12,8 @@ export default function LogoMigrationPage() {
   const navContext = useQuery(api.communities.getMyNavigationContext);
   const runMigration = useMutation(api.admin.runLogoMigration);
 
+  const [loadingStatus, setLoadingStatus] = useState<string>("");
+
   const handleRunMigration = async () => {
     if (!navContext?.userId) {
       setError("No user ID found. Please ensure you are logged in as a superadmin.");
@@ -22,25 +24,43 @@ export default function LogoMigrationPage() {
       setIsRunning(true);
       setError(null);
       setResult(null);
+      setLoadingStatus("Initializing...");
       
-      console.log("🚀 Starting migration with adminId:", navContext.userId);
+      console.log("🚀 [1/3] Starting migration with adminId:", navContext.userId);
+      setLoadingStatus("Calling migration mutation...");
+      
       console.log("👤 User is superadmin:", navContext.isSuperadmin);
+      console.log("[2/3] About to call runMigration mutation...");
       
       const migrationResult = await runMigration({
         adminId: navContext.userId,
       });
       
-      console.log("✅ Migration result received:", migrationResult);
+      console.log("✅ [3/3] Migration result received:", migrationResult);
+      setLoadingStatus("Processing results...");
       
       if (!migrationResult) {
-        throw new Error("Migration returned empty response");
+        console.warn("⚠️ Migration returned null/undefined");
+        setError("Migration completed but returned no data. Check console for details.");
+        return;
       }
       
+      console.log("✨ Setting result state with:", migrationResult);
+      setLoadingStatus("Complete!");
       setResult(migrationResult);
+      
+      // Show success banner
+      setTimeout(() => {
+        if (!result) {
+          console.log("✅ Result should now be displayed");
+        }
+      }, 500);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
-      console.error("❌ Migration error:", errorMessage);
+      console.error("❌ [ERROR] Migration failed:", errorMessage);
       console.error("Full error object:", err);
+      console.error("Stack:", err instanceof Error ? err.stack : "No stack");
+      setLoadingStatus(`ERROR: ${errorMessage}`);
       setError(`Migration failed: ${errorMessage}`);
     } finally {
       setIsRunning(false);
@@ -149,7 +169,14 @@ export default function LogoMigrationPage() {
             </button>
             {isRunning && (
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
-                ⏳ Migration in progress... Check your browser console (F12) to see detailed logs
+                <div className="flex items-center gap-2 mb-2">
+                  <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span>{loadingStatus || 'Processing...'}</span>
+                </div>
+                <p className="text-xs text-blue-700">Check your browser console (F12) to see detailed logs</p>
               </div>
             )}
           </div>

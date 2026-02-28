@@ -3,10 +3,8 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { useRouter } from "next/navigation";
 
 export default function LogoMigrationPage() {
-  const router = useRouter();
   const [isRunning, setIsRunning] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
@@ -46,43 +44,6 @@ export default function LogoMigrationPage() {
     );
   }
 
-  // Check if user is superadmin
-  if (!navContext.isSuperadmin) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full text-center">
-          <div className="bg-white rounded-lg shadow-lg p-8">
-            <div className="flex justify-center mb-4">
-              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
-                <svg
-                  className="w-8 h-8 text-red-600"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              </div>
-            </div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-3">SuperAdmin Only</h1>
-            <p className="text-gray-600 mb-6">
-              This page is only accessible to superadmins.
-            </p>
-            <button
-              onClick={() => router.push("/")}
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
-            >
-              Go Home
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 md:p-8">
       <div className="max-w-4xl mx-auto">
@@ -95,6 +56,14 @@ export default function LogoMigrationPage() {
             This tool updates community records with the correct logo paths from the /public folder.
           </p>
         </div>
+
+        {!navContext.isSuperadmin && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
+            <p className="text-amber-800 text-sm">
+              Superadmin verification is not detected for this session. The migration button is visible, but execution will still be validated by backend permissions.
+            </p>
+          </div>
+        )}
 
         {/* Logo Mapping Info */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
@@ -260,7 +229,9 @@ export default function LogoMigrationPage() {
             {/* Action Buttons */}
             <div className="flex gap-3 mt-4">
               <button
-                onClick={() => router.push("/superadmin/dashboard")}
+                onClick={() => {
+                  window.location.href = "/superadmin/dashboard";
+                }}
                 className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
               >
                 Go to Dashboard

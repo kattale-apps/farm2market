@@ -62,6 +62,7 @@ import type * as seedUgandaLocations from "../seedUgandaLocations.js";
 import type * as serviceLevels from "../serviceLevels.js";
 import type * as storeAdmin from "../storeAdmin.js";
 import type * as storeadminAudit from "../storeadminAudit.js";
+import type * as stores from "../stores.js";
 import type * as tempVerifyFarmerData from "../tempVerifyFarmerData.js";
 import type * as testUtils from "../testUtils.js";
 import type * as traderBuyerNegotiations from "../traderBuyerNegotiations.js";
@@ -139,6 +140,7 @@ declare const fullApi: ApiFromModules<{
   serviceLevels: typeof serviceLevels;
   storeAdmin: typeof storeAdmin;
   storeadminAudit: typeof storeadminAudit;
+  stores: typeof stores;
   tempVerifyFarmerData: typeof tempVerifyFarmerData;
   testUtils: typeof testUtils;
   traderBuyerNegotiations: typeof traderBuyerNegotiations;

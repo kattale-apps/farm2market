@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useEffect, useState } from "react";
-import QRCode from "qrcode.react";
+import QRCode from "qrcode";
 
 interface MobileQRDownloaderProps {
   qrValue: string; // The URL to encode in QR
@@ -14,14 +14,25 @@ export function MobileQRDownloader({
   filename,
   title,
 }: MobileQRDownloaderProps) {
-  const qrRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     // Detect if device is mobile
     setIsMobile(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
-  }, []);
+    
+    // Generate QR code on canvas
+    if (canvasRef.current) {
+      QRCode.toCanvas(canvasRef.current, qrValue, {
+        errorCorrectionLevel: "H",
+        type: "image/png",
+        margin: 1,
+        width: 256,
+      }).catch((err) => {
+        console.error("QR code generation error:", err);
+      });
+    }
+  }, [qrValue]);
 
   const handleDownloadQR = async () => {
     try {
@@ -82,16 +93,11 @@ export function MobileQRDownloader({
           aspectRatio: "1",
         }}
       >
-        <div ref={qrRef} className="flex items-center justify-center">
-          <QRCode
-            ref={canvasRef}
-            value={qrValue}
-            size={256}
-            level="H"
-            includeMargin={true}
-            renderAs="canvas"
-          />
-        </div>
+        <canvas
+          ref={canvasRef}
+          className="flex items-center justify-center"
+          style={{ width: "100%", height: "100%" }}
+        />
       </div>
 
       {/* Mobile-friendly instruction text */}

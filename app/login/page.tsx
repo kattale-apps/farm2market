@@ -422,6 +422,33 @@ export default function LoginPage() {
             </div>
           )}
 
+          {/* Remember Me Checkbox for Login */}
+          {!isSignup && (
+            <div style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <input
+                type="checkbox"
+                id="rememberMe"
+                defaultChecked={true}
+                style={{
+                  width: "1.2rem",
+                  height: "1.2rem",
+                  cursor: "pointer"
+                }}
+              />
+              <label
+                htmlFor="rememberMe"
+                style={{
+                  fontSize: "0.9rem",
+                  color: "#666",
+                  cursor: "pointer",
+                  userSelect: "none"
+                }}
+              >
+                Remember me (stay logged in)
+              </label>
+            </div>
+          )}
+
           {error && (
             <div style={{
               padding: "0.75rem",
@@ -457,12 +484,7 @@ export default function LoginPage() {
         {!isSignup && (
           <div style={{ marginTop: "1rem", textAlign: "center" }}>
             <a
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                // TODO: Implement forgot password functionality
-                alert("Forgot password functionality will be available soon. Please contact support at kattaleglobal@gmail.com");
-              }}
+              href="/forgot-password"
               style={{
                 color: "#1976d2",
                 textDecoration: "none",

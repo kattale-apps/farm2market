@@ -620,3 +620,90 @@ export const backfillCommunityAdmins = mutation({
     return results;
   },
 });
+/**
+ * Request password reset - sends reset token to user's email
+ * Token expires in 1 hour
+ */
+export const requestPasswordReset = mutation({
+  args: {
+    email: v.string(),
+  },
+  handler: async (ctx, args) => {
+    // Find user by email (case-insensitive)
+    const normalizedEmail = args.email.trim().toLowerCase();
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", normalizedEmail))
+      .first();
+
+    if (!user) {
+      // Don't reveal whether email exists for security
+      return {
+        success: true,
+        message: "If an account with that email exists, a password reset link has been sent.",
+      };
+    }
+
+    // Generate reset token (simple random for pilot - use crypto.randomBytes in production)
+    const resetToken = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
+    const resetExpiry = getUgandaTime() + 3600000; // 1 hour from now
+
+    await ctx.db.patch(user._id, {
+      passwordResetToken: resetToken,
+      passwordResetExpiry: resetExpiry,
+    });
+
+    // In production, this would send an email with the reset link
+    // For pilot, return token directly (remove in production!)
+    return {
+      success: true,
+      message: "If an account with that email exists, a password reset link has been sent.",
+      resetToken, // ⚠️ PILOT ONLY - remove in production
+      resetUrl: `/reset-password?token=${resetToken}`, // ⚠️ PILOT ONLY
+    };
+  },
+});
+
+/**
+ * Reset password using reset token
+ */
+export const resetPassword = mutation({
+  args: {
+    token: v.string(),
+    newPassword: v.string(),
+  },
+  handler: async (ctx, args) => {
+    // Find user by reset token
+    const users = await ctx.db.query("users").collect();
+    const user = users.find(
+      (u) =>
+        (u as any).passwordResetToken === args.token &&
+        (u as any).passwordResetExpiry &&
+        (u as any).passwordResetExpiry > getUgandaTime()
+    );
+
+    if (!user) {
+      throw new Error("Invalid or expired reset token");
+    }
+
+    // Validate new password
+    if (args.newPassword.length < 6) {
+      throw new Error("Password must be at least 6 characters long");
+    }
+
+    // Hash new password
+    const passwordHash = simpleHash(args.newPassword);
+
+    // Update password and clear reset token
+    await ctx.db.patch(user._id, {
+      passwordHash,
+      passwordResetToken: undefined,
+      passwordResetExpiry: undefined,
+    });
+
+    return {
+      success: true,
+      message: "Password reset successful. You can now login with your newpassword.",
+    };
+  },
+});

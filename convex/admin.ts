@@ -2318,81 +2318,14 @@ export const getUsersWithDemoFundStatus = query({
 });
 
 /**
- * Admin action to run logo migration for all communities
- * Updates communities with correct logo paths based on their names
+ * REMOVED: Logo migration mutation
+ * This was causing issues and has been removed. Logo paths should be set during community creation instead.
  */
-export const runLogoMigration = mutation({
-  args: {
-    adminId: v.id("users"),
-  },
-  handler: async (ctx, args) => {
-    // Verify admin
-    const admin = await ctx.db.get(args.adminId);
-    
-    if (!admin) {
-      throw new Error(`User not found in database: ${args.adminId}`);
-    }
-    
-    if (admin.role !== "admin") {
-      throw new Error(`User role is '${admin.role}', but must be 'admin' to run migrations`);
-    }
-    
-    if (!isSuperAdmin(admin)) {
-      const adminLevel = admin.adminLevel || "undefined (fallback: super)";
-      throw new Error(`User adminLevel is '${adminLevel}', only superadmins (adminLevel='super') can run logo migration`);
-    }
-
-    // Logo mapping: community name -> /public file path
-    const logoMapping: { [key: string]: string } = {
-      "BIOFARM": "/biofarmlogo.jpeg",
-      "DEI CASSAVA GROWERS": "/deilogo.png",
-      "AGROFRESH": "/agrofreshlogo.png",
-    };
-
-    // Get all communities
-    const allCommunities = await ctx.db.query("communities").collect();
-    
-    let updatedCount = 0;
-    const results = [];
-
-    for (const community of allCommunities) {
-      const communityNameUpper = community.name?.toUpperCase() || "";
-      const logoPath = logoMapping[communityNameUpper];
-
-      // If we have a mapping and community doesn't already have a logo
-      if (logoPath && !community.logoPath) {
-        await ctx.db.patch(community._id, {
-          logoPath: logoPath,
-        });
-        updatedCount++;
-        results.push({
-          communityId: community._id,
-          name: community.name,
-          logoPath: logoPath,
-          status: "✅ Updated",
-        });
-      } else if (community.logoPath) {
-        results.push({
-          communityId: community._id,
-          name: community.name,
-          logoPath: community.logoPath,
-          status: "⏭️ Already has logo",
-        });
-      } else {
-        results.push({
-          communityId: community._id,
-          name: community.name,
-          status: "⚠️ No matching logo found",
-        });
-      }
-    }
-
-    return {
-      success: true,
-      updatedCount,
-      totalCommunities: allCommunities.length,
-      results,
-      message: `Successfully updated ${updatedCount} communities with logos`,
-    };
-  },
-});
+// export const runLogoMigration = mutation({
+//   args: {
+//     adminId: v.id("users"),
+//   },
+//   handler: async (ctx, args) => {
+//     // Migration code removed
+//   },
+// });

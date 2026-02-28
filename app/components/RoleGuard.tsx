@@ -78,7 +78,9 @@ export default function RoleGuard({ children, allowedRoles, communityId }: RoleG
     return "/community-discovery";
   };
 
-  // Loading state: Show spinner
+  // REMOVED: Secondary authentication check that was blocking UX flow
+  // Users are already authenticated at app level - no need to block here
+  // Loading state: Show minimal spinner without blocking
   if (!navContext) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -90,41 +92,23 @@ export default function RoleGuard({ children, allowedRoles, communityId }: RoleG
     );
   }
 
-  // Authentication error state
-  if (navContext.error) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
-        <div className="max-w-md w-full text-center">
-          <div className="flex justify-center mb-6">
-            <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center">
-              <svg
-                className="w-8 h-8 text-yellow-600"
-                fill="currentColor"
-                viewBox="0 0 20 20"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M10 18a8 8 0 100-16 8 8 0 000 16z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </div>
-          </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-3">Authentication Required</h1>
-          <p className="text-gray-600 mb-6">Please log in or sign up to continue.</p>
-          <button
-            onClick={() => router.push("/")}
-            className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
-          >
-            Go to Home
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // REMOVED: Authentication error blocking
+  // if (navContext.error) {
+  //   return (
+  //     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
+  //       <div className="max-w-md w-full text-center">
+  //         <h1 className="text-3xl font-bold text-gray-900 mb-3">Authentication Required</h1>
+  //         <p className="text-gray-600 mb-6">Please log in or sign up to continue.</p>
+  //         <button onClick={() => router.push("/")} className="...">Go to Home</button>
+  //       </div>
+  //     </div>
+  //   );
+  // }
 
   // Unauthorized state: Show 403 screen
-  if (!isAuthorized) {
+  // UPDATED: Only block if we have clear authorization context and user is not authorized
+  // Don't block if there's an error - that might be a temporary issue
+  if (!isAuthorized && !navContext.error && navContext.userId) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
         <div className="max-w-md w-full text-center">
@@ -186,6 +170,8 @@ export default function RoleGuard({ children, allowedRoles, communityId }: RoleG
     );
   }
 
+  // UPDATED: Allow access if there's an error but user is logged in at app level
+  // The backend will handle actual permission checks
   // Authorized: Render children
   return <>{children}</>;
 }

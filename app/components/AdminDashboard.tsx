@@ -1323,22 +1323,28 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
             Community Admin Dashboard
           </h2>
           <div style={{ marginBottom: "1rem" }}>
-            <a
-              href="/admin/community-dashboard"
-              style={{
-                display: "inline-block",
-                padding: "0.6rem 1rem",
-                borderRadius: 8,
-                background: "linear-gradient(135deg, #1976d2 0%, #1565c0 100%)",
-                color: "#fff",
-                textDecoration: "none",
-                fontSize: "0.95rem",
-                fontWeight: 600,
-                boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-              }}
-            >
-              Open Full Community Dashboard →
-            </a>
+            {communities && communities.length > 0 ? (
+              <a
+                href={`/community-admin/${communities[0]._id}/dashboard`}
+                style={{
+                  display: "inline-block",
+                  padding: "0.6rem 1rem",
+                  borderRadius: 8,
+                  background: "linear-gradient(135deg, #1976d2 0%, #1565c0 100%)",
+                  color: "#fff",
+                  textDecoration: "none",
+                  fontSize: "0.95rem",
+                  fontWeight: 600,
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+                }}
+              >
+                Open Full Community Dashboard →
+              </a>
+            ) : (
+              <div style={{ color: "#666", fontSize: "0.9rem" }}>
+                No community assigned yet.
+              </div>
+            )}
           </div>
           <div style={farmCardStyle}>
             <div style={glassPanelStyle}>

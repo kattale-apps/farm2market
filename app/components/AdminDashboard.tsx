@@ -1365,52 +1365,72 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
               >
                 {communities && communities.length > 0 ? (
                   <>
-                    <div
-                      style={{
-                        width: 72,
-                        height: 72,
-                        borderRadius: 18,
-                        background: "#ffffff",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        boxShadow: "0 4px 10px rgba(0,0,0,0.16)",
-                        overflow: "hidden",
-                        flexShrink: 0,
-                      }}
-                    >
-                      <img
-                        src={communities[0]?.qrLogoUrl || communities[0]?.logoPath || "/agrofreshlogo.png"}
-                        alt={`${communities[0].name} logo`}
-                        style={{
-                          maxWidth: "100%",
-                          maxHeight: "100%",
-                          objectFit: "contain",
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <div
-                        style={{
-                          fontSize: "1.1rem",
-                          fontWeight: 800,
-                          letterSpacing: "-0.03em",
-                          textTransform: "uppercase",
-                          color: "#1b5e20",
-                        }}
-                      >
-                        {communities[0].name}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: "0.9rem",
-                          color: "#374151",
-                          maxWidth: "28rem",
-                        }}
-                      >
-                        {communities[0].description}
-                      </div>
-                    </div>
+                    {(() => {
+                      const logoUrl = communities[0]?.qrLogoUrl || communities[0]?.logoPath;
+                      const hasLogo = Boolean(logoUrl);
+                      return (
+                        <>
+                          <div
+                            style={{
+                              width: 72,
+                              height: 72,
+                              borderRadius: 18,
+                              background: hasLogo ? "#ffffff" : "linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              boxShadow: "0 4px 10px rgba(0,0,0,0.16)",
+                              overflow: "hidden",
+                              flexShrink: 0,
+                            }}
+                          >
+                            {hasLogo ? (
+                              <img
+                                src={logoUrl}
+                                alt={`${communities[0].name} logo`}
+                                style={{
+                                  maxWidth: "100%",
+                                  maxHeight: "100%",
+                                  objectFit: "contain",
+                                }}
+                              />
+                            ) : (
+                              <span
+                                style={{
+                                  fontSize: "2rem",
+                                  fontWeight: "bold",
+                                  color: "#ffffff",
+                                }}
+                              >
+                                {communities[0].name?.charAt(0).toUpperCase() || "C"}
+                              </span>
+                            )}
+                          </div>
+                          <div>
+                            <div
+                              style={{
+                                fontSize: "1.1rem",
+                                fontWeight: 800,
+                                letterSpacing: "-0.03em",
+                                textTransform: "uppercase",
+                                color: "#1b5e20",
+                              }}
+                            >
+                              {communities[0].name}
+                            </div>
+                            <div
+                              style={{
+                                fontSize: "0.9rem",
+                                color: "#374151",
+                                maxWidth: "28rem",
+                              }}
+                            >
+                              {communities[0].description}
+                            </div>
+                          </div>
+                        </>
+                      );
+                    })()}
                   </>
                 ) : (
                   <div style={{ color: "#999" }}>

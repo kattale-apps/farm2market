@@ -14,19 +14,29 @@ export default function LogoMigrationPage() {
 
   const handleRunMigration = async () => {
     if (!navContext?.userId) {
-      setError("No user ID found");
+      setError("No user ID found. Please ensure you are logged in as a superadmin.");
       return;
     }
 
     try {
       setIsRunning(true);
       setError(null);
+      setResult(null);
+      
+      console.log("Starting migration with adminId:", navContext.userId);
+      console.log("User is superadmin:", navContext.isSuperadmin);
+      
       const migrationResult = await runMigration({
         adminId: navContext.userId,
       });
+      
+      console.log("Migration result:", migrationResult);
       setResult(migrationResult);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error occurred");
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      console.error("Migration error:", errorMessage);
+      console.error("Full error:", err);
+      setError(`Migration failed: ${errorMessage}`);
     } finally {
       setIsRunning(false);
     }

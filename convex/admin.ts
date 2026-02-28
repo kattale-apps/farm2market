@@ -2327,9 +2327,19 @@ export const runLogoMigration = mutation({
   },
   handler: async (ctx, args) => {
     // Verify admin
-    const admin = await verifyAdmin(ctx, args.adminId);
+    const admin = await ctx.db.get(args.adminId);
+    
+    if (!admin) {
+      throw new Error(`User not found in database: ${args.adminId}`);
+    }
+    
+    if (admin.role !== "admin") {
+      throw new Error(`User role is '${admin.role}', but must be 'admin' to run migrations`);
+    }
+    
     if (!isSuperAdmin(admin)) {
-      throw new Error("Only SuperAdmin can run logo migration");
+      const adminLevel = admin.adminLevel || "undefined (fallback: super)";
+      throw new Error(`User adminLevel is '${adminLevel}', only superadmins (adminLevel='super') can run logo migration`);
     }
 
     // Logo mapping: community name -> /public file path

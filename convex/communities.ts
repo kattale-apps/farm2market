@@ -470,14 +470,27 @@ export const getCommunityDashboardSummary = query({
       )
       .collect();
 
+    // Get member count
+    const members = await ctx.db
+      .query("communityMembers")
+      .withIndex("by_community", (q) => q.eq("communityId", args.communityId))
+      .filter((q) => q.eq(q.field("status"), "APPROVED"))
+      .collect();
+
     const freeImageQuotaPerMonth = settings?.juniorAdminFreeMonthlyImageQuota ?? 0;
     const used = monthPosts.length;
 
     return {
       communityId: community._id,
       communityName: community.name,
+      description: community.description,
+      logoPath: community.logoPath,
+      qrLogoUrl: community.qrLogoUrl,
+      communityType: community.communityType,
+      memberCount: members.length,
       freeImageQuotaPerMonth,
       used,
+      createdAt: community.createdAt,
     };
   },
 });
@@ -544,6 +557,76 @@ export const searchCommunities = query({
       logoPath: (c as any).logoPath,
       isGlobal: c.isGlobal,
     }));
+  },
+});
+
+/**
+ * Get suggested communities for discovery (empty state or recommendations)
+ * Returns active communities sorted by recent activity and member count
+ */
+export const getSuggestedCommunities = query({
+  args: {
+    userId: v.optional(v.id("users")),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = args.limit || 20;
+    
+    // Get all active communities
+    const allCommunities = await ctx.db.query("communities").collect();
+    
+    // Get user's joined communities if userId provided
+    let joinedCommunityIds = new Set<string>();
+    if (args.userId) {
+      const memberships = await ctx.db
+        .query("communityMemberships")
+        .withIndex("by_user", (q) => q.eq("userId", args.userId!))
+        .collect();
+      joinedCommunityIds = new Set(memberships.map((m) => String(m.communityId)));
+    }
+    
+    // Filter to communities user hasn't joined
+    const unjoined = allCommunities.filter((c) => !joinedCommunityIds.has(String(c._id)));
+    
+    // Get member counts and recent activity for each
+    const communitiesWithStats = await Promise.all(
+      unjoined.map(async (c) => {
+        const memberCount = await ctx.db
+          .query("communityMemberships")
+          .withIndex("by_community", (q) => q.eq("communityId", c._id))
+          .collect()
+          .then((ms) => ms.length);
+        
+        // Get most recent post for activity sorting
+        const recentPost = await ctx.db
+          .query("noticeboardPosts")
+          .withIndex("by_community", (q) => q.eq("communityId", c._id))
+          .order("desc")
+          .first();
+        
+        return {
+          _id: c._id,
+          name: c.name,
+          description: (c as any).description,
+          logoPath: (c as any).logoPath,
+          qrLogoUrl: (c as any).qrLogoUrl,
+          qrSlug: (c as any).qrSlug,
+          memberCount,
+          lastActivityAt: recentPost?.createdAt || c._creationTime,
+        };
+      })
+    );
+    
+    // Sort by recent activity and member count
+    const sorted = communitiesWithStats.sort((a, b) => {
+      // First by recent activity
+      const activityDiff = b.lastActivityAt - a.lastActivityAt;
+      if (activityDiff !== 0) return activityDiff;
+      // Then by member count
+      return b.memberCount - a.memberCount;
+    });
+    
+    return sorted.slice(0, limit);
   },
 });
 
@@ -775,6 +858,8 @@ export const joinCommunityByQr = mutation({
       communityId: community._id,
       userId,
       joinedAt: getUgandaTime(),
+      termsAccepted: true,
+      termsAcceptedAt: getUgandaTime(),
     });
 
     return {
@@ -1108,6 +1193,8 @@ export const joinCommunity = mutation({
       communityId: args.communityId,
       userId: args.farmerId,
       joinedAt: getUgandaTime(),
+      termsAccepted: true,
+      termsAcceptedAt: getUgandaTime(),
     });
 
     return { success: true };

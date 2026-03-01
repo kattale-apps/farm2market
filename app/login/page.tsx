@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -11,6 +11,18 @@ import { useRouter, useSearchParams } from "next/navigation";
  * User authentication and registration
  */
 export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <main style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}>
+        <p>Loading...</p>
+      </main>
+    }>
+      <LoginPageInner />
+    </Suspense>
+  );
+}
+
+function LoginPageInner() {
   const [isSignup, setIsSignup] = useState(false);
   const [email, setEmail] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -518,3 +530,4 @@ export default function LoginPage() {
     </main>
   );
 }
+

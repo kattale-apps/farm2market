@@ -3,7 +3,7 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { CommunityQRCode } from "../../components/CommunityQRCode";
 
@@ -20,6 +20,10 @@ export default function CommunitiesPage() {
   );
   const [createdCommunityId, setCreatedCommunityId] = useState<Id<"communities"> | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState("");
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -76,6 +80,17 @@ export default function CommunitiesPage() {
   const createCommunity = useMutation(api.communities.createCommunity);
   const updateCommunity = useMutation(api.communities.updateCommunity);
   const deleteCommunity = useMutation(api.communities.deleteCommunity);
+  const generateUploadUrl = useMutation(api.files.generateUploadUrl);
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setLogoFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => setLogoPreview(reader.result as string);
+      reader.readAsDataURL(file);
+    }
+  };
 
   // Get assigned admin name by finding which admin has this community in assignedCommunityIds
   const getAssignedAdminInfo = (communityId: string, communityAdminId?: string) => {
@@ -310,6 +325,98 @@ export default function CommunitiesPage() {
                   />
                 </div>
 
+                {/* Community Logo Upload */}
+                <div>
+                  <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                    Community Logo
+                  </label>
+                  <input
+                    ref={galleryInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleLogoUpload}
+                    style={{ display: "none" }}
+                  />
+                  <input
+                    ref={cameraInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={handleLogoUpload}
+                    style={{ display: "none" }}
+                  />
+                  <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center" }}>
+                    <button
+                      type="button"
+                      onClick={() => galleryInputRef.current?.click()}
+                      style={{
+                        padding: "0.5rem 1rem",
+                        border: "1px solid #ccc",
+                        borderRadius: "6px",
+                        background: "#f5f5f5",
+                        cursor: "pointer",
+                        fontWeight: 600,
+                        fontSize: "0.85rem",
+                      }}
+                    >
+                      📁 Gallery
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => cameraInputRef.current?.click()}
+                      style={{
+                        padding: "0.5rem 1rem",
+                        border: "1px solid #ccc",
+                        borderRadius: "6px",
+                        background: "#f5f5f5",
+                        cursor: "pointer",
+                        fontWeight: 600,
+                        fontSize: "0.85rem",
+                      }}
+                    >
+                      📷 Camera
+                    </button>
+                    {logoFile && (
+                      <button
+                        type="button"
+                        onClick={() => { setLogoFile(null); setLogoPreview(""); }}
+                        style={{
+                          padding: "0.5rem 1rem",
+                          border: "1px solid #ef5350",
+                          borderRadius: "6px",
+                          background: "#ffebee",
+                          color: "#c62828",
+                          cursor: "pointer",
+                          fontWeight: 600,
+                          fontSize: "0.85rem",
+                        }}
+                      >
+                        ✕ Remove
+                      </button>
+                    )}
+                  </div>
+                  {logoPreview ? (
+                    <div style={{ marginTop: "0.75rem" }}>
+                      <img
+                        src={logoPreview}
+                        alt="Logo preview"
+                        style={{
+                          width: "80px",
+                          height: "80px",
+                          borderRadius: "50%",
+                          objectFit: "cover",
+                          border: "2px solid #e0e0e0",
+                        }}
+                      />
+                      <p style={{ fontSize: "0.8rem", color: "#2e7d32", marginTop: "0.25rem" }}>✓ {logoFile?.name}</p>
+                    </div>
+                  ) : (
+                    <p style={{ fontSize: "0.8rem", color: "#999", marginTop: "0.5rem" }}>
+                      Upload a logo image for this community (optional)
+                    </p>
+                  )}
+                </div>
+
                 {/* Community Type */}
                 <div>
                   <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
@@ -520,10 +627,24 @@ export default function CommunitiesPage() {
                       const adminIdValue = formData.assignAdminId?.trim();
                       const validAdminId = adminIdValue && adminIdValue !== "undefined" ? (adminIdValue as Id<"users">) : undefined;
 
+                      // Upload logo if provided
+                      let uploadedLogoPath: string | undefined;
+                      if (logoFile) {
+                        const uploadUrl = await generateUploadUrl();
+                        const uploadResp = await fetch(uploadUrl, {
+                          method: "POST",
+                          headers: { "Content-Type": logoFile.type },
+                          body: logoFile,
+                        });
+                        const { storageId } = await uploadResp.json();
+                        uploadedLogoPath = storageId;
+                      }
+
                       const result = await createCommunity({
                         adminId: userId,
                         name: formData.name,
                         description: formData.description || undefined,
+                        logoPath: uploadedLogoPath,
                         isGlobal: formData.isGlobal,
                         geoLocked: !formData.isGlobal,
                         regionKey: formData.regionKey || undefined,
@@ -548,6 +669,8 @@ export default function CommunitiesPage() {
                         juniorAdminImagePrice: 5000,
                         memberImageMessagePrice: 1000,
                       });
+                      setLogoFile(null);
+                      setLogoPreview("");
                       setShowAdvanced(false);
                     } catch (err: any) {
                       setMessage({ type: "error", text: err.message || "Failed to create community" });
@@ -582,6 +705,8 @@ export default function CommunitiesPage() {
                       juniorAdminImagePrice: 5000,
                       memberImageMessagePrice: 1000,
                     });
+                    setLogoFile(null);
+                    setLogoPreview("");
                     setShowAdvanced(false);
                     setMessage(null);
                   }}

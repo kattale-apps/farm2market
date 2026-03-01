@@ -3,7 +3,7 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { CommunityQRCode } from "../../components/CommunityQRCode";
 
@@ -18,6 +18,8 @@ export default function CommunitiesPage() {
   const [editingCommunityId, setEditingCommunityId] = useState<string | null>(
     null
   );
+  const [createdCommunityId, setCreatedCommunityId] = useState<Id<"communities"> | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -27,6 +29,12 @@ export default function CommunitiesPage() {
     regionKey: "",
     communityType: "farmer" as "farmer" | "trader" | "buyer",
     assignAdminId: "",
+    // QR & monetisation
+    qrSlug: "",
+    qrLogoUrl: "",
+    juniorAdminFreeMonthlyImageQuota: 2,
+    juniorAdminImagePrice: 5000,
+    memberImageMessagePrice: 1000,
   });
 
   const [editData, setEditData] = useState({
@@ -222,231 +230,376 @@ export default function CommunitiesPage() {
             </div>
           )}
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "1rem", marginBottom: "1.5rem" }}>
-            <div>
-              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
-                Community Name *
-              </label>
-              <input
-                type="text"
-                placeholder="e.g., Main Farmers Community"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                style={{
-                  width: "100%",
-                  padding: "0.6rem",
-                  border: "1px solid #ccc",
-                  borderRadius: "6px",
-                  fontSize: "0.9rem",
-                  boxSizing: "border-box",
-                }}
+          {/* Show QR after successful creation */}
+          {createdCommunityId && (
+            <div style={{
+              margin: "0 0 1.5rem 0",
+              padding: "1.5rem",
+              background: "#f1f8e9",
+              borderRadius: "10px",
+              border: "1px solid #c5e1a5",
+              textAlign: "center",
+            }}>
+              <h3 style={{ margin: "0 0 1rem 0", color: "#2e7d32", fontSize: "1.1rem" }}>
+                ✅ Community Created — QR Code Ready
+              </h3>
+              <CommunityQRCode
+                communityId={createdCommunityId}
+                mode="inline"
               />
-            </div>
-
-            <div>
-              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
-                Description
-              </label>
-              <textarea
-                placeholder="Describe this community..."
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                style={{
-                  width: "100%",
-                  padding: "0.6rem",
-                  border: "1px solid #ccc",
-                  borderRadius: "6px",
-                  fontSize: "0.9rem",
-                  minHeight: "80px",
-                  boxSizing: "border-box",
-                }}
-              />
-            </div>
-
-            <div>
-              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
-                Community Type *
-              </label>
-              <select
-                value={formData.communityType}
-                onChange={(e) => setFormData({ ...formData, communityType: e.target.value as "farmer" | "trader" | "buyer" })}
-                style={{
-                  width: "100%",
-                  padding: "0.6rem",
-                  border: "1px solid #ccc",
-                  borderRadius: "6px",
-                  fontSize: "0.9rem",
-                  boxSizing: "border-box",
-                }}
-              >
-                <option value="farmer">Farmer</option>
-                <option value="trader">Trader</option>
-                <option value="buyer">Buyer</option>
-              </select>
-            </div>
-
-            <div>
-              <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontWeight: "600", color: "#333", cursor: "pointer" }}>
-                <input
-                  type="checkbox"
-                  checked={formData.isGlobal}
-                  onChange={(e) => setFormData({ ...formData, isGlobal: e.target.checked, geoLocked: false })}
-                  style={{ cursor: "pointer" }}
+              <div style={{ marginTop: "1rem", display: "flex", gap: "0.75rem", justifyContent: "center", flexWrap: "wrap" }}>
+                <CommunityQRCode
+                  communityId={createdCommunityId}
+                  mode="button"
+                  buttonLabel="Download / Share QR"
                 />
-                Global Community
-              </label>
-              <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.85rem", color: "#666" }}>
-                Accessible to all users. Disable to make it geo-locked.
-              </p>
-            </div>
-
-            {!formData.isGlobal && (
-              <div>
-                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
-                  Region (for geo-locked communities)
-                </label>
-                <select
-                  value={formData.regionKey}
-                  onChange={(e) => setFormData({ ...formData, regionKey: e.target.value })}
+                <button
+                  onClick={() => {
+                    setCreatedCommunityId(null);
+                    setShowCreateForm(false);
+                  }}
                   style={{
-                    width: "100%",
-                    padding: "0.6rem",
-                    border: "1px solid #ccc",
-                    borderRadius: "6px",
+                    padding: "0.5rem 1rem",
+                    background: "#e0e0e0",
+                    border: "none",
+                    borderRadius: "8px",
+                    cursor: "pointer",
+                    fontWeight: "600",
                     fontSize: "0.9rem",
-                    boxSizing: "border-box",
                   }}
                 >
-                  <option value="">Select a region...</option>
-                  <option value="central_buganda">Central Buganda</option>
-                  <option value="eastern_region">Eastern Region</option>
-                  <option value="northern_region">Northern Region</option>
-                  <option value="western_region">Western Region</option>
-                </select>
+                  Done
+                </button>
               </div>
-            )}
-
-            <div>
-              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
-                Assign Junior Community Admin *
-              </label>
-              <select
-                value={formData.assignAdminId}
-                onChange={(e) => {
-                  // Ensure we only get the ID value, not the display text
-                  const selectedValue = e.target.value;
-                  setFormData({ ...formData, assignAdminId: selectedValue });
-                }}
-                style={{
-                  width: "100%",
-                  padding: "0.6rem",
-                  border: "1px solid #ccc",
-                  borderRadius: "6px",
-                  fontSize: "0.9rem",
-                  boxSizing: "border-box",
-                }}
-              >
-                <option value="">Select an admin...</option>
-                {allAdmins && allAdmins
-                  .filter((admin: any) => admin.role === "admin" && admin.adminLevel === "junior" && admin.adminCategory === "community")
-                  .map((admin: any) => (
-                    <option key={admin._id} value={String(admin._id)}>
-                      {admin.alias} ({admin.email})
-                    </option>
-                  ))}
-              </select>
-              <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.85rem", color: "#666" }}>
-                Select a junior community admin to manage this community.
-              </p>
             </div>
-          </div>
+          )}
 
-          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-            <button
-              onClick={async () => {
-                if (!formData.name.trim()) {
-                  setMessage({ type: "error", text: "Community name is required" });
-                  return;
-                }
-                if (!formData.assignAdminId || !formData.assignAdminId.trim()) {
-                  setMessage({ type: "error", text: "You must assign a junior community admin" });
-                  return;
-                }
-                setLoading(true);
-                try {
-                  // Only send assignAdminId if it's a valid non-empty string and not 'undefined'
-                  const adminIdValue = formData.assignAdminId?.trim();
-                  const validAdminId = adminIdValue && adminIdValue !== "undefined" ? (adminIdValue as Id<"users">) : undefined;
-                  
-                  await createCommunity({
-                    adminId: userId,
-                    name: formData.name,
-                    description: formData.description || undefined,
-                    isGlobal: formData.isGlobal,
-                    geoLocked: !formData.isGlobal,
-                    regionKey: formData.regionKey || undefined,
-                    communityType: formData.communityType,
-                    ...(validAdminId ? { assignAdminId: validAdminId } : {}),
-                  });
-                  setMessage({ type: "success", text: "Community created successfully!" });
-                  setFormData({
-                    name: "",
-                    description: "",
-                    isGlobal: false,
-                    geoLocked: false,
-                    regionKey: "",
-                    communityType: "farmer",
-                    assignAdminId: "",
-                  });
-                  setShowCreateForm(false);
-                } catch (err: any) {
-                  setMessage({ type: "error", text: err.message || "Failed to create community" });
-                } finally {
-                  setLoading(false);
-                }
-              }}
-              disabled={loading}
-              style={{
-                padding: "0.75rem 1.5rem",
-                background: "#4caf50",
-                color: "#fff",
-                border: "none",
-                borderRadius: "6px",
-                cursor: loading ? "not-allowed" : "pointer",
-                fontWeight: "600",
-                fontSize: "0.9rem",
-                opacity: loading ? 0.6 : 1,
-              }}
-            >
-              {loading ? "Creating..." : "Create Community"}
-            </button>
-            <button
-              onClick={() => {
-                setShowCreateForm(false);
-                setFormData({
-                  name: "",
-                  description: "",
-                  isGlobal: false,
-                  geoLocked: false,
-                  regionKey: "",
-                  communityType: "farmer",
-                  assignAdminId: "",
-                });
-                setMessage(null);
-              }}
-              style={{
-                padding: "0.75rem 1.5rem",
-                background: "#e0e0e0",
-                border: "none",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "0.9rem",
-              }}
-            >
-              Cancel
-            </button>
-          </div>
+          {!createdCommunityId && (
+            <>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "1rem", marginBottom: "1.5rem" }}>
+                {/* Community Name */}
+                <div>
+                  <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                    Community Name *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g., Main Farmers Community"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    style={{
+                      width: "100%", padding: "0.6rem", border: "1px solid #ccc",
+                      borderRadius: "6px", fontSize: "0.9rem", boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                    Description
+                  </label>
+                  <textarea
+                    placeholder="Describe this community..."
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    style={{
+                      width: "100%", padding: "0.6rem", border: "1px solid #ccc",
+                      borderRadius: "6px", fontSize: "0.9rem", minHeight: "80px", boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+
+                {/* Community Type */}
+                <div>
+                  <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                    Community Type *
+                  </label>
+                  <select
+                    value={formData.communityType}
+                    onChange={(e) => setFormData({ ...formData, communityType: e.target.value as "farmer" | "trader" | "buyer" })}
+                    style={{
+                      width: "100%", padding: "0.6rem", border: "1px solid #ccc",
+                      borderRadius: "6px", fontSize: "0.9rem", boxSizing: "border-box",
+                    }}
+                  >
+                    <option value="farmer">Farmer</option>
+                    <option value="trader">Trader</option>
+                    <option value="buyer">Buyer</option>
+                  </select>
+                </div>
+
+                {/* Global */}
+                <div>
+                  <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontWeight: "600", color: "#333", cursor: "pointer" }}>
+                    <input
+                      type="checkbox"
+                      checked={formData.isGlobal}
+                      onChange={(e) => setFormData({ ...formData, isGlobal: e.target.checked, geoLocked: false })}
+                      style={{ cursor: "pointer" }}
+                    />
+                    Global Community
+                  </label>
+                  <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.85rem", color: "#666" }}>
+                    Accessible to all users. Disable to make it geo-locked.
+                  </p>
+                </div>
+
+                {/* Region */}
+                {!formData.isGlobal && (
+                  <div>
+                    <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                      Region (for geo-locked communities)
+                    </label>
+                    <select
+                      value={formData.regionKey}
+                      onChange={(e) => setFormData({ ...formData, regionKey: e.target.value })}
+                      style={{
+                        width: "100%", padding: "0.6rem", border: "1px solid #ccc",
+                        borderRadius: "6px", fontSize: "0.9rem", boxSizing: "border-box",
+                      }}
+                    >
+                      <option value="">Select a region...</option>
+                      <option value="central_buganda">Central Buganda</option>
+                      <option value="eastern_region">Eastern Region</option>
+                      <option value="northern_region">Northern Region</option>
+                      <option value="western_region">Western Region</option>
+                    </select>
+                  </div>
+                )}
+
+                {/* Assign Admin */}
+                <div>
+                  <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                    Assign Junior Community Admin *
+                  </label>
+                  <select
+                    value={formData.assignAdminId}
+                    onChange={(e) => setFormData({ ...formData, assignAdminId: e.target.value })}
+                    style={{
+                      width: "100%", padding: "0.6rem", border: "1px solid #ccc",
+                      borderRadius: "6px", fontSize: "0.9rem", boxSizing: "border-box",
+                    }}
+                  >
+                    <option value="">Select an admin...</option>
+                    {allAdmins && allAdmins
+                      .filter((admin: any) => admin.role === "admin" && admin.adminLevel === "junior" && admin.adminCategory === "community")
+                      .map((admin: any) => (
+                        <option key={admin._id} value={String(admin._id)}>
+                          {admin.alias} ({admin.email})
+                        </option>
+                      ))}
+                  </select>
+                  <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.85rem", color: "#666" }}>
+                    Select a junior community admin to manage this community.
+                  </p>
+                </div>
+
+                {/* QR & Monetisation Toggle */}
+                <div style={{
+                  padding: "1rem",
+                  background: showAdvanced ? "#e3f2fd" : "#f5f5f5",
+                  borderRadius: "8px",
+                  border: `1px solid ${showAdvanced ? "#90caf9" : "#e0e0e0"}`,
+                }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontWeight: "600", color: "#333", cursor: "pointer" }}>
+                    <input
+                      type="checkbox"
+                      checked={showAdvanced}
+                      onChange={(e) => setShowAdvanced(e.target.checked)}
+                      style={{ cursor: "pointer" }}
+                    />
+                    Enable QR Join Link & Monetisation Settings
+                  </label>
+                  <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.85rem", color: "#666" }}>
+                    Add a URL slug for QR-code joining and set image posting fees.
+                  </p>
+                </div>
+
+                {/* QR & Monetisation Fields */}
+                {showAdvanced && (
+                  <>
+                    <div>
+                      <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                        URL Slug *
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g., biofarm-ug"
+                        value={formData.qrSlug}
+                        onChange={(e) => setFormData({ ...formData, qrSlug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-") })}
+                        style={{
+                          width: "100%", padding: "0.6rem", border: "1px solid #ccc",
+                          borderRadius: "6px", fontSize: "0.9rem", boxSizing: "border-box",
+                        }}
+                      />
+                      <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.8rem", color: "#666", fontFamily: "monospace" }}>
+                        Join link: /join/community/{formData.qrSlug || "your-slug"}
+                      </p>
+                    </div>
+
+                    <div style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                      gap: "1rem",
+                      padding: "1rem",
+                      background: "#f5f5f5",
+                      borderRadius: "8px",
+                      border: "1px solid #e0e0e0",
+                    }}>
+                      <div>
+                        <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333", fontSize: "0.85rem" }}>
+                          Admin Free Monthly Image Quota
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={formData.juniorAdminFreeMonthlyImageQuota}
+                          onChange={(e) => setFormData({ ...formData, juniorAdminFreeMonthlyImageQuota: parseInt(e.target.value) || 0 })}
+                          style={{
+                            width: "100%", padding: "0.6rem", border: "1px solid #ccc",
+                            borderRadius: "6px", fontSize: "0.9rem", boxSizing: "border-box",
+                          }}
+                        />
+                        <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.75rem", color: "#888" }}>Free posts per month</p>
+                      </div>
+                      <div>
+                        <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333", fontSize: "0.85rem" }}>
+                          Admin Image Post Price (UGX)
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={formData.juniorAdminImagePrice}
+                          onChange={(e) => setFormData({ ...formData, juniorAdminImagePrice: parseInt(e.target.value) || 0 })}
+                          style={{
+                            width: "100%", padding: "0.6rem", border: "1px solid #ccc",
+                            borderRadius: "6px", fontSize: "0.9rem", boxSizing: "border-box",
+                          }}
+                        />
+                        <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.75rem", color: "#888" }}>Price after free quota exceeded</p>
+                      </div>
+                      <div>
+                        <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333", fontSize: "0.85rem" }}>
+                          Member Image Message Price (UGX)
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={formData.memberImageMessagePrice}
+                          onChange={(e) => setFormData({ ...formData, memberImageMessagePrice: parseInt(e.target.value) || 0 })}
+                          style={{
+                            width: "100%", padding: "0.6rem", border: "1px solid #ccc",
+                            borderRadius: "6px", fontSize: "0.9rem", boxSizing: "border-box",
+                          }}
+                        />
+                        <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.75rem", color: "#888" }}>Member messaging image fee</p>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+                <button
+                  onClick={async () => {
+                    if (!formData.name.trim()) {
+                      setMessage({ type: "error", text: "Community name is required" });
+                      return;
+                    }
+                    if (!formData.assignAdminId || !formData.assignAdminId.trim()) {
+                      setMessage({ type: "error", text: "You must assign a junior community admin" });
+                      return;
+                    }
+                    if (showAdvanced && !formData.qrSlug.trim()) {
+                      setMessage({ type: "error", text: "URL slug is required when QR is enabled" });
+                      return;
+                    }
+                    setLoading(true);
+                    try {
+                      const adminIdValue = formData.assignAdminId?.trim();
+                      const validAdminId = adminIdValue && adminIdValue !== "undefined" ? (adminIdValue as Id<"users">) : undefined;
+
+                      const result = await createCommunity({
+                        adminId: userId,
+                        name: formData.name,
+                        description: formData.description || undefined,
+                        isGlobal: formData.isGlobal,
+                        geoLocked: !formData.isGlobal,
+                        regionKey: formData.regionKey || undefined,
+                        communityType: formData.communityType,
+                        ...(validAdminId ? { assignAdminId: validAdminId } : {}),
+                        // QR & monetisation (only if advanced enabled)
+                        ...(showAdvanced ? {
+                          qrSlug: formData.qrSlug.trim(),
+                          juniorAdminFreeMonthlyImageQuota: formData.juniorAdminFreeMonthlyImageQuota,
+                          juniorAdminImagePrice: formData.juniorAdminImagePrice,
+                          memberImageMessagePrice: formData.memberImageMessagePrice,
+                        } : {}),
+                      });
+
+                      setMessage({ type: "success", text: "Community created successfully!" });
+                      setCreatedCommunityId(result.communityId as Id<"communities">);
+                      setFormData({
+                        name: "", description: "", isGlobal: false, geoLocked: false,
+                        regionKey: "", communityType: "farmer", assignAdminId: "",
+                        qrSlug: "", qrLogoUrl: "",
+                        juniorAdminFreeMonthlyImageQuota: 2,
+                        juniorAdminImagePrice: 5000,
+                        memberImageMessagePrice: 1000,
+                      });
+                      setShowAdvanced(false);
+                    } catch (err: any) {
+                      setMessage({ type: "error", text: err.message || "Failed to create community" });
+                    } finally {
+                      setLoading(false);
+                    }
+                  }}
+                  disabled={loading}
+                  style={{
+                    padding: "0.75rem 1.5rem",
+                    background: "#4caf50",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: loading ? "not-allowed" : "pointer",
+                    fontWeight: "600",
+                    fontSize: "0.9rem",
+                    opacity: loading ? 0.6 : 1,
+                  }}
+                >
+                  {loading ? "Creating..." : "Create Community"}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowCreateForm(false);
+                    setCreatedCommunityId(null);
+                    setFormData({
+                      name: "", description: "", isGlobal: false, geoLocked: false,
+                      regionKey: "", communityType: "farmer", assignAdminId: "",
+                      qrSlug: "", qrLogoUrl: "",
+                      juniorAdminFreeMonthlyImageQuota: 2,
+                      juniorAdminImagePrice: 5000,
+                      memberImageMessagePrice: 1000,
+                    });
+                    setShowAdvanced(false);
+                    setMessage(null);
+                  }}
+                  style={{
+                    padding: "0.75rem 1.5rem",
+                    background: "#e0e0e0",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    fontWeight: "600",
+                    fontSize: "0.9rem",
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </>
+          )}
         </div>
       )}
 

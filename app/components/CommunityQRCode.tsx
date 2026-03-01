@@ -4,6 +4,7 @@ import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import QRCode from "qrcode";
 
 interface CommunityQRCodeProps {
@@ -110,8 +111,8 @@ export function CommunityQRCode({
         📱 {buttonLabel}
       </button>
 
-      {/* Fullscreen QR Modal */}
-      {showModal && (
+      {/* Fullscreen QR Modal — rendered via portal to avoid card z-index issues */}
+      {showModal && typeof document !== "undefined" && createPortal(
         <div
           onClick={() => setShowModal(false)}
           style={{
@@ -257,7 +258,8 @@ export function CommunityQRCode({
               Close
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

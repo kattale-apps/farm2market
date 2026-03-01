@@ -808,6 +808,12 @@ export const createCommunity = mutation({
     communityType: v.union(v.literal("farmer"), v.literal("trader"), v.literal("buyer")),
     // assignAdminId is fully optional - community admins can be assigned later
     assignAdminId: v.optional(v.id("users")),
+    // QR & monetisation fields (optional)
+    qrSlug: v.optional(v.string()),
+    qrLogoUrl: v.optional(v.string()),
+    juniorAdminFreeMonthlyImageQuota: v.optional(v.number()),
+    juniorAdminImagePrice: v.optional(v.number()),
+    memberImageMessagePrice: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     // Verify admin role
@@ -896,6 +902,17 @@ export const createCommunity = mutation({
       assignedAdminId = args.assignAdminId;
     }
 
+    // If slug provided, validate uniqueness
+    if (args.qrSlug) {
+      const existingSlug = await ctx.db
+        .query("communities")
+        .filter((q) => q.eq(q.field("qrSlug"), args.qrSlug))
+        .first();
+      if (existingSlug) {
+        throw new Error("Community slug already exists. Please choose a different one.");
+      }
+    }
+
     // Create community
     const communityId = await ctx.db.insert("communities", {
       name: args.name.trim(),
@@ -911,6 +928,13 @@ export const createCommunity = mutation({
       createdAt: getUgandaTime(),
       utid,
       communityType: args.communityType || "farmer",
+      // QR fields (only set if slug provided)
+      ...(args.qrSlug ? {
+        qrEnabled: true,
+        qrSlug: args.qrSlug.trim(),
+        qrLogoUrl: args.qrLogoUrl?.trim(),
+        searchPriorityScore: 100,
+      } : {}),
     });
 
     // If assigning to a community admin, add to their assignedCommunityIds
@@ -922,15 +946,28 @@ export const createCommunity = mutation({
       });
     }
 
+    // Create monetisation settings if provided
+    if (args.juniorAdminFreeMonthlyImageQuota !== undefined || args.juniorAdminImagePrice !== undefined || args.memberImageMessagePrice !== undefined) {
+      await ctx.db.insert("communityMonetisationSettings", {
+        communityId: communityId,
+        juniorAdminFreeMonthlyImageQuota: args.juniorAdminFreeMonthlyImageQuota ?? 2,
+        juniorAdminImagePrice: args.juniorAdminImagePrice ?? 5000,
+        memberImageMessagePrice: args.memberImageMessagePrice ?? 1000,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        updatedBy: args.adminId,
+      });
+    }
+
     // Log admin action
     await ctx.db.insert("adminActions", {
       adminId: args.adminId,
       action: "create_community",
-      details: `Created community: ${args.name} (UTID: ${utid})`,
+      details: `Created community: ${args.name} (UTID: ${utid})${args.qrSlug ? ` (QR slug: ${args.qrSlug})` : ""}`,
       timestamp: getUgandaTime(),
     });
 
-    return { communityId, utid };
+    return { communityId, utid, qrSlug: args.qrSlug };
   },
 });
 

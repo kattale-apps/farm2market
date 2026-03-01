@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 /**
  * Login Page
@@ -22,10 +22,30 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [pendingCommunitySlug, setPendingCommunitySlug] = useState<string | null>(null);
   const router = useRouter();
+  const searchParams = useSearchParams();
   
   const login = useMutation(api.auth.login);
   const signup = useMutation(api.auth.signup);
+
+  // On mount, detect QR community join intent from URL param or localStorage
+  useEffect(() => {
+    const qrSlug = searchParams.get("qrCommunityId");
+    if (qrSlug) {
+      setPendingCommunitySlug(qrSlug);
+      // Also persist in localStorage in case user refreshes
+      localStorage.setItem("pending_community_join", qrSlug);
+      // Default to signup tab when coming from QR scan
+      setIsSignup(true);
+    } else {
+      // Check localStorage for pending join intent
+      const stored = localStorage.getItem("pending_community_join");
+      if (stored) {
+        setPendingCommunitySlug(stored);
+      }
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,8 +94,12 @@ export default function LoginPage() {
         // Store user info in localStorage
         localStorage.setItem("pilot_user", JSON.stringify(result));
         
-        // Redirect to dashboard
-        router.push("/");
+        // Redirect: if pending community join, go back to join page; otherwise go home
+        if (pendingCommunitySlug) {
+          router.push(`/join/community/${pendingCommunitySlug}?from_signup=1`);
+        } else {
+          router.push("/");
+        }
       } else {
         // Login
         const result = await login({
@@ -87,8 +111,12 @@ export default function LoginPage() {
         // Store user info in localStorage
         localStorage.setItem("pilot_user", JSON.stringify(result));
         
-        // Redirect to dashboard
-        router.push("/");
+        // Redirect: if pending community join, go back to join page; otherwise go home
+        if (pendingCommunitySlug) {
+          router.push(`/join/community/${pendingCommunitySlug}?from_signup=1`);
+        } else {
+          router.push("/");
+        }
       }
     } catch (err: any) {
       console.error("Auth error:", err);

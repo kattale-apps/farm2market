@@ -10,6 +10,7 @@ import { NotificationMailbox } from "./NotificationMailbox";
 import { ThreadView } from "./messages/ThreadView";
 import { ContactUs } from "./ContactUs";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { resolveCommunityLogo } from "../lib/communityLogos";
 import { UserProfileCard } from "./UserProfileCard";
 
@@ -18,6 +19,7 @@ interface BuyerDashboardProps {
 }
 
 export function BuyerDashboard({ userId }: BuyerDashboardProps) {
+  const router = useRouter();
   const inventory = useQuery(api.buyerDashboard.getAvailableInventory, { buyerId: userId });
   const traderListings = useQuery(api.buyerDashboard.getAvailableTraderListingsForBuyers, { buyerId: userId });
   const windowStatus = useQuery(api.buyerDashboard.getPurchaseWindowStatus, { buyerId: userId });
@@ -836,12 +838,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
             {memberCommunities.map((c: any) => {
               const logo = resolveCommunityLogo(c);
               return (
-                <Link
-                  key={c.id}
-                  href="/farmer/communities"
-                  style={{ textDecoration: "none", color: "inherit" }}
-                >
-                  <div style={{
+                <div key={c.id} style={{
                     borderRadius: "14px",
                     overflow: "hidden",
                     border: "1px solid #c8e6c9",
@@ -893,7 +890,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                       </div>
                     </div>
                     {/* Card Body */}
-                    <div style={{ padding: "0.75rem 1.25rem", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                    <div style={{ padding: "0.75rem 1.25rem", display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
                       <span style={{
                         padding: "0.2rem 0.6rem", borderRadius: "999px", fontSize: "0.75rem",
                         fontWeight: 600, background: "#e8f5e9", color: "#2e7d32", border: "1px solid #c8e6c9",
@@ -917,8 +914,32 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                         </span>
                       )}
                     </div>
+                    <div style={{ padding: "0 1.25rem 1rem" }}>
+                      <button
+                        onClick={() => router.push(`/community-only/messages?communityId=${c.id}`)}
+                        style={{
+                          width: "100%",
+                          padding: "0.7rem 1rem",
+                          background: "linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%)",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: "10px",
+                          fontSize: "0.9rem",
+                          fontWeight: 700,
+                          fontFamily: '"Montserrat", sans-serif',
+                          cursor: "pointer",
+                          minHeight: "44px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "0.5rem",
+                          transition: "opacity 0.2s",
+                        }}
+                      >
+                        🌾 View Community
+                      </button>
+                    </div>
                   </div>
-                </Link>
               );
             })}
           </div>

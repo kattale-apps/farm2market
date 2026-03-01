@@ -68,7 +68,7 @@ export default function MyCommunitiesPage() {
   };
 
   const handleNavigateToCommunity = (communityId: string) => {
-    router.push(`/community/${communityId}/messaging?communityId=${communityId}`);
+    router.push(`/community-only/messages?communityId=${communityId}`);
   };
 
   return (
@@ -105,23 +105,27 @@ export default function MyCommunitiesPage() {
               {allCommunities.map((community) => (
                 <div
                   key={community.communityId}
-                  onClick={() => handleNavigateToCommunity(community.communityId)}
-                  className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition cursor-pointer border border-gray-200"
+                  className="bg-white rounded-lg shadow-md hover:shadow-lg transition border border-gray-200 overflow-hidden"
                 >
                   {community.logo && (
                     <img
                       src={community.logo}
                       alt={community.name}
-                      className="w-full h-32 object-cover rounded-lg mb-4"
+                      className="w-full h-32 object-cover"
                     />
                   )}
-                  <h3 className="font-bold text-gray-900 text-lg mb-2">{community.name}</h3>
-                  <p className="text-gray-600 text-sm mb-4">
-                    Click to view community messages and noticeboard
-                  </p>
-                  <button className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium">
-                    Open Community
-                  </button>
+                  <div className="p-4">
+                    <h3 className="font-bold text-gray-900 text-lg mb-1">{community.name}</h3>
+                    <p className="text-gray-500 text-sm mb-4">
+                      Posts, messages, trackers &amp; more
+                    </p>
+                    <button
+                      onClick={() => handleNavigateToCommunity(community.communityId)}
+                      className="w-full px-4 py-3 bg-green-700 text-white rounded-lg hover:bg-green-800 transition font-bold text-sm min-h-[44px] flex items-center justify-center gap-2"
+                    >
+                      🌾 View Community
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

@@ -81,7 +81,7 @@ export default function CreateQRCommunity() {
 
       // Step 2: Generate QR code (import dynamically to avoid SSR issues)
       const QRCode = (await import("qrcode")).default;
-      const joinLink = `${window.location.origin}/join/${formData.slug}`;
+      const joinLink = `${window.location.origin}/join/community/${formData.slug}`;
       const qrDataUrl = await QRCode.toDataURL(joinLink);
 
       setGeneratedQR({
@@ -228,7 +228,7 @@ export default function CreateQRCommunity() {
                         disabled={status.type === "loading"}
                       />
                       <p className="text-xs text-gray-500 mt-2">
-                        Join link will be: <span className="font-mono text-gray-700">/join/{formData.slug}</span>
+                        Join link will be: <span className="font-mono text-gray-700">/join/community/{formData.slug}</span>
                       </p>
                     </div>
 

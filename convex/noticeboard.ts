@@ -166,26 +166,38 @@ export const getAdminNoticeboardQuotaStatus = query({
 /**
  * Send text message to community (free)
  * 
- * Can be a reply to a noticeboard post or a standalone message
+ * Can be a reply to a noticeboard post or a standalone message.
+ * Accepts an explicit userId for pilot-auth (localStorage) flows.
+ * Falls back to Convex auth if userId is not provided.
  */
 export const sendNoticeboardTextMessage = mutation({
   args: {
     communityId: v.id("communities"),
     text: v.string(),
     replyToPostId: v.optional(v.id("noticeboardPosts")),
+    userId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
-    const adminUser = await ctx.auth.getUserIdentity();
-    if (!adminUser) {
-      throw new Error("Not authenticated");
+    let resolvedUserId: Id<"users"> | undefined = args.userId;
+
+    if (!resolvedUserId) {
+      // Fallback: try Convex auth
+      const authUser = await ctx.auth.getUserIdentity();
+      if (!authUser) {
+        throw new Error("Not authenticated — provide userId or sign in");
+      }
+      const user = await ctx.db
+        .query("users")
+        .filter((q) => q.eq(q.field("email"), authUser.email))
+        .first();
+      if (!user) {
+        throw new Error("User not found");
+      }
+      resolvedUserId = user._id;
     }
 
-    // Get user
-    const user = await ctx.db
-      .query("users")
-      .filter((q) => q.eq(q.field("userId"), adminUser.tokenIdentifier))
-      .first();
-
+    // Verify user exists
+    const user = await ctx.db.get(resolvedUserId);
     if (!user) {
       throw new Error("User not found");
     }
@@ -193,11 +205,8 @@ export const sendNoticeboardTextMessage = mutation({
     // Verify membership
     const membership = await ctx.db
       .query("communityMemberships")
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("userId"), user._id),
-          q.eq(q.field("communityId"), args.communityId)
-        )
+      .withIndex("by_community_user", (q) =>
+        q.eq("communityId", args.communityId).eq("userId", resolvedUserId!)
       )
       .first();
 
@@ -208,7 +217,7 @@ export const sendNoticeboardTextMessage = mutation({
     // Create message
     const messageId = await ctx.db.insert("communityMessages", {
       communityId: args.communityId,
-      userId: user._id,
+      userId: resolvedUserId,
       text: args.text.trim(),
       replyToPostId: args.replyToPostId || undefined,
       createdAt: Date.now(),
@@ -221,7 +230,8 @@ export const sendNoticeboardTextMessage = mutation({
 /**
  * Send image message to community (payment required)
  * 
- * Call this after payment is confirmed
+ * Call this after payment is confirmed.
+ * Accepts an explicit userId for pilot-auth flows.
  * Can be a reply to a noticeboard post
  */
 export const sendImageMessage = mutation({
@@ -231,19 +241,28 @@ export const sendImageMessage = mutation({
     caption: v.optional(v.string()),
     replyToPostId: v.optional(v.id("noticeboardPosts")),
     paymentId: v.id("payments"), // Link to the payment that authorized this
+    userId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
-    const adminUser = await ctx.auth.getUserIdentity();
-    if (!adminUser) {
-      throw new Error("Not authenticated");
+    let resolvedUserId: Id<"users"> | undefined = args.userId;
+
+    if (!resolvedUserId) {
+      const authUser = await ctx.auth.getUserIdentity();
+      if (!authUser) {
+        throw new Error("Not authenticated — provide userId or sign in");
+      }
+      const user = await ctx.db
+        .query("users")
+        .filter((q) => q.eq(q.field("email"), authUser.email))
+        .first();
+      if (!user) {
+        throw new Error("User not found");
+      }
+      resolvedUserId = user._id;
     }
 
-    // Get user
-    const user = await ctx.db
-      .query("users")
-      .filter((q) => q.eq(q.field("userId"), adminUser.tokenIdentifier))
-      .first();
-
+    // Verify user exists
+    const user = await ctx.db.get(resolvedUserId);
     if (!user) {
       throw new Error("User not found");
     }
@@ -251,11 +270,8 @@ export const sendImageMessage = mutation({
     // Verify membership
     const membership = await ctx.db
       .query("communityMemberships")
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("userId"), user._id),
-          q.eq(q.field("communityId"), args.communityId)
-        )
+      .withIndex("by_community_user", (q) =>
+        q.eq("communityId", args.communityId).eq("userId", resolvedUserId!)
       )
       .first();
 
@@ -272,7 +288,7 @@ export const sendImageMessage = mutation({
     // Create message with image
     const messageId = await ctx.db.insert("communityMessages", {
       communityId: args.communityId,
-      userId: user._id,
+      userId: resolvedUserId,
       imageStorageId: args.imageStorageId,
       text: args.caption?.trim() || undefined,
       replyToPostId: args.replyToPostId || undefined,
@@ -290,21 +306,22 @@ export const togglePostLike = mutation({
   args: {
     postId: v.id("noticeboardPosts"),
     communityId: v.id("communities"),
+    userId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
-    const adminUser = await ctx.auth.getUserIdentity();
-    if (!adminUser) {
-      throw new Error("Not authenticated");
-    }
+    let resolvedUserId: Id<"users"> | undefined = args.userId;
 
-    // Get user
-    const user = await ctx.db
-      .query("users")
-      .filter((q) => q.eq(q.field("userId"), adminUser.tokenIdentifier))
-      .first();
-
-    if (!user) {
-      throw new Error("User not found");
+    if (!resolvedUserId) {
+      const authUser = await ctx.auth.getUserIdentity();
+      if (!authUser) {
+        throw new Error("Not authenticated — provide userId or sign in");
+      }
+      const user = await ctx.db
+        .query("users")
+        .filter((q) => q.eq(q.field("email"), authUser.email))
+        .first();
+      if (!user) throw new Error("User not found");
+      resolvedUserId = user._id;
     }
 
     // Check if user already liked
@@ -313,7 +330,7 @@ export const togglePostLike = mutation({
       .filter((q) =>
         q.and(
           q.eq(q.field("postId"), args.postId),
-          q.eq(q.field("userId"), user._id)
+          q.eq(q.field("userId"), resolvedUserId!)
         )
       )
       .first();
@@ -329,7 +346,7 @@ export const togglePostLike = mutation({
         .filter((q) =>
           q.and(
             q.eq(q.field("postId"), args.postId),
-            q.eq(q.field("userId"), user._id)
+            q.eq(q.field("userId"), resolvedUserId!)
           )
         )
         .first();
@@ -340,7 +357,7 @@ export const togglePostLike = mutation({
 
       await ctx.db.insert("postLikes", {
         postId: args.postId,
-        userId: user._id,
+        userId: resolvedUserId!,
         communityId: args.communityId,
         createdAt: Date.now(),
       });
@@ -357,21 +374,22 @@ export const togglePostDislike = mutation({
   args: {
     postId: v.id("noticeboardPosts"),
     communityId: v.id("communities"),
+    userId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
-    const adminUser = await ctx.auth.getUserIdentity();
-    if (!adminUser) {
-      throw new Error("Not authenticated");
-    }
+    let resolvedUserId: Id<"users"> | undefined = args.userId;
 
-    // Get user
-    const user = await ctx.db
-      .query("users")
-      .filter((q) => q.eq(q.field("userId"), adminUser.tokenIdentifier))
-      .first();
-
-    if (!user) {
-      throw new Error("User not found");
+    if (!resolvedUserId) {
+      const authUser = await ctx.auth.getUserIdentity();
+      if (!authUser) {
+        throw new Error("Not authenticated — provide userId or sign in");
+      }
+      const user = await ctx.db
+        .query("users")
+        .filter((q) => q.eq(q.field("email"), authUser.email))
+        .first();
+      if (!user) throw new Error("User not found");
+      resolvedUserId = user._id;
     }
 
     // Check if user already disliked
@@ -380,7 +398,7 @@ export const togglePostDislike = mutation({
       .filter((q) =>
         q.and(
           q.eq(q.field("postId"), args.postId),
-          q.eq(q.field("userId"), user._id)
+          q.eq(q.field("userId"), resolvedUserId!)
         )
       )
       .first();
@@ -396,7 +414,7 @@ export const togglePostDislike = mutation({
         .filter((q) =>
           q.and(
             q.eq(q.field("postId"), args.postId),
-            q.eq(q.field("userId"), user._id)
+            q.eq(q.field("userId"), resolvedUserId!)
           )
         )
         .first();
@@ -407,7 +425,7 @@ export const togglePostDislike = mutation({
 
       await ctx.db.insert("postDislikes", {
         postId: args.postId,
-        userId: user._id,
+        userId: resolvedUserId!,
         communityId: args.communityId,
         createdAt: Date.now(),
       });

@@ -40,8 +40,6 @@ export default function FarmerCommunitiesPage() {
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [selectedCommunityId, setSelectedCommunityId] = useState<Id<"communities"> | null>(null);
   const agroFreshCommunityId = process.env.NEXT_PUBLIC_AGROFRESH_COMMUNITY_ID;
-  const bioFarmCommunityId = "ms72de3njrrc9k43cf9h3yq70181ncp0";
-  const deiAgroCommunityId = "ms7b1qga2n0kwjvczv3n1dqwwx809p81";
   const communities = useQuery(api.communities.getActiveCommunities, userId ? { userId } : "skip");
   const myDrafts = useQuery(api.farmValidation.getMyDrafts, userId ? { farmerId: userId } : "skip");
   const latestForm = useQuery(api.farmValidation.getLatestFormForFarmer, userId ? { farmerId: userId } : "skip");
@@ -88,20 +86,16 @@ export default function FarmerCommunitiesPage() {
     return nameKey.includes("agrofresh") || descriptionKey.includes("agrofresh");
   };
 
-  const isBioFarmCommunity = (community: { id: Id<"communities">; name?: string; description?: string }) => {
-    return community.id === bioFarmCommunityId;
+  const isBioFarmCommunity = (_community: { id: Id<"communities">; name?: string; description?: string }) => {
+    return false; // No longer hardcoded - use logoPath from DB
   };
 
-  const isDeiAgroCommunity = (community: { id: Id<"communities">; name?: string; description?: string }) => {
-    return community.id === deiAgroCommunityId;
+  const isDeiAgroCommunity = (_community: { id: Id<"communities">; name?: string; description?: string }) => {
+    return false; // No longer hardcoded - use logoPath from DB
   };
 
   const getCommunityLogo = (community: { id: Id<"communities">; name?: string; description?: string; logoPath?: string }) => {
-    if (community.logoPath) return community.logoPath;
-    if (isAgroFreshCommunity(community)) return "/agrofreshlogo.png";
-    if (isBioFarmCommunity(community)) return "/biofarmlogo.jpeg";
-    if (isDeiAgroCommunity(community)) return "/deilogo.png";
-    return undefined;
+    return community.logoPath || undefined;
   };
 
   const getCommunityStatus = (community: { id: Id<"communities">; name?: string; description?: string; isMember?: boolean }) => {

@@ -133,23 +133,12 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   const router = useRouter();
   const adminId = userId as Id<"users">;
   
-  // Community IDs and logo helpers
-  const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
-  const DEIGRO_COMMUNITY_ID = "ms7b1qga2n0kwjvczv3n1dqwwx809p81";
-
-  const getCommunityLogo = (communityId: string | Id<"communities">) => {
-    const idStr = String(communityId);
-    if (idStr === BIOFARM_COMMUNITY_ID) return "/biofarmlogo.jpeg";
-    if (idStr === DEIGRO_COMMUNITY_ID) return "/deilogo.png";
-    return "/agrofreshlogo.png";
-  };
-
-  const isBioFarmCommunity = (communityId: string | Id<"communities">) => {
-    return String(communityId) === BIOFARM_COMMUNITY_ID;
-  };
-
-  const isDeiAgroCommunity = (communityId: string | Id<"communities">) => {
-    return String(communityId) === DEIGRO_COMMUNITY_ID;
+  // Resolve community logo from the community object's stored logoPath
+  const getCommunityLogo = (community: any) => {
+    if (typeof community === "object" && community !== null) {
+      return community.logoPath || community.qrLogoUrl || undefined;
+    }
+    return undefined;
   };
 
   const [selectedCommunityId, setSelectedCommunityId] =
@@ -1380,8 +1369,9 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                         flexShrink: 0,
                       }}
                     >
+                      {getCommunityLogo(communities[0]) ? (
                       <img
-                        src={getCommunityLogo(communities[0]._id || communities[0].id)}
+                        src={getCommunityLogo(communities[0])}
                         alt={`${communities[0].name} logo`}
                         style={{
                           maxWidth: "100%",
@@ -1389,6 +1379,11 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                           objectFit: "contain",
                         }}
                       />
+                      ) : (
+                        <span style={{ fontSize: "1.5rem", fontWeight: 800, color: "#999" }}>
+                          {communities[0].name?.charAt(0)?.toUpperCase() || "?"}
+                        </span>
+                      )}
                     </div>
                     <div>
                       <div
@@ -2826,7 +2821,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                     });
 
                     // Generate QR code
-                    const joinLink = `${window.location.origin}/join/${qrCommunityForm.slug}`;
+                    const joinLink = `${window.location.origin}/join/community/${qrCommunityForm.slug}`;
                     const qrDataUrl = await QRCode.toDataURL(joinLink);
 
                     setGeneratedQRCode({

@@ -259,10 +259,27 @@ export default function MyCommunities() {
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    const userIdFromStorage = localStorage.getItem("pilot_user");
-    if (userIdFromStorage) {
-      setUserId(userIdFromStorage as Id<"users">);
-    } else {
+    try {
+      const stored = localStorage.getItem("pilot_user");
+      if (stored) {
+        // pilot_user may be a JSON object { userId, role, ... } or a raw ID string
+        try {
+          const parsed = JSON.parse(stored);
+          if (parsed && parsed.userId) {
+            setUserId(parsed.userId as Id<"users">);
+          } else {
+            // Unexpected JSON shape — redirect
+            router.push("/join/community");
+          }
+        } catch {
+          // Not JSON — treat as a raw user ID string (legacy format)
+          setUserId(stored as Id<"users">);
+        }
+      } else {
+        router.push("/join/community");
+      }
+    } catch (error) {
+      console.error("Failed to read pilot_user from localStorage:", error);
       router.push("/join/community");
     }
   }, [router]);

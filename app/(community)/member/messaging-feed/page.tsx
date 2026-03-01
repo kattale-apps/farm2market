@@ -119,6 +119,7 @@ export default function MemberMessagingFeed() {
       await sendTextMessage({
         communityId: communityId,
         text: messageText.trim(),
+        userId: userId,
       });
       setMessageText("");
     } catch (error) {
@@ -184,6 +185,7 @@ export default function MemberMessagingFeed() {
         imageStorageId: storageId as Id<"_storage">,
         caption: pendingImageMessage.caption || undefined,
         paymentId: paymentId as Id<"payments">,
+        userId: userId,
       });
 
       setShowPaymentModal(false);
@@ -202,6 +204,7 @@ export default function MemberMessagingFeed() {
       await togglePostLike({
         postId,
         communityId,
+        userId: userId,
       });
     } catch (error) {
       console.error("Error toggling like:", error);
@@ -213,6 +216,7 @@ export default function MemberMessagingFeed() {
       await togglePostDislike({
         postId,
         communityId,
+        userId: userId,
       });
     } catch (error) {
       console.error("Error toggling dislike:", error);

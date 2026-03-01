@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, DatabaseReader } from "./_generated/server";
 import { generateUTID, getUgandaTime } from "./utils";
 import { verifyAdminRole } from "./auth";
 import { Id } from "./_generated/dataModel";
@@ -12,6 +12,24 @@ import { Id } from "./_generated/dataModel";
  * - Farmers can join communities
  * - Listings can be tagged to communities
  */
+
+/**
+ * Reusable helper: check if a user is a member of a given community.
+ * Can be imported in other convex modules for authorisation checks.
+ */
+export async function isUserCommunityMember(
+  db: DatabaseReader,
+  userId: Id<"users">,
+  communityId: Id<"communities">,
+): Promise<boolean> {
+  const membership = await db
+    .query("communityMemberships")
+    .withIndex("by_community_user", (q) =>
+      q.eq("communityId", communityId).eq("userId", userId)
+    )
+    .first();
+  return !!membership;
+}
 
 /**
  * Check if admin is SuperAdmin
@@ -559,9 +577,8 @@ export const getUserCommunities = query({
  * Flow:
  * 1. Find community by slug
  * 2. If user does not exist → create with email/phone
- * 3. Set accountScope = "community_only"
- * 4. Save onboardedViaCommunityId
- * 5. Join user to community
+ * 3. Save onboardedViaCommunityId
+ * 4. Join user to community
  */
 export const joinCommunityByQr = mutation({
   args: {
@@ -646,7 +663,6 @@ export const joinCommunityByQr = mutation({
           createdAt: getUgandaTime(),
           lastActiveAt: getUgandaTime(),
           passwordHash,
-          accountScope: "community_only",
           onboardedViaCommunityId: community._id,
         });
       }
@@ -658,11 +674,8 @@ export const joinCommunityByQr = mutation({
       throw new Error("Failed to get user after creation");
     }
 
-    // Update accountScope and onboardedViaCommunityId if not already set
+    // Update onboardedViaCommunityId if not already set
     const updates: any = {};
-    if (!user.accountScope) {
-      updates.accountScope = "community_only";
-    }
     if (!user.onboardedViaCommunityId) {
       updates.onboardedViaCommunityId = community._id;
     }
@@ -1713,11 +1726,27 @@ export const getMyNavigationContext = query({
     const userId = user._id;
     const isSuperadmin = user.adminLevel === "super" || user.adminLevel === undefined;
 
-    // Get communities where user is the admin
-    const adminCommunities = await ctx.db
+    // Get communities where user is the admin (via communityAdminId on community)
+    const directAdminCommunities = await ctx.db
       .query("communities")
       .filter((q) => q.eq(q.field("communityAdminId"), userId))
       .collect();
+
+    // Also get communities assigned via assignedCommunityIds on the user record
+    const assignedIds: Id<"communities">[] = Array.isArray((user as any).assignedCommunityIds)
+      ? (user as any).assignedCommunityIds
+      : [];
+    const assignedCommunities = (
+      await Promise.all(assignedIds.map((id) => ctx.db.get(id)))
+    ).filter((c): c is NonNullable<typeof c> => c !== null);
+
+    // Merge and deduplicate
+    const seenIds = new Set<string>();
+    const adminCommunities = [...directAdminCommunities, ...assignedCommunities].filter((c) => {
+      if (seenIds.has(String(c._id))) return false;
+      seenIds.add(String(c._id));
+      return true;
+    });
 
     const adminCommunitiesMapped = adminCommunities.map((c) => ({
       communityId: c._id,

@@ -436,6 +436,13 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
     { fieldType: "text", label: "", required: true, helpText: "", placeholder: "", options: [] },
   ]);
   const [expandedFormId, setExpandedFormId] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState(typeof window !== "undefined" ? window.innerWidth < 768 : true);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   // Auto-seed templates on first load
   useEffect(() => {

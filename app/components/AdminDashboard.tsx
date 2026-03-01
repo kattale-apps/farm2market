@@ -154,6 +154,16 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   const [selectedMessageThread, setSelectedMessageThread] = useState<{ utid: string; otherUserId: Id<"users"> } | null>(null);
   const [adminMessageText, setAdminMessageText] = useState("");
   const [showMessagesPanel, setShowMessagesPanel] = useState(false);
+  const [adminIsMobile, setAdminIsMobile] = useState(false);
+
+  // Responsive: detect mobile for grid layout
+  useEffect(() => {
+    const checkMobile = () => setAdminIsMobile(window.innerWidth <= 640);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
   const [notificationTarget, setNotificationTarget] = useState<"role" | "individual" | "community">("role");
   const [notificationRole, setNotificationRole] = useState<"farmer" | "trader" | "buyer">("farmer");
   const [notificationUserId, setNotificationUserId] = useState<string>("");
@@ -529,7 +539,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
       </div>
       <div style={{
         display: "grid",
-        gridTemplateColumns: "minmax(220px, 320px) 1fr",
+        gridTemplateColumns: adminIsMobile ? "1fr" : "minmax(220px, 320px) 1fr",
         gap: "1rem",
         alignItems: "stretch",
       }}>
@@ -722,8 +732,8 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
           minHeight: "320px",
         }}>
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(180px, 260px) 1fr", gap: "1rem" }}>
-            <div style={{ borderRight: "1px solid #eee", paddingRight: "0.75rem" }}>
+          <div style={{ display: "grid", gridTemplateColumns: adminIsMobile ? "1fr" : "minmax(180px, 260px) 1fr", gap: "1rem" }}>
+            <div style={{ borderRight: adminIsMobile ? "none" : "1px solid #eee", paddingRight: adminIsMobile ? 0 : "0.75rem", borderBottom: adminIsMobile ? "1px solid #eee" : "none", paddingBottom: adminIsMobile ? "0.75rem" : 0 }}>
               <div style={{ fontWeight: 600, marginBottom: "0.75rem" }}>Message Threads</div>
               {adminMessageThreads === undefined ? (
                 <p style={{ color: "#666" }}>Loading threads...</p>

@@ -2,7 +2,7 @@
 
 export const dynamic = "force-dynamic";
 
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useState, useEffect } from "react";
 import { Id } from "@/convex/_generated/dataModel";
@@ -87,25 +87,158 @@ function QuotaWidget({ communityId }: { communityId: Id<"communities"> }) {
   );
 }
 
+/* ------------------------------------------------------------------ */
+/*  Post Card — renders one noticeboard post (image + caption + like) */
+/* ------------------------------------------------------------------ */
+function PostCard({
+  post,
+  userId,
+  communityId,
+}: {
+  post: {
+    _id: Id<"noticeboardPosts">;
+    imageUrl: string | null;
+    caption?: string;
+    postedByAlias: string;
+    likeCount: number;
+    likedByUserIds: Id<"users">[];
+    createdAt: number;
+  };
+  userId: Id<"users">;
+  communityId: Id<"communities">;
+}) {
+  const toggleLike = useMutation(api.noticeboard.togglePostLike);
+  const [busy, setBusy] = useState(false);
+  const liked = post.likedByUserIds.includes(userId);
+
+  const handleLike = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await toggleLike({ postId: post._id, communityId, userId });
+    } catch {
+      /* silently ignore */
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const timeAgo = (ts: number) => {
+    const diff = Date.now() - ts;
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "Just now";
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    if (days < 30) return `${days}d ago`;
+    return new Date(ts).toLocaleDateString();
+  };
+
+  return (
+    <div
+      style={{
+        background: "#fff",
+        borderRadius: 12,
+        overflow: "hidden",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
+        marginBottom: 16,
+      }}
+    >
+      {/* Image */}
+      {post.imageUrl && (
+        <img
+          src={post.imageUrl}
+          alt={post.caption || "Post image"}
+          style={{
+            width: "100%",
+            maxHeight: 360,
+            objectFit: "cover",
+            display: "block",
+          }}
+        />
+      )}
+
+      {/* Body */}
+      <div style={{ padding: "12px 16px" }}>
+        {post.caption && (
+          <p style={{ margin: "0 0 8px", fontSize: 14, color: "#222", lineHeight: 1.45 }}>
+            {post.caption}
+          </p>
+        )}
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            fontSize: 12,
+            color: "#888",
+          }}
+        >
+          <span>
+            Posted by <b style={{ color: "#2e7d32" }}>{post.postedByAlias}</b> · {timeAgo(post.createdAt)}
+          </span>
+
+          <button
+            onClick={handleLike}
+            disabled={busy}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              border: "none",
+              background: "none",
+              cursor: "pointer",
+              fontSize: 13,
+              color: liked ? "#e53935" : "#aaa",
+              padding: "4px 8px",
+              borderRadius: 8,
+              transition: "color 0.2s",
+            }}
+          >
+            {liked ? "❤️" : "🤍"} {post.likeCount}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Main Page                                                          */
+/* ------------------------------------------------------------------ */
 export default function CommunityNoticeboardPage() {
   const searchParams = useSearchParams();
   const communityIdParam = searchParams.get("communityId") || "";
   
   const [communityId, setCommunityId] = useState<Id<"communities"> | null>(null);
   const [userId, setUserId] = useState<Id<"users"> | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
   useEffect(() => {
-    // Get community ID from URL params
     if (communityIdParam) {
       setCommunityId(communityIdParam as Id<"communities">);
     }
 
-    // Get user ID from localStorage
-    const userIdFromStorage = localStorage.getItem("pilot_user");
-    if (userIdFromStorage) {
-      setUserId(userIdFromStorage as Id<"users">);
+    // Parse from JSON — pilot_user is stored as JSON string
+    const stored = localStorage.getItem("pilot_user");
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        setUserId(parsed.userId as Id<"users">);
+        setUserRole(parsed.role ?? null);
+      } catch {
+        /* invalid JSON — ignore */
+      }
     }
   }, [communityIdParam]);
+
+  // Fetch posts
+  const posts = useQuery(
+    api.noticeboard.getCommunityNoticeboardPosts,
+    communityId ? { communityId } : "skip"
+  );
 
   if (!communityId || !userId) {
     return (
@@ -117,36 +250,68 @@ export default function CommunityNoticeboardPage() {
     );
   }
 
+  const isAdmin = userRole === "admin" || userRole === "superadmin";
+
   return (
-      <div className="min-h-screen bg-gray-50 pb-safe">
-        <div className="max-w-md mx-auto md:max-w-none md:p-8">
-          <h1 className="text-3xl font-bold mb-8 px-4 md:px-0 pt-4 md:pt-0">Community Noticeboard</h1>
+    <div className="min-h-screen bg-gray-50 pb-safe" style={{ paddingBottom: "5rem" }}>
+      <div className="max-w-md mx-auto md:max-w-none md:p-8">
+        <h1
+          className="font-bold mb-4 px-4 md:px-0 pt-4 md:pt-0"
+          style={{ fontSize: 22, color: "#2e7d32" }}
+        >
+          📌 Community Posts
+        </h1>
 
-          <QuotaWidget communityId={communityId} />
+        {/* Quota widget only for admins */}
+        {isAdmin && <QuotaWidget communityId={communityId} />}
 
-          <div className="bg-white rounded-lg shadow-lg p-6 mx-4 md:mx-0">
-            <h2 className="text-xl font-semibold mb-4">Create a new post</h2>
-            <div className="text-gray-500 p-8 text-center">
-              Post creation form coming soon
+        {/* Posts feed */}
+        <div className="px-4 md:px-0">
+          {posts === undefined && (
+            <div style={{ textAlign: "center", padding: 32, color: "#999" }}>
+              Loading posts...
             </div>
-          </div>
-        </div>
+          )}
 
-        <style>{`
-          .mobile-sticky {
-            position: sticky;
-            top: 0;
-            z-index: 10;
-          }
-          
-          @media (min-width: 768px) {
-            .mobile-sticky {
-              position: static;
-              z-index: auto;
-            }
-          }
-        `}</style>
-        <CommunityTabBar />
+          {posts && posts.length === 0 && (
+            <div
+              style={{
+                textAlign: "center",
+                padding: 48,
+                color: "#bbb",
+                fontSize: 15,
+              }}
+            >
+              No posts yet. The community admin will share updates here.
+            </div>
+          )}
+
+          {posts &&
+            posts.map((post) => (
+              <PostCard
+                key={post._id}
+                post={post as any}
+                userId={userId}
+                communityId={communityId}
+              />
+            ))}
+        </div>
       </div>
+
+      <style>{`
+        .mobile-sticky {
+          position: sticky;
+          top: 0;
+          z-index: 10;
+        }
+        @media (min-width: 768px) {
+          .mobile-sticky {
+            position: static;
+            z-index: auto;
+          }
+        }
+      `}</style>
+      <CommunityTabBar />
+    </div>
   );
 }

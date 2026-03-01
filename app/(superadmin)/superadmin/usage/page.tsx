@@ -38,6 +38,15 @@ function PricingEditor({
   const [juniorAdminImagePrice, setJuniorAdminImagePrice] = useState(0);
   const [memberImageMessagePrice, setMemberImageMessagePrice] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Seed state from selected community when it changes
+  useEffect(() => {
+    if (selectedCommunity) {
+      setJuniorAdminFreeMonthlyImageQuota(selectedCommunity.juniorAdminFreeMonthlyImageQuota ?? 0);
+      setJuniorAdminImagePrice(selectedCommunity.juniorAdminImagePrice ?? 0);
+      setMemberImageMessagePrice(selectedCommunity.memberImageMessagePrice ?? 0);
+    }
+  }, [selectedCommunity?._id, selectedCommunity?.juniorAdminFreeMonthlyImageQuota, selectedCommunity?.juniorAdminImagePrice, selectedCommunity?.memberImageMessagePrice]);
   const [showToast, setShowToast] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -345,9 +354,18 @@ export default function SuperadminUsagePage() {
 
   useEffect(() => {
     // Get current user ID from localStorage (pilot_user for testing)
-    const userId = localStorage.getItem("pilot_user");
-    if (userId) {
-      setAdminId(userId as Id<"users">);
+    try {
+      const stored = localStorage.getItem("pilot_user");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.userId) {
+          setAdminId(parsed.userId as Id<"users">);
+        }
+      }
+    } catch {
+      // If stored value is a raw ID string (legacy), use directly
+      const stored = localStorage.getItem("pilot_user");
+      if (stored) setAdminId(stored as Id<"users">);
     }
   }, []);
 

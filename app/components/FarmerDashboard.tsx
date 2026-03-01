@@ -302,11 +302,56 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
     }
   };
 
-  const handleExportAnalyticsPDF = () => {
+  const handleExportAnalyticsPDF = async () => {
     try {
       const jsPDF = require("jspdf");
       require("jspdf-autotable");
       const doc = new jsPDF.default();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+
+      // --- Load logo for watermark ---
+      let logoDataUrl: string | null = null;
+      try {
+        const resp = await fetch("/farm2marketlogo.jpeg");
+        if (resp.ok) {
+          const blob = await resp.blob();
+          logoDataUrl = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(blob);
+          });
+        }
+      } catch { /* logo not available — skip watermark image */ }
+
+      // --- Helper: add watermark + footer to current page ---
+      const addWatermarkAndFooter = () => {
+        // Watermark: centered, faint logo
+        if (logoDataUrl) {
+          const savedGState = (doc as any).internal.getCurrentPageInfo?.();
+          doc.saveGraphicsState();
+          (doc as any).setGState(new (doc as any).GState({ opacity: 0.08 }));
+          const logoW = 70;
+          const logoH = 70;
+          doc.addImage(logoDataUrl, "JPEG", (pageWidth - logoW) / 2, (pageHeight - logoH) / 2, logoW, logoH);
+          doc.restoreGraphicsState();
+        }
+        // Footer line + text on every page
+        doc.setDrawColor(200, 200, 200);
+        doc.setLineWidth(0.3);
+        doc.line(14, pageHeight - 14, pageWidth - 14, pageHeight - 14);
+        doc.setFontSize(7);
+        doc.setTextColor(140, 140, 140);
+        doc.text("Report compiled by farm2marketuganda.com", pageWidth / 2, pageHeight - 9, { align: "center" });
+      };
+
+      // autoTable hook for pages added by tables
+      const autoTableHooks = {
+        didDrawPage: () => addWatermarkAndFooter(),
+      };
+
+      // --- Page 1: Title ---
+      addWatermarkAndFooter();
 
       doc.setFontSize(18);
       doc.setTextColor(46, 125, 50);
@@ -340,6 +385,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
         headStyles: { fillColor: [46, 125, 50], fontSize: 9 },
         bodyStyles: { fontSize: 8 },
         margin: { left: 14 },
+        ...autoTableHooks,
       });
       y = (doc as any).lastAutoTable.finalY + 12;
 
@@ -348,7 +394,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
       const activeNegs = allNegotiations.filter((n: any) => n.status === "pending" || n.status === "countered");
       const acceptedNegs = allNegotiations.filter((n: any) => n.status === "accepted");
 
-      if (y > 240) { doc.addPage(); y = 20; }
+      if (y > 240) { doc.addPage(); y = 20; addWatermarkAndFooter(); }
       doc.setFontSize(13);
       doc.text("Negotiations Summary", 14, y);
       y += 8;
@@ -365,6 +411,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
         headStyles: { fillColor: [46, 125, 50], fontSize: 9 },
         bodyStyles: { fontSize: 8 },
         margin: { left: 14 },
+        ...autoTableHooks,
       });
       y = (doc as any).lastAutoTable.finalY + 12;
 
@@ -373,7 +420,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
       const totalEarnings = txs.reduce((sum: number, tx: any) => sum + (tx.totalEarned || 0), 0);
       const totalKilos = txs.reduce((sum: number, tx: any) => sum + (tx.kilos || 0), 0);
 
-      if (y > 240) { doc.addPage(); y = 20; }
+      if (y > 240) { doc.addPage(); y = 20; addWatermarkAndFooter(); }
       doc.setFontSize(13);
       doc.text("Earnings Summary", 14, y);
       y += 8;
@@ -392,6 +439,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
         headStyles: { fillColor: [46, 125, 50], fontSize: 9 },
         bodyStyles: { fontSize: 8 },
         margin: { left: 14 },
+        ...autoTableHooks,
       });
 
       doc.save(`farmer_analytics_${new Date().toISOString().split("T")[0]}.pdf`);
@@ -3040,7 +3088,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
             <Link href="/farmer/communities" style={{ color: "#1976d2", fontWeight: 600 }}>Browse communities</Link>
           </p>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1rem" }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(280px, 1fr))", gap: "1rem" }}>
             {memberCommunities.map((c: any) => {
               const logo = resolveCommunityLogo(c);
               return (
@@ -3120,7 +3168,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                     </div>
                     <div style={{ padding: "0 1.25rem 1rem" }}>
                       <button
-                        onClick={() => router.push(`/community-only/messages?communityId=${c.id}`)}
+                        onClick={() => router.push(`/community-only/noticeboard?communityId=${c.id}`)}
                         style={{
                           width: "100%",
                           padding: "0.7rem 1rem",
@@ -3140,7 +3188,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                           transition: "opacity 0.2s",
                         }}
                       >
-                        🌾 View Community
+                        🌾 Open Community
                       </button>
                     </div>
                   </div>

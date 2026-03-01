@@ -119,7 +119,32 @@ export const getCommunityNoticeboardPosts = query({
       .order("desc")
       .take(args.limit ?? 100);
 
-    return posts;
+    // Enrich each post with imageUrl, postedByAlias, and likeCount
+    const enriched = await Promise.all(
+      posts.map(async (post) => {
+        const imageUrl = post.imageStorageId
+          ? await ctx.storage.getUrl(post.imageStorageId)
+          : null;
+
+        const adminUser = await ctx.db.get(post.adminId);
+        const postedByAlias = adminUser?.alias ?? "Admin";
+
+        const likes = await ctx.db
+          .query("postLikes")
+          .withIndex("by_post", (q) => q.eq("postId", post._id))
+          .collect();
+
+        return {
+          ...post,
+          imageUrl,
+          postedByAlias,
+          likeCount: likes.length,
+          likedByUserIds: likes.map((l) => l.userId),
+        };
+      })
+    );
+
+    return enriched;
   },
 });
 

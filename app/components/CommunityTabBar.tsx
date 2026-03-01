@@ -10,9 +10,9 @@ interface TabItem {
 }
 
 const TABS: TabItem[] = [
-  { label: "Board", icon: "📰", path: "/community-only/noticeboard" },
-  { label: "Chat", icon: "💬", path: "/community-only/messages" },
-  { label: "Trackers", icon: "📊", path: "/community-only/trackers" },
+  { label: "Posts", icon: "📰", path: "/community-only/noticeboard" },
+  { label: "Messages", icon: "💬", path: "/community-only/messages" },
+  { label: "Forms", icon: "📋", path: "/community-only/trackers" },
   { label: "Insights", icon: "📈", path: "/community-only/my-insights" },
   { label: "Profile", icon: "👤", path: "/community-only/profile" },
 ];

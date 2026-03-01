@@ -716,3 +716,109 @@ export const getCommunityMessages = query({
     return query.order("desc").take(args.limit ?? 100);
   },
 });
+
+/**
+ * Get community members with role info for targeted messaging
+ */
+export const getCommunityMembersForMessaging = query({
+  args: {
+    communityId: v.id("communities"),
+  },
+  handler: async (ctx, args) => {
+    const memberships = await ctx.db
+      .query("communityMemberships")
+      .withIndex("by_community", (q: any) => q.eq("communityId", args.communityId))
+      .collect();
+
+    const members: any[] = [];
+    for (const m of memberships) {
+      const user = await ctx.db.get(m.userId);
+      if (user) {
+        members.push({
+          userId: user._id,
+          alias: user.alias || "Unknown",
+          role: user.role || "farmer",
+          email: user.email,
+          phoneNumber: user.phoneNumber,
+        });
+      }
+    }
+
+    // Also get super admin
+    const admins = await ctx.db
+      .query("users")
+      .withIndex("by_role", (q) => q.eq("role", "admin"))
+      .collect();
+    const superAdmin = admins.find(
+      (a) => a.adminLevel === "super" || a.adminLevel === undefined
+    );
+    if (superAdmin) {
+      // Add super admin if not already in the list
+      const alreadyIn = members.some((m) => String(m.userId) === String(superAdmin._id));
+      if (!alreadyIn) {
+        members.push({
+          userId: superAdmin._id,
+          alias: superAdmin.alias || "Super Admin",
+          role: "superadmin",
+          email: superAdmin.email,
+          phoneNumber: superAdmin.phoneNumber,
+        });
+      }
+    }
+
+    return members;
+  },
+});
+
+/**
+ * Send a targeted community message to specific members or role groups
+ */
+export const sendTargetedCommunityMessage = mutation({
+  args: {
+    communityId: v.id("communities"),
+    userId: v.id("users"),
+    text: v.string(),
+    targetType: v.union(
+      v.literal("all"),
+      v.literal("individual"),
+      v.literal("role"),
+      v.literal("superadmin")
+    ),
+    targetUserIds: v.optional(v.array(v.id("users"))),
+    targetRole: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    if (!args.text.trim()) throw new Error("Message cannot be empty");
+
+    const createdAt = getUgandaTime();
+
+    // Create the community message with targeting metadata
+    const messageId = await ctx.db.insert("communityMessages", {
+      communityId: args.communityId,
+      userId: args.userId,
+      imageStorageId: undefined,
+      text: args.text.trim(),
+      replyToPostId: undefined,
+      createdAt,
+    });
+
+    // Store targeting metadata as a separate record for filtering
+    await ctx.db.insert("messageTargets", {
+      messageId,
+      communityId: args.communityId,
+      targetType: args.targetType,
+      targetUserIds: args.targetUserIds,
+      targetRole: args.targetRole,
+      createdAt,
+    });
+
+    return {
+      _id: messageId,
+      communityId: args.communityId,
+      userId: args.userId,
+      text: args.text,
+      targetType: args.targetType,
+      createdAt,
+    };
+  },
+});

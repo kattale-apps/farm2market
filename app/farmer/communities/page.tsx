@@ -7,6 +7,7 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { resolveCommunityLogo } from "../../lib/communityLogos";
 
 export default function FarmerCommunitiesPage() {
   // Inject responsive styles for communities (client-side only)
@@ -25,8 +26,13 @@ export default function FarmerCommunitiesPage() {
       }
       @media (min-width: 701px) {
         .communities-grid {
-          grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)) !important;
-          gap: 2rem !important;
+          grid-template-columns: repeat(3, 1fr) !important;
+          gap: 1.5rem !important;
+        }
+      }
+      @media (min-width: 701px) and (max-width: 1050px) {
+        .communities-grid {
+          grid-template-columns: repeat(2, 1fr) !important;
         }
       }
     `;
@@ -95,7 +101,7 @@ export default function FarmerCommunitiesPage() {
   };
 
   const getCommunityLogo = (community: { id: Id<"communities">; name?: string; description?: string; logoPath?: string }) => {
-    return community.logoPath || undefined;
+    return resolveCommunityLogo(community);
   };
 
   const getCommunityStatus = (community: { id: Id<"communities">; name?: string; description?: string; isMember?: boolean }) => {
@@ -323,27 +329,28 @@ export default function FarmerCommunitiesPage() {
                 <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", height: "100%" }}>
                   {/* Card Header */}
                   <div style={{
-                    padding: "1.5rem",
+                    padding: "1.25rem 1.5rem",
+                    minHeight: "100px",
                     background: community.isMember ? "#e8f5e9" : community.isGlobal ? "#f1f8e9" : community.geoLocked ? "#fffde7" : "#f9fbe7",
                     borderBottom: `2.5px solid ${community.isMember ? "#388e3c" : community.isGlobal ? "#43a047" : community.geoLocked ? "#fbc02d" : "#8bc34a"}`,
                   }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                      {headerLogo && (
-                        <div
-                          style={{
-                            width: 52,
-                            height: 52,
-                            borderRadius: "50%",
-                            background: "#ffffff",
-                            border: "2px solid #43a047",
-                            boxShadow: "0 0 0 4px rgba(67,160,71,0.25), 0 10px 18px rgba(67,160,71,0.35)",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            overflow: "hidden",
-                            flexShrink: 0,
-                          }}
-                        >
+                      <div
+                        style={{
+                          width: 52,
+                          height: 52,
+                          borderRadius: "50%",
+                          background: "#ffffff",
+                          border: "2px solid #43a047",
+                          boxShadow: "0 0 0 4px rgba(67,160,71,0.25), 0 10px 18px rgba(67,160,71,0.35)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          overflow: "hidden",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {headerLogo ? (
                           <Image
                             src={headerLogo}
                             alt={`${community.name} logo`}
@@ -351,24 +358,40 @@ export default function FarmerCommunitiesPage() {
                             height={52}
                             style={{ width: "100%", height: "100%", objectFit: "cover" }}
                           />
-                        </div>
-                      )}
-                      <div>
+                        ) : (
+                          <span style={{ fontSize: "1.5rem", fontWeight: 800, color: "#43a047" }}>
+                            {community.name?.charAt(0)?.toUpperCase() || "?"}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
                         <h3 style={{
-                          margin: "0 0 0.5rem 0",
-                          fontSize: "1.3rem",
+                          margin: "0 0 0.35rem 0",
+                          fontSize: "1.1rem",
                           fontFamily: '"Montserrat", sans-serif',
                           fontWeight: "700",
                           color: "#2c2c2c",
+                          textTransform: "uppercase",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          display: "-webkit-box",
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: "vertical" as any,
+                          lineHeight: "1.3",
                         }}>
                           {community.name}
                         </h3>
                         {community.description && (
                           <p style={{
                             margin: "0",
-                            fontSize: "0.9rem",
+                            fontSize: "0.85rem",
                             color: "#666",
                             lineHeight: "1.4",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            display: "-webkit-box",
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: "vertical" as any,
                           }}>
                             {community.description}
                           </p>
@@ -380,8 +403,9 @@ export default function FarmerCommunitiesPage() {
                   {/* Card Body */}
                   <div style={{
                     padding: "1.5rem",
-                    flex: "1",
+                    flex: 1,
                     position: "relative",
+                    minHeight: "140px",
                   }}>
                     {headerLogo && (
                       <div

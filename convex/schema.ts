@@ -1307,6 +1307,22 @@ export default defineSchema({
     .index("by_created_at", ["createdAt"]),
 
   /**
+   * Message Targets
+   * - Stores targeting metadata for community messages
+   * - Enables filtering messages by recipient type (all, individual, role, superadmin)
+   */
+  messageTargets: defineTable({
+    messageId: v.id("communityMessages"),
+    communityId: v.id("communities"),
+    targetType: v.string(), // "all" | "individual" | "role" | "superadmin"
+    targetUserIds: v.optional(v.array(v.id("users"))),
+    targetRole: v.optional(v.string()), // "farmer" | "trader" | "buyer"
+    createdAt: v.number(),
+  })
+    .index("by_message", ["messageId"])
+    .index("by_community", ["communityId"]),
+
+  /**
    * Post Likes
    * - Members can like noticeboard posts (free engagement)
    */

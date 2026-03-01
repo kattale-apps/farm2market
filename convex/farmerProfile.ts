@@ -228,3 +228,99 @@ export const updateSupplyChainRole = mutation({
     };
   },
 });
+
+// ── Generic profile for traders & buyers ──
+
+/**
+ * Get a user profile (works for any role: trader, buyer, farmer)
+ */
+export const getUserProfile = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) throw new Error("User not found");
+
+    let districtName: string | undefined;
+    let subcountyName: string | undefined;
+    let parishName: string | undefined;
+
+    if (user.districtId) {
+      const d = await ctx.db.get(user.districtId);
+      districtName = d?.name;
+    }
+    if (user.subcountyId) {
+      const s = await ctx.db.get(user.subcountyId);
+      subcountyName = s?.name;
+    }
+    if (user.parishId) {
+      const p = await ctx.db.get(user.parishId);
+      parishName = p?.name;
+    }
+
+    return {
+      userId: user._id,
+      alias: user.alias,
+      role: user.role,
+      email: user.email,
+      phoneNumber: user.phoneNumber,
+      sex: user.sex,
+      region: user.region,
+      county: user.county,
+      village: user.village,
+      districtId: user.districtId,
+      districtName,
+      districtText: user.districtText,
+      subcountyId: user.subcountyId,
+      subcountyName,
+      subCountyText: user.subCountyText,
+      parishId: user.parishId,
+      parishName,
+      parishText: (user as any).parishText,
+    };
+  },
+});
+
+/**
+ * Update profile for trader / buyer (location + contact details).
+ * Accepts the same fields as updateFarmerProfile but without
+ * the farmer-role gate.
+ */
+export const updateUserProfile = mutation({
+  args: {
+    userId: v.id("users"),
+    phoneNumber: v.optional(v.string()),
+    email: v.optional(v.string()),
+    sex: v.optional(v.union(v.literal("M"), v.literal("F"))),
+    region: v.optional(v.string()),
+    county: v.optional(v.string()),
+    village: v.optional(v.string()),
+    districtText: v.optional(v.string()),
+    subCountyText: v.optional(v.string()),
+    districtId: v.optional(v.id("districts")),
+    subcountyId: v.optional(v.id("subcounties")),
+    parishId: v.optional(v.id("parishes")),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) throw new Error("User not found");
+
+    const updates: Record<string, any> = {
+      lastActiveAt: getUgandaTime(),
+    };
+
+    if (args.phoneNumber !== undefined) updates.phoneNumber = args.phoneNumber.trim() || undefined;
+    if (args.email !== undefined) updates.email = args.email.trim() || undefined;
+    if (args.sex !== undefined) updates.sex = args.sex;
+    if (args.region !== undefined) updates.region = args.region.trim() || undefined;
+    if (args.county !== undefined) updates.county = args.county.trim() || undefined;
+    if (args.village !== undefined) updates.village = args.village.trim() || undefined;
+    if (args.districtText !== undefined) updates.districtText = args.districtText.trim() || undefined;
+    if (args.subCountyText !== undefined) updates.subCountyText = args.subCountyText.trim() || undefined;
+    if (args.districtId !== undefined) updates.districtId = args.districtId;
+    if (args.subcountyId !== undefined) updates.subcountyId = args.subcountyId;
+    if (args.parishId !== undefined) updates.parishId = args.parishId;
+
+    await ctx.db.patch(args.userId, updates);
+    return { success: true, message: "Profile updated successfully" };
+  },
+});

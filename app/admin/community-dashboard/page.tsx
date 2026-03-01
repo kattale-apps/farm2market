@@ -8,9 +8,10 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import * as XLSX from "xlsx";
 import { CommunityQRCode } from "../../components/CommunityQRCode";
+import { resolveCommunityLogo } from "../../lib/communityLogos";
 
 /* ── Tab types for community cards ── */
-type CommunityTab = "members" | "noticeboard" | "messages";
+type CommunityTab = "members" | "noticeboard" | "messages" | "forms";
 
 /* ── Noticeboard tab (per community) ── */
 function NoticeboardTab({ communityId, userId }: { communityId: Id<"communities">; userId: Id<"users"> }) {
@@ -145,27 +146,61 @@ function NoticeboardTab({ communityId, userId }: { communityId: Id<"communities"
   );
 }
 
-/* ── Messages tab (per community) ── */
+/* ── Messages tab (per community) — with targeted messaging ── */
 function MessagesTab({ communityId, userId }: { communityId: Id<"communities">; userId: Id<"users"> }) {
   const messages = useQuery(api.messages.getCommunityMessages, { communityId });
+  const members = useQuery(api.messages.getCommunityMembersForMessaging, { communityId });
   const sendText = useMutation(api.messages.sendTextMessage);
+  const sendTargeted = useMutation(api.messages.sendTargetedCommunityMessage);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [targetType, setTargetType] = useState<"all" | "individual" | "role" | "superadmin">("all");
+  const [selectedMembers, setSelectedMembers] = useState<Id<"users">[]>([]);
+  const [selectedRole, setSelectedRole] = useState<string>("farmer");
+  const [showMemberPicker, setShowMemberPicker] = useState(false);
+  const [memberSearch, setMemberSearch] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  const filteredMembers = (members || []).filter((m: any) =>
+    m.alias?.toLowerCase().includes(memberSearch.toLowerCase()) ||
+    m.email?.toLowerCase().includes(memberSearch.toLowerCase())
+  );
+
+  const toggleMember = (memberId: Id<"users">) => {
+    setSelectedMembers((prev) =>
+      prev.includes(memberId) ? prev.filter((id) => id !== memberId) : [...prev, memberId]
+    );
+  };
+
   const handleSend = async () => {
     if (!text.trim()) return;
+    if (targetType === "individual" && selectedMembers.length === 0) {
+      setMsg({ type: "error", text: "Select at least one recipient" });
+      return;
+    }
     setSending(true);
     setMsg(null);
     try {
-      await sendText({ communityId, userId, text: text.trim() });
+      if (targetType === "all") {
+        await sendText({ communityId, userId, text: text.trim() });
+      } else {
+        await sendTargeted({
+          communityId,
+          userId,
+          text: text.trim(),
+          targetType,
+          targetUserIds: targetType === "individual" ? selectedMembers : undefined,
+          targetRole: targetType === "role" ? selectedRole : undefined,
+        });
+      }
       setText("");
-      setMsg({ type: "success", text: "Sent!" });
+      setSelectedMembers([]);
+      setMsg({ type: "success", text: "Message sent!" });
     } catch (e: any) {
       setMsg({ type: "error", text: e?.message || "Failed to send" });
     } finally {
@@ -173,11 +208,127 @@ function MessagesTab({ communityId, userId }: { communityId: Id<"communities">; 
     }
   };
 
+  const getTargetLabel = () => {
+    if (targetType === "all") return "📢 All Members";
+    if (targetType === "superadmin") return "🔑 Super Admin";
+    if (targetType === "role") return `👥 All ${selectedRole.charAt(0).toUpperCase() + selectedRole.slice(1)}s`;
+    if (targetType === "individual") return `👤 ${selectedMembers.length} selected`;
+    return "";
+  };
+
   return (
     <div style={{ padding: "1.5rem", display: "flex", flexDirection: "column" }}>
+      {/* Targeting Controls */}
+      <div style={{
+        marginBottom: "1rem", padding: "0.85rem", borderRadius: "10px",
+        background: "#f5f9ff", border: "1px solid #bbdefb",
+      }}>
+        <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#1565c0", marginBottom: "0.5rem" }}>
+          📨 Send To:
+        </div>
+        <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginBottom: "0.5rem" }}>
+          {(["all", "individual", "role", "superadmin"] as const).map((t) => {
+            const labels = { all: "All Members", individual: "Individual", role: "By Role", superadmin: "Super Admin" };
+            return (
+              <button
+                key={t}
+                onClick={() => { setTargetType(t); setShowMemberPicker(t === "individual"); }}
+                style={{
+                  padding: "0.3rem 0.65rem", borderRadius: "999px", border: "none",
+                  background: targetType === t ? "#1976d2" : "#e3f2fd",
+                  color: targetType === t ? "#fff" : "#1565c0",
+                  fontSize: "0.78rem", fontWeight: 600, cursor: "pointer",
+                }}
+              >
+                {labels[t]}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Role Selector */}
+        {targetType === "role" && (
+          <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.35rem" }}>
+            {["farmer", "trader", "buyer"].map((r) => (
+              <button
+                key={r}
+                onClick={() => setSelectedRole(r)}
+                style={{
+                  padding: "0.25rem 0.6rem", borderRadius: "6px", border: "none",
+                  background: selectedRole === r ? "#2e7d32" : "#e8f5e9",
+                  color: selectedRole === r ? "#fff" : "#2e7d32",
+                  fontSize: "0.78rem", fontWeight: 600, cursor: "pointer",
+                }}
+              >
+                {r.charAt(0).toUpperCase() + r.slice(1)}s
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Individual Member Picker */}
+        {targetType === "individual" && (
+          <div style={{ marginTop: "0.5rem" }}>
+            <input
+              value={memberSearch}
+              onChange={(e) => setMemberSearch(e.target.value)}
+              placeholder="Search members..."
+              style={{
+                width: "100%", padding: "0.4rem 0.6rem", borderRadius: "6px",
+                border: "1px solid #ccc", fontSize: "0.82rem", marginBottom: "0.35rem",
+              }}
+            />
+            <div style={{
+              maxHeight: "150px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.2rem",
+            }}>
+              {filteredMembers.map((m: any) => {
+                const isSelected = selectedMembers.includes(m.userId);
+                return (
+                  <div
+                    key={m.userId}
+                    onClick={() => toggleMember(m.userId)}
+                    style={{
+                      padding: "0.35rem 0.6rem", borderRadius: "6px", cursor: "pointer",
+                      background: isSelected ? "#e8f5e9" : "#fff",
+                      border: `1px solid ${isSelected ? "#43a047" : "#eee"}`,
+                      display: "flex", justifyContent: "space-between", alignItems: "center",
+                    }}
+                  >
+                    <div>
+                      <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "#333" }}>{m.alias}</span>
+                      <span style={{
+                        marginLeft: "0.4rem", padding: "0.1rem 0.35rem", borderRadius: "4px",
+                        fontSize: "0.68rem", fontWeight: 600,
+                        background: m.role === "farmer" ? "#e8f5e9" : m.role === "trader" ? "#fff3e0" : m.role === "buyer" ? "#e3f2fd" : "#f3e5f5",
+                        color: m.role === "farmer" ? "#2e7d32" : m.role === "trader" ? "#ef6c00" : m.role === "buyer" ? "#1565c0" : "#7b1fa2",
+                      }}>
+                        {m.role}
+                      </span>
+                    </div>
+                    {isSelected && <span style={{ color: "#43a047", fontWeight: 700 }}>✓</span>}
+                  </div>
+                );
+              })}
+              {filteredMembers.length === 0 && (
+                <p style={{ color: "#999", fontSize: "0.8rem", textAlign: "center", padding: "0.5rem" }}>No members found</p>
+              )}
+            </div>
+            {selectedMembers.length > 0 && (
+              <div style={{ marginTop: "0.35rem", fontSize: "0.78rem", color: "#2e7d32", fontWeight: 600 }}>
+                {selectedMembers.length} member{selectedMembers.length !== 1 ? "s" : ""} selected
+              </div>
+            )}
+          </div>
+        )}
+
+        <div style={{ marginTop: "0.5rem", fontSize: "0.78rem", color: "#666" }}>
+          Sending to: <strong>{getTargetLabel()}</strong>
+        </div>
+      </div>
+
       {/* Messages feed */}
       <div style={{
-        maxHeight: "400px",
+        maxHeight: "350px",
         overflowY: "auto",
         marginBottom: "1rem",
         padding: "0.5rem",
@@ -230,11 +381,7 @@ function MessagesTab({ communityId, userId }: { communityId: Id<"communities">; 
       </div>
 
       {/* Compose */}
-      <div style={{
-        display: "flex",
-        gap: "0.5rem",
-        alignItems: "center",
-      }}>
+      <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
         <input
           type="text"
           value={text}
@@ -242,12 +389,8 @@ function MessagesTab({ communityId, userId }: { communityId: Id<"communities">; 
           placeholder="Type a message…"
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
           style={{
-            flex: 1,
-            padding: "0.6rem 0.85rem",
-            borderRadius: "999px",
-            border: "1px solid #ccc",
-            fontSize: "0.88rem",
-            outline: "none",
+            flex: 1, padding: "0.6rem 0.85rem", borderRadius: "999px",
+            border: "1px solid #ccc", fontSize: "0.88rem", outline: "none",
           }}
           disabled={sending}
         />
@@ -255,13 +398,9 @@ function MessagesTab({ communityId, userId }: { communityId: Id<"communities">; 
           onClick={handleSend}
           disabled={sending || !text.trim()}
           style={{
-            padding: "0.6rem 1.25rem",
-            borderRadius: "999px",
-            border: "none",
+            padding: "0.6rem 1.25rem", borderRadius: "999px", border: "none",
             background: sending || !text.trim() ? "#bbb" : "#1976d2",
-            color: "#fff",
-            fontWeight: 600,
-            fontSize: "0.85rem",
+            color: "#fff", fontWeight: 600, fontSize: "0.85rem",
             cursor: sending || !text.trim() ? "not-allowed" : "pointer",
           }}
         >
@@ -277,6 +416,491 @@ function MessagesTab({ communityId, userId }: { communityId: Id<"communities">; 
   );
 }
 
+/* ── Forms & Templates tab (per community) ── */
+function FormsTab({ communityId, userId }: { communityId: Id<"communities">; userId: Id<"users"> }) {
+  const forms = useQuery((api as any).forms.getCommunityForms, { communityId });
+  const templates = useQuery((api as any).forms.getTrackerTemplates, {});
+  const seedTemplates = useMutation((api as any).forms.seedTrackerTemplates);
+  const createTrackerFromTemplate = useMutation((api as any).forms.createTrackerFromTemplate);
+  const createForm = useMutation((api as any).forms.createForm);
+  const addFormField = useMutation((api as any).forms.addFormField);
+  const deleteForm = useMutation((api as any).forms.deleteForm);
+  const updateForm = useMutation((api as any).forms.updateForm);
+
+  const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [showBuilder, setShowBuilder] = useState(false);
+  const [builderName, setBuilderName] = useState("");
+  const [builderDescription, setBuilderDescription] = useState("");
+  const [builderCategory, setBuilderCategory] = useState("custom");
+  const [builderFields, setBuilderFields] = useState<any[]>([
+    { fieldType: "text", label: "", required: true, helpText: "", placeholder: "", options: [] },
+  ]);
+  const [expandedFormId, setExpandedFormId] = useState<string | null>(null);
+
+  // Auto-seed templates on first load
+  useEffect(() => {
+    if (templates && templates.length === 0) {
+      seedTemplates({}).catch(() => {});
+    }
+  }, [templates, seedTemplates]);
+
+  const handleCreateFromTemplate = async (templateId: Id<"trackerTemplates">) => {
+    try {
+      await createTrackerFromTemplate({ templateId, communityId, adminId: userId });
+      setMsg({ type: "success", text: "Form created from template!" });
+      setTimeout(() => setMsg(null), 4000);
+    } catch (e: any) {
+      setMsg({ type: "error", text: e.message });
+    }
+  };
+
+  const handleCreateCustom = async () => {
+    if (!builderName.trim()) return;
+    const validFields = builderFields.filter((f) => f.label.trim());
+    if (validFields.length === 0) {
+      setMsg({ type: "error", text: "Add at least one field with a label" });
+      return;
+    }
+    try {
+      const result = await createForm({
+        communityId,
+        adminId: userId,
+        name: builderName,
+        description: builderDescription || undefined,
+        category: builderCategory,
+      });
+      for (const f of validFields) {
+        await addFormField({
+          formId: (result as any)._id,
+          fieldType: f.fieldType,
+          label: f.label,
+          required: f.required,
+          helpText: f.helpText || undefined,
+          placeholder: f.placeholder || undefined,
+          options: f.options?.length > 0 ? f.options.filter((o: string) => o.trim()) : undefined,
+        });
+      }
+      setMsg({ type: "success", text: "Custom form created!" });
+      setShowBuilder(false);
+      setBuilderName("");
+      setBuilderDescription("");
+      setBuilderCategory("custom");
+      setBuilderFields([{ fieldType: "text", label: "", required: true, helpText: "", placeholder: "", options: [] }]);
+      setTimeout(() => setMsg(null), 4000);
+    } catch (e: any) {
+      setMsg({ type: "error", text: e.message });
+    }
+  };
+
+  const addField = () => {
+    setBuilderFields((prev) => [...prev, { fieldType: "text", label: "", required: false, helpText: "", placeholder: "", options: [] }]);
+  };
+
+  const removeField = (idx: number) => {
+    setBuilderFields((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const updateField = (idx: number, key: string, value: any) => {
+    setBuilderFields((prev) => prev.map((f, i) => (i === idx ? { ...f, [key]: value } : f)));
+  };
+
+  const CATEGORY_LABELS: Record<string, string> = {
+    revenue: "Revenue", expense: "Expense", inventory: "Inventory",
+    profit_loss: "Profit & Loss", cashflow: "Cash Flow", custom: "Custom",
+  };
+  const CATEGORY_COLORS: Record<string, string> = {
+    revenue: "#2e7d32", expense: "#d32f2f", inventory: "#1976d2",
+    profit_loss: "#f57c00", cashflow: "#00838f", custom: "#7b1fa2",
+  };
+
+  return (
+    <div style={{ padding: "1.5rem" }}>
+      {msg && (
+        <div style={{
+          marginBottom: "1rem", padding: "0.75rem 1rem", borderRadius: "8px",
+          background: msg.type === "success" ? "#e8f5e9" : "#ffebee",
+          color: msg.type === "success" ? "#2e7d32" : "#c62828",
+          border: `1px solid ${msg.type === "success" ? "#c8e6c9" : "#ffcdd2"}`,
+          fontSize: "0.85rem",
+        }}>
+          {msg.text}
+        </div>
+      )}
+
+      {/* Templates Section */}
+      <div style={{ marginBottom: "2rem" }}>
+        <h4 style={{ margin: "0 0 1rem 0", fontSize: "1.05rem", fontWeight: 700, color: "#1b5e20" }}>
+          📋 Templates
+        </h4>
+        <p style={{ fontSize: "0.85rem", color: "#666", margin: "0 0 1rem 0" }}>
+          Create forms instantly from pre-built templates with fields ready to go.
+        </p>
+        {templates === undefined ? (
+          <p style={{ color: "#999", fontSize: "0.85rem" }}>Loading templates...</p>
+        ) : templates.length === 0 ? (
+          <p style={{ color: "#999", fontSize: "0.85rem" }}>Seeding templates...</p>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "0.75rem" }}>
+            {templates.map((t: any) => (
+              <div key={t._id} style={{
+                padding: "1rem", borderRadius: "10px", border: "1px solid #e0e0e0",
+                background: "#fafafa",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
+                  <span style={{
+                    padding: "0.15rem 0.5rem", borderRadius: "999px", fontSize: "0.7rem",
+                    fontWeight: 600, background: CATEGORY_COLORS[t.category] || "#7b1fa2",
+                    color: "#fff",
+                  }}>
+                    {CATEGORY_LABELS[t.category] || t.category}
+                  </span>
+                </div>
+                <h5 style={{ margin: "0 0 0.35rem 0", fontSize: "0.95rem", fontWeight: 700, color: "#333" }}>
+                  {t.name}
+                </h5>
+                <p style={{ margin: "0 0 0.5rem 0", fontSize: "0.8rem", color: "#666" }}>
+                  {t.description}
+                </p>
+                <div style={{ fontSize: "0.78rem", color: "#888", marginBottom: "0.5rem" }}>
+                  {t.fields?.length || 0} fields: {(t.fields || []).map((f: any) => f.label).join(", ")}
+                </div>
+                <button
+                  onClick={() => handleCreateFromTemplate(t._id)}
+                  style={{
+                    padding: "0.4rem 0.8rem", borderRadius: "6px", border: "none",
+                    background: "#2e7d32", color: "#fff", fontSize: "0.8rem",
+                    fontWeight: 600, cursor: "pointer",
+                  }}
+                >
+                  + Use Template
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Existing Forms */}
+      <div style={{ marginBottom: "2rem" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+          <h4 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700, color: "#1b5e20" }}>
+            📝 Community Forms
+          </h4>
+          <button
+            onClick={() => setShowBuilder(!showBuilder)}
+            style={{
+              padding: "0.4rem 0.8rem", borderRadius: "6px", border: "none",
+              background: showBuilder ? "#c62828" : "#1976d2", color: "#fff",
+              fontSize: "0.8rem", fontWeight: 600, cursor: "pointer",
+            }}
+          >
+            {showBuilder ? "Cancel" : "+ Build Custom Form"}
+          </button>
+        </div>
+
+        {/* Custom Form Builder */}
+        {showBuilder && (
+          <div style={{
+            marginBottom: "1.5rem", padding: "1.25rem", borderRadius: "12px",
+            border: "2px solid #1976d2", background: "#f5f9ff",
+          }}>
+            <h5 style={{ margin: "0 0 1rem 0", fontSize: "1rem", fontWeight: 700, color: "#1976d2" }}>
+              Custom Form Builder
+            </h5>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1rem" }}>
+              <div>
+                <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#333" }}>Form Name *</label>
+                <input
+                  value={builderName}
+                  onChange={(e) => setBuilderName(e.target.value)}
+                  placeholder="e.g. Weekly Harvest Report"
+                  style={{
+                    width: "100%", padding: "0.5rem", borderRadius: "6px",
+                    border: "1px solid #ccc", fontSize: "0.85rem", marginTop: "0.25rem",
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#333" }}>Category</label>
+                <select
+                  value={builderCategory}
+                  onChange={(e) => setBuilderCategory(e.target.value)}
+                  style={{
+                    width: "100%", padding: "0.5rem", borderRadius: "6px",
+                    border: "1px solid #ccc", fontSize: "0.85rem", marginTop: "0.25rem",
+                  }}
+                >
+                  {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
+                    <option key={k} value={k}>{v}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div style={{ marginBottom: "1rem" }}>
+              <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#333" }}>Description</label>
+              <input
+                value={builderDescription}
+                onChange={(e) => setBuilderDescription(e.target.value)}
+                placeholder="Brief description of the form"
+                style={{
+                  width: "100%", padding: "0.5rem", borderRadius: "6px",
+                  border: "1px solid #ccc", fontSize: "0.85rem", marginTop: "0.25rem",
+                }}
+              />
+            </div>
+
+            {/* Fields */}
+            <h6 style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", fontWeight: 700, color: "#333" }}>Fields</h6>
+            {builderFields.map((field, idx) => (
+              <div key={idx} style={{
+                padding: "0.75rem", borderRadius: "8px", border: "1px solid #d0d0d0",
+                background: "#fff", marginBottom: "0.5rem",
+              }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 120px auto auto", gap: "0.5rem", alignItems: "center" }}>
+                  <input
+                    value={field.label}
+                    onChange={(e) => updateField(idx, "label", e.target.value)}
+                    placeholder="Field label"
+                    style={{ padding: "0.4rem", borderRadius: "5px", border: "1px solid #ccc", fontSize: "0.82rem" }}
+                  />
+                  <select
+                    value={field.fieldType}
+                    onChange={(e) => updateField(idx, "fieldType", e.target.value)}
+                    style={{ padding: "0.4rem", borderRadius: "5px", border: "1px solid #ccc", fontSize: "0.82rem" }}
+                  >
+                    <option value="text">Text</option>
+                    <option value="number">Number</option>
+                    <option value="date">Date</option>
+                    <option value="select">Select</option>
+                    <option value="textarea">Textarea</option>
+                  </select>
+                  <label style={{ display: "flex", alignItems: "center", gap: "0.25rem", fontSize: "0.78rem", cursor: "pointer" }}>
+                    <input
+                      type="checkbox"
+                      checked={field.required}
+                      onChange={(e) => updateField(idx, "required", e.target.checked)}
+                    />
+                    Required
+                  </label>
+                  <button
+                    onClick={() => removeField(idx)}
+                    style={{
+                      border: "none", background: "#ffebee", color: "#c62828",
+                      borderRadius: "5px", padding: "0.3rem 0.5rem", cursor: "pointer", fontSize: "0.8rem",
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+                {field.fieldType === "select" && (
+                  <div style={{ marginTop: "0.4rem" }}>
+                    <input
+                      value={(field.options || []).join(", ")}
+                      onChange={(e) => updateField(idx, "options", e.target.value.split(",").map((s: string) => s.trim()))}
+                      placeholder="Options (comma-separated)"
+                      style={{ width: "100%", padding: "0.35rem", borderRadius: "5px", border: "1px solid #ccc", fontSize: "0.8rem" }}
+                    />
+                  </div>
+                )}
+              </div>
+            ))}
+            <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.75rem" }}>
+              <button
+                onClick={addField}
+                style={{
+                  padding: "0.4rem 0.75rem", borderRadius: "6px", border: "1px dashed #999",
+                  background: "#fff", color: "#333", fontSize: "0.8rem", cursor: "pointer",
+                }}
+              >
+                + Add Field
+              </button>
+              <button
+                onClick={handleCreateCustom}
+                disabled={!builderName.trim()}
+                style={{
+                  padding: "0.4rem 0.9rem", borderRadius: "6px", border: "none",
+                  background: builderName.trim() ? "#1976d2" : "#bbb", color: "#fff",
+                  fontSize: "0.8rem", fontWeight: 600, cursor: builderName.trim() ? "pointer" : "not-allowed",
+                }}
+              >
+                Create Form
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Forms List */}
+        {forms === undefined ? (
+          <p style={{ color: "#999", fontSize: "0.85rem" }}>Loading forms...</p>
+        ) : forms.length === 0 ? (
+          <p style={{ color: "#999", fontSize: "0.85rem" }}>No forms yet. Use a template or build a custom form above.</p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+            {forms.map((form: any) => {
+              const isExpanded = expandedFormId === String(form._id);
+              return (
+                <div key={form._id} style={{
+                  borderRadius: "10px", border: "1px solid #e0e0e0", background: "#fff", overflow: "hidden",
+                }}>
+                  <div
+                    onClick={() => setExpandedFormId(isExpanded ? null : String(form._id))}
+                    style={{
+                      padding: "0.85rem 1rem", display: "flex", justifyContent: "space-between",
+                      alignItems: "center", cursor: "pointer", background: isExpanded ? "#f5f9ff" : "#fafafa",
+                      borderBottom: isExpanded ? "1px solid #ddd" : "none",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                      {form.category && (
+                        <span style={{
+                          padding: "0.1rem 0.4rem", borderRadius: "999px", fontSize: "0.68rem",
+                          fontWeight: 600, background: CATEGORY_COLORS[form.category] || "#7b1fa2", color: "#fff",
+                        }}>
+                          {CATEGORY_LABELS[form.category] || form.category}
+                        </span>
+                      )}
+                      <strong style={{ fontSize: "0.9rem", color: "#333" }}>{form.name}</strong>
+                      <span style={{
+                        fontSize: "0.75rem", color: form.isActive ? "#2e7d32" : "#999",
+                        fontWeight: 600,
+                      }}>
+                        {form.isActive ? "● Active" : "● Inactive"}
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                      <span style={{ fontSize: "0.78rem", color: "#888" }}>
+                        {form.responseCount || 0} responses
+                      </span>
+                      <span style={{ fontSize: "1rem", color: "#888" }}>{isExpanded ? "▲" : "▼"}</span>
+                    </div>
+                  </div>
+                  {isExpanded && (
+                    <FormDetailView
+                      formId={form._id}
+                      formName={form.name}
+                      isActive={form.isActive}
+                      onToggleActive={async () => {
+                        try {
+                          await updateForm({ formId: form._id, isActive: !form.isActive });
+                          setMsg({ type: "success", text: `Form ${form.isActive ? "deactivated" : "activated"}` });
+                        } catch (e: any) {
+                          setMsg({ type: "error", text: e.message });
+                        }
+                      }}
+                      onDelete={async () => {
+                        if (confirm("Delete this form and all its data?")) {
+                          try {
+                            await deleteForm({ formId: form._id });
+                            setMsg({ type: "success", text: "Form deleted" });
+                          } catch (e: any) {
+                            setMsg({ type: "error", text: e.message });
+                          }
+                        }
+                      }}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ── Form Detail View (inside Forms tab) ── */
+function FormDetailView({ formId, formName, isActive, onToggleActive, onDelete }: {
+  formId: Id<"communityForms">;
+  formName: string;
+  isActive: boolean;
+  onToggleActive: () => void;
+  onDelete: () => void;
+}) {
+  const formDetails = useQuery((api as any).forms.getFormDetails, { formId });
+  const responses = useQuery((api as any).forms.getFormResponses, { formId });
+
+  return (
+    <div style={{ padding: "1rem" }}>
+      {/* Form fields */}
+      <h6 style={{ margin: "0 0 0.5rem 0", fontSize: "0.85rem", fontWeight: 700, color: "#333" }}>
+        Fields
+      </h6>
+      {formDetails === undefined ? (
+        <p style={{ color: "#999", fontSize: "0.8rem" }}>Loading...</p>
+      ) : formDetails.fields && formDetails.fields.length > 0 ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", marginBottom: "1rem" }}>
+          {formDetails.fields.map((f: any, idx: number) => (
+            <div key={f._id || idx} style={{
+              padding: "0.5rem 0.75rem", borderRadius: "6px", background: "#f5f5f5",
+              border: "1px solid #eee", display: "flex", alignItems: "center", gap: "0.5rem",
+            }}>
+              <span style={{
+                width: 22, height: 22, borderRadius: "50%", background: "#e8f5e9",
+                color: "#2e7d32", fontSize: "0.7rem", fontWeight: 700,
+                display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+              }}>
+                {idx + 1}
+              </span>
+              <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "#333" }}>{f.label}</span>
+              <span style={{
+                padding: "0.1rem 0.35rem", borderRadius: "4px", fontSize: "0.68rem",
+                background: "#e3f2fd", color: "#1565c0", fontWeight: 600,
+              }}>
+                {f.fieldType}
+              </span>
+              {f.required && (
+                <span style={{ fontSize: "0.7rem", color: "#c62828", fontWeight: 600 }}>Required</span>
+              )}
+              {f.options && f.options.length > 0 && (
+                <span style={{ fontSize: "0.72rem", color: "#888" }}>
+                  Options: {f.options.join(", ")}
+                </span>
+              )}
+              {f.isCalculated && (
+                <span style={{ fontSize: "0.72rem", color: "#f57c00", fontWeight: 600 }}>
+                  Calculated: {f.formula}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p style={{ color: "#999", fontSize: "0.8rem", marginBottom: "1rem" }}>No fields defined.</p>
+      )}
+
+      {/* Responses count */}
+      <div style={{ fontSize: "0.85rem", color: "#555", marginBottom: "0.75rem" }}>
+        <strong>Responses:</strong> {responses === undefined ? "..." : Array.isArray(responses) ? responses.length : 0}
+      </div>
+
+      {/* Actions */}
+      <div style={{ display: "flex", gap: "0.5rem" }}>
+        <button
+          onClick={onToggleActive}
+          style={{
+            padding: "0.35rem 0.7rem", borderRadius: "6px", border: "1px solid #ddd",
+            background: isActive ? "#fff3e0" : "#e8f5e9", color: isActive ? "#ef6c00" : "#2e7d32",
+            fontSize: "0.8rem", fontWeight: 600, cursor: "pointer",
+          }}
+        >
+          {isActive ? "Deactivate" : "Activate"}
+        </button>
+        <button
+          onClick={onDelete}
+          style={{
+            padding: "0.35rem 0.7rem", borderRadius: "6px", border: "1px solid #ffcdd2",
+            background: "#ffebee", color: "#c62828",
+            fontSize: "0.8rem", fontWeight: 600, cursor: "pointer",
+          }}
+        >
+          Delete
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function CommunityDashboardPage() {
   const router = useRouter();
   const [userId, setUserId] = useState<Id<"users"> | null>(null);
@@ -285,14 +909,8 @@ export default function CommunityDashboardPage() {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Resolve community logo from the community object's stored logoPath
-  const getCommunityLogo = (community: { logoPath?: string; qrLogoUrl?: string; name?: string } | string | Id<"communities">) => {
-    if (typeof community === "object" && community !== null) {
-      return (community as any).logoPath || (community as any).qrLogoUrl || undefined;
-    }
-    // Fallback: look up from userCommunities list by ID
-    return undefined;
-  };
+  // Resolve community logo using shared helper (DB → known-name fallback)
+  const getCommunityLogo = (community: any) => resolveCommunityLogo(community);
   const [selectedApplicationId, setSelectedApplicationId] = useState<Id<"communityApplications"> | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [exportCommunityId, setExportCommunityId] = useState<Id<"communities"> | null>(null);
@@ -852,9 +1470,9 @@ export default function CommunityDashboardPage() {
                 borderBottom: "2px solid #e0e0e0",
                 background: "#fafafa",
               }}>
-                {(["members", "noticeboard", "messages"] as CommunityTab[]).map((tab) => {
+                {(["members", "noticeboard", "messages", "forms"] as CommunityTab[]).map((tab) => {
                   const active = getActiveTab(communityId) === tab;
-                  const labels: Record<CommunityTab, string> = { members: "Members", noticeboard: "Noticeboard", messages: "Messages" };
+                  const labels: Record<CommunityTab, string> = { members: "Members", noticeboard: "Noticeboard", messages: "Messages", forms: "Forms" };
                   return (
                     <button
                       key={tab}
@@ -887,6 +1505,11 @@ export default function CommunityDashboardPage() {
               {/* ── Messages Tab ── */}
               {getActiveTab(communityId) === "messages" && (
                 <MessagesTab communityId={communityId} userId={userId!} />
+              )}
+
+              {/* ── Forms & Templates Tab ── */}
+              {getActiveTab(communityId) === "forms" && (
+                <FormsTab communityId={communityId} userId={userId!} />
               )}
 
               {/* ── Members Tab (existing content) ── */}

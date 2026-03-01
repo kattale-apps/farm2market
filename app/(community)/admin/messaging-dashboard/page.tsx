@@ -8,7 +8,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import CommunitySwitcher from "@/app/components/CommunitySwitcher";
-import RoleGuard from "@/app/components/RoleGuard";
 
 export default function MessagingDashboard() {
   const searchParams = useSearchParams();
@@ -197,10 +196,6 @@ export default function MessagingDashboard() {
   };
 
   return (
-    <RoleGuard
-      allowedRoles={["communityAdmin"]}
-      communityId={communityIdParam}
-    >
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <div className="max-w-4xl mx-auto">
         {/* Header with Community Switcher */}
@@ -411,6 +406,5 @@ export default function MessagingDashboard() {
         </div>
       )}
     </div>
-    </RoleGuard>
   );
 }

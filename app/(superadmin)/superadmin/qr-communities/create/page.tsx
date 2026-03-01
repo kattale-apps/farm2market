@@ -1,13 +1,25 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useRouter } from "next/navigation";
+import { Id } from "@/convex/_generated/dataModel";
 
 export default function CreateQRCommunity() {
   const router = useRouter();
   const createQRCommunity = useMutation(api.communities.createQRCommunity as any);
+  const [userId, setUserId] = useState<Id<"users"> | null>(null);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("pilot_user");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.userId) setUserId(parsed.userId as Id<"users">);
+      }
+    } catch {}
+  }, []);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -28,6 +40,8 @@ export default function CreateQRCommunity() {
     qrDataUrl: string;
     joinLink: string;
   } | null>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -70,7 +84,7 @@ export default function CreateQRCommunity() {
 
     try {
       const community = await createQRCommunity({
-        adminId: undefined as any, // Will be fetched by mutation from auth context
+        adminId: userId,
         name: formData.name.trim(),
         slug: formData.slug.trim(),
         logoUrl: formData.logoPreview,
@@ -115,18 +129,18 @@ export default function CreateQRCommunity() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-4 md:p-6">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-5xl font-bold text-gray-900">Create QR Community</h1>
+          <h1 className="text-3xl md:text-5xl font-bold text-gray-900">Create QR Community</h1>
           <p className="text-lg text-gray-600 mt-3">
             Set up a new community joinable via QR code with flexible monetisation controls
           </p>
         </div>
 
         {/* Form Card */}
-        <div className="bg-white rounded-xl shadow-md border border-gray-100 p-8">
+        <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4 md:p-8">
           {status.type === "success" && generatedQR ? (
             // Success State
             <div className="space-y-6">
@@ -137,12 +151,12 @@ export default function CreateQRCommunity() {
               {/* QR Code Display */}
               <div className="text-center space-y-6">
                 <div>
-                  <h2 className="text-3xl font-bold text-gray-900 mb-4">Your QR Code</h2>
-                  <div className="flex justify-center p-8 bg-gray-50 rounded-lg border-2 border-gray-200">
+                  <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">Your QR Code</h2>
+                  <div className="flex justify-center p-4 md:p-8 bg-gray-50 rounded-lg border-2 border-gray-200">
                     <img
                       src={generatedQR.qrDataUrl}
                       alt="Community QR Code"
-                      className="w-80 h-80 border-4 border-white rounded-lg shadow-lg"
+                      className="w-full max-w-[320px] aspect-square border-4 border-white rounded-lg shadow-lg"
                     />
                   </div>
                 </div>
@@ -236,20 +250,72 @@ export default function CreateQRCommunity() {
                       <label className="block text-sm font-semibold text-gray-700 mb-2">
                         Community Logo (Optional)
                       </label>
-                      <div className="flex items-center gap-4">
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleLogoUpload}
-                          className="flex-1 px-4 py-3 border border-gray-300 rounded-lg"
-                          disabled={status.type === "loading"}
-                        />
-                        {formData.logoPreview && (
-                          <img
-                            src={formData.logoPreview}
-                            alt="Logo Preview"
-                            className="w-16 h-16 object-cover rounded-lg border-2 border-gray-300 flex-shrink-0"
-                          />
+                      {/* Hidden file inputs */}
+                      <input
+                        ref={galleryInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleLogoUpload}
+                        style={{ display: "none" }}
+                        disabled={status.type === "loading"}
+                      />
+                      <input
+                        ref={cameraInputRef}
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={handleLogoUpload}
+                        style={{ display: "none" }}
+                        disabled={status.type === "loading"}
+                      />
+                      <div className="flex items-start gap-4">
+                        <div className="flex flex-col gap-2 flex-1">
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => galleryInputRef.current?.click()}
+                              disabled={status.type === "loading"}
+                              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-green-500 hover:bg-green-50 transition-colors cursor-pointer disabled:opacity-50"
+                            >
+                              <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                              <span className="text-sm font-semibold text-gray-600">Gallery</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => cameraInputRef.current?.click()}
+                              disabled={status.type === "loading"}
+                              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors cursor-pointer disabled:opacity-50"
+                            >
+                              <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                              </svg>
+                              <span className="text-sm font-semibold text-gray-600">Camera</span>
+                            </button>
+                          </div>
+                          {formData.logoFile && (
+                            <p className="text-sm text-green-600">✓ {formData.logoFile.name}</p>
+                          )}
+                          {!formData.logoFile && (
+                            <p className="text-xs text-gray-400">Pick from gallery or take a photo</p>
+                          )}
+                        </div>
+                        {formData.logoPreview ? (
+                          <div className="w-16 h-16 bg-gray-100 rounded-lg p-1 flex items-center justify-center flex-shrink-0 border-2 border-green-400">
+                            <img
+                              src={formData.logoPreview}
+                              alt="Logo Preview"
+                              className="max-w-full max-h-full object-contain rounded"
+                            />
+                          </div>
+                        ) : (
+                          <div className="w-16 h-16 bg-gray-50 rounded-lg flex items-center justify-center flex-shrink-0 border-2 border-dashed border-gray-200">
+                            <svg className="w-6 h-6 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                          </div>
                         )}
                       </div>
                     </div>

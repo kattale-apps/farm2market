@@ -4,7 +4,6 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useState, useEffect } from "react";
 import { Id } from "@/convex/_generated/dataModel";
-import RoleGuard from "@/app/components/RoleGuard";
 
 function Toast({ message, onClose }: { message: string; onClose: () => void }) {
   useEffect(() => {
@@ -353,7 +352,6 @@ export default function SuperadminUsagePage() {
   }, []);
 
   return (
-    <RoleGuard allowedRoles={["superadmin"]}>
       <div className="min-h-screen bg-gray-50 p-4 md:p-8 pb-safe">
         <div className="max-w-md mx-auto md:max-w-none">
           <h1 className="text-2xl md:text-3xl font-bold mb-8">Superadmin Usage Dashboard</h1>
@@ -367,6 +365,5 @@ export default function SuperadminUsagePage() {
           )}
         </div>
       </div>
-    </RoleGuard>
   );
 }

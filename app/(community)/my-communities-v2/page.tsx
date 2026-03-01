@@ -5,7 +5,6 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useRouter } from "next/navigation";
 import CommunitySwitcher from "@/app/components/CommunitySwitcher";
-import RoleGuard from "@/app/components/RoleGuard";
 
 export default function MyCommunitiesPage() {
   const router = useRouter();
@@ -73,7 +72,6 @@ export default function MyCommunitiesPage() {
   };
 
   return (
-    <RoleGuard allowedRoles={["member", "communityAdmin"]}>
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       {/* Header with Community Switcher */}
       <div className="sticky top-0 bg-white border-b border-gray-200 shadow-sm z-40">
@@ -215,6 +213,5 @@ export default function MyCommunitiesPage() {
         )}
       </div>
     </div>
-    </RoleGuard>
   );
 }

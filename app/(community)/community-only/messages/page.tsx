@@ -7,7 +7,6 @@ import { api } from "@/convex/_generated/api";
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { Id } from "@/convex/_generated/dataModel";
-import RoleGuard from "@/app/components/RoleGuard";
 import CommunityTabBar from "@/app/components/CommunityTabBar";
 
 function Skeleton({ className = "" }: { className?: string } = {}) {
@@ -386,7 +385,7 @@ function MessagesList({ communityId }: { communityId: Id<"communities"> }) {
               <div className="flex items-center gap-3 px-2 py-1">
                 <button
                   onClick={() => handleLikeClick(message._id)}
-                  className={`flex items-center gap-1 px-2 py-1 rounded-full transition-all ${
+                  className={`flex items-center gap-1 px-3 py-2 rounded-full transition-all min-h-[44px] ${
                     isAnimating ? 'scale-90' : 'scale-100'
                   } ${
                     engagement.liked
@@ -406,7 +405,7 @@ function MessagesList({ communityId }: { communityId: Id<"communities"> }) {
 
                 <button
                   onClick={() => handleDislikeClick(message._id)}
-                  className={`flex items-center gap-1 px-2 py-1 rounded-full transition-all ${
+                  className={`flex items-center gap-1 px-3 py-2 rounded-full transition-all min-h-[44px] ${
                     isAnimating ? 'scale-90' : 'scale-100'
                   } ${
                     engagement.disliked
@@ -457,10 +456,6 @@ export default function CommunityMessagingPage() {
   }
 
   return (
-    <RoleGuard
-      allowedRoles={["member", "communityAdmin"]}
-      communityId={communityId || undefined}
-    >
       <div className="flex flex-col h-screen bg-white">
         {/* Header */}
         <div className="px-4 py-4 border-b border-gray-200 bg-white">
@@ -478,6 +473,5 @@ export default function CommunityMessagingPage() {
         </div>
         <CommunityTabBar />
       </div>
-    </RoleGuard>
   );
 }

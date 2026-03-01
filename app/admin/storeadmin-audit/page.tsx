@@ -72,6 +72,7 @@ export default function StoreAdminAuditPage() {
             fontWeight: "500",
             color: "#333",
             transition: "all 0.2s",
+            minHeight: "44px",
           }}
           onMouseOver={(e) => {
             e.currentTarget.style.background = "#e8e8e8";
@@ -146,7 +147,7 @@ export default function StoreAdminAuditPage() {
           </div>
 
           {/* Clickable Cards */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "1rem", marginBottom: "2rem" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 250px), 1fr))", gap: "1rem", marginBottom: "2rem" }}>
             {/* Total Actions Card */}
             <div
               onClick={() => setViewMode("actions")}
@@ -339,6 +340,7 @@ export default function StoreAdminAuditPage() {
                         border: "1px solid #ddd",
                         borderRadius: "4px",
                         minWidth: "200px",
+                        minHeight: "44px",
                         color: "#333",
                       }}
                     >
@@ -350,7 +352,7 @@ export default function StoreAdminAuditPage() {
                   </div>
                 )}
 
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1rem", marginBottom: "1.5rem" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 200px), 1fr))", gap: "1rem", marginBottom: "1.5rem" }}>
                   <div style={{ padding: "1rem", background: "#f5f5f5", borderRadius: "8px" }}>
                     <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.25rem" }}>Total Kilos</div>
                     <div style={{ fontSize: "1.5rem", fontWeight: "700", color: "#1a1a1a" }}>

@@ -267,6 +267,7 @@ export default function AdminRoleManagementPage() {
                 fontSize: "0.9rem",
                 transition: "background 0.2s",
                 whiteSpace: "nowrap",
+                minHeight: "44px",
               }}
               onMouseEnter={(e) =>
                 (e.currentTarget.style.background = "#e0e0e0")
@@ -370,6 +371,7 @@ export default function AdminRoleManagementPage() {
                       borderRadius: "6px",
                       fontSize: "0.9rem",
                       boxSizing: "border-box",
+                      minHeight: "44px",
                     }}
                   />
                 </div>
@@ -389,6 +391,7 @@ export default function AdminRoleManagementPage() {
                       borderRadius: "6px",
                       fontSize: "0.9rem",
                       boxSizing: "border-box",
+                      minHeight: "44px",
                     }}
                   >
                     <option value="">Select category...</option>

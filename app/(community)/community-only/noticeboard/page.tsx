@@ -6,7 +6,6 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useState, useEffect } from "react";
 import { Id } from "@/convex/_generated/dataModel";
-import RoleGuard from "@/app/components/RoleGuard";
 import CommunityTabBar from "@/app/components/CommunityTabBar";
 import { useSearchParams } from "next/navigation";
 
@@ -119,10 +118,6 @@ export default function CommunityNoticeboardPage() {
   }
 
   return (
-    <RoleGuard
-      allowedRoles={["member", "communityAdmin"]}
-      communityId={communityId || undefined}
-    >
       <div className="min-h-screen bg-gray-50 pb-safe">
         <div className="max-w-md mx-auto md:max-w-none md:p-8">
           <h1 className="text-3xl font-bold mb-8 px-4 md:px-0 pt-4 md:pt-0">Community Noticeboard</h1>
@@ -153,6 +148,5 @@ export default function CommunityNoticeboardPage() {
         `}</style>
         <CommunityTabBar />
       </div>
-    </RoleGuard>
   );
 }

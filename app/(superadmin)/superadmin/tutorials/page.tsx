@@ -4,7 +4,6 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useState, useEffect } from "react";
 import { Id } from "@/convex/_generated/dataModel";
-import RoleGuard from "@/app/components/RoleGuard";
 
 type RoleCategory = "farmer" | "trader" | "buyer" | "admin" | "all";
 
@@ -513,8 +512,6 @@ function TutorialManagementContent() {
 
 export default function TutorialManagementPage() {
   return (
-    <RoleGuard allowedRoles={["superadmin"]}>
       <TutorialManagementContent />
-    </RoleGuard>
   );
 }

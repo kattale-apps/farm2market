@@ -540,7 +540,7 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
         ) : templates.length === 0 ? (
           <p style={{ color: "#999", fontSize: "0.85rem" }}>Seeding templates...</p>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "0.75rem" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 260px), 1fr))", gap: "0.75rem" }}>
             {templates.map((t: any) => (
               <div key={t._id} style={{
                 padding: "1rem", borderRadius: "10px", border: "1px solid #e0e0e0",
@@ -607,7 +607,7 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
             <h5 style={{ margin: "0 0 1rem 0", fontSize: "1rem", fontWeight: 700, color: "#1976d2" }}>
               Custom Form Builder
             </h5>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "0.75rem", marginBottom: "1rem" }}>
               <div>
                 <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#333" }}>Form Name *</label>
                 <input
@@ -656,7 +656,7 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
                 padding: "0.75rem", borderRadius: "8px", border: "1px solid #d0d0d0",
                 background: "#fff", marginBottom: "0.5rem",
               }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 120px auto auto", gap: "0.5rem", alignItems: "center" }}>
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 120px auto auto", gap: "0.5rem", alignItems: "center" }}>
                   <input
                     value={field.label}
                     onChange={(e) => updateField(idx, "label", e.target.value)}
@@ -912,7 +912,7 @@ export default function CommunityDashboardPage() {
   // Resolve community logo using shared helper (DB → known-name fallback)
   const getCommunityLogo = (community: any) => resolveCommunityLogo(community);
   const [selectedApplicationId, setSelectedApplicationId] = useState<Id<"communityApplications"> | null>(null);
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState(typeof window !== "undefined" ? window.innerWidth < 768 : true);
   const [exportCommunityId, setExportCommunityId] = useState<Id<"communities"> | null>(null);
   const [exportCommunityName, setExportCommunityName] = useState<string>("");
 
@@ -1194,7 +1194,7 @@ export default function CommunityDashboardPage() {
     <div
       style={{
         minHeight: "100vh",
-        padding: "2rem",
+        padding: "clamp(0.75rem, 3vw, 2rem)",
         backgroundImage: "url('/background/farm-bg.jpg')",
         backgroundSize: "cover",
         backgroundPosition: "center",
@@ -1588,7 +1588,7 @@ export default function CommunityDashboardPage() {
                                 <td style={{ padding: "0.5rem", display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
                                   <button
                                     onClick={() => setSelectedApplicationId(app.id as any)}
-                                    style={{ padding: "0.35rem 0.6rem" }}
+                                    style={{ padding: "0.5rem 0.75rem", minHeight: "44px" }}
                                   >
                                     View
                                   </button>
@@ -1601,7 +1601,7 @@ export default function CommunityDashboardPage() {
                                         setMessage({ type: "error", text: error?.message || "Failed to approve" });
                                       }
                                     }}
-                                    style={{ padding: "0.35rem 0.6rem" }}
+                                    style={{ padding: "0.5rem 0.75rem", minHeight: "44px" }}
                                   >
                                     Approve
                                   </button>
@@ -1614,7 +1614,7 @@ export default function CommunityDashboardPage() {
                                         setMessage({ type: "error", text: error?.message || "Failed to reject" });
                                       }
                                     }}
-                                    style={{ padding: "0.35rem 0.6rem" }}
+                                    style={{ padding: "0.5rem 0.75rem", minHeight: "44px" }}
                                   >
                                     Reject
                                   </button>

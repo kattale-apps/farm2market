@@ -5,7 +5,6 @@ import { useQuery, useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
-import RoleGuard from "@/app/components/RoleGuard";
 import QRCode from "qrcode";
 
 type CommunityFormData = {
@@ -56,6 +55,8 @@ export default function CreateCommunityPage() {
   const [showAdminDropdown, setShowAdminDropdown] = useState(false);
   const [assignLater, setAssignLater] = useState(true);
   const qrCanvasRef = useRef<HTMLCanvasElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch users for admin assignment
   const users = useQuery(
@@ -235,7 +236,6 @@ export default function CreateCommunityPage() {
   // Success state
   if (status === "success") {
     return (
-      <RoleGuard allowedRoles={["superadmin"]}>
         <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 p-4 md:p-8">
           <div className="max-w-4xl mx-auto">
             {/* Success Header */}
@@ -349,27 +349,23 @@ export default function CreateCommunityPage() {
             </div>
           </div>
         </div>
-      </RoleGuard>
     );
   }
 
   // Loading state
   if (status === "loading") {
     return (
-      <RoleGuard allowedRoles={["superadmin"]}>
         <div className="min-h-screen bg-gray-50 p-4 flex items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-4"></div>
             <p className="text-xl font-semibold text-gray-700">Creating your community...</p>
           </div>
         </div>
-      </RoleGuard>
     );
   }
 
   // Main form
   return (
-    <RoleGuard allowedRoles={["superadmin"]}>
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 md:p-8">
         <div className="max-w-7xl mx-auto">
           {/* Page Header */}
@@ -458,30 +454,72 @@ export default function CreateCommunityPage() {
                       />
                     </div>
 
-                    {/* Logo Upload */}
+                    {/* Logo Upload — Gallery or Camera */}
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">
                         Community Logo *
                       </label>
-                      <div className="flex gap-4">
-                        <div className="flex-1">
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={handleLogoUpload}
-                            className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                          />
+                      {/* Hidden file inputs */}
+                      <input
+                        ref={galleryInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleLogoUpload}
+                        style={{ display: "none" }}
+                      />
+                      <input
+                        ref={cameraInputRef}
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={handleLogoUpload}
+                        style={{ display: "none" }}
+                      />
+                      <div className="flex gap-3 items-start">
+                        <div className="flex flex-col gap-2 flex-1">
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => galleryInputRef.current?.click()}
+                              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-green-500 hover:bg-green-50 transition-colors cursor-pointer"
+                            >
+                              <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                              <span className="text-sm font-semibold text-gray-600">Gallery</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => cameraInputRef.current?.click()}
+                              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors cursor-pointer"
+                            >
+                              <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                              </svg>
+                              <span className="text-sm font-semibold text-gray-600">Camera</span>
+                            </button>
+                          </div>
                           {logoFile && (
-                            <p className="text-sm text-green-600 mt-2">✓ {logoFile.name}</p>
+                            <p className="text-sm text-green-600">✓ {logoFile.name}</p>
+                          )}
+                          {!logoFile && (
+                            <p className="text-xs text-gray-400">Pick from gallery or take a photo</p>
                           )}
                         </div>
-                        {logoPreview && (
-                          <div className="w-20 h-20 bg-gray-100 rounded-lg p-2 flex items-center justify-center flex-shrink-0">
+                        {logoPreview ? (
+                          <div className="w-20 h-20 bg-gray-100 rounded-lg p-1 flex items-center justify-center flex-shrink-0 border-2 border-green-400">
                             <img
                               src={logoPreview}
                               alt="Logo preview"
-                              className="max-w-full max-h-full object-contain"
+                              className="max-w-full max-h-full object-contain rounded"
                             />
+                          </div>
+                        ) : (
+                          <div className="w-20 h-20 bg-gray-50 rounded-lg flex items-center justify-center flex-shrink-0 border-2 border-dashed border-gray-200">
+                            <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
                           </div>
                         )}
                       </div>
@@ -843,6 +881,5 @@ export default function CreateCommunityPage() {
           </div>
         </div>
       </div>
-    </RoleGuard>
   );
 }

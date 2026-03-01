@@ -8,7 +8,6 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useSearchParams } from "next/navigation";
 import CommunitySwitcher from "@/app/components/CommunitySwitcher";
-import RoleGuard from "@/app/components/RoleGuard";
 
 export default function MemberMessagingFeed() {
   const searchParams = useSearchParams();
@@ -228,10 +227,6 @@ export default function MemberMessagingFeed() {
   };
 
   return (
-    <RoleGuard
-      allowedRoles={["member", "communityAdmin"]}
-      communityId={communityId}
-    >
       <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pb-32">
         {/* Header with Community Switcher */}
         <div className="sticky top-0 bg-white border-b border-gray-200 p-4 z-40 flex items-center justify-between">
@@ -303,7 +298,7 @@ export default function MemberMessagingFeed() {
                 ) : (
                   getRepliesForPost(post._id).map((reply) => (
                     <div key={reply._id} className="flex justify-start">
-                      <div className="bg-gray-200 rounded-2xl rounded-tl px-4 py-2 max-w-xs">
+                      <div className="bg-gray-200 rounded-2xl rounded-tl px-4 py-2 max-w-[75%]">
                         <p className="text-xs text-gray-600 font-medium mb-1">Member</p>
                         {reply.text && <p className="text-sm text-gray-900">{reply.text}</p>}
                         {reply.imageStorageId && (
@@ -416,6 +411,5 @@ export default function MemberMessagingFeed() {
         </div>
       )}
       </div>
-    </RoleGuard>
   );
 }

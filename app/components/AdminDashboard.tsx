@@ -1722,6 +1722,105 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
             <div style={utilityCardStyle}>Inbox (Premium)</div>
           </div>
 
+          {/* ── Community Overview Grid ── */}
+          {communities && communities.length > 0 && (
+            <div style={{ marginBottom: "1.75rem" }}>
+              <h3 style={{ marginBottom: "0.75rem", fontSize: "1.1rem", fontWeight: 700 }}>Community Overview</h3>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 280px), 1fr))", gap: "1rem" }}>
+                {communities.map((c: any) => (
+                  <div
+                    key={c._id}
+                    style={{
+                      background: "#fff",
+                      borderRadius: "12px",
+                      padding: "1rem",
+                      border: "1px solid #e0e0e0",
+                      boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.75rem" }}>
+                      <div style={{
+                        width: "40px",
+                        height: "40px",
+                        borderRadius: "50%",
+                        background: "#e3f2fd",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontWeight: 700,
+                        color: "#1565c0",
+                        fontSize: "1rem",
+                        flexShrink: 0,
+                      }}>
+                        {(c.name || "?").charAt(0).toUpperCase()}
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: "0.95rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {c.name}
+                        </div>
+                        <div style={{ fontSize: "0.78rem", color: "#888" }}>
+                          {c.communityType === "qr" ? "QR Community" : "Application-based"}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
+                      <div>
+                        <div style={{ fontSize: "1.3rem", fontWeight: 700, color: "#1976d2" }}>{c.memberCount || 0}</div>
+                        <div style={{ fontSize: "0.75rem", color: "#888" }}>Members</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: "1.3rem", fontWeight: 700, color: c.status === "active" ? "#2e7d32" : "#999" }}>
+                          {c.status === "active" ? "✓" : "—"}
+                        </div>
+                        <div style={{ fontSize: "0.75rem", color: "#888" }}>{c.status || "active"}</div>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                      <a
+                        href={`/admin/community-dashboard?communityId=${c._id}`}
+                        style={{
+                          padding: "0.4rem 0.75rem",
+                          background: "#e3f2fd",
+                          color: "#1565c0",
+                          borderRadius: "6px",
+                          textDecoration: "none",
+                          fontSize: "0.82rem",
+                          fontWeight: 600,
+                          minHeight: "36px",
+                          display: "inline-flex",
+                          alignItems: "center",
+                        }}
+                      >
+                        Dashboard
+                      </a>
+                      {c.qrSlug && (
+                        <a
+                          href={`/join/community/${c.qrSlug}`}
+                          target="_blank"
+                          rel="noopener"
+                          style={{
+                            padding: "0.4rem 0.75rem",
+                            background: "#f5f5f5",
+                            color: "#555",
+                            borderRadius: "6px",
+                            textDecoration: "none",
+                            fontSize: "0.82rem",
+                            fontWeight: 600,
+                            minHeight: "36px",
+                            display: "inline-flex",
+                            alignItems: "center",
+                          }}
+                        >
+                          Join Link ↗
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div style={farmCardStyle}>
             <div style={glassPanelStyle}>
               {isSuperAdmin && (

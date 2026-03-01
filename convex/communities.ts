@@ -22,13 +22,34 @@ export async function isUserCommunityMember(
   userId: Id<"users">,
   communityId: Id<"communities">,
 ): Promise<boolean> {
-  const membership = await db
+  // Check communityMemberships table (QR / direct join)
+  const directMembership = await db
     .query("communityMemberships")
     .withIndex("by_community_user", (q) =>
       q.eq("communityId", communityId).eq("userId", userId)
     )
     .first();
-  return !!membership;
+  if (directMembership) return true;
+
+  // Check communityMembers table (application / approval flow)
+  const approvedMember = await db
+    .query("communityMembers")
+    .withIndex("by_community_farmer", (q) =>
+      q.eq("communityId", communityId).eq("farmerId", userId)
+    )
+    .first();
+  if (approvedMember && approvedMember.status === "APPROVED") return true;
+
+  // Check if user is an admin assigned to this community
+  const user = await db.get(userId);
+  if (user && user.role === "admin") {
+    const community = await db.get(communityId);
+    if (community && (community as any).communityAdminId === userId) return true;
+    const assigned: string[] = (user as any).assignedCommunityIds || [];
+    if (assigned.includes(String(communityId))) return true;
+  }
+
+  return false;
 }
 
 /**
@@ -399,17 +420,31 @@ export const getActiveCommunities = query({
 
 /**
  * Get community by QR slug (public query for QR code join flows)
- * Returns community details needed for QR join functionality
+ * Returns community details needed for QR join functionality.
+ * Fallback: if no qrSlug match, try to resolve the slug as a community _id.
  */
 export const getCommunityByQrSlug = query({
   args: {
     slug: v.string(),
   },
   handler: async (ctx, args) => {
-    const community = await ctx.db
+    // 1. Try qrSlug match first
+    let community = await ctx.db
       .query("communities")
       .filter((q) => q.eq(q.field("qrSlug"), args.slug))
       .first();
+
+    // 2. Fallback: try to resolve slug as a community _id
+    if (!community) {
+      try {
+        const byId = await ctx.db.get(args.slug as Id<"communities">);
+        if (byId) {
+          community = byId;
+        }
+      } catch {
+        // Invalid ID format — ignore
+      }
+    }
 
     if (!community) {
       return null;
@@ -418,8 +453,36 @@ export const getCommunityByQrSlug = query({
     return {
       _id: community._id,
       name: community.name,
+      description: community.description,
+      logoPath: (community as any).logoPath,
       qrLogoUrl: (community as any).qrLogoUrl,
-      qrEnabled: (community as any).qrEnabled,
+      qrEnabled: (community as any).qrEnabled ?? false,
+    };
+  },
+});
+
+/**
+ * Get QR join data for any community.
+ * Returns the join slug (qrSlug or _id fallback) so frontends can
+ * build QR codes and share links for every community.
+ */
+export const getCommunityQrData = query({
+  args: {
+    communityId: v.id("communities"),
+  },
+  handler: async (ctx, args) => {
+    const community = await ctx.db.get(args.communityId);
+    if (!community) return null;
+
+    // Prefer qrSlug; fall back to raw _id
+    const slug = community.qrSlug || String(community._id);
+
+    return {
+      _id: community._id,
+      name: community.name,
+      slug,
+      logoPath: (community as any).logoPath || (community as any).qrLogoUrl,
+      joinPath: `/join/community/${slug}`,
     };
   },
 });
@@ -589,19 +652,29 @@ export const joinCommunityByQr = mutation({
     userId: v.optional(v.id("users")), // If existing user is joining
   },
   handler: async (ctx, args) => {
-    // 1. Find community by slug
-    const community = await ctx.db
+    // 1. Find community by slug (with _id fallback)
+    let community = await ctx.db
       .query("communities")
       .filter((q) => q.eq(q.field("qrSlug"), args.slug))
       .first();
+
+    // Fallback: try to resolve slug as a community _id
+    if (!community) {
+      try {
+        const byId = await ctx.db.get(args.slug as Id<"communities">);
+        if (byId) {
+          community = byId;
+        }
+      } catch {
+        // Invalid ID format — ignore
+      }
+    }
 
     if (!community) {
       throw new Error("Community not found");
     }
 
-    if (!(community as any).qrEnabled) {
-      throw new Error("QR code feature is not enabled for this community");
-    }
+    // QR join is now allowed for ALL communities (qrEnabled gate removed)
 
     let userId: Id<"users"> | undefined;
 
@@ -674,14 +747,11 @@ export const joinCommunityByQr = mutation({
       throw new Error("Failed to get user after creation");
     }
 
-    // Update onboardedViaCommunityId if not already set
-    const updates: any = {};
-    if (!user.onboardedViaCommunityId) {
-      updates.onboardedViaCommunityId = community._id;
-    }
-
-    if (Object.keys(updates).length > 0) {
-      await ctx.db.patch(userId, updates);
+// Update onboardedViaCommunityId if not already set (analytics only — no accountScope restriction)
+      if (!user.onboardedViaCommunityId) {
+        await ctx.db.patch(userId, {
+          onboardedViaCommunityId: community._id,
+        });
     }
 
     // 5. Join user to community
@@ -992,18 +1062,23 @@ export const updateCommunity = mutation({
 });
 
 /**
- * Join a community (farmer only)
+ * Join a community (any role: farmer, trader, buyer)
  */
 export const joinCommunity = mutation({
   args: {
-    farmerId: v.id("users"),
+    farmerId: v.id("users"), // kept as "farmerId" for backward-compat; accepts any role
     communityId: v.id("communities"),
   },
   handler: async (ctx, args) => {
-    // Verify user is a farmer
-    const farmer = await ctx.db.get(args.farmerId);
-    if (!farmer || farmer.role !== "farmer") {
-      throw new Error("Only farmers can join communities");
+    const user = await ctx.db.get(args.farmerId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    // Any non-admin role may join communities
+    const allowedRoles = ["farmer", "trader", "buyer"];
+    if (!allowedRoles.includes(user.role)) {
+      throw new Error("Only farmers, traders, and buyers can join communities");
     }
 
     // Verify community exists
@@ -1024,12 +1099,12 @@ export const joinCommunity = mutation({
       throw new Error("Already a member of this community");
     }
 
-    // Check geo-locking
+    // Check geo-locking (uses location fields if user has them)
     if (community.geoLocked && !community.isGlobal) {
       const hasAccess =
-        (farmer.districtId && community.districtIds?.includes(farmer.districtId)) ||
-        (farmer.subcountyId && community.subcountyIds?.includes(farmer.subcountyId)) ||
-        (farmer.parishId && community.parishIds?.includes(farmer.parishId));
+        (user.districtId && community.districtIds?.includes(user.districtId)) ||
+        (user.subcountyId && community.subcountyIds?.includes(user.subcountyId)) ||
+        (user.parishId && community.parishIds?.includes(user.parishId));
 
       if (!hasAccess) {
         throw new Error("You do not have access to this geo-locked community");
@@ -1048,18 +1123,17 @@ export const joinCommunity = mutation({
 });
 
 /**
- * Leave a community (farmer only)
+ * Leave a community (any role: farmer, trader, buyer)
  */
 export const leaveCommunity = mutation({
   args: {
-    farmerId: v.id("users"),
+    farmerId: v.id("users"), // kept as "farmerId" for backward-compat; accepts any role
     communityId: v.id("communities"),
   },
   handler: async (ctx, args) => {
-    // Verify user is a farmer
-    const farmer = await ctx.db.get(args.farmerId);
-    if (!farmer || farmer.role !== "farmer") {
-      throw new Error("Only farmers can leave communities");
+    const user = await ctx.db.get(args.farmerId);
+    if (!user) {
+      throw new Error("User not found");
     }
 
     // Find membership
@@ -1226,17 +1300,17 @@ export const getExportQuota = query({
       };
     }
 
-    // Standard = 5 per month
-    const now = getUgandaTime();
-    const currentMonth = new Date(now).toISOString().slice(0, 7); // "YYYY-MM"
+// Standard tier: use exportLimit from user record, fallback to 5
+      const now = getUgandaTime();
+      const currentMonth = new Date(now).toISOString().slice(0, 7); // "YYYY-MM"
 
-    const exportsThisMonth = await ctx.db
-      .query("exportLogs")
-      .withIndex("by_user_month", (q) => q.eq("userId", args.userId).eq("month", currentMonth))
-      .collect();
+      const exportsThisMonth = await ctx.db
+        .query("exportLogs")
+        .withIndex("by_user_month", (q) => q.eq("userId", args.userId).eq("month", currentMonth))
+        .collect();
 
-    const usedCount = exportsThisMonth.length;
-    const limit = 5;
+      const usedCount = exportsThisMonth.length;
+      const limit = (user as any).exportLimit ?? 5;
     const remaining = Math.max(0, limit - usedCount);
 
     return {

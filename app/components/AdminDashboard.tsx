@@ -861,9 +861,20 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
       {/* SuperAdmin Cards */}
       {isSuperAdmin && (
         <>
-          <h2 style={{ marginBottom: "1rem", fontSize: "1.8rem", fontWeight: "700" }}>
+          <h2 style={{ marginBottom: "0.25rem", fontSize: "1.8rem", fontWeight: "700" }}>
             SuperAdmin Dashboard
           </h2>
+          <p style={{
+            margin: "0 0 1rem 0",
+            fontSize: "1rem",
+            color: "#2e7d32",
+            fontWeight: 600,
+            fontStyle: "italic",
+            letterSpacing: "0.02em",
+            fontFamily: '"Montserrat", sans-serif',
+          }}>
+            Know Your Numbers
+          </p>
           
           {/* Admin Action Cards */}
           <div
@@ -902,6 +913,39 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                   <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Finance Dashboard</h3>
                   <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.95 }}>
                     View commission earnings and financial reports
+                  </p>
+                </div>
+              </div>
+            </a>
+
+            {/* Business Trackers */}
+            <a href="/admin/business-trackers" style={{ textDecoration: "none" }}>
+              <div
+                style={{
+                  ...utilityCardStyle,
+                  cursor: "pointer",
+                  transition: "transform 0.2s, box-shadow 0.2s",
+                  background: "linear-gradient(135deg, #00695c 0%, #004d40 100%)",
+                  color: "#fff",
+                  minHeight: "140px",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-4px)";
+                  e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.15)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.06)";
+                }}
+              >
+                <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>📊</div>
+                <div>
+                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Business Trackers</h3>
+                  <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.95 }}>
+                    Financial intelligence engine for communities
                   </p>
                 </div>
               </div>

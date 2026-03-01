@@ -9,22 +9,22 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 export default function FarmerCommunitiesPage() {
-  // Inject responsive styles for farmer communities (client-side only)
+  // Inject responsive styles for communities (client-side only)
   useEffect(() => {
     const style = document.createElement("style");
     style.innerHTML = `
       @media (max-width: 700px) {
-        .farmer-communities-grid {
+        .communities-grid {
           grid-template-columns: 1fr !important;
           gap: 1rem !important;
         }
-        .farmer-communities-header {
+        .communities-header {
           padding: 1rem !important;
           font-size: 1.2rem !important;
         }
       }
       @media (min-width: 701px) {
-        .farmer-communities-grid {
+        .communities-grid {
           grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)) !important;
           gap: 2rem !important;
         }
@@ -228,14 +228,14 @@ export default function FarmerCommunitiesPage() {
             fontWeight: "700",
             letterSpacing: "-0.02em",
           }}>
-            🌾 Grower Communities
+            🌾 Communities
           </h1>
           <p style={{
             fontSize: "1rem",
             color: "#666",
             marginTop: "0.5rem",
           }}>
-            Join communities to connect with other farmers, share experiences, and grow together.
+            Join communities to connect, share experiences, and grow together.
           </p>
         </div>
 
@@ -281,7 +281,7 @@ export default function FarmerCommunitiesPage() {
               gap: "1.5rem",
               marginBottom: "2rem",
             }}
-            className="farmer-communities-grid"
+            className="communities-grid"
           >
             {communities.map((community) => {
               const headerLogo = getCommunityLogo(community);

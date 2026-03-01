@@ -5,6 +5,7 @@ import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { CommunityQRCode } from "../../components/CommunityQRCode";
 
 export default function CommunitiesPage() {
   const router = useRouter();
@@ -580,6 +581,21 @@ export default function CommunitiesPage() {
                   >
                     Delete
                   </button>
+                  <CommunityQRCode
+                    communityId={community.id}
+                    mode="button"
+                    buttonLabel="QR Code"
+                  />
+                </div>
+              )}
+              {/* QR Code for non-superadmin community admins */}
+              {!isSuperAdmin && (
+                <div style={{ marginTop: "1rem" }}>
+                  <CommunityQRCode
+                    communityId={community.id}
+                    mode="button"
+                    buttonLabel="QR Code"
+                  />
                 </div>
               )}
             </div>

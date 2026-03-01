@@ -1398,4 +1398,132 @@ export default defineSchema({
     .index("by_status", ["status"])
     .index("by_type", ["paymentType"])
     .index("by_pesapal_tracking", ["pesapalTrackingId"]),
+
+  /**
+   * Community Forms - custom forms created by community admins
+   * - Each community can have multiple forms
+   * - Members fill out forms to submit data
+   * - Admins can export responses (billable by rows × columns × price-per-cell)
+   */
+  communityForms: defineTable({
+    communityId: v.id("communities"),
+    adminId: v.id("users"),
+    name: v.string(),
+    description: v.optional(v.string()),
+    isActive: v.boolean(), // Inactive forms don't accept new submissions
+    responseCount: v.number(), // Cached count for quick display
+    category: v.optional(v.string()), // e.g. "revenue", "expense", "inventory", "custom"
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_community", ["communityId"])
+    .index("by_admin", ["adminId"])
+    .index("by_active", ["isActive"]),
+
+  /**
+   * Form Fields - individual fields within a form
+   * - Each field has type, label, required flag, and optional configuration
+   * - Supports text, email, phone, number, select, textarea, checkbox
+   */
+  formFields: defineTable({
+    formId: v.id("communityForms"),
+    fieldType: v.string(), // text, email, phone, number, select, textarea, checkbox, date
+    label: v.string(),
+    required: v.boolean(),
+    helpText: v.optional(v.string()),
+    placeholder: v.optional(v.string()),
+    options: v.optional(v.array(v.string())), // For select/checkbox fields
+    order: v.number(), // Display order
+    isCalculated: v.optional(v.boolean()), // Auto-calculated from other fields
+    formula: v.optional(v.string()), // e.g. "revenue - expenses" (field labels, lowercased, spaces→underscores)
+    createdAt: v.number(),
+  })
+    .index("by_form", ["formId"]),
+
+  /**
+   * Form Responses - individual member submissions
+   * - Tracks who submitted and when
+   * - Actual field values stored in formResponseValues table
+   */
+  formResponses: defineTable({
+    formId: v.id("communityForms"),
+    communityId: v.id("communities"),
+    memberId: v.id("users"),
+    status: v.optional(v.string()), // "DRAFT" | "SUBMITTED" — defaults to SUBMITTED for backward compat
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_form", ["formId"])
+    .index("by_community", ["communityId"])
+    .index("by_member", ["memberId"])
+    .index("by_form_member", ["formId", "memberId"]),
+
+  /**
+   * Form Response Values - individual field responses
+   * - Stores the actual answer for each field in a response
+   * - Clean separation allows efficient export queries
+   */
+  formResponseValues: defineTable({
+    responseId: v.id("formResponses"),
+    fieldId: v.id("formFields"),
+    value: v.string(), // Stored as string for consistency
+    createdAt: v.number(),
+  })
+    .index("by_response", ["responseId"])
+    .index("by_field", ["fieldId"]),
+
+  /**
+   * Tracker Templates - pre-built financial tracker templates
+   * - Seeded on first load, admin can create from template
+   * - Each template defines name, category, and field definitions
+   */
+  trackerTemplates: defineTable({
+    name: v.string(), // e.g. "Daily Revenue Tracker"
+    description: v.optional(v.string()),
+    category: v.string(), // "revenue", "expense", "inventory", "profit_loss", "cashflow", "custom"
+    fields: v.array(v.object({
+      fieldType: v.string(),
+      label: v.string(),
+      required: v.boolean(),
+      helpText: v.optional(v.string()),
+      placeholder: v.optional(v.string()),
+      options: v.optional(v.array(v.string())),
+      isCalculated: v.optional(v.boolean()),
+      formula: v.optional(v.string()),
+    })),
+    createdAt: v.number(),
+  })
+    .index("by_category", ["category"]),
+
+  /**
+   * Tutorial Videos - training and support videos
+   * - Superadmin-managed video library
+   * - Organized by user role (farmer, trader, buyer, admin)
+   * - Members access tutorials via /learn page
+   */
+  tutorialVideos: defineTable({
+    roleCategory: v.union(
+      v.literal("farmer"),
+      v.literal("trader"),
+      v.literal("buyer"),
+      v.literal("admin"),
+      v.literal("all") // Tutorials visible to all roles
+    ),
+    title: v.string(), // Tutorial title (e.g., "How to Create a Listing")
+    description: v.optional(v.string()), // Optional tutorial description
+    youtubeUrl: v.string(), // Full YouTube URL (https://www.youtube.com/watch?v=...)
+    youtubeVideoId: v.string(), // Extracted video ID for embedding
+    duration: v.optional(v.number()), // Duration in seconds (fetched from YouTube)
+    thumbnailUrl: v.optional(v.string()), // YouTube thumbnail URL
+    order: v.number(), // Display order within role category (lower = first)
+    active: v.boolean(), // Whether this tutorial is published
+    viewCount: v.optional(v.number()), // Track views for analytics
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    createdBy: v.id("users"), // Superadmin who added this tutorial
+  })
+    .index("by_role", ["roleCategory"])
+    .index("by_role_order", ["roleCategory", "order"])
+    .index("by_active", ["active"])
+    .index("by_created_at", ["createdAt"]),
 });

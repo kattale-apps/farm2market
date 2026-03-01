@@ -605,3 +605,174 @@ export const backfillCommunityAdmins = mutation({
     return results;
   },
 });
+
+// ───────────────────────────────────────────────────────
+// Password Recovery
+// ───────────────────────────────────────────────────────
+
+/**
+ * Request a password reset.
+ * Accepts phone number OR email. Looks up the user, creates a
+ * passwordResetTokens row, and returns a pilot-mode reset URL.
+ *
+ * If the user signed up with phone only and has no email,
+ * returns { needsEmail: true } so the frontend can collect one.
+ */
+export const requestPasswordReset = mutation({
+  args: {
+    identifier: v.string(), // phone number or email
+    recoveryEmail: v.optional(v.string()), // recovery email if user has none
+  },
+  handler: async (ctx, args) => {
+    const trimmed = args.identifier.trim();
+    if (!trimmed) {
+      return { success: false, message: "Please enter your phone number or email" };
+    }
+
+    // Determine whether identifier is an email or phone number
+    const isEmail = trimmed.includes("@");
+
+    let user = null;
+    if (isEmail) {
+      const normalizedEmail = trimmed.toLowerCase();
+      user = await ctx.db
+        .query("users")
+        .withIndex("by_email", (q) => q.eq("email", normalizedEmail))
+        .first();
+    } else {
+      // Treat as phone number
+      const cleaned = trimmed.replace(/\D/g, "");
+      let normalizedPhone = cleaned;
+      if (cleaned.startsWith("0")) {
+        normalizedPhone = "256" + cleaned.substring(1);
+      } else if (!cleaned.startsWith("256")) {
+        normalizedPhone = "256" + cleaned;
+      }
+      user = await ctx.db
+        .query("users")
+        .withIndex("by_phone", (q) => q.eq("phoneNumber", normalizedPhone))
+        .first();
+    }
+
+    if (!user) {
+      // Do NOT reveal whether user exists — always show generic success
+      return {
+        success: true,
+        message: "If an account exists with that information, a reset link has been sent.",
+      };
+    }
+
+    // If user has no email and no recovery email was provided, ask for one
+    const userEmail = user.email;
+    if (!userEmail && !args.recoveryEmail) {
+      return {
+        success: false,
+        needsEmail: true,
+        message: "This account has no email on file. Please provide a recovery email.",
+      };
+    }
+
+    // If a recovery email was provided, save it on the user for future use
+    if (args.recoveryEmail && !userEmail) {
+      await ctx.db.patch(user._id, { email: args.recoveryEmail.trim().toLowerCase() });
+    }
+
+    // Generate a random token (simple pilot-grade — NOT crypto-secure)
+    const rawToken = Math.random().toString(36).substring(2) + Date.now().toString(36);
+    const tokenHash = simpleHash(rawToken);
+
+    // Expire in 1 hour
+    const expiresAt = Date.now() + 60 * 60 * 1000;
+
+    await ctx.db.insert("passwordResetTokens", {
+      userId: user._id,
+      tokenHash,
+      expiresAt,
+      createdAt: Date.now(),
+    });
+
+    // Pilot mode: return the reset URL directly
+    const resetUrl = `/reset-password?token=${rawToken}`;
+
+    return {
+      success: true,
+      message: "If an account exists with that information, a reset link has been sent.",
+      resetUrl, // Pilot mode only — remove in production
+    };
+  },
+});
+
+/**
+ * Verify a password reset token.
+ * Returns the userId if the token is valid and unexpired.
+ */
+export const verifyResetToken = query({
+  args: {
+    token: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const tokenHash = simpleHash(args.token);
+
+    const tokenRecord = await ctx.db
+      .query("passwordResetTokens")
+      .withIndex("by_token_hash", (q) => q.eq("tokenHash", tokenHash))
+      .first();
+
+    if (!tokenRecord) {
+      return { valid: false, message: "Invalid or expired reset link" };
+    }
+
+    if (tokenRecord.usedAt) {
+      return { valid: false, message: "This reset link has already been used" };
+    }
+
+    if (tokenRecord.expiresAt < Date.now()) {
+      return { valid: false, message: "This reset link has expired" };
+    }
+
+    return { valid: true, userId: tokenRecord.userId };
+  },
+});
+
+/**
+ * Reset password using a valid token.
+ */
+export const resetPassword = mutation({
+  args: {
+    token: v.string(),
+    newPassword: v.string(),
+  },
+  handler: async (ctx, args) => {
+    if (args.newPassword.length < 6) {
+      return { success: false, message: "Password must be at least 6 characters" };
+    }
+
+    const tokenHash = simpleHash(args.token);
+
+    const tokenRecord = await ctx.db
+      .query("passwordResetTokens")
+      .withIndex("by_token_hash", (q) => q.eq("tokenHash", tokenHash))
+      .first();
+
+    if (!tokenRecord) {
+      return { success: false, message: "Invalid or expired reset link" };
+    }
+
+    if (tokenRecord.usedAt) {
+      return { success: false, message: "This reset link has already been used" };
+    }
+
+    if (tokenRecord.expiresAt < Date.now()) {
+      return { success: false, message: "This reset link has expired" };
+    }
+
+    // Update password
+    const newHash = simpleHash(args.newPassword.trim());
+    await ctx.db.patch(tokenRecord.userId, { passwordHash: newHash });
+
+    // Mark token as used
+    await ctx.db.patch(tokenRecord._id, { usedAt: Date.now() });
+
+    return { success: true, message: "Password has been reset successfully" };
+  },
+});

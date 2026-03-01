@@ -32,9 +32,17 @@ export const createNoticeboardImagePost = mutation({
       .withIndex("by_community", (q) => q.eq("communityId", args.communityId))
       .first();
 
-    // Verify user is the community admin
-    const isAdmin = community.communityAdminId === args.userId;
-    if (!isAdmin) {
+    // Verify user is a community admin (direct assignment OR via assignedCommunityIds)
+    const isDirectAdmin = community.communityAdminId === args.userId;
+    let isAssignedAdmin = false;
+    if (!isDirectAdmin) {
+      const adminUser = await ctx.db.get(args.userId);
+      if (adminUser && adminUser.role === "admin") {
+        const assigned: string[] = (adminUser as any).assignedCommunityIds || [];
+        isAssignedAdmin = assigned.includes(String(args.communityId));
+      }
+    }
+    if (!isDirectAdmin && !isAssignedAdmin) {
       throw new Error("Only the community admin can create noticeboard image posts");
     }
 
@@ -202,15 +210,10 @@ export const sendNoticeboardTextMessage = mutation({
       throw new Error("User not found");
     }
 
-    // Verify membership
-    const membership = await ctx.db
-      .query("communityMemberships")
-      .withIndex("by_community_user", (q) =>
-        q.eq("communityId", args.communityId).eq("userId", resolvedUserId!)
-      )
-      .first();
-
-    if (!membership) {
+    // Verify membership (check both tables + admin assignment)
+    const { isUserCommunityMember } = await import("./communities");
+    const isMember = await isUserCommunityMember(ctx.db, resolvedUserId, args.communityId);
+    if (!isMember) {
       throw new Error("You are not a member of this community");
     }
 
@@ -267,15 +270,10 @@ export const sendImageMessage = mutation({
       throw new Error("User not found");
     }
 
-    // Verify membership
-    const membership = await ctx.db
-      .query("communityMemberships")
-      .withIndex("by_community_user", (q) =>
-        q.eq("communityId", args.communityId).eq("userId", resolvedUserId!)
-      )
-      .first();
-
-    if (!membership) {
+    // Verify membership (check both tables + admin assignment)
+    const { isUserCommunityMember } = await import("./communities");
+    const isMember = await isUserCommunityMember(ctx.db, resolvedUserId, args.communityId);
+    if (!isMember) {
       throw new Error("You are not a member of this community");
     }
 

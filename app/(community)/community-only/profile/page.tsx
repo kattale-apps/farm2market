@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
+import CommunityTabBar from "@/app/components/CommunityTabBar";
 
 const SUPPLY_CHAIN_ROLES = [
   "Farmer",
@@ -172,6 +173,7 @@ export default function CommunityProfilePage() {
           onClose={() => setToastMessage(null)}
         />
       )}
+      <CommunityTabBar />
     </div>
   );
 }

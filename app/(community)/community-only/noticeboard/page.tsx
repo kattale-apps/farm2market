@@ -7,6 +7,7 @@ import { api } from "@/convex/_generated/api";
 import { useState, useEffect } from "react";
 import { Id } from "@/convex/_generated/dataModel";
 import RoleGuard from "@/app/components/RoleGuard";
+import CommunityTabBar from "@/app/components/CommunityTabBar";
 import { useSearchParams } from "next/navigation";
 
 function QuotaWidget({ communityId }: { communityId: Id<"communities"> }) {
@@ -150,6 +151,7 @@ export default function CommunityNoticeboardPage() {
             }
           }
         `}</style>
+        <CommunityTabBar />
       </div>
     </RoleGuard>
   );

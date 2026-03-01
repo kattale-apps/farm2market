@@ -8,6 +8,7 @@ import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { Id } from "@/convex/_generated/dataModel";
 import RoleGuard from "@/app/components/RoleGuard";
+import CommunityTabBar from "@/app/components/CommunityTabBar";
 
 function Skeleton({ className = "" }: { className?: string } = {}) {
   return <div className={`h-4 bg-gray-200 rounded animate-pulse ${className}`} />;
@@ -475,6 +476,7 @@ export default function CommunityMessagingPage() {
         <div className="pb-safe">
           <MessageComposer communityId={communityId} />
         </div>
+        <CommunityTabBar />
       </div>
     </RoleGuard>
   );

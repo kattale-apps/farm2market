@@ -9,6 +9,8 @@ import { useEffect, useState } from "react";
 interface CommunityInfo {
   _id: string;
   name: string;
+  description?: string;
+  logoPath?: string;
   qrLogoUrl?: string;
   qrEnabled?: boolean;
 }
@@ -179,9 +181,9 @@ export default function JoinCommunityPage({ params }: { params: { slug: string }
           boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
         }}
       >
-        {community.qrLogoUrl && (
+        {(community.logoPath || community.qrLogoUrl) && (
           <img
-            src={community.qrLogoUrl}
+            src={community.logoPath || community.qrLogoUrl}
             alt={community.name}
             style={{
               maxWidth: "150px",

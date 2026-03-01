@@ -301,6 +301,104 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
     }
   };
 
+  const handleExportAnalyticsPDF = () => {
+    try {
+      const jsPDF = require("jspdf");
+      require("jspdf-autotable");
+      const doc = new jsPDF.default();
+
+      doc.setFontSize(18);
+      doc.setTextColor(46, 125, 50);
+      doc.text("Farmer Analytics Report", 14, 20);
+      doc.setFontSize(10);
+      doc.setTextColor(100, 100, 100);
+      doc.text("Know Your Numbers — Farm2Market Uganda", 14, 28);
+      doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 34);
+
+      let y = 44;
+
+      // Listings summary
+      const allListings = listings?.listings || [];
+      const activeListings = allListings.filter((l: any) => l.status === "active");
+      const lockedListings = allListings.filter((l: any) => l.status === "locked");
+
+      doc.setFontSize(13);
+      doc.setTextColor(0, 0, 0);
+      doc.text("Listings Overview", 14, y);
+      y += 8;
+
+      (doc as any).autoTable({
+        startY: y,
+        head: [["Metric", "Value"]],
+        body: [
+          ["Total Listings", String(allListings.length)],
+          ["Active Listings", String(activeListings.length)],
+          ["Locked Listings", String(lockedListings.length)],
+        ],
+        theme: "grid",
+        headStyles: { fillColor: [46, 125, 50], fontSize: 9 },
+        bodyStyles: { fontSize: 8 },
+        margin: { left: 14 },
+      });
+      y = (doc as any).lastAutoTable.finalY + 12;
+
+      // Negotiations summary
+      const allNegotiations = negotiations?.negotiations || [];
+      const activeNegs = allNegotiations.filter((n: any) => n.status === "pending" || n.status === "countered");
+      const acceptedNegs = allNegotiations.filter((n: any) => n.status === "accepted");
+
+      if (y > 240) { doc.addPage(); y = 20; }
+      doc.setFontSize(13);
+      doc.text("Negotiations Summary", 14, y);
+      y += 8;
+
+      (doc as any).autoTable({
+        startY: y,
+        head: [["Metric", "Value"]],
+        body: [
+          ["Total Negotiations", String(allNegotiations.length)],
+          ["Active Negotiations", String(activeNegs.length)],
+          ["Accepted Negotiations", String(acceptedNegs.length)],
+        ],
+        theme: "grid",
+        headStyles: { fillColor: [46, 125, 50], fontSize: 9 },
+        bodyStyles: { fontSize: 8 },
+        margin: { left: 14 },
+      });
+      y = (doc as any).lastAutoTable.finalY + 12;
+
+      // Transactions Ledger summary
+      const txs = transactionsLedger?.transactions || [];
+      const totalEarnings = txs.reduce((sum: number, tx: any) => sum + (tx.totalEarned || 0), 0);
+      const totalKilos = txs.reduce((sum: number, tx: any) => sum + (tx.kilos || 0), 0);
+
+      if (y > 240) { doc.addPage(); y = 20; }
+      doc.setFontSize(13);
+      doc.text("Earnings Summary", 14, y);
+      y += 8;
+
+      (doc as any).autoTable({
+        startY: y,
+        head: [["Metric", "Value"]],
+        body: [
+          ["Successful Transactions", String(txs.length)],
+          ["Total Kilos Sold", `${totalKilos.toLocaleString()} kg`],
+          ["Total Earnings", `UGX ${totalEarnings.toLocaleString()}`],
+          ["Overdue Deliveries", String(deliveryDeadlines?.overdue?.deadlines?.length || 0)],
+          ["Expired UTIDs", String(expiredUTIDs?.expiredUTIDs?.length || 0)],
+        ],
+        theme: "grid",
+        headStyles: { fillColor: [46, 125, 50], fontSize: 9 },
+        bodyStyles: { fontSize: 8 },
+        margin: { left: 14 },
+      });
+
+      doc.save(`farmer_analytics_${new Date().toISOString().split("T")[0]}.pdf`);
+    } catch (e) {
+      alert("PDF export failed. Please try again.");
+    }
+  };
+
   const handleAcceptOffer = async (negotiationId: Id<"negotiations">) => {
     setMessage(null);
     try {
@@ -855,21 +953,6 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
           {listings && listings.listings && listings.listings.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
               <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                <button
-                  onClick={() => handleExportUTIDs("excel")}
-                  style={{
-                    padding: "0.5rem 1rem",
-                    background: "#000000",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: "6px",
-                    cursor: "pointer",
-                    fontSize: "0.85rem",
-                    fontWeight: "500"
-                  }}
-                >
-                  Export Excel
-                </button>
                 <button
                   onClick={() => handleExportUTIDs("pdf")}
                   style={{
@@ -2909,6 +2992,66 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
           </div>
         </div>
       )}
+
+      {/* Farm Analytics Summary */}
+      <div style={{
+        marginTop: "1.5rem",
+        padding: "clamp(1rem, 3vw, 1.5rem)",
+        background: "#fff",
+        borderRadius: "12px",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        border: "1px solid #e0e0e0",
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.5rem" }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", fontWeight: "600", color: "#2c2c2c", fontFamily: '"Montserrat", sans-serif' }}>
+              📊 Farm Analytics
+            </h3>
+            <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem", color: "#2e7d32", fontWeight: 600, fontStyle: "italic" }}>Know Your Numbers</p>
+          </div>
+          <button
+            onClick={handleExportAnalyticsPDF}
+            style={{
+              padding: "0.5rem 1rem",
+              background: "#ffc107",
+              color: "#000",
+              border: "none",
+              borderRadius: "6px",
+              cursor: "pointer",
+              fontSize: "0.85rem",
+              fontWeight: "600",
+            }}
+          >
+            📄 Export Analytics PDF
+          </button>
+        </div>
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 140px), 1fr))",
+          gap: "0.75rem",
+        }}>
+          <div style={{ padding: "0.75rem", background: "#e8f5e9", borderRadius: 8, textAlign: "center" }}>
+            <div style={{ fontSize: "0.7rem", color: "#666", fontWeight: 600 }}>Total Listings</div>
+            <div style={{ fontSize: "1.3rem", fontWeight: 700, color: "#2e7d32" }}>{listings?.listings?.length || 0}</div>
+          </div>
+          <div style={{ padding: "0.75rem", background: "#e3f2fd", borderRadius: 8, textAlign: "center" }}>
+            <div style={{ fontSize: "0.7rem", color: "#666", fontWeight: 600 }}>Negotiations</div>
+            <div style={{ fontSize: "1.3rem", fontWeight: 700, color: "#1976d2" }}>{negotiations?.negotiations?.length || 0}</div>
+          </div>
+          <div style={{ padding: "0.75rem", background: "#fff3e0", borderRadius: 8, textAlign: "center" }}>
+            <div style={{ fontSize: "0.7rem", color: "#666", fontWeight: 600 }}>Transactions</div>
+            <div style={{ fontSize: "1.3rem", fontWeight: 700, color: "#f57c00" }}>{transactionsLedger?.transactions?.length || 0}</div>
+          </div>
+          <div style={{ padding: "0.75rem", background: "#fce4ec", borderRadius: 8, textAlign: "center" }}>
+            <div style={{ fontSize: "0.7rem", color: "#666", fontWeight: 600 }}>Total Earnings</div>
+            <div style={{ fontSize: "1rem", fontWeight: 700, color: "#d32f2f" }}>
+              {new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX", maximumFractionDigits: 0 }).format(
+                (transactionsLedger?.transactions || []).reduce((sum: number, tx: any) => sum + (tx.totalEarned || 0), 0)
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* In-app Help */}
       <div style={{

@@ -82,7 +82,7 @@ export default function Home() {
 
   const communities = useQuery(
     api.communities.getActiveCommunities,
-    user?.role === "farmer" && user?.userId ? { userId: user.userId as Id<"users"> } : "skip"
+    (user?.role === "farmer" || user?.role === "trader" || user?.role === "buyer") && user?.userId ? { userId: user.userId as Id<"users"> } : "skip"
   );
 
   const memberCommunities = (communities || []).filter((c: any) => c.isMember);
@@ -235,7 +235,7 @@ export default function Home() {
             >
               Privacy Policy
             </a>
-            {(user?.role === "farmer" || isSuperAdmin || (user?.role === "admin" && user?.adminCategory === "community")) && (
+            {(user?.role === "farmer" || user?.role === "trader" || user?.role === "buyer" || isSuperAdmin || (user?.role === "admin" && user?.adminCategory === "community")) && (
               <a
                 href={
                   isSuperAdmin ? "/admin/communities" :
@@ -265,7 +265,7 @@ export default function Home() {
                   e.currentTarget.style.background = "#1976d2";
                 }}
               >
-                {isSuperAdmin ? "Create a Community" : user?.adminCategory === "community" ? "Community Dashboard" : "Join A Growers Community"}
+                {isSuperAdmin ? "Create a Community" : user?.adminCategory === "community" ? "Community Dashboard" : "Join A Community"}
               </a>
             )}
           </div>
@@ -293,7 +293,7 @@ export default function Home() {
           }}>
             Role: {user?.role || "unknown"}
           </p>
-          {user?.role === "farmer" && (
+          {(user?.role === "farmer" || user?.role === "trader" || user?.role === "buyer") && (
             <div style={{ position: "relative", alignSelf: isMobile ? "flex-start" : "flex-end" }}>
               <button
                 type="button"

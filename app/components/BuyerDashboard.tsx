@@ -9,6 +9,7 @@ import { formatUgandaDateTime, getUgandaTime } from "../utils/timeUtils";
 import { NotificationMailbox } from "./NotificationMailbox";
 import { ThreadView } from "./messages/ThreadView";
 import { ContactUs } from "./ContactUs";
+import Link from "next/link";
 
 interface BuyerDashboardProps {
   userId: Id<"users">;
@@ -32,6 +33,8 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   const buyerConfirmListingDelivery = useMutation((api as any).buyers.buyerConfirmListingDelivery);
   const cashOutBuyerRewardReceipt = useMutation((api as any).farmcoin.cashOutBuyerRewardReceipt);
   const messageThreads = useQuery(api.messages.getUserMessageThreads, { userId });
+  const communities = useQuery(api.communities.getActiveCommunities, { userId });
+  const memberCommunities = (communities || []).filter((c: any) => c.isMember);
   const paginationPreferences = useQuery(
     (api as any).userSettings.getPaginationPreferences,
     { userId } as any
@@ -504,6 +507,116 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
     doc.save(`Buyer_Wallet_Report_${new Date().toISOString().split("T")[0]}.pdf`);
   };
 
+  const handleExportAnalyticsPDF = () => {
+    try {
+      const jsPDF = require("jspdf");
+      require("jspdf-autotable");
+      const doc = new jsPDF.default();
+
+      doc.setFontSize(18);
+      doc.setTextColor(46, 125, 50);
+      doc.text("Buyer Analytics Report", 14, 20);
+      doc.setFontSize(10);
+      doc.setTextColor(100, 100, 100);
+      doc.text("Know Your Numbers — Farm2Market Uganda", 14, 28);
+      doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 34);
+
+      let y = 44;
+
+      // Wallet Summary
+      doc.setFontSize(13);
+      doc.setTextColor(0, 0, 0);
+      doc.text("Wallet Summary", 14, y);
+      y += 8;
+
+      (doc as any).autoTable({
+        startY: y,
+        head: [["Metric", "Value"]],
+        body: [
+          ["Available Balance", `UGX ${(walletBalance?.balance || 0).toLocaleString()}`],
+          ["Total Deposits", `UGX ${(walletBalance?.totalDeposits || 0).toLocaleString()}`],
+        ],
+        theme: "grid",
+        headStyles: { fillColor: [46, 125, 50], fontSize: 9 },
+        bodyStyles: { fontSize: 8 },
+        margin: { left: 14 },
+      });
+      y = (doc as any).lastAutoTable.finalY + 12;
+
+      // Transaction Summary
+      if (transactionLedger) {
+        if (y > 240) { doc.addPage(); y = 20; }
+        doc.setFontSize(13);
+        doc.text("Transaction Summary", 14, y);
+        y += 8;
+
+        (doc as any).autoTable({
+          startY: y,
+          head: [["Metric", "Value"]],
+          body: [
+            ["Total Transactions", String(transactionLedger.totals?.totalTransactions || 0)],
+            ["Total Quantity", `${(transactionLedger.totals?.totalQuantityKilos || 0).toFixed(2)} kg`],
+            ["Total Cost", `UGX ${(transactionLedger.totals?.totalCost || 0).toLocaleString()}`],
+          ],
+          theme: "grid",
+          headStyles: { fillColor: [25, 118, 210], fontSize: 9 },
+          bodyStyles: { fontSize: 8 },
+          margin: { left: 14 },
+        });
+        y = (doc as any).lastAutoTable.finalY + 12;
+      }
+
+      // Wallet Report
+      if (walletReport) {
+        if (y > 240) { doc.addPage(); y = 20; }
+        doc.setFontSize(13);
+        doc.text("Cash Flow Summary", 14, y);
+        y += 8;
+
+        (doc as any).autoTable({
+          startY: y,
+          head: [["Metric", "Value"]],
+          body: [
+            ["Total Money In", `UGX ${(walletReport.totals?.totalMoneyIn || 0).toLocaleString()}`],
+            ["Total Money Out", `UGX ${(walletReport.totals?.totalMoneyOut || 0).toLocaleString()}`],
+            ["Current Balance", `UGX ${(walletReport.totals?.currentBalance || 0).toLocaleString()}`],
+          ],
+          theme: "grid",
+          headStyles: { fillColor: [245, 124, 0], fontSize: 9 },
+          bodyStyles: { fontSize: 8 },
+          margin: { left: 14 },
+        });
+        y = (doc as any).lastAutoTable.finalY + 12;
+      }
+
+      // Orders
+      const allOrders = orders?.orders || [];
+      const allListingOrders = listingOrders?.orders || [];
+      if (y > 240) { doc.addPage(); y = 20; }
+      doc.setFontSize(13);
+      doc.text("Orders Overview", 14, y);
+      y += 8;
+
+      (doc as any).autoTable({
+        startY: y,
+        head: [["Metric", "Value"]],
+        body: [
+          ["Direct Orders", String(allOrders.length)],
+          ["Listing Orders", String(allListingOrders.length)],
+          ["FarmCoin Rewards", String(buyerRewardSummary?.balance || 0)],
+        ],
+        theme: "grid",
+        headStyles: { fillColor: [0, 131, 143], fontSize: 9 },
+        bodyStyles: { fontSize: 8 },
+        margin: { left: 14 },
+      });
+
+      doc.save(`buyer_analytics_${new Date().toISOString().split("T")[0]}.pdf`);
+    } catch (e) {
+      alert("PDF export failed. Please try again.");
+    }
+  };
+
   const handlePurchase = async (inventoryId: Id<"traderInventory">, availableKilos: number) => {
     const kilosStr = kilosInput[inventoryId] || "";
     const kilos = parseFloat(kilosStr);
@@ -668,6 +781,68 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
               : ""}
           </button>
         </div>
+      </div>
+
+      {/* Communities Section */}
+      <div style={{
+        padding: "clamp(1rem, 3vw, 1.5rem)",
+        background: "#fff",
+        borderRadius: "12px",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        border: "1px solid #e0e0e0",
+        marginBottom: "1.5rem"
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+          <h3 style={{
+            margin: 0,
+            fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)",
+            color: "#2c2c2c",
+            fontFamily: '"Montserrat", sans-serif',
+            fontWeight: "600",
+            letterSpacing: "-0.01em"
+          }}>
+            🌾 My Communities
+          </h3>
+          <Link
+            href="/farmer/communities"
+            style={{
+              padding: "0.4rem 0.8rem",
+              background: "#1976d2",
+              color: "#fff",
+              textDecoration: "none",
+              borderRadius: "8px",
+              fontSize: "0.85rem",
+              fontWeight: "600",
+              transition: "background 0.2s",
+            }}
+          >
+            Browse All
+          </Link>
+        </div>
+        {communities === undefined ? (
+          <p style={{ color: "#999", fontSize: "0.9rem" }}>Loading communities...</p>
+        ) : memberCommunities.length === 0 ? (
+          <p style={{ color: "#6b7280", fontSize: "0.9rem" }}>
+            You haven&apos;t joined any communities yet.{" "}
+            <Link href="/farmer/communities" style={{ color: "#1976d2", fontWeight: 600 }}>Browse communities</Link>
+          </p>
+        ) : (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+            {memberCommunities.map((c: any) => (
+              <span key={c.id} style={{
+                padding: "0.35rem 0.75rem",
+                borderRadius: "999px",
+                background: "#e8f5e9",
+                color: "#2e7d32",
+                fontSize: "0.85rem",
+                fontWeight: "600",
+                border: "1px solid #c8e6c9",
+              }}>
+                {c.name}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Trader Listing Orders */}
@@ -1859,6 +2034,66 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
             </div>
           </>
         )}
+      </div>
+
+      {/* Buyer Analytics Summary */}
+      <div style={{
+        padding: "clamp(1rem, 3vw, 1.5rem)",
+        background: "#fff",
+        borderRadius: "12px",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        border: "1px solid #e0e0e0",
+        marginBottom: "1.5rem",
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.5rem" }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", fontWeight: "600", color: "#2c2c2c", fontFamily: '"Montserrat", sans-serif' }}>
+              📊 Buyer Analytics
+            </h3>
+            <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem", color: "#2e7d32", fontWeight: 600, fontStyle: "italic" }}>Know Your Numbers</p>
+          </div>
+          <button
+            onClick={handleExportAnalyticsPDF}
+            style={{
+              padding: "0.5rem 1rem",
+              background: "#ffc107",
+              color: "#000",
+              border: "none",
+              borderRadius: "6px",
+              cursor: "pointer",
+              fontSize: "0.85rem",
+              fontWeight: "600",
+            }}
+          >
+            📄 Export Analytics PDF
+          </button>
+        </div>
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 140px), 1fr))",
+          gap: "0.75rem",
+        }}>
+          <div style={{ padding: "0.75rem", background: "#e8f5e9", borderRadius: 8, textAlign: "center" }}>
+            <div style={{ fontSize: "0.7rem", color: "#666", fontWeight: 600 }}>Balance</div>
+            <div style={{ fontSize: "1rem", fontWeight: 700, color: "#2e7d32" }}>
+              UGX {(walletBalance?.balance || 0).toLocaleString()}
+            </div>
+          </div>
+          <div style={{ padding: "0.75rem", background: "#e3f2fd", borderRadius: 8, textAlign: "center" }}>
+            <div style={{ fontSize: "0.7rem", color: "#666", fontWeight: 600 }}>Transactions</div>
+            <div style={{ fontSize: "1.3rem", fontWeight: 700, color: "#1976d2" }}>{transactionLedger?.totals?.totalTransactions || 0}</div>
+          </div>
+          <div style={{ padding: "0.75rem", background: "#fff3e0", borderRadius: 8, textAlign: "center" }}>
+            <div style={{ fontSize: "0.7rem", color: "#666", fontWeight: 600 }}>Total Spent</div>
+            <div style={{ fontSize: "1rem", fontWeight: 700, color: "#f57c00" }}>
+              UGX {(transactionLedger?.totals?.totalCost || 0).toLocaleString()}
+            </div>
+          </div>
+          <div style={{ padding: "0.75rem", background: "#fce4ec", borderRadius: 8, textAlign: "center" }}>
+            <div style={{ fontSize: "0.7rem", color: "#666", fontWeight: 600 }}>FarmCoin</div>
+            <div style={{ fontSize: "1.3rem", fontWeight: 700, color: "#d32f2f" }}>{buyerRewardSummary?.balance || 0}</div>
+          </div>
+        </div>
       </div>
 
       {/* Purchase Analytics - Institutional Style */}

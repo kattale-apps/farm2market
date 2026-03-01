@@ -3,10 +3,279 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import * as XLSX from "xlsx";
+import { CommunityQRCode } from "../../components/CommunityQRCode";
+
+/* ── Tab types for community cards ── */
+type CommunityTab = "members" | "noticeboard" | "messages";
+
+/* ── Noticeboard tab (per community) ── */
+function NoticeboardTab({ communityId, userId }: { communityId: Id<"communities">; userId: Id<"users"> }) {
+  const posts = useQuery(api.noticeboard.getCommunityNoticeboardPosts, { communityId });
+  const quotaStatus = useQuery(api.noticeboard.getAdminNoticeboardQuotaStatus, { communityId });
+  const sendText = useMutation(api.noticeboard.sendNoticeboardTextMessage);
+  const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
+  const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const handleSend = async () => {
+    if (!text.trim()) return;
+    setSending(true);
+    setMsg(null);
+    try {
+      await sendText({ communityId, text: text.trim(), userId });
+      setText("");
+      setMsg({ type: "success", text: "Post sent!" });
+    } catch (e: any) {
+      setMsg({ type: "error", text: e?.message || "Failed to send post" });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div style={{ padding: "1.5rem" }}>
+      {/* Quota widget */}
+      {quotaStatus && (
+        <div style={{
+          marginBottom: "1.25rem",
+          padding: "0.75rem 1rem",
+          borderRadius: "8px",
+          background: quotaStatus.remaining === 0 ? "#fff3e0" : "#e8f5e9",
+          border: `1px solid ${quotaStatus.remaining === 0 ? "#ffe0b2" : "#c8e6c9"}`,
+          fontSize: "0.85rem",
+          color: quotaStatus.remaining === 0 ? "#e65100" : "#2e7d32",
+        }}>
+          <strong>Image Posts:</strong> {quotaStatus.used}/{quotaStatus.quota} used &middot;{" "}
+          {quotaStatus.remaining > 0
+            ? `${quotaStatus.remaining} free remaining`
+            : "New image posts will be billable"}
+        </div>
+      )}
+
+      {/* Compose */}
+      <div style={{
+        marginBottom: "1.5rem",
+        padding: "1rem",
+        background: "#fafafa",
+        borderRadius: "10px",
+        border: "1px solid #e0e0e0",
+      }}>
+        <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "0.95rem", fontWeight: 600, color: "#333" }}>New Post</h4>
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Write a noticeboard post…"
+          rows={3}
+          style={{
+            width: "100%",
+            padding: "0.6rem 0.75rem",
+            borderRadius: "8px",
+            border: "1px solid #ccc",
+            fontSize: "0.9rem",
+            resize: "vertical",
+            fontFamily: "inherit",
+            boxSizing: "border-box",
+          }}
+        />
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginTop: "0.5rem" }}>
+          <button
+            onClick={handleSend}
+            disabled={sending || !text.trim()}
+            style={{
+              padding: "0.5rem 1.25rem",
+              background: sending || !text.trim() ? "#bbb" : "#2e7d32",
+              color: "#fff",
+              border: "none",
+              borderRadius: "8px",
+              fontSize: "0.85rem",
+              fontWeight: 600,
+              cursor: sending || !text.trim() ? "not-allowed" : "pointer",
+            }}
+          >
+            {sending ? "Sending…" : "Post"}
+          </button>
+          {msg && (
+            <span style={{ fontSize: "0.82rem", color: msg.type === "success" ? "#2e7d32" : "#c62828" }}>
+              {msg.text}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Posts list */}
+      <h4 style={{ margin: "0 0 0.75rem 0", fontSize: "1rem", fontWeight: 600, color: "#333" }}>Recent Posts</h4>
+      {posts === undefined ? (
+        <p style={{ color: "#999" }}>Loading posts…</p>
+      ) : posts.length === 0 ? (
+        <p style={{ color: "#999" }}>No posts yet. Create the first one above!</p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+          {posts.map((post: any) => (
+            <div
+              key={post._id}
+              style={{
+                padding: "0.75rem 1rem",
+                background: "#fff",
+                borderRadius: "8px",
+                border: "1px solid #e5e7eb",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+              }}
+            >
+              {post.caption && (
+                <p style={{ margin: "0 0 0.3rem 0", fontSize: "0.9rem", color: "#333" }}>{post.caption}</p>
+              )}
+              {post.imageStorageId && (
+                <span style={{ fontSize: "0.8rem", color: "#666" }}>📸 Image post</span>
+              )}
+              {!post.caption && !post.imageStorageId && post.text && (
+                <p style={{ margin: 0, fontSize: "0.9rem", color: "#333" }}>{post.text}</p>
+              )}
+              <div style={{ marginTop: "0.35rem", fontSize: "0.75rem", color: "#999" }}>
+                {post.createdAt ? new Date(post.createdAt).toLocaleString() : ""}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Messages tab (per community) ── */
+function MessagesTab({ communityId, userId }: { communityId: Id<"communities">; userId: Id<"users"> }) {
+  const messages = useQuery(api.messages.getCommunityMessages, { communityId });
+  const sendText = useMutation(api.messages.sendTextMessage);
+  const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
+  const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const endRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const handleSend = async () => {
+    if (!text.trim()) return;
+    setSending(true);
+    setMsg(null);
+    try {
+      await sendText({ communityId, userId, text: text.trim() });
+      setText("");
+      setMsg({ type: "success", text: "Sent!" });
+    } catch (e: any) {
+      setMsg({ type: "error", text: e?.message || "Failed to send" });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div style={{ padding: "1.5rem", display: "flex", flexDirection: "column" }}>
+      {/* Messages feed */}
+      <div style={{
+        maxHeight: "400px",
+        overflowY: "auto",
+        marginBottom: "1rem",
+        padding: "0.5rem",
+        background: "#f9fafb",
+        borderRadius: "10px",
+        border: "1px solid #e5e7eb",
+      }}>
+        {messages === undefined ? (
+          <p style={{ color: "#999", textAlign: "center", padding: "1rem" }}>Loading messages…</p>
+        ) : messages.length === 0 ? (
+          <p style={{ color: "#999", textAlign: "center", padding: "1rem" }}>No messages yet. Start the conversation!</p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            {([...messages].reverse()).map((m: any) => {
+              const isMine = m.userId === userId;
+              return (
+                <div
+                  key={m._id}
+                  style={{
+                    display: "flex",
+                    justifyContent: isMine ? "flex-end" : "flex-start",
+                  }}
+                >
+                  <div style={{
+                    maxWidth: "75%",
+                    padding: "0.5rem 0.85rem",
+                    borderRadius: isMine ? "12px 12px 4px 12px" : "12px 12px 12px 4px",
+                    background: isMine ? "#2e7d32" : "#fff",
+                    color: isMine ? "#fff" : "#333",
+                    border: isMine ? "none" : "1px solid #e0e0e0",
+                    fontSize: "0.88rem",
+                  }}>
+                    {m.text && <p style={{ margin: 0 }}>{m.text}</p>}
+                    {m.imageStorageId && <span style={{ fontSize: "0.8rem" }}>📸 Image</span>}
+                    <div style={{
+                      marginTop: "0.25rem",
+                      fontSize: "0.7rem",
+                      opacity: 0.7,
+                      textAlign: "right",
+                    }}>
+                      {m.createdAt ? new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            <div ref={endRef} />
+          </div>
+        )}
+      </div>
+
+      {/* Compose */}
+      <div style={{
+        display: "flex",
+        gap: "0.5rem",
+        alignItems: "center",
+      }}>
+        <input
+          type="text"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Type a message…"
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+          style={{
+            flex: 1,
+            padding: "0.6rem 0.85rem",
+            borderRadius: "999px",
+            border: "1px solid #ccc",
+            fontSize: "0.88rem",
+            outline: "none",
+          }}
+          disabled={sending}
+        />
+        <button
+          onClick={handleSend}
+          disabled={sending || !text.trim()}
+          style={{
+            padding: "0.6rem 1.25rem",
+            borderRadius: "999px",
+            border: "none",
+            background: sending || !text.trim() ? "#bbb" : "#1976d2",
+            color: "#fff",
+            fontWeight: 600,
+            fontSize: "0.85rem",
+            cursor: sending || !text.trim() ? "not-allowed" : "pointer",
+          }}
+        >
+          {sending ? "…" : "Send"}
+        </button>
+        {msg && (
+          <span style={{ fontSize: "0.78rem", color: msg.type === "success" ? "#2e7d32" : "#c62828" }}>
+            {msg.text}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function CommunityDashboardPage() {
   const router = useRouter();
@@ -102,6 +371,12 @@ export default function CommunityDashboardPage() {
   const pendingPageKey = "community_pending_applications";
   const approvedPageKey = "community_approved_members";
   const membersPageKey = "community_members_list";
+
+  // Tab state per community
+  const [activeTabs, setActiveTabs] = useState<Record<string, CommunityTab>>({});
+  const getActiveTab = (cId: string): CommunityTab => activeTabs[cId] || "members";
+  const setActiveTab = (cId: string, tab: CommunityTab) =>
+    setActiveTabs((prev) => ({ ...prev, [cId]: tab }));
 
   useEffect(() => {
     if (!paginationPreferences) return;
@@ -561,7 +836,61 @@ export default function CommunityDashboardPage() {
                       </div>
                     )}
                   </div>
+                  {/* QR Code Button */}
+                  <div style={{ marginTop: "0.75rem" }}>
+                    <CommunityQRCode
+                      communityId={communityId}
+                      mode="button"
+                      buttonLabel="QR Code"
+                    />
+                  </div>
                 </div>
+
+              {/* ── Tab Bar ── */}
+              <div style={{
+                display: "flex",
+                borderBottom: "2px solid #e0e0e0",
+                background: "#fafafa",
+              }}>
+                {(["members", "noticeboard", "messages"] as CommunityTab[]).map((tab) => {
+                  const active = getActiveTab(communityId) === tab;
+                  const labels: Record<CommunityTab, string> = { members: "Members", noticeboard: "Noticeboard", messages: "Messages" };
+                  return (
+                    <button
+                      key={tab}
+                      onClick={() => setActiveTab(communityId, tab)}
+                      style={{
+                        flex: 1,
+                        padding: "0.75rem 0.5rem",
+                        border: "none",
+                        borderBottom: active ? "3px solid #2e7d32" : "3px solid transparent",
+                        background: active ? "#fff" : "transparent",
+                        color: active ? "#2e7d32" : "#666",
+                        fontWeight: active ? 700 : 500,
+                        fontSize: "0.9rem",
+                        cursor: "pointer",
+                        transition: "all 0.2s",
+                        fontFamily: '"Montserrat", sans-serif',
+                      }}
+                    >
+                      {labels[tab]}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* ── Noticeboard Tab ── */}
+              {getActiveTab(communityId) === "noticeboard" && (
+                <NoticeboardTab communityId={communityId} userId={userId!} />
+              )}
+
+              {/* ── Messages Tab ── */}
+              {getActiveTab(communityId) === "messages" && (
+                <MessagesTab communityId={communityId} userId={userId!} />
+              )}
+
+              {/* ── Members Tab (existing content) ── */}
+              {getActiveTab(communityId) === "members" && (<>
 
               {/* Pending Applications */}
               <div style={{ padding: "1.5rem", borderBottom: "1px solid #eee" }}>
@@ -1089,6 +1418,8 @@ export default function CommunityDashboardPage() {
                   <p>No members in this community yet.</p>
                 </div>
               )}
+
+              </>)}
             </div>
           );
           })

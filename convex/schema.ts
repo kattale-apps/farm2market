@@ -61,9 +61,6 @@ export default defineSchema({
     createdAt: v.number(),
     lastActiveAt: v.number(),
     passwordHash: v.optional(v.string()), // Secure password hash (bcrypt/argon2). Required for production authentication.
-    passwordResetToken: v.optional(v.string()), // Token for password reset
-    passwordResetExpiry: v.optional(v.number()), // Expiry timestamp for reset token
-    rememberMeToken: v.optional(v.string()), // Token for persistent login sessions
     customSpendCap: v.optional(v.number()), // Admin-set custom spend cap for traders (in UGX). If not set, uses default MAX_TRADER_EXPOSURE_UGX.
     adminLevel: v.optional(v.union(v.literal("super"), v.literal("junior"))), // Admin hierarchy level. undefined means super admin (backward compatible).
     adminCategory: v.optional(v.union(v.literal("store"), v.literal("message"), v.literal("community"), v.literal("finance"))), // Junior admin category (store delivery vs message support vs community oversight vs finance)
@@ -857,8 +854,6 @@ export default defineSchema({
     communityId: v.id("communities"),
     userId: v.id("users"), // Farmer who joined
     joinedAt: v.number(),
-    termsAccepted: v.optional(v.boolean()), // Whether user accepted community terms
-    termsAcceptedAt: v.optional(v.number()), // When terms were accepted
   })
     .index("by_community", ["communityId"])
     .index("by_user", ["userId"])
@@ -1403,32 +1398,4 @@ export default defineSchema({
     .index("by_status", ["status"])
     .index("by_type", ["paymentType"])
     .index("by_pesapal_tracking", ["pesapalTrackingId"]),
-
-  /**
-   * Stores
-   * - Store information for store managers (junior admins)
-   * - Manages delivery locations for orders
-   */
-  stores: defineTable({
-    adminId: v.id("users"), // Junior admin managing this store
-    communityId: v.id("communities"), // Community this store serves
-    storeName: v.string(), // Store name
-    deliveryLocations: v.optional(
-      v.array(
-        v.object({
-          locationId: v.string(), // Unique identifier for this location
-          name: v.string(), // e.g., "Downtown Market", "Warehouse A"
-          address: v.string(), // Full address
-          lat: v.optional(v.number()), // Latitude for map
-          lng: v.optional(v.number()), // Longitude for map
-          createdAt: v.number(), // When location was added
-        })
-      )
-    ), // Array of delivery locations
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  })
-    .index("by_admin", ["adminId"])
-    .index("by_community", ["communityId"])
-    .index("by_admin_community", ["adminId", "communityId"]),
 });

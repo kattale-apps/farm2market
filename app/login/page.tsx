@@ -1,7 +1,5 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-
 import { useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
@@ -28,30 +26,6 @@ export default function LoginPage() {
   
   const login = useMutation(api.auth.login);
   const signup = useMutation(api.auth.signup);
-
-  const getDefaultRedirectForUser = (user: any) => {
-    if (user?.role === "admin" && user?.adminLevel === "super") {
-      return "/superadmin/dashboard";
-    }
-    if (user?.role === "admin") {
-      if (user?.defaultCommunityId) {
-        return `/community-admin/${user.defaultCommunityId}/dashboard`;
-      }
-      if (user?.assignedCommunityIds?.length > 0) {
-        return `/community-admin/${user.assignedCommunityIds[0]}/dashboard`;
-      }
-      return "/my-communities";
-    }
-    // Route end-users to their role-specific dashboard
-    if (user?.role === "trader") {
-      return "/trader/dashboard";
-    }
-    if (user?.role === "buyer") {
-      return "/buyer/dashboard";
-    }
-    // Default for farmers or any other role
-    return "/farmer/dashboard";
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -100,11 +74,8 @@ export default function LoginPage() {
         // Store user info in localStorage
         localStorage.setItem("pilot_user", JSON.stringify(result));
         
-        // Redirect after signup/login
-        const redirect = typeof window !== "undefined"
-          ? new URLSearchParams(window.location.search).get("redirect")
-          : null;
-        router.push(redirect || getDefaultRedirectForUser(result));
+        // Redirect to dashboard
+        router.push("/");
       } else {
         // Login
         const result = await login({
@@ -116,11 +87,8 @@ export default function LoginPage() {
         // Store user info in localStorage
         localStorage.setItem("pilot_user", JSON.stringify(result));
         
-        // Redirect after signup/login
-        const redirect = typeof window !== "undefined"
-          ? new URLSearchParams(window.location.search).get("redirect")
-          : null;
-        router.push(redirect || getDefaultRedirectForUser(result));
+        // Redirect to dashboard
+        router.push("/");
       }
     } catch (err: any) {
       console.error("Auth error:", err);
@@ -422,33 +390,6 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* Remember Me Checkbox for Login */}
-          {!isSignup && (
-            <div style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <input
-                type="checkbox"
-                id="rememberMe"
-                defaultChecked={true}
-                style={{
-                  width: "1.2rem",
-                  height: "1.2rem",
-                  cursor: "pointer"
-                }}
-              />
-              <label
-                htmlFor="rememberMe"
-                style={{
-                  fontSize: "0.9rem",
-                  color: "#666",
-                  cursor: "pointer",
-                  userSelect: "none"
-                }}
-              >
-                Remember me (stay logged in)
-              </label>
-            </div>
-          )}
-
           {error && (
             <div style={{
               padding: "0.75rem",
@@ -484,7 +425,12 @@ export default function LoginPage() {
         {!isSignup && (
           <div style={{ marginTop: "1rem", textAlign: "center" }}>
             <a
-              href="/forgot-password"
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                // TODO: Implement forgot password functionality
+                alert("Forgot password functionality will be available soon. Please contact support at kattaleglobal@gmail.com");
+              }}
               style={{
                 color: "#1976d2",
                 textDecoration: "none",

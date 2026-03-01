@@ -346,18 +346,9 @@ export default function SuperadminUsagePage() {
 
   useEffect(() => {
     // Get current user ID from localStorage (pilot_user for testing)
-    if (typeof window !== "undefined") {
-      const storedUser = localStorage.getItem("pilot_user");
-      if (storedUser) {
-        try {
-          const userObj = JSON.parse(storedUser);
-          if (userObj.userId) {
-            setAdminId(userObj.userId as Id<"users">);
-          }
-        } catch {
-          setAdminId(storedUser as Id<"users">);
-        }
-      }
+    const userId = localStorage.getItem("pilot_user");
+    if (userId) {
+      setAdminId(userId as Id<"users">);
     }
   }, []);
 

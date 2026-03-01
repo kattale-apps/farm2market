@@ -92,26 +92,11 @@ function MessageComposer({ communityId }: { communityId: Id<"communities"> }) {
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showBottomSheet, setShowBottomSheet] = useState(false);
-  const [userId, setUserId] = useState<Id<"users"> | null>(null);
 
   const sendTextMessage = useMutation(api.messages.sendTextMessage);
   const sendMessageWithImage = useMutation(api.messages.sendMessageWithImage);
 
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const storedUser = localStorage.getItem("pilot_user");
-      if (storedUser) {
-        try {
-          const userObj = JSON.parse(storedUser);
-          if (userObj.userId) {
-            setUserId(userObj.userId as Id<"users">);
-          }
-        } catch {
-          setUserId(storedUser as Id<"users">);
-        }
-      }
-    }
-  }, []);
+  const userId = localStorage.getItem("pilot_user") as Id<"users"> | null;
 
   const handleImageSelect = (file: File) => {
     setSelectedImage(file);
@@ -255,7 +240,7 @@ function MessagesList({ communityId }: { communityId: Id<"communities"> }) {
     communityId,
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [userId, setUserId] = useState<Id<"users"> | null>(null);
+  const userId = localStorage.getItem("pilot_user") as Id<"users"> | null;
 
   // Optimistic state for engagement
   const [engagementState, setEngagementState] = useState<
@@ -267,23 +252,6 @@ function MessagesList({ communityId }: { communityId: Id<"communities"> }) {
   const unlikePostMutation = useMutation(api.messages.unlikeNoticeboardPost);
   const dislikePostMutation = useMutation(api.messages.dislikeNoticeboardPost);
   const undislikePostMutation = useMutation(api.messages.undislikeNoticeboardPost);
-
-  // Get userId from localStorage
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const storedUser = localStorage.getItem("pilot_user");
-      if (storedUser) {
-        try {
-          const userObj = JSON.parse(storedUser);
-          if (userObj.userId) {
-            setUserId(userObj.userId as Id<"users">);
-          }
-        } catch {
-          setUserId(storedUser as Id<"users">);
-        }
-      }
-    }
-  }, []);
 
   // Auto-scroll to latest message
   useEffect(() => {

@@ -9,9 +9,6 @@ import * as XLSX from "xlsx";
 import QRCode from "qrcode";
 import { formatUgandaDate } from "../utils/dateUtils";
 import { NotificationMailbox } from "./NotificationMailbox";
-
-const DEIGRO_COMMUNITY_ID = "ms7b1qga2n0kwjvczv3n1dqwwx809p81";
-
 const REGION_GROUPS: { label: string; districts: string[] }[] = [
   {
     label: "Central (Buganda)",
@@ -135,9 +132,19 @@ const utilityCardStyle: React.CSSProperties = {
 export function AdminDashboard({ userId }: AdminDashboardProps) {
   const router = useRouter();
   const adminId = userId as Id<"users">;
+  
+  // Community IDs and logo helpers
+  const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
+  const DEIGRO_COMMUNITY_ID = "ms7b1qga2n0kwjvczv3n1dqwwx809p81";
+
+  const getCommunityLogo = (communityId: string | Id<"communities">) => {
+    const idStr = String(communityId);
+    if (idStr === BIOFARM_COMMUNITY_ID) return "/biofarmlogo.jpeg";
+    if (idStr === DEIGRO_COMMUNITY_ID) return "/deilogo.png";
+    return "/agrofreshlogo.png";
+  };
 
   const isBioFarmCommunity = (communityId: string | Id<"communities">) => {
-    const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
     return String(communityId) === BIOFARM_COMMUNITY_ID;
   };
 
@@ -1323,28 +1330,22 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
             Community Admin Dashboard
           </h2>
           <div style={{ marginBottom: "1rem" }}>
-            {communities && communities.length > 0 ? (
-              <a
-                href={`/community-admin/${communities[0]._id}/dashboard`}
-                style={{
-                  display: "inline-block",
-                  padding: "0.6rem 1rem",
-                  borderRadius: 8,
-                  background: "linear-gradient(135deg, #1976d2 0%, #1565c0 100%)",
-                  color: "#fff",
-                  textDecoration: "none",
-                  fontSize: "0.95rem",
-                  fontWeight: 600,
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-                }}
-              >
-                Open Full Community Dashboard →
-              </a>
-            ) : (
-              <div style={{ color: "#666", fontSize: "0.9rem" }}>
-                No community assigned yet.
-              </div>
-            )}
+            <a
+              href="/admin/community-dashboard"
+              style={{
+                display: "inline-block",
+                padding: "0.6rem 1rem",
+                borderRadius: 8,
+                background: "linear-gradient(135deg, #1976d2 0%, #1565c0 100%)",
+                color: "#fff",
+                textDecoration: "none",
+                fontSize: "0.95rem",
+                fontWeight: 600,
+                boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+              }}
+            >
+              Open Full Community Dashboard →
+            </a>
           </div>
           <div style={farmCardStyle}>
             <div style={glassPanelStyle}>
@@ -1365,72 +1366,52 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
               >
                 {communities && communities.length > 0 ? (
                   <>
-                    {(() => {
-                      const logoUrl = communities[0]?.qrLogoUrl || communities[0]?.logoPath;
-                      const hasLogo = Boolean(logoUrl);
-                      return (
-                        <>
-                          <div
-                            style={{
-                              width: 72,
-                              height: 72,
-                              borderRadius: 18,
-                              background: hasLogo ? "#ffffff" : "linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              boxShadow: "0 4px 10px rgba(0,0,0,0.16)",
-                              overflow: "hidden",
-                              flexShrink: 0,
-                            }}
-                          >
-                            {hasLogo ? (
-                              <img
-                                src={logoUrl}
-                                alt={`${communities[0].name} logo`}
-                                style={{
-                                  maxWidth: "100%",
-                                  maxHeight: "100%",
-                                  objectFit: "contain",
-                                }}
-                              />
-                            ) : (
-                              <span
-                                style={{
-                                  fontSize: "2rem",
-                                  fontWeight: "bold",
-                                  color: "#ffffff",
-                                }}
-                              >
-                                {communities[0].name?.charAt(0).toUpperCase() || "C"}
-                              </span>
-                            )}
-                          </div>
-                          <div>
-                            <div
-                              style={{
-                                fontSize: "1.1rem",
-                                fontWeight: 800,
-                                letterSpacing: "-0.03em",
-                                textTransform: "uppercase",
-                                color: "#1b5e20",
-                              }}
-                            >
-                              {communities[0].name}
-                            </div>
-                            <div
-                              style={{
-                                fontSize: "0.9rem",
-                                color: "#374151",
-                                maxWidth: "28rem",
-                              }}
-                            >
-                              {communities[0].description}
-                            </div>
-                          </div>
-                        </>
-                      );
-                    })()}
+                    <div
+                      style={{
+                        width: 72,
+                        height: 72,
+                        borderRadius: 18,
+                        background: "#ffffff",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        boxShadow: "0 4px 10px rgba(0,0,0,0.16)",
+                        overflow: "hidden",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <img
+                        src={getCommunityLogo(communities[0]._id || communities[0].id)}
+                        alt={`${communities[0].name} logo`}
+                        style={{
+                          maxWidth: "100%",
+                          maxHeight: "100%",
+                          objectFit: "contain",
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <div
+                        style={{
+                          fontSize: "1.1rem",
+                          fontWeight: 800,
+                          letterSpacing: "-0.03em",
+                          textTransform: "uppercase",
+                          color: "#1b5e20",
+                        }}
+                      >
+                        {communities[0].name}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "0.9rem",
+                          color: "#374151",
+                          maxWidth: "28rem",
+                        }}
+                      >
+                        {communities[0].description}
+                      </div>
+                    </div>
                   </>
                 ) : (
                   <div style={{ color: "#999" }}>

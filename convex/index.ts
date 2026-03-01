@@ -30,7 +30,6 @@ export * from "./pdfGeneration";
 export * from "./pilotMode";
 export * from "./pilotSetup";
 export * from "./seedUgandaLocations";
-export * from "./stores";
 export * from "./userSettings";
 export * from "./usageEvents";
 export * from "./utils";

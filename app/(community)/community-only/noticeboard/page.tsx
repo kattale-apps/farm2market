@@ -101,16 +101,9 @@ export default function CommunityNoticeboardPage() {
     }
 
     // Get user ID from localStorage
-    const storedUser = localStorage.getItem("pilot_user");
-    if (storedUser) {
-      try {
-        const userObj = JSON.parse(storedUser);
-        if (userObj.userId) {
-          setUserId(userObj.userId as Id<"users">);
-        }
-      } catch {
-        setUserId(storedUser as Id<"users">);
-      }
+    const userIdFromStorage = localStorage.getItem("pilot_user");
+    if (userIdFromStorage) {
+      setUserId(userIdFromStorage as Id<"users">);
     }
   }, [communityIdParam]);
 

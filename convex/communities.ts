@@ -364,7 +364,6 @@ export const getActiveCommunities = query({
           name: c.name,
           description: c.description,
           logoPath: (c as any).logoPath,
-          qrLogoUrl: (c as any).qrLogoUrl,
           communityAdminId: (c as any).communityAdminId,
           isGlobal: c.isGlobal,
           geoLocked: c.geoLocked,
@@ -389,10 +388,9 @@ export const getCommunityByQrSlug = query({
     slug: v.string(),
   },
   handler: async (ctx, args) => {
-    const normalizedSlug = args.slug.trim().toLowerCase();
     const community = await ctx.db
       .query("communities")
-      .filter((q) => q.eq(q.field("qrSlug"), normalizedSlug))
+      .filter((q) => q.eq(q.field("qrSlug"), args.slug))
       .first();
 
     if (!community) {
@@ -404,93 +402,6 @@ export const getCommunityByQrSlug = query({
       name: community.name,
       qrLogoUrl: (community as any).qrLogoUrl,
       qrEnabled: (community as any).qrEnabled,
-    };
-  },
-});
-
-/**
- * Get community by ID with logo data
- * 
- * SOURCE OF TRUTH for community information including logos.
- * Access control: User must be authenticated to access community data
- * (Specific role-based access checks are done at component level)
- */
-export const getCommunityById = query({
-  args: {
-    communityId: v.id("communities"),
-  },
-  handler: async (ctx, args) => {
-    const community = await ctx.db.get(args.communityId);
-
-    if (!community) {
-      return null;
-    }
-
-    // Return community data with logo information
-    // qrLogoUrl takes precedence, falls back to logoPath
-    return {
-      _id: community._id,
-      name: community.name,
-      description: (community as any).description || undefined,
-      logoPath: (community as any).logoPath,
-      qrLogoUrl: (community as any).qrLogoUrl,
-      qrSlug: (community as any).qrSlug,
-    };
-  },
-});
-
-/**
- * Get basic community dashboard data
- */
-export const getCommunityDashboardSummary = query({
-  args: {
-    communityId: v.id("communities"),
-  },
-  handler: async (ctx, args) => {
-    const community = await ctx.db.get(args.communityId);
-    if (!community) {
-      return null;
-    }
-
-    const settings = await ctx.db
-      .query("communityMonetisationSettings")
-      .withIndex("by_community", (q) => q.eq("communityId", args.communityId))
-      .first();
-
-    const now = new Date();
-    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-
-    const monthPosts = await ctx.db
-      .query("noticeboardPosts")
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("communityId"), args.communityId),
-          q.eq(q.field("monthKey"), monthKey)
-        )
-      )
-      .collect();
-
-    // Get member count
-    const members = await ctx.db
-      .query("communityMembers")
-      .withIndex("by_community", (q) => q.eq("communityId", args.communityId))
-      .filter((q) => q.eq(q.field("status"), "APPROVED"))
-      .collect();
-
-    const freeImageQuotaPerMonth = settings?.juniorAdminFreeMonthlyImageQuota ?? 0;
-    const used = monthPosts.length;
-
-    return {
-      communityId: community._id,
-      communityName: community.name,
-      description: community.description,
-      logoPath: community.logoPath,
-      qrLogoUrl: community.qrLogoUrl,
-      communityType: community.communityType,
-      memberCount: members.length,
-      freeImageQuotaPerMonth,
-      used,
-      createdAt: community.createdAt,
     };
   },
 });
@@ -557,76 +468,6 @@ export const searchCommunities = query({
       logoPath: (c as any).logoPath,
       isGlobal: c.isGlobal,
     }));
-  },
-});
-
-/**
- * Get suggested communities for discovery (empty state or recommendations)
- * Returns active communities sorted by recent activity and member count
- */
-export const getSuggestedCommunities = query({
-  args: {
-    userId: v.optional(v.id("users")),
-    limit: v.optional(v.number()),
-  },
-  handler: async (ctx, args) => {
-    const limit = args.limit || 20;
-    
-    // Get all active communities
-    const allCommunities = await ctx.db.query("communities").collect();
-    
-    // Get user's joined communities if userId provided
-    let joinedCommunityIds = new Set<string>();
-    if (args.userId) {
-      const memberships = await ctx.db
-        .query("communityMemberships")
-        .withIndex("by_user", (q) => q.eq("userId", args.userId!))
-        .collect();
-      joinedCommunityIds = new Set(memberships.map((m) => String(m.communityId)));
-    }
-    
-    // Filter to communities user hasn't joined
-    const unjoined = allCommunities.filter((c) => !joinedCommunityIds.has(String(c._id)));
-    
-    // Get member counts and recent activity for each
-    const communitiesWithStats = await Promise.all(
-      unjoined.map(async (c) => {
-        const memberCount = await ctx.db
-          .query("communityMemberships")
-          .withIndex("by_community", (q) => q.eq("communityId", c._id))
-          .collect()
-          .then((ms) => ms.length);
-        
-        // Get most recent post for activity sorting
-        const recentPost = await ctx.db
-          .query("noticeboardPosts")
-          .withIndex("by_community", (q) => q.eq("communityId", c._id))
-          .order("desc")
-          .first();
-        
-        return {
-          _id: c._id,
-          name: c.name,
-          description: (c as any).description,
-          logoPath: (c as any).logoPath,
-          qrLogoUrl: (c as any).qrLogoUrl,
-          qrSlug: (c as any).qrSlug,
-          memberCount,
-          lastActivityAt: recentPost?.createdAt || c._creationTime,
-        };
-      })
-    );
-    
-    // Sort by recent activity and member count
-    const sorted = communitiesWithStats.sort((a, b) => {
-      // First by recent activity
-      const activityDiff = b.lastActivityAt - a.lastActivityAt;
-      if (activityDiff !== 0) return activityDiff;
-      // Then by member count
-      return b.memberCount - a.memberCount;
-    });
-    
-    return sorted.slice(0, limit);
   },
 });
 
@@ -702,7 +543,6 @@ export const getUserCommunities = query({
           name: community.name,
           description: community.description,
           logoPath: (community as any).logoPath,
-          qrLogoUrl: (community as any).qrLogoUrl,
           isGlobal: community.isGlobal,
           joinedAt: m.joinedAt,
         };
@@ -730,15 +570,12 @@ export const joinCommunityByQr = mutation({
     phoneNumber: v.optional(v.string()),
     password: v.optional(v.string()), // Required if user is new
     userId: v.optional(v.id("users")), // If existing user is joining
-    role: v.optional(v.union(v.literal("farmer"), v.literal("trader"), v.literal("buyer"))), // Optional role override
   },
   handler: async (ctx, args) => {
-    const normalizedSlug = args.slug.trim().toLowerCase();
-
     // 1. Find community by slug
     const community = await ctx.db
       .query("communities")
-      .filter((q) => q.eq(q.field("qrSlug"), normalizedSlug))
+      .filter((q) => q.eq(q.field("qrSlug"), args.slug))
       .first();
 
     if (!community) {
@@ -795,7 +632,7 @@ export const joinCommunityByQr = mutation({
         const normalizedPhone = args.phoneNumber ? normalizePhoneNumber(args.phoneNumber) : undefined;
 
         // Generate alias
-        const alias = generateAlias(args.role || "farmer");
+        const alias = generateAlias("farmer");
 
         // Hash password (using simple hash for now - in production should use bcrypt)
         const passwordHash = simpleHash(args.password.trim());
@@ -803,7 +640,7 @@ export const joinCommunityByQr = mutation({
         userId = await ctx.db.insert("users", {
           email: normalizedEmail,
           phoneNumber: normalizedPhone,
-          role: args.role || "farmer",
+          role: "farmer",
           alias,
           state: "active",
           createdAt: getUgandaTime(),
@@ -858,8 +695,6 @@ export const joinCommunityByQr = mutation({
       communityId: community._id,
       userId,
       joinedAt: getUgandaTime(),
-      termsAccepted: true,
-      termsAcceptedAt: getUgandaTime(),
     });
 
     return {
@@ -1193,8 +1028,6 @@ export const joinCommunity = mutation({
       communityId: args.communityId,
       userId: args.farmerId,
       joinedAt: getUgandaTime(),
-      termsAccepted: true,
-      termsAcceptedAt: getUgandaTime(),
     });
 
     return { success: true };
@@ -1651,7 +1484,7 @@ export const updateCommunityPricing = mutation({
  */
 export const createQRCommunity = mutation({
   args: {
-    adminId: v.id("users"), // Required - passed from frontend localStorage
+    adminId: v.optional(v.id("users")), // Optional - will try to get from auth if not provided
     name: v.string(),
     slug: v.string(),
     logoUrl: v.optional(v.string()),
@@ -1660,8 +1493,37 @@ export const createQRCommunity = mutation({
     memberImageMessagePrice: v.number(),
   },
   handler: async (ctx, args) => {
-    const normalizedSlug = args.slug.trim().toLowerCase();
-    const adminId = args.adminId;
+    let adminId = args.adminId;
+
+    // If no adminId provided, try to get from auth context
+    if (!adminId) {
+      const authUser = await ctx.auth.getUserIdentity();
+      if (!authUser) {
+        throw new Error("Not authenticated");
+      }
+
+      // Find user in DB
+      let user = null;
+      if (authUser.email) {
+        user = await ctx.db
+          .query("users")
+          .withIndex("by_email", (q) => q.eq("email", authUser.email))
+          .first();
+      }
+
+      if (!user && authUser.phoneNumber) {
+        user = await ctx.db
+          .query("users")
+          .withIndex("by_phone", (q) => q.eq("phoneNumber", authUser.phoneNumber))
+          .first();
+      }
+
+      if (!user) {
+        throw new Error("User not found");
+      }
+
+      adminId = user._id;
+    }
 
     // Verify admin role
     const adminCheck = await verifyAdminRole({
@@ -1687,18 +1549,14 @@ export const createQRCommunity = mutation({
       throw new Error("Community name cannot be empty");
     }
 
-    if (!normalizedSlug) {
+    if (!args.slug.trim()) {
       throw new Error("Community slug cannot be empty");
-    }
-
-    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(normalizedSlug)) {
-      throw new Error("Slug must be lowercase, hyphen-separated, and URL-safe");
     }
 
     // Check if slug is unique
     const existingCommunity = await ctx.db
       .query("communities")
-      .filter((q) => q.eq(q.field("qrSlug"), normalizedSlug))
+      .filter((q) => q.eq(q.field("qrSlug"), args.slug))
       .first();
 
     if (existingCommunity) {
@@ -1725,7 +1583,7 @@ export const createQRCommunity = mutation({
       communityType: "farmer",
       // QR-specific fields
       qrEnabled: true,
-      qrSlug: normalizedSlug,
+      qrSlug: args.slug,
       qrLogoUrl: args.logoUrl?.trim(),
       searchPriorityScore: 100, // High priority for QR communities
     });
@@ -1745,14 +1603,14 @@ export const createQRCommunity = mutation({
     await ctx.db.insert("adminActions", {
       adminId: adminId,
       action: "create_qr_community",
-      details: `Created QR community: ${args.name} (slug: ${normalizedSlug}, UTID: ${utid})`,
+      details: `Created QR community: ${args.name} (slug: ${args.slug}, UTID: ${utid})`,
       timestamp: getUgandaTime(),
     });
 
     return {
       _id: communityId,
       name: args.name,
-      slug: normalizedSlug,
+      slug: args.slug,
       logoUrl: args.logoUrl,
       qrEnabled: true,
     };
@@ -1855,34 +1713,13 @@ export const getMyNavigationContext = query({
     const userId = user._id;
     const isSuperadmin = user.adminLevel === "super" || user.adminLevel === undefined;
 
-    // Get communities where user is the admin (by communityAdminId)
-    const adminCommunitiesByRole = await ctx.db
+    // Get communities where user is the admin
+    const adminCommunities = await ctx.db
       .query("communities")
       .filter((q) => q.eq(q.field("communityAdminId"), userId))
       .collect();
 
-    // Also get communities where user is assigned via assignedCommunityIds
-    const assignedCommunityIds = (user as any)?.assignedCommunityIds || [];
-    const assignedCommunitiesMap = new Map<string, any>();
-    
-    for (const communityId of assignedCommunityIds) {
-      const community = await ctx.db.get(communityId as Id<"communities">);
-      if (community) {
-        assignedCommunitiesMap.set(communityId.toString(), community);
-      }
-    }
-
-    // Combine both lists and remove duplicates
-    const allAdminCommunities: any[] = [...adminCommunitiesByRole];
-    const seenIds = new Set(adminCommunitiesByRole.map(c => c._id.toString()));
-    
-    for (const [communityIdStr, community] of assignedCommunitiesMap.entries()) {
-      if (!seenIds.has(communityIdStr)) {
-        allAdminCommunities.push(community);
-      }
-    }
-
-    const adminCommunitiesMapped = allAdminCommunities.map((c) => ({
+    const adminCommunitiesMapped = adminCommunities.map((c) => ({
       communityId: c._id,
       name: c.name,
       slug: c.qrSlug || c.name.toLowerCase().replace(/\s+/g, "-"),
@@ -1910,9 +1747,12 @@ export const getMyNavigationContext = query({
 
     // Determine default community ID
     let defaultCommunityId: Id<"communities"> | null = null;
-    if (allAdminCommunities.length > 0) {
-      // Admin users default to their first admin community
-      defaultCommunityId = allAdminCommunities[0]._id;
+    if (adminCommunitiesMapped.length > 0) {
+      // Prefer admin communities
+      const firstAdminCommunity = adminCommunities.find((c) =>
+        adminCommunitiesMapped.some((mc) => mc.communityId === c._id)
+      );
+      defaultCommunityId = firstAdminCommunity?._id || null;
     } else if (joinedCommunities.length > 0) {
       // Fall back to first joined community
       const firstJoinedMembership = membershipRecords[0];

@@ -15,6 +15,17 @@ export default function CommunityDashboardPage() {
   const [userAdminCategory, setUserAdminCategory] = useState<string>("");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Community IDs and logo helpers
+  const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
+  const DEIGRO_COMMUNITY_ID = "ms7b1qga2n0kwjvczv3n1dqwwx809p81";
+
+  const getCommunityLogo = (communityId: string | Id<"communities">) => {
+    const idStr = String(communityId);
+    if (idStr === BIOFARM_COMMUNITY_ID) return "/biofarmlogo.jpeg";
+    if (idStr === DEIGRO_COMMUNITY_ID) return "/deilogo.png";
+    return "/agrofreshlogo.png";
+  };
   const [selectedApplicationId, setSelectedApplicationId] = useState<Id<"communityApplications"> | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [exportCommunityId, setExportCommunityId] = useState<Id<"communities"> | null>(null);
@@ -423,15 +434,13 @@ export default function CommunityDashboardPage() {
         ) : (
           userCommunities.map((community: any) => {
             const communityId = community?._id ?? community?.id;
-            // Use qrLogoUrl first, then logoPath as fallback (no default fallback image)
-            const logoUrl = community?.qrLogoUrl || community?.logoPath;
-            const hasLogo = Boolean(logoUrl);
-            
             return (
               <div
                 key={communityId}
                 style={{
-                  background: `linear-gradient(rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.96))`,
+                  background: `linear-gradient(rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.96)), url('${getCommunityLogo(communityId)}')`,
+                  backgroundRepeat: "repeat",
+                  backgroundSize: "auto",
                   borderRadius: "12px",
                   boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
                   marginBottom: "2rem",
@@ -460,7 +469,7 @@ export default function CommunityDashboardPage() {
                         width: "80px",
                         height: "80px",
                         borderRadius: "16px",
-                        background: hasLogo ? "#ffffff" : "linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)",
+                        background: "#ffffff",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
@@ -468,27 +477,15 @@ export default function CommunityDashboardPage() {
                         overflow: "hidden",
                       }}
                     >
-                      {hasLogo ? (
-                        <img
-                          src={logoUrl}
-                          alt={`${community.name} logo`}
-                          style={{
-                            maxWidth: "100%",
-                            maxHeight: "100%",
-                            objectFit: "contain",
-                          }}
-                        />
-                      ) : (
-                        <span
-                          style={{
-                            fontSize: "2rem",
-                            fontWeight: "bold",
-                            color: "#ffffff",
-                          }}
-                        >
-                          {community.name?.charAt(0).toUpperCase() || "C"}
-                        </span>
-                      )}
+                      <img
+                        src={getCommunityLogo(communityId)}
+                        alt={`${community.name} logo`}
+                        style={{
+                          maxWidth: "100%",
+                          maxHeight: "100%",
+                          objectFit: "contain",
+                        }}
+                      />
                     </div>
                     <div>
                       <h2

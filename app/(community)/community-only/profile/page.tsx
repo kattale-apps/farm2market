@@ -59,16 +59,9 @@ export default function CommunityProfilePage() {
 
   // Get user ID from localStorage
   useEffect(() => {
-    const storedUser = localStorage.getItem("pilot_user");
-    if (storedUser) {
-      try {
-        const userObj = JSON.parse(storedUser);
-        if (userObj.userId) {
-          setUserId(userObj.userId as Id<"users">);
-        }
-      } catch {
-        setUserId(storedUser as Id<"users">);
-      }
+    const pilot_user = localStorage.getItem("pilot_user");
+    if (pilot_user) {
+      setUserId(pilot_user as Id<"users">);
     }
   }, []);
 

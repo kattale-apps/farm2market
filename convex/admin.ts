@@ -2316,16 +2316,3 @@ export const getUsersWithDemoFundStatus = query({
     };
   },
 });
-
-/**
- * REMOVED: Logo migration mutation
- * This was causing issues and has been removed. Logo paths should be set during community creation instead.
- */
-// export const runLogoMigration = mutation({
-//   args: {
-//     adminId: v.id("users"),
-//   },
-//   handler: async (ctx, args) => {
-//     // Migration code removed
-//   },
-// });

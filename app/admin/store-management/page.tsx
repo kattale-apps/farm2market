@@ -503,8 +503,8 @@ function AuditTab({ userId }: { userId: Id<"users"> }) {
           {/* Summary Text */}
           <div style={{ marginBottom: "1rem", padding: "1rem", background: "#e3f2fd", borderRadius: "8px" }}>
             <p style={{ margin: 0, fontSize: "0.9rem", color: "#1565c0" }}>
-              <strong>{auditData.storeAdminName}</strong> — {auditData.totalActions} actions,{" "}
-              {auditData.totalDeliveries} deliveries recorded
+              <strong>{auditData.storeAdminAlias || auditData.storeAdminEmail}</strong> — {auditData.totalActions} actions,{" "}
+              {auditData.deliveryVerifications} delivery verifications
             </p>
           </div>
 
@@ -537,8 +537,8 @@ function AuditTab({ userId }: { userId: Id<"users"> }) {
                 minHeight: "44px",
               }}
             >
-              <div style={{ fontSize: "2rem", fontWeight: 700, color: "#43a047" }}>{auditData.totalDeliveries}</div>
-              <div style={{ fontSize: "0.85rem", color: "#666", marginTop: "0.25rem" }}>Deliveries</div>
+              <div style={{ fontSize: "2rem", fontWeight: 700, color: "#43a047" }}>{auditData.deliveryVerifications}</div>
+              <div style={{ fontSize: "0.85rem", color: "#666", marginTop: "0.25rem" }}>Delivery Verifications</div>
             </div>
             <div
               onClick={() => setViewMode("inventory")}
@@ -560,29 +560,29 @@ function AuditTab({ userId }: { userId: Id<"users"> }) {
           </div>
 
           {/* Detail Panels */}
-          {viewMode === "actions" && auditData.actions && (
+          {viewMode === "actions" && auditData.utids && (
             <div style={{ background: "#fff", borderRadius: "12px", padding: "1.5rem", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-              <h3 style={{ margin: "0 0 1rem 0", fontWeight: 700 }}>Admin Actions</h3>
-              {auditData.actions.length === 0 ? (
-                <p style={{ color: "#999" }}>No actions recorded.</p>
+              <h3 style={{ margin: "0 0 1rem 0", fontWeight: 700 }}>Delivery Verification UTIDs</h3>
+              {auditData.utids.length === 0 ? (
+                <p style={{ color: "#999" }}>No delivery verifications recorded.</p>
               ) : (
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
                     <thead>
                       <tr style={{ background: "#f5f5f5" }}>
                         <th style={{ padding: "0.6rem", textAlign: "left" }}>UTID</th>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Action</th>
+                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Target UTID</th>
                         <th style={{ padding: "0.6rem", textAlign: "left" }}>Reason</th>
                         <th style={{ padding: "0.6rem", textAlign: "left" }}>Date</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {auditData.actions.map((action: any) => (
-                        <tr key={action._id} style={{ borderTop: "1px solid #eee" }}>
-                          <td style={{ padding: "0.6rem", fontFamily: "monospace", fontSize: "0.78rem" }}>{action.utid}</td>
-                          <td style={{ padding: "0.6rem" }}>{action.actionType}</td>
-                          <td style={{ padding: "0.6rem", maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis" }}>{action.reason}</td>
-                          <td style={{ padding: "0.6rem", whiteSpace: "nowrap" }}>{new Date(action.createdAt).toLocaleString()}</td>
+                      {auditData.utids.map((u: any, idx: number) => (
+                        <tr key={idx} style={{ borderTop: "1px solid #eee" }}>
+                          <td style={{ padding: "0.6rem", fontFamily: "monospace", fontSize: "0.78rem" }}>{u.utid || "—"}</td>
+                          <td style={{ padding: "0.6rem", fontFamily: "monospace", fontSize: "0.78rem" }}>{u.targetUtid || "—"}</td>
+                          <td style={{ padding: "0.6rem", maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis" }}>{u.reason || "—"}</td>
+                          <td style={{ padding: "0.6rem", whiteSpace: "nowrap" }}>{new Date(u.timestamp).toLocaleString()}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -592,35 +592,19 @@ function AuditTab({ userId }: { userId: Id<"users"> }) {
             </div>
           )}
 
-          {viewMode === "deliveries" && auditData.deliveries && (
+          {viewMode === "deliveries" && auditData.locations && (
             <div style={{ background: "#fff", borderRadius: "12px", padding: "1.5rem", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-              <h3 style={{ margin: "0 0 1rem 0", fontWeight: 700 }}>Deliveries</h3>
-              {auditData.deliveries.length === 0 ? (
-                <p style={{ color: "#999" }}>No deliveries recorded.</p>
+              <h3 style={{ margin: "0 0 1rem 0", fontWeight: 700 }}>Assigned Locations</h3>
+              {auditData.locations.length === 0 ? (
+                <p style={{ color: "#999" }}>No locations assigned.</p>
               ) : (
-                <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
-                    <thead>
-                      <tr style={{ background: "#f5f5f5" }}>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>UTID</th>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Listing</th>
-                        <th style={{ padding: "0.6rem", textAlign: "right" }}>Kilos</th>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Location</th>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Date</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {auditData.deliveries.map((d: any) => (
-                        <tr key={d._id} style={{ borderTop: "1px solid #eee" }}>
-                          <td style={{ padding: "0.6rem", fontFamily: "monospace", fontSize: "0.78rem" }}>{d.utid}</td>
-                          <td style={{ padding: "0.6rem" }}>{d.listingName || "—"}</td>
-                          <td style={{ padding: "0.6rem", textAlign: "right", fontWeight: 600 }}>{d.kilos?.toLocaleString() || "—"}</td>
-                          <td style={{ padding: "0.6rem" }}>{d.locationName || "—"}</td>
-                          <td style={{ padding: "0.6rem", whiteSpace: "nowrap" }}>{new Date(d.createdAt).toLocaleString()}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 200px), 1fr))", gap: "0.75rem" }}>
+                  {auditData.locations.map((loc: any) => (
+                    <div key={loc.id} style={{ padding: "1rem", background: "#f5f5f5", borderRadius: "8px" }}>
+                      <div style={{ fontWeight: 700 }}>{loc.name}</div>
+                      <div style={{ fontSize: "0.82rem", color: "#888", fontFamily: "monospace" }}>{loc.code}</div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -631,7 +615,7 @@ function AuditTab({ userId }: { userId: Id<"users"> }) {
               <h3 style={{ margin: "0 0 1rem 0", fontWeight: 700 }}>Inventory Summary</h3>
 
               {/* Location Filter */}
-              {inventoryData.locations && inventoryData.locations.length > 0 && (
+              {auditData.locations && auditData.locations.length > 0 && (
                 <div style={{ marginBottom: "1rem" }}>
                   <label style={{ display: "block", marginBottom: "0.3rem", fontWeight: 600, fontSize: "0.85rem" }}>Filter by Location:</label>
                   <select
@@ -640,7 +624,7 @@ function AuditTab({ userId }: { userId: Id<"users"> }) {
                     style={{ padding: "0.5rem", fontSize: "0.9rem", border: "1px solid #ccc", borderRadius: "6px", minHeight: "44px", minWidth: "200px" }}
                   >
                     <option value="">All Locations</option>
-                    {inventoryData.locations.map((loc: any) => (
+                    {auditData.locations.map((loc: any) => (
                       <option key={loc.id} value={loc.id}>{loc.name} ({loc.code})</option>
                     ))}
                   </select>
@@ -654,32 +638,33 @@ function AuditTab({ userId }: { userId: Id<"users"> }) {
                   <div style={{ fontSize: "1.4rem", fontWeight: 700 }}>{inventoryData.totalKilos.toLocaleString()} kg</div>
                 </div>
                 <div style={{ padding: "1rem", background: "#e8f5e9", borderRadius: "8px" }}>
-                  <div style={{ fontSize: "0.82rem", color: "#666" }}>Active Units</div>
-                  <div style={{ fontSize: "1.4rem", fontWeight: 700, color: "#2e7d32" }}>{inventoryData.activeUnits || 0}</div>
+                  <div style={{ fontSize: "0.82rem", color: "#666" }}>Total Value</div>
+                  <div style={{ fontSize: "1.4rem", fontWeight: 700, color: "#2e7d32" }}>UGX {inventoryData.totalValue.toLocaleString()}</div>
                 </div>
                 <div style={{ padding: "1rem", background: "#fff3e0", borderRadius: "8px" }}>
-                  <div style={{ fontSize: "0.82rem", color: "#666" }}>Locations</div>
-                  <div style={{ fontSize: "1.4rem", fontWeight: 700, color: "#ef6c00" }}>{inventoryData.locations?.length || 0}</div>
+                  <div style={{ fontSize: "0.82rem", color: "#666" }}>Inventory Blocks</div>
+                  <div style={{ fontSize: "1.4rem", fontWeight: 700, color: "#ef6c00" }}>{inventoryData.totalBlocks}</div>
                 </div>
               </div>
 
-              {/* Per-Location Breakdown */}
-              {inventoryData.byLocation && inventoryData.byLocation.length > 0 && (
+              {/* By Produce Type */}
+              {inventoryData.byProduce && Object.keys(inventoryData.byProduce).length > 0 && (
                 <div style={{ overflowX: "auto" }}>
+                  <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "0.95rem", fontWeight: 700 }}>By Produce Type</h4>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
                     <thead>
                       <tr style={{ background: "#f5f5f5" }}>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Location</th>
+                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Produce</th>
                         <th style={{ padding: "0.6rem", textAlign: "right" }}>Kilos</th>
-                        <th style={{ padding: "0.6rem", textAlign: "right" }}>Units</th>
+                        <th style={{ padding: "0.6rem", textAlign: "right" }}>Blocks</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {inventoryData.byLocation.map((loc: any) => (
-                        <tr key={loc.locationId} style={{ borderTop: "1px solid #eee" }}>
-                          <td style={{ padding: "0.6rem", fontWeight: 600 }}>{loc.name} ({loc.code})</td>
-                          <td style={{ padding: "0.6rem", textAlign: "right" }}>{loc.kilos?.toLocaleString() || 0} kg</td>
-                          <td style={{ padding: "0.6rem", textAlign: "right" }}>{loc.units || 0}</td>
+                      {Object.entries(inventoryData.byProduce).map(([produce, data]: [string, any]) => (
+                        <tr key={produce} style={{ borderTop: "1px solid #eee" }}>
+                          <td style={{ padding: "0.6rem", fontWeight: 600 }}>{produce}</td>
+                          <td style={{ padding: "0.6rem", textAlign: "right" }}>{data.kilos?.toLocaleString() || 0} kg</td>
+                          <td style={{ padding: "0.6rem", textAlign: "right" }}>{data.blocks || 0}</td>
                         </tr>
                       ))}
                     </tbody>

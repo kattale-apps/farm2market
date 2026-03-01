@@ -94,13 +94,13 @@ export const checkExpiredUTIDs = internalMutation({
         });
 
         // Step 2: Reverse wallet ledger entry (unlock capital)
-        const walletEntries = await ctx.db
+        const latestEntry = await ctx.db
           .query("walletLedger")
           .withIndex("by_user", (q: any) => q.eq("userId", traderId))
           .order("desc")
-          .collect();
+          .first();
 
-        const currentBalance = walletEntries[0]?.balanceAfter || 0;
+        const currentBalance = latestEntry?.balanceAfter || 0;
         const balanceAfter = currentBalance + unitPrice;
 
         await ctx.db.insert("walletLedger", {
@@ -259,5 +259,141 @@ export const checkEtaNotifications = internalMutation({
     }
 
     return { processed: purchases.length };
+  },
+});
+
+/**
+ * Expire stale negotiations (7 days)
+ * Negotiations in "pending" or "countered" status that haven't been
+ * updated in 7 days are automatically expired.
+ */
+export const expireStaleNegotiations = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = getUgandaTime();
+    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+    const cutoff = now - sevenDaysMs;
+    let expired = 0;
+
+    // Farmer-Trader negotiations
+    for (const status of ["pending", "countered"] as const) {
+      const stale = await ctx.db
+        .query("negotiations")
+        .withIndex("by_status", (q: any) => q.eq("status", status))
+        .collect();
+
+      for (const neg of stale) {
+        if (neg.lastUpdatedAt < cutoff) {
+          await ctx.db.patch(neg._id, { status: "expired", lastUpdatedAt: now });
+          // Release any unit held by this negotiation
+          if (neg.unitId) {
+            const unit = await ctx.db.get(neg.unitId);
+            if (unit && unit.activeNegotiationId === neg._id) {
+              await ctx.db.patch(unit._id, { activeNegotiationId: undefined });
+            }
+          }
+          expired++;
+        }
+      }
+    }
+
+    // Trader-Buyer negotiations
+    for (const status of ["pending", "countered"] as const) {
+      const stale = await ctx.db
+        .query("traderBuyerNegotiations")
+        .withIndex("by_status", (q: any) => q.eq("status", status))
+        .collect();
+
+      for (const neg of stale) {
+        if (neg.lastUpdatedAt < cutoff) {
+          await ctx.db.patch(neg._id, { status: "expired", lastUpdatedAt: now });
+          expired++;
+        }
+      }
+    }
+
+    return { expired };
+  },
+});
+
+/**
+ * Archive old listings (30 days)
+ * Listings that have been "cancelled" or "delivered" for over 30 days
+ * are soft-deleted by appending an `archivedAt` timestamp.
+ */
+export const archiveOldListings = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = getUgandaTime();
+    const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+    const cutoff = now - thirtyDaysMs;
+    let archived = 0;
+
+    for (const status of ["cancelled", "delivered"] as const) {
+      const old = await ctx.db
+        .query("listings")
+        .withIndex("by_status", (q: any) => q.eq("status", status))
+        .collect();
+
+      for (const listing of old) {
+        // Skip already archived
+        if ((listing as any).archivedAt) continue;
+        if (listing.createdAt > cutoff) continue;
+
+        await ctx.db.patch(listing._id, { archivedAt: now } as any);
+        archived++;
+      }
+    }
+
+    return { archived };
+  },
+});
+
+/**
+ * Purge stale session/token/rateLimit rows (older than 30 days)
+ * These tables accumulate junk rows over time.
+ */
+export const purgeJunkRows = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = getUgandaTime();
+    const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+    const cutoff = now - thirtyDaysMs;
+    let deleted = 0;
+
+    // Purge old sessions
+    const sessions = await ctx.db
+      .query("sessions")
+      .collect();
+    for (const s of sessions) {
+      if ((s as any).createdAt && (s as any).createdAt < cutoff) {
+        await ctx.db.delete(s._id);
+        deleted++;
+      }
+    }
+
+    // Purge old password reset tokens
+    const tokens = await ctx.db
+      .query("passwordResetTokens")
+      .collect();
+    for (const t of tokens) {
+      if ((t as any).createdAt && (t as any).createdAt < cutoff) {
+        await ctx.db.delete(t._id);
+        deleted++;
+      }
+    }
+
+    // Purge old rate limit hits
+    const hits = await ctx.db
+      .query("rateLimitHits")
+      .collect();
+    for (const h of hits) {
+      if ((h as any).timestamp && (h as any).timestamp < cutoff) {
+        await ctx.db.delete(h._id);
+        deleted++;
+      }
+    }
+
+    return { deleted };
   },
 });

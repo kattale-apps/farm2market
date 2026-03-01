@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import * as XLSX from "xlsx";
-import QRCode from "qrcode";
 import { formatUgandaDate } from "../utils/dateUtils";
 import { NotificationMailbox } from "./NotificationMailbox";
 import { resolveCommunityLogo } from "../lib/communityLogos";
@@ -279,7 +278,6 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   const notifyCommunity = useMutation(api.communities.notifyCommunity);
 
   const logExport = useMutation(api.communities.logExport);
-  const createQRCommunity = useMutation(api.communities.createQRCommunity);
 
   const notificationRecipients = useQuery(
     api.notifications.getNotificationRecipients,

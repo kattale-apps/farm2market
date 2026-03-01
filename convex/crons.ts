@@ -23,4 +23,25 @@ crons.interval(
   internal.scheduled.checkEtaNotifications,
 );
 
+// Expire stale negotiations every 6 hours (7-day threshold)
+crons.interval(
+  "expire stale negotiations",
+  { hours: 6 },
+  internal.scheduled.expireStaleNegotiations,
+);
+
+// Archive old completed/cancelled listings once per day (30-day threshold)
+crons.interval(
+  "archive old listings",
+  { hours: 24 },
+  internal.scheduled.archiveOldListings,
+);
+
+// Purge junk session/token/rateLimit rows once per day (30-day threshold)
+crons.interval(
+  "purge junk rows",
+  { hours: 24 },
+  internal.scheduled.purgeJunkRows,
+);
+
 export default crons;

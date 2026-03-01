@@ -9,6 +9,7 @@ import { Id } from "@/convex/_generated/dataModel";
 export default function CreateQRCommunity() {
   const router = useRouter();
   const createQRCommunity = useMutation(api.communities.createQRCommunity as any);
+  const generateUploadUrl = useMutation(api.files.generateUploadUrl);
   const [userId, setUserId] = useState<Id<"users"> | null>(null);
 
   useEffect(() => {
@@ -83,11 +84,24 @@ export default function CreateQRCommunity() {
     setStatus({ type: "loading", message: "Creating community..." });
 
     try {
+      // Upload logo to Convex storage if provided
+      let logoStorageId = "";
+      if (formData.logoFile) {
+        const uploadUrl = await generateUploadUrl();
+        const uploadResult = await fetch(uploadUrl, {
+          method: "POST",
+          headers: { "Content-Type": formData.logoFile.type },
+          body: formData.logoFile,
+        });
+        const { storageId } = await uploadResult.json();
+        logoStorageId = storageId;
+      }
+
       const community = await createQRCommunity({
         adminId: userId,
         name: formData.name.trim(),
         slug: formData.slug.trim(),
-        logoUrl: formData.logoPreview,
+        logoUrl: logoStorageId || undefined,
         juniorAdminFreeMonthlyImageQuota: formData.juniorAdminFreeMonthlyImageQuota,
         juniorAdminImagePrice: formData.juniorAdminImagePrice,
         memberImageMessagePrice: formData.memberImageMessagePrice,

@@ -31,8 +31,16 @@ export default function CreateCommunityPage() {
   // Get user ID from localStorage on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const uid = localStorage.getItem("pilot_user");
-      if (uid) setUserId(uid as Id<"users">);
+      const stored = localStorage.getItem("pilot_user");
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (parsed.userId) setUserId(parsed.userId as Id<"users">);
+        } catch {
+          // legacy raw string fallback
+          setUserId(stored as Id<"users">);
+        }
+      }
     }
   }, []);
   

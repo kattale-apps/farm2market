@@ -14,6 +14,37 @@ import { Id } from "./_generated/dataModel";
  */
 
 /**
+ * Resolve a community logoPath to a displayable URL.
+ * logoPath may be:
+ *  - A Convex storage ID (needs ctx.storage.getUrl)
+ *  - A static path like "/agrofreshlogo.png"
+ *  - A full http(s) URL
+ *  - A base64 data: URI
+ *  - undefined/empty
+ */
+async function resolveLogoUrl(
+  ctx: { storage: { getUrl: (id: any) => Promise<string | null> } },
+  logoPath: string | undefined,
+): Promise<string | undefined> {
+  if (!logoPath) return undefined;
+  // Already a usable URL/path — return as-is
+  if (
+    logoPath.startsWith("/") ||
+    logoPath.startsWith("http") ||
+    logoPath.startsWith("data:")
+  ) {
+    return logoPath;
+  }
+  // Assume it's a Convex storage ID — try to resolve
+  try {
+    const url = await ctx.storage.getUrl(logoPath as any);
+    return url ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Reusable helper: check if a user is a member of a given community.
  * Can be imported in other convex modules for authorisation checks.
  */
@@ -398,11 +429,12 @@ export const getActiveCommunities = query({
             }));
         }
 
+        const resolvedLogo = await resolveLogoUrl(ctx, (c as any).logoPath);
         return {
           id: c._id,
           name: c.name,
           description: c.description,
-          logoPath: (c as any).logoPath,
+          logoPath: resolvedLogo,
           communityAdminId: (c as any).communityAdminId,
           communityType: (c as any).communityType,
           isGlobal: c.isGlobal,
@@ -451,12 +483,13 @@ export const getCommunityByQrSlug = query({
       return null;
     }
 
+    const resolvedLogo = await resolveLogoUrl(ctx, (community as any).logoPath || (community as any).qrLogoUrl);
     return {
       _id: community._id,
       name: community.name,
       description: community.description,
-      logoPath: (community as any).logoPath,
-      qrLogoUrl: (community as any).qrLogoUrl,
+      logoPath: resolvedLogo,
+      qrLogoUrl: resolvedLogo,
       qrEnabled: (community as any).qrEnabled ?? false,
     };
   },
@@ -478,11 +511,12 @@ export const getCommunityQrData = query({
     // Prefer qrSlug; fall back to raw _id
     const slug = community.qrSlug || String(community._id);
 
+    const resolvedLogo = await resolveLogoUrl(ctx, (community as any).logoPath || (community as any).qrLogoUrl);
     return {
       _id: community._id,
       name: community.name,
       slug,
-      logoPath: (community as any).logoPath || (community as any).qrLogoUrl,
+      logoPath: resolvedLogo,
       joinPath: `/join/community/${slug}`,
     };
   },
@@ -543,13 +577,16 @@ export const searchCommunities = query({
     });
 
     // Return limited results with essential info
-    return results.slice(0, 10).map((c) => ({
-      _id: c._id,
-      name: c.name,
-      description: c.description,
-      logoPath: (c as any).logoPath,
-      isGlobal: c.isGlobal,
-    }));
+    const mapped = await Promise.all(
+      results.slice(0, 10).map(async (c) => ({
+        _id: c._id,
+        name: c.name,
+        description: c.description,
+        logoPath: await resolveLogoUrl(ctx, (c as any).logoPath),
+        isGlobal: c.isGlobal,
+      }))
+    );
+    return mapped;
   },
 });
 
@@ -587,17 +624,20 @@ export const searchQrCommunities = query({
         // Then by name ascending
         return a.name.localeCompare(b.name);
       })
-      .slice(0, 10)
-      .map((c) => ({
+      .slice(0, 10);
+
+    const mapped = await Promise.all(
+      results.map(async (c) => ({
         _id: c._id,
         name: c.name,
         description: c.description,
-        logoPath: (c as any).logoPath,
+        logoPath: await resolveLogoUrl(ctx, (c as any).logoPath || c.qrLogoUrl),
         qrSlug: c.qrSlug,
-        qrLogoUrl: c.qrLogoUrl,
-      }));
+        qrLogoUrl: await resolveLogoUrl(ctx, c.qrLogoUrl),
+      }))
+    );
 
-    return results;
+    return mapped;
   },
 });
 
@@ -620,11 +660,12 @@ export const getUserCommunities = query({
       memberships.map(async (m) => {
         const community = await ctx.db.get(m.communityId);
         if (!community) return null;
+        const resolvedLogo = await resolveLogoUrl(ctx, (community as any).logoPath || (community as any).qrLogoUrl);
         return {
           _id: community._id,
           name: community.name,
           description: community.description,
-          logoPath: (community as any).logoPath,
+          logoPath: resolvedLogo,
           isGlobal: community.isGlobal,
           joinedAt: m.joinedAt,
         };
@@ -1522,7 +1563,7 @@ export const getCommunitiesWithUsageForSuperadmin = query({
           _id: c._id,
           name: c.name,
           slug: c.qrSlug || c.name.toLowerCase().replace(/\s+/g, "-"),
-          logo: c.logoPath,
+          logo: await resolveLogoUrl(ctx, c.logoPath || c.qrLogoUrl),
           juniorAdminFreeMonthlyImageQuota: settings?.juniorAdminFreeMonthlyImageQuota || 0,
           juniorAdminImagePrice: settings?.juniorAdminImagePrice || 0,
           memberImageMessagePrice: settings?.memberImageMessagePrice || 0,
@@ -1860,12 +1901,14 @@ export const getMyNavigationContext = query({
       return true;
     });
 
-    const adminCommunitiesMapped = adminCommunities.map((c) => ({
-      communityId: c._id,
-      name: c.name,
-      slug: c.qrSlug || c.name.toLowerCase().replace(/\s+/g, "-"),
-      logo: c.qrLogoUrl || c.logoPath,
-    }));
+    const adminCommunitiesMapped = await Promise.all(
+      adminCommunities.map(async (c) => ({
+        communityId: c._id,
+        name: c.name,
+        slug: c.qrSlug || c.name.toLowerCase().replace(/\s+/g, "-"),
+        logo: await resolveLogoUrl(ctx, c.qrLogoUrl || c.logoPath),
+      }))
+    );
 
     // Get communities where user is a member
     const membershipRecords = await ctx.db
@@ -1881,7 +1924,7 @@ export const getMyNavigationContext = query({
           communityId: community._id,
           name: community.name,
           slug: community.qrSlug || community.name.toLowerCase().replace(/\s+/g, "-"),
-          logo: community.qrLogoUrl || community.logoPath,
+          logo: await resolveLogoUrl(ctx, community.qrLogoUrl || community.logoPath),
         });
       }
     }

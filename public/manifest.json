@@ -1,0 +1,21 @@
+{
+  "name": "Farm2Market Uganda",
+  "short_name": "FarmCoin",
+  "description": "Controlled, negotiation-driven agricultural trading platform",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f5f5",
+  "theme_color": "#2e7d32",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/apple-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}

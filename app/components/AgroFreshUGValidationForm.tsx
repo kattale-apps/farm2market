@@ -4,10 +4,13 @@ import React, { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
 import { Doc, Id } from "../../convex/_generated/dataModel";
 import { api } from "../../convex/_generated/api";
 import { useDebouncedCallback } from "use-debounce";
+import { useOfflineQuery } from "../hooks/useOfflineQuery";
+import { useOfflineMutation } from "../hooks/useOfflineMutation";
+import { useFormDraftPersistence } from "../hooks/useFormDraftPersistence";
 
 // Import section components (to be created)
 import { Section1FarmerParticulars } from "./Section1FarmerParticulars";
@@ -52,9 +55,9 @@ export function AgroFreshUGValidationForm({ initialData }: Props) {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const router = useRouter();
 
-  const updateDraft = useMutation(api.farmValidation.updateDraft);
-  const submitForm = useMutation(api.farmValidation.submitForm);
-  const updateProfile = useMutation(api.farmerProfile.updateFarmerProfile);
+  const updateDraft = useOfflineMutation(api.farmValidation.updateDraft);
+  const submitForm = useOfflineMutation(api.farmValidation.submitForm);
+  const updateProfile = useOfflineMutation(api.farmerProfile.updateFarmerProfile);
   const createNewDraft = useMutation(api.farmValidation.createNewDraft) as (
     args: { farmerId: Id<"users"> }
   ) => Promise<Id<"agroFreshUGFarmValidations">>;
@@ -62,11 +65,25 @@ export function AgroFreshUGValidationForm({ initialData }: Props) {
     args: { formId: Id<"agroFreshUGFarmValidations">; farmerId: Id<"users"> }
   ) => Promise<{ success: boolean }>;
 
-  const profile = useQuery(api.farmerProfile.getFarmerProfile, { farmerId: initialData.farmerId });
-  const applicationStatus = useQuery((api as any).communityApplications.getMyApplicationStatus, {
+  const profile = useOfflineQuery(api.farmerProfile.getFarmerProfile, { farmerId: initialData.farmerId });
+  const applicationStatus = useOfflineQuery((api as any).communityApplications.getMyApplicationStatus, {
     farmerId: initialData.farmerId,
     formId: initialData._id,
-  });
+  }) as any;
+
+  // Persist form data to IndexedDB for offline resilience
+  useFormDraftPersistence(
+    String(initialData.farmerId),
+    "agrofresh",
+    String(initialData._id),
+    formData,
+    (restoredData) => {
+      // Only restore if we haven't loaded from server yet
+      if (restoredData) {
+        setFormData((prev: any) => ({ ...prev, ...restoredData }));
+      }
+    },
+  );
 
   // Debounced autosave function
   const debouncedSave = useDebouncedCallback(async (newData: Partial<Doc<"agroFreshUGFarmValidations">>) => {

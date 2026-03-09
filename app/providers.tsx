@@ -1,8 +1,11 @@
 "use client";
 
 import { ConvexProvider, ConvexReactClient } from "convex/react";
-import { ReactNode, useMemo } from "react";
+import { ReactNode, useMemo, useEffect } from "react";
 import { getDeploymentMode, getConvexUrl } from "./utils/deployment";
+import { NetworkProvider } from "./context/NetworkContext";
+import { OfflineBanner } from "./components/OfflineBanner";
+import { setSyncClient } from "./lib/syncService";
 
 export function Providers({ children }: { children: ReactNode }) {
   const deploymentMode = useMemo(() => getDeploymentMode(), []);
@@ -24,11 +27,30 @@ export function Providers({ children }: { children: ReactNode }) {
     }
   }, [convexUrl, deploymentMode]);
 
+  // Register the Convex client with the sync service for offline mutation replay
+  useEffect(() => {
+    if (convex) {
+      setSyncClient(convex);
+    }
+  }, [convex]);
+
   if (!convex) {
     console.warn(`[${deploymentMode.toUpperCase()}] Convex client is null - rendering without provider`);
-    return <>{children}</>;
+    return (
+      <NetworkProvider>
+        {children}
+        <OfflineBanner />
+      </NetworkProvider>
+    );
   }
   
   console.log(`[${deploymentMode.toUpperCase()}] Rendering with ConvexProvider`);
-  return <ConvexProvider client={convex}>{children}</ConvexProvider>;
+  return (
+    <ConvexProvider client={convex}>
+      <NetworkProvider>
+        {children}
+        <OfflineBanner />
+      </NetworkProvider>
+    </ConvexProvider>
+  );
 }

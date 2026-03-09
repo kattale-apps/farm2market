@@ -702,7 +702,7 @@ export default defineSchema({
    */
   rateLimitHits: defineTable({
     userId: v.id("users"),
-    userRole: v.union(v.literal("farmer"), v.literal("trader"), v.literal("buyer"), v.literal("admin")),
+    userRole: v.union(v.literal("farmer"), v.literal("trader"), v.literal("buyer"), v.literal("admin"), v.literal("vendor"), v.literal("transporter"), v.literal("store")),
     actionType: v.string(), // e.g., "lock_unit", "create_listing", "create_purchase"
     limitType: v.string(), // e.g., "negotiations_per_hour", "listings_per_day"
     limitValue: v.number(), // The limit that was exceeded

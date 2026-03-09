@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery, useMutation } from "convex/react";
+import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { CreateListing } from "./CreateListing";
@@ -13,6 +13,8 @@ import { ContactUs } from "./ContactUs";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { resolveCommunityLogo } from "../lib/communityLogos";
+import { useOfflineQuery } from "../hooks/useOfflineQuery";
+import { useOfflineMutation } from "../hooks/useOfflineMutation";
 
 interface FarmerDashboardProps {
   userId: Id<"users">;
@@ -20,39 +22,39 @@ interface FarmerDashboardProps {
 }
 
 export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
-  const listings = useQuery(api.farmerDashboard.getFarmerListings, { farmerId: userId });
-  const negotiations = useQuery(api.negotiations.getFarmerNegotiations, { farmerId: userId });
-  const confirmations = useQuery(api.farmerDashboard.getPayToLockConfirmations, { farmerId: userId });
-  const deliveryDeadlines = useQuery(api.farmerDashboard.getDeliveryDeadlines, { farmerId: userId });
-  const expiredUTIDs = useQuery(api.farmerDashboard.getExpiredUTIDs, { farmerId: userId });
-  const transactionsLedger = useQuery(api.farmerDashboard.getSuccessfulTransactionsLedger, { farmerId: userId });
-  const allUnitsLedger = useQuery(api.farmerDashboard.getAllUnitsLedger, { farmerId: userId });
-  const communities = useQuery(api.communities.getActiveCommunities, { userId });
+  const listings = useOfflineQuery(api.farmerDashboard.getFarmerListings, { farmerId: userId });
+  const negotiations = useOfflineQuery(api.negotiations.getFarmerNegotiations, { farmerId: userId });
+  const confirmations = useOfflineQuery(api.farmerDashboard.getPayToLockConfirmations, { farmerId: userId });
+  const deliveryDeadlines = useOfflineQuery(api.farmerDashboard.getDeliveryDeadlines, { farmerId: userId });
+  const expiredUTIDs = useOfflineQuery(api.farmerDashboard.getExpiredUTIDs, { farmerId: userId });
+  const transactionsLedger = useOfflineQuery(api.farmerDashboard.getSuccessfulTransactionsLedger, { farmerId: userId });
+  const allUnitsLedger = useOfflineQuery(api.farmerDashboard.getAllUnitsLedger, { farmerId: userId });
+  const communities = useOfflineQuery(api.communities.getActiveCommunities, { userId });
   const effectiveRole = userRole || "farmer";
-  const myAgroFreshDrafts = useQuery(
+  const myAgroFreshDrafts = useOfflineQuery(
     api.farmValidation.getMyDrafts,
     effectiveRole === "farmer" ? { farmerId: userId } : "skip"
   );
-  const farmerFarmcoinBalance = useQuery(
+  const farmerFarmcoinBalance = useOfflineQuery(
     (api as any).farmcoin.getFarmerFarmcoinBalance,
     { farmerId: userId }
-  );
-  const paginationPreferences = useQuery(
+  ) as any;
+  const paginationPreferences = useOfflineQuery(
     (api as any).userSettings.getPaginationPreferences,
     { userId } as any
-  );
+  ) as any;
   
-  const acceptOffer = useMutation(api.negotiations.acceptOffer);
-  const rejectOffer = useMutation(api.negotiations.rejectOffer);
-  const counterOffer = useMutation(api.negotiations.counterOffer);
-  const archiveUTID = useMutation(api.farmerDashboard.archiveUTID);
-  const cancelOverdueUTID = useMutation(api.farmerDashboard.cancelOverdueUTID);
-  const cancelListing = useMutation(api.farmerDashboard.cancelListing);
-  const farmerConfirmDelivery = useMutation(api.farmerDashboard.farmerConfirmDelivery);
-  const clearConcludedNegotiations = useMutation(api.negotiations.clearConcludedNegotiations);
-  const deleteSingleNegotiation = useMutation(api.negotiations.deleteSingleNegotiation);
-  const messageThreads = useQuery(api.messages.getUserMessageThreads, { userId });
-  const updatePaginationPreferences = useMutation(
+  const acceptOffer = useOfflineMutation(api.negotiations.acceptOffer);
+  const rejectOffer = useOfflineMutation(api.negotiations.rejectOffer);
+  const counterOffer = useOfflineMutation(api.negotiations.counterOffer);
+  const archiveUTID = useOfflineMutation(api.farmerDashboard.archiveUTID);
+  const cancelOverdueUTID = useOfflineMutation(api.farmerDashboard.cancelOverdueUTID);
+  const cancelListing = useOfflineMutation(api.farmerDashboard.cancelListing);
+  const farmerConfirmDelivery = useOfflineMutation(api.farmerDashboard.farmerConfirmDelivery);
+  const clearConcludedNegotiations = useOfflineMutation(api.negotiations.clearConcludedNegotiations);
+  const deleteSingleNegotiation = useOfflineMutation(api.negotiations.deleteSingleNegotiation);
+  const messageThreads = useOfflineQuery(api.messages.getUserMessageThreads, { userId });
+  const updatePaginationPreferences = useOfflineMutation(
     (api as any).userSettings.updatePaginationPreferences
   );
   const createNewValidation = useMutation(api.farmValidation.createNewDraft) as (
@@ -650,8 +652,8 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
   const pagedLedgerItems = getPageItems(sortedLedgerItems, ledgerPage, ledgerPageSize);
   const ledgerTotalPages = getTotalPages(sortedLedgerItems, ledgerPageSize);
 
-  const user = useQuery(api.auth.getUser, { userId });
-  const profile = useQuery(api.farmerProfile.getFarmerProfile, { farmerId: userId });
+  const user = useOfflineQuery(api.auth.getUser, { userId });
+  const profile = useOfflineQuery(api.farmerProfile.getFarmerProfile, { farmerId: userId });
 
   // Format location display
   const locationDisplay = profile

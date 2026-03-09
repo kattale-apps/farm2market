@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import CommunityTabBar from "@/app/components/CommunityTabBar";
+import { useOfflineQuery } from "@/app/hooks/useOfflineQuery";
+import { useOfflineMutation } from "@/app/hooks/useOfflineMutation";
 
 const BRAND = "#2e7d32";
 const FONT = '"Montserrat", sans-serif';
@@ -67,7 +69,7 @@ function LiveProfileField({
 }) {
   const [value, setValue] = useState(initialValue);
   const [saving, setSaving] = useState(false);
-  const upsert = useMutation((api as any).forms.upsertProfileFormField);
+  const upsert = useOfflineMutation((api as any).forms.upsertProfileFormField);
 
   const handleBlur = useCallback(async () => {
     if (value === initialValue) return; // no change
@@ -185,28 +187,28 @@ export default function CommunityProfilePage() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [creatingValidation, setCreatingValidation] = useState(false);
 
-  const updateRole = useMutation(api.farmerProfile.updateSupplyChainRole);
+  const updateRole = useOfflineMutation(api.farmerProfile.updateSupplyChainRole);
 
   // Farm Validation (only for farmer role in AgroFresh)
   const createNewValidation = useMutation(api.farmValidation.createNewDraft) as (
     args: { farmerId: Id<"users"> }
   ) => Promise<Id<"agroFreshUGFarmValidations">>;
-  const myAgroFreshDrafts = useQuery(
+  const myAgroFreshDrafts = useOfflineQuery(
     api.farmValidation.getMyDrafts,
     userId && userRole === "farmer" ? { farmerId: userId } : "skip"
   );
 
   // Community profile forms
-  const profileForms = useQuery(
+  const profileForms = useOfflineQuery(
     (api as any).forms.getCommunityProfileForms,
     communityId ? { communityId } : "skip"
-  );
+  ) as any;
 
   // My saved profile form responses
-  const myResponses = useQuery(
+  const myResponses = useOfflineQuery(
     (api as any).forms.getMyProfileFormResponses,
     communityId && userId ? { communityId, memberId: userId } : "skip"
-  );
+  ) as any;
 
   useEffect(() => {
     const raw = localStorage.getItem("pilot_user");

@@ -2,13 +2,13 @@
 
 export const dynamic = "force-dynamic";
 
-import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useState, useEffect } from "react";
 import { Id } from "@/convex/_generated/dataModel";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import CommunityTabBar from "@/app/components/CommunityTabBar";
+import { useOfflineQuery } from "@/app/hooks/useOfflineQuery";
 
 const BRAND = "#2e7d32";
 const FONT = '"Montserrat", sans-serif';
@@ -46,10 +46,10 @@ export default function TrackersHubPage() {
     } catch {}
   }, []);
 
-  const forms = useQuery(
+  const forms = useOfflineQuery(
     (api as any).forms.getCommunityForms,
     communityId ? { communityId } : "skip"
-  );
+  ) as any;
 
   const activeForms = forms?.filter((f: any) => f.isActive) || [];
 

@@ -2,12 +2,13 @@
 
 export const dynamic = "force-dynamic";
 
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { Id } from "@/convex/_generated/dataModel";
 import CommunityTabBar from "@/app/components/CommunityTabBar";
+import { useOfflineQuery } from "@/app/hooks/useOfflineQuery";
 
 function Skeleton({ className = "" }: { className?: string } = {}) {
   return <div className={`h-4 bg-gray-200 rounded animate-pulse ${className}`} />;
@@ -293,9 +294,9 @@ function MessageComposer({ communityId }: { communityId: Id<"communities"> }) {
 }
 
 function MessagesList({ communityId }: { communityId: Id<"communities"> }) {
-  const messages = useQuery(api.messages.getCommunityMessages, {
+  const messages = useOfflineQuery(api.messages.getCommunityMessages, {
     communityId,
-  });
+  }) as any[] | undefined;
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const userId = (() => {
     try {
@@ -420,7 +421,7 @@ function MessagesList({ communityId }: { communityId: Id<"communities"> }) {
     );
   }
 
-  if (messages.length === 0) {
+  if (!messages || messages.length === 0) {
     return (
       <div style={{
         textAlign: "center", padding: "2rem", margin: "1rem",

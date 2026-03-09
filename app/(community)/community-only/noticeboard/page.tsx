@@ -2,17 +2,18 @@
 
 export const dynamic = "force-dynamic";
 
-import { useQuery, useMutation } from "convex/react";
+import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useState, useEffect } from "react";
 import { Id } from "@/convex/_generated/dataModel";
 import CommunityTabBar from "@/app/components/CommunityTabBar";
 import { useSearchParams } from "next/navigation";
+import { useOfflineQuery } from "@/app/hooks/useOfflineQuery";
 
 function QuotaWidget({ communityId }: { communityId: Id<"communities"> }) {
-  const quotaStatus = useQuery(api.noticeboard.getAdminNoticeboardQuotaStatus, {
+  const quotaStatus = useOfflineQuery(api.noticeboard.getAdminNoticeboardQuotaStatus, {
     communityId,
-  });
+  }) as any;
 
   if (!quotaStatus) {
     return (
@@ -235,10 +236,10 @@ export default function CommunityNoticeboardPage() {
   }, [communityIdParam]);
 
   // Fetch posts
-  const posts = useQuery(
+  const posts = useOfflineQuery(
     api.noticeboard.getCommunityNoticeboardPosts,
     communityId ? { communityId } : "skip"
-  );
+  ) as any;
 
   if (!communityId || !userId) {
     return (
@@ -286,7 +287,7 @@ export default function CommunityNoticeboardPage() {
           )}
 
           {posts &&
-            posts.map((post) => (
+            posts.map((post: any) => (
               <PostCard
                 key={post._id}
                 post={post as any}

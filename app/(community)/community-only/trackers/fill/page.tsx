@@ -2,13 +2,15 @@
 
 export const dynamic = "force-dynamic";
 
-import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Id } from "@/convex/_generated/dataModel";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import CommunityTabBar from "@/app/components/CommunityTabBar";
+import { useOfflineQuery } from "@/app/hooks/useOfflineQuery";
+import { useOfflineMutation } from "@/app/hooks/useOfflineMutation";
+import { useFormDraftPersistence, clearFormDraft } from "@/app/hooks/useFormDraftPersistence";
 
 const BRAND = "#2e7d32";
 const BRAND_LIGHT = "#43a047";
@@ -304,12 +306,25 @@ export default function TrackerFillPage() {
     } catch {}
   }, []);
 
-  const formDetails = useQuery((api as any).forms.getFormDetails, formId ? { formId } : "skip");
-  const existingDraft = useQuery((api as any).forms.getDraftResponse, formId && userId ? { formId, memberId: userId } : "skip");
-  const saveDraft = useMutation((api as any).forms.saveDraftResponse);
-  const submitDraft = useMutation((api as any).forms.submitDraft);
-  const submitFormResponse = useMutation((api as any).forms.submitFormResponse);
-  const mintFarmerFormCoin = useMutation((api as any).farmcoin.mintFarmerFormCoin);
+  const formDetails = useOfflineQuery((api as any).forms.getFormDetails, formId ? { formId } : "skip") as any;
+  const existingDraft = useOfflineQuery((api as any).forms.getDraftResponse, formId && userId ? { formId, memberId: userId } : "skip") as any;
+  const saveDraft = useOfflineMutation((api as any).forms.saveDraftResponse);
+  const submitDraft = useOfflineMutation((api as any).forms.submitDraft);
+  const submitFormResponse = useOfflineMutation((api as any).forms.submitFormResponse);
+  const mintFarmerFormCoin = useOfflineMutation((api as any).farmcoin.mintFarmerFormCoin);
+
+  // Persist form drafts to IndexedDB for offline access
+  useFormDraftPersistence(
+    userId as string | null,
+    "tracker",
+    formId as string | null,
+    fieldValues,
+    (restoredData) => {
+      if (!draftLoaded && Object.keys(restoredData).length > 0) {
+        setFieldValues(restoredData);
+      }
+    },
+  );
 
   useEffect(() => {
     if (existingDraft && !draftLoaded) {
@@ -383,15 +398,47 @@ export default function TrackerFillPage() {
           value: value || "",
         }));
         await saveDraft({ formId, communityId, memberId: userId, fieldValues: fvArray });
-        await submitDraft({ responseId: existingDraft._id, memberId: userId });
+        const submitResult = await submitDraft({ responseId: existingDraft._id, memberId: userId });
         responseId = existingDraft._id;
+        // If offline-queued, show optimistic coin animation and clear local draft
+        if (submitResult && (submitResult as any).queued) {
+          const fields = formDetails?.fields || [];
+          const filledCount = fields.filter((f: any) => !f.isCalculated && fieldValues[String(f._id)]?.trim()).length;
+          if (filledCount > 0) {
+            setCoinsEarned(filledCount);
+            setShowCoinAnimation(true);
+          } else {
+            setMessage({ type: "success", text: "Queued offline — will sync when reconnected!" });
+            setTimeout(() => router.push(`/community-only/trackers/view?communityId=${communityId}`), 1500);
+          }
+          clearFormDraft(String(userId), "tracker", String(formId));
+          setSubmitting(false);
+          return;
+        }
       } else {
         const fvArray = Object.entries(fieldValues)
           .filter(([_, value]) => value !== "")
           .map(([fieldId, value]) => ({ fieldId: fieldId as Id<"formFields">, value }));
         const result = await submitFormResponse({ formId, communityId, memberId: userId, fieldValues: fvArray });
+        // If offline-queued, show optimistic coin animation
+        if (result && (result as any).queued) {
+          const fields = formDetails?.fields || [];
+          const filledCount = fields.filter((f: any) => !f.isCalculated && fieldValues[String(f._id)]?.trim()).length;
+          if (filledCount > 0) {
+            setCoinsEarned(filledCount);
+            setShowCoinAnimation(true);
+          } else {
+            setMessage({ type: "success", text: "Queued offline — will sync when reconnected!" });
+            setTimeout(() => router.push(`/community-only/trackers/view?communityId=${communityId}`), 1500);
+          }
+          clearFormDraft(String(userId), "tracker", String(formId));
+          setSubmitting(false);
+          return;
+        }
         responseId = result?._id || result;
       }
+      // Clear local IndexedDB draft on successful submission
+      clearFormDraft(String(userId), "tracker", String(formId));
       const fields = formDetails?.fields || [];
       const filledCount = fields.filter((f: any) => !f.isCalculated && fieldValues[String(f._id)]?.trim()).length;
       if (filledCount > 0 && responseId) {

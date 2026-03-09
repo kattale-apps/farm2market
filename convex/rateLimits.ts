@@ -191,7 +191,7 @@ async function countActionsInWindow(
 export async function checkRateLimit(
   ctx: { db: DatabaseReader | DatabaseWriter },
   userId: Id<"users">,
-  userRole: "farmer" | "trader" | "buyer" | "admin",
+  userRole: string,
   actionType: string,
   metadata?: any
 ): Promise<void> {
@@ -200,8 +200,14 @@ export async function checkRateLimit(
     return;
   }
 
+  // Only rate-limit known roles; other roles pass through
+  const knownRoles = ["farmer", "trader", "buyer"] as const;
+  if (!knownRoles.includes(userRole as any)) {
+    return;
+  }
+
   // Get rate limit configuration
-  const config = getRateLimitConfig(userRole, actionType);
+  const config = getRateLimitConfig(userRole as "farmer" | "trader" | "buyer", actionType);
   if (!config) {
     // No rate limit for this action
     return;
@@ -222,7 +228,7 @@ export async function checkRateLimit(
     if ("insert" in ctx.db) {
       await ctx.db.insert("rateLimitHits", {
         userId,
-        userRole,
+        userRole: userRole as "farmer" | "trader" | "buyer" | "admin" | "vendor" | "transporter" | "store",
         actionType,
         limitType: config.limitType,
         limitValue: config.limit,

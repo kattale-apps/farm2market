@@ -39,11 +39,15 @@ export const getActiveDistricts = query({
  * Get subcounties by district
  */
 export const getSubcountiesByDistrict = query({
-  args: { districtId: v.id("districts") },
+  args: { districtId: v.string() },
   handler: async (ctx, args) => {
+    // Gracefully handle legacy text values (e.g. "Kampala") stored instead of Convex IDs
+    if (/\s/.test(args.districtId) || /^[A-Za-z]+$/.test(args.districtId)) {
+      return [];
+    }
     const subcounties = await ctx.db
       .query("subcounties")
-      .withIndex("by_district", (q) => q.eq("districtId", args.districtId))
+      .withIndex("by_district", (q) => q.eq("districtId", args.districtId as any))
       .collect();
 
     // Filter by active and sort
@@ -62,11 +66,15 @@ export const getSubcountiesByDistrict = query({
  * Get parishes by subcounty
  */
 export const getParishesBySubcounty = query({
-  args: { subcountyId: v.id("subcounties") },
+  args: { subcountyId: v.string() },
   handler: async (ctx, args) => {
+    // Gracefully handle legacy text values (e.g. "Kawempe Division") stored instead of Convex IDs
+    if (/\s/.test(args.subcountyId) || /^[A-Za-z]+$/.test(args.subcountyId)) {
+      return [];
+    }
     const parishes = await ctx.db
       .query("parishes")
-      .withIndex("by_subcounty", (q) => q.eq("subcountyId", args.subcountyId))
+      .withIndex("by_subcounty", (q) => q.eq("subcountyId", args.subcountyId as any))
       .collect();
 
     // Filter by active and sort

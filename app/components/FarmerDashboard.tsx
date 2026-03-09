@@ -634,7 +634,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
   const concludedTotalPages = getTotalPages(concludedNegotiations);
 
   const deliveryItems = deliveryDeadlines
-    ? [...deliveryDeadlines.overdue.deadlines, ...deliveryDeadlines.pending.deadlines].filter(
+    ? [...(deliveryDeadlines.overdue?.deadlines || []), ...(deliveryDeadlines.pending?.deadlines || [])].filter(
         (delivery: any) => !cancelledUnitIds.has(delivery.unitId)
       )
     : [];

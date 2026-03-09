@@ -726,7 +726,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
               fontWeight: "700",
               letterSpacing: "-0.02em"
             }}>
-              Hello, Farmer 👩🏾‍🌾
+              Hello, {effectiveRole === "vendor" ? "Vendor 🏪" : effectiveRole === "store" ? "Store 🏬" : "Farmer 👩🏾‍🌾"}
             </h2>
             {typeof farmerFarmcoinBalance === "number" && (
               <div style={{

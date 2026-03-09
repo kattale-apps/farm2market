@@ -576,7 +576,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
               fontWeight: "700",
               letterSpacing: "-0.02em"
             }}>
-              Trader: {user?.alias || "Trader"}
+              {userRole === "transporter" ? "Transporter" : "Trader"}: {user?.alias || (userRole === "transporter" ? "Transporter" : "Trader")}
             </h2>
             {(user as any)?.isVerifiedTrader && (user as any)?.verificationStatus === "verified" && (
               <span style={{

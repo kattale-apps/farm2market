@@ -429,7 +429,7 @@ export const getActiveCommunities = query({
             }));
         }
 
-        const resolvedLogo = await resolveLogoUrl(ctx, (c as any).logoPath);
+        const resolvedLogo = await resolveLogoUrl(ctx, (c as any).logoPath || (c as any).qrLogoUrl);
         return {
           id: c._id,
           name: c.name,

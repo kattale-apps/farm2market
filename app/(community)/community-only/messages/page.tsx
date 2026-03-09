@@ -355,7 +355,17 @@ function MessagesList({ communityId }: { communityId: Id<"communities"> }) {
   }
 
   if (messages.length === 0) {
-    return <div className="text-center text-gray-500 p-8">No messages yet. Start the conversation!</div>;
+    return (
+      <div style={{
+        textAlign: "center", padding: "2rem", margin: "1rem",
+        background: "#fff", borderRadius: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+        color: "#666", fontFamily: '"Montserrat", sans-serif',
+      }}>
+        <p style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>💬</p>
+        <p style={{ fontSize: "clamp(1rem, 3vw, 1.1rem)", fontWeight: 600 }}>No messages yet</p>
+        <p style={{ fontSize: "clamp(0.85rem, 2.5vw, 0.95rem)", color: "#999" }}>Start the conversation!</p>
+      </div>
+    );
   }
 
   return (
@@ -448,8 +458,12 @@ export default function CommunityMessagingPage() {
   if (!communityId) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center text-gray-500">
-          Loading messaging...
+        <div style={{
+          textAlign: "center", padding: "2rem", margin: "1rem",
+          background: "#fff", borderRadius: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+          color: "#888", fontFamily: '"Montserrat", sans-serif',
+        }}>
+          <p style={{ fontSize: "clamp(0.95rem, 2.5vw, 1.05rem)" }}>Loading messaging...</p>
         </div>
       </div>
     );
@@ -458,8 +472,14 @@ export default function CommunityMessagingPage() {
   return (
       <div className="flex flex-col h-screen bg-white">
         {/* Header */}
-        <div className="px-4 py-4 border-b border-gray-200 bg-white">
-          <h1 className="text-xl font-bold">Messages</h1>
+        <div style={{
+          background: "linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%)",
+          padding: "1.25rem 1rem",
+          color: "#fff",
+        }}>
+          <h1 style={{ margin: 0, fontSize: "1.3rem", fontWeight: 700, fontFamily: '"Montserrat", sans-serif' }}>
+            💬 Messages
+          </h1>
         </div>
 
         {/* Messages Container - Scrollable */}

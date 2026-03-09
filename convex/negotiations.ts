@@ -832,3 +832,70 @@ export const getAcceptedNegotiations = query({
     };
   },
 });
+
+/**
+ * Clear all concluded negotiations for a farmer (permanent delete).
+ * Concluded = status in ["accepted", "rejected", "cancelled"].
+ */
+export const clearConcludedNegotiations = mutation({
+  args: {
+    farmerId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.farmerId);
+    if (!user || user.role !== "farmer") {
+      throw new Error("Only farmers can clear their concluded negotiations");
+    }
+
+    const allNegotiations = await ctx.db
+      .query("negotiations")
+      .withIndex("by_farmer", (q) => q.eq("farmerId", args.farmerId))
+      .collect();
+
+    const concluded = allNegotiations.filter(
+      (n) => n.status === "accepted" || n.status === "rejected" || n.status === "cancelled"
+    );
+
+    for (const neg of concluded) {
+      await ctx.db.delete(neg._id);
+    }
+
+    return { deletedCount: concluded.length };
+  },
+});
+
+/**
+ * Delete a single concluded negotiation (farmer only).
+ */
+export const deleteSingleNegotiation = mutation({
+  args: {
+    farmerId: v.id("users"),
+    negotiationId: v.id("negotiations"),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.farmerId);
+    if (!user || user.role !== "farmer") {
+      throw new Error("Only farmers can delete their negotiations");
+    }
+
+    const negotiation = await ctx.db.get(args.negotiationId);
+    if (!negotiation) {
+      throw new Error("Negotiation not found");
+    }
+
+    if (negotiation.farmerId !== args.farmerId) {
+      throw new Error("You can only delete your own negotiations");
+    }
+
+    if (
+      negotiation.status !== "accepted" &&
+      negotiation.status !== "rejected" &&
+      negotiation.status !== "cancelled"
+    ) {
+      throw new Error("Can only delete concluded negotiations");
+    }
+
+    await ctx.db.delete(args.negotiationId);
+    return { success: true };
+  },
+});

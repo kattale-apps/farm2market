@@ -40,6 +40,8 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
   const cancelOverdueUTID = useMutation(api.farmerDashboard.cancelOverdueUTID);
   const cancelListing = useMutation(api.farmerDashboard.cancelListing);
   const farmerConfirmDelivery = useMutation(api.farmerDashboard.farmerConfirmDelivery);
+  const clearConcludedNegotiations = useMutation(api.negotiations.clearConcludedNegotiations);
+  const deleteSingleNegotiation = useMutation(api.negotiations.deleteSingleNegotiation);
   const messageThreads = useQuery(api.messages.getUserMessageThreads, { userId });
   const updatePaginationPreferences = useMutation(
     (api as any).userSettings.updatePaginationPreferences
@@ -82,6 +84,10 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
   const ITEMS_PER_PAGE = 5;
   const SUPPORT_THREAD = "SUPPORT";
   const [isMobile, setIsMobile] = useState(false);
+  const [transactionsExpanded, setTransactionsExpanded] = useState(true);
+  const [ledgerExpanded, setLedgerExpanded] = useState(true);
+  const [clearingConcluded, setClearingConcluded] = useState(false);
+  const [deletingNegId, setDeletingNegId] = useState<string | null>(null);
   const inboxRef = useRef<HTMLDivElement>(null);
   const [isInboxNarrow, setIsInboxNarrow] = useState(false);
   const isInboxStacked = isMobile || isInboxNarrow;
@@ -794,57 +800,6 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
         </div>
       </div>
 
-      {isAgroFreshMember && (
-        <div
-          style={{
-            marginBottom: "1.5rem",
-            padding: "clamp(1rem, 3vw, 1.5rem)",
-            background: "#ffffff",
-            borderRadius: "12px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-            border: "1px solid #e0e0e0",
-            display: "flex",
-            flexDirection: "column",
-            gap: "0.75rem",
-          }}
-        >
-          <h3
-            style={{
-              margin: 0,
-              fontSize: "clamp(1.1rem, 3vw, 1.3rem)",
-              color: "#2c2c2c",
-              fontFamily: '"Montserrat", sans-serif',
-              fontWeight: "600",
-              letterSpacing: "-0.01em",
-            }}
-          >
-            Farm Validation
-          </h3>
-          <p style={{ margin: 0, color: "#555", fontSize: "0.95rem" }}>
-            Submit a new farm for validation with AGROFRESH UG.
-          </p>
-          <div>
-            <button
-              onClick={handleStartNewForm}
-              disabled={creatingValidation}
-              style={{
-                padding: "0.75rem 1.25rem",
-                background: "#2e7d32",
-                color: "#fff",
-                border: "none",
-                borderRadius: "8px",
-                fontSize: "0.95rem",
-                fontWeight: "600",
-                cursor: creatingValidation ? "not-allowed" : "pointer",
-                opacity: creatingValidation ? 0.7 : 1,
-              }}
-            >
-              {creatingValidation ? "Starting..." : "Start New Farm Validation"}
-            </button>
-          </div>
-        </div>
-      )}
-
       {messageInboxOpen && (
         <div
           id="message-inbox"
@@ -990,18 +945,21 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
         border: "1px solid #e0e0e0"
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", gap: "1rem", flexWrap: "wrap" }}>
-          <h3 style={{ 
-            marginTop: 0, 
-            marginBottom: 0, 
-            fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", 
-            color: "#2c2c2c",
-            fontFamily: '"Montserrat", sans-serif',
-            fontWeight: "600",
-            letterSpacing: "-0.01em"
-          }}>
-            Your Transactions
-          </h3>
-          {listings && listings.listings && listings.listings.length > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }} onClick={() => setTransactionsExpanded(e => !e)}>
+            <span style={{ fontSize: "1rem", color: "#888", transition: "transform 0.2s", transform: transactionsExpanded ? "rotate(0deg)" : "rotate(-90deg)", display: "inline-block" }}>▼</span>
+            <h3 style={{ 
+              marginTop: 0, 
+              marginBottom: 0, 
+              fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", 
+              color: "#2c2c2c",
+              fontFamily: '"Montserrat", sans-serif',
+              fontWeight: "600",
+              letterSpacing: "-0.01em"
+            }}>
+              Your Transactions
+            </h3>
+          </div>
+          {transactionsExpanded && listings && listings.listings && listings.listings.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
               <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                 <button
@@ -1074,7 +1032,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
             </div>
           )}
         </div>
-        {listings === undefined ? (
+        {!transactionsExpanded ? null : listings === undefined ? (
           <p style={{ color: "#999" }}>Loading...</p>
         ) : listings.listings.length === 0 ? (
           <p style={{ color: "#666" }}>No transactions yet. Create your first listing to get started.</p>
@@ -1768,7 +1726,31 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
           }}>
             Concluded Negotiations
           </h3>
-          <div style={{ display: "flex", gap: "0.5rem" }}>
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+            {concludedNegotiations.length > 0 && (
+              <button
+                onClick={async () => {
+                  if (!confirm("Permanently delete all concluded negotiations? This cannot be undone.")) return;
+                  try {
+                    await clearConcludedNegotiations({ farmerId: userId });
+                  } catch (err: any) {
+                    alert(err.message || "Failed to clear");
+                  }
+                }}
+                style={{
+                  padding: "0.4rem 0.7rem",
+                  background: "#ffebee",
+                  color: "#c62828",
+                  border: "1px solid #ef9a9a",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontSize: "0.8rem",
+                  fontWeight: "600"
+                }}
+              >
+                🗑 Clear All
+              </button>
+            )}
             <button
               onClick={() => setConcludedNegotiationsView("list")}
               style={{
@@ -1826,7 +1808,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                       border: "1px solid #e0e0e0"
                     }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                        <div style={{ fontWeight: "600" }}>
+                        <div style={{ fontWeight: "600", flex: 1 }}>
                           {getProduceEmoji(neg.produceType)} {neg.produceType} • Unit #{neg.unitNumber}
                         </div>
                         <span style={{
@@ -1839,6 +1821,21 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                         }}>
                           {pillText}
                         </span>
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            if (!confirm("Delete this concluded negotiation?")) return;
+                            try {
+                              await deleteSingleNegotiation({ negotiationId: neg.negotiationId, farmerId: userId });
+                            } catch (err: any) { alert(err.message || "Failed"); }
+                          }}
+                          style={{
+                            background: "none", border: "none", cursor: "pointer",
+                            color: "#bbb", fontSize: "1rem", padding: "0.2rem 0.4rem",
+                            borderRadius: 4, lineHeight: 1,
+                          }}
+                          title="Delete"
+                        >✕</button>
                       </div>
                       <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.35rem", fontFamily: "monospace" }}>
                         UTID: {neg.negotiationUtid}
@@ -1856,10 +1853,25 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                     borderRadius: "8px",
                     border: "1px solid #e0e0e0"
                   }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-                      <div style={{ fontWeight: "600" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem", gap: "0.5rem" }}>
+                      <div style={{ fontWeight: "600", flex: 1 }}>
                         {getProduceEmoji(neg.produceType)} {neg.produceType} - Unit #{neg.unitNumber}
                       </div>
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (!confirm("Delete this concluded negotiation?")) return;
+                          try {
+                            await deleteSingleNegotiation({ negotiationId: neg.negotiationId, farmerId: userId });
+                          } catch (err: any) { alert(err.message || "Failed"); }
+                        }}
+                        style={{
+                          background: "none", border: "none", cursor: "pointer",
+                          color: "#bbb", fontSize: "1rem", padding: "0.2rem 0.4rem",
+                          borderRadius: 4, lineHeight: 1, flexShrink: 0,
+                        }}
+                        title="Delete"
+                      >✕</button>
                       {(() => {
                         const isDeliveryCancelled = (neg.deliveryStatus || "").toLowerCase() === "cancelled";
                         const pillText = isDeliveryCancelled ? "CANCELLED" : neg.status.toUpperCase();
@@ -2437,18 +2449,21 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
         border: "1px solid #e0e0e0"
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", gap: "0.75rem", flexWrap: "wrap" }}>
-          <h3 style={{ 
-            marginTop: 0, 
-            marginBottom: 0, 
-            fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", 
-            color: "#2c2c2c",
-            fontFamily: '"Montserrat", sans-serif',
-            fontWeight: "600",
-            letterSpacing: "-0.01em"
-          }}>
-            Transactions Ledger
-          </h3>
-          <div style={{ display: "flex", gap: "0.5rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }} onClick={() => setLedgerExpanded(e => !e)}>
+            <span style={{ fontSize: "1rem", color: "#888", transition: "transform 0.2s", transform: ledgerExpanded ? "rotate(0deg)" : "rotate(-90deg)", display: "inline-block" }}>▼</span>
+            <h3 style={{ 
+              marginTop: 0, 
+              marginBottom: 0, 
+              fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", 
+              color: "#2c2c2c",
+              fontFamily: '"Montserrat", sans-serif',
+              fontWeight: "600",
+              letterSpacing: "-0.01em"
+            }}>
+              Transactions Ledger
+            </h3>
+          </div>
+          {ledgerExpanded && <div style={{ display: "flex", gap: "0.5rem" }}>
             <button
               onClick={() => setLedgerView("list")}
               style={{
@@ -2479,8 +2494,9 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
             >
               Card
             </button>
-          </div>
+          </div>}
         </div>
+        {ledgerExpanded && (<>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
           <span style={{ fontSize: "0.85rem", color: "#666" }}>Per page:</span>
           <select
@@ -2817,6 +2833,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
             )}
           </div>
         )}
+        </>)}
       </div>
 
       {/* UTID Details Modal */}

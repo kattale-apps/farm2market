@@ -268,21 +268,20 @@ export default function CommunityNoticeboardPage() {
         {/* Posts feed */}
         <div className="px-4 md:px-0">
           {posts === undefined && (
-            <div style={{ textAlign: "center", padding: 32, color: "#999" }}>
-              Loading posts...
+            <div style={{ textAlign: "center", padding: "2rem", color: "#888", background: "#fff", borderRadius: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}>
+              <p style={{ fontSize: "clamp(0.95rem, 2.5vw, 1.05rem)", fontFamily: '"Montserrat", sans-serif' }}>Loading posts...</p>
             </div>
           )}
 
           {posts && posts.length === 0 && (
-            <div
-              style={{
-                textAlign: "center",
-                padding: 48,
-                color: "#bbb",
-                fontSize: 15,
-              }}
-            >
-              No posts yet. The community admin will share updates here.
+            <div style={{
+              textAlign: "center", padding: "2rem", color: "#666",
+              background: "#fff", borderRadius: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+              fontFamily: '"Montserrat", sans-serif',
+            }}>
+              <p style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>📌</p>
+              <p style={{ fontSize: "clamp(1rem, 3vw, 1.1rem)", fontWeight: 600 }}>No posts yet</p>
+              <p style={{ fontSize: "clamp(0.85rem, 2.5vw, 0.95rem)", color: "#999" }}>The community admin will share updates here.</p>
             </div>
           )}
 

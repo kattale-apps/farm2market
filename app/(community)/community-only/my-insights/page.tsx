@@ -83,14 +83,16 @@ export default function MyInsightsPage() {
       {/* Content */}
       <div style={{ padding: "1rem" }}>
         {!insights && (
-          <div style={{ textAlign: "center", padding: "2rem", color: "#888" }}>Loading insights...</div>
+          <div style={{ textAlign: "center", padding: "2rem", color: "#888", background: "#fff", borderRadius: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}>
+            <p style={{ fontSize: "clamp(0.95rem, 2.5vw, 1.05rem)" }}>Loading insights...</p>
+          </div>
         )}
 
         {insights && insights.length === 0 && (
-          <div style={{ textAlign: "center", padding: "2rem", color: "#888" }}>
+          <div style={{ textAlign: "center", padding: "2rem", color: "#666", background: "#fff", borderRadius: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}>
             <p style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>📈</p>
-            <p style={{ fontSize: "0.95rem", fontWeight: 600 }}>No insights yet</p>
-            <p style={{ fontSize: "0.8rem", color: "#aaa" }}>Submit tracker entries to see your performance data.</p>
+            <p style={{ fontSize: "clamp(1rem, 3vw, 1.1rem)", fontWeight: 600 }}>No insights yet</p>
+            <p style={{ fontSize: "clamp(0.85rem, 2.5vw, 0.95rem)", color: "#999" }}>Submit tracker entries to see your performance data.</p>
             <Link
               href={`/community-only/trackers?communityId=${communityId}`}
               style={{

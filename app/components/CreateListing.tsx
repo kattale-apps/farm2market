@@ -8,14 +8,21 @@ import { useRouter } from "next/navigation";
 
 interface CreateListingProps {
   userId: Id<"users">;
+  userRole?: "farmer" | "vendor" | "store";
 }
 
-export function CreateListing({ userId }: CreateListingProps) {
+export function CreateListing({ userId, userRole }: CreateListingProps) {
   const router = useRouter();
+  const effectiveRole = userRole || "farmer";
+  const isVendorOrStore = effectiveRole === "vendor" || effectiveRole === "store";
   const createListing = useMutation(api.listings.createListing);
   const qualityOptions = useQuery(api.listings.getActiveQualityOptions, {});
   const produceOptions = useQuery(api.listings.getActiveProduceOptions, {});
   const storageLocations = useQuery(api.listings.getActiveStorageLocations, {});
+  const autoStorageLocation = useQuery(
+    api.listings.getAutoStorageLocationForUser,
+    isVendorOrStore ? { userId } : "skip"
+  );
   const onboardingStatus = useQuery(api.farmerOnboarding.checkOnboardingStatus, { farmerId: userId });  // supports farmer/vendor/store
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -46,6 +53,13 @@ export function CreateListing({ userId }: CreateListingProps) {
       });
     }
   }, [onboardingStatus]);
+
+  // Auto-set storage location for vendor/store users
+  useEffect(() => {
+    if (isVendorOrStore && autoStorageLocation?.storageLocationId) {
+      setFormData((prev) => ({ ...prev, storageLocationId: autoStorageLocation.storageLocationId }));
+    }
+  }, [isVendorOrStore, autoStorageLocation]);
 
   const formatUGX = (amount: number) => {
     return new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX" }).format(amount);
@@ -319,7 +333,7 @@ export function CreateListing({ userId }: CreateListingProps) {
             Please complete your profile onboarding before creating listings.{" "}
             <button
               type="button"
-              onClick={() => router.push("/onboarding/farmer")}
+              onClick={() => router.push(`/onboarding/${effectiveRole}`)}
               style={{
                 background: "none",
                 border: "none",
@@ -337,7 +351,8 @@ export function CreateListing({ userId }: CreateListingProps) {
       <form onSubmit={handleSubmit}>
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
           
-          {/* Listing Mode Selection */}
+          {/* Listing Mode Selection - only for farmers (vendors/stores always use unit mode) */}
+          {!isVendorOrStore && (
           <div>
             <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
               Listing Mode *
@@ -365,47 +380,106 @@ export function CreateListing({ userId }: CreateListingProps) {
               </label>
             </div>
           </div>
+          )}
 
-          {/* STEP 1: Storage Location Selection (FIRST) */}
-          <div>
-            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
-              Select Delivery Location (District) *
-            </label>
-            <p style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.75rem" }}>
-              Choose the storage location where you will deliver your produce
-            </p>
-            {storageLocations === undefined ? (
-              <p style={{ color: "#999", fontSize: "0.9rem" }}>Loading storage locations...</p>
-            ) : storageLocations.length === 0 ? (
-              <p style={{ color: "#666", fontSize: "0.9rem", padding: "1rem", background: "#fff3cd", borderRadius: "6px" }}>
-                No storage locations available. Please contact admin to add storage locations.
+          {/* STEP 1: Storage Location / Collection Point */}
+          {isVendorOrStore ? (
+            <div>
+              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                Collection Location
+              </label>
+              {autoStorageLocation ? (
+                <div style={{
+                  padding: "0.75rem 1rem",
+                  background: "#e8f5e9",
+                  borderRadius: "8px",
+                  border: "1px solid #81c784",
+                  color: "#2e7d32",
+                  fontSize: "0.95rem",
+                  fontWeight: "500",
+                }}>
+                  📍 {autoStorageLocation.districtName} ({autoStorageLocation.code}) — your {effectiveRole === "vendor" ? "market" : "store"} location
+                </div>
+              ) : autoStorageLocation === undefined ? (
+                <p style={{ color: "#999", fontSize: "0.9rem" }}>Loading your location...</p>
+              ) : (
+                <div style={{
+                  padding: "0.75rem 1rem",
+                  background: "#fff3cd",
+                  borderRadius: "8px",
+                  border: "1px solid #ffc107",
+                  color: "#856404",
+                  fontSize: "0.9rem",
+                }}>
+                  Your district is not yet set up as a collection point. Please select one below or contact admin.
+                </div>
+              )}
+              {/* Fallback picker when auto-match fails */}
+              {autoStorageLocation === null && storageLocations && storageLocations.length > 0 && (
+                <select
+                  value={formData.storageLocationId}
+                  onChange={(e) => setFormData({ ...formData, storageLocationId: e.target.value, produceType: "" })}
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "0.75rem",
+                    border: "1px solid #ddd",
+                    borderRadius: "6px",
+                    fontSize: "1rem",
+                    background: "#fff",
+                    marginTop: "0.5rem",
+                  }}
+                >
+                  <option value="">-- Select collection location --</option>
+                  {storageLocations.filter((loc: any) => loc.active).map((location) => (
+                    <option key={location.locationId} value={location.locationId}>
+                      {location.districtName} ({location.code})
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          ) : (
+            <div>
+              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                Select Delivery Location (District) *
+              </label>
+              <p style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.75rem" }}>
+                Choose the storage location where you will deliver your produce
               </p>
-            ) : (
-              <select
-                value={formData.storageLocationId}
-                onChange={(e) => {
-                  // Clear produce type when location changes
-                  setFormData({ ...formData, storageLocationId: e.target.value, produceType: "" });
-                }}
-                required
-                style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  border: "1px solid #ddd",
-                  borderRadius: "6px",
-                  fontSize: "1rem",
-                  background: "#fff",
-                }}
-              >
-                <option value="">-- Select storage location --</option>
-                {storageLocations.filter((loc: any) => loc.active).map((location) => (
-                  <option key={location.locationId} value={location.locationId}>
-                    {location.districtName} ({location.code})
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
+              {storageLocations === undefined ? (
+                <p style={{ color: "#999", fontSize: "0.9rem" }}>Loading storage locations...</p>
+              ) : storageLocations.length === 0 ? (
+                <p style={{ color: "#666", fontSize: "0.9rem", padding: "1rem", background: "#fff3cd", borderRadius: "6px" }}>
+                  No storage locations available. Please contact admin to add storage locations.
+                </p>
+              ) : (
+                <select
+                  value={formData.storageLocationId}
+                  onChange={(e) => {
+                    // Clear produce type when location changes
+                    setFormData({ ...formData, storageLocationId: e.target.value, produceType: "" });
+                  }}
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "0.75rem",
+                    border: "1px solid #ddd",
+                    borderRadius: "6px",
+                    fontSize: "1rem",
+                    background: "#fff",
+                  }}
+                >
+                  <option value="">-- Select storage location --</option>
+                  {storageLocations.filter((loc: any) => loc.active).map((location) => (
+                    <option key={location.locationId} value={location.locationId}>
+                      {location.districtName} ({location.code})
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
 
           {/* STEP 2: Produce Type Selection (filtered by location) */}
           <div>

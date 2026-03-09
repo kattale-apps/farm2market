@@ -22,6 +22,35 @@ import {
 import { Id } from "./_generated/dataModel";
 
 /**
+ * For vendor/store users, resolve their onboarded district to a matching storageLocation.
+ * Returns the storageLocationId + districtName, or null if no match.
+ */
+export const getAutoStorageLocationForUser = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user || !["vendor", "store"].includes(user.role)) return null;
+    if (!user.districtId) return null;
+
+    const district = await ctx.db.get(user.districtId);
+    if (!district) return null;
+
+    const storageLocations = await ctx.db
+      .query("storageLocations")
+      .withIndex("by_active", (q: any) => q.eq("active", true))
+      .collect();
+
+    const match = storageLocations.find(
+      (sl) => sl.districtName.toLowerCase() === district.name.toLowerCase()
+    );
+
+    return match
+      ? { storageLocationId: match._id, districtName: match.districtName, code: match.code }
+      : null;
+  },
+});
+
+/**
  * Create a listing (farmer only)
  * Auto-splits into 10kg units
  */

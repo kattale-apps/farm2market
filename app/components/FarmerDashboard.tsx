@@ -962,7 +962,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
       )}
 
       {/* Create Listing */}
-      <CreateListing userId={userId} />
+      <CreateListing userId={userId} userRole={effectiveRole as "farmer" | "vendor" | "store"} />
 
       {/* Your Transactions - Simplified Cards */}
       <div style={{

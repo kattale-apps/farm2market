@@ -26,7 +26,7 @@ export const getLedgerBreakdown = query({
   handler: async (ctx, args) => {
     // Verify user is a trader
     const user = await ctx.db.get(args.traderId);
-    if (!user || user.role !== "trader") {
+    if (!user || !["trader", "transporter"].includes(user.role)) {
       throw new Error("User is not a trader");
     }
 
@@ -115,7 +115,7 @@ export const getExposureStatus = query({
   handler: async (ctx, args) => {
     // Verify user is a trader
     const user = await ctx.db.get(args.traderId);
-    if (!user || user.role !== "trader") {
+    if (!user || !["trader", "transporter"].includes(user.role)) {
       throw new Error("User is not a trader");
     }
 
@@ -166,7 +166,7 @@ export const getTraderActiveUTIDs = query({
   handler: async (ctx, args) => {
     // Verify user is a trader
     const user = await ctx.db.get(args.traderId);
-    if (!user || user.role !== "trader") {
+    if (!user || !["trader", "transporter"].includes(user.role)) {
       throw new Error("User is not a trader");
     }
 
@@ -378,7 +378,7 @@ export const getInventoryWithProjectedLoss = query({
   handler: async (ctx, args) => {
     // Verify user is a trader
     const user = await ctx.db.get(args.traderId);
-    if (!user || user.role !== "trader") {
+    if (!user || !["trader", "transporter"].includes(user.role)) {
       throw new Error("User is not a trader");
     }
 
@@ -498,7 +498,7 @@ export const getTraderStorageFeeRate = query({
   handler: async (ctx, args) => {
     // Verify user is a trader
     const user = await ctx.db.get(args.traderId);
-    if (!user || user.role !== "trader") {
+    if (!user || !["trader", "transporter"].includes(user.role)) {
       throw new Error("User is not a trader");
     }
 
@@ -524,7 +524,7 @@ export const getTraderSales = query({
   handler: async (ctx, args) => {
     // Verify user is a trader
     const user = await ctx.db.get(args.traderId);
-    if (!user || user.role !== "trader") {
+    if (!user || !["trader", "transporter"].includes(user.role)) {
       throw new Error("User is not a trader");
     }
 

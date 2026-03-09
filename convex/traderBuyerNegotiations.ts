@@ -126,7 +126,7 @@ export const acceptBuyerOffer = mutation({
 
     // Verify user is a trader
     const user = await ctx.db.get(args.traderId);
-    if (!user || user.role !== "trader") {
+    if (!user || !["trader", "transporter"].includes(user.role)) {
       throwAppError(invalidRoleError("trader"));
     }
 
@@ -178,7 +178,7 @@ export const rejectBuyerOffer = mutation({
 
     // Verify user is a trader
     const user = await ctx.db.get(args.traderId);
-    if (!user || user.role !== "trader") {
+    if (!user || !["trader", "transporter"].includes(user.role)) {
       throwAppError(invalidRoleError("trader"));
     }
 
@@ -227,7 +227,7 @@ export const counterBuyerOffer = mutation({
 
     // Verify user is a trader
     const user = await ctx.db.get(args.traderId);
-    if (!user || user.role !== "trader") {
+    if (!user || !["trader", "transporter"].includes(user.role)) {
       throwAppError(invalidRoleError("trader"));
     }
 
@@ -333,7 +333,7 @@ export const getTraderBuyOffers = query({
   handler: async (ctx, args) => {
     // Verify user is a trader
     const user = await ctx.db.get(args.traderId);
-    if (!user || user.role !== "trader") {
+    if (!user || !["trader", "transporter"].includes(user.role)) {
       throw new Error("User is not a trader");
     }
 

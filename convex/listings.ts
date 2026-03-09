@@ -50,7 +50,7 @@ export const createListing = mutation({
 
     // Verify user is a farmer
     const user = await ctx.db.get(args.farmerId);
-    if (!user || user.role !== "farmer") {
+    if (!user || !["farmer", "vendor", "store"].includes(user.role)) {
       throwAppError(invalidRoleError("farmer"));
     }
 
@@ -418,7 +418,7 @@ export const createTraderListing = mutation({
 
     // Verify user is a trader
     const user = await ctx.db.get(args.traderId);
-    if (!user || user.role !== "trader") {
+    if (!user || !["trader", "transporter"].includes(user.role)) {
       throwAppError(invalidRoleError("trader"));
     }
 
@@ -542,7 +542,7 @@ export const createTraderPackagingListing = mutation({
     await checkPilotMode(ctx);
 
     const user = await ctx.db.get(args.traderId);
-    if (!user || user.role !== "trader") {
+    if (!user || !["trader", "transporter"].includes(user.role)) {
       throwAppError(invalidRoleError("trader"));
     }
 
@@ -644,7 +644,7 @@ export const createTraderInventoryLot = mutation({
     await checkPilotMode(ctx);
 
     const user = await ctx.db.get(args.traderId);
-    if (!user || user.role !== "trader") {
+    if (!user || !["trader", "transporter"].includes(user.role)) {
       throwAppError(invalidRoleError("trader"));
     }
 
@@ -697,7 +697,7 @@ export const updateTraderListingEta = mutation({
   },
   handler: async (ctx, args) => {
     const trader = await ctx.db.get(args.traderId);
-    if (!trader || trader.role !== "trader") {
+    if (!trader || !["trader", "transporter"].includes(trader.role)) {
       throwAppError(invalidRoleError("trader"));
     }
 
@@ -832,7 +832,7 @@ export const updateTraderDeliveryStatus = mutation({
   },
   handler: async (ctx, args) => {
     const trader = await ctx.db.get(args.traderId);
-    if (!trader || trader.role !== "trader") {
+    if (!trader || !["trader", "transporter"].includes(trader.role)) {
       throwAppError(invalidRoleError("trader"));
     }
 
@@ -905,7 +905,7 @@ export const getTraderDeliveryListings = query({
   },
   handler: async (ctx, args) => {
     const trader = await ctx.db.get(args.traderId);
-    if (!trader || trader.role !== "trader") {
+    if (!trader || !["trader", "transporter"].includes(trader.role)) {
       throwAppError(invalidRoleError("trader"));
     }
 
@@ -979,7 +979,7 @@ export const getTraderAvailableInventoryForListing = query({
   handler: async (ctx, args) => {
     // Verify user is a trader
     const user = await ctx.db.get(args.traderId);
-    if (!user || user.role !== "trader") {
+    if (!user || !["trader", "transporter"].includes(user.role)) {
       throw new Error("User is not a trader");
     }
 

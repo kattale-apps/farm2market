@@ -17,7 +17,7 @@ export const getFarmerProfile = query({
   args: { farmerId: v.id("users") },
   handler: async (ctx, args) => {
     const farmer = await ctx.db.get(args.farmerId);
-    if (!farmer || farmer.role !== "farmer") {
+    if (!farmer || !["farmer", "vendor", "store"].includes(farmer.role)) {
       throw new Error("User is not a farmer");
     }
 
@@ -90,7 +90,7 @@ export const updateFarmerProfile = mutation({
   },
   handler: async (ctx, args) => {
     const farmer = await ctx.db.get(args.farmerId);
-    if (!farmer || farmer.role !== "farmer") {
+    if (!farmer || !["farmer", "vendor", "store"].includes(farmer.role)) {
       throw new Error("User is not a farmer");
     }
 

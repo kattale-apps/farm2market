@@ -38,7 +38,7 @@ async function lockUnitInternal(
 ) {
   // Verify user is a trader
   const user = await ctx.db.get(traderId);
-  if (!user || user.role !== "trader") {
+  if (!user || !["trader", "transporter"].includes(user.role)) {
     throw new Error("User is not a trader");
   }
 

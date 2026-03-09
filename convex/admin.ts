@@ -1674,7 +1674,7 @@ export const updateTraderSpendCap = mutation({
       throw new Error("Trader not found");
     }
 
-    if (trader.role !== "trader") {
+    if (!["trader", "transporter"].includes(trader.role)) {
       throw new Error("User is not a trader");
     }
 
@@ -1739,7 +1739,7 @@ export const getTraderSpendCap = query({
       throw new Error("Trader not found");
     }
 
-    if (trader.role !== "trader") {
+    if (!["trader", "transporter"].includes(trader.role)) {
       throw new Error("User is not a trader");
     }
 

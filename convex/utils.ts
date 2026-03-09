@@ -66,7 +66,7 @@ export async function calculateTraderExposureInternal(
 ) {
   // Get trader to check for custom spend cap
   const trader = await ctx.db.get(traderId as Id<"users">);
-  if (!trader || trader.role !== "trader") {
+  if (!trader || !["trader", "transporter"].includes(trader.role)) {
     return {
       totalExposure: 0,
       lockedCapital: 0,

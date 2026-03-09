@@ -21,7 +21,7 @@ export const getWalletBalance = query({
   handler: async (ctx, args) => {
     // Verify user is a trader
     const user = await ctx.db.get(args.traderId);
-    if (!user || user.role !== "trader") {
+    if (!user || !["trader", "transporter"].includes(user.role)) {
       throw new Error("User is not a trader");
     }
 
@@ -146,7 +146,7 @@ export const depositCapital = mutation({
 
     // Verify user is a trader
     const user = await ctx.db.get(args.traderId);
-    if (!user || user.role !== "trader") {
+    if (!user || !["trader", "transporter"].includes(user.role)) {
       throw new Error("User is not a trader");
     }
 
@@ -202,7 +202,7 @@ export const withdrawProfit = mutation({
 
     // Verify user is a trader
     const user = await ctx.db.get(args.traderId);
-    if (!user || user.role !== "trader") {
+    if (!user || !["trader", "transporter"].includes(user.role)) {
       throw new Error("User is not a trader");
     }
 
@@ -261,7 +261,7 @@ export const getLedgerBreakdown = query({
   handler: async (ctx, args) => {
     // Verify user is a trader
     const user = await ctx.db.get(args.traderId);
-    if (!user || user.role !== "trader") {
+    if (!user || !["trader", "transporter"].includes(user.role)) {
       throw new Error("User is not a trader");
     }
 

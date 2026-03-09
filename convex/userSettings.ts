@@ -47,7 +47,7 @@ export const updateNotificationPreferences = mutation({
     }
 
     // Only traders can update preferences
-    if (user.role !== "trader") {
+    if (!["trader", "transporter"].includes(user.role)) {
       throw new Error("Only traders can update notification preferences");
     }
 

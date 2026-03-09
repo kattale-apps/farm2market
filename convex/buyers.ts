@@ -372,7 +372,7 @@ export const traderConfirmListingDelivery = mutation({
   },
   handler: async (ctx, args) => {
     const trader = await ctx.db.get(args.traderId);
-    if (!trader || trader.role !== "trader") {
+    if (!trader || !["trader", "transporter"].includes(trader.role)) {
       throw new Error("User is not a trader");
     }
 
@@ -650,7 +650,7 @@ export const getTraderDeliveryBatches = query({
   args: { traderId: v.id("users") },
   handler: async (ctx, args) => {
     const trader = await ctx.db.get(args.traderId);
-    if (!trader || trader.role !== "trader") {
+    if (!trader || !["trader", "transporter"].includes(trader.role)) {
       throw new Error("User is not a trader");
     }
 

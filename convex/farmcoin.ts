@@ -766,7 +766,7 @@ export const grantFarmcoinTokens = mutation({
     }
 
     const trader = await ctx.db.get(args.traderId);
-    if (!trader || trader.role !== "trader") {
+    if (!trader || !["trader", "transporter"].includes(trader.role)) {
       throw new Error("User is not a trader");
     }
 
@@ -863,7 +863,7 @@ export const spendFarmcoinTokens = internalMutation({
   },
   handler: async (ctx, args) => {
     const trader = await ctx.db.get(args.traderId);
-    if (!trader || trader.role !== "trader") {
+    if (!trader || !["trader", "transporter"].includes(trader.role)) {
       throw new Error("User is not a trader");
     }
 
@@ -917,7 +917,7 @@ export const requestFarmcoinTokens = mutation({
   },
   handler: async (ctx, args) => {
     const trader = await ctx.db.get(args.traderId);
-    if (!trader || trader.role !== "trader") {
+    if (!trader || !["trader", "transporter"].includes(trader.role)) {
       throw new Error("User is not a trader");
     }
 
@@ -1009,7 +1009,7 @@ export const verifyTrader = mutation({
     }
 
     const trader = await ctx.db.get(args.traderId);
-    if (!trader || trader.role !== "trader") {
+    if (!trader || !["trader", "transporter"].includes(trader.role)) {
       throw new Error("User is not a trader");
     }
 
@@ -1041,7 +1041,7 @@ export const rejectTrader = mutation({
     }
 
     const trader = await ctx.db.get(args.traderId);
-    if (!trader || trader.role !== "trader") {
+    if (!trader || !["trader", "transporter"].includes(trader.role)) {
       throw new Error("User is not a trader");
     }
 
@@ -1082,7 +1082,7 @@ export const setTraderVerificationStatus = mutation({
     }
 
     const trader = await ctx.db.get(args.traderId);
-    if (!trader || trader.role !== "trader") {
+    if (!trader || !["trader", "transporter"].includes(trader.role)) {
       throw new Error("User is not a trader");
     }
 

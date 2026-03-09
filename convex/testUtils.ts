@@ -75,7 +75,7 @@ export async function ensureTestUsers(
 
   if (traderId) {
     const user = await getUser(ctx, traderId);
-    if (!user || user.role !== "trader" || !user.isTestUser) {
+    if (!user || !["trader", "transporter"].includes(user.role) || !user.isTestUser) {
       throw new Error("Override trader must be a test trader user.");
     }
   } else {

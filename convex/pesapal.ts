@@ -688,7 +688,7 @@ export const initiateTraderDeposit = action({
   handler: async (ctx, args): Promise<{ transactionId: any; orderTrackingId: string; redirectUrl: string }> => {
     // Verify user is a trader
     const user = await ctx.runQuery(api.pesapal.getUserDetails, { userId: args.traderId });
-    if (!user || user.role !== "trader") {
+    if (!user || !["trader", "transporter"].includes(user.role)) {
       throw new Error("User is not a trader");
     }
 

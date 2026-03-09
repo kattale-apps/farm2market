@@ -50,10 +50,31 @@ export const getSubcountiesByDistrict = query({
       .withIndex("by_district", (q) => q.eq("districtId", args.districtId as any))
       .collect();
 
-    // Filter by active and sort
-    return subcounties
-      .filter((s) => s.active)
-      .sort((a, b) => a.order - b.order)
+    const active = subcounties.filter((s) => s.active);
+
+    // Only keep subcounties that have at least one active parish
+    const withParishes = [];
+    for (const sc of active) {
+      const firstParish = await ctx.db
+        .query("parishes")
+        .withIndex("by_subcounty", (q) => q.eq("subcountyId", sc._id))
+        .first();
+      if (firstParish && firstParish.active) {
+        withParishes.push(sc);
+      }
+    }
+
+    // Deduplicate by name (keep the first occurrence)
+    const seen = new Set<string>();
+    const deduped = withParishes.filter((s) => {
+      const key = s.name.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    return deduped
+      .sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }))
       .map((s) => ({
         id: s._id,
         name: s.name,

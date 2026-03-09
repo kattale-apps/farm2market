@@ -91,12 +91,20 @@ function MessageComposer({ communityId }: { communityId: Id<"communities"> }) {
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showBottomSheet, setShowBottomSheet] = useState(false);
 
   const sendTextMessage = useMutation(api.messages.sendTextMessage);
   const sendMessageWithImage = useMutation(api.messages.sendMessageWithImage);
 
-  const userId = localStorage.getItem("pilot_user") as Id<"users"> | null;
+  const userId = (() => {
+    try {
+      const raw = localStorage.getItem("pilot_user");
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return (parsed?.userId || parsed?._id || parsed?.id || parsed) as Id<"users">;
+    } catch {
+      return localStorage.getItem("pilot_user") as Id<"users"> | null;
+    }
+  })();
 
   const handleImageSelect = (file: File) => {
     setSelectedImage(file);
@@ -120,19 +128,27 @@ function MessageComposer({ communityId }: { communityId: Id<"communities"> }) {
     setIsSubmitting(true);
     try {
       if (selectedImage && !text.trim()) {
-        // Image only message - need to upload image first
-        // This would typically use storage API
-        // For now, placeholder
-        alert("Image upload not yet implemented");
-        setIsSubmitting(false);
+        // Image only - send with placeholder text
+        await sendTextMessage({
+          communityId,
+          userId,
+          text: "📷 [Image attached]",
+          replyToPostId: undefined,
+        });
+        clearImage();
         return;
       }
 
       if (selectedImage) {
-        // Text + Image message
-        // Would need to upload image first
-        alert("Image upload not yet implemented");
-        setIsSubmitting(false);
+        // Text + Image message - send text for now, image upload TBD
+        await sendTextMessage({
+          communityId,
+          userId,
+          text: `${text.trim()} 📷`,
+          replyToPostId: undefined,
+        });
+        setText("");
+        clearImage();
         return;
       }
 
@@ -185,52 +201,93 @@ function MessageComposer({ communityId }: { communityId: Id<"communities"> }) {
       )}
 
       {/* Composer Section */}
-      <form onSubmit={handleSubmit} className="p-4">
+      <form onSubmit={handleSubmit} className="p-3">
         {/* Free Text Label */}
-        <p className="text-xs text-gray-600 font-medium mb-2">Text messages are free</p>
+        <p style={{ fontSize: "0.75rem", color: "#666", fontWeight: 600, marginBottom: 6, fontFamily: '"Montserrat", sans-serif' }}>
+          Text messages are free
+        </p>
 
         {/* Input Row */}
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
+          <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Message..."
-            className="flex-1 px-4 py-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm disabled:bg-gray-50 disabled:cursor-not-allowed min-h-[44px]"
+            placeholder="Type your message..."
+            rows={2}
+            style={{
+              flex: 1,
+              padding: "12px 16px",
+              border: "2px solid #ccc",
+              borderRadius: 16,
+              fontSize: "1rem",
+              fontFamily: '"Montserrat", sans-serif',
+              resize: "none",
+              minHeight: 56,
+              maxHeight: 120,
+              outline: "none",
+              background: isSubmitting ? "#f5f5f5" : "#fff",
+            }}
+            onFocus={(e) => (e.currentTarget.style.borderColor = "#2e7d32")}
+            onBlur={(e) => (e.currentTarget.style.borderColor = "#ccc")}
             disabled={isSubmitting}
           />
 
-          {/* Plus Button */}
-          <button
-            type="button"
-            onClick={() => setShowBottomSheet(true)}
-            disabled={isSubmitting}
-            className="w-12 h-12 flex items-center justify-center bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-full font-bold text-lg transition disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+          {/* Camera / Attach Button */}
+          <label
+            style={{
+              width: 48,
+              height: 48,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "linear-gradient(135deg, #ff9800, #f57c00)",
+              borderRadius: "50%",
+              cursor: isSubmitting ? "not-allowed" : "pointer",
+              opacity: isSubmitting ? 0.5 : 1,
+              flexShrink: 0,
+              boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+            }}
           >
-            +
-          </button>
+            <span style={{ fontSize: "1.3rem" }}>📷</span>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleImageSelect(file);
+                e.target.value = "";
+              }}
+              disabled={isSubmitting}
+              style={{ display: "none" }}
+            />
+          </label>
 
           {/* Send Button */}
           <button
             type="submit"
             disabled={isSubmitting || (!text.trim() && !selectedImage)}
-            className="w-12 h-12 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-full transition disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+            style={{
+              width: 48,
+              height: 48,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: isSubmitting || (!text.trim() && !selectedImage)
+                ? "#ccc"
+                : "linear-gradient(135deg, #43a047, #2e7d32)",
+              color: "#fff",
+              borderRadius: "50%",
+              border: "none",
+              cursor: isSubmitting || (!text.trim() && !selectedImage) ? "not-allowed" : "pointer",
+              flexShrink: 0,
+              boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+              fontSize: "1.3rem",
+            }}
           >
-            {isSubmitting ? (
-              <span className="animate-spin">⏳</span>
-            ) : (
-              <span>⬆️</span>
-            )}
+            {isSubmitting ? "⏳" : "➤"}
           </button>
         </div>
       </form>
-
-      {/* Bottom Sheet */}
-      <BottomSheet
-        isOpen={showBottomSheet}
-        onClose={() => setShowBottomSheet(false)}
-        onSelectImage={handleImageSelect}
-      />
     </div>
   );
 }
@@ -240,7 +297,16 @@ function MessagesList({ communityId }: { communityId: Id<"communities"> }) {
     communityId,
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const userId = localStorage.getItem("pilot_user") as Id<"users"> | null;
+  const userId = (() => {
+    try {
+      const raw = localStorage.getItem("pilot_user");
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return (parsed?.userId || parsed?._id || parsed?.id || parsed) as Id<"users">;
+    } catch {
+      return localStorage.getItem("pilot_user") as Id<"users"> | null;
+    }
+  })();
 
   // Optimistic state for engagement
   const [engagementState, setEngagementState] = useState<

@@ -528,7 +528,8 @@ export default defineSchema({
       v.literal("central"),
       v.literal("trader"),
       v.literal("sentify"),
-      v.literal("buyer_reward")
+      v.literal("buyer_reward"),
+      v.literal("farmer")
     ),
     traderId: v.optional(v.id("users")),
     userId: v.optional(v.id("users")),
@@ -544,7 +545,8 @@ export default defineSchema({
       v.literal("sentify_receipt"),
       v.literal("buyer_confirmation_reward"),
       v.literal("sentify_cashout"),
-      v.literal("buyer_reward_cashout")
+      v.literal("buyer_reward_cashout"),
+      v.literal("form_field_reward")
     ),
     utid: v.string(),
     listingId: v.optional(v.id("listings")),
@@ -552,6 +554,9 @@ export default defineSchema({
     relatedUtid: v.optional(v.string()),
     adminId: v.optional(v.id("users")),
     reason: v.optional(v.string()),
+    formResponseId: v.optional(v.id("formResponses")),
+    communityId: v.optional(v.id("communities")),
+    fieldCount: v.optional(v.number()),
     createdAt: v.number(),
   })
     .index("by_trader", ["traderId", "createdAt"])
@@ -1426,9 +1431,10 @@ export default defineSchema({
     adminId: v.id("users"),
     name: v.string(),
     description: v.optional(v.string()),
-    isActive: v.boolean(), // Inactive forms don't accept new submissions
-    responseCount: v.number(), // Cached count for quick display
-    category: v.optional(v.string()), // e.g. "revenue", "expense", "inventory", "custom"
+    isActive: v.boolean(),
+    responseCount: v.number(),
+    category: v.optional(v.string()),
+    formPurpose: v.optional(v.union(v.literal("tracker"), v.literal("profile"))),
     createdAt: v.number(),
     updatedAt: v.number(),
   })

@@ -28,6 +28,10 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
   const allUnitsLedger = useQuery(api.farmerDashboard.getAllUnitsLedger, { farmerId: userId });
   const communities = useQuery(api.communities.getActiveCommunities, { userId });
   const myAgroFreshDrafts = useQuery(api.farmValidation.getMyDrafts, { farmerId: userId });
+  const farmerFarmcoinBalance = useQuery(
+    (api as any).farmcoin.getFarmerFarmcoinBalance,
+    { farmerId: userId }
+  );
   const paginationPreferences = useQuery(
     (api as any).userSettings.getPaginationPreferences,
     { userId } as any
@@ -77,8 +81,8 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
   const [expiredUtidsPage, setExpiredUtidsPage] = useState(0);
   const [ledgerView, setLedgerView] = useState<"list" | "card">("list");
   const [ledgerPage, setLedgerPage] = useState(0);
-  const [transactionsPageSize, setTransactionsPageSize] = useState(10);
-  const [ledgerPageSize, setLedgerPageSize] = useState(10);
+  const [transactionsPageSize, setTransactionsPageSize] = useState(5);
+  const [ledgerPageSize, setLedgerPageSize] = useState(5);
   const transactionsPageKey = "farmer_transactions";
   const ledgerPageKey = "farmer_ledger";
   const ITEMS_PER_PAGE = 5;
@@ -706,7 +710,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
         border: "1px solid #e0e0e0"
       }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ marginBottom: "0.5rem" }}>
+          <div style={{ marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
             <h2 style={{ 
               fontSize: "clamp(1.5rem, 4vw, 1.8rem)", 
               margin: 0, 
@@ -717,6 +721,24 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
             }}>
               Hello, Farmer 👩🏾‍🌾
             </h2>
+            {typeof farmerFarmcoinBalance === "number" && (
+              <div style={{
+                background: "linear-gradient(135deg, #fff8e1, #ffecb3)",
+                border: "1.5px solid #f9a825",
+                borderRadius: 20,
+                padding: "4px 12px",
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                fontSize: "0.85rem",
+                fontWeight: 700,
+                color: "#f57f17",
+                fontFamily: '"Montserrat", sans-serif',
+                boxShadow: "0 2px 6px rgba(249,168,37,0.25)",
+              }}>
+                🪙 {farmerFarmcoinBalance}
+              </div>
+            )}
           </div>
           <p style={{ 
             color: "#3d3d3d", 
@@ -1024,6 +1046,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
                   }}
                   style={{ padding: "0.35rem 0.6rem", borderRadius: 6, border: "1px solid #ddd", fontSize: "0.85rem" }}
                 >
+                  <option value={5}>5</option>
                   <option value={10}>10</option>
                   <option value={20}>20</option>
                   <option value={50}>50</option>
@@ -2513,6 +2536,7 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
             }}
             style={{ padding: "0.35rem 0.6rem", borderRadius: 6, border: "1px solid #ddd", fontSize: "0.85rem" }}
           >
+            <option value={5}>5</option>
             <option value={10}>10</option>
             <option value={20}>20</option>
             <option value={50}>50</option>

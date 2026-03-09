@@ -53,6 +53,10 @@ export default function FinanceDashboardPage() {
     (api as any).buyers.getSentifyDeliveryBatches,
     userId && (isSuperAdmin || isFinanceAdmin) ? { adminId: userId } : "skip"
   );
+  const farmerFormRewards = useQuery(
+    (api as any).farmcoin.getFarmerFormRewards,
+    userId && (isSuperAdmin || isFinanceAdmin) ? {} : "skip"
+  );
   const paginationPreferences = useQuery(
     (api as any).userSettings.getPaginationPreferences,
     userId ? { userId } : "skip"
@@ -72,6 +76,7 @@ export default function FinanceDashboardPage() {
   const [grantsPageSize, setGrantsPageSize] = useState(20);
   const [returnsPage, setReturnsPage] = useState(1);
   const [returnsPageSize, setReturnsPageSize] = useState(20);
+  const [farmerRewardsExpanded, setFarmerRewardsExpanded] = useState(false);
   const sentifyPageKey = "finance_sentify_batches";
   const grantsPageKey = "finance_token_grants";
   const returnsPageKey = "finance_token_returns";
@@ -1241,6 +1246,94 @@ export default function FinanceDashboardPage() {
           </div>
           </>
         )
+      )}
+
+      {/* ─── Farmer Form Rewards Section ─── */}
+      {(isSuperAdmin || isFinanceAdmin) && (
+        <div style={{
+          background: "#fff", borderRadius: 14, padding: "1.25rem",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.08)", marginTop: "1.5rem",
+          border: "1px solid #e0e0e0",
+        }}>
+          <div
+            onClick={() => setFarmerRewardsExpanded(!farmerRewardsExpanded)}
+            style={{
+              display: "flex", justifyContent: "space-between", alignItems: "center",
+              cursor: "pointer",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: "1.3rem" }}>🌱</span>
+              <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700, color: "#1b5e20" }}>
+                Farmer Form Entry Rewards
+              </h3>
+              {farmerFormRewards && (
+                <span style={{
+                  fontSize: "0.72rem", fontWeight: 600, padding: "2px 8px",
+                  borderRadius: 999, background: "#fff8e1", color: "#f57f17",
+                  border: "1px solid #f9a825"
+                }}>
+                  🪙 {farmerFormRewards.reduce((sum: number, e: any) => sum + (e.delta || 0), 0)} total issued
+                </span>
+              )}
+            </div>
+            <span style={{ fontSize: "1rem", color: "#888" }}>
+              {farmerRewardsExpanded ? "▲" : "▼"}
+            </span>
+          </div>
+
+          {farmerRewardsExpanded && (
+            <div style={{ marginTop: "1rem" }}>
+              {!farmerFormRewards ? (
+                <p style={{ color: "#999", fontSize: "0.85rem" }}>Loading...</p>
+              ) : farmerFormRewards.length === 0 ? (
+                <p style={{ color: "#999", fontSize: "0.85rem" }}>
+                  No farmer form rewards issued yet. Farmers earn FarmCoins by completing tracker and profile forms.
+                </p>
+              ) : (
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
+                    <thead>
+                      <tr style={{ borderBottom: "2px solid #e0e0e0", background: "#f5f5f5" }}>
+                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Farmer</th>
+                        <th style={{ padding: "0.6rem", textAlign: "right" }}>Coins</th>
+                        <th style={{ padding: "0.6rem", textAlign: "right" }}>Fields</th>
+                        <th style={{ padding: "0.6rem", textAlign: "left" }}>UTID</th>
+                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {farmerFormRewards.slice(0, 50).map((entry: any) => (
+                        <tr key={entry._id} style={{ borderBottom: "1px solid #eee" }}>
+                          <td style={{ padding: "0.6rem", fontWeight: 500 }}>
+                            {entry.farmerName}
+                          </td>
+                          <td style={{ padding: "0.6rem", textAlign: "right", fontWeight: 700, color: "#f57f17" }}>
+                            🪙 {entry.delta}
+                          </td>
+                          <td style={{ padding: "0.6rem", textAlign: "right", color: "#666" }}>
+                            {entry.fieldCount || entry.delta}
+                          </td>
+                          <td style={{ padding: "0.6rem", fontFamily: "monospace", fontSize: "0.72rem", color: "#888" }}>
+                            {entry.utid}
+                          </td>
+                          <td style={{ padding: "0.6rem", color: "#888", fontSize: "0.75rem" }}>
+                            {new Date(entry.createdAt).toLocaleDateString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {farmerFormRewards.length > 50 && (
+                    <p style={{ color: "#999", fontSize: "0.75rem", textAlign: "center", marginTop: 8 }}>
+                      Showing 50 of {farmerFormRewards.length} entries
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

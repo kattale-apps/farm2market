@@ -13,6 +13,7 @@ export const createForm = mutation({
     name: v.string(),
     description: v.optional(v.string()),
     category: v.optional(v.string()),
+    formPurpose: v.optional(v.union(v.literal("tracker"), v.literal("profile"))),
   },
   handler: async (ctx, args) => {
     // Verify admin is authorized for this community
@@ -43,6 +44,7 @@ export const createForm = mutation({
       isActive: true,
       responseCount: 0,
       category: args.category,
+      formPurpose: args.formPurpose || "tracker",
       createdAt: now,
       updatedAt: now,
     });
@@ -1021,5 +1023,39 @@ export const getMemberBreakdown = query({
     }
 
     return results.sort((a, b) => b.submissionCount - a.submissionCount);
+  },
+});
+
+/**
+ * Get active profile forms for a community (used by community members on Profile tab)
+ */
+export const getCommunityProfileForms = query({
+  args: {
+    communityId: v.id("communities"),
+  },
+  handler: async (ctx, args) => {
+    const forms = await ctx.db
+      .query("communityForms")
+      .withIndex("by_community", (q: any) => q.eq("communityId", args.communityId))
+      .collect();
+
+    const profileForms = forms.filter(
+      (f: any) => f.formPurpose === "profile" && f.isActive
+    );
+
+    // For each form, fetch its fields
+    const results = [];
+    for (const form of profileForms) {
+      const fields = await ctx.db
+        .query("formFields")
+        .filter((q: any) => q.eq(q.field("formId"), form._id))
+        .collect();
+      results.push({
+        ...form,
+        fields: fields.sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0)),
+      });
+    }
+
+    return results;
   },
 });

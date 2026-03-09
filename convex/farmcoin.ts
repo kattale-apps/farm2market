@@ -1116,3 +1116,114 @@ export const setTraderVerificationStatus = mutation({
     return { success: true };
   },
 });
+
+// ─── Farmer Form Field Rewards ───────────────────────────────────────
+
+/**
+ * Get farmer FarmCoin balance (for the counter badge)
+ */
+export const getFarmerFarmcoinBalance = query({
+  args: { farmerId: v.id("users") },
+  handler: async (ctx, args) => {
+    const entries = await ctx.db
+      .query("farmcoinLedger")
+      .withIndex("by_account", (q: any) => q.eq("accountType", "farmer"))
+      .filter((q: any) => q.eq(q.field("userId"), args.farmerId))
+      .order("desc")
+      .first();
+
+    return entries?.balanceAfter ?? 0;
+  },
+});
+
+/**
+ * Get farmer farmcoin ledger entries (for finance dashboard)
+ */
+export const getFarmerFormRewards = query({
+  args: {},
+  handler: async (ctx) => {
+    const entries = await ctx.db
+      .query("farmcoinLedger")
+      .withIndex("by_account", (q: any) => q.eq("accountType", "farmer"))
+      .order("desc")
+      .take(200);
+
+    // Resolve user names
+    const results = [];
+    for (const entry of entries) {
+      let farmerName = "Unknown";
+      if (entry.userId) {
+        const user = await ctx.db.get(entry.userId);
+        farmerName = (user as any)?.alias || (user as any)?.email || "Unknown";
+      }
+      results.push({ ...entry, farmerName });
+    }
+    return results;
+  },
+});
+
+/**
+ * Mint FarmCoins for a farmer upon form submission
+ * - 1 coin per completed field
+ * - Only on final submission (not on draft save)
+ */
+export const mintFarmerFormCoin = mutation({
+  args: {
+    farmerId: v.id("users"),
+    formResponseId: v.id("formResponses"),
+    communityId: v.id("communities"),
+    fieldCount: v.number(),
+    fieldLabels: v.optional(v.array(v.string())),
+  },
+  handler: async (ctx, args) => {
+    if (args.fieldCount <= 0) {
+      throw new Error("fieldCount must be positive");
+    }
+
+    // Prevent duplicate rewards for same response
+    const existing = await ctx.db
+      .query("farmcoinLedger")
+      .withIndex("by_account", (q: any) => q.eq("accountType", "farmer"))
+      .filter((q: any) =>
+        q.and(
+          q.eq(q.field("userId"), args.farmerId),
+          q.eq(q.field("formResponseId"), args.formResponseId)
+        )
+      )
+      .first();
+
+    if (existing) {
+      return { success: false, reason: "Already rewarded for this submission", balance: existing.balanceAfter };
+    }
+
+    // Get current farmer balance
+    const latestEntry = await ctx.db
+      .query("farmcoinLedger")
+      .withIndex("by_account", (q: any) => q.eq("accountType", "farmer"))
+      .filter((q: any) => q.eq(q.field("userId"), args.farmerId))
+      .order("desc")
+      .first();
+
+    const currentBalance = latestEntry?.balanceAfter ?? 0;
+    const newBalance = currentBalance + args.fieldCount;
+
+    const now = getUgandaTime();
+    const utid = generateUTID("fcr");
+
+    await ctx.db.insert("farmcoinLedger", {
+      accountType: "farmer",
+      userId: args.farmerId,
+      delta: args.fieldCount,
+      balanceAfter: newBalance,
+      source: "form_field_reward",
+      utid,
+      formResponseId: args.formResponseId,
+      communityId: args.communityId,
+      fieldCount: args.fieldCount,
+      reason: `Form submission reward: ${args.fieldCount} field${args.fieldCount > 1 ? "s" : ""} completed`,
+      createdAt: now,
+    });
+
+    return { success: true, coinsEarned: args.fieldCount, balance: newBalance };
+  },
+});

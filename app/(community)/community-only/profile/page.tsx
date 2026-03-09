@@ -74,12 +74,18 @@ export default function CommunityProfilePage() {
     userId ? { farmerId: userId } : "skip"
   );
 
+  // Community profile forms
+  const profileForms = useQuery(
+    (api as any).forms.getCommunityProfileForms,
+    communityId ? { communityId } : "skip"
+  );
+
   useEffect(() => {
     const raw = localStorage.getItem("pilot_user");
     if (raw) {
       try {
         const parsed = JSON.parse(raw);
-        setUserId((parsed?._id || parsed?.id || parsed) as Id<"users">);
+        setUserId((parsed?.userId || parsed?._id || parsed?.id || parsed) as Id<"users">);
       } catch {
         setUserId(raw as Id<"users">);
       }
@@ -235,6 +241,72 @@ export default function CommunityProfilePage() {
             >
               {creatingValidation ? "Starting..." : "Start New Farm Validation"}
             </button>
+          </div>
+        )}
+
+        {/* Community Profile Forms */}
+        {profileForms && profileForms.length > 0 && (
+          <div style={{ marginBottom: "1.25rem" }}>
+            <h2 style={{ fontSize: "clamp(1.05rem, 3vw, 1.2rem)", fontWeight: 700, color: "#1a1a1a", margin: "0 0 0.75rem" }}>
+              📋 Community Profile Forms
+            </h2>
+            {profileForms.map((form: any) => (
+              <div
+                key={form._id}
+                style={{
+                  background: "#fff",
+                  borderRadius: 14,
+                  padding: "clamp(1rem, 3vw, 1.25rem)",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                  border: "1px solid #e0e0e0",
+                  marginBottom: "0.75rem",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <h3 style={{ margin: 0, fontSize: "clamp(0.95rem, 2.5vw, 1.05rem)", fontWeight: 700, color: "#333" }}>
+                    {form.name}
+                  </h3>
+                  <span style={{
+                    fontSize: "0.68rem",
+                    fontWeight: 600,
+                    padding: "2px 8px",
+                    borderRadius: 999,
+                    background: "#e8f5e9",
+                    color: BRAND,
+                  }}>
+                    {form.fields?.length || 0} fields
+                  </span>
+                </div>
+                {form.description && (
+                  <p style={{ margin: "0 0 0.75rem", fontSize: "0.85rem", color: "#666" }}>
+                    {form.description}
+                  </p>
+                )}
+                <button
+                  onClick={() => {
+                    router.push(`/community-only/trackers/fill?communityId=${communityId}&formId=${form._id}`);
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "0.65rem",
+                    background: `linear-gradient(135deg, #43a047, ${BRAND})`,
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: 10,
+                    fontSize: "clamp(0.9rem, 2.5vw, 1rem)",
+                    fontWeight: 600,
+                    fontFamily: FONT,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                  }}
+                >
+                  ✏️ Fill Profile Form
+                </button>
+              </div>
+            ))}
           </div>
         )}
       </div>

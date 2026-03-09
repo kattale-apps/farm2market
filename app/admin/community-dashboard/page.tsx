@@ -432,6 +432,7 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
   const [builderName, setBuilderName] = useState("");
   const [builderDescription, setBuilderDescription] = useState("");
   const [builderCategory, setBuilderCategory] = useState("custom");
+  const [builderPurpose, setBuilderPurpose] = useState<"tracker" | "profile">("tracker");
   const [builderFields, setBuilderFields] = useState<any[]>([
     { fieldType: "text", label: "", required: true, helpText: "", placeholder: "", options: [] },
   ]);
@@ -475,6 +476,7 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
         name: builderName,
         description: builderDescription || undefined,
         category: builderCategory,
+        formPurpose: builderPurpose,
       });
       for (const f of validFields) {
         await addFormField({
@@ -492,6 +494,7 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
       setBuilderName("");
       setBuilderDescription("");
       setBuilderCategory("custom");
+      setBuilderPurpose("tracker");
       setBuilderFields([{ fieldType: "text", label: "", required: true, helpText: "", placeholder: "", options: [] }]);
       setTimeout(() => setMsg(null), 4000);
     } catch (e: any) {
@@ -643,6 +646,37 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
                 </select>
               </div>
             </div>
+            {/* Form Purpose Toggle */}
+            <div style={{ marginBottom: "1rem" }}>
+              <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#333", display: "block", marginBottom: "0.3rem" }}>Form Purpose</label>
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                {(["tracker", "profile"] as const).map((purpose) => (
+                  <button
+                    key={purpose}
+                    onClick={() => setBuilderPurpose(purpose)}
+                    style={{
+                      flex: 1,
+                      padding: "0.5rem",
+                      borderRadius: "8px",
+                      border: `2px solid ${builderPurpose === purpose ? (purpose === "tracker" ? "#1976d2" : "#2e7d32") : "#ddd"}`,
+                      background: builderPurpose === purpose ? (purpose === "tracker" ? "#e3f2fd" : "#e8f5e9") : "#fff",
+                      color: builderPurpose === purpose ? (purpose === "tracker" ? "#1565c0" : "#2e7d32") : "#666",
+                      fontSize: "0.82rem",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      transition: "all 0.2s",
+                    }}
+                  >
+                    {purpose === "tracker" ? "📊 Tracker Form" : "👤 Profile Form"}
+                  </button>
+                ))}
+              </div>
+              <p style={{ fontSize: "0.72rem", color: "#888", margin: "0.25rem 0 0 0" }}>
+                {builderPurpose === "tracker"
+                  ? "Tracker forms appear in the Trackers tab for data entry"
+                  : "Profile forms appear in the community Profile tab for member info"}
+              </p>
+            </div>
             <div style={{ marginBottom: "1rem" }}>
               <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#333" }}>Description</label>
               <input
@@ -757,7 +791,15 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
                       borderBottom: isExpanded ? "1px solid #ddd" : "none",
                     }}
                   >
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                      {form.formPurpose === "profile" && (
+                        <span style={{
+                          padding: "0.1rem 0.4rem", borderRadius: "999px", fontSize: "0.68rem",
+                          fontWeight: 600, background: "#2e7d32", color: "#fff",
+                        }}>
+                          👤 Profile
+                        </span>
+                      )}
                       {form.category && (
                         <span style={{
                           padding: "0.1rem 0.4rem", borderRadius: "999px", fontSize: "0.68rem",

@@ -822,8 +822,8 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
               minWidth: "96px",
             }}
           >
-            📩 Inbox {messageThreads && messageThreads.length > 0
-              ? `(${messageThreads.reduce((sum, t) => sum + (t.unreadCount || 0), 0)})`
+            📩 Inbox {Array.isArray(messageThreads) && messageThreads.length > 0
+              ? `(${messageThreads.reduce((sum: number, t: any) => sum + (t.unreadCount || 0), 0)})`
               : ""}
           </button>
         </div>
@@ -873,7 +873,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
               x
             </button>
           </div>
-          {messageThreads === undefined ? (
+          {messageThreads === undefined || !Array.isArray(messageThreads) ? (
             <p style={{ color: "#999" }}>Loading message threads...</p>
           ) : messageThreads.length === 0 ? (
             <div>
@@ -1064,7 +1064,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
         </div>
         {!transactionsExpanded ? null : listings === undefined ? (
           <p style={{ color: "#999" }}>Loading...</p>
-        ) : listings.listings.length === 0 ? (
+        ) : !listings?.listings?.length ? (
           <p style={{ color: "#666" }}>No transactions yet. Create your first listing to get started.</p>
         ) : (
           <div>
@@ -2833,7 +2833,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
             )}
 
             {/* Grand Totals */}
-            {allUnitsLedger.listings.length > 0 && (
+            {allUnitsLedger?.listings?.length > 0 && (
               <div style={{
                 padding: "1rem",
                 background: "#e8f5e9",

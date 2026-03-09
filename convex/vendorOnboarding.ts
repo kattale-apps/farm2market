@@ -26,14 +26,17 @@ export const checkOnboardingStatus = query({
       .first();
 
     return {
-      completed: profile?.onboardingCompleted === true,
+      completed: profile?.onboardingCompleted === true && !!profile?.marketName,
       hasLocation: !!(profile?.districtId && profile?.subcountyId),
       hasMarketType: !!profile?.marketType,
+      hasMarketDetails: !!profile?.marketName,
       region: profile?.region,
       districtId: profile?.districtId,
       subcountyId: profile?.subcountyId,
       parishId: profile?.parishId,
       marketType: profile?.marketType,
+      marketName: profile?.marketName,
+      stallNumber: profile?.stallNumber,
     };
   },
 });
@@ -56,6 +59,8 @@ export const completeOnboarding = mutation({
       v.literal("town_market"),
       v.literal("village_market")
     ),
+    marketName: v.string(),
+    stallNumber: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const user = await ctx.db.get(args.userId);
@@ -96,6 +101,8 @@ export const completeOnboarding = mutation({
         subcountyId: args.subcountyId,
         ...(args.parishId ? { parishId: args.parishId } : {}),
         marketType: args.marketType,
+        marketName: args.marketName,
+        stallNumber: args.stallNumber,
         onboardingCompleted: true,
       });
     } else {
@@ -106,6 +113,8 @@ export const completeOnboarding = mutation({
         subcountyId: args.subcountyId,
         ...(args.parishId ? { parishId: args.parishId } : {}),
         marketType: args.marketType,
+        marketName: args.marketName,
+        stallNumber: args.stallNumber,
         onboardingCompleted: true,
         createdAt: Date.now(),
       });

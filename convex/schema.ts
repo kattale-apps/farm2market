@@ -1566,6 +1566,8 @@ export default defineSchema({
       v.literal("town_market"),
       v.literal("village_market")
     ),
+    marketName: v.optional(v.string()), // Mandatory for new onboarding, optional in schema for backward compat
+    stallNumber: v.optional(v.string()), // Optional stall number
     onboardingCompleted: v.boolean(),
     createdAt: v.number(),
   })
@@ -1601,6 +1603,9 @@ export default defineSchema({
       v.literal("dry_storage")
     ),
     storeTypeCustom: v.optional(v.string()), // Free text when "other" selected on UI
+    streetAddress: v.optional(v.string()), // Mandatory for new onboarding, optional in schema for backward compat
+    buildingName: v.optional(v.string()), // Mandatory for new onboarding
+    storeNumber: v.optional(v.string()), // Mandatory for new onboarding
     onboardingCompleted: v.boolean(),
     createdAt: v.number(),
   })

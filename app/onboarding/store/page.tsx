@@ -73,6 +73,9 @@ export default function StoreOnboardingPage() {
   const [storeType, setStoreType] = useState("");
   const [storeTypeCustom, setStoreTypeCustom] = useState("");
   const [storageCapacity, setStorageCapacity] = useState("");
+  const [streetAddress, setStreetAddress] = useState("");
+  const [buildingName, setBuildingName] = useState("");
+  const [storeNumber, setStoreNumber] = useState("");
 
   const completeOnboarding = useMutation(api.storeOnboarding.completeOnboarding);
   const [loading, setLoading] = useState(false);
@@ -97,6 +100,15 @@ export default function StoreOnboardingPage() {
 
   useEffect(() => {
     if (onboardingStatus?.completed) router.push("/");
+    // Pre-fill existing data for returning users missing new fields
+    if (onboardingStatus && !onboardingStatus.completed && onboardingStatus.hasLocation) {
+      if (onboardingStatus.storeType && !storeType) setStoreType(onboardingStatus.storeType);
+      if (onboardingStatus.storeTypeCustom && !storeTypeCustom) setStoreTypeCustom(onboardingStatus.storeTypeCustom);
+      if (onboardingStatus.storageCapacityTonnes && !storageCapacity) setStorageCapacity(String(onboardingStatus.storageCapacityTonnes));
+      if (onboardingStatus.streetAddress && !streetAddress) setStreetAddress(onboardingStatus.streetAddress);
+      if (onboardingStatus.buildingName && !buildingName) setBuildingName(onboardingStatus.buildingName);
+      if (onboardingStatus.storeNumber && !storeNumber) setStoreNumber(onboardingStatus.storeNumber);
+    }
   }, [onboardingStatus, router]);
 
   useEffect(() => { setSelectedDistrictId(""); setSelectedSubcountyId(""); setSelectedParishId(""); }, [selectedRegionKey]);
@@ -113,6 +125,9 @@ export default function StoreOnboardingPage() {
     if (!storageCapacity || parseFloat(storageCapacity) <= 0) {
       setMessage({ type: "error", text: "Please enter storage capacity" }); return;
     }
+    if (!streetAddress.trim()) { setMessage({ type: "error", text: "Please enter the street address" }); return; }
+    if (!buildingName.trim()) { setMessage({ type: "error", text: "Please enter the building name" }); return; }
+    if (!storeNumber.trim()) { setMessage({ type: "error", text: "Please enter the store number" }); return; }
 
     setLoading(true); setMessage(null);
     try {
@@ -125,6 +140,9 @@ export default function StoreOnboardingPage() {
         storageCapacityTonnes: parseFloat(storageCapacity),
         storeType: storeType as any,
         storeTypeCustom: storeTypeCustom || undefined,
+        streetAddress: streetAddress.trim(),
+        buildingName: buildingName.trim(),
+        storeNumber: storeNumber.trim(),
       });
       setMessage({ type: "success", text: `Onboarding complete! UTID: ${result.utid}` });
       setTimeout(() => router.push("/"), 2000);
@@ -152,7 +170,9 @@ export default function StoreOnboardingPage() {
           lineHeight: "1.6", background: "#fce4ec", padding: "1rem", borderRadius: "8px",
           border: "1px solid #f8bbd0"
         }}>
-          Please provide your location, storage type, and capacity. This information is required before you can create listings.
+          {onboardingStatus && !onboardingStatus.completed && onboardingStatus.hasLocation
+            ? "We've updated our onboarding — please confirm your details and fill in the new required fields (Street Address, Building Name, Store Number) to continue."
+            : "Please provide your location, storage type, capacity, and store address. This information is required before you can create listings."}
         </p>
 
         {message && (
@@ -243,6 +263,49 @@ export default function StoreOnboardingPage() {
                 placeholder="e.g. 10"
                 min="0.1"
                 step="0.1"
+                required
+                style={inputStyle}
+              />
+            </div>
+          </div>
+
+          {/* Store Address */}
+          <div style={{ marginBottom: "2rem", background: "#fce4ec", padding: "1.5rem", borderRadius: "8px", border: "1px solid #f8bbd0" }}>
+            <h2 style={{ fontSize: "clamp(1.2rem, 3vw, 1.5rem)", marginBottom: "1rem", color: "#c62828", fontFamily: '"Montserrat", sans-serif', fontWeight: "600" }}>
+              🏠 Store Address
+            </h2>
+
+            <div style={{ marginBottom: "1rem" }}>
+              <label style={labelStyle}>Street Address *</label>
+              <input
+                type="text"
+                value={streetAddress}
+                onChange={(e) => setStreetAddress(e.target.value)}
+                placeholder="e.g. Plot 23, Kampala Road"
+                required
+                style={inputStyle}
+              />
+            </div>
+
+            <div style={{ marginBottom: "1rem" }}>
+              <label style={labelStyle}>Building Name *</label>
+              <input
+                type="text"
+                value={buildingName}
+                onChange={(e) => setBuildingName(e.target.value)}
+                placeholder="e.g. City Mall, Farmer House"
+                required
+                style={inputStyle}
+              />
+            </div>
+
+            <div style={{ marginBottom: "1rem" }}>
+              <label style={labelStyle}>Store Number *</label>
+              <input
+                type="text"
+                value={storeNumber}
+                onChange={(e) => setStoreNumber(e.target.value)}
+                placeholder="e.g. Shop 5, Unit B-12"
                 required
                 style={inputStyle}
               />

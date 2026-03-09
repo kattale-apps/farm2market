@@ -26,9 +26,10 @@ export const checkOnboardingStatus = query({
       .first();
 
     return {
-      completed: profile?.onboardingCompleted === true,
+      completed: profile?.onboardingCompleted === true && !!(profile?.streetAddress && profile?.buildingName && profile?.storeNumber),
       hasLocation: !!(profile?.districtId && profile?.subcountyId),
       hasStoreInfo: !!(profile?.storeType && profile?.storageCapacityTonnes),
+      hasStoreAddress: !!(profile?.streetAddress && profile?.buildingName && profile?.storeNumber),
       region: profile?.region,
       districtId: profile?.districtId,
       subcountyId: profile?.subcountyId,
@@ -36,6 +37,9 @@ export const checkOnboardingStatus = query({
       storageCapacityTonnes: profile?.storageCapacityTonnes,
       storeType: profile?.storeType,
       storeTypeCustom: profile?.storeTypeCustom,
+      streetAddress: profile?.streetAddress,
+      buildingName: profile?.buildingName,
+      storeNumber: profile?.storeNumber,
     };
   },
 });
@@ -57,6 +61,9 @@ export const completeOnboarding = mutation({
       v.literal("dry_storage")
     ),
     storeTypeCustom: v.optional(v.string()),
+    streetAddress: v.string(),
+    buildingName: v.string(),
+    storeNumber: v.string(),
   },
   handler: async (ctx, args) => {
     const user = await ctx.db.get(args.userId);
@@ -103,6 +110,9 @@ export const completeOnboarding = mutation({
         storageCapacityTonnes: args.storageCapacityTonnes,
         storeType: args.storeType,
         storeTypeCustom: args.storeTypeCustom,
+        streetAddress: args.streetAddress,
+        buildingName: args.buildingName,
+        storeNumber: args.storeNumber,
         onboardingCompleted: true,
       });
     } else {
@@ -115,6 +125,9 @@ export const completeOnboarding = mutation({
         storageCapacityTonnes: args.storageCapacityTonnes,
         storeType: args.storeType,
         storeTypeCustom: args.storeTypeCustom,
+        streetAddress: args.streetAddress,
+        buildingName: args.buildingName,
+        storeNumber: args.storeNumber,
         onboardingCompleted: true,
         createdAt: Date.now(),
       });

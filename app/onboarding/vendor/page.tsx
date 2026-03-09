@@ -74,6 +74,8 @@ export default function VendorOnboardingPage() {
 
   // Vendor-specific
   const [marketType, setMarketType] = useState("");
+  const [marketName, setMarketName] = useState("");
+  const [stallNumber, setStallNumber] = useState("");
 
   const completeOnboarding = useMutation(api.vendorOnboarding.completeOnboarding);
   const [loading, setLoading] = useState(false);
@@ -98,6 +100,12 @@ export default function VendorOnboardingPage() {
 
   useEffect(() => {
     if (onboardingStatus?.completed) router.push("/");
+    // Pre-fill existing data for returning users missing new fields
+    if (onboardingStatus && !onboardingStatus.completed && onboardingStatus.hasLocation) {
+      if (onboardingStatus.marketType && !marketType) setMarketType(onboardingStatus.marketType);
+      if (onboardingStatus.marketName && !marketName) setMarketName(onboardingStatus.marketName);
+      if (onboardingStatus.stallNumber && !stallNumber) setStallNumber(onboardingStatus.stallNumber);
+    }
   }, [onboardingStatus, router]);
 
   // Reset cascading location
@@ -112,6 +120,7 @@ export default function VendorOnboardingPage() {
       setMessage({ type: "error", text: "Please select Region, District, and Subcounty" }); return;
     }
     if (!marketType) { setMessage({ type: "error", text: "Please select a market type" }); return; }
+    if (!marketName.trim()) { setMessage({ type: "error", text: "Please enter the market name" }); return; }
 
     setLoading(true); setMessage(null);
     try {
@@ -122,6 +131,8 @@ export default function VendorOnboardingPage() {
         subcountyId: selectedSubcountyId as Id<"subcounties">,
         parishId: selectedParishId ? selectedParishId as Id<"parishes"> : undefined,
         marketType: marketType as any,
+        marketName: marketName.trim(),
+        stallNumber: stallNumber.trim() || undefined,
       });
       setMessage({ type: "success", text: `Onboarding complete! UTID: ${result.utid}` });
       setTimeout(() => router.push("/"), 2000);
@@ -149,7 +160,9 @@ export default function VendorOnboardingPage() {
           lineHeight: "1.6", background: "#fff3e0", padding: "1rem", borderRadius: "8px",
           border: "1px solid #ffe0b2"
         }}>
-          Please provide your location and market type to continue. This information is required before you can create listings.
+          {onboardingStatus && !onboardingStatus.completed && onboardingStatus.hasLocation
+            ? "We've updated our onboarding — please confirm your details and fill in the new required fields (Market Name) to continue."
+            : "Please provide your location and market details to continue. This information is required before you can create listings."}
         </p>
 
         {message && (
@@ -217,6 +230,30 @@ export default function VendorOnboardingPage() {
                 <option value="">Select Market Type</option>
                 {MARKET_TYPES.map((mt) => <option key={mt.value} value={mt.value}>{mt.label}</option>)}
               </select>
+            </div>
+
+            <div style={{ marginBottom: "1rem" }}>
+              <label style={labelStyle}>Market Name *</label>
+              <input
+                type="text"
+                value={marketName}
+                onChange={(e) => setMarketName(e.target.value)}
+                placeholder="e.g. Owino Market, Nakasero Market"
+                required
+                style={inputStyle}
+              />
+              <p style={{ margin: "0.25rem 0 0", fontSize: "0.8rem", color: "#888" }}>Enter the name of the market where you sell</p>
+            </div>
+
+            <div style={{ marginBottom: "1rem" }}>
+              <label style={labelStyle}>Stall Number (optional)</label>
+              <input
+                type="text"
+                value={stallNumber}
+                onChange={(e) => setStallNumber(e.target.value)}
+                placeholder="e.g. Stall 42, Block A-12"
+                style={inputStyle}
+              />
             </div>
           </div>
 

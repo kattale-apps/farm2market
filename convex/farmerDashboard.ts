@@ -71,6 +71,7 @@ export const getFarmerListings = query({
             districtName: storageLocation.districtName,
             code: storageLocation.code,
           } : null,
+          collectionLocationText: listing.collectionLocationText || null,
           // Unit breakdown
           units: {
             available: availableCount,

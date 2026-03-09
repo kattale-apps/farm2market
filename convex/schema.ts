@@ -190,6 +190,7 @@ export default defineSchema({
     gardenSize: v.optional(v.number()), // Garden size in acres (for garden mode)
     gardenDimensions: v.optional(v.any()), // Raw garden dimensions (for garden mode)
     totalPrice: v.optional(v.number()), // Total price for entire garden (for garden mode, in UGX)
+    collectionLocationText: v.optional(v.string()), // Vendor/store collection location text for buyers
   })
     .index("by_farmer", ["farmerId"])
     .index("by_trader", ["traderId"])

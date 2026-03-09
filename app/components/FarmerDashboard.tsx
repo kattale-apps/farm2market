@@ -1976,6 +1976,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
         )}
       </div>
 
+      {effectiveRole === "farmer" && (<>
       {/* Delivery Deadlines */}
       <div style={{
         padding: "clamp(1rem, 3vw, 1.5rem)",
@@ -2469,6 +2470,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
           </div>
         )}
       </div>
+      </>)}
 
       {/* All Units Ledger - Comprehensive View */}
       <div style={{
@@ -3128,7 +3130,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
             Browse All
           </Link>
         </div>
-        {communities === undefined ? (
+        {!communities ? (
           <p style={{ color: "#999", fontSize: "0.9rem" }}>Loading communities...</p>
         ) : memberCommunities.length === 0 ? (
           <p style={{ color: "#6b7280", fontSize: "0.9rem" }}>
@@ -3258,7 +3260,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.5rem" }}>
           <div>
             <h3 style={{ margin: 0, fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", fontWeight: "600", color: "#2c2c2c", fontFamily: '"Montserrat", sans-serif' }}>
-              📊 Farm Analytics
+              📊 {effectiveRole === "vendor" ? "Vendor" : effectiveRole === "store" ? "Store" : "Farm"} Analytics
             </h3>
             <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem", color: "#2e7d32", fontWeight: 600, fontStyle: "italic" }}>Know Your Numbers</p>
           </div>

@@ -51,7 +51,7 @@ export function useOfflineQuery<Query extends FunctionReference<"query">>(
     offlineDb.queryCache
       .get(effectiveKey)
       .then((entry) => {
-        if (!cancelled && entry) {
+        if (!cancelled && entry && entry.data != null) {
           setCachedData(entry.data as T);
           cachedDataLoadedRef.current = true;
         }
@@ -79,14 +79,14 @@ export function useOfflineQuery<Query extends FunctionReference<"query">>(
     }
   }, [liveData, effectiveKey]);
 
-  // If we have live data, always prefer it
+  // If we have live data, always prefer it (coerce null → undefined for consistency)
   if (liveData !== undefined) {
-    return liveData;
+    return liveData ?? undefined;
   }
 
   // Offline or still loading — return cached data
   if (!isOnline || cachedDataLoadedRef.current) {
-    return cachedData;
+    return cachedData ?? undefined;
   }
 
   // Still loading and online — return undefined (Convex loading state)

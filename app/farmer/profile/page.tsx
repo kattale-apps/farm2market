@@ -129,7 +129,7 @@ export default function FarmerProfilePage() {
         const stored = localStorage.getItem("pilot_user");
         if (stored) {
           const parsed = JSON.parse(stored);
-          if (parsed && parsed.userId && parsed.role === "farmer") {
+          if (parsed && parsed.userId && ["farmer", "vendor", "store"].includes(parsed.role)) {
             setUserId(parsed.userId);
           } else {
             router.push("/login");

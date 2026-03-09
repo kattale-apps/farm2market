@@ -42,13 +42,14 @@ export default function FarmerCommunitiesPage() {
 
   const router = useRouter();
   const [userId, setUserId] = useState<Id<"users"> | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [selectedCommunityId, setSelectedCommunityId] = useState<Id<"communities"> | null>(null);
   const agroFreshCommunityId = process.env.NEXT_PUBLIC_AGROFRESH_COMMUNITY_ID;
   const communities = useQuery(api.communities.getActiveCommunities, userId ? { userId } : "skip");
-  const myDrafts = useQuery(api.farmValidation.getMyDrafts, userId ? { farmerId: userId } : "skip");
-  const latestForm = useQuery(api.farmValidation.getLatestFormForFarmer, userId ? { farmerId: userId } : "skip");
+  const myDrafts = useQuery(api.farmValidation.getMyDrafts, userId && userRole === "farmer" ? { farmerId: userId } : "skip");
+  const latestForm = useQuery(api.farmValidation.getLatestFormForFarmer, userId && userRole === "farmer" ? { farmerId: userId } : "skip");
   const latestApplicationStatus = useQuery(
     (api as any).communityApplications.getMyApplicationStatus,
     latestForm?._id && userId
@@ -66,6 +67,7 @@ export default function FarmerCommunitiesPage() {
       try {
         const parsed = JSON.parse(storedUser);
         setUserId(parsed.userId);
+        setUserRole(parsed.role || null);
       } catch (e) {
         console.error("Failed to parse stored user:", e);
         router.push("/login");

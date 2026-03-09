@@ -80,7 +80,17 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
 
   // Filter produce types based on selected location
   const filteredProduceOptions = useMemo(() => {
-    if (!formData.storageLocationId || !produceOptions || !storageLocations) {
+    if (!produceOptions) return [];
+    // Vendor/store: show all produce types even without storageLocationId
+    if (isVendorOrStore && !formData.storageLocationId) {
+      return produceOptions.filter((produce: any) => {
+        if (!produce.allowedStorageLocationIds || produce.allowedStorageLocationIds.length === 0) {
+          return true;
+        }
+        return true; // Show all for vendor/store without preset location
+      });
+    }
+    if (!formData.storageLocationId || !storageLocations) {
       return [];
     }
     
@@ -94,7 +104,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
       // Check if this location is in the allowed list
       return produce.allowedStorageLocationIds.includes(formData.storageLocationId);
     });
-  }, [formData.storageLocationId, produceOptions, storageLocations]);
+  }, [formData.storageLocationId, produceOptions, storageLocations, isVendorOrStore]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -118,7 +128,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
         return;
       }
 
-      if (!formData.storageLocationId) {
+      if (!isVendorOrStore && !formData.storageLocationId) {
         setMessage({ type: "error", text: "Storage location is required" });
         setLoading(false);
         return;
@@ -190,7 +200,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
         pricePerKilo,
         qualityRating: formData.qualityRating || undefined,
         qualityComment: formData.qualityComment.trim() || undefined,
-        storageLocationId: formData.storageLocationId as any,
+        storageLocationId: formData.storageLocationId ? (formData.storageLocationId as any) : undefined,
         listingMode,
         gardenSize,
         gardenDimensions,

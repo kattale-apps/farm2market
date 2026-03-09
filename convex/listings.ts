@@ -62,7 +62,7 @@ export const createListing = mutation({
     pricePerKilo: v.number(), // In UGX (for unit mode)
     qualityRating: v.optional(v.string()), // Quality rating from dropdown
     qualityComment: v.optional(v.string()), // Farmer's text comment about produce quality
-    storageLocationId: v.id("storageLocations"), // Storage location (district) where produce will be delivered
+    storageLocationId: v.optional(v.id("storageLocations")), // Storage location (district) where produce will be delivered (optional for vendor/store)
     // Garden mode fields
     listingMode: v.optional(v.union(v.literal("unit"), v.literal("garden"))), // Default: "unit"
     gardenSize: v.optional(v.number()), // Garden size in acres (for garden mode)
@@ -149,13 +149,35 @@ export const createListing = mutation({
         : LISTING_UNIT_SIZE_KG;
     }
 
-    // Verify storage location exists and is active
-    const storageLocation = await ctx.db.get(args.storageLocationId);
-    if (!storageLocation) {
-      throw new Error("Storage location not found");
+    // Verify storage location exists and is active (only when provided)
+    if (args.storageLocationId) {
+      const storageLocation = await ctx.db.get(args.storageLocationId);
+      if (!storageLocation) {
+        throw new Error("Storage location not found");
+      }
+      if (!storageLocation.active) {
+        throw new Error("Storage location is not active");
+      }
     }
-    if (!storageLocation.active) {
-      throw new Error("Storage location is not active");
+
+    // Build collection location text for vendor/store listings
+    let collectionLocationText: string | undefined;
+    if (user.role === "vendor") {
+      const vendorProfile = await ctx.db
+        .query("vendorProfiles")
+        .withIndex("by_userId", (q: any) => q.eq("userId", args.farmerId))
+        .first();
+      if (vendorProfile?.marketName) {
+        collectionLocationText = vendorProfile.marketName + (vendorProfile.stallNumber ? `, Stall ${vendorProfile.stallNumber}` : "");
+      }
+    } else if (user.role === "store") {
+      const storeProfile = await ctx.db
+        .query("storeProfiles")
+        .withIndex("by_userId", (q: any) => q.eq("userId", args.farmerId))
+        .first();
+      if (storeProfile?.buildingName && storeProfile?.streetAddress && storeProfile?.storeNumber) {
+        collectionLocationText = `${storeProfile.buildingName}, ${storeProfile.streetAddress}, ${storeProfile.storeNumber}`;
+      }
     }
 
     // Create listing
@@ -266,6 +288,7 @@ export const getActiveListings = query({
           storageLocation: storageLocation
             ? { districtName: storageLocation.districtName, code: storageLocation.code }
             : null,
+          collectionLocationText: listing.collectionLocationText || null,
           // Garden sale fields (optional for older listings)
           listingMode: derivedListingMode,
           gardenSize: listing.gardenSize,

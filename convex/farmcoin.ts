@@ -320,8 +320,8 @@ export const getTraderFarmcoinSummary = query({
   args: { traderId: v.id("users") },
   handler: async (ctx, args) => {
     const user = await ctx.db.get(args.traderId);
-    if (!user || user.role !== "trader") {
-      throw new Error("User is not a trader");
+    if (!user || !["trader", "transporter"].includes(user.role)) {
+      throw new Error("User is not a trader or transporter");
     }
 
     const entries = await ctx.db
@@ -341,8 +341,8 @@ export const getSentifyWalletSummary = query({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
     const user = await ctx.db.get(args.userId);
-    if (!user || user.role !== "trader") {
-      throw new Error("User is not a trader");
+    if (!user || !["trader", "transporter"].includes(user.role)) {
+      throw new Error("User is not a trader or transporter");
     }
 
     const entries = await ctx.db
@@ -387,8 +387,8 @@ export const getSentifyReceipts = query({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
     const user = await ctx.db.get(args.userId);
-    if (!user || user.role !== "trader") {
-      throw new Error("User is not a trader");
+    if (!user || !["trader", "transporter"].includes(user.role)) {
+      throw new Error("User is not a trader or transporter");
     }
 
     const entries = await ctx.db
@@ -460,8 +460,8 @@ export const cashOutSentifyReceipt = mutation({
   },
   handler: async (ctx, args) => {
     const user = await ctx.db.get(args.traderId);
-    if (!user || user.role !== "trader") {
-      throw new Error("User is not a trader");
+    if (!user || !["trader", "transporter"].includes(user.role)) {
+      throw new Error("User is not a trader or transporter");
     }
 
     const receipt = await ctx.db

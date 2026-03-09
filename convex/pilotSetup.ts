@@ -56,9 +56,8 @@ export const createPilotUsers = mutation({
         }
 
         // Generate alias
-        const prefix = userData.role.substring(0, 3);
         const random = Math.random().toString(36).substring(2, 8);
-        const alias = `${prefix}_${random}`;
+        const alias = `${userData.role}_${random}`;
 
         // Hash the shared pilot password
         const password = "Farm2Market2024";

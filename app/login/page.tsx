@@ -29,7 +29,7 @@ function LoginPageInner() {
   const [usePhone, setUsePhone] = useState(false); // Toggle between email and phone
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [role, setRole] = useState<"farmer" | "trader" | "buyer">("farmer");
+  const [role, setRole] = useState<"farmer" | "trader" | "buyer" | "vendor" | "transporter" | "store">("farmer");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -320,7 +320,7 @@ function LoginPageInner() {
               </label>
               <select
                 value={role}
-                onChange={(e) => setRole(e.target.value as "farmer" | "trader" | "buyer")}
+                onChange={(e) => setRole(e.target.value as "farmer" | "trader" | "buyer" | "vendor" | "transporter" | "store")}
                 required
                 style={{
                   width: "100%",
@@ -334,6 +334,9 @@ function LoginPageInner() {
                 <option value="farmer">Farmer</option>
                 <option value="trader">Trader</option>
                 <option value="buyer">Buyer</option>
+                <option value="vendor">Vendor</option>
+                <option value="transporter">Transporter</option>
+                <option value="store">Store</option>
               </select>
             </div>
           )}

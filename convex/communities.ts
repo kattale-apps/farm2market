@@ -99,9 +99,8 @@ function isCommunityAdmin(user: { adminLevel?: "super" | "junior"; adminCategory
  * Generate a unique alias for a user
  */
 function generateAlias(role: string): string {
-  const prefix = role.substring(0, 3); // "farmer" -> "far", "trader" -> "tra"
   const random = Math.random().toString(36).substring(2, 8);
-  return `${prefix}_${random}`;
+  return `${role}_${random}`;
 }
 
 /**
@@ -376,14 +375,13 @@ export const getActiveCommunities = query({
     const isCommunityAdminUser = isAdmin && !!userRecord && isCommunityAdmin(userRecord);
     const canViewMemberDetails = isSuperAdminUser || isCommunityAdminUser;
 
-    let farmerById = new Map<Id<"users">, any>();
-    let allFarmers: any[] = [];
+    let userById = new Map<Id<"users">, any>();
+    let allUsers: any[] = [];
     if (canViewMemberDetails) {
-      allFarmers = await ctx.db
-        .query("users")
-        .withIndex("by_role", (q) => q.eq("role", "farmer"))
-        .collect();
-      farmerById = new Map(allFarmers.map((farmer) => [farmer._id, farmer]));
+      // Fetch all non-admin users for member detail resolution
+      const allDbUsers = await ctx.db.query("users").collect();
+      allUsers = allDbUsers.filter((u) => u.role !== "admin");
+      userById = new Map(allUsers.map((u) => [u._id, u]));
     }
 
     // Get membership status for each community
@@ -406,26 +404,34 @@ export const getActiveCommunities = query({
           .withIndex("by_community", (q) => q.eq("communityId", c._id))
           .collect();
 
-        let memberDetails: Array<{ userId: Id<"users">; alias: string; email?: string; phoneNumber?: string }> | undefined;
-        let nonMemberDetails: Array<{ userId: Id<"users">; alias: string; email?: string; phoneNumber?: string }> | undefined;
+        let memberDetails: Array<{ userId: Id<"users">; alias: string; email?: string; phoneNumber?: string; role?: string }> | undefined;
+        let nonMemberDetails: Array<{ userId: Id<"users">; alias: string; email?: string; phoneNumber?: string; role?: string }> | undefined;
+        // Role breakdown: count members per signup role
+        let roleBreakdown: Record<string, number> | undefined;
         if (canViewMemberDetails) {
           const memberIds = new Set(memberships.map((membership) => membership.userId));
+          const breakdown: Record<string, number> = {};
           memberDetails = memberships.map((membership) => {
-            const member = farmerById.get(membership.userId);
+            const member = userById.get(membership.userId);
+            const role = member?.role || "unknown";
+            breakdown[role] = (breakdown[role] || 0) + 1;
             return {
               userId: membership.userId,
               alias: member?.alias || "Unknown",
               email: member?.email,
               phoneNumber: member?.phoneNumber,
+              role,
             };
           });
-          nonMemberDetails = allFarmers
-            .filter((farmer) => !memberIds.has(farmer._id))
-            .map((farmer) => ({
-              userId: farmer._id,
-              alias: farmer.alias || "Unknown",
-              email: farmer.email,
-              phoneNumber: farmer.phoneNumber,
+          roleBreakdown = breakdown;
+          nonMemberDetails = allUsers
+            .filter((u) => !memberIds.has(u._id))
+            .map((u) => ({
+              userId: u._id,
+              alias: u.alias || "Unknown",
+              email: u.email,
+              phoneNumber: u.phoneNumber,
+              role: u.role,
             }));
         }
 
@@ -441,6 +447,7 @@ export const getActiveCommunities = query({
           geoLocked: c.geoLocked,
           isMember,
           memberCount: memberships.length,
+          roleBreakdown,
           members: memberDetails,
           nonMembers: nonMemberDetails,
         };
@@ -847,7 +854,7 @@ export const createCommunity = mutation({
     districtIds: v.optional(v.array(v.id("districts"))),
     subcountyIds: v.optional(v.array(v.id("subcounties"))),
     parishIds: v.optional(v.array(v.id("parishes"))),
-    communityType: v.union(v.literal("farmer"), v.literal("trader"), v.literal("buyer")),
+    communityType: v.union(v.literal("farmer"), v.literal("trader"), v.literal("buyer"), v.literal("vendor"), v.literal("transporter"), v.literal("store")),
     // assignAdminId is fully optional - community admins can be assigned later
     assignAdminId: v.optional(v.id("users")),
     // QR & monetisation fields (optional)
@@ -1141,7 +1148,7 @@ export const updateCommunity = mutation({
 });
 
 /**
- * Join a community (any role: farmer, trader, buyer)
+ * Join a community (any role: farmer, trader, buyer, vendor, transporter, store)
  */
 export const joinCommunity = mutation({
   args: {
@@ -1155,9 +1162,9 @@ export const joinCommunity = mutation({
     }
 
     // Any non-admin role may join communities
-    const allowedRoles = ["farmer", "trader", "buyer"];
+    const allowedRoles = ["farmer", "trader", "buyer", "vendor", "transporter", "store"];
     if (!allowedRoles.includes(user.role)) {
-      throw new Error("Only farmers, traders, and buyers can join communities");
+      throw new Error("Only non-admin users can join communities");
     }
 
     // Verify community exists
@@ -1202,7 +1209,7 @@ export const joinCommunity = mutation({
 });
 
 /**
- * Leave a community (any role: farmer, trader, buyer)
+ * Leave a community (any role: farmer, trader, buyer, vendor, transporter, store)
  */
 export const leaveCommunity = mutation({
   args: {
@@ -1235,7 +1242,7 @@ export const leaveCommunity = mutation({
 });
 
 /**
- * Tag a listing to a community (farmer only, for their own listings)
+ * Tag a listing to a community (farmer/vendor/store, for their own listings)
  */
 export const tagListingToCommunity = mutation({
   args: {
@@ -1244,10 +1251,10 @@ export const tagListingToCommunity = mutation({
     communityId: v.id("communities"),
   },
   handler: async (ctx, args) => {
-    // Verify user is a farmer
+    // Verify user has a listing-capable role
     const farmer = await ctx.db.get(args.farmerId);
-    if (!farmer || farmer.role !== "farmer") {
-      throw new Error("Only farmers can tag listings to communities");
+    if (!farmer || !["farmer", "vendor", "store"].includes(farmer.role)) {
+      throw new Error("Only farmers, vendors, and stores can tag listings to communities");
     }
 
     // Verify listing belongs to farmer
@@ -1951,5 +1958,43 @@ export const getMyNavigationContext = query({
       defaultCommunityId,
       error: undefined,
     };
+  },
+});
+
+/**
+ * Set a community-specific role label on a membership record.
+ * This is separate from the signup role — it lets a community admin
+ * assign a community-level role (e.g., "Lead Farmer", "Zone Manager").
+ */
+export const setCommunityRole = mutation({
+  args: {
+    communityId: v.id("communities"),
+    userId: v.id("users"),
+    communityRole: v.string(),
+    adminId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    // Verify caller is admin
+    const admin = await ctx.db.get(args.adminId);
+    if (!admin || admin.role !== "admin") {
+      throw new Error("Only admins can set community roles");
+    }
+
+    const membership = await ctx.db
+      .query("communityMemberships")
+      .withIndex("by_community_user", (q) =>
+        q.eq("communityId", args.communityId).eq("userId", args.userId)
+      )
+      .first();
+
+    if (!membership) {
+      throw new Error("User is not a member of this community");
+    }
+
+    await ctx.db.patch(membership._id, {
+      communityRole: args.communityRole,
+    });
+
+    return { success: true };
   },
 });

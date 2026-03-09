@@ -494,8 +494,8 @@ export function generateUserAlias(
   // Format: {rolePrefix}_{timestampHash}_{emailHash}
   // This ensures uniqueness and determinism
   try {
-    // Extract role prefix (first 3 characters, lowercase)
-    const rolePrefix = context.role.slice(0, 3).toLowerCase();
+    // Use full role name (lowercase) as alias prefix
+    const rolePrefix = context.role.toLowerCase();
     
     // Hash timestamp (deterministic)
     const timestampHash = hashString(context.timestamp.toString()).slice(0, 6);

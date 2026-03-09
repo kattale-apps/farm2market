@@ -33,9 +33,8 @@ export async function verifyAdminRole(context: {
  * Format: role_prefix_randomstring (e.g., "farmer_a3k9x2", "trader_m7p4q1")
  */
 function generateAlias(role: string): string {
-  const prefix = role.substring(0, 3); // "farmer" -> "far", "trader" -> "tra"
   const random = Math.random().toString(36).substring(2, 8);
-  return `${prefix}_${random}`;
+  return `${role}_${random}`;
 }
 
 /**
@@ -103,7 +102,10 @@ export const createUser = mutation({
       v.literal("farmer"),
       v.literal("trader"),
       v.literal("buyer"),
-      v.literal("admin")
+      v.literal("admin"),
+      v.literal("vendor"),
+      v.literal("transporter"),
+      v.literal("store")
     ),
     adminLevel: v.optional(v.union(v.literal("super"), v.literal("junior"))),
     adminCategory: v.optional(v.union(v.literal("store"), v.literal("message"), v.literal("community"), v.literal("finance"))),
@@ -279,7 +281,10 @@ export const signup = mutation({
     role: v.union(
       v.literal("farmer"),
       v.literal("trader"),
-      v.literal("buyer")
+      v.literal("buyer"),
+      v.literal("vendor"),
+      v.literal("transporter"),
+      v.literal("store")
     ),
   },
   handler: async (ctx, args) => {
@@ -483,7 +488,10 @@ export const verifyRole = query({
       v.literal("farmer"),
       v.literal("trader"),
       v.literal("buyer"),
-      v.literal("admin")
+      v.literal("admin"),
+      v.literal("vendor"),
+      v.literal("transporter"),
+      v.literal("store")
     ),
   },
   handler: async (ctx, args) => {

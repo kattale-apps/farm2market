@@ -63,11 +63,13 @@ import type * as seedDemo from "../seedDemo.js";
 import type * as seedUgandaLocations from "../seedUgandaLocations.js";
 import type * as serviceLevels from "../serviceLevels.js";
 import type * as storeAdmin from "../storeAdmin.js";
+import type * as storeOnboarding from "../storeOnboarding.js";
 import type * as storeadminAudit from "../storeadminAudit.js";
 import type * as tempVerifyFarmerData from "../tempVerifyFarmerData.js";
 import type * as testUtils from "../testUtils.js";
 import type * as traderBuyerNegotiations from "../traderBuyerNegotiations.js";
 import type * as traderDashboard from "../traderDashboard.js";
+import type * as transporterOnboarding from "../transporterOnboarding.js";
 import type * as tutorials from "../tutorials.js";
 import type * as types_communityForms from "../types/communityForms.js";
 import type * as ugandaLocationsData from "../ugandaLocationsData.js";
@@ -79,6 +81,7 @@ import type * as userSettings from "../userSettings.js";
 import type * as utils from "../utils.js";
 import type * as utils_index from "../utils/index.js";
 import type * as utils_types from "../utils/types.js";
+import type * as vendorOnboarding from "../vendorOnboarding.js";
 import type * as wallet from "../wallet.js";
 
 import type {
@@ -143,11 +146,13 @@ declare const fullApi: ApiFromModules<{
   seedUgandaLocations: typeof seedUgandaLocations;
   serviceLevels: typeof serviceLevels;
   storeAdmin: typeof storeAdmin;
+  storeOnboarding: typeof storeOnboarding;
   storeadminAudit: typeof storeadminAudit;
   tempVerifyFarmerData: typeof tempVerifyFarmerData;
   testUtils: typeof testUtils;
   traderBuyerNegotiations: typeof traderBuyerNegotiations;
   traderDashboard: typeof traderDashboard;
+  transporterOnboarding: typeof transporterOnboarding;
   tutorials: typeof tutorials;
   "types/communityForms": typeof types_communityForms;
   ugandaLocationsData: typeof ugandaLocationsData;
@@ -159,6 +164,7 @@ declare const fullApi: ApiFromModules<{
   utils: typeof utils;
   "utils/index": typeof utils_index;
   "utils/types": typeof utils_types;
+  vendorOnboarding: typeof vendorOnboarding;
   wallet: typeof wallet;
 }>;
 

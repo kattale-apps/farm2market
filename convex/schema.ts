@@ -55,7 +55,7 @@ export default defineSchema({
     email: v.optional(v.string()), // Optional - user can use email or phone number
     phoneNumber: v.optional(v.string()), // Optional - user can use email or phone number
     sex: v.optional(v.union(v.literal("M"), v.literal("F"))), // Optional - farmer profile field
-    role: v.union(v.literal("farmer"), v.literal("trader"), v.literal("buyer"), v.literal("admin")),
+    role: v.union(v.literal("farmer"), v.literal("trader"), v.literal("buyer"), v.literal("admin"), v.literal("vendor"), v.literal("transporter"), v.literal("store")),
     alias: v.string(), // System-generated, stable, non-identifying
     state: v.union(v.literal("active"), v.literal("suspended"), v.literal("deleted")), // User account state
     createdAt: v.number(),
@@ -844,7 +844,7 @@ export default defineSchema({
     createdBy: v.id("users"), // SuperAdmin who created this community
     createdAt: v.number(),
     utid: v.string(), // Admin action UTID
-    communityType: v.optional(v.union(v.literal("farmer"), v.literal("trader"), v.literal("buyer"))), // Type of community (optional for backward-compatibility)
+    communityType: v.optional(v.union(v.literal("farmer"), v.literal("trader"), v.literal("buyer"), v.literal("vendor"), v.literal("transporter"), v.literal("store"))), // Type of community (optional for backward-compatibility)
     // QR code and community features
     qrEnabled: v.optional(v.boolean()), // Whether community has QR code feature enabled
     qrSlug: v.optional(v.string()), // Slug for community QR code (e.g., "biofarm-ug")
@@ -857,8 +857,9 @@ export default defineSchema({
 
   communityMemberships: defineTable({
     communityId: v.id("communities"),
-    userId: v.id("users"), // Farmer who joined
+    userId: v.id("users"), // Member who joined
     joinedAt: v.number(),
+    communityRole: v.optional(v.string()), // Community-specific role label (e.g. "Lead Aggregator", "Input Supplier")
   })
     .index("by_community", ["communityId"])
     .index("by_user", ["userId"])
@@ -1490,6 +1491,7 @@ export default defineSchema({
     fieldId: v.id("formFields"),
     value: v.string(), // Stored as string for consistency
     createdAt: v.number(),
+    updatedAt: v.optional(v.number()), // Set on upsert for live profile form fields
   })
     .index("by_response", ["responseId"])
     .index("by_field", ["fieldId"]),
@@ -1548,4 +1550,59 @@ export default defineSchema({
     .index("by_role_order", ["roleCategory", "order"])
     .index("by_active", ["active"])
     .index("by_created_at", ["createdAt"]),
+
+  // ── Vendor / Transporter / Store profile tables ──
+
+  vendorProfiles: defineTable({
+    userId: v.id("users"),
+    region: v.optional(v.string()),
+    districtId: v.optional(v.id("districts")),
+    subcountyId: v.optional(v.id("subcounties")),
+    parishId: v.optional(v.id("parishes")),
+    marketType: v.union(
+      v.literal("city_market"),
+      v.literal("supermarket"),
+      v.literal("roadside_market"),
+      v.literal("town_market"),
+      v.literal("village_market")
+    ),
+    onboardingCompleted: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_userId", ["userId"]),
+
+  transporterProfiles: defineTable({
+    userId: v.id("users"),
+    vehicleType: v.union(
+      v.literal("cold_storage"),
+      v.literal("open_pickup"),
+      v.literal("box_body")
+    ),
+    vehicleTypeCustom: v.optional(v.string()), // Free text when "other" selected on UI
+    weightCapacityTonnes: v.number(),
+    vehicleCount: v.number(),
+    departureRegion: v.optional(v.string()),
+    departureDistrictId: v.optional(v.id("districts")),
+    departureSubcountyId: v.optional(v.id("subcounties")),
+    onboardingCompleted: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_userId", ["userId"]),
+
+  storeProfiles: defineTable({
+    userId: v.id("users"),
+    region: v.optional(v.string()),
+    districtId: v.optional(v.id("districts")),
+    subcountyId: v.optional(v.id("subcounties")),
+    parishId: v.optional(v.id("parishes")),
+    storageCapacityTonnes: v.number(),
+    storeType: v.union(
+      v.literal("cold_storage"),
+      v.literal("dry_storage")
+    ),
+    storeTypeCustom: v.optional(v.string()), // Free text when "other" selected on UI
+    onboardingCompleted: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_userId", ["userId"]),
 });

@@ -245,7 +245,7 @@ export const acceptOffer = mutation({
 
     // Verify user is a farmer
     const user = await ctx.db.get(args.farmerId);
-    if (!user || user.role !== "farmer") {
+    if (!user || !["farmer", "vendor", "store"].includes(user.role)) {
       throwAppError(invalidRoleError("farmer"));
     }
 
@@ -311,7 +311,7 @@ export const rejectOffer = mutation({
 
     // Verify user is a farmer
     const user = await ctx.db.get(args.farmerId);
-    if (!user || user.role !== "farmer") {
+    if (!user || !["farmer", "vendor", "store"].includes(user.role)) {
       throwAppError(invalidRoleError("farmer"));
     }
 
@@ -365,7 +365,7 @@ export const counterOffer = mutation({
 
     // Verify user is a farmer
     const user = await ctx.db.get(args.farmerId);
-    if (!user || user.role !== "farmer") {
+    if (!user || !["farmer", "vendor", "store"].includes(user.role)) {
       throwAppError(invalidRoleError("farmer"));
     }
 
@@ -709,7 +709,7 @@ export const getFarmerNegotiations = query({
   handler: async (ctx, args) => {
     // Verify user is a farmer
     const user = await ctx.db.get(args.farmerId);
-    if (!user || user.role !== "farmer") {
+    if (!user || !["farmer", "vendor", "store"].includes(user.role)) {
       throw new Error("User is not a farmer");
     }
 
@@ -843,7 +843,7 @@ export const clearConcludedNegotiations = mutation({
   },
   handler: async (ctx, args) => {
     const user = await ctx.db.get(args.farmerId);
-    if (!user || user.role !== "farmer") {
+    if (!user || !["farmer", "vendor", "store"].includes(user.role)) {
       throw new Error("Only farmers can clear their concluded negotiations");
     }
 
@@ -874,7 +874,7 @@ export const deleteSingleNegotiation = mutation({
   },
   handler: async (ctx, args) => {
     const user = await ctx.db.get(args.farmerId);
-    if (!user || user.role !== "farmer") {
+    if (!user || !["farmer", "vendor", "store"].includes(user.role)) {
       throw new Error("Only farmers can delete their negotiations");
     }
 

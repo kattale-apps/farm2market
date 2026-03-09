@@ -8,6 +8,9 @@ import { AdminDashboard } from "./components/AdminDashboard";
 import { TraderDashboardSafe } from "./components/TraderDashboardSafe";
 import { FarmerDashboard } from "./components/FarmerDashboard";
 import { BuyerDashboard } from "./components/BuyerDashboard";
+import { VendorDashboard } from "./components/VendorDashboard";
+import { TransporterDashboard } from "./components/TransporterDashboard";
+import { StoreDashboard } from "./components/StoreDashboard";
 import { Id } from "../convex/_generated/dataModel";
 // import { useMutation } from "convex/react";
 // import { initializePushNotifications } from "./utils/pushNotifications";
@@ -72,7 +75,7 @@ export default function Home() {
     }
   }, [router]);
 
-  // Check if farmer needs onboarding (hooks must be called unconditionally)
+  // Check if farmer/vendor/store needs onboarding (hooks must be called unconditionally)
   const onboardingStatus = useQuery(
     api.farmerOnboarding.checkOnboardingStatus,
     user?.role === "farmer" && user?.userId 
@@ -80,19 +83,49 @@ export default function Home() {
       : "skip"
   );
 
+  const vendorOnboardingStatus = useQuery(
+    api.vendorOnboarding.checkOnboardingStatus,
+    user?.role === "vendor" && user?.userId
+      ? { userId: user.userId as Id<"users"> }
+      : "skip"
+  );
+
+  const transporterOnboardingStatus = useQuery(
+    api.transporterOnboarding.checkOnboardingStatus,
+    user?.role === "transporter" && user?.userId
+      ? { userId: user.userId as Id<"users"> }
+      : "skip"
+  );
+
+  const storeOnboardingStatus = useQuery(
+    api.storeOnboarding.checkOnboardingStatus,
+    user?.role === "store" && user?.userId
+      ? { userId: user.userId as Id<"users"> }
+      : "skip"
+  );
+
   const communities = useQuery(
     api.communities.getActiveCommunities,
-    (user?.role === "farmer" || user?.role === "trader" || user?.role === "buyer") && user?.userId ? { userId: user.userId as Id<"users"> } : "skip"
+    ["farmer", "trader", "buyer", "vendor", "transporter", "store"].includes(user?.role) && user?.userId ? { userId: user.userId as Id<"users"> } : "skip"
   );
 
   const memberCommunities = (communities || []).filter((c: any) => c.isMember);
 
-  // Redirect farmers to onboarding if not completed
+  // Redirect to onboarding if not completed
   useEffect(() => {
     if (user?.role === "farmer" && onboardingStatus !== undefined && !onboardingStatus.completed) {
       router.push("/onboarding/farmer");
     }
-  }, [user?.role, onboardingStatus, router]);
+    if (user?.role === "vendor" && vendorOnboardingStatus !== undefined && !vendorOnboardingStatus.completed) {
+      router.push("/onboarding/vendor");
+    }
+    if (user?.role === "transporter" && transporterOnboardingStatus !== undefined && !transporterOnboardingStatus.completed) {
+      router.push("/onboarding/transporter");
+    }
+    if (user?.role === "store" && storeOnboardingStatus !== undefined && !storeOnboardingStatus.completed) {
+      router.push("/onboarding/store");
+    }
+  }, [user?.role, onboardingStatus, vendorOnboardingStatus, transporterOnboardingStatus, storeOnboardingStatus, router]);
   
   // Show loading if checking auth
   if (!user || !user.userId || !user.role || !user.alias) {
@@ -235,7 +268,7 @@ export default function Home() {
             >
               Privacy Policy
             </a>
-            {(user?.role === "farmer" || user?.role === "trader" || user?.role === "buyer" || isSuperAdmin || (user?.role === "admin" && user?.adminCategory === "community")) && (
+            {(user?.role === "farmer" || user?.role === "trader" || user?.role === "buyer" || user?.role === "vendor" || user?.role === "transporter" || user?.role === "store" || isSuperAdmin || (user?.role === "admin" && user?.adminCategory === "community")) && (
               <a
                 href={
                   isSuperAdmin ? "/admin/communities" :
@@ -293,7 +326,7 @@ export default function Home() {
           }}>
             Role: {user?.role || "unknown"}
           </p>
-          {(user?.role === "farmer" || user?.role === "trader" || user?.role === "buyer") && (
+          {(user?.role === "farmer" || user?.role === "trader" || user?.role === "buyer" || user?.role === "vendor" || user?.role === "transporter" || user?.role === "store") && (
             <div style={{ position: "relative", alignSelf: isMobile ? "flex-start" : "flex-end" }}>
               <button
                 type="button"
@@ -394,6 +427,9 @@ export default function Home() {
         {user?.role === "trader" && user?.userId && <TraderDashboardSafe userId={user.userId as Id<"users">} />}
         {user?.role === "farmer" && user?.userId && <FarmerDashboard userId={user.userId as Id<"users">} />}
         {user?.role === "buyer" && user?.userId && <BuyerDashboard userId={user.userId as Id<"users">} />}
+        {user?.role === "vendor" && user?.userId && <VendorDashboard userId={user.userId as Id<"users">} />}
+        {user?.role === "transporter" && user?.userId && <TransporterDashboard userId={user.userId as Id<"users">} />}
+        {user?.role === "store" && user?.userId && <StoreDashboard userId={user.userId as Id<"users">} />}
       </div>
     </main>
   );

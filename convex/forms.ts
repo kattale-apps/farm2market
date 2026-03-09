@@ -1059,3 +1059,135 @@ export const getCommunityProfileForms = query({
     return results;
   },
 });
+
+// ─────────────── Profile Form Live-Save Functions ───────────────
+
+/**
+ * Upsert a single profile form field value (live save on blur).
+ * Profile forms never mint FarmCoin. Status always stays "DRAFT".
+ * Creates a formResponse record if none exists, then upserts the single field value.
+ */
+export const upsertProfileFormField = mutation({
+  args: {
+    formId: v.id("communityForms"),
+    communityId: v.id("communities"),
+    memberId: v.id("users"),
+    fieldId: v.id("formFields"),
+    value: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const now = getUgandaTime();
+
+    // Verify form is a profile form
+    const form = await ctx.db.get(args.formId);
+    if (!form || (form as any).formPurpose !== "profile") {
+      throw new Error("Form is not a profile form");
+    }
+
+    // Find or create DRAFT response for this member + form
+    const existing = await ctx.db
+      .query("formResponses")
+      .withIndex("by_form_member", (q) =>
+        q.eq("formId", args.formId).eq("memberId", args.memberId)
+      )
+      .collect();
+    let draft = existing.find((r: any) => r.status === "DRAFT" || !r.status);
+
+    let responseId: Id<"formResponses">;
+    if (draft) {
+      responseId = draft._id;
+      await ctx.db.patch(responseId, { updatedAt: now });
+    } else {
+      responseId = await ctx.db.insert("formResponses", {
+        formId: args.formId,
+        communityId: args.communityId,
+        memberId: args.memberId,
+        status: "DRAFT",
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    // Find existing value for this field
+    const existingValues = await ctx.db
+      .query("formResponseValues")
+      .withIndex("by_response", (q) => q.eq("responseId", responseId))
+      .collect();
+    const existingValue = existingValues.find(
+      (v) => String(v.fieldId) === String(args.fieldId)
+    );
+
+    if (existingValue) {
+      // Update in place
+      await ctx.db.patch(existingValue._id, {
+        value: args.value,
+        updatedAt: now,
+      });
+    } else {
+      // Insert new value
+      await ctx.db.insert("formResponseValues", {
+        responseId,
+        fieldId: args.fieldId,
+        value: args.value,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    return { responseId, status: "DRAFT" };
+  },
+});
+
+/**
+ * Get all profile form responses for a member in a community.
+ * Returns a map of formId → { responseId, fieldValues: { fieldId → value } }
+ */
+export const getMyProfileFormResponses = query({
+  args: {
+    communityId: v.id("communities"),
+    memberId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    // Get all profile forms for this community
+    const forms = await ctx.db
+      .query("communityForms")
+      .withIndex("by_community", (q: any) => q.eq("communityId", args.communityId))
+      .collect();
+    const profileForms = forms.filter(
+      (f: any) => f.formPurpose === "profile" && f.isActive
+    );
+
+    const result: Record<string, {
+      responseId: string;
+      fieldValues: Record<string, string>;
+      updatedAt: number;
+    }> = {};
+
+    for (const form of profileForms) {
+      const responses = await ctx.db
+        .query("formResponses")
+        .withIndex("by_form_member", (q) =>
+          q.eq("formId", form._id).eq("memberId", args.memberId)
+        )
+        .collect();
+      const response = responses[0]; // Take first (there should be at most one DRAFT)
+      if (response) {
+        const values = await ctx.db
+          .query("formResponseValues")
+          .withIndex("by_response", (q) => q.eq("responseId", response._id))
+          .collect();
+        const fieldValues: Record<string, string> = {};
+        for (const v of values) {
+          fieldValues[String(v.fieldId)] = v.value;
+        }
+        result[String(form._id)] = {
+          responseId: String(response._id),
+          fieldValues,
+          updatedAt: response.updatedAt,
+        };
+      }
+    }
+
+    return result;
+  },
+});

@@ -39,7 +39,7 @@ export function generateUTID(role: string): string {
   const seconds = String(date.getUTCSeconds()).padStart(2, "0");
   const dateStr = `${year}${month}${day}`;
   const timeStr = `${hours}${minutes}${seconds}`;
-  const rolePrefix = role.substring(0, 3);
+  const rolePrefix = role;
   const random = Math.random().toString(36).substring(2, 8);
   return `${dateStr}-${timeStr}-${rolePrefix}-${random}`;
 }

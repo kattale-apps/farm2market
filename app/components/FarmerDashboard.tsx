@@ -16,9 +16,10 @@ import { resolveCommunityLogo } from "../lib/communityLogos";
 
 interface FarmerDashboardProps {
   userId: Id<"users">;
+  userRole?: "farmer" | "vendor" | "store";
 }
 
-export function FarmerDashboard({ userId }: FarmerDashboardProps) {
+export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
   const listings = useQuery(api.farmerDashboard.getFarmerListings, { farmerId: userId });
   const negotiations = useQuery(api.negotiations.getFarmerNegotiations, { farmerId: userId });
   const confirmations = useQuery(api.farmerDashboard.getPayToLockConfirmations, { farmerId: userId });
@@ -27,7 +28,11 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
   const transactionsLedger = useQuery(api.farmerDashboard.getSuccessfulTransactionsLedger, { farmerId: userId });
   const allUnitsLedger = useQuery(api.farmerDashboard.getAllUnitsLedger, { farmerId: userId });
   const communities = useQuery(api.communities.getActiveCommunities, { userId });
-  const myAgroFreshDrafts = useQuery(api.farmValidation.getMyDrafts, { farmerId: userId });
+  const effectiveRole = userRole || "farmer";
+  const myAgroFreshDrafts = useQuery(
+    api.farmValidation.getMyDrafts,
+    effectiveRole === "farmer" ? { farmerId: userId } : "skip"
+  );
   const farmerFarmcoinBalance = useQuery(
     (api as any).farmcoin.getFarmerFarmcoinBalance,
     { farmerId: userId }
@@ -660,13 +665,13 @@ export function FarmerDashboard({ userId }: FarmerDashboardProps) {
 
   const agroFreshCommunityId = process.env.NEXT_PUBLIC_AGROFRESH_COMMUNITY_ID;
 
-  const isAgroFreshMember =
-    communities?.some((c: any) => {
+  const isAgroFreshMember = effectiveRole === "farmer" &&
+    (communities?.some((c: any) => {
       if (agroFreshCommunityId && c.id === agroFreshCommunityId) return !!c.isMember;
       const nameKey = normalizeCommunityKey(c.name);
       const descriptionKey = normalizeCommunityKey(c.description);
       return (nameKey.includes("agrofresh") || descriptionKey.includes("agrofresh")) && c.isMember;
-    }) ?? false;
+    }) ?? false);
 
   const memberCommunities = (communities || []).filter((c: any) => c.isMember);
 

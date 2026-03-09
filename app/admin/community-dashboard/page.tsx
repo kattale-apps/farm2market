@@ -1140,7 +1140,8 @@ export default function CommunityDashboardPage() {
       // These are the standard fields every farmer fills during registration
       // No community-specific form fields are included
       const profileOnboarding = {
-        "Farmer Name": farmer.alias || "",
+        "Member Name": farmer.alias || "",
+        "Signup Role": farmer.role || item.role || "",
         "Email": farmer.email || "",
         "Phone": farmer.phoneNumber || "",
         "Region": farmer.region || "",
@@ -1469,11 +1470,42 @@ export default function CommunityDashboardPage() {
                       fontSize: "0.9rem",
                       color: "#424242",
                       flexWrap: "wrap",
+                      alignItems: "center",
                     }}
                   >
                     <div>
                       <strong>Members:</strong> {community.memberCount}
                     </div>
+                    {/* Role Breakdown Badges */}
+                    {community.roleBreakdown && Object.entries(community.roleBreakdown as Record<string, number>).map(([role, count]: [string, number]) => {
+                      const roleColors: Record<string, { bg: string; text: string }> = {
+                        farmer: { bg: "#e8f5e9", text: "#2e7d32" },
+                        trader: { bg: "#e3f2fd", text: "#1565c0" },
+                        buyer: { bg: "#f3e5f5", text: "#6a1b9a" },
+                        vendor: { bg: "#fff3e0", text: "#e65100" },
+                        transporter: { bg: "#e1f5fe", text: "#0277bd" },
+                        store: { bg: "#ffebee", text: "#c62828" },
+                        admin: { bg: "#eceff1", text: "#37474f" },
+                      };
+                      const c = roleColors[role] || { bg: "#f5f5f5", text: "#616161" };
+                      return (
+                        <div key={role} style={{
+                          padding: "0.2rem 0.6rem",
+                          borderRadius: 999,
+                          background: c.bg,
+                          color: c.text,
+                          fontWeight: 600,
+                          fontSize: "0.78rem",
+                          textTransform: "capitalize",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 4,
+                        }}>
+                          <span>{role === "farmer" ? "🌾" : role === "trader" ? "📊" : role === "buyer" ? "🛒" : role === "vendor" ? "🏪" : role === "transporter" ? "🚛" : role === "store" ? "🏬" : "👤"}</span>
+                          {role}: {count}
+                        </div>
+                      );
+                    })}
                     {community.isGlobal && (
                       <div
                         style={{
@@ -1906,7 +1938,15 @@ export default function CommunityDashboardPage() {
                             fontWeight: "600",
                             color: "#2c2c2c",
                           }}>
-                            Farmer Name
+                            Name
+                          </th>
+                          <th style={{
+                            padding: "0.75rem",
+                            textAlign: "left",
+                            fontWeight: "600",
+                            color: "#2c2c2c",
+                          }}>
+                            Role
                           </th>
                           <th style={{
                             padding: "0.75rem",
@@ -1946,6 +1986,34 @@ export default function CommunityDashboardPage() {
                             >
                               <td style={{ padding: "0.75rem", color: "#2c2c2c" }}>
                                 {member.alias}
+                              </td>
+                              <td style={{ padding: "0.75rem" }}>
+                                {(() => {
+                                  const r = member.role || "unknown";
+                                  const rc: Record<string, { bg: string; text: string }> = {
+                                    farmer: { bg: "#e8f5e9", text: "#2e7d32" },
+                                    trader: { bg: "#e3f2fd", text: "#1565c0" },
+                                    buyer: { bg: "#f3e5f5", text: "#6a1b9a" },
+                                    vendor: { bg: "#fff3e0", text: "#e65100" },
+                                    transporter: { bg: "#e1f5fe", text: "#0277bd" },
+                                    store: { bg: "#ffebee", text: "#c62828" },
+                                    admin: { bg: "#eceff1", text: "#37474f" },
+                                  };
+                                  const cl = rc[r] || { bg: "#f5f5f5", text: "#616161" };
+                                  return (
+                                    <span style={{
+                                      padding: "0.15rem 0.5rem",
+                                      borderRadius: 999,
+                                      background: cl.bg,
+                                      color: cl.text,
+                                      fontWeight: 600,
+                                      fontSize: "0.78rem",
+                                      textTransform: "capitalize",
+                                    }}>
+                                      {r}
+                                    </span>
+                                  );
+                                })()}
                               </td>
                               <td style={{ padding: "0.75rem", color: "#666" }}>
                                 {member.phoneNumber || "—"}

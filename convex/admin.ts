@@ -331,8 +331,8 @@ export const depositDemoFunds = mutation({
     }
 
     const user = await ctx.db.get(args.targetUserId);
-    if (!user || (user.role !== "trader" && user.role !== "buyer")) {
-      throw new Error("Target user must be a trader or buyer");
+    if (!user || !["trader", "buyer", "transporter"].includes(user.role)) {
+      throw new Error("Target user must be a trader, buyer, or transporter");
     }
 
     // Get current balance
@@ -2184,8 +2184,8 @@ export const adminDepositDemoFunds = mutation({
       throw new Error("Target user not found");
     }
 
-    if (targetUser.role !== "trader" && targetUser.role !== "buyer") {
-      throw new Error("Can only deposit demo funds to traders or buyers");
+    if (!["trader", "buyer", "transporter"].includes(targetUser.role)) {
+      throw new Error("Can only deposit demo funds to traders, buyers, or transporters");
     }
 
     if (args.amount <= 0) {

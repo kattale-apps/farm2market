@@ -13,7 +13,7 @@ type AnyUser = {
   alias: string;
   email?: string;
   phoneNumber?: string;
-  role: "farmer" | "trader" | "buyer" | "admin";
+  role: "farmer" | "trader" | "buyer" | "admin" | "vendor" | "transporter" | "store";
   adminLevel?: "super" | "junior";
   adminCategory?: "community" | "store" | "message" | "finance";
   assignedCommunityIds?: Id<"communities">[];

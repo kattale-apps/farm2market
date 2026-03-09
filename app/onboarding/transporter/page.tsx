@@ -247,7 +247,7 @@ export default function TransporterOnboardingPage() {
               <select value={selectedSubcountyId} onChange={(e) => setSelectedSubcountyId(e.target.value as any)} disabled={!selectedDistrictId}
                 style={{ ...inputStyle, background: selectedDistrictId ? "#fff" : "#f5f5f5" }}>
                 <option value="">{selectedDistrictId ? "Select Subcounty" : "Select District first"}</option>
-                {(subcounties ?? []).map((sc: any) => <option key={sc._id} value={sc._id}>{sc.name}</option>)}
+                {(subcounties ?? []).map((sc: any) => <option key={sc.id} value={sc.id}>{sc.name}</option>)}
               </select>
             </div>
           </div>

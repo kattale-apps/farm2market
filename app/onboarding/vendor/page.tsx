@@ -108,8 +108,8 @@ export default function VendorOnboardingPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userId) { setMessage({ type: "error", text: "Please log in first" }); return; }
-    if (!selectedRegionKey || !selectedDistrictId || !selectedSubcountyId || !selectedParishId) {
-      setMessage({ type: "error", text: "Please select Region, District, Subcounty, and Parish" }); return;
+    if (!selectedRegionKey || !selectedDistrictId || !selectedSubcountyId) {
+      setMessage({ type: "error", text: "Please select Region, District, and Subcounty" }); return;
     }
     if (!marketType) { setMessage({ type: "error", text: "Please select a market type" }); return; }
 
@@ -120,7 +120,7 @@ export default function VendorOnboardingPage() {
         region: selectedRegion?.label || selectedRegionKey,
         districtId: selectedDistrictId as Id<"districts">,
         subcountyId: selectedSubcountyId as Id<"subcounties">,
-        parishId: selectedParishId as Id<"parishes">,
+        parishId: selectedParishId ? selectedParishId as Id<"parishes"> : undefined,
         marketType: marketType as any,
       });
       setMessage({ type: "success", text: `Onboarding complete! UTID: ${result.utid}` });
@@ -192,16 +192,16 @@ export default function VendorOnboardingPage() {
               <select value={selectedSubcountyId} onChange={(e) => setSelectedSubcountyId(e.target.value as any)} required disabled={!selectedDistrictId}
                 style={{ ...inputStyle, background: selectedDistrictId ? "#fff" : "#f5f5f5", cursor: selectedDistrictId ? "pointer" : "not-allowed" }}>
                 <option value="">{selectedDistrictId ? "Select Subcounty" : "Select District first"}</option>
-                {(subcounties ?? []).map((sc: any) => <option key={sc._id} value={sc._id}>{sc.name}</option>)}
+                {(subcounties ?? []).map((sc: any) => <option key={sc.id} value={sc.id}>{sc.name}</option>)}
               </select>
             </div>
 
             <div style={{ marginBottom: "1rem" }}>
-              <label style={labelStyle}>Parish *</label>
-              <select value={selectedParishId} onChange={(e) => setSelectedParishId(e.target.value as any)} required disabled={!selectedSubcountyId}
+              <label style={labelStyle}>Parish (optional)</label>
+              <select value={selectedParishId} onChange={(e) => setSelectedParishId(e.target.value as any)} disabled={!selectedSubcountyId}
                 style={{ ...inputStyle, background: selectedSubcountyId ? "#fff" : "#f5f5f5", cursor: selectedSubcountyId ? "pointer" : "not-allowed" }}>
                 <option value="">{selectedSubcountyId ? "Select Parish" : "Select Subcounty first"}</option>
-                {(parishes ?? []).map((p: any) => <option key={p._id} value={p._id}>{p.name}</option>)}
+                {(parishes ?? []).map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </div>
           </div>

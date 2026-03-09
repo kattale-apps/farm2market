@@ -490,12 +490,11 @@ export default function FarmerProfilePage() {
               {selectedSubcountyId && (
                 <div>
                   <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>
-                    Parish *
+                    Parish (optional)
                   </label>
                   <select
                     value={selectedParishId}
                     onChange={(e) => setSelectedParishId(e.target.value)}
-                    required
                     style={{
                       width: "100%",
                       padding: "0.75rem",

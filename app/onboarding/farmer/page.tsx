@@ -161,8 +161,8 @@ export default function FarmerOnboardingPage() {
       return;
     }
 
-    if (!selectedDistrictId || !selectedSubcountyId || !selectedParishId) {
-      setMessage({ type: "error", text: "Please select District, Subcounty, and Parish" });
+    if (!selectedDistrictId || !selectedSubcountyId) {
+      setMessage({ type: "error", text: "Please select District and Subcounty" });
       return;
     }
 
@@ -199,7 +199,7 @@ export default function FarmerOnboardingPage() {
         region: selectedRegion?.label || selectedRegionKey,
         districtId: selectedDistrictId as Id<"districts">,
         subcountyId: selectedSubcountyId as Id<"subcounties">,
-        parishId: selectedParishId as Id<"parishes">,
+        parishId: selectedParishId ? selectedParishId as Id<"parishes"> : undefined,
         farmSizeInput,
       });
 
@@ -442,12 +442,11 @@ export default function FarmerOnboardingPage() {
                   color: "#2c2c2c",
                   fontSize: "0.95rem"
                 }}>
-                  Parish *
+                  Parish (optional)
                 </label>
                 <select
                   value={selectedParishId}
                   onChange={(e) => setSelectedParishId(e.target.value as Id<"parishes"> | "")}
-                  required
                   style={{
                     width: "100%",
                     padding: "0.75rem",

@@ -27,7 +27,7 @@ export const checkOnboardingStatus = query({
 
     return {
       completed: profile?.onboardingCompleted === true,
-      hasLocation: !!(profile?.districtId && profile?.subcountyId && profile?.parishId),
+      hasLocation: !!(profile?.districtId && profile?.subcountyId),
       hasStoreInfo: !!(profile?.storeType && profile?.storageCapacityTonnes),
       region: profile?.region,
       districtId: profile?.districtId,
@@ -50,7 +50,7 @@ export const completeOnboarding = mutation({
     region: v.string(),
     districtId: v.id("districts"),
     subcountyId: v.id("subcounties"),
-    parishId: v.id("parishes"),
+    parishId: v.optional(v.id("parishes")),
     storageCapacityTonnes: v.number(),
     storeType: v.union(
       v.literal("cold_storage"),
@@ -79,9 +79,11 @@ export const completeOnboarding = mutation({
       throw new Error("Invalid or inactive subcounty for this district");
     }
 
-    const parish = await ctx.db.get(args.parishId);
-    if (!parish || !parish.active || parish.subcountyId !== args.subcountyId) {
-      throw new Error("Invalid or inactive parish for this subcounty");
+    if (args.parishId) {
+      const parish = await ctx.db.get(args.parishId);
+      if (!parish || !parish.active || parish.subcountyId !== args.subcountyId) {
+        throw new Error("Invalid or inactive parish for this subcounty");
+      }
     }
 
     // Check for existing profile
@@ -97,7 +99,7 @@ export const completeOnboarding = mutation({
         region: args.region,
         districtId: args.districtId,
         subcountyId: args.subcountyId,
-        parishId: args.parishId,
+        ...(args.parishId ? { parishId: args.parishId } : {}),
         storageCapacityTonnes: args.storageCapacityTonnes,
         storeType: args.storeType,
         storeTypeCustom: args.storeTypeCustom,
@@ -109,7 +111,7 @@ export const completeOnboarding = mutation({
         region: args.region,
         districtId: args.districtId,
         subcountyId: args.subcountyId,
-        parishId: args.parishId,
+        ...(args.parishId ? { parishId: args.parishId } : {}),
         storageCapacityTonnes: args.storageCapacityTonnes,
         storeType: args.storeType,
         storeTypeCustom: args.storeTypeCustom,
@@ -124,7 +126,7 @@ export const completeOnboarding = mutation({
       region: args.region,
       districtId: args.districtId,
       subcountyId: args.subcountyId,
-      parishId: args.parishId,
+      ...(args.parishId ? { parishId: args.parishId } : {}),
     });
 
     return { utid };

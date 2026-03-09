@@ -70,7 +70,7 @@ export const checkOnboardingStatus = query({
     }
 
     const completed = farmer.onboardingCompleted === true;
-    const hasLocation = farmer.districtId && farmer.subcountyId && farmer.parishId;
+    const hasLocation = farmer.districtId && farmer.subcountyId;
     const hasFarmSize = farmer.farmSizeAcres !== undefined;
 
     return {
@@ -96,7 +96,7 @@ export const completeOnboarding = mutation({
     region: v.string(),
     districtId: v.id("districts"),
     subcountyId: v.id("subcounties"),
-    parishId: v.id("parishes"),
+    parishId: v.optional(v.id("parishes")),
     farmSizeInput: v.any(), // {unit, length, width, omwigo, emiigo}
   },
   handler: async (ctx, args) => {
@@ -117,9 +117,11 @@ export const completeOnboarding = mutation({
       throw new Error("Invalid or inactive subcounty for this district");
     }
 
-    const parish = await ctx.db.get(args.parishId);
-    if (!parish || !parish.active || parish.subcountyId !== args.subcountyId) {
-      throw new Error("Invalid or inactive parish for this subcounty");
+    if (args.parishId) {
+      const parish = await ctx.db.get(args.parishId);
+      if (!parish || !parish.active || parish.subcountyId !== args.subcountyId) {
+        throw new Error("Invalid or inactive parish for this subcounty");
+      }
     }
 
     // Calculate farm size in acres
@@ -137,7 +139,7 @@ export const completeOnboarding = mutation({
     // Get location names for export prefill
     const districtRecord = await ctx.db.get(args.districtId);
     const subcountyRecord = await ctx.db.get(args.subcountyId);
-    const parishRecord = await ctx.db.get(args.parishId);
+    const parishRecord = args.parishId ? await ctx.db.get(args.parishId) : null;
     const districtText = districtRecord?.name;
     const subCountyText = subcountyRecord?.name;
     const parishText = parishRecord?.name;
@@ -152,7 +154,7 @@ export const completeOnboarding = mutation({
       districtText, // Store text name for export/prefill
       subcountyId: args.subcountyId,
       subCountyText, // Store text name for export/prefill
-      parishId: args.parishId,
+      ...(args.parishId ? { parishId: args.parishId } : {}),
       parishText, // Store parish name for export
       farmSizeAcres,
       farmSizeRaw: args.farmSizeInput,

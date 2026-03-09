@@ -25,10 +25,19 @@ export function useOfflineQuery<Query extends FunctionReference<"query">>(
   const cachedDataLoadedRef = useRef(false);
 
   // Build a stable cache key from the query function name + args
+  const fnName = (() => {
+    try {
+      const n = (queryFn as any)?._name ?? (queryFn as any)?.functionName;
+      if (typeof n === "string" && n) return n;
+      return JSON.stringify(queryFn) ?? "query";
+    } catch {
+      return "query";
+    }
+  })();
   const effectiveKey =
     cacheKey ??
     (queryFn
-      ? `${String((queryFn as any)?._name || queryFn)}__${args === "skip" ? "skip" : JSON.stringify(args)}`
+      ? `${fnName}__${args === "skip" ? "skip" : JSON.stringify(args)}`
       : "");
 
   // Attempt Convex query (will return undefined when offline / WS disconnected)

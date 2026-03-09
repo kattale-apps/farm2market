@@ -22,10 +22,15 @@ export function useOfflineMutation<Args extends Record<string, any>, Result = an
   isOnlineRef.current = isOnline;
 
   const liveMutation = useMutation(mutationFn);
-  const mutationPath =
-    (mutationFn as any)?._name ??
-    (mutationFn as any)?.name ??
-    String(mutationFn);
+  const mutationPath = (() => {
+    try {
+      const n = (mutationFn as any)?._name ?? (mutationFn as any)?.functionName ?? (mutationFn as any)?.name;
+      if (typeof n === "string" && n) return n;
+      return JSON.stringify(mutationFn) ?? "mutation";
+    } catch {
+      return "mutation";
+    }
+  })();
 
   const execute = useCallback(
     async (args: Args): Promise<Result | { queued: true }> => {

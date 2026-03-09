@@ -13,17 +13,22 @@ interface UserProfileCardProps {
  * Profile card for traders and buyers to enter/update
  * location and contact details.
  */
+
+// Convex IDs are never human-readable text — reject plain words
+const isConvexId = (v: unknown): v is string =>
+  typeof v === "string" && v.length > 0 && !/\s/.test(v) && !/^[A-Za-z]+$/.test(v);
+
 export function UserProfileCard({ userId }: UserProfileCardProps) {
   const profile = useQuery(api.farmerProfile.getUserProfile, { userId });
   const updateProfile = useMutation(api.farmerProfile.updateUserProfile);
   const districts = useQuery(api.locations.getActiveDistricts, {});
   const subcounties = useQuery(
     api.locations.getSubcountiesByDistrict,
-    profile?.districtId ? { districtId: profile.districtId } : "skip"
+    isConvexId(profile?.districtId) ? { districtId: profile.districtId } : "skip"
   );
   const parishes = useQuery(
     api.locations.getParishesBySubcounty,
-    profile?.subcountyId ? { subcountyId: profile.subcountyId } : "skip"
+    isConvexId(profile?.subcountyId) ? { subcountyId: profile.subcountyId } : "skip"
   );
 
   const [editing, setEditing] = useState(false);
@@ -58,11 +63,11 @@ export function UserProfileCard({ userId }: UserProfileCardProps) {
   // Dynamic subcounty/parish queries when district/subcounty changes in edit
   const editSubcounties = useQuery(
     api.locations.getSubcountiesByDistrict,
-    form.districtId ? { districtId: form.districtId as Id<"districts"> } : "skip"
+    isConvexId(form.districtId) ? { districtId: form.districtId as Id<"districts"> } : "skip"
   );
   const editParishes = useQuery(
     api.locations.getParishesBySubcounty,
-    form.subcountyId ? { subcountyId: form.subcountyId as Id<"subcounties"> } : "skip"
+    isConvexId(form.subcountyId) ? { subcountyId: form.subcountyId as Id<"subcounties"> } : "skip"
   );
 
   const handleSave = async () => {

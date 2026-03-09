@@ -149,15 +149,19 @@ export default function FarmerProfilePage() {
     userId ? { farmerId: userId } : "skip"
   );
 
+  // Convex IDs are never human-readable text — reject plain words
+  const isConvexId = (v: unknown): v is string =>
+    typeof v === "string" && v.length > 0 && !/\s/.test(v) && !/^[A-Za-z]+$/.test(v);
+
   // Get location options
   const districts = useQuery(api.locations.getActiveDistricts, {});
   const subcounties = useQuery(
     api.locations.getSubcountiesByDistrict,
-    selectedDistrictId ? { districtId: selectedDistrictId as Id<"districts"> } : "skip"
+    isConvexId(selectedDistrictId) ? { districtId: selectedDistrictId as Id<"districts"> } : "skip"
   );
   const parishes = useQuery(
     api.locations.getParishesBySubcounty,
-    selectedSubcountyId ? { subcountyId: selectedSubcountyId as Id<"subcounties"> } : "skip"
+    isConvexId(selectedSubcountyId) ? { subcountyId: selectedSubcountyId as Id<"subcounties"> } : "skip"
   );
 
   // Initialize form when profile loads

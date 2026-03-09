@@ -19,7 +19,7 @@ export function TraderDashboardSafe({ userId }: TraderDashboardSafeProps) {
   const farmcoinSummary = useQuery(api.farmcoin.getTraderFarmcoinSummary, { traderId: userId });
   const communities = useQuery(api.communities.getActiveCommunities, { userId });
 
-  const memberCommunities = (communities || []).filter((c: any) => c.isMember);
+  const memberCommunities = (Array.isArray(communities) ? communities : []).filter((c: any) => c.isMember);
   const isVerified = (user as any)?.isVerifiedTrader && (user as any)?.verificationStatus === "verified";
 
   return (

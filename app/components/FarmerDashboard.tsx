@@ -668,14 +668,14 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
   const agroFreshCommunityId = process.env.NEXT_PUBLIC_AGROFRESH_COMMUNITY_ID;
 
   const isAgroFreshMember = effectiveRole === "farmer" &&
-    (communities?.some((c: any) => {
+    (Array.isArray(communities) && communities.some((c: any) => {
       if (agroFreshCommunityId && c.id === agroFreshCommunityId) return !!c.isMember;
       const nameKey = normalizeCommunityKey(c.name);
       const descriptionKey = normalizeCommunityKey(c.description);
       return (nameKey.includes("agrofresh") || descriptionKey.includes("agrofresh")) && c.isMember;
-    }) ?? false);
+    }));
 
-  const memberCommunities = (communities || []).filter((c: any) => c.isMember);
+  const memberCommunities = (Array.isArray(communities) ? communities : []).filter((c: any) => c.isMember);
 
   const handleStartNewForm = async () => {
     setCreatingValidation(true);

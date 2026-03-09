@@ -38,7 +38,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   const cashOutBuyerRewardReceipt = useMutation((api as any).farmcoin.cashOutBuyerRewardReceipt);
   const messageThreads = useQuery(api.messages.getUserMessageThreads, { userId });
   const communities = useQuery(api.communities.getActiveCommunities, { userId });
-  const memberCommunities = (communities || []).filter((c: any) => c.isMember);
+  const memberCommunities = (Array.isArray(communities) ? communities : []).filter((c: any) => c.isMember);
   const paginationPreferences = useQuery(
     (api as any).userSettings.getPaginationPreferences,
     { userId } as any

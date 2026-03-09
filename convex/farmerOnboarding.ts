@@ -58,8 +58,15 @@ export const checkOnboardingStatus = query({
   args: { farmerId: v.id("users") },
   handler: async (ctx, args) => {
     const farmer = await ctx.db.get(args.farmerId);
-    if (!farmer || farmer.role !== "farmer") {
+    if (!farmer) {
+      throw new Error("User not found");
+    }
+    // Vendor/store users have their own onboarding; treat them as completed
+    if (!(["farmer", "vendor", "store"] as string[]).includes(farmer.role)) {
       throw new Error("User is not a farmer");
+    }
+    if (farmer.role !== "farmer") {
+      return { completed: true, hasLocation: true, hasFarmSize: true };
     }
 
     const completed = farmer.onboardingCompleted === true;

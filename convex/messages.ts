@@ -696,24 +696,96 @@ export const getUserPostEngagement = query({
 export const getCommunityMessages = query({
   args: {
     communityId: v.id("communities"),
+    userId: v.optional(v.id("users")),
     replyToPostId: v.optional(v.id("noticeboardPosts")),
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    let query = ctx.db
+    const baseQuery = ctx.db
       .query("communityMessages")
       .withIndex("by_community", (q) => q.eq("communityId", args.communityId));
 
-    // Filter by reply target if specified
-    if (args.replyToPostId) {
-      const allMessages = await query.collect();
-      const filtered = allMessages.filter((m) =>
-        m.replyToPostId === args.replyToPostId
-      );
-      return filtered.slice(0, args.limit ?? 100);
+    const allMessages = await baseQuery.collect();
+    let scopedMessages = args.replyToPostId
+      ? allMessages.filter((m) => m.replyToPostId === args.replyToPostId)
+      : allMessages;
+
+    // Backward-compatible fallback when viewer context is not provided.
+    if (!args.userId) {
+      return scopedMessages
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .slice(0, args.limit ?? 100);
     }
 
-    return query.order("desc").take(args.limit ?? 100);
+    const viewerId = args.userId;
+    const viewer = await ctx.db.get(viewerId);
+    if (!viewer) {
+      throw new Error("User not found");
+    }
+
+    const community = await ctx.db.get(args.communityId);
+    if (!community) {
+      throw new Error("Community not found");
+    }
+
+    const viewerIsSuperAdmin = viewer.role === "admin" && isSuperAdmin(viewer as any);
+    const viewerAssigned: string[] = ((viewer as any).assignedCommunityIds || []).map((id: any) => String(id));
+    const viewerIsCommunityAdmin =
+      viewer.role === "admin" &&
+      ((community as any).communityAdminId === viewer._id || viewerAssigned.includes(String(args.communityId)));
+
+    const membership = await ctx.db
+      .query("communityMemberships")
+      .withIndex("by_community_user", (q) =>
+        q.eq("communityId", args.communityId).eq("userId", viewerId)
+      )
+      .first();
+
+    const approvedMember = await ctx.db
+      .query("communityMembers")
+      .withIndex("by_community_farmer", (q) =>
+        q.eq("communityId", args.communityId).eq("farmerId", viewerId)
+      )
+      .first();
+
+    const viewerIsMember = !!membership || (approvedMember?.status === "APPROVED");
+
+    if (!viewerIsSuperAdmin && !viewerIsCommunityAdmin && !viewerIsMember) {
+      throw new Error("Not authorized to view community messages");
+    }
+
+    const targets = await ctx.db
+      .query("messageTargets")
+      .withIndex("by_community", (q) => q.eq("communityId", args.communityId))
+      .collect();
+
+    const targetByMessageId = new Map<string, any>();
+    for (const t of targets) {
+      targetByMessageId.set(String(t.messageId), t);
+    }
+
+    const visible = scopedMessages.filter((m) => {
+      const target = targetByMessageId.get(String(m._id));
+      if (!target) return true;
+
+      // SuperAdmin must always be able to audit all targeted messages.
+      if (viewerIsSuperAdmin) return true;
+
+      // Sender should always see own message regardless of target.
+      if (String(m.userId) === String(viewerId)) return true;
+
+      if (target.targetType === "all") return true;
+      if (target.targetType === "superadmin") return false;
+      if (target.targetType === "role") return target.targetRole === viewer.role;
+      if (target.targetType === "individual") {
+        return (target.targetUserIds || []).some((uid: Id<"users">) => String(uid) === String(viewerId));
+      }
+      return true;
+    });
+
+    return visible
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, args.limit ?? 100);
   },
 });
 

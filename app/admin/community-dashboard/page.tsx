@@ -151,7 +151,7 @@ function NoticeboardTab({ communityId, userId }: { communityId: Id<"communities"
 
 /* ── Messages tab (per community) — with targeted messaging ── */
 function MessagesTab({ communityId, userId }: { communityId: Id<"communities">; userId: Id<"users"> }) {
-  const messages = useQuery(api.messages.getCommunityMessages, { communityId });
+  const messages = useQuery(api.messages.getCommunityMessages, { communityId, userId });
   const members = useQuery(api.messages.getCommunityMembersForMessaging, { communityId });
   const sendText = useMutation(api.messages.sendTextMessage);
   const sendTargeted = useMutation(api.messages.sendTargetedCommunityMessage);

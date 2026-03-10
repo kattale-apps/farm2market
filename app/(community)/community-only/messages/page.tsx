@@ -294,10 +294,6 @@ function MessageComposer({ communityId }: { communityId: Id<"communities"> }) {
 }
 
 function MessagesList({ communityId }: { communityId: Id<"communities"> }) {
-  const messages = useOfflineQuery(api.messages.getCommunityMessages, {
-    communityId,
-  }) as any[] | undefined;
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const userId = (() => {
     try {
       const raw = localStorage.getItem("pilot_user");
@@ -308,6 +304,12 @@ function MessagesList({ communityId }: { communityId: Id<"communities"> }) {
       return localStorage.getItem("pilot_user") as Id<"users"> | null;
     }
   })();
+
+  const messages = useOfflineQuery(api.messages.getCommunityMessages, {
+    communityId,
+    userId: userId || undefined,
+  }) as any[] | undefined;
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Optimistic state for engagement
   const [engagementState, setEngagementState] = useState<

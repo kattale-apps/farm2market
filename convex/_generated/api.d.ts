@@ -61,6 +61,7 @@ import type * as rateLimits_index from "../rateLimits/index.js";
 import type * as rateLimits_types from "../rateLimits/types.js";
 import type * as scheduled from "../scheduled.js";
 import type * as seedDemo from "../seedDemo.js";
+import type * as seedProduce from "../seedProduce.js";
 import type * as seedUgandaLocations from "../seedUgandaLocations.js";
 import type * as serviceLevels from "../serviceLevels.js";
 import type * as storeAdmin from "../storeAdmin.js";
@@ -145,6 +146,7 @@ declare const fullApi: ApiFromModules<{
   "rateLimits/types": typeof rateLimits_types;
   scheduled: typeof scheduled;
   seedDemo: typeof seedDemo;
+  seedProduce: typeof seedProduce;
   seedUgandaLocations: typeof seedUgandaLocations;
   serviceLevels: typeof serviceLevels;
   storeAdmin: typeof storeAdmin;

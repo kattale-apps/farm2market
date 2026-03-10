@@ -7,11 +7,14 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import { BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { CommunityQRCode } from "../../components/CommunityQRCode";
 import { resolveCommunityLogo } from "../../lib/communityLogos";
 
 /* ── Tab types for community cards ── */
-type CommunityTab = "members" | "noticeboard" | "messages" | "forms";
+type CommunityTab = "members" | "noticeboard" | "messages" | "forms" | "insights";
 
 /* ── Noticeboard tab (per community) ── */
 function NoticeboardTab({ communityId, userId }: { communityId: Id<"communities">; userId: Id<"users"> }) {
@@ -951,6 +954,336 @@ function FormDetailView({ formId, formName, isActive, onToggleActive, onDelete }
   );
 }
 
+/* ── Insights tab (per community) ── */
+const CHART_COLORS = ["#2e7d32","#1565c0","#ef6c00","#8e24aa","#c62828","#00838f","#6d4c41","#546e7a","#d4e157","#ff8a65"];
+
+function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; userId: Id<"users"> }) {
+  const forms = useQuery((api as any).forms.getCommunityForms, { communityId });
+  const [selectedFormId, setSelectedFormId] = useState<string>("");
+  const formResponses = useQuery(
+    (api as any).forms.getFormResponses,
+    selectedFormId ? { formId: selectedFormId as Id<"communityForms"> } : "skip"
+  );
+  const members = useQuery(
+    api.communityApplications.getCommunityMembersByCommunityIds,
+    userId ? { adminId: userId, communityIds: [communityId], status: "APPROVED" as const } : "skip"
+  );
+  const chartRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  const trackerForms = (forms ?? []).filter((f: any) => f.formPurpose === "tracker" || !f.formPurpose);
+  const profileForms = (forms ?? []).filter((f: any) => f.formPurpose === "profile");
+  const selectedForm = (forms ?? []).find((f: any) => String(f._id) === selectedFormId);
+  const isProfile = selectedForm?.formPurpose === "profile";
+
+  const fields: any[] = formResponses?.fields ?? [];
+  const responses: any[] = formResponses?.responses ?? [];
+
+  // Aggregate per-field data
+  const fieldAggregations = useMemo(() => {
+    if (!fields.length || !responses.length) return [];
+    return fields.map((field: any) => {
+      const vals = responses.map((r: any) => {
+        const v = (r.values || []).find((rv: any) => String(rv.fieldId) === String(field._id));
+        return v?.value ?? "";
+      }).filter((v: string) => v !== "");
+
+      if (field.fieldType === "number") {
+        const nums = vals.map(Number).filter((n: number) => !isNaN(n));
+        const avg = nums.length ? nums.reduce((a: number, b: number) => a + b, 0) / nums.length : 0;
+        const min = nums.length ? Math.min(...nums) : 0;
+        const max = nums.length ? Math.max(...nums) : 0;
+        // Bar chart: member alias → value
+        const barData = responses.map((r: any) => {
+          const v = (r.values || []).find((rv: any) => String(rv.fieldId) === String(field._id));
+          const num = parseFloat(v?.value ?? "0");
+          return { name: r.member?.alias || "?", value: isNaN(num) ? 0 : num };
+        }).filter((d: any) => d.value !== 0);
+        return { field, type: "number" as const, barData, avg: Math.round(avg * 100) / 100, min, max, count: nums.length };
+      }
+      if (field.fieldType === "select" || field.fieldType === "checkbox") {
+        const freq: Record<string, number> = {};
+        vals.forEach((v: string) => { freq[v] = (freq[v] || 0) + 1; });
+        const pieData = Object.entries(freq).map(([name, value]) => ({ name, value }));
+        return { field, type: "pie" as const, pieData, count: vals.length };
+      }
+      if (field.fieldType === "date") {
+        const monthFreq: Record<string, number> = {};
+        vals.forEach((v: string) => {
+          try { const d = new Date(v); const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; monthFreq[key] = (monthFreq[key] || 0) + 1; } catch {}
+        });
+        const barData = Object.entries(monthFreq).sort(([a],[b]) => a.localeCompare(b)).map(([name, value]) => ({ name, value }));
+        return { field, type: "date" as const, barData, count: vals.length };
+      }
+      if (field.fieldType === "camera") {
+        return { field, type: "camera" as const, count: vals.length };
+      }
+      // text/textarea/email/phone — top N unique
+      const freq: Record<string, number> = {};
+      vals.forEach((v: string) => { freq[v] = (freq[v] || 0) + 1; });
+      const barData = Object.entries(freq).sort(([,a],[,b]) => b - a).slice(0, 10).map(([name, value]) => ({ name: name.length > 20 ? name.slice(0,18)+"…" : name, value }));
+      return { field, type: "text" as const, barData, count: vals.length };
+    });
+  }, [fields, responses]);
+
+  // Total approved members for profile completion
+  const totalMembers = useMemo(() => {
+    if (!members) return 0;
+    const commMembers = (members as any)[String(communityId)];
+    return Array.isArray(commMembers) ? commMembers.length : 0;
+  }, [members, communityId]);
+
+  // ── Export: PNG charts ──
+  const handleExportPNG = useCallback(() => {
+    chartRefs.current.forEach((div, idx) => {
+      if (!div) return;
+      const svg = div.querySelector("svg");
+      if (!svg) return;
+      const serializer = new XMLSerializer();
+      const svgStr = serializer.serializeToString(svg);
+      const blob = new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `chart-${fields[idx]?.label || idx}.svg`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    });
+  }, [fields]);
+
+  // ── Export: Excel ──
+  const handleExportExcel = useCallback(() => {
+    if (!responses.length || !fields.length) return;
+    const rows = responses.map((r: any) => {
+      const row: Record<string, string> = {
+        "Member": r.member?.alias || "Unknown",
+        "Email": r.member?.email || "—",
+        "Phone": r.member?.phoneNumber || "—",
+        "Submitted": new Date(r.createdAt).toLocaleString(),
+      };
+      fields.forEach((f: any) => {
+        const v = (r.values || []).find((rv: any) => String(rv.fieldId) === String(f._id));
+        let val = v?.value ?? "";
+        if (f.fieldType === "camera") {
+          try { val = JSON.parse(val).capturedAt || "photo"; } catch { val = val ? "photo" : ""; }
+        }
+        row[f.label] = val;
+      });
+      return row;
+    });
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, "Responses");
+    // Summary sheet
+    const summary = [
+      { Metric: "Form", Value: selectedForm?.name || "" },
+      { Metric: "Type", Value: isProfile ? "Profile" : "Tracker" },
+      { Metric: "Total Responses", Value: String(responses.length) },
+      { Metric: "Fields", Value: String(fields.length) },
+      { Metric: "Exported", Value: new Date().toLocaleString() },
+    ];
+    const ss = XLSX.utils.json_to_sheet(summary);
+    XLSX.utils.book_append_sheet(wb, ss, "Summary");
+    XLSX.writeFile(wb, `${selectedForm?.name || "form"}-responses.xlsx`);
+  }, [responses, fields, selectedForm, isProfile]);
+
+  // ── Export: PDF ──
+  const handleExportPDF = useCallback(() => {
+    if (!responses.length || !fields.length) return;
+    const doc = new jsPDF({ orientation: fields.length > 5 ? "landscape" : "portrait" });
+    const pw = doc.internal.pageSize.getWidth();
+    doc.setFontSize(16);
+    doc.text(selectedForm?.name || "Form Report", pw / 2, 18, { align: "center" });
+    doc.setFontSize(10);
+    doc.text(`Type: ${isProfile ? "Profile Form" : "Tracker Form"} | Responses: ${responses.length} | Exported: ${new Date().toLocaleString()}`, pw / 2, 26, { align: "center" });
+
+    // Field summaries table
+    const summaryRows = fieldAggregations.map((agg: any) => {
+      if (agg.type === "number") return [agg.field.label, "Number", `Avg: ${agg.avg}, Min: ${agg.min}, Max: ${agg.max} (${agg.count} values)`];
+      if (agg.type === "pie") return [agg.field.label, agg.field.fieldType, agg.pieData.map((d: any) => `${d.name}: ${d.value}`).join(", ")];
+      if (agg.type === "camera") return [agg.field.label, "Camera", `${agg.count} photos`];
+      if (agg.type === "date") return [agg.field.label, "Date", agg.barData.map((d: any) => `${d.name}: ${d.value}`).join(", ")];
+      return [agg.field.label, agg.field.fieldType, (agg.barData || []).map((d: any) => `${d.name}: ${d.value}`).join(", ")];
+    });
+    autoTable(doc, {
+      head: [["Field", "Type", "Summary"]],
+      body: summaryRows,
+      startY: 34,
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [46, 125, 50] },
+    });
+
+    // Response data table
+    const headers = ["Member", ...fields.map((f: any) => f.label)];
+    const body = responses.map((r: any) => {
+      const memberName = r.member?.alias || "Unknown";
+      const vals = fields.map((f: any) => {
+        const v = (r.values || []).find((rv: any) => String(rv.fieldId) === String(f._id));
+        let val = v?.value ?? "";
+        if (f.fieldType === "camera") { try { val = JSON.parse(val).capturedAt || "photo"; } catch { val = val ? "photo" : ""; } }
+        return val.length > 40 ? val.slice(0, 38) + "…" : val;
+      });
+      return [memberName, ...vals];
+    });
+    autoTable(doc, {
+      head: [headers],
+      body,
+      startY: (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 10 : 80,
+      styles: { fontSize: 7 },
+      headStyles: { fillColor: [21, 101, 192] },
+      alternateRowStyles: { fillColor: [245, 245, 245] },
+    });
+    doc.save(`${selectedForm?.name || "form"}-report.pdf`);
+  }, [responses, fields, selectedForm, isProfile, fieldAggregations]);
+
+  if (!forms) return <div style={{ padding: "1rem", color: "#999" }}>Loading forms...</div>;
+  if (forms.length === 0) return <div style={{ padding: "1rem", color: "#999" }}>No forms created yet. Go to the Forms tab to create one.</div>;
+
+  return (
+    <div style={{ padding: "1rem" }}>
+      {/* Form selector */}
+      <div style={{ marginBottom: "1rem" }}>
+        <label style={{ fontWeight: 600, fontSize: "0.9rem", color: "#333", display: "block", marginBottom: "0.35rem" }}>Select Form</label>
+        <select
+          value={selectedFormId}
+          onChange={(e) => setSelectedFormId(e.target.value)}
+          style={{ width: "100%", padding: "0.5rem", borderRadius: "8px", border: "1px solid #ccc", fontSize: "0.9rem" }}
+        >
+          <option value="">— Choose a form —</option>
+          {trackerForms.length > 0 && (
+            <optgroup label="📊 Tracker Forms">
+              {trackerForms.map((f: any) => <option key={f._id} value={f._id}>{f.name} ({f.responseCount ?? 0} responses)</option>)}
+            </optgroup>
+          )}
+          {profileForms.length > 0 && (
+            <optgroup label="👤 Profile Forms">
+              {profileForms.map((f: any) => <option key={f._id} value={f._id}>{f.name} ({f.responseCount ?? 0} responses)</option>)}
+            </optgroup>
+          )}
+        </select>
+      </div>
+
+      {!selectedFormId && (
+        <div style={{ padding: "2rem", textAlign: "center", color: "#999" }}>Select a form above to view insights.</div>
+      )}
+
+      {selectedFormId && formResponses === undefined && (
+        <div style={{ padding: "2rem", textAlign: "center", color: "#999" }}>Loading responses...</div>
+      )}
+
+      {selectedFormId && formResponses && (
+        <>
+          {/* Summary banner */}
+          <div style={{
+            display: "flex", flexWrap: "wrap", gap: "0.75rem", marginBottom: "1rem",
+          }}>
+            <div style={{ flex: "1 1 140px", background: "#e8f5e9", padding: "0.75rem", borderRadius: "8px", textAlign: "center" }}>
+              <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "#2e7d32" }}>{responses.length}</div>
+              <div style={{ fontSize: "0.78rem", color: "#555" }}>Responses</div>
+            </div>
+            <div style={{ flex: "1 1 140px", background: "#e3f2fd", padding: "0.75rem", borderRadius: "8px", textAlign: "center" }}>
+              <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "#1565c0" }}>{fields.length}</div>
+              <div style={{ fontSize: "0.78rem", color: "#555" }}>Fields</div>
+            </div>
+            {isProfile && (
+              <div style={{ flex: "1 1 140px", background: "#fff3e0", padding: "0.75rem", borderRadius: "8px", textAlign: "center" }}>
+                <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "#ef6c00" }}>{responses.length} / {totalMembers}</div>
+                <div style={{ fontSize: "0.78rem", color: "#555" }}>Members Filled</div>
+              </div>
+            )}
+            {responses.length > 0 && (
+              <div style={{ flex: "1 1 140px", background: "#f3e5f5", padding: "0.75rem", borderRadius: "8px", textAlign: "center" }}>
+                <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "#6a1b9a" }}>{new Date(responses[0].createdAt).toLocaleDateString()}</div>
+                <div style={{ fontSize: "0.78rem", color: "#555" }}>Latest Response</div>
+              </div>
+            )}
+          </div>
+
+          {/* Export buttons */}
+          <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.25rem", flexWrap: "wrap" }}>
+            <button onClick={handleExportExcel} style={{ padding: "0.45rem 0.85rem", borderRadius: "6px", border: "1px solid #2e7d32", background: "#e8f5e9", color: "#2e7d32", fontWeight: 600, fontSize: "0.82rem", cursor: "pointer" }}>📥 Excel</button>
+            <button onClick={handleExportPNG} style={{ padding: "0.45rem 0.85rem", borderRadius: "6px", border: "1px solid #1565c0", background: "#e3f2fd", color: "#1565c0", fontWeight: 600, fontSize: "0.82rem", cursor: "pointer" }}>🖼 PNG Charts</button>
+            <button onClick={handleExportPDF} style={{ padding: "0.45rem 0.85rem", borderRadius: "6px", border: "1px solid #6a1b9a", background: "#f3e5f5", color: "#6a1b9a", fontWeight: 600, fontSize: "0.82rem", cursor: "pointer" }}>📄 PDF Report</button>
+          </div>
+
+          {/* Per-field charts */}
+          {responses.length === 0 ? (
+            <div style={{ padding: "2rem", textAlign: "center", color: "#999" }}>No responses yet for this form.</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+              {fieldAggregations.map((agg: any, idx: number) => (
+                <div key={agg.field._id} style={{ background: "#fafafa", borderRadius: "10px", border: "1px solid #eee", padding: "1rem", overflow: "hidden" }}>
+                  <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", fontWeight: 700, color: "#333" }}>
+                    {agg.field.label}
+                    <span style={{ fontWeight: 400, color: "#999", fontSize: "0.78rem", marginLeft: "0.5rem" }}>{agg.field.fieldType} · {agg.count} values</span>
+                  </h4>
+                  <div ref={(el) => { chartRefs.current[idx] = el; }}>
+                    {agg.type === "number" && (
+                      <>
+                        <div style={{ display: "flex", gap: "1rem", marginBottom: "0.5rem", fontSize: "0.8rem", color: "#555" }}>
+                          <span>Avg: <strong>{agg.avg}</strong></span>
+                          <span>Min: <strong>{agg.min}</strong></span>
+                          <span>Max: <strong>{agg.max}</strong></span>
+                        </div>
+                        <ResponsiveContainer width="100%" height={200}>
+                          <BarChart data={agg.barData}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                            <YAxis tick={{ fontSize: 10 }} />
+                            <Tooltip />
+                            <Bar dataKey="value" fill="#2e7d32" radius={[4,4,0,0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </>
+                    )}
+                    {agg.type === "pie" && (
+                      <ResponsiveContainer width="100%" height={220}>
+                        <PieChart>
+                          <Pie data={agg.pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name, percent }: any) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                            {agg.pieData.map((_: any, i: number) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                          </Pie>
+                          <Tooltip />
+                          <Legend />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    )}
+                    {agg.type === "date" && (
+                      <ResponsiveContainer width="100%" height={200}>
+                        <BarChart data={agg.barData}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                          <YAxis tick={{ fontSize: 10 }} />
+                          <Tooltip />
+                          <Bar dataKey="value" fill="#1565c0" radius={[4,4,0,0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                    {agg.type === "text" && agg.barData.length > 0 && (
+                      <ResponsiveContainer width="100%" height={Math.max(150, agg.barData.length * 28)}>
+                        <BarChart data={agg.barData} layout="vertical">
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis type="number" tick={{ fontSize: 10 }} />
+                          <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 10 }} />
+                          <Tooltip />
+                          <Bar dataKey="value" fill="#ef6c00" radius={[0,4,4,0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                    {agg.type === "camera" && (
+                      <div style={{ padding: "0.75rem", background: "#e3f2fd", borderRadius: "6px", fontSize: "0.85rem", color: "#1565c0" }}>📸 {agg.count} photo(s) captured</div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function CommunityDashboardPage() {
   const router = useRouter();
   const [userId, setUserId] = useState<Id<"users"> | null>(null);
@@ -1553,9 +1886,9 @@ export default function CommunityDashboardPage() {
                 borderBottom: "2px solid #e0e0e0",
                 background: "#fafafa",
               }}>
-                {(["members", "noticeboard", "messages", "forms"] as CommunityTab[]).map((tab) => {
+                {(["members", "noticeboard", "messages", "forms", "insights"] as CommunityTab[]).map((tab) => {
                   const active = getActiveTab(communityId) === tab;
-                  const labels: Record<CommunityTab, string> = { members: "Members", noticeboard: "Noticeboard", messages: "Messages", forms: "Forms" };
+                  const labels: Record<CommunityTab, string> = { members: "Members", noticeboard: "Noticeboard", messages: "Messages", forms: "Forms", insights: "📊 Insights" };
                   return (
                     <button
                       key={tab}
@@ -1593,6 +1926,11 @@ export default function CommunityDashboardPage() {
               {/* ── Forms & Templates Tab ── */}
               {getActiveTab(communityId) === "forms" && (
                 <FormsTab communityId={communityId} userId={userId!} />
+              )}
+
+              {/* ── Insights Tab ── */}
+              {getActiveTab(communityId) === "insights" && (
+                <InsightsTab communityId={communityId} userId={userId!} />
               )}
 
               {/* ── Members Tab (existing content) ── */}

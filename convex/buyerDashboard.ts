@@ -917,3 +917,84 @@ export const getBuyerWalletReport = query({
     };
   },
 });
+
+/**
+ * Get active vendor and store listings for buyers
+ */
+export const getVendorStoreListings = query({
+  args: { buyerId: v.id("users") },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.buyerId);
+    if (!user || user.role !== "buyer") {
+      throw new Error("User is not a buyer");
+    }
+
+    // Get all active listings
+    const listings = await ctx.db
+      .query("listings")
+      .withIndex("by_status", (q) => q.eq("status", "active"))
+      .collect();
+
+    // Filter to vendor/store listings (they use farmerId, not traderId)
+    const vendorStoreListings = [];
+    for (const listing of listings) {
+      if (!listing.farmerId || listing.traderId) continue;
+      const seller = await ctx.db.get(listing.farmerId);
+      if (!seller || !["vendor", "store"].includes(seller.role)) continue;
+
+      let marketInfo: { marketName?: string; stallNumber?: string; marketType?: string } = {};
+      let storeInfo: { buildingName?: string; streetAddress?: string; storeNumber?: string; storeType?: string } = {};
+
+      if (seller.role === "vendor") {
+        const vp = await ctx.db
+          .query("vendorProfiles")
+          .withIndex("by_userId", (q: any) => q.eq("userId", listing.farmerId))
+          .first();
+        if (vp) {
+          marketInfo = { marketName: vp.marketName, stallNumber: vp.stallNumber, marketType: vp.marketType };
+        }
+      } else {
+        const sp = await ctx.db
+          .query("storeProfiles")
+          .withIndex("by_userId", (q: any) => q.eq("userId", listing.farmerId))
+          .first();
+        if (sp) {
+          storeInfo = { buildingName: sp.buildingName, streetAddress: sp.streetAddress, storeNumber: sp.storeNumber, storeType: sp.storeType };
+        }
+      }
+
+      // Count available units
+      const units = await ctx.db
+        .query("listingUnits")
+        .withIndex("by_listing", (q) => q.eq("listingId", listing._id))
+        .collect();
+      const availableUnits = listing.availableUnits ?? units.filter((u) => u.status === "available").length;
+
+      vendorStoreListings.push({
+        listingId: listing._id,
+        utid: listing.utid,
+        produceType: listing.produceType,
+        productName: listing.productName,
+        totalKilos: listing.totalKilos,
+        pricePerKilo: listing.pricePerKilo,
+        pricePerUnit: listing.pricePerUnit,
+        pricingUnit: listing.pricingUnit,
+        packagingTypeEnum: listing.packagingTypeEnum,
+        totalUnits: listing.totalUnits,
+        availableUnits,
+        listingMode: listing.listingMode || "unit",
+        sellerAlias: seller.alias,
+        sellerRole: seller.role as "vendor" | "store",
+        collectionLocationText: listing.collectionLocationText || null,
+        marketName: marketInfo.marketName,
+        stallNumber: marketInfo.stallNumber,
+        buildingName: storeInfo.buildingName,
+        streetAddress: storeInfo.streetAddress,
+        storeNumber: storeInfo.storeNumber,
+        createdAt: listing.createdAt,
+      });
+    }
+
+    return { listings: vendorStoreListings.sort((a, b) => b.createdAt - a.createdAt) };
+  },
+});

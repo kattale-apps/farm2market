@@ -30,10 +30,34 @@ export const getAutoStorageLocationForUser = query({
   handler: async (ctx, args) => {
     const user = await ctx.db.get(args.userId);
     if (!user || !["vendor", "store"].includes(user.role)) return null;
-    if (!user.districtId) return null;
+
+    // Build collection text from vendor/store profile
+    let collectionText: string | undefined;
+    if (user.role === "vendor") {
+      const vp = await ctx.db
+        .query("vendorProfiles")
+        .withIndex("by_userId", (q: any) => q.eq("userId", args.userId))
+        .first();
+      if (vp?.marketName) {
+        collectionText = vp.marketName + (vp.stallNumber ? `, Stall ${vp.stallNumber}` : "");
+      }
+    } else if (user.role === "store") {
+      const sp = await ctx.db
+        .query("storeProfiles")
+        .withIndex("by_userId", (q: any) => q.eq("userId", args.userId))
+        .first();
+      if (sp?.buildingName) {
+        collectionText = sp.buildingName + (sp.streetAddress ? `, ${sp.streetAddress}` : "") + (sp.storeNumber ? `, ${sp.storeNumber}` : "");
+      }
+    }
+
+    if (!user.districtId) {
+      // No district, but still return collectionText
+      return collectionText ? { storageLocationId: null, districtName: null, code: null, collectionText } : null;
+    }
 
     const district = await ctx.db.get(user.districtId);
-    if (!district) return null;
+    if (!district) return collectionText ? { storageLocationId: null, districtName: null, code: null, collectionText } : null;
 
     const storageLocations = await ctx.db
       .query("storageLocations")
@@ -45,8 +69,8 @@ export const getAutoStorageLocationForUser = query({
     );
 
     return match
-      ? { storageLocationId: match._id, districtName: match.districtName, code: match.code }
-      : null;
+      ? { storageLocationId: match._id, districtName: match.districtName, code: match.code, collectionText }
+      : { storageLocationId: null, districtName: district.name, code: null, collectionText };
   },
 });
 
@@ -59,15 +83,21 @@ export const createListing = mutation({
     farmerId: v.id("users"),
     produceType: v.string(),
     totalKilos: v.optional(v.number()),
-    pricePerKilo: v.number(), // In UGX (for unit mode)
-    qualityRating: v.optional(v.string()), // Quality rating from dropdown
-    qualityComment: v.optional(v.string()), // Farmer's text comment about produce quality
-    storageLocationId: v.optional(v.id("storageLocations")), // Storage location (district) where produce will be delivered (optional for vendor/store)
+    pricePerKilo: v.optional(v.number()), // In UGX (for unit mode) — optional for packaging mode
+    qualityRating: v.optional(v.string()),
+    qualityComment: v.optional(v.string()),
+    storageLocationId: v.optional(v.id("storageLocations")),
     // Garden mode fields
-    listingMode: v.optional(v.union(v.literal("unit"), v.literal("garden"))), // Default: "unit"
-    gardenSize: v.optional(v.number()), // Garden size in acres (for garden mode)
-    gardenDimensions: v.optional(v.any()), // Raw garden dimensions (for garden mode)
-    totalPrice: v.optional(v.number()), // Total price for entire garden (for garden mode, in UGX)
+    listingMode: v.optional(v.union(v.literal("unit"), v.literal("garden"), v.literal("packaging"))),
+    gardenSize: v.optional(v.number()),
+    gardenDimensions: v.optional(v.any()),
+    totalPrice: v.optional(v.number()),
+    // Packaging mode fields (vendor/store)
+    packagingTypeEnum: v.optional(v.string()),
+    packagingTypeCustom: v.optional(v.string()),
+    availableUnits: v.optional(v.number()),
+    pricingUnit: v.optional(v.union(v.literal("per_package"), v.literal("per_kg"))),
+    pricePerUnit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     // ============================================================
@@ -96,7 +126,9 @@ export const createListing = mutation({
     const listingMode = args.listingMode || "unit"; // Default to unit mode
     const normalizedTotalKilos = listingMode === "garden"
       ? Math.max(args.totalKilos || 1, 1)
-      : args.totalKilos || 0;
+      : listingMode === "packaging"
+        ? 0
+        : args.totalKilos || 0;
 
     await checkRateLimit(ctx, args.farmerId, user.role, "create_listing", {
       produceType: args.produceType,
@@ -104,7 +136,18 @@ export const createListing = mutation({
     });
 
     // Validate based on mode
-    if (listingMode === "garden") {
+    if (listingMode === "packaging") {
+      // Packaging mode: requires availableUnits and pricePerUnit
+      if (!args.availableUnits || args.availableUnits <= 0) {
+        throw new Error("Number of units is required for packaging mode");
+      }
+      if (!args.pricePerUnit || args.pricePerUnit <= 0) {
+        throw new Error("Price per unit is required for packaging mode");
+      }
+      if (!args.packagingTypeEnum) {
+        throw new Error("Packaging type is required for packaging mode");
+      }
+    } else if (listingMode === "garden") {
       // Garden mode: requires totalPrice and gardenSize
       if (!args.totalPrice || args.totalPrice <= 0) {
         throw new Error("Total price is required for garden sale mode");
@@ -123,7 +166,7 @@ export const createListing = mutation({
       if (!args.totalKilos || args.totalKilos <= 0) {
         throwAppError(invalidKilosError());
       }
-      if (args.pricePerKilo <= 0) {
+      if (!args.pricePerKilo || args.pricePerKilo <= 0) {
         throwAppError(invalidAmountError());
       }
     }
@@ -135,7 +178,11 @@ export const createListing = mutation({
     let totalUnits: number;
     let actualUnitSize: number;
     
-    if (listingMode === "garden") {
+    if (listingMode === "packaging") {
+      // Packaging mode: each package is 1 unit
+      totalUnits = args.availableUnits!;
+      actualUnitSize = 1;
+    } else if (listingMode === "garden") {
       // Garden mode: entire plot is 1 unit
       totalUnits = 1;
       actualUnitSize = normalizedTotalKilos; // Entire garden represented as one unit
@@ -186,12 +233,12 @@ export const createListing = mutation({
       utid,
       produceType: args.produceType,
       totalKilos: normalizedTotalKilos,
-      pricePerKilo: args.pricePerKilo,
-      unitSize: actualUnitSize, // Store actual unit size (10kg or entire garden)
+      pricePerKilo: args.pricePerKilo || 0,
+      unitSize: actualUnitSize,
       totalUnits,
       status: "active",
       createdAt: getUgandaTime(),
-      deliverySLA: 0, // Set when payment is made
+      deliverySLA: 0,
       qualityRating: args.qualityRating?.trim() || undefined,
       qualityComment: args.qualityComment?.trim() || undefined,
       storageLocationId: args.storageLocationId,
@@ -200,6 +247,14 @@ export const createListing = mutation({
       gardenSize: args.gardenSize,
       gardenDimensions: args.gardenDimensions,
       totalPrice: args.totalPrice,
+      // Packaging mode fields
+      packagingTypeEnum: args.packagingTypeEnum?.trim() || undefined,
+      packagingTypeCustom: args.packagingTypeCustom?.trim() || undefined,
+      availableUnits: listingMode === "packaging" ? args.availableUnits : undefined,
+      pricingUnit: args.pricingUnit,
+      pricePerUnit: args.pricePerUnit,
+      // Collection location
+      collectionLocationText,
     });
 
     // Create individual units

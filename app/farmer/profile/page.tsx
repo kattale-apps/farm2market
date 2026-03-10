@@ -10,6 +10,7 @@ import Link from "next/link";
 export default function FarmerProfilePage() {
   const router = useRouter();
   const [userId, setUserId] = useState<Id<"users"> | null>(null);
+  const [userRole, setUserRole] = useState<string>("farmer");
   const [isEditing, setIsEditing] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -28,6 +29,16 @@ export default function FarmerProfilePage() {
     omwigo?: number;
     acres?: number;
   }>({});
+
+  // Vendor fields
+  const [marketName, setMarketName] = useState("");
+  const [marketType, setMarketType] = useState("");
+  const [stallNumber, setStallNumber] = useState("");
+  // Store fields
+  const [buildingName, setBuildingName] = useState("");
+  const [streetAddress, setStreetAddress] = useState("");
+  const [storeNumber, setStoreNumber] = useState("");
+  const [storeType, setStoreType] = useState("");
 
   const regionGroups = useMemo(() => [
     {
@@ -131,6 +142,7 @@ export default function FarmerProfilePage() {
           const parsed = JSON.parse(stored);
           if (parsed && parsed.userId && ["farmer", "vendor", "store"].includes(parsed.role)) {
             setUserId(parsed.userId);
+            setUserRole(parsed.role);
           } else {
             router.push("/login");
           }
@@ -147,6 +159,16 @@ export default function FarmerProfilePage() {
   const profile = useQuery(
     api.farmerProfile.getFarmerProfile,
     userId ? { farmerId: userId } : "skip"
+  );
+
+  // Vendor/Store profile queries
+  const vendorProfile = useQuery(
+    api.farmerProfile.getVendorProfile,
+    userId && userRole === "vendor" ? { userId } : "skip"
+  );
+  const storeProfile = useQuery(
+    api.farmerProfile.getStoreProfile,
+    userId && userRole === "store" ? { userId } : "skip"
   );
 
   // Convex IDs are never human-readable text — reject plain words
@@ -179,7 +201,27 @@ export default function FarmerProfilePage() {
     }
   }, [profile, isEditing, regionForDistrictName]);
 
+  // Initialize vendor/store fields
+  useEffect(() => {
+    if (vendorProfile && !isEditing) {
+      setMarketName(vendorProfile.marketName || "");
+      setMarketType(vendorProfile.marketType || "");
+      setStallNumber(vendorProfile.stallNumber || "");
+    }
+  }, [vendorProfile, isEditing]);
+
+  useEffect(() => {
+    if (storeProfile && !isEditing) {
+      setBuildingName(storeProfile.buildingName || "");
+      setStreetAddress(storeProfile.streetAddress || "");
+      setStoreNumber(storeProfile.storeNumber || "");
+      setStoreType(storeProfile.storeType || "");
+    }
+  }, [storeProfile, isEditing]);
+
   const updateProfile = useMutation(api.farmerProfile.updateFarmerProfile);
+  const updateVendorProfile = useMutation(api.farmerProfile.updateVendorProfile);
+  const updateStoreProfile = useMutation(api.farmerProfile.updateStoreProfile);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -194,10 +236,28 @@ export default function FarmerProfilePage() {
         districtId: selectedDistrictId ? (selectedDistrictId as Id<"districts">) : undefined,
         subcountyId: selectedSubcountyId ? (selectedSubcountyId as Id<"subcounties">) : undefined,
         parishId: selectedParishId ? (selectedParishId as Id<"parishes">) : undefined,
-        farmSizeInput: Object.keys(farmSizeInput).length > 0 ? farmSizeInput : undefined,
+        farmSizeInput: userRole === "farmer" && Object.keys(farmSizeInput).length > 0 ? farmSizeInput : undefined,
         phoneNumber: phoneNumber.trim() || undefined,
         sex: sex || undefined,
       });
+
+      // Save vendor/store specific data
+      if (userRole === "vendor") {
+        await updateVendorProfile({
+          userId,
+          marketType: (marketType || undefined) as any,
+          marketName: marketName || undefined,
+          stallNumber: stallNumber || undefined,
+        });
+      } else if (userRole === "store") {
+        await updateStoreProfile({
+          userId,
+          storeType: (storeType || undefined) as any,
+          buildingName: buildingName || undefined,
+          streetAddress: streetAddress || undefined,
+          storeNumber: storeNumber || undefined,
+        });
+      }
 
       setMessage({ type: "success", text: "Profile updated successfully!" });
       setIsEditing(false);
@@ -220,7 +280,7 @@ export default function FarmerProfilePage() {
     <div style={{ padding: "clamp(1rem, 4vw, 2rem)", maxWidth: "800px", margin: "0 auto" }}>
       <div style={{ marginBottom: "2rem", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
         <h1 style={{ fontSize: "clamp(1.5rem, 4vw, 2rem)", margin: 0, color: "#2c2c2c" }}>
-          My Profile 👩🏾‍🌾
+          My Profile {userRole === "vendor" ? "🏪" : userRole === "store" ? "🏬" : "👩🏾‍🌾"}
         </h1>
         <div style={{ display: "flex", gap: "1rem" }}>
           <Link
@@ -234,20 +294,21 @@ export default function FarmerProfilePage() {
               fontSize: "0.9rem",
             }}
           >
-            🌾 Communities
+            🌍 Communities
           </Link>
           <Link
             href="/"
             style={{
-              padding: "0.5rem 1rem",
-              background: "#4CAF50",
+              padding: "8px 16px",
+              background: "#2e7d32",
               color: "white",
               textDecoration: "none",
-              borderRadius: "8px",
+              borderRadius: "10px",
               fontSize: "0.9rem",
+              fontWeight: 600,
             }}
           >
-            ← Back to Dashboard
+            🏠 Back to Home
           </Link>
         </div>
       </div>
@@ -333,14 +394,47 @@ export default function FarmerProfilePage() {
           </div>
 
           <div style={{ marginBottom: "2rem" }}>
-            <h2 style={{ fontSize: "1.2rem", marginBottom: "1rem", color: "#2c2c2c" }}>Farm Information</h2>
+            <h2 style={{ fontSize: "1.2rem", marginBottom: "1rem", color: "#2c2c2c" }}>
+              {userRole === "vendor" ? "Market Information" : userRole === "store" ? "Store Information" : "Farm Information"}
+            </h2>
             <div style={{ display: "grid", gap: "1rem" }}>
-              {profile.farmSizeAcres ? (
-                <div>
-                  <strong>Farm Size:</strong> {profile.farmSizeAcres.toFixed(4)} acres
-                </div>
+              {userRole === "vendor" ? (
+                <>
+                  {vendorProfile?.marketType && (
+                    <div><strong>Market Type:</strong> {vendorProfile.marketType.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}</div>
+                  )}
+                  {vendorProfile?.marketName && (
+                    <div><strong>Market Name:</strong> {vendorProfile.marketName}</div>
+                  )}
+                  {vendorProfile?.stallNumber && (
+                    <div><strong>Stall Number:</strong> {vendorProfile.stallNumber}</div>
+                  )}
+                  {!vendorProfile && <div style={{ color: "#666", fontStyle: "italic" }}>Market info not set — edit your profile to add it</div>}
+                </>
+              ) : userRole === "store" ? (
+                <>
+                  {storeProfile?.storeType && (
+                    <div><strong>Store Type:</strong> {storeProfile.storeType.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}</div>
+                  )}
+                  {storeProfile?.buildingName && (
+                    <div><strong>Building Name:</strong> {storeProfile.buildingName}</div>
+                  )}
+                  {storeProfile?.streetAddress && (
+                    <div><strong>Street Address:</strong> {storeProfile.streetAddress}</div>
+                  )}
+                  {storeProfile?.storeNumber && (
+                    <div><strong>Store Number:</strong> {storeProfile.storeNumber}</div>
+                  )}
+                  {!storeProfile && <div style={{ color: "#666", fontStyle: "italic" }}>Store info not set — edit your profile to add it</div>}
+                </>
               ) : (
-                <div style={{ color: "#666", fontStyle: "italic" }}>Farm size not set</div>
+                <>
+                  {profile.farmSizeAcres ? (
+                    <div><strong>Farm Size:</strong> {profile.farmSizeAcres.toFixed(4)} acres</div>
+                  ) : (
+                    <div style={{ color: "#666", fontStyle: "italic" }}>Farm size not set</div>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -562,7 +656,60 @@ export default function FarmerProfilePage() {
             </div>
           </div>
 
-          {/* Farm Size */}
+          {/* Role-specific edit section */}
+          {userRole === "vendor" ? (
+            <div style={{ marginBottom: "2rem", background: "#fff3e0", padding: "1.25rem", borderRadius: "10px", border: "1px solid #ffe0b2" }}>
+              <h3 style={{ fontSize: "1rem", marginBottom: "1rem", color: "#2c2c2c" }}>Market Information</h3>
+              <div style={{ display: "grid", gap: "1rem" }}>
+                <div>
+                  <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>Market Type</label>
+                  <select value={marketType} onChange={(e) => setMarketType(e.target.value)} style={{ width: "100%", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "8px", fontSize: "1rem" }}>
+                    <option value="">Select Market Type</option>
+                    <option value="city_market">City Market</option>
+                    <option value="supermarket">Supermarket</option>
+                    <option value="roadside_market">Roadside Market</option>
+                    <option value="town_market">Town Market</option>
+                    <option value="village_market">Village Market</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>Market Name</label>
+                  <input type="text" value={marketName} onChange={(e) => setMarketName(e.target.value)} placeholder="e.g., Owino Market" style={{ width: "100%", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "8px", fontSize: "1rem" }} />
+                </div>
+                <div>
+                  <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>Stall Number (optional)</label>
+                  <input type="text" value={stallNumber} onChange={(e) => setStallNumber(e.target.value)} placeholder="e.g., A-12" style={{ width: "100%", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "8px", fontSize: "1rem" }} />
+                </div>
+              </div>
+            </div>
+          ) : userRole === "store" ? (
+            <div style={{ marginBottom: "2rem", background: "#e3f2fd", padding: "1.25rem", borderRadius: "10px", border: "1px solid #bbdefb" }}>
+              <h3 style={{ fontSize: "1rem", marginBottom: "1rem", color: "#2c2c2c" }}>Store Information</h3>
+              <div style={{ display: "grid", gap: "1rem" }}>
+                <div>
+                  <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>Store Type</label>
+                  <select value={storeType} onChange={(e) => setStoreType(e.target.value)} style={{ width: "100%", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "8px", fontSize: "1rem" }}>
+                    <option value="">Select Store Type</option>
+                    <option value="cold_storage">Cold Storage</option>
+                    <option value="dry_storage">Dry Storage</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>Building Name</label>
+                  <input type="text" value={buildingName} onChange={(e) => setBuildingName(e.target.value)} placeholder="e.g., Farmers House" style={{ width: "100%", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "8px", fontSize: "1rem" }} />
+                </div>
+                <div>
+                  <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>Street Address</label>
+                  <input type="text" value={streetAddress} onChange={(e) => setStreetAddress(e.target.value)} placeholder="e.g., Plot 5, Market Street" style={{ width: "100%", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "8px", fontSize: "1rem" }} />
+                </div>
+                <div>
+                  <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>Store Number</label>
+                  <input type="text" value={storeNumber} onChange={(e) => setStoreNumber(e.target.value)} placeholder="e.g., S-04" style={{ width: "100%", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "8px", fontSize: "1rem" }} />
+                </div>
+              </div>
+            </div>
+          ) : (
+          /* Farm Size — farmer only */
           <div style={{ marginBottom: "2rem" }}>
             <h3 style={{ fontSize: "1rem", marginBottom: "1rem", color: "#2c2c2c" }}>Farm Size</h3>
             <div style={{ display: "grid", gap: "1rem" }}>
@@ -691,6 +838,7 @@ export default function FarmerProfilePage() {
                         </div>
             </div>
           </div>
+          )}
 
           <div style={{ display: "flex", gap: "1rem" }}>
             <button

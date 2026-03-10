@@ -22,6 +22,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   const router = useRouter();
   const inventory = useQuery(api.buyerDashboard.getAvailableInventory, { buyerId: userId });
   const traderListings = useQuery(api.buyerDashboard.getAvailableTraderListingsForBuyers, { buyerId: userId });
+  const vendorStoreListings = useQuery(api.buyerDashboard.getVendorStoreListings, { buyerId: userId });
   const windowStatus = useQuery(api.buyerDashboard.getPurchaseWindowStatus, { buyerId: userId });
   const orders = useQuery(api.buyerDashboard.getBuyerOrders, { buyerId: userId });
   const listingOrders = useQuery(api.buyerDashboard.getBuyerListingOrders, { buyerId: userId });
@@ -34,6 +35,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   const buyerRewardReceipts = useQuery((api as any).farmcoin.getBuyerRewardReceipts, { userId } as any);
   const createPurchase = useMutation(api.buyers.createBuyerPurchase);
   const createListingPurchase = useMutation((api as any).buyers.createBuyerListingPurchase);
+  const createVendorStorePurchase = useMutation((api as any).buyers.createBuyerVendorStorePurchase);
   const buyerConfirmListingDelivery = useMutation((api as any).buyers.buyerConfirmListingDelivery);
   const cashOutBuyerRewardReceipt = useMutation((api as any).farmcoin.cashOutBuyerRewardReceipt);
   const messageThreads = useQuery(api.messages.getUserMessageThreads, { userId });
@@ -54,6 +56,8 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   const [purchaseMessage, setPurchaseMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [kilosInput, setKilosInput] = useState<{ [key: string]: string }>({});
   const [listingUnitsInput, setListingUnitsInput] = useState<{ [key: string]: string }>({});
+  const [vendorStoreUnitsInput, setVendorStoreUnitsInput] = useState<{ [key: string]: string }>({});
+  const [vendorStorePurchaseMessage, setVendorStorePurchaseMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [depositAmount, setDepositAmount] = useState<string>("");
   const [isDepositing, setIsDepositing] = useState(false);
   const [depositMessage, setDepositMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -697,6 +701,42 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       setListingUnitsInput({ ...listingUnitsInput, [listingId]: "" });
     } catch (error: any) {
       setListingPurchaseMessage({
+        type: "error",
+        text: `Purchase failed: ${error.message}`,
+      });
+    }
+  };
+
+  const handleVendorStorePurchase = async (listingId: string, availableUnits: number) => {
+    const unitsStr = vendorStoreUnitsInput[listingId] || "";
+    const units = parseInt(unitsStr, 10);
+
+    if (!unitsStr || Number.isNaN(units) || units <= 0) {
+      setVendorStorePurchaseMessage({ type: "error", text: "Please enter a valid number of units" });
+      return;
+    }
+
+    if (units > availableUnits) {
+      setVendorStorePurchaseMessage({ type: "error", text: `Requested units (${units}) exceed available units (${availableUnits})` });
+      return;
+    }
+
+    setVendorStorePurchaseMessage(null);
+
+    try {
+      const result = await createVendorStorePurchase({
+        buyerId: userId,
+        listingId: listingId as any,
+        unitCount: units,
+      });
+
+      setVendorStorePurchaseMessage({
+        type: "success",
+        text: `Purchase successful! UTID: ${(result as any).purchaseUtid}. Collect from the seller's location.`,
+      });
+      setVendorStoreUnitsInput({ ...vendorStoreUnitsInput, [listingId]: "" });
+    } catch (error: any) {
+      setVendorStorePurchaseMessage({
         type: "error",
         text: `Purchase failed: ${error.message}`,
       });
@@ -1729,6 +1769,187 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                               Purchase
                             </button>
                           </div>
+                        ) : (
+                          <span style={{ color: "#999", fontSize: "0.85rem" }}>Window Closed</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Vendor & Store Listings */}
+      <div style={{
+        marginBottom: "1.5rem",
+        padding: "clamp(1rem, 3vw, 1.5rem)",
+        background: "#fff",
+        borderRadius: "12px",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        border: "1px solid #e0e0e0"
+      }}>
+        <h3 style={{
+          marginTop: 0,
+          marginBottom: "1rem",
+          fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)",
+          color: "#2c2c2c",
+          fontFamily: '"Montserrat", sans-serif',
+          fontWeight: "600",
+          letterSpacing: "-0.01em"
+        }}>
+          🏪 Shop from Vendors &amp; Stores
+        </h3>
+        <p style={{ color: "#666", fontSize: "0.9rem", marginBottom: "1rem" }}>
+          Browse packaged produce from verified vendors and stores. Collect from their location after purchase.
+        </p>
+
+        {vendorStorePurchaseMessage && (
+          <div style={{
+            padding: "1rem",
+            marginBottom: "1.5rem",
+            background: vendorStorePurchaseMessage.type === "success" ? "#e8f5e9" : "#ffebee",
+            borderRadius: "8px",
+            border: `1px solid ${vendorStorePurchaseMessage.type === "success" ? "#4caf50" : "#ef5350"}`,
+            color: vendorStorePurchaseMessage.type === "success" ? "#2e7d32" : "#c62828",
+          }}>
+            {vendorStorePurchaseMessage.text}
+          </div>
+        )}
+
+        {vendorStoreListings === undefined ? (
+          <p style={{ color: "#999" }}>Loading...</p>
+        ) : !vendorStoreListings?.length ? (
+          <p style={{ color: "#666" }}>No vendor or store listings available right now.</p>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
+              <thead>
+                <tr style={{ borderBottom: "2px solid #e0e0e0", background: "#f9f9f9" }}>
+                  <th style={{ padding: "0.75rem", textAlign: "left", fontWeight: "600", color: "#333" }}>UTID</th>
+                  <th style={{ padding: "0.75rem", textAlign: "left", fontWeight: "600", color: "#333" }}>Product</th>
+                  <th style={{ padding: "0.75rem", textAlign: "left", fontWeight: "600", color: "#333" }}>Packaging</th>
+                  <th style={{ padding: "0.75rem", textAlign: "left", fontWeight: "600", color: "#333" }}>Available</th>
+                  <th style={{ padding: "0.75rem", textAlign: "left", fontWeight: "600", color: "#333" }}>Price / Unit</th>
+                  <th style={{ padding: "0.75rem", textAlign: "left", fontWeight: "600", color: "#333" }}>Seller</th>
+                  <th style={{ padding: "0.75rem", textAlign: "left", fontWeight: "600", color: "#333" }}>Collection Point</th>
+                  <th style={{ padding: "0.75rem", textAlign: "left", fontWeight: "600", color: "#333" }}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(vendorStoreListings as any[]).map((listing: any) => {
+                  const unitsAvailable = listing.availableUnits ?? 0;
+                  const isVendor = listing.sellerRole === "vendor";
+                  const badgeColor = isVendor ? "#e65100" : "#c62828";
+                  const badgeLabel = isVendor ? "Vendor" : "Store";
+
+                  return (
+                    <tr key={listing.listingId} style={{ borderBottom: "1px solid #f0f0f0" }}>
+                      <td style={{ padding: "0.75rem", fontFamily: "monospace", fontWeight: 700 }}>{listing.utid}</td>
+                      <td style={{ padding: "0.75rem" }}>{listing.produceType}</td>
+                      <td style={{ padding: "0.75rem" }}>
+                        {listing.packagingTypeEnum
+                          ? listing.packagingTypeEnum.replace(/_/g, " ")
+                          : listing.pricingUnit || "unit"}
+                      </td>
+                      <td style={{ padding: "0.75rem" }}>
+                        {unitsAvailable > 0 ? (
+                          unitsAvailable
+                        ) : (
+                          <span style={{
+                            padding: "0.2rem 0.5rem",
+                            background: "#ffebee",
+                            color: "#c62828",
+                            borderRadius: "4px",
+                            fontSize: "0.8rem",
+                            fontWeight: "600"
+                          }}>
+                            Out of Stock
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ padding: "0.75rem" }}>
+                        {listing.pricePerUnit
+                          ? formatUGX(listing.pricePerUnit)
+                          : listing.pricePerKilo
+                          ? formatUGX(listing.pricePerKilo)
+                          : "N/A"}
+                      </td>
+                      <td style={{ padding: "0.75rem" }}>
+                        <div>{listing.sellerAlias || "Seller"}</div>
+                        <span style={{
+                          display: "inline-block",
+                          marginTop: "0.2rem",
+                          padding: "0.15rem 0.4rem",
+                          background: badgeColor,
+                          color: "#fff",
+                          borderRadius: "4px",
+                          fontSize: "0.7rem",
+                          fontWeight: "600",
+                          textTransform: "uppercase"
+                        }}>
+                          {badgeLabel}
+                        </span>
+                      </td>
+                      <td style={{ padding: "0.75rem", fontSize: "0.85rem", color: "#555" }}>
+                        {listing.collectionLocationText || "Ask seller"}
+                      </td>
+                      <td style={{ padding: "0.75rem" }}>
+                        {windowStatus?.isOpen ? (
+                          unitsAvailable > 0 ? (
+                            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                              <input
+                                type="number"
+                                min="1"
+                                max={unitsAvailable}
+                                value={vendorStoreUnitsInput[listing.listingId] || ""}
+                                onChange={(e) => setVendorStoreUnitsInput({ ...vendorStoreUnitsInput, [listing.listingId]: e.target.value })}
+                                placeholder="Units"
+                                style={{
+                                  padding: "0.5rem",
+                                  border: "1px solid #ddd",
+                                  borderRadius: "4px",
+                                  fontSize: "0.85rem",
+                                  width: "80px"
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setVendorStoreUnitsInput({ ...vendorStoreUnitsInput, [listing.listingId]: String(unitsAvailable) })}
+                                style={{
+                                  padding: "0.5rem 0.75rem",
+                                  background: "#f5f5f5",
+                                  color: "#333",
+                                  border: "1px solid #ddd",
+                                  borderRadius: "4px",
+                                  fontSize: "0.8rem",
+                                  cursor: "pointer"
+                                }}
+                              >
+                                Buy All
+                              </button>
+                              <button
+                                onClick={() => handleVendorStorePurchase(listing.listingId, unitsAvailable)}
+                                disabled={!vendorStoreUnitsInput[listing.listingId]}
+                                style={{
+                                  padding: "0.5rem 1rem",
+                                  background: !vendorStoreUnitsInput[listing.listingId] ? "#ccc" : "#e65100",
+                                  color: "#fff",
+                                  border: "none",
+                                  borderRadius: "4px",
+                                  fontSize: "0.85rem",
+                                  fontWeight: "600",
+                                  cursor: !vendorStoreUnitsInput[listing.listingId] ? "not-allowed" : "pointer"
+                                }}
+                              >
+                                Purchase
+                              </button>
+                            </div>
+                          ) : (
+                            <span style={{ color: "#999", fontSize: "0.85rem" }}>Sold Out</span>
+                          )
                         ) : (
                           <span style={{ color: "#999", fontSize: "0.85rem" }}>Window Closed</span>
                         )}

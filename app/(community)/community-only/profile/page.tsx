@@ -204,6 +204,12 @@ export default function CommunityProfilePage() {
     communityId ? { communityId } : "skip"
   ) as any;
 
+  // Community info (name + logo)
+  const communityInfo = useOfflineQuery(
+    api.communities.getCommunityInfo,
+    communityId ? { communityId } : "skip"
+  );
+
   // My saved profile form responses
   const myResponses = useOfflineQuery(
     (api as any).forms.getMyProfileFormResponses,
@@ -316,10 +322,10 @@ export default function CommunityProfilePage() {
           boxShadow: "0 2px 8px rgba(0,0,0,0.1)", border: "1px solid #e0e0e0", marginBottom: "1.25rem",
         }}>
           <h2 style={{ fontSize: "clamp(1.05rem, 3vw, 1.2rem)", fontWeight: 700, color: "#1a1a1a", margin: "0 0 0.5rem" }}>
-            Your role in the value chain
+            Your role in {communityInfo?.name || "this community"}
           </h2>
           <p style={{ fontSize: "clamp(0.9rem, 2.5vw, 1rem)", color: "#666", margin: "0 0 1rem" }}>
-            Help others understand what you do in the supply chain
+            Help others know what your role is in this community
           </p>
 
           <select

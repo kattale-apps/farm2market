@@ -28,7 +28,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   
-  const [listingMode, setListingMode] = useState<"unit" | "garden">("unit");
+  const [listingMode, setListingMode] = useState<"unit" | "garden" | "packaging">("unit");
   const [gardenSizeMode, setGardenSizeMode] = useState<"acres" | "emiigo">("acres");
   const [formData, setFormData] = useState({
     produceType: "",
@@ -42,6 +42,10 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
     gardenLength: "",
     gardenWidth: "",
     totalPrice: "",
+    // Packaging mode fields
+    packagingType: "",
+    availableUnits: "",
+    pricePerUnit: "",
   });
 
   // Check onboarding status
@@ -130,6 +134,56 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
 
       if (!isVendorOrStore && !formData.storageLocationId) {
         setMessage({ type: "error", text: "Storage location is required" });
+        setLoading(false);
+        return;
+      }
+
+      // Packaging mode validation
+      if (listingMode === "packaging") {
+        const units = parseInt(formData.availableUnits);
+        const ppu = parseFloat(formData.pricePerUnit);
+        if (!formData.packagingType) {
+          setMessage({ type: "error", text: "Packaging type is required" });
+          setLoading(false);
+          return;
+        }
+        if (isNaN(units) || units <= 0) {
+          setMessage({ type: "error", text: "Number of units must be a positive number" });
+          setLoading(false);
+          return;
+        }
+        if (isNaN(ppu) || ppu <= 0) {
+          setMessage({ type: "error", text: "Price per unit must be a positive number" });
+          setLoading(false);
+          return;
+        }
+
+        const result = await createListing({
+          farmerId: userId,
+          produceType: formData.produceType.trim(),
+          listingMode: "packaging",
+          packagingTypeEnum: formData.packagingType,
+          availableUnits: units,
+          pricingUnit: "per_package" as const,
+          pricePerUnit: ppu,
+          qualityRating: formData.qualityRating || undefined,
+          qualityComment: formData.qualityComment.trim() || undefined,
+          storageLocationId: formData.storageLocationId ? (formData.storageLocationId as any) : undefined,
+        });
+
+        setMessage({
+          type: "success",
+          text: `Listing created! UTID: ${result.utid}. ${result.totalUnits} ${formData.packagingType}(s) listed.`,
+        });
+
+        // Reset form
+        setFormData({
+          produceType: "", totalKilos: "", pricePerKilo: "", qualityRating: "", qualityComment: "",
+          storageLocationId: "", gardenSize: "", gardenLength: "", gardenWidth: "", totalPrice: "",
+          packagingType: "", availableUnits: "", pricePerUnit: "",
+        });
+        setListingMode("unit");
+        setTimeout(() => { setShowForm(false); setMessage(null); }, 5000);
         setLoading(false);
         return;
       }
@@ -224,6 +278,9 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
         gardenLength: "",
         gardenWidth: "",
         totalPrice: "",
+        packagingType: "",
+        availableUnits: "",
+        pricePerUnit: "",
       });
       setListingMode("unit");
       setGardenSizeMode("acres");
@@ -297,6 +354,9 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
               gardenLength: "",
               gardenWidth: "",
               totalPrice: "",
+              packagingType: "",
+              availableUnits: "",
+              pricePerUnit: "",
             });
             setListingMode("unit");
             setGardenSizeMode("acres");
@@ -361,8 +421,36 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
       <form onSubmit={handleSubmit}>
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
           
-          {/* Listing Mode Selection - only for farmers (vendors/stores always use unit mode) */}
-          {!isVendorOrStore && (
+          {/* Listing Mode Selection */}
+          {isVendorOrStore ? (
+          <div>
+            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+              Listing Mode *
+            </label>
+            <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
+                <input
+                  type="radio"
+                  name="listingMode"
+                  value="unit"
+                  checked={listingMode === "unit"}
+                  onChange={() => setListingMode("unit")}
+                />
+                <span>By Weight (kilos)</span>
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
+                <input
+                  type="radio"
+                  name="listingMode"
+                  value="packaging"
+                  checked={listingMode === "packaging"}
+                  onChange={() => setListingMode("packaging")}
+                />
+                <span>By Packaging (crates, bags, bunches...)</span>
+              </label>
+            </div>
+          </div>
+          ) : (
           <div>
             <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
               Listing Mode *
@@ -398,7 +486,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
               <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
                 Collection Location
               </label>
-              {autoStorageLocation ? (
+              {autoStorageLocation && autoStorageLocation.storageLocationId ? (
                 <div style={{
                   padding: "0.75rem 1rem",
                   background: "#e8f5e9",
@@ -412,16 +500,28 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
                 </div>
               ) : autoStorageLocation === undefined ? (
                 <p style={{ color: "#999", fontSize: "0.9rem" }}>Loading your location...</p>
+              ) : autoStorageLocation?.collectionText ? (
+                <div style={{
+                  padding: "0.75rem 1rem",
+                  background: "#e8f5e9",
+                  borderRadius: "8px",
+                  border: "1px solid #81c784",
+                  color: "#2e7d32",
+                  fontSize: "0.95rem",
+                  fontWeight: "500",
+                }}>
+                  📍 {autoStorageLocation.collectionText} — your registered {effectiveRole === "vendor" ? "market" : "store"} address
+                </div>
               ) : (
                 <div style={{
                   padding: "0.75rem 1rem",
-                  background: "#fff3cd",
+                  background: "#e3f2fd",
                   borderRadius: "8px",
-                  border: "1px solid #ffc107",
-                  color: "#856404",
+                  border: "1px solid #90caf9",
+                  color: "#1565c0",
                   fontSize: "0.9rem",
                 }}>
-                  Your district is not yet set up as a collection point. Please select one below or contact admin.
+                  Your listing will be collected from your registered {effectiveRole === "vendor" ? "market" : "store"} address. You can update your address from your profile.
                 </div>
               )}
               {/* Fallback picker when auto-match fails */}
@@ -496,7 +596,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
             <label style={{ display: "block", marginBottom: "0.75rem", fontWeight: "600", color: "#333" }}>
               Select Produce Type *
             </label>
-            {!formData.storageLocationId ? (
+            {!formData.storageLocationId && !isVendorOrStore ? (
               <p style={{ color: "#666", fontSize: "0.9rem", padding: "1rem", background: "#fff3cd", borderRadius: "6px" }}>
                 Please select a storage location first to see available produce types.
               </p>
@@ -562,7 +662,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
             )}
           </div>
 
-          {listingMode !== "garden" && (
+          {listingMode !== "garden" && listingMode !== "packaging" && (
             <div>
               <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
                 Total Kilos *
@@ -589,7 +689,65 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
             </div>
           )}
 
-          {listingMode === "garden" ? (
+          {listingMode === "packaging" ? (
+            <>
+              <div>
+                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                  Packaging Type *
+                </label>
+                <select
+                  value={formData.packagingType}
+                  onChange={(e) => setFormData({ ...formData, packagingType: e.target.value })}
+                  required
+                  style={{ width: "100%", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "6px", fontSize: "1rem", background: "#fff" }}
+                >
+                  <option value="">Select packaging type</option>
+                  <option value="crate">Crate</option>
+                  <option value="bag">Bag (50kg)</option>
+                  <option value="bunch">Bunch</option>
+                  <option value="basket">Basket</option>
+                  <option value="tin">Tin / Debe</option>
+                  <option value="sack">Sack</option>
+                  <option value="bundle">Bundle</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                  Number of Units Available *
+                </label>
+                <input
+                  type="number"
+                  value={formData.availableUnits}
+                  onChange={(e) => setFormData({ ...formData, availableUnits: e.target.value })}
+                  placeholder="e.g., 10, 25, 50"
+                  min="1"
+                  step="1"
+                  required
+                  style={{ width: "100%", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "6px", fontSize: "1rem" }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                  Price Per {formData.packagingType || "Unit"} (UGX) *
+                </label>
+                <input
+                  type="number"
+                  value={formData.pricePerUnit}
+                  onChange={(e) => setFormData({ ...formData, pricePerUnit: e.target.value })}
+                  placeholder="e.g., 50000, 100000"
+                  min="1"
+                  step="1"
+                  required
+                  style={{ width: "100%", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "6px", fontSize: "1rem" }}
+                />
+                {formData.availableUnits && formData.pricePerUnit && (
+                  <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.85rem", color: "#666" }}>
+                    Total Value: {formatUGX(parseInt(formData.availableUnits) * parseFloat(formData.pricePerUnit))}
+                  </p>
+                )}
+              </div>
+            </>
+          ) : listingMode === "garden" ? (
             <>
               <div>
                 <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
@@ -802,19 +960,19 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
           <div style={{ display: "flex", gap: "1rem", marginTop: "0.5rem" }}>
             <button
               type="submit"
-              disabled={loading || !formData.storageLocationId || !formData.produceType || !onboardingStatus?.completed}
+              disabled={loading || (!isVendorOrStore && !formData.storageLocationId) || !formData.produceType || !onboardingStatus?.completed}
               style={{
                 padding: "0.75rem 1.5rem",
-                background: loading || !formData.storageLocationId || !formData.produceType || !onboardingStatus?.completed ? "#ccc" : "#4caf50",
+                background: loading || (!isVendorOrStore && !formData.storageLocationId) || !formData.produceType || !onboardingStatus?.completed ? "#ccc" : "#4caf50",
                 color: "#fff",
                 border: "none",
                 borderRadius: "6px",
-                cursor: loading || !formData.storageLocationId || !formData.produceType || !onboardingStatus?.completed ? "not-allowed" : "pointer",
+                cursor: loading || (!isVendorOrStore && !formData.storageLocationId) || !formData.produceType || !onboardingStatus?.completed ? "not-allowed" : "pointer",
                 fontSize: "1rem",
                 fontWeight: "600",
               }}
             >
-              {loading ? "Creating..." : listingMode === "garden" ? "Create Garden Listing" : "Create Listing"}
+              {loading ? "Creating..." : listingMode === "garden" ? "Create Garden Listing" : listingMode === "packaging" ? "Create Packaging Listing" : "Create Listing"}
             </button>
             <button
               type="button"
@@ -832,6 +990,9 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
                   gardenLength: "",
                   gardenWidth: "",
                   totalPrice: "",
+                  packagingType: "",
+                  availableUnits: "",
+                  pricePerUnit: "",
                 });
                 setListingMode("unit");
               }}

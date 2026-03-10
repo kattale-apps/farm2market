@@ -205,6 +205,22 @@ const REGION_GROUPS: { key: string; districts: string[] }[] = [
 
 
 
+/**
+ * Get basic community info (name + logo URL) for header display
+ */
+export const getCommunityInfo = query({
+  args: { communityId: v.id("communities") },
+  handler: async (ctx, args) => {
+    const community = await ctx.db.get(args.communityId);
+    if (!community) return null;
+    const logoUrl = await resolveLogoUrl(ctx, community.logoPath);
+    return {
+      name: community.name,
+      logoUrl,
+    };
+  },
+});
+
 export const getCommunities = query({
   args: {
     adminId: v.id("users"),

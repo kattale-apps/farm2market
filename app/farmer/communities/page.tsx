@@ -215,18 +215,19 @@ export default function FarmerCommunitiesPage() {
               display: "inline-flex",
               alignItems: "center",
               gap: "0.5rem",
-              padding: "0.65rem 1.1rem",
-              borderRadius: "999px",
-              background: "#ffffff",
-              color: "#1b5e20",
+              padding: "8px 16px",
+              borderRadius: "10px",
+              background: "#2e7d32",
+              color: "#fff",
               textDecoration: "none",
-              fontWeight: 700,
-              border: "1px solid #e0e0e0",
-              boxShadow: "0 2px 10px rgba(0,0,0,0.08)",
+              fontWeight: 600,
+              border: "none",
+              boxShadow: "none",
               marginBottom: "1rem",
+              fontSize: "0.9rem",
             }}
           >
-            ← Back to Home
+            🏠 Back to Home
           </Link>
           <h1 style={{
             fontSize: "clamp(1.8rem, 5vw, 2.2rem)",
@@ -236,7 +237,7 @@ export default function FarmerCommunitiesPage() {
             fontWeight: "700",
             letterSpacing: "-0.02em",
           }}>
-            🌾 Communities
+            � Communities
           </h1>
           <p style={{
             fontSize: "1rem",

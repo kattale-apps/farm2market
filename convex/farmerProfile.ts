@@ -178,6 +178,141 @@ export const updateFarmerProfile = mutation({
 });
 
 /**
+ * Get vendor profile (market info)
+ */
+export const getVendorProfile = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const vp = await ctx.db
+      .query("vendorProfiles")
+      .withIndex("by_userId", (q: any) => q.eq("userId", args.userId))
+      .first();
+    if (!vp) return null;
+    return {
+      marketType: vp.marketType,
+      marketName: vp.marketName,
+      stallNumber: vp.stallNumber,
+    };
+  },
+});
+
+/**
+ * Get store profile (store info)
+ */
+export const getStoreProfile = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const sp = await ctx.db
+      .query("storeProfiles")
+      .withIndex("by_userId", (q: any) => q.eq("userId", args.userId))
+      .first();
+    if (!sp) return null;
+    return {
+      storeType: sp.storeType,
+      storageCapacityTonnes: sp.storageCapacityTonnes,
+      buildingName: sp.buildingName,
+      streetAddress: sp.streetAddress,
+      storeNumber: sp.storeNumber,
+    };
+  },
+});
+
+/**
+ * Update vendor profile (upsert)
+ */
+export const updateVendorProfile = mutation({
+  args: {
+    userId: v.id("users"),
+    marketType: v.optional(v.union(
+      v.literal("city_market"),
+      v.literal("supermarket"),
+      v.literal("roadside_market"),
+      v.literal("town_market"),
+      v.literal("village_market")
+    )),
+    marketName: v.optional(v.string()),
+    stallNumber: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user || user.role !== "vendor") {
+      throw new Error("User is not a vendor");
+    }
+    const existing = await ctx.db
+      .query("vendorProfiles")
+      .withIndex("by_userId", (q: any) => q.eq("userId", args.userId))
+      .first();
+
+    const updates: any = {};
+    if (args.marketType !== undefined) updates.marketType = args.marketType;
+    if (args.marketName !== undefined) updates.marketName = args.marketName.trim() || undefined;
+    if (args.stallNumber !== undefined) updates.stallNumber = args.stallNumber.trim() || undefined;
+
+    if (existing) {
+      await ctx.db.patch(existing._id, updates);
+    } else {
+      await ctx.db.insert("vendorProfiles", {
+        userId: args.userId,
+        marketType: args.marketType || "village_market",
+        marketName: args.marketName?.trim(),
+        stallNumber: args.stallNumber?.trim(),
+        onboardingCompleted: true,
+        createdAt: getUgandaTime(),
+      });
+    }
+    return { success: true };
+  },
+});
+
+/**
+ * Update store profile (upsert)
+ */
+export const updateStoreProfile = mutation({
+  args: {
+    userId: v.id("users"),
+    storeType: v.optional(v.union(
+      v.literal("cold_storage"),
+      v.literal("dry_storage")
+    )),
+    buildingName: v.optional(v.string()),
+    streetAddress: v.optional(v.string()),
+    storeNumber: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user || user.role !== "store") {
+      throw new Error("User is not a store");
+    }
+    const existing = await ctx.db
+      .query("storeProfiles")
+      .withIndex("by_userId", (q: any) => q.eq("userId", args.userId))
+      .first();
+
+    const updates: any = {};
+    if (args.storeType !== undefined) updates.storeType = args.storeType;
+    if (args.buildingName !== undefined) updates.buildingName = args.buildingName.trim() || undefined;
+    if (args.streetAddress !== undefined) updates.streetAddress = args.streetAddress.trim() || undefined;
+    if (args.storeNumber !== undefined) updates.storeNumber = args.storeNumber.trim() || undefined;
+
+    if (existing) {
+      await ctx.db.patch(existing._id, updates);
+    } else {
+      await ctx.db.insert("storeProfiles", {
+        userId: args.userId,
+        storeType: args.storeType || "dry_storage",
+        storageCapacityTonnes: 0,
+        buildingName: args.buildingName?.trim(),
+        streetAddress: args.streetAddress?.trim(),
+        storeNumber: args.storeNumber?.trim(),
+        onboardingCompleted: true,
+        createdAt: getUgandaTime(),
+      });
+    }
+    return { success: true };
+  },
+});
+
+/**
  * Get active supply chain roles
  */
 export const getActiveSupplyChainRoles = query({

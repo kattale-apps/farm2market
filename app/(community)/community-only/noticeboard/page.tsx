@@ -110,7 +110,7 @@ function PostCard({
 }) {
   const toggleLike = useMutation(api.noticeboard.togglePostLike);
   const [busy, setBusy] = useState(false);
-  const liked = post.likedByUserIds.includes(userId);
+  const liked = (post.likedByUserIds ?? []).includes(userId);
 
   const handleLike = async () => {
     if (busy) return;

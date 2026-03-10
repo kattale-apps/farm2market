@@ -7,14 +7,15 @@ interface TabItem {
   label: string;
   icon: string;
   path: string;
+  color: string;
 }
 
 const TABS: TabItem[] = [
-  { label: "Posts", icon: "📰", path: "/community-only/noticeboard" },
-  { label: "Messages", icon: "💬", path: "/community-only/messages" },
-  { label: "Forms", icon: "📋", path: "/community-only/trackers" },
-  { label: "Insights", icon: "📈", path: "/community-only/my-insights" },
-  { label: "Profile", icon: "👤", path: "/community-only/profile" },
+  { label: "Posts", icon: "📰", path: "/community-only/noticeboard", color: "#2e7d32" },
+  { label: "Messages", icon: "💬", path: "/community-only/messages", color: "#1565c0" },
+  { label: "Forms", icon: "📋", path: "/community-only/trackers", color: "#e65100" },
+  { label: "Insights", icon: "📈", path: "/community-only/my-insights", color: "#6a1b9a" },
+  { label: "Profile", icon: "👤", path: "/community-only/profile", color: "#00695c" },
 ];
 
 export default function CommunityTabBar() {
@@ -33,9 +34,10 @@ export default function CommunityTabBar() {
       display: "flex",
       justifyContent: "space-around",
       alignItems: "center",
-      padding: "0.35rem 0 calc(0.35rem + env(safe-area-inset-bottom, 0px)) 0",
+      padding: "0.4rem 0.25rem calc(0.4rem + env(safe-area-inset-bottom, 0px)) 0.25rem",
       zIndex: 1000,
       boxShadow: "0 -2px 8px rgba(0,0,0,0.08)",
+      gap: "0.25rem",
     }}>
       {TABS.map((tab) => {
         const isActive = pathname === tab.path || pathname?.startsWith(tab.path + "/");
@@ -49,17 +51,22 @@ export default function CommunityTabBar() {
               flexDirection: "column",
               alignItems: "center",
               textDecoration: "none",
-              padding: "0.25rem 0.5rem",
-              borderRadius: 8,
-              gap: "0.1rem",
-              color: isActive ? "#2e7d32" : "#888",
-              fontWeight: isActive ? 700 : 500,
+              padding: "0.35rem 0.6rem",
+              borderRadius: 12,
+              gap: "0.15rem",
+              minHeight: 48,
+              justifyContent: "center",
+              background: isActive ? tab.color : `${tab.color}1F`,
+              color: isActive ? "#fff" : tab.color,
+              fontWeight: isActive ? 700 : 600,
               fontSize: "0.65rem",
               fontFamily: '"Montserrat", sans-serif',
-              transition: "color 0.15s",
+              transition: "all 0.2s ease",
+              boxShadow: isActive ? `0 2px 10px ${tab.color}66` : "none",
+              flex: 1,
             }}
           >
-            <span style={{ fontSize: "1.2rem" }}>{tab.icon}</span>
+            <span style={{ fontSize: "1.4rem", lineHeight: 1 }}>{tab.icon}</span>
             <span>{tab.label}</span>
           </Link>
         );

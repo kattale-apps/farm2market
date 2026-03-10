@@ -186,7 +186,7 @@ export default defineSchema({
       v.literal("arrived")
     )),
     // Garden sale mode
-    listingMode: v.optional(v.union(v.literal("unit"), v.literal("garden"))), // Listing mode: unit-based (default) or entire garden plot
+    listingMode: v.optional(v.union(v.literal("unit"), v.literal("garden"), v.literal("packaging"))), // Listing mode: unit-based (default), garden plot, or packaging (vendor/store)
     gardenSize: v.optional(v.number()), // Garden size in acres (for garden mode)
     gardenDimensions: v.optional(v.any()), // Raw garden dimensions (for garden mode)
     totalPrice: v.optional(v.number()), // Total price for entire garden (for garden mode, in UGX)

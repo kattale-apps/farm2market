@@ -363,6 +363,149 @@ export const createBuyerListingPurchase = mutation({
 });
 
 /**
+ * Buyer purchases vendor/store listing (separate from trader flow)
+ */
+export const createBuyerVendorStorePurchase = mutation({
+  args: {
+    buyerId: v.id("users"),
+    listingId: v.id("listings"),
+    unitCount: v.number(),
+  },
+  handler: async (ctx, args) => {
+    await checkPilotMode(ctx);
+
+    const purchaseWindow = await ctx.db
+      .query("purchaseWindows")
+      .withIndex("by_status", (q) => q.eq("isOpen", true))
+      .first();
+    if (!purchaseWindow) {
+      throwAppError(purchaseWindowClosedError());
+    }
+
+    const user = await ctx.db.get(args.buyerId);
+    if (!user || user.role !== "buyer") {
+      throwAppError(invalidRoleError("buyer"));
+    }
+
+    await checkRateLimit(ctx, args.buyerId, user.role, "create_purchase", {
+      listingId: args.listingId,
+      unitCount: args.unitCount,
+    });
+
+    if (args.unitCount <= 0) {
+      throw new Error("Unit count must be positive");
+    }
+
+    const listing = await ctx.db.get(args.listingId);
+    if (!listing) {
+      throw new Error("Listing not found");
+    }
+
+    if (!listing.farmerId) {
+      throw new Error("Invalid listing");
+    }
+
+    // Verify the seller is a vendor or store
+    const seller = await ctx.db.get(listing.farmerId);
+    if (!seller || !["vendor", "store"].includes(seller.role)) {
+      throw new Error("This listing is not from a vendor or store");
+    }
+
+    if (listing.status !== "active" && listing.status !== "partially_locked") {
+      throw new Error("Listing is not available for purchase");
+    }
+
+    const availableUnits = listing.availableUnits ?? listing.totalUnits;
+    if (args.unitCount > availableUnits) {
+      throw new Error(`Requested units (${args.unitCount}) exceed available units (${availableUnits}).`);
+    }
+
+    const unitSize = listing.unitSize || 1;
+    const basePricePerUnit = listing.pricePerUnit ?? listing.pricePerKilo * unitSize;
+    const basePricePerKilo = basePricePerUnit / (unitSize || 1);
+    const totalKilos = listing.listingMode === "packaging" ? 0 : args.unitCount * unitSize;
+
+    const serviceFeePercentage = await getBuyerServiceFeePercentage({ db: ctx.db });
+    const baseCost = basePricePerUnit * args.unitCount;
+    const serviceFee = (baseCost * serviceFeePercentage) / 100;
+    const totalCost = baseCost + serviceFee;
+
+    const currentEntry = await ctx.db
+      .query("walletLedger")
+      .withIndex("by_user", (q) => q.eq("userId", args.buyerId))
+      .order("desc")
+      .first();
+
+    const currentBalance = currentEntry?.balanceAfter || 0;
+    if (currentBalance < totalCost) {
+      throw new Error(
+        `Insufficient wallet balance. Required: ${totalCost.toFixed(2)} UGX, Available: ${currentBalance.toFixed(2)} UGX`
+      );
+    }
+
+    const purchaseTime = getUgandaTime();
+    const purchaseUtid = generateUTID(user.role);
+    const balanceAfter = currentBalance - totalCost;
+
+    await ctx.db.insert("walletLedger", {
+      userId: args.buyerId,
+      utid: purchaseUtid,
+      type: "capital_lock",
+      amount: totalCost,
+      balanceAfter,
+      timestamp: purchaseTime,
+      metadata: {
+        type: "buyer_listing_purchase",
+        listingId: args.listingId,
+        listingUtid: listing.utid,
+        unitCount: args.unitCount,
+        unitSize,
+        basePricePerUnit,
+        basePricePerKilo,
+        serviceFeePercentage,
+        serviceFee,
+        totalCost,
+      },
+    });
+
+    const remainingUnits = availableUnits - args.unitCount;
+    await ctx.db.patch(args.listingId, {
+      availableUnits: remainingUnits,
+      status: remainingUnits === 0 ? "fully_locked" : "partially_locked",
+    });
+
+    // Use farmerId (vendor/store userId) as traderId field since the schema requires it
+    const purchaseId = await ctx.db.insert("buyerListingPurchases", {
+      buyerId: args.buyerId,
+      listingId: args.listingId,
+      listingUtid: listing.utid,
+      traderId: listing.farmerId,
+      unitCount: args.unitCount,
+      unitSize,
+      totalKilos,
+      pricePerUnit: basePricePerUnit,
+      pricePerKilo: basePricePerKilo,
+      serviceFeePercentage,
+      serviceFee,
+      totalCost,
+      utid: purchaseUtid,
+      purchasedAt: purchaseTime,
+      status: "pending_delivery",
+    });
+
+    return {
+      purchaseId,
+      purchaseUtid,
+      listingId: args.listingId,
+      listingUtid: listing.utid,
+      unitCount: args.unitCount,
+      totalCost,
+      status: "pending_delivery",
+    };
+  },
+});
+
+/**
  * Trader confirms delivery for a listing batch
  */
 export const traderConfirmListingDelivery = mutation({

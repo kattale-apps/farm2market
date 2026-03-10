@@ -493,7 +493,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
   const dayStart = today - (today % (24 * 60 * 60 * 1000));
   
   // Get today's purchases (from farmers - unit locks)
-  const todayPurchases = activeUTIDs?.utids.filter((utid: any) => {
+  const todayPurchases = (activeUTIDs?.utids || []).filter((utid: any) => {
     return utid.timestamp && utid.timestamp >= dayStart && utid.type === "unit_lock";
   }).map((utid: any) => {
     let purchaseStatus = "Confirmed";
@@ -507,10 +507,10 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
       transactionType: "Purchase",
       status: purchaseStatus,
     };
-  }) || [];
+  });
 
   // Get today's sales (to buyers - buyer purchases from trader inventory)
-  const todaySales = traderSales?.sales.filter((sale: any) => {
+  const todaySales = (traderSales?.sales || []).filter((sale: any) => {
     return sale.purchasedAt && sale.purchasedAt >= dayStart;
   }).map((sale: any) => {
     return {
@@ -523,10 +523,10 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
       kilos: sale.kilos,
       buyerAlias: sale.buyerAlias,
     };
-  }) || [];
+  });
 
   // Get today's trader-buyer negotiations (pending offers)
-  const todayNegotiations = buyOffers?.negotiations.filter((neg: any) => {
+  const todayNegotiations = (buyOffers?.negotiations || []).filter((neg: any) => {
     return neg.lastUpdatedAt && neg.lastUpdatedAt >= dayStart;
   }).map((neg: any) => {
     let sellStatus = "Pending Acceptance/Rejection";
@@ -545,7 +545,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
       kilos: neg.kilos,
       buyerAlias: neg.buyerAlias,
     };
-  }) || [];
+  });
 
   // Combine all activities
   const todayActivity = [...todayPurchases, ...todaySales, ...todayNegotiations].sort((a, b) => b.timestamp - a.timestamp);

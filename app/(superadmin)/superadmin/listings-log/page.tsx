@@ -137,7 +137,7 @@ export default function SuperadminListingsLogPage() {
         }}>
           {data === undefined ? (
             <div style={{ padding: "2rem", textAlign: "center", color: "#999" }}>Loading listings...</div>
-          ) : !data.items.length ? (
+          ) : !data.items || !data.items.length ? (
             <div style={{ padding: "2rem", textAlign: "center", color: "#666" }}>No listings found for the selected filters.</div>
           ) : (
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>

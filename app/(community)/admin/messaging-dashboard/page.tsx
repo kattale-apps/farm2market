@@ -87,8 +87,8 @@ export default function MessagingDashboard() {
     pricing,
     payableAmount,
     billedAmount,
-    noticeboardPosts,
-    communityMessages,
+    noticeboardPosts = [],
+    communityMessages = [],
     quotaTrackerId,
   } = dashboardData;
 

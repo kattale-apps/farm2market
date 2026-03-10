@@ -119,7 +119,7 @@ export default function StoreAdminAuditPage() {
             <option value="">-- Select StoreAdmin --</option>
             {storeAdmins.map((admin: any) => (
               <option key={admin.id} value={admin.id}>
-                {admin.alias} ({admin.email}) - {admin.locations.map((l: any) => l.name).join(", ")}
+                {admin.alias} ({admin.email}) - {(admin.locations || []).map((l: any) => l.name).join(", ")}
               </option>
             ))}
           </select>

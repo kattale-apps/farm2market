@@ -46,12 +46,13 @@ export default function TrackersHubPage() {
     } catch {}
   }, []);
 
-  const forms = useOfflineQuery(
+  const formsRaw = useOfflineQuery(
     (api as any).forms.getCommunityForms,
     communityId ? { communityId } : "skip"
   ) as any;
 
-  const activeForms = forms?.filter((f: any) => f.isActive) || [];
+  const forms = Array.isArray(formsRaw) ? formsRaw : formsRaw === undefined ? undefined : null;
+  const activeForms = (Array.isArray(forms) ? forms : []).filter((f: any) => f.isActive);
 
   if (!communityId) {
     return (

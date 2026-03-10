@@ -264,11 +264,11 @@ function UsageSummaryPanel({
           </div>
         </div>
 
-        {usageSummary.breakdown.length > 0 && (
+        {(usageSummary.breakdown || []).length > 0 && (
           <div>
             <h3 className="font-semibold text-lg mb-4">Breakdown by Type</h3>
             <div className="space-y-3">
-              {usageSummary.breakdown.map((item) => (
+              {(usageSummary.breakdown || []).map((item) => (
                 <div key={item.type} className="p-4 bg-gray-50 rounded-lg">
                   <div className="flex justify-between items-start mb-2">
                     <div className="font-semibold capitalize">{item.type.replace(/_/g, " ")}</div>

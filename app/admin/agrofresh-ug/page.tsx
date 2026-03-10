@@ -103,7 +103,7 @@ export default function AgroFreshUGAdminPage() {
   );
 
   const rows = useMemo(() => {
-    if (!applications) return [];
+    if (!applications?.items) return [];
     return applications.items.map((item: any) => ({
       id: item.id,
       status: item.status,

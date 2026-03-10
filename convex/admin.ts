@@ -1994,6 +1994,7 @@ export const addProduceOption = mutation({
     value: v.string(),
     icon: v.string(), // Emoji icon
     order: v.float64(),
+    category: v.optional(v.string()),
     allowedStorageLocationIds: v.optional(v.array(v.id("storageLocations"))),
     reason: v.string(),
   },
@@ -2044,6 +2045,9 @@ export const addProduceOption = mutation({
       createdBy: args.adminId,
     };
     
+    if (args.category) {
+      insertData.category = args.category.trim();
+    }
     if (args.allowedStorageLocationIds && args.allowedStorageLocationIds.length > 0) {
       insertData.allowedStorageLocationIds = args.allowedStorageLocationIds;
     }

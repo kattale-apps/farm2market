@@ -76,6 +76,8 @@ export default defineSchema({
     farmSizeAcres: v.optional(v.number()), // Farm size in acres (calculated)
     farmSizeRaw: v.optional(v.any()), // Raw farm size input: {unit, length, width, omwigo, emiigo}
     onboardingCompleted: v.optional(v.boolean()), // Whether farmer has completed onboarding
+    gpsLat: v.optional(v.number()), // GPS latitude captured during onboarding
+    gpsLng: v.optional(v.number()), // GPS longitude captured during onboarding
     // Farmer profile (community onboarding preload fields)
     county: v.optional(v.string()),
     village: v.optional(v.string()),
@@ -669,6 +671,7 @@ export default defineSchema({
     icon: v.string(), // Emoji icon (e.g., "🍌", "🌽", "🫘")
     order: v.number(), // Display order (lower numbers appear first)
     active: v.boolean(), // Whether this option is currently active/available
+    category: v.optional(v.string()), // Produce category (e.g., "Grains & Cereals", "Vegetables")
     allowedStorageLocationIds: v.optional(v.array(v.id("storageLocations"))), // Storage locations where this produce can be delivered
     createdAt: v.number(),
     createdBy: v.id("users"), // Admin who created this option

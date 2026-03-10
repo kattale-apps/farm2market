@@ -34,6 +34,17 @@ export function Providers({ children }: { children: ReactNode }) {
     }
   }, [convex]);
 
+  // Early GPS permission prompt — ask once on app load so location is ready when needed
+  useEffect(() => {
+    if (typeof navigator !== "undefined" && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        () => { /* permission granted, no-op */ },
+        () => { /* denied or unavailable, no-op */ },
+        { timeout: 5000 }
+      );
+    }
+  }, []);
+
   if (!convex) {
     console.warn(`[${deploymentMode.toUpperCase()}] Convex client is null - rendering without provider`);
     return (

@@ -481,6 +481,7 @@ export const getActiveProduceOptions = query({
       value: opt.value,
       label: opt.label,
       icon: opt.icon,
+      category: opt.category || "Other",
       allowedStorageLocationIds: opt.allowedStorageLocationIds || [],
     }));
   },

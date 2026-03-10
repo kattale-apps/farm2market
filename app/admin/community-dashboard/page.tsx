@@ -714,6 +714,7 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
                     <option value="date">Date</option>
                     <option value="select">Select</option>
                     <option value="textarea">Textarea</option>
+                    <option value="camera">📸 Camera Photo</option>
                   </select>
                   <label style={{ display: "flex", alignItems: "center", gap: "0.25rem", fontSize: "0.78rem", cursor: "pointer" }}>
                     <input

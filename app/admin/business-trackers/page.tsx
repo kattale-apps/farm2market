@@ -579,11 +579,30 @@ export default function BusinessTrackersPage() {
                               return (
                                 <tr key={resp._id} style={{ borderBottom: "1px solid #eee" }}>
                                   <td style={{ padding: "0.4rem 0.6rem" }}>{resp.member?.alias || "Unknown"}</td>
-                                  {formResponses.fields?.map((field: any) => (
-                                    <td key={field._id} style={{ padding: "0.4rem 0.6rem" }}>
-                                      {String(valMap.get(String(field._id)) ?? "—")}
-                                    </td>
-                                  ))}
+                                  {formResponses.fields?.map((field: any) => {
+                                    const rawVal = valMap.get(String(field._id));
+                                    let cellContent: React.ReactNode = String(rawVal ?? "—");
+                                    if (field.fieldType === "camera" && rawVal) {
+                                      try {
+                                        const parsed = JSON.parse(String(rawVal));
+                                        if (parsed.dataUrl) {
+                                          cellContent = (
+                                            <img
+                                              src={parsed.dataUrl}
+                                              alt="Photo"
+                                              style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 4, cursor: "pointer" }}
+                                              onClick={() => window.open(parsed.dataUrl, "_blank")}
+                                            />
+                                          );
+                                        }
+                                      } catch { /* not valid JSON, show raw */ }
+                                    }
+                                    return (
+                                      <td key={field._id} style={{ padding: "0.4rem 0.6rem" }}>
+                                        {cellContent}
+                                      </td>
+                                    );
+                                  })}
                                   <td style={{ padding: "0.4rem 0.6rem", whiteSpace: "nowrap" }}>
                                     {new Date(resp.createdAt).toLocaleDateString()}
                                   </td>

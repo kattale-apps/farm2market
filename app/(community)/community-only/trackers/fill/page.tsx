@@ -8,6 +8,7 @@ import { Id } from "@/convex/_generated/dataModel";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import CommunityTabBar from "@/app/components/CommunityTabBar";
+import { GeneralCameraCapture } from "@/app/components/GeneralCameraCapture";
 import { useOfflineQuery } from "@/app/hooks/useOfflineQuery";
 import { useOfflineMutation } from "@/app/hooks/useOfflineMutation";
 import { useFormDraftPersistence, clearFormDraft } from "@/app/hooks/useFormDraftPersistence";
@@ -261,6 +262,24 @@ function FieldInput({
             {opt}
           </label>
         ))}
+      </div>
+    );
+  }
+  if (field.fieldType === "camera") {
+    // Show preview if value is already a JSON with dataUrl
+    let previewUrl: string | null = null;
+    if (value) {
+      try {
+        const parsed = JSON.parse(value);
+        previewUrl = parsed.dataUrl || null;
+      } catch { /* not valid JSON, ignore */ }
+    }
+    return (
+      <div>
+        {previewUrl && (
+          <img src={previewUrl} alt="Captured" style={{ width: "100%", maxWidth: 400, borderRadius: 8, marginBottom: "0.5rem" }} />
+        )}
+        <GeneralCameraCapture onCapture={(jsonVal) => onChange(jsonVal)} />
       </div>
     );
   }

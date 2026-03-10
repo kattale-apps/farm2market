@@ -182,13 +182,85 @@ export function CreateTraderListing({ userId }: CreateTraderListingProps) {
   const canPost = isVerified && farmcoinBalance >= postingCost;
 
   const packagingOptionsByProduct: Record<string, string[]> = {
+    // Grains & Cereals
     maize: ["50kg bag", "25kg bag", "10kg bag", "Other"],
+    rice: ["50kg bag", "25kg bag", "10kg bag", "5kg bag", "Other"],
+    millet: ["50kg bag", "25kg bag", "10kg bag", "Other"],
+    sorghum: ["50kg bag", "25kg bag", "10kg bag", "Other"],
+    wheat: ["50kg bag", "25kg bag", "Other"],
+    // Legumes
     beans: ["50kg bag", "25kg bag", "10kg bag", "Other"],
+    groundnuts: ["50kg bag", "25kg bag", "Basin", "Other"],
+    soybeans: ["50kg bag", "25kg bag", "Other"],
+    cowpeas: ["50kg bag", "25kg bag", "Other"],
+    "green grams": ["25kg bag", "10kg bag", "Other"],
+    lentils: ["25kg bag", "10kg bag", "Other"],
+    // Root crops
     cassava: ["Sack", "Crate", "Bundle", "Other"],
-    bananas: ["Bunch", "Crate", "Box", "Other"],
+    "sweet potatoes": ["Sack", "Crate", "Basin", "Other"],
+    "irish potatoes": ["50kg bag", "25kg bag", "Sack", "Other"],
     potatoes: ["50kg bag", "25kg bag", "Sack", "Other"],
+    yams: ["Sack", "Crate", "Other"],
+    // Fruits
+    bananas: ["Bunch", "Crate", "Box", "Other"],
+    "bananas (matooke)": ["Bunch", "Crate", "Box", "Other"],
+    "bananas (sweet)": ["Bunch", "Crate", "Box", "Other"],
+    mangoes: ["Crate", "Box", "Basket", "Other"],
+    pineapples: ["Crate", "Box", "Other"],
+    oranges: ["Crate", "Box", "Net bag", "Other"],
+    avocados: ["Crate", "Box", "Basket", "Other"],
+    watermelon: ["Piece", "Crate", "Other"],
+    jackfruit: ["Piece", "Crate", "Other"],
+    // Vegetables
     tomatoes: ["Crate", "Box", "Basket", "Other"],
-    default: ["Bag", "Box", "Crate", "Other"],
+    onions: ["50kg bag", "25kg bag", "Net bag", "Other"],
+    cabbage: ["Piece", "Crate", "Other"],
+    eggplant: ["Crate", "Basket", "Other"],
+    "green peppers": ["Crate", "Basket", "Other"],
+    "hot peppers": ["Basket", "Small bag", "Other"],
+    carrots: ["Crate", "25kg bag", "Other"],
+    okra: ["Basket", "Small bag", "Other"],
+    spinach: ["Bundle", "Basket", "Other"],
+    "sukuma wiki (kale)": ["Bundle", "Basket", "Other"],
+    mushrooms: ["Basket", "Box", "Other"],
+    pumpkins: ["Piece", "Crate", "Other"],
+    // Spices & Herbs
+    vanilla: ["Bundle", "Small bag", "Other"],
+    ginger: ["25kg bag", "10kg bag", "Basket", "Other"],
+    garlic: ["Net bag", "Small bag", "Other"],
+    turmeric: ["25kg bag", "Small bag", "Other"],
+    // Oils & Oil Seeds
+    "sunflower seeds": ["50kg bag", "25kg bag", "Other"],
+    "sesame (simsim)": ["50kg bag", "25kg bag", "Other"],
+    "palm oil": ["20L jerrycan", "10L jerrycan", "5L jerrycan", "Other"],
+    "shea nuts": ["50kg bag", "25kg bag", "Other"],
+    // Meat & Poultry
+    beef: ["Kilo", "Half carcass", "Quarter carcass", "Other"],
+    "goat meat": ["Kilo", "Half carcass", "Quarter carcass", "Other"],
+    chicken: ["Piece", "Kilo", "Crate", "Other"],
+    pork: ["Kilo", "Half carcass", "Other"],
+    turkey: ["Piece", "Kilo", "Other"],
+    duck: ["Piece", "Kilo", "Other"],
+    eggs: ["Tray (30)", "Half tray (15)", "Crate", "Other"],
+    // Fish & Seafood
+    tilapia: ["Kilo", "Bucket", "Basin", "Other"],
+    "nile perch": ["Kilo", "Piece", "Other"],
+    "mukene (silver fish)": ["Basin", "Sack", "Small bag", "Other"],
+    catfish: ["Kilo", "Bucket", "Other"],
+    "dried fish": ["Basin", "Sack", "Small bag", "Other"],
+    // Dairy
+    "fresh milk": ["20L jerrycan", "10L jerrycan", "5L jerrycan", "Litre", "Other"],
+    ghee: ["5L jerrycan", "1L bottle", "Other"],
+    yogurt: ["5L jerrycan", "1L bottle", "Other"],
+    // Cash crops & processed
+    coffee: ["50kg bag", "25kg bag", "10kg bag", "Other"],
+    tea: ["50kg bag", "25kg bag", "Other"],
+    honey: ["20L jerrycan", "5L jerrycan", "1L bottle", "Other"],
+    sugarcane: ["Bundle", "Piece", "Other"],
+    "cassava flour": ["50kg bag", "25kg bag", "10kg bag", "Other"],
+    "maize flour": ["50kg bag", "25kg bag", "10kg bag", "Other"],
+    // Default fallback
+    default: ["Bag", "Box", "Crate", "Kilo", "Piece", "Other"],
   };
 
   const productKey = productName.trim().toLowerCase();

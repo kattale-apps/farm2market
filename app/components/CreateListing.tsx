@@ -608,36 +608,50 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
               </p>
             ) : (
               <>
-                <div style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(80px, 1fr))",
-                  gap: "1rem",
-                  marginBottom: "1rem"
-                }}>
-                  {filteredProduceOptions.map((produce) => (
-                    <button
-                      key={produce.value}
-                      type="button"
-                      onClick={() => setFormData({ ...formData, produceType: produce.value })}
-                      style={{
-                        padding: "1rem",
-                        background: formData.produceType === produce.value ? "#e8f5e9" : "#f5f5f5",
-                        border: `2px solid ${formData.produceType === produce.value ? "#4caf50" : "#e0e0e0"}`,
-                        borderRadius: "12px",
-                        cursor: "pointer",
-                        fontSize: "2rem",
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        gap: "0.5rem",
-                        transition: "all 0.2s"
-                      }}
-                    >
-                      <span>{produce.icon}</span>
-                      <span style={{ fontSize: "0.75rem", color: "#666" }}>{produce.label}</span>
-                    </button>
-                  ))}
-                </div>
+                {(() => {
+                  // Group produce options by category
+                  const grouped: Record<string, typeof filteredProduceOptions> = {};
+                  filteredProduceOptions.forEach((p) => {
+                    const cat = (p as any).category || "Other";
+                    if (!grouped[cat]) grouped[cat] = [];
+                    grouped[cat].push(p);
+                  });
+                  const categories = Object.keys(grouped);
+                  return categories.map((cat) => (
+                    <div key={cat} style={{ marginBottom: "1rem" }}>
+                      <p style={{ fontWeight: "600", fontSize: "0.85rem", color: "#555", marginBottom: "0.5rem" }}>{cat}</p>
+                      <div style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fit, minmax(80px, 1fr))",
+                        gap: "0.75rem",
+                      }}>
+                        {grouped[cat].map((produce) => (
+                          <button
+                            key={produce.value}
+                            type="button"
+                            onClick={() => setFormData({ ...formData, produceType: produce.value })}
+                            style={{
+                              padding: "0.75rem 0.5rem",
+                              background: formData.produceType === produce.value ? "#e8f5e9" : "#f5f5f5",
+                              border: `2px solid ${formData.produceType === produce.value ? "#4caf50" : "#e0e0e0"}`,
+                              borderRadius: "12px",
+                              cursor: "pointer",
+                              fontSize: "1.75rem",
+                              display: "flex",
+                              flexDirection: "column",
+                              alignItems: "center",
+                              gap: "0.25rem",
+                              transition: "all 0.2s"
+                            }}
+                          >
+                            <span>{produce.icon}</span>
+                            <span style={{ fontSize: "0.7rem", color: "#666" }}>{produce.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ));
+                })()}
                 {/* Fallback text input for other produce types */}
                 <input
                   type="text"

@@ -114,6 +114,23 @@ export default function FarmerOnboardingPage() {
   const [farmSizeOmwigo, setFarmSizeOmwigo] = useState("");
   const [farmSizeEmiigo, setFarmSizeEmiigo] = useState("");
 
+  // GPS capture
+  const [gpsLat, setGpsLat] = useState<number | undefined>(undefined);
+  const [gpsLng, setGpsLng] = useState<number | undefined>(undefined);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setGpsLat(pos.coords.latitude);
+          setGpsLng(pos.coords.longitude);
+        },
+        () => { /* GPS denied or unavailable — continue without */ },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    }
+  }, []);
+
   const completeOnboarding = useMutation(api.farmerOnboarding.completeOnboarding);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -201,9 +218,11 @@ export default function FarmerOnboardingPage() {
         subcountyId: selectedSubcountyId as Id<"subcounties">,
         parishId: selectedParishId ? selectedParishId as Id<"parishes"> : undefined,
         farmSizeInput,
+        ...(gpsLat !== undefined ? { gpsLat } : {}),
+        ...(gpsLng !== undefined ? { gpsLng } : {}),
       });
 
-      setMessage({ type: "success", text: `Onboarding completed! UTID: ${result.utid}. Farm size: ${result.farmSizeAcres.toFixed(4)} acres.` });
+      setMessage({ type: "success", text: `Onboarding completed! UTID: ${result.utid}. Farm size: ${result.farmSizeAcres.toFixed(2)} acres.` });
       
       // Redirect after 2 seconds
       setTimeout(() => {

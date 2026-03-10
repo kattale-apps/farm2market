@@ -13,12 +13,18 @@ import { generateUTID, getUgandaTime } from "./utils";
  * Calculate farm size in acres from various input formats
  */
 export function calculateFarmSizeAcres(input: {
+  acres?: number;
   unit?: "ft" | "m";
   length?: number;
   width?: number;
   omwigo?: number;
   emiigo?: number;
 }): number {
+  // Direct acres input
+  if (input.acres !== undefined && input.acres > 0) {
+    return Math.round(input.acres * 100) / 100;
+  }
+
   // Omwigo = 10 × 100 ft = 1000 sq ft
   // 1 acre = 43,560 sq ft
   const OMWIGO_SQ_FT = 10 * 100; // 1000 sq ft
@@ -97,7 +103,9 @@ export const completeOnboarding = mutation({
     districtId: v.id("districts"),
     subcountyId: v.id("subcounties"),
     parishId: v.optional(v.id("parishes")),
-    farmSizeInput: v.any(), // {unit, length, width, omwigo, emiigo}
+    farmSizeInput: v.any(), // {unit, length, width, omwigo, emiigo, acres}
+    gpsLat: v.optional(v.number()),
+    gpsLng: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     // Verify user is a farmer
@@ -159,6 +167,8 @@ export const completeOnboarding = mutation({
       farmSizeAcres,
       farmSizeRaw: args.farmSizeInput,
       onboardingCompleted: true,
+      ...(args.gpsLat !== undefined ? { gpsLat: args.gpsLat } : {}),
+      ...(args.gpsLng !== undefined ? { gpsLng: args.gpsLng } : {}),
     });
 
     return { utid, farmSizeAcres };

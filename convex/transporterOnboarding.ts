@@ -123,8 +123,16 @@ export const completeOnboarding = mutation({
     // Also set onboardingCompleted on user record
     const patchData: any = { onboardingCompleted: true };
     if (args.departureRegion) patchData.region = args.departureRegion;
-    if (args.departureDistrictId) patchData.districtId = args.departureDistrictId;
-    if (args.departureSubcountyId) patchData.subcountyId = args.departureSubcountyId;
+    if (args.departureDistrictId) {
+      patchData.districtId = args.departureDistrictId;
+      const departureDistrict = await ctx.db.get(args.departureDistrictId);
+      if (departureDistrict) patchData.districtText = departureDistrict.name;
+    }
+    if (args.departureSubcountyId) {
+      patchData.subcountyId = args.departureSubcountyId;
+      const departureSub = await ctx.db.get(args.departureSubcountyId);
+      if (departureSub) patchData.subCountyText = departureSub.name;
+    }
     await ctx.db.patch(args.userId, patchData);
 
     return { utid };

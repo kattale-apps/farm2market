@@ -248,8 +248,8 @@ function MessagesTab({ communityId, userId }: { communityId: Id<"communities">; 
 
         {/* Role Selector */}
         {targetType === "role" && (
-          <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.35rem" }}>
-            {["farmer", "trader", "buyer"].map((r) => (
+          <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.35rem", flexWrap: "wrap" }}>
+            {["farmer", "trader", "buyer", "vendor", "transporter", "store"].map((r) => (
               <button
                 key={r}
                 onClick={() => setSelectedRole(r)}
@@ -1143,6 +1143,7 @@ export default function CommunityDashboardPage() {
       const profileOnboarding = {
         "Member Name": farmer.alias || "",
         "Signup Role": farmer.role || item.role || "",
+        "Community Role": item.communityRole || "",
         "Email": farmer.email || "",
         "Phone": farmer.phoneNumber || "",
         "Region": farmer.region || "",

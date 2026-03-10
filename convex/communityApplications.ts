@@ -309,6 +309,20 @@ export const getCommunityMemberExportData = query({
 
     const farmerById = new Map(farmers.filter(Boolean).map((f: any) => [f._id, f]));
 
+    // Build communityRole map from communityMemberships
+    const communityRoleById = new Map<string, string>();
+    for (const fId of farmerIds) {
+      const membership = await ctx.db
+        .query("communityMemberships")
+        .withIndex("by_community_user", (q: any) =>
+          q.eq("communityId", communityId).eq("userId", fId)
+        )
+        .first();
+      if (membership?.communityRole) {
+        communityRoleById.set(String(fId), membership.communityRole);
+      }
+    }
+
     return filtered.map((m: any) => {
       const app = applications.find((a: any) => a?._id === m.applicationId) || null;
       const formId = (app as any)?.formId;
@@ -321,6 +335,7 @@ export const getCommunityMemberExportData = query({
         application: app,
         form,
         farmer,
+        communityRole: communityRoleById.get(String(m.farmerId)) || null,
       };
     });
   },

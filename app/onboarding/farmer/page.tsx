@@ -113,6 +113,7 @@ export default function FarmerOnboardingPage() {
   const [farmSizeWidth, setFarmSizeWidth] = useState("");
   const [farmSizeOmwigo, setFarmSizeOmwigo] = useState("");
   const [farmSizeEmiigo, setFarmSizeEmiigo] = useState("");
+  const [waterSource, setWaterSource] = useState("");
 
   // GPS capture
   const [gpsLat, setGpsLat] = useState<number | undefined>(undefined);
@@ -183,6 +184,11 @@ export default function FarmerOnboardingPage() {
       return;
     }
 
+    if (!waterSource) {
+      setMessage({ type: "error", text: "Please select a Water Source" });
+      return;
+    }
+
     // Build farm size input
     let farmSizeInput: any = {};
     if (farmSizeUnit === "emiigo") {
@@ -218,6 +224,7 @@ export default function FarmerOnboardingPage() {
         subcountyId: selectedSubcountyId as Id<"subcounties">,
         parishId: selectedParishId ? selectedParishId as Id<"parishes"> : undefined,
         farmSizeInput,
+        waterSource,
         ...(gpsLat !== undefined ? { gpsLat } : {}),
         ...(gpsLng !== undefined ? { gpsLng } : {}),
       });
@@ -486,7 +493,44 @@ export default function FarmerOnboardingPage() {
             </div>
           )}
         </div>
-
+        {/* Water Source */}
+        <div style={{
+          marginBottom: "2rem",
+          background: "#e3f2fd",
+          padding: "1.5rem",
+          borderRadius: "8px",
+          border: "1px solid #bbdefb"
+        }}>
+          <h2 style={{ fontSize: "clamp(1.2rem, 3vw, 1.5rem)", marginBottom: "1rem", color: "#2c2c2c", fontFamily: '"Montserrat", sans-serif', fontWeight: "600" }}>
+            Water Source
+          </h2>
+          <div style={{ marginBottom: "1rem" }}>
+            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#2c2c2c", fontSize: "0.95rem" }}>
+              Source of water *
+            </label>
+            <select
+              value={waterSource}
+              onChange={(e) => setWaterSource(e.target.value)}
+              required
+              style={{
+                width: "100%",
+                padding: "0.75rem",
+                fontSize: "1rem",
+                border: "1px solid #ddd",
+                borderRadius: "8px",
+                background: "#fff",
+                color: "#2c2c2c",
+              }}
+            >
+              <option value="">Select water source</option>
+              <option value="Borehole">Borehole</option>
+              <option value="River">River</option>
+              <option value="Lake">Lake</option>
+              <option value="Rainwater">Rainwater</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+        </div>
         {/* Farm Size */}
         <div style={{ marginBottom: "2rem" }}>
           <h2 style={{ fontSize: "clamp(1.2rem, 3vw, 1.5rem)", marginBottom: "1rem" }}>

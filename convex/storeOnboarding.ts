@@ -134,12 +134,19 @@ export const completeOnboarding = mutation({
     }
 
     // Also set onboardingCompleted on user record
+    const districtText = district?.name;
+    const subCountyText = subcounty?.name;
+    const parishRecord = args.parishId ? await ctx.db.get(args.parishId) : null;
+    const parishText = parishRecord?.name;
     await ctx.db.patch(args.userId, {
       onboardingCompleted: true,
       region: args.region,
       districtId: args.districtId,
+      districtText,
       subcountyId: args.subcountyId,
+      subCountyText,
       ...(args.parishId ? { parishId: args.parishId } : {}),
+      parishText,
     });
 
     return { utid };

@@ -104,6 +104,7 @@ export const completeOnboarding = mutation({
     subcountyId: v.id("subcounties"),
     parishId: v.optional(v.id("parishes")),
     farmSizeInput: v.any(), // {unit, length, width, omwigo, emiigo, acres}
+    waterSource: v.optional(v.string()),
     gpsLat: v.optional(v.number()),
     gpsLng: v.optional(v.number()),
   },
@@ -167,6 +168,7 @@ export const completeOnboarding = mutation({
       farmSizeAcres,
       farmSizeRaw: args.farmSizeInput,
       onboardingCompleted: true,
+      ...(args.waterSource ? { waterSource: args.waterSource } : {}),
       ...(args.gpsLat !== undefined ? { gpsLat: args.gpsLat } : {}),
       ...(args.gpsLng !== undefined ? { gpsLng: args.gpsLng } : {}),
     });

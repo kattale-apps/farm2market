@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { getUgandaTime } from "./utils";
+import { isUserCommunityMember } from "./communities";
 
 /**
  * Create a noticeboard image post (admin only)
@@ -236,7 +237,6 @@ export const sendNoticeboardTextMessage = mutation({
     }
 
     // Verify membership (check both tables + admin assignment)
-    const { isUserCommunityMember } = await import("./communities");
     const isMember = await isUserCommunityMember(ctx.db, resolvedUserId, args.communityId);
     if (!isMember) {
       throw new Error("You are not a member of this community");
@@ -296,7 +296,6 @@ export const sendImageMessage = mutation({
     }
 
     // Verify membership (check both tables + admin assignment)
-    const { isUserCommunityMember } = await import("./communities");
     const isMember = await isUserCommunityMember(ctx.db, resolvedUserId, args.communityId);
     if (!isMember) {
       throw new Error("You are not a member of this community");

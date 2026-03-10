@@ -1821,7 +1821,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
 
         {vendorStoreListings === undefined ? (
           <p style={{ color: "#999" }}>Loading...</p>
-        ) : !vendorStoreListings?.length ? (
+        ) : !vendorStoreListings?.listings?.length ? (
           <p style={{ color: "#666" }}>No vendor or store listings available right now.</p>
         ) : (
           <div style={{ overflowX: "auto" }}>
@@ -1839,7 +1839,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                 </tr>
               </thead>
               <tbody>
-                {(vendorStoreListings as any[]).map((listing: any) => {
+                {(vendorStoreListings.listings as any[]).map((listing: any) => {
                   const unitsAvailable = listing.availableUnits ?? 0;
                   const isVendor = listing.sellerRole === "vendor";
                   const badgeColor = isVendor ? "#e65100" : "#c62828";

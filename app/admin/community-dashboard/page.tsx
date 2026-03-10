@@ -964,11 +964,12 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
     (api as any).forms.getFormResponses,
     selectedFormId ? { formId: selectedFormId as Id<"communityForms"> } : "skip"
   );
-  const members = useQuery(
+  const membersRaw = useQuery(
     api.communityApplications.getCommunityMembersByCommunityIds,
     userId ? { adminId: userId, communityIds: [communityId], status: "APPROVED" as const } : "skip"
   );
   const chartRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const [showMemberInsights, setShowMemberInsights] = useState(true);
 
   const trackerForms = (forms ?? []).filter((f: any) => f.formPurpose === "tracker" || !f.formPurpose);
   const profileForms = (forms ?? []).filter((f: any) => f.formPurpose === "profile");
@@ -977,6 +978,94 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
 
   const fields: any[] = formResponses?.fields ?? [];
   const responses: any[] = formResponses?.responses ?? [];
+
+  // ── Extract member list (fix: membersRaw is array, not dict) ──
+  const memberList: any[] = useMemo(() => {
+    if (!membersRaw || !Array.isArray(membersRaw)) return [];
+    const found = (membersRaw as any[]).find((c: any) => String(c.communityId) === String(communityId));
+    return found?.members ?? [];
+  }, [membersRaw, communityId]);
+
+  const totalMembers = memberList.length;
+
+  // ── Member Insights (category-agnostic) ──
+  const memberInsights = useMemo(() => {
+    if (!memberList.length) return null;
+    const farmers = memberList.map((m: any) => m.farmer).filter(Boolean);
+
+    // Role distribution (farmer, trader, buyer, etc.)
+    const roleFreq: Record<string, number> = {};
+    farmers.forEach((f: any) => { const r = f.role || "unknown"; roleFreq[r] = (roleFreq[r] || 0) + 1; });
+    const roleData = Object.entries(roleFreq).sort(([,a],[,b]) => b - a).map(([name, value]) => ({ name: name.charAt(0).toUpperCase() + name.slice(1), value }));
+    const roleColors: Record<string, string> = {};
+    roleData.forEach((r, i) => { roleColors[r.name] = CHART_COLORS[i % CHART_COLORS.length]; });
+
+    // Sex distribution
+    const sexFreq: Record<string, number> = {};
+    farmers.forEach((f: any) => { const s = f.sex === "M" ? "Male" : f.sex === "F" ? "Female" : "Not Set"; sexFreq[s] = (sexFreq[s] || 0) + 1; });
+    const sexData = Object.entries(sexFreq).sort(([,a],[,b]) => b - a).map(([name, value]) => ({ name, value }));
+
+    // District distribution
+    const districtFreq: Record<string, number> = {};
+    farmers.forEach((f: any) => { const d = f.districtText || "Unknown"; districtFreq[d] = (districtFreq[d] || 0) + 1; });
+    const districtColors: Record<string, string> = {};
+    Object.keys(districtFreq).sort().forEach((d, i) => { districtColors[d] = CHART_COLORS[i % CHART_COLORS.length]; });
+    const districtData = Object.entries(districtFreq).sort(([,a],[,b]) => b - a).map(([name, value]) => ({ name, value, fill: districtColors[name] }));
+
+    // Subcounty distribution (colour-coded by district)
+    const subcountyMap: Record<string, { count: number; district: string }> = {};
+    farmers.forEach((f: any) => {
+      const sc = f.subCountyText || "Unknown";
+      const d = f.districtText || "Unknown";
+      if (!subcountyMap[sc]) subcountyMap[sc] = { count: 0, district: d };
+      subcountyMap[sc].count++;
+    });
+    const subcountyData = Object.entries(subcountyMap)
+      .sort(([,a],[,b]) => b.count - a.count)
+      .map(([name, { count, district }]) => ({ name, value: count, fill: districtColors[district] || "#546e7a" }));
+
+    // Farm size data (only for members that have it)
+    const farmSizes = farmers.filter((f: any) => typeof f.farmSizeAcres === "number" && f.farmSizeAcres > 0);
+    const totalFarmSize = farmSizes.reduce((sum: number, f: any) => sum + f.farmSizeAcres, 0);
+    const hasFarmData = farmSizes.length > 0;
+
+    // Farm size histogram (bucket by floor)
+    const farmBuckets: Record<number, number> = {};
+    farmSizes.forEach((f: any) => { const b = Math.floor(f.farmSizeAcres); farmBuckets[b] = (farmBuckets[b] || 0) + 1; });
+    const histData = Object.entries(farmBuckets).sort(([a],[b]) => Number(a) - Number(b)).map(([name, value]) => ({ name: `${name} acres`, value }));
+
+    // Average farm size per district
+    const districtFarmAcc: Record<string, { total: number; count: number }> = {};
+    farmSizes.forEach((f: any) => {
+      const d = f.districtText || "Unknown";
+      if (!districtFarmAcc[d]) districtFarmAcc[d] = { total: 0, count: 0 };
+      districtFarmAcc[d].total += f.farmSizeAcres;
+      districtFarmAcc[d].count++;
+    });
+    const avgFarmDataUnsorted = Object.entries(districtFarmAcc)
+      .map(([name, val]) => ({ name, value: Math.round((val.total / val.count) * 100) / 100, fill: districtColors[name] || "#546e7a" }));
+    const avgFarmData = avgFarmDataUnsorted.sort((a, b) => b.value - a.value);
+
+    // Region distribution
+    const regionFreq: Record<string, number> = {};
+    farmers.forEach((f: any) => { if (f.region) { regionFreq[f.region] = (regionFreq[f.region] || 0) + 1; } });
+    const regionData = Object.entries(regionFreq).sort(([,a],[,b]) => b - a).map(([name, value]) => ({ name, value }));
+
+    // Supply chain role distribution
+    const scRoleFreq: Record<string, number> = {};
+    farmers.forEach((f: any) => { if (f.supplyChainRole) { scRoleFreq[f.supplyChainRole] = (scRoleFreq[f.supplyChainRole] || 0) + 1; } });
+    const scRoleData = Object.entries(scRoleFreq).sort(([,a],[,b]) => b - a).map(([name, value]) => ({ name, value }));
+
+    const distinctDistricts = Object.keys(districtFreq).filter(d => d !== "Unknown").length;
+    const distinctSubcounties = Object.keys(subcountyMap).filter(s => s !== "Unknown").length;
+
+    return {
+      roleData, roleColors, sexData, districtData, districtColors, subcountyData,
+      hasFarmData, totalFarmSize, histData, avgFarmData,
+      regionData, scRoleData,
+      distinctDistricts, distinctSubcounties, totalMemberCount: farmers.length,
+    };
+  }, [memberList]);
 
   // Aggregate per-field data
   const fieldAggregations = useMemo(() => {
@@ -992,7 +1081,6 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
         const avg = nums.length ? nums.reduce((a: number, b: number) => a + b, 0) / nums.length : 0;
         const min = nums.length ? Math.min(...nums) : 0;
         const max = nums.length ? Math.max(...nums) : 0;
-        // Bar chart: member alias → value
         const barData = responses.map((r: any) => {
           const v = (r.values || []).find((rv: any) => String(rv.fieldId) === String(field._id));
           const num = parseFloat(v?.value ?? "0");
@@ -1017,20 +1105,12 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
       if (field.fieldType === "camera") {
         return { field, type: "camera" as const, count: vals.length };
       }
-      // text/textarea/email/phone — top N unique
       const freq: Record<string, number> = {};
       vals.forEach((v: string) => { freq[v] = (freq[v] || 0) + 1; });
       const barData = Object.entries(freq).sort(([,a],[,b]) => b - a).slice(0, 10).map(([name, value]) => ({ name: name.length > 20 ? name.slice(0,18)+"…" : name, value }));
       return { field, type: "text" as const, barData, count: vals.length };
     });
   }, [fields, responses]);
-
-  // Total approved members for profile completion
-  const totalMembers = useMemo(() => {
-    if (!members) return 0;
-    const commMembers = (members as any)[String(communityId)];
-    return Array.isArray(commMembers) ? commMembers.length : 0;
-  }, [members, communityId]);
 
   // ── Export: PNG charts ──
   const handleExportPNG = useCallback(() => {
@@ -1052,7 +1132,7 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
     });
   }, [fields]);
 
-  // ── Export: Excel ──
+  // ── Export: Excel (form responses) ──
   const handleExportExcel = useCallback(() => {
     if (!responses.length || !fields.length) return;
     const rows = responses.map((r: any) => {
@@ -1075,7 +1155,6 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(rows);
     XLSX.utils.book_append_sheet(wb, ws, "Responses");
-    // Summary sheet
     const summary = [
       { Metric: "Form", Value: selectedForm?.name || "" },
       { Metric: "Type", Value: isProfile ? "Profile" : "Tracker" },
@@ -1088,7 +1167,7 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
     XLSX.writeFile(wb, `${selectedForm?.name || "form"}-responses.xlsx`);
   }, [responses, fields, selectedForm, isProfile]);
 
-  // ── Export: PDF ──
+  // ── Export: PDF (form responses) ──
   const handleExportPDF = useCallback(() => {
     if (!responses.length || !fields.length) return;
     const doc = new jsPDF({ orientation: fields.length > 5 ? "landscape" : "portrait" });
@@ -1097,8 +1176,6 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
     doc.text(selectedForm?.name || "Form Report", pw / 2, 18, { align: "center" });
     doc.setFontSize(10);
     doc.text(`Type: ${isProfile ? "Profile Form" : "Tracker Form"} | Responses: ${responses.length} | Exported: ${new Date().toLocaleString()}`, pw / 2, 26, { align: "center" });
-
-    // Field summaries table
     const summaryRows = fieldAggregations.map((agg: any) => {
       if (agg.type === "number") return [agg.field.label, "Number", `Avg: ${agg.avg}, Min: ${agg.min}, Max: ${agg.max} (${agg.count} values)`];
       if (agg.type === "pie") return [agg.field.label, agg.field.fieldType, agg.pieData.map((d: any) => `${d.name}: ${d.value}`).join(", ")];
@@ -1106,15 +1183,7 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
       if (agg.type === "date") return [agg.field.label, "Date", agg.barData.map((d: any) => `${d.name}: ${d.value}`).join(", ")];
       return [agg.field.label, agg.field.fieldType, (agg.barData || []).map((d: any) => `${d.name}: ${d.value}`).join(", ")];
     });
-    autoTable(doc, {
-      head: [["Field", "Type", "Summary"]],
-      body: summaryRows,
-      startY: 34,
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [46, 125, 50] },
-    });
-
-    // Response data table
+    autoTable(doc, { head: [["Field", "Type", "Summary"]], body: summaryRows, startY: 34, styles: { fontSize: 8 }, headStyles: { fillColor: [46, 125, 50] } });
     const headers = ["Member", ...fields.map((f: any) => f.label)];
     const body = responses.map((r: any) => {
       const memberName = r.member?.alias || "Unknown";
@@ -1126,157 +1195,403 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
       });
       return [memberName, ...vals];
     });
-    autoTable(doc, {
-      head: [headers],
-      body,
-      startY: (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 10 : 80,
-      styles: { fontSize: 7 },
-      headStyles: { fillColor: [21, 101, 192] },
-      alternateRowStyles: { fillColor: [245, 245, 245] },
-    });
+    autoTable(doc, { head: [headers], body, startY: (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 10 : 80, styles: { fontSize: 7 }, headStyles: { fillColor: [21, 101, 192] }, alternateRowStyles: { fillColor: [245, 245, 245] } });
     doc.save(`${selectedForm?.name || "form"}-report.pdf`);
   }, [responses, fields, selectedForm, isProfile, fieldAggregations]);
 
+  // ── Export: Members Excel ──
+  const handleExportMembersExcel = useCallback(() => {
+    if (!memberList.length) return;
+    const rows = memberList.map((m: any) => ({
+      "Name": m.farmer?.alias || "Unknown",
+      "Role": m.farmer?.role || "—",
+      "Sex": m.farmer?.sex === "M" ? "Male" : m.farmer?.sex === "F" ? "Female" : "—",
+      "Email": m.farmer?.email || "—",
+      "Phone": m.farmer?.phoneNumber || "—",
+      "District": m.farmer?.districtText || "—",
+      "Subcounty": m.farmer?.subCountyText || "—",
+      "Parish": m.farmer?.parishText || "—",
+      "County": m.farmer?.county || "—",
+      "Village": m.farmer?.village || "—",
+      "Region": m.farmer?.region || "—",
+      "Farm Size (Acres)": m.farmer?.farmSizeAcres ?? "—",
+      "Supply Chain Role": m.farmer?.supplyChainRole || "—",
+      "Status": m.status,
+      "Joined": m.joinedAt ? new Date(m.joinedAt).toLocaleDateString() : "—",
+    }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "Members");
+    XLSX.writeFile(wb, "community-members.xlsx");
+  }, [memberList]);
+
+  // ── Export: Members PDF ──
+  const handleExportMembersPDF = useCallback(() => {
+    if (!memberList.length) return;
+    const doc = new jsPDF({ orientation: "landscape" });
+    const pw = doc.internal.pageSize.getWidth();
+    doc.setFontSize(16);
+    doc.text("Community Member Report", pw / 2, 18, { align: "center" });
+    doc.setFontSize(10);
+    doc.text(`Total Members: ${memberList.length} | Exported: ${new Date().toLocaleString()}`, pw / 2, 26, { align: "center" });
+    const headers = ["Name", "Role", "Sex", "District", "Subcounty", "Farm Size"];
+    const body = memberList.map((m: any) => [
+      m.farmer?.alias || "?",
+      m.farmer?.role || "—",
+      m.farmer?.sex === "M" ? "M" : m.farmer?.sex === "F" ? "F" : "—",
+      m.farmer?.districtText || "—",
+      m.farmer?.subCountyText || "—",
+      m.farmer?.farmSizeAcres != null ? String(m.farmer.farmSizeAcres) : "—",
+    ]);
+    autoTable(doc, { head: [headers], body, startY: 34, styles: { fontSize: 7 }, headStyles: { fillColor: [46, 125, 50] }, alternateRowStyles: { fillColor: [245, 245, 245] } });
+    doc.save("community-members-report.pdf");
+  }, [memberList]);
+
   if (!forms) return <div style={{ padding: "1rem", color: "#999" }}>Loading forms...</div>;
-  if (forms.length === 0) return <div style={{ padding: "1rem", color: "#999" }}>No forms created yet. Go to the Forms tab to create one.</div>;
 
   return (
     <div style={{ padding: "1rem" }}>
-      {/* Form selector */}
-      <div style={{ marginBottom: "1rem" }}>
-        <label style={{ fontWeight: 600, fontSize: "0.9rem", color: "#333", display: "block", marginBottom: "0.35rem" }}>Select Form</label>
-        <select
-          value={selectedFormId}
-          onChange={(e) => setSelectedFormId(e.target.value)}
-          style={{ width: "100%", padding: "0.5rem", borderRadius: "8px", border: "1px solid #ccc", fontSize: "0.9rem" }}
+      {/* ═══════════ SECTION 1: Community Member Insights ═══════════ */}
+      <div style={{ marginBottom: "1.5rem" }}>
+        <div
+          onClick={() => setShowMemberInsights(!showMemberInsights)}
+          style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", marginBottom: "0.75rem" }}
         >
-          <option value="">— Choose a form —</option>
-          {trackerForms.length > 0 && (
-            <optgroup label="📊 Tracker Forms">
-              {trackerForms.map((f: any) => <option key={f._id} value={f._id}>{f.name} ({f.responseCount ?? 0} responses)</option>)}
-            </optgroup>
-          )}
-          {profileForms.length > 0 && (
-            <optgroup label="👤 Profile Forms">
-              {profileForms.map((f: any) => <option key={f._id} value={f._id}>{f.name} ({f.responseCount ?? 0} responses)</option>)}
-            </optgroup>
-          )}
-        </select>
-      </div>
+          <span style={{ fontSize: "1.1rem", fontWeight: 700, color: "#1a237e" }}>👥 Community Member Insights</span>
+          <span style={{ fontSize: "0.8rem", color: "#888" }}>{showMemberInsights ? "▼" : "▶"}</span>
+        </div>
 
-      {!selectedFormId && (
-        <div style={{ padding: "2rem", textAlign: "center", color: "#999" }}>Select a form above to view insights.</div>
-      )}
-
-      {selectedFormId && formResponses === undefined && (
-        <div style={{ padding: "2rem", textAlign: "center", color: "#999" }}>Loading responses...</div>
-      )}
-
-      {selectedFormId && formResponses && (
-        <>
-          {/* Summary banner */}
-          <div style={{
-            display: "flex", flexWrap: "wrap", gap: "0.75rem", marginBottom: "1rem",
-          }}>
-            <div style={{ flex: "1 1 140px", background: "#e8f5e9", padding: "0.75rem", borderRadius: "8px", textAlign: "center" }}>
-              <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "#2e7d32" }}>{responses.length}</div>
-              <div style={{ fontSize: "0.78rem", color: "#555" }}>Responses</div>
-            </div>
-            <div style={{ flex: "1 1 140px", background: "#e3f2fd", padding: "0.75rem", borderRadius: "8px", textAlign: "center" }}>
-              <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "#1565c0" }}>{fields.length}</div>
-              <div style={{ fontSize: "0.78rem", color: "#555" }}>Fields</div>
-            </div>
-            {isProfile && (
-              <div style={{ flex: "1 1 140px", background: "#fff3e0", padding: "0.75rem", borderRadius: "8px", textAlign: "center" }}>
-                <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "#ef6c00" }}>{responses.length} / {totalMembers}</div>
-                <div style={{ fontSize: "0.78rem", color: "#555" }}>Members Filled</div>
+        {showMemberInsights && (
+          <>
+            {!memberInsights ? (
+              <div style={{ padding: "1.5rem", textAlign: "center", color: "#999" }}>
+                {membersRaw === undefined ? "Loading members..." : "No approved members yet."}
               </div>
-            )}
-            {responses.length > 0 && (
-              <div style={{ flex: "1 1 140px", background: "#f3e5f5", padding: "0.75rem", borderRadius: "8px", textAlign: "center" }}>
-                <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "#6a1b9a" }}>{new Date(responses[0].createdAt).toLocaleDateString()}</div>
-                <div style={{ fontSize: "0.78rem", color: "#555" }}>Latest Response</div>
-              </div>
-            )}
-          </div>
+            ) : (
+              <>
+                {/* KPI Cards */}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", marginBottom: "1rem" }}>
+                  <div style={{ flex: "1 1 130px", background: "#e8f5e9", padding: "0.75rem", borderRadius: "8px", textAlign: "center" }}>
+                    <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "#2e7d32" }}>{memberInsights.totalMemberCount}</div>
+                    <div style={{ fontSize: "0.78rem", color: "#555" }}>Total Members</div>
+                  </div>
+                  <div style={{ flex: "1 1 130px", background: "#e3f2fd", padding: "0.75rem", borderRadius: "8px", textAlign: "center" }}>
+                    <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "#1565c0" }}>{memberInsights.distinctDistricts}</div>
+                    <div style={{ fontSize: "0.78rem", color: "#555" }}>Districts</div>
+                  </div>
+                  <div style={{ flex: "1 1 130px", background: "#fff3e0", padding: "0.75rem", borderRadius: "8px", textAlign: "center" }}>
+                    <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "#ef6c00" }}>{memberInsights.distinctSubcounties}</div>
+                    <div style={{ fontSize: "0.78rem", color: "#555" }}>Subcounties</div>
+                  </div>
+                  {memberInsights.hasFarmData && (
+                    <div style={{ flex: "1 1 130px", background: "#f3e5f5", padding: "0.75rem", borderRadius: "8px", textAlign: "center" }}>
+                      <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "#6a1b9a" }}>{memberInsights.totalFarmSize.toLocaleString()}</div>
+                      <div style={{ fontSize: "0.78rem", color: "#555" }}>Total Farm Size (Acres)</div>
+                    </div>
+                  )}
+                  <div style={{ flex: "1 1 130px", background: "#fce4ec", padding: "0.75rem", borderRadius: "8px", textAlign: "center" }}>
+                    <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "#c62828" }}>{memberInsights.roleData.length}</div>
+                    <div style={{ fontSize: "0.78rem", color: "#555" }}>Member Roles</div>
+                  </div>
+                </div>
 
-          {/* Export buttons */}
-          <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.25rem", flexWrap: "wrap" }}>
-            <button onClick={handleExportExcel} style={{ padding: "0.45rem 0.85rem", borderRadius: "6px", border: "1px solid #2e7d32", background: "#e8f5e9", color: "#2e7d32", fontWeight: 600, fontSize: "0.82rem", cursor: "pointer" }}>📥 Excel</button>
-            <button onClick={handleExportPNG} style={{ padding: "0.45rem 0.85rem", borderRadius: "6px", border: "1px solid #1565c0", background: "#e3f2fd", color: "#1565c0", fontWeight: 600, fontSize: "0.82rem", cursor: "pointer" }}>🖼 PNG Charts</button>
-            <button onClick={handleExportPDF} style={{ padding: "0.45rem 0.85rem", borderRadius: "6px", border: "1px solid #6a1b9a", background: "#f3e5f5", color: "#6a1b9a", fontWeight: 600, fontSize: "0.82rem", cursor: "pointer" }}>📄 PDF Report</button>
-          </div>
+                {/* Export buttons */}
+                <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.25rem", flexWrap: "wrap" }}>
+                  <button onClick={handleExportMembersExcel} style={{ padding: "0.45rem 0.85rem", borderRadius: "6px", border: "1px solid #2e7d32", background: "#e8f5e9", color: "#2e7d32", fontWeight: 600, fontSize: "0.82rem", cursor: "pointer" }}>📥 Export Members Excel</button>
+                  <button onClick={handleExportMembersPDF} style={{ padding: "0.45rem 0.85rem", borderRadius: "6px", border: "1px solid #6a1b9a", background: "#f3e5f5", color: "#6a1b9a", fontWeight: 600, fontSize: "0.82rem", cursor: "pointer" }}>📄 Export Members PDF</button>
+                </div>
 
-          {/* Per-field charts */}
-          {responses.length === 0 ? (
-            <div style={{ padding: "2rem", textAlign: "center", color: "#999" }}>No responses yet for this form.</div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-              {fieldAggregations.map((agg: any, idx: number) => (
-                <div key={agg.field._id} style={{ background: "#fafafa", borderRadius: "10px", border: "1px solid #eee", padding: "1rem", overflow: "hidden" }}>
-                  <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", fontWeight: 700, color: "#333" }}>
-                    {agg.field.label}
-                    <span style={{ fontWeight: 400, color: "#999", fontSize: "0.78rem", marginLeft: "0.5rem" }}>{agg.field.fieldType} · {agg.count} values</span>
-                  </h4>
-                  <div ref={(el) => { chartRefs.current[idx] = el; }}>
-                    {agg.type === "number" && (
-                      <>
-                        <div style={{ display: "flex", gap: "1rem", marginBottom: "0.5rem", fontSize: "0.8rem", color: "#555" }}>
-                          <span>Avg: <strong>{agg.avg}</strong></span>
-                          <span>Min: <strong>{agg.min}</strong></span>
-                          <span>Max: <strong>{agg.max}</strong></span>
-                        </div>
-                        <ResponsiveContainer width="100%" height={200}>
-                          <BarChart data={agg.barData}>
+                {/* Charts grid */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+                  {/* Role Distribution (donut) */}
+                  <div style={{ background: "#fafafa", borderRadius: "10px", border: "1px solid #eee", padding: "1rem" }}>
+                    <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", fontWeight: 700, color: "#333" }}>Distribution of Members by Role</h4>
+                    <ResponsiveContainer width="100%" height={240}>
+                      <PieChart>
+                        <Pie data={memberInsights.roleData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} label={({ name, percent }: any) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                          {memberInsights.roleData.map((_: any, i: number) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                        </Pie>
+                        <Tooltip />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div style={{ textAlign: "center", marginTop: "-130px", position: "relative", zIndex: 1, pointerEvents: "none" }}>
+                      <div style={{ fontSize: "0.7rem", color: "#999" }}>Total</div>
+                      <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "#333" }}>{memberInsights.totalMemberCount}</div>
+                    </div>
+                    <div style={{ height: "100px" }} />
+                  </div>
+
+                  {/* Sex Distribution */}
+                  <div style={{ background: "#fafafa", borderRadius: "10px", border: "1px solid #eee", padding: "1rem" }}>
+                    <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", fontWeight: 700, color: "#333" }}>Distribution by Sex</h4>
+                    <ResponsiveContainer width="100%" height={240}>
+                      <PieChart>
+                        <Pie data={memberInsights.sexData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} label={({ name, percent }: any) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                          {memberInsights.sexData.map((_: any, i: number) => <Cell key={i} fill={["#1565c0","#c62828","#bdbdbd"][i] || CHART_COLORS[i % CHART_COLORS.length]} />)}
+                        </Pie>
+                        <Tooltip />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  {/* District Distribution (donut) */}
+                  <div style={{ background: "#fafafa", borderRadius: "10px", border: "1px solid #eee", padding: "1rem" }}>
+                    <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", fontWeight: 700, color: "#333" }}>Distribution of Members by District</h4>
+                    <ResponsiveContainer width="100%" height={240}>
+                      <PieChart>
+                        <Pie data={memberInsights.districtData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={52} outerRadius={80} label={({ name, percent }: any) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                          {memberInsights.districtData.map((d: any, i: number) => <Cell key={i} fill={d.fill || CHART_COLORS[i % CHART_COLORS.length]} />)}
+                        </Pie>
+                        <Tooltip />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div style={{ textAlign: "center", marginTop: "-130px", position: "relative", zIndex: 1, pointerEvents: "none" }}>
+                      <div style={{ fontSize: "0.7rem", color: "#999" }}>Total Members</div>
+                      <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "#333" }}>{memberInsights.totalMemberCount}</div>
+                    </div>
+                    <div style={{ height: "100px" }} />
+                  </div>
+
+                  {/* Members per District & Subcounty (horizontal bar) */}
+                  <div style={{ background: "#fafafa", borderRadius: "10px", border: "1px solid #eee", padding: "1rem" }}>
+                    <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", fontWeight: 700, color: "#333" }}>Members per District & Subcounty</h4>
+                    <ResponsiveContainer width="100%" height={Math.max(200, memberInsights.subcountyData.length * 26)}>
+                      <BarChart data={memberInsights.subcountyData} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis type="number" tick={{ fontSize: 10 }} label={{ value: "Number of Members", position: "insideBottom", offset: -2, fontSize: 10 }} />
+                        <YAxis dataKey="name" type="category" width={110} tick={{ fontSize: 9 }} />
+                        <Tooltip />
+                        <Bar dataKey="value" radius={[0,4,4,0]}>
+                          {memberInsights.subcountyData.map((d: any, i: number) => <Cell key={i} fill={d.fill} />)}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Full-width charts below the grid */}
+                {memberInsights.hasFarmData && (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginTop: "1rem" }}>
+                    {/* Farm Size Histogram */}
+                    <div style={{ background: "#fafafa", borderRadius: "10px", border: "1px solid #eee", padding: "1rem" }}>
+                      <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", fontWeight: 700, color: "#333" }}>Distribution of Farm Size (Acres)</h4>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <BarChart data={memberInsights.histData}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="name" tick={{ fontSize: 9 }} />
+                          <YAxis tick={{ fontSize: 10 }} label={{ value: "Number of Members", angle: -90, position: "insideLeft", fontSize: 10 }} />
+                          <Tooltip />
+                          <Bar dataKey="value" fill="#8e24aa" radius={[4,4,0,0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    {/* Avg Farm Size per District */}
+                    <div style={{ background: "#fafafa", borderRadius: "10px", border: "1px solid #eee", padding: "1rem" }}>
+                      <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", fontWeight: 700, color: "#333" }}>Average Farm Size (Acres) per District</h4>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <BarChart data={memberInsights.avgFarmData}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="name" tick={{ fontSize: 9 }} />
+                          <YAxis tick={{ fontSize: 10 }} label={{ value: "Avg Acres", angle: -90, position: "insideLeft", fontSize: 10 }} />
+                          <Tooltip />
+                          <Bar dataKey="value" radius={[4,4,0,0]}>
+                            {memberInsights.avgFarmData.map((d: any, i: number) => <Cell key={i} fill={d.fill} />)}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                )}
+
+                {/* Region & Supply Chain Role charts (only if data exists) */}
+                {(memberInsights.regionData.length > 0 || memberInsights.scRoleData.length > 0) && (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginTop: "1rem" }}>
+                    {memberInsights.regionData.length > 0 && (
+                      <div style={{ background: "#fafafa", borderRadius: "10px", border: "1px solid #eee", padding: "1rem" }}>
+                        <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", fontWeight: 700, color: "#333" }}>Members by Region</h4>
+                        <ResponsiveContainer width="100%" height={220}>
+                          <BarChart data={memberInsights.regionData}>
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis dataKey="name" tick={{ fontSize: 10 }} />
                             <YAxis tick={{ fontSize: 10 }} />
                             <Tooltip />
-                            <Bar dataKey="value" fill="#2e7d32" radius={[4,4,0,0]} />
+                            <Bar dataKey="value" fill="#00838f" radius={[4,4,0,0]} />
                           </BarChart>
                         </ResponsiveContainer>
-                      </>
+                      </div>
                     )}
-                    {agg.type === "pie" && (
-                      <ResponsiveContainer width="100%" height={220}>
-                        <PieChart>
-                          <Pie data={agg.pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name, percent }: any) => `${name} ${(percent * 100).toFixed(0)}%`}>
-                            {agg.pieData.map((_: any, i: number) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
-                          </Pie>
-                          <Tooltip />
-                          <Legend />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    )}
-                    {agg.type === "date" && (
-                      <ResponsiveContainer width="100%" height={200}>
-                        <BarChart data={agg.barData}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                          <YAxis tick={{ fontSize: 10 }} />
-                          <Tooltip />
-                          <Bar dataKey="value" fill="#1565c0" radius={[4,4,0,0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    )}
-                    {agg.type === "text" && agg.barData.length > 0 && (
-                      <ResponsiveContainer width="100%" height={Math.max(150, agg.barData.length * 28)}>
-                        <BarChart data={agg.barData} layout="vertical">
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis type="number" tick={{ fontSize: 10 }} />
-                          <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 10 }} />
-                          <Tooltip />
-                          <Bar dataKey="value" fill="#ef6c00" radius={[0,4,4,0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    )}
-                    {agg.type === "camera" && (
-                      <div style={{ padding: "0.75rem", background: "#e3f2fd", borderRadius: "6px", fontSize: "0.85rem", color: "#1565c0" }}>📸 {agg.count} photo(s) captured</div>
+                    {memberInsights.scRoleData.length > 0 && (
+                      <div style={{ background: "#fafafa", borderRadius: "10px", border: "1px solid #eee", padding: "1rem" }}>
+                        <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", fontWeight: 700, color: "#333" }}>Members by Supply Chain Role</h4>
+                        <ResponsiveContainer width="100%" height={220}>
+                          <BarChart data={memberInsights.scRoleData}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                            <YAxis tick={{ fontSize: 10 }} />
+                            <Tooltip />
+                            <Bar dataKey="value" fill="#6d4c41" radius={[4,4,0,0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
                     )}
                   </div>
+                )}
+              </>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* ═══════════ DIVIDER ═══════════ */}
+      <hr style={{ border: "none", borderTop: "2px solid #e0e0e0", margin: "1.5rem 0" }} />
+
+      {/* ═══════════ SECTION 2: Form Response Insights ═══════════ */}
+      <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: "#1a237e", marginBottom: "0.75rem" }}>📋 Form Response Insights</h3>
+
+      {forms.length === 0 && (
+        <div style={{ padding: "1rem", color: "#999" }}>No forms created yet. Go to the Forms tab to create one.</div>
+      )}
+
+      {forms.length > 0 && (
+        <>
+          {/* Form selector */}
+          <div style={{ marginBottom: "1rem" }}>
+            <label style={{ fontWeight: 600, fontSize: "0.9rem", color: "#333", display: "block", marginBottom: "0.35rem" }}>Select Form</label>
+            <select
+              value={selectedFormId}
+              onChange={(e) => setSelectedFormId(e.target.value)}
+              style={{ width: "100%", padding: "0.5rem", borderRadius: "8px", border: "1px solid #ccc", fontSize: "0.9rem" }}
+            >
+              <option value="">— Choose a form —</option>
+              {trackerForms.length > 0 && (
+                <optgroup label="📊 Tracker Forms">
+                  {trackerForms.map((f: any) => <option key={f._id} value={f._id}>{f.name} ({f.responseCount ?? 0} responses)</option>)}
+                </optgroup>
+              )}
+              {profileForms.length > 0 && (
+                <optgroup label="👤 Profile Forms">
+                  {profileForms.map((f: any) => <option key={f._id} value={f._id}>{f.name} ({f.responseCount ?? 0} responses)</option>)}
+                </optgroup>
+              )}
+            </select>
+          </div>
+
+          {!selectedFormId && (
+            <div style={{ padding: "2rem", textAlign: "center", color: "#999" }}>Select a form above to view insights.</div>
+          )}
+
+          {selectedFormId && formResponses === undefined && (
+            <div style={{ padding: "2rem", textAlign: "center", color: "#999" }}>Loading responses...</div>
+          )}
+
+          {selectedFormId && formResponses && (
+            <>
+              {/* Summary banner */}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", marginBottom: "1rem" }}>
+                <div style={{ flex: "1 1 140px", background: "#e8f5e9", padding: "0.75rem", borderRadius: "8px", textAlign: "center" }}>
+                  <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "#2e7d32" }}>{responses.length}</div>
+                  <div style={{ fontSize: "0.78rem", color: "#555" }}>Responses</div>
                 </div>
-              ))}
-            </div>
+                <div style={{ flex: "1 1 140px", background: "#e3f2fd", padding: "0.75rem", borderRadius: "8px", textAlign: "center" }}>
+                  <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "#1565c0" }}>{fields.length}</div>
+                  <div style={{ fontSize: "0.78rem", color: "#555" }}>Fields</div>
+                </div>
+                {isProfile && (
+                  <div style={{ flex: "1 1 140px", background: "#fff3e0", padding: "0.75rem", borderRadius: "8px", textAlign: "center" }}>
+                    <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "#ef6c00" }}>{responses.length} / {totalMembers}</div>
+                    <div style={{ fontSize: "0.78rem", color: "#555" }}>Members Filled</div>
+                  </div>
+                )}
+                {responses.length > 0 && (
+                  <div style={{ flex: "1 1 140px", background: "#f3e5f5", padding: "0.75rem", borderRadius: "8px", textAlign: "center" }}>
+                    <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "#6a1b9a" }}>{new Date(responses[0].createdAt).toLocaleDateString()}</div>
+                    <div style={{ fontSize: "0.78rem", color: "#555" }}>Latest Response</div>
+                  </div>
+                )}
+              </div>
+
+              {/* Export buttons */}
+              <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.25rem", flexWrap: "wrap" }}>
+                <button onClick={handleExportExcel} style={{ padding: "0.45rem 0.85rem", borderRadius: "6px", border: "1px solid #2e7d32", background: "#e8f5e9", color: "#2e7d32", fontWeight: 600, fontSize: "0.82rem", cursor: "pointer" }}>📥 Excel</button>
+                <button onClick={handleExportPNG} style={{ padding: "0.45rem 0.85rem", borderRadius: "6px", border: "1px solid #1565c0", background: "#e3f2fd", color: "#1565c0", fontWeight: 600, fontSize: "0.82rem", cursor: "pointer" }}>🖼 PNG Charts</button>
+                <button onClick={handleExportPDF} style={{ padding: "0.45rem 0.85rem", borderRadius: "6px", border: "1px solid #6a1b9a", background: "#f3e5f5", color: "#6a1b9a", fontWeight: 600, fontSize: "0.82rem", cursor: "pointer" }}>📄 PDF Report</button>
+              </div>
+
+              {/* Per-field charts */}
+              {responses.length === 0 ? (
+                <div style={{ padding: "2rem", textAlign: "center", color: "#999" }}>No responses yet for this form.</div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+                  {fieldAggregations.map((agg: any, idx: number) => (
+                    <div key={agg.field._id} style={{ background: "#fafafa", borderRadius: "10px", border: "1px solid #eee", padding: "1rem", overflow: "hidden" }}>
+                      <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", fontWeight: 700, color: "#333" }}>
+                        {agg.field.label}
+                        <span style={{ fontWeight: 400, color: "#999", fontSize: "0.78rem", marginLeft: "0.5rem" }}>{agg.field.fieldType} · {agg.count} values</span>
+                      </h4>
+                      <div ref={(el) => { chartRefs.current[idx] = el; }}>
+                        {agg.type === "number" && (
+                          <>
+                            <div style={{ display: "flex", gap: "1rem", marginBottom: "0.5rem", fontSize: "0.8rem", color: "#555" }}>
+                              <span>Avg: <strong>{agg.avg}</strong></span>
+                              <span>Min: <strong>{agg.min}</strong></span>
+                              <span>Max: <strong>{agg.max}</strong></span>
+                            </div>
+                            <ResponsiveContainer width="100%" height={200}>
+                              <BarChart data={agg.barData}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                                <YAxis tick={{ fontSize: 10 }} />
+                                <Tooltip />
+                                <Bar dataKey="value" fill="#2e7d32" radius={[4,4,0,0]} />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </>
+                        )}
+                        {agg.type === "pie" && (
+                          <ResponsiveContainer width="100%" height={220}>
+                            <PieChart>
+                              <Pie data={agg.pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name, percent }: any) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                                {agg.pieData.map((_: any, i: number) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                              </Pie>
+                              <Tooltip />
+                              <Legend />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        )}
+                        {agg.type === "date" && (
+                          <ResponsiveContainer width="100%" height={200}>
+                            <BarChart data={agg.barData}>
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                              <YAxis tick={{ fontSize: 10 }} />
+                              <Tooltip />
+                              <Bar dataKey="value" fill="#1565c0" radius={[4,4,0,0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        )}
+                        {agg.type === "text" && agg.barData.length > 0 && (
+                          <ResponsiveContainer width="100%" height={Math.max(150, agg.barData.length * 28)}>
+                            <BarChart data={agg.barData} layout="vertical">
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis type="number" tick={{ fontSize: 10 }} />
+                              <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 10 }} />
+                              <Tooltip />
+                              <Bar dataKey="value" fill="#ef6c00" radius={[0,4,4,0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        )}
+                        {agg.type === "camera" && (
+                          <div style={{ padding: "0.75rem", background: "#e3f2fd", borderRadius: "6px", fontSize: "0.85rem", color: "#1565c0" }}>📸 {agg.count} photo(s) captured</div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </>
       )}

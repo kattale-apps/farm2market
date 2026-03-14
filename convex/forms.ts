@@ -526,6 +526,10 @@ export const saveDraftResponse = mutation({
   },
   handler: async (ctx, args) => {
     const now = getUgandaTime();
+    const sameContext = (row: any) =>
+      String(row?.planId || "") === String(args.planId || "") &&
+      String(row?.plannedSprayDate || "") === String(args.plannedSprayDate || "");
+
     // Find existing draft
     const existing = await ctx.db
       .query("formResponses")
@@ -533,7 +537,7 @@ export const saveDraftResponse = mutation({
         q.eq("formId", args.formId).eq("memberId", args.memberId)
       )
       .collect();
-    const draft = existing.find((r: any) => r.status === "DRAFT");
+    const draft = existing.find((r: any) => r.status === "DRAFT" && sameContext(r));
 
     let responseId: Id<"formResponses">;
     if (draft) {
@@ -598,15 +602,21 @@ export const getDraftResponse = query({
   args: {
     formId: v.id("communityForms"),
     memberId: v.id("users"),
+    planId: v.optional(v.id("fertilizerPlans")),
+    plannedSprayDate: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const sameContext = (row: any) =>
+      String(row?.planId || "") === String(args.planId || "") &&
+      String(row?.plannedSprayDate || "") === String(args.plannedSprayDate || "");
+
     const responses = await ctx.db
       .query("formResponses")
       .withIndex("by_form_member", (q) =>
         q.eq("formId", args.formId).eq("memberId", args.memberId)
       )
       .collect();
-    const draft = responses.find((r: any) => r.status === "DRAFT");
+    const draft = responses.find((r: any) => r.status === "DRAFT" && sameContext(r));
     if (!draft) return null;
 
     const values = await ctx.db

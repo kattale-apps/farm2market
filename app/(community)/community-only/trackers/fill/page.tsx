@@ -31,21 +31,23 @@ function FarmCoinRewardVideo({
   onFallback: () => void;
 }) {
   const [showContinue, setShowContinue] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
+  const [needsUserStart, setNeedsUserStart] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const tryPlayWithSound = useCallback(async () => {
+    const video = videoRef.current;
+    if (!video) return;
+    try {
+      await video.play();
+      setNeedsUserStart(false);
+    } catch {
+      setNeedsUserStart(true);
+    }
+  }, []);
 
   useEffect(() => {
-    const videoEl = videoRef.current;
-    if (!videoEl) return;
-
-    videoEl.muted = isMuted;
-    void videoEl.play().catch(async () => {
-      // Some browsers block unmuted autoplay; retry muted so playback still starts.
-      if (!isMuted) {
-        setIsMuted(true);
-      }
-    });
-  }, [isMuted]);
+    // Attempt autoplay with sound; if blocked by browser policy, request user tap.
+    tryPlayWithSound();
+  }, [tryPlayWithSound]);
 
   useEffect(() => {
     // Safety timeout: always show a continue button even if playback stalls.
@@ -70,32 +72,31 @@ function FarmCoinRewardVideo({
         <video
           ref={videoRef}
           src={REWARD_VIDEO_SRC}
-          autoPlay
-          muted={isMuted}
           playsInline
           preload="metadata"
           onEnded={onDone}
           onError={onFallback}
           style={{ width: "100%", borderRadius: 14, boxShadow: "0 8px 28px rgba(0,0,0,0.45)", background: "#000" }}
         />
-        <button
-          type="button"
-          onClick={() => setIsMuted((prev) => !prev)}
-          style={{
-            marginTop: "0.5rem",
-            padding: "0.45rem 0.9rem",
-            borderRadius: 8,
-            border: "1px solid rgba(255,255,255,0.35)",
-            background: "rgba(255,255,255,0.12)",
-            color: "#fff",
-            fontSize: "0.82rem",
-            fontWeight: 700,
-            cursor: "pointer",
-            fontFamily: FONT,
-          }}
-        >
-          {isMuted ? "Turn Sound On" : "Mute Sound"}
-        </button>
+        {needsUserStart && (
+          <button
+            onClick={tryPlayWithSound}
+            style={{
+              marginTop: "0.6rem",
+              padding: "0.7rem 1.8rem",
+              borderRadius: 10,
+              border: "1px solid #f5f5f5",
+              background: "rgba(255,255,255,0.08)",
+              color: "#fff",
+              fontSize: "0.95rem",
+              fontWeight: 700,
+              cursor: "pointer",
+              fontFamily: FONT,
+            }}
+          >
+            ▶ Play with sound
+          </button>
+        )}
         <p style={{ margin: "0.75rem 0 0", fontSize: "1.15rem", fontWeight: 700, color: GOLD }}>
           +{coinsEarned} FarmCoin{coinsEarned > 1 ? "s" : ""}
         </p>
@@ -455,7 +456,8 @@ function FieldInput({
     if (value) {
       try {
         const parsed = JSON.parse(value);
-        previewUrl = parsed.dataUrl || null;
+        const candidate = typeof parsed?.dataUrl === "string" ? parsed.dataUrl : "";
+        previewUrl = candidate.startsWith("data:image/") ? candidate : null;
       } catch { /* not valid JSON, ignore */ }
     }
     return (
@@ -522,7 +524,17 @@ export default function TrackerFillPage() {
   }, []);
 
   const formDetails = useOfflineQuery((api as any).forms.getFormDetails, formId ? { formId } : "skip") as any;
-  const existingDraft = useOfflineQuery((api as any).forms.getDraftResponse, formId && userId ? { formId, memberId: userId } : "skip") as any;
+  const existingDraft = useOfflineQuery(
+    (api as any).forms.getDraftResponse,
+    formId && userId
+      ? {
+          formId,
+          memberId: userId,
+          planId: planId || undefined,
+          plannedSprayDate: plannedSprayDate || undefined,
+        }
+      : "skip"
+  ) as any;
   const saveDraft = useOfflineMutation((api as any).forms.saveDraftResponse);
   const submitDraft = useOfflineMutation((api as any).forms.submitDraft);
   const submitFormResponse = useOfflineMutation((api as any).forms.submitFormResponse);

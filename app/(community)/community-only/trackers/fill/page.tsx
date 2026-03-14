@@ -31,6 +31,21 @@ function FarmCoinRewardVideo({
   onFallback: () => void;
 }) {
   const [showContinue, setShowContinue] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const videoEl = videoRef.current;
+    if (!videoEl) return;
+
+    videoEl.muted = isMuted;
+    void videoEl.play().catch(async () => {
+      // Some browsers block unmuted autoplay; retry muted so playback still starts.
+      if (!isMuted) {
+        setIsMuted(true);
+      }
+    });
+  }, [isMuted]);
 
   useEffect(() => {
     // Safety timeout: always show a continue button even if playback stalls.
@@ -53,15 +68,34 @@ function FarmCoinRewardVideo({
     >
       <div style={{ width: "100%", maxWidth: 640, textAlign: "center", color: "#fff", fontFamily: FONT }}>
         <video
+          ref={videoRef}
           src={REWARD_VIDEO_SRC}
           autoPlay
-          muted
+          muted={isMuted}
           playsInline
           preload="metadata"
           onEnded={onDone}
           onError={onFallback}
           style={{ width: "100%", borderRadius: 14, boxShadow: "0 8px 28px rgba(0,0,0,0.45)", background: "#000" }}
         />
+        <button
+          type="button"
+          onClick={() => setIsMuted((prev) => !prev)}
+          style={{
+            marginTop: "0.5rem",
+            padding: "0.45rem 0.9rem",
+            borderRadius: 8,
+            border: "1px solid rgba(255,255,255,0.35)",
+            background: "rgba(255,255,255,0.12)",
+            color: "#fff",
+            fontSize: "0.82rem",
+            fontWeight: 700,
+            cursor: "pointer",
+            fontFamily: FONT,
+          }}
+        >
+          {isMuted ? "Turn Sound On" : "Mute Sound"}
+        </button>
         <p style={{ margin: "0.75rem 0 0", fontSize: "1.15rem", fontWeight: 700, color: GOLD }}>
           +{coinsEarned} FarmCoin{coinsEarned > 1 ? "s" : ""}
         </p>
@@ -429,7 +463,7 @@ function FieldInput({
         {previewUrl && (
           <img src={previewUrl} alt="Captured" style={{ width: "100%", maxWidth: 400, borderRadius: 8, marginBottom: "0.5rem" }} />
         )}
-        <GeneralCameraCapture onCapture={(jsonVal) => onChange(jsonVal)} />
+        <GeneralCameraCapture key={String(field._id)} onCapture={(jsonVal) => onChange(jsonVal)} />
       </div>
     );
   }
@@ -804,7 +838,7 @@ export default function TrackerFillPage() {
             </h2>
             {currentField.helpText && <p style={{ margin: "0 0 16px 0", fontSize: "0.82rem", color: "#888", lineHeight: 1.4 }}>{currentField.helpText}</p>}
             <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-              <FieldInput field={currentField} value={fieldValues[String(currentField._id)] || ""} onChange={(val) => handleFieldChange(String(currentField._id), val)} isSingleView={true} />
+              <FieldInput key={String(currentField._id)} field={currentField} value={fieldValues[String(currentField._id)] || ""} onChange={(val) => handleFieldChange(String(currentField._id), val)} isSingleView={true} />
             </div>
           </div>
 

@@ -43,6 +43,8 @@ export function FertilizerPlanOutput({
   const plan = details.plan;
   const projection = details.projection;
   const complianceByDate = details.complianceByDate || [];
+  const totalSprayDays = complianceByDate.length;
+  const loggedSprayDays = complianceByDate.filter((item: any) => item.status === "done").length;
 
   return (
     <div style={{ display: "grid", gap: "0.7rem" }}>
@@ -81,6 +83,9 @@ export function FertilizerPlanOutput({
 
       <div style={{ border: "1px solid #e6e6e6", borderRadius: 10, padding: "0.75rem", background: "#fff" }}>
         <p style={{ margin: 0, fontWeight: 700, fontSize: "0.85rem", color: "#1b5e20" }}>🌱 Spray Days</p>
+        <p style={{ margin: "0.3rem 0 0", fontSize: "0.78rem", color: "#4b5563", fontWeight: 600 }}>
+          Total: {totalSprayDays} | Logged: {loggedSprayDays}
+        </p>
         <div style={{ marginTop: "0.55rem", display: "grid", gap: "0.4rem", maxHeight: 230, overflowY: "auto", paddingRight: 4 }}>
           {complianceByDate.map((item: any) => {
             const statusEmoji = item.status === "done" ? "✅" : item.status === "missed" ? "❌" : "⏳";

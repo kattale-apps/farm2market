@@ -701,6 +701,161 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
     }
   };
 
+  const communitiesSection = (
+    <div style={{
+      marginTop: "1.5rem",
+      padding: "clamp(1rem, 3vw, 1.5rem)",
+      background: "#fff",
+      borderRadius: "12px",
+      boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+      border: "1px solid #e0e0e0",
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+        <h3 style={{
+          margin: 0,
+          fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)",
+          color: "#2c2c2c",
+          fontFamily: '"Montserrat", sans-serif',
+          fontWeight: "600",
+          letterSpacing: "-0.01em"
+        }}>
+          🌾 My Communities
+        </h3>
+        <Link
+          href="/farmer/communities"
+          style={{
+            padding: "0.4rem 0.8rem",
+            background: "#1976d2",
+            color: "#fff",
+            textDecoration: "none",
+            borderRadius: "8px",
+            fontSize: "0.85rem",
+            fontWeight: "600",
+            transition: "background 0.2s",
+          }}
+        >
+          Browse All
+        </Link>
+      </div>
+      {!communities ? (
+        <p style={{ color: "#999", fontSize: "0.9rem" }}>Loading communities...</p>
+      ) : memberCommunities.length === 0 ? (
+        <p style={{ color: "#6b7280", fontSize: "0.9rem" }}>
+          You haven&apos;t joined any communities yet.{" "}
+          <Link href="/farmer/communities" style={{ color: "#1976d2", fontWeight: 600 }}>Browse communities</Link>
+        </p>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(280px, 1fr))", gap: "1rem" }}>
+          {memberCommunities.map((c: any) => {
+            const logo = resolveCommunityLogo(c);
+            return (
+              <div key={c.id} style={{
+                  borderRadius: "14px",
+                  overflow: "hidden",
+                  border: "1px solid #c8e6c9",
+                  boxShadow: "0 2px 10px rgba(46,125,50,0.08)",
+                  background: logo
+                    ? `linear-gradient(rgba(255,255,255,0.92),rgba(255,255,255,0.92)), url('${logo}')`
+                    : "#fff",
+                  backgroundRepeat: "repeat",
+                  backgroundSize: "120px",
+                  transition: "box-shadow 0.2s",
+                  position: "relative",
+                }}>
+                  <div style={{
+                    padding: "1rem 1.25rem",
+                    background: "linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)",
+                    borderBottom: "2px solid #a5d6a7",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.75rem",
+                  }}>
+                    <div style={{
+                      width: 48, height: 48, borderRadius: "50%",
+                      background: "#fff", border: "2px solid #43a047",
+                      boxShadow: "0 2px 8px rgba(67,160,71,0.25)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      overflow: "hidden", flexShrink: 0,
+                    }}>
+                      {logo ? (
+                        <img src={logo} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                      ) : (
+                        <span style={{ fontSize: "1.3rem", fontWeight: 800, color: "#43a047" }}>
+                          {c.name?.charAt(0)?.toUpperCase() || "?"}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <h4 style={{
+                        margin: 0, fontSize: "0.95rem", fontWeight: 700,
+                        color: "#1b5e20", textTransform: "uppercase",
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                      }}>{c.name}</h4>
+                      {c.description && (
+                        <p style={{
+                          margin: "0.15rem 0 0", fontSize: "0.78rem", color: "#555",
+                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        }}>{c.description}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ padding: "0.75rem 1.25rem", display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
+                    <span style={{
+                      padding: "0.2rem 0.6rem", borderRadius: "999px", fontSize: "0.75rem",
+                      fontWeight: 600, background: "#e8f5e9", color: "#2e7d32", border: "1px solid #c8e6c9",
+                    }}>
+                      ✅ Member
+                    </span>
+                    {c.isGlobal && (
+                      <span style={{
+                        padding: "0.2rem 0.6rem", borderRadius: "999px", fontSize: "0.75rem",
+                        fontWeight: 600, background: "#e3f2fd", color: "#1565c0", border: "1px solid #90caf9",
+                      }}>
+                        Global
+                      </span>
+                    )}
+                    {c.memberCount !== undefined && (
+                      <span style={{
+                        padding: "0.2rem 0.6rem", borderRadius: "999px", fontSize: "0.75rem",
+                        fontWeight: 600, background: "#f5f5f5", color: "#666", border: "1px solid #e0e0e0",
+                      }}>
+                        {c.memberCount} members
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ padding: "0 1.25rem 1rem" }}>
+                    <button
+                      onClick={() => router.push(`/community-only/noticeboard?communityId=${c.id}`)}
+                      style={{
+                        width: "100%",
+                        padding: "0.7rem 1rem",
+                        background: "linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%)",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: "10px",
+                        fontSize: "0.9rem",
+                        fontWeight: 700,
+                        fontFamily: '"Montserrat", sans-serif',
+                        cursor: "pointer",
+                        minHeight: "44px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "0.5rem",
+                        transition: "opacity 0.2s",
+                      }}
+                    >
+                      🌾 Open Community
+                    </button>
+                  </div>
+                </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div style={{ padding: "1rem", maxWidth: "100%", boxSizing: "border-box" }}>
       <div style={{ 
@@ -828,6 +983,8 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
           </button>
         </div>
       </div>
+
+      {communitiesSection}
 
       {messageInboxOpen && (
         <div
@@ -3093,160 +3250,6 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
           </div>
         </div>
       )}
-
-      {/* Communities Section */}
-      <div style={{
-        marginTop: "1.5rem",
-        padding: "clamp(1rem, 3vw, 1.5rem)",
-        background: "#fff",
-        borderRadius: "12px",
-        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        border: "1px solid #e0e0e0",
-      }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-          <h3 style={{
-            margin: 0,
-            fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)",
-            color: "#2c2c2c",
-            fontFamily: '"Montserrat", sans-serif',
-            fontWeight: "600",
-            letterSpacing: "-0.01em"
-          }}>
-            🌾 My Communities
-          </h3>
-          <Link
-            href="/farmer/communities"
-            style={{
-              padding: "0.4rem 0.8rem",
-              background: "#1976d2",
-              color: "#fff",
-              textDecoration: "none",
-              borderRadius: "8px",
-              fontSize: "0.85rem",
-              fontWeight: "600",
-              transition: "background 0.2s",
-            }}
-          >
-            Browse All
-          </Link>
-        </div>
-        {!communities ? (
-          <p style={{ color: "#999", fontSize: "0.9rem" }}>Loading communities...</p>
-        ) : memberCommunities.length === 0 ? (
-          <p style={{ color: "#6b7280", fontSize: "0.9rem" }}>
-            You haven&apos;t joined any communities yet.{" "}
-            <Link href="/farmer/communities" style={{ color: "#1976d2", fontWeight: 600 }}>Browse communities</Link>
-          </p>
-        ) : (
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(280px, 1fr))", gap: "1rem" }}>
-            {memberCommunities.map((c: any) => {
-              const logo = resolveCommunityLogo(c);
-              return (
-                <div key={c.id} style={{
-                    borderRadius: "14px",
-                    overflow: "hidden",
-                    border: "1px solid #c8e6c9",
-                    boxShadow: "0 2px 10px rgba(46,125,50,0.08)",
-                    background: logo
-                      ? `linear-gradient(rgba(255,255,255,0.92),rgba(255,255,255,0.92)), url('${logo}')`
-                      : "#fff",
-                    backgroundRepeat: "repeat",
-                    backgroundSize: "120px",
-                    transition: "box-shadow 0.2s",
-                    position: "relative",
-                  }}>
-                    <div style={{
-                      padding: "1rem 1.25rem",
-                      background: "linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)",
-                      borderBottom: "2px solid #a5d6a7",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.75rem",
-                    }}>
-                      <div style={{
-                        width: 48, height: 48, borderRadius: "50%",
-                        background: "#fff", border: "2px solid #43a047",
-                        boxShadow: "0 2px 8px rgba(67,160,71,0.25)",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        overflow: "hidden", flexShrink: 0,
-                      }}>
-                        {logo ? (
-                          <img src={logo} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
-                        ) : (
-                          <span style={{ fontSize: "1.3rem", fontWeight: 800, color: "#43a047" }}>
-                            {c.name?.charAt(0)?.toUpperCase() || "?"}
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <h4 style={{
-                          margin: 0, fontSize: "0.95rem", fontWeight: 700,
-                          color: "#1b5e20", textTransform: "uppercase",
-                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                        }}>{c.name}</h4>
-                        {c.description && (
-                          <p style={{
-                            margin: "0.15rem 0 0", fontSize: "0.78rem", color: "#555",
-                            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                          }}>{c.description}</p>
-                        )}
-                      </div>
-                    </div>
-                    <div style={{ padding: "0.75rem 1.25rem", display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
-                      <span style={{
-                        padding: "0.2rem 0.6rem", borderRadius: "999px", fontSize: "0.75rem",
-                        fontWeight: 600, background: "#e8f5e9", color: "#2e7d32", border: "1px solid #c8e6c9",
-                      }}>
-                        ✅ Member
-                      </span>
-                      {c.isGlobal && (
-                        <span style={{
-                          padding: "0.2rem 0.6rem", borderRadius: "999px", fontSize: "0.75rem",
-                          fontWeight: 600, background: "#e3f2fd", color: "#1565c0", border: "1px solid #90caf9",
-                        }}>
-                          Global
-                        </span>
-                      )}
-                      {c.memberCount !== undefined && (
-                        <span style={{
-                          padding: "0.2rem 0.6rem", borderRadius: "999px", fontSize: "0.75rem",
-                          fontWeight: 600, background: "#f5f5f5", color: "#666", border: "1px solid #e0e0e0",
-                        }}>
-                          {c.memberCount} members
-                        </span>
-                      )}
-                    </div>
-                    <div style={{ padding: "0 1.25rem 1rem" }}>
-                      <button
-                        onClick={() => router.push(`/community-only/noticeboard?communityId=${c.id}`)}
-                        style={{
-                          width: "100%",
-                          padding: "0.7rem 1rem",
-                          background: "linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%)",
-                          color: "#fff",
-                          border: "none",
-                          borderRadius: "10px",
-                          fontSize: "0.9rem",
-                          fontWeight: 700,
-                          fontFamily: '"Montserrat", sans-serif',
-                          cursor: "pointer",
-                          minHeight: "44px",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: "0.5rem",
-                          transition: "opacity 0.2s",
-                        }}
-                      >
-                        🌾 Open Community
-                      </button>
-                    </div>
-                  </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
 
       {/* Farm Analytics Summary */}
       <div style={{

@@ -18,6 +18,7 @@ const CROP_EMOJI: Record<string, string> = {
 };
 
 const KNAPSACK_ICON_PATH = "/icons/knapsack-sprayer.png";
+const BOTTLE_ICON_PATH = "/icons/biofarm_bottle.png";
 
 export function FertilizerPlanOutput({
   planId,
@@ -63,7 +64,16 @@ export function FertilizerPlanOutput({
             <span>Knapsacks: {plan.knapsacks}</span>
           </div>
           <div style={{ fontSize: "0.82rem" }}>🧴 Mix per tank: {plan.doseMl} ml fertilizer + {Math.round(plan.waterRequiredL / Math.max(plan.knapsacks, 1))}L water</div>
-          <div style={{ fontSize: "0.82rem" }}>📦 Bottles per spray: {plan.bottlesPerSpray}</div>
+          <div style={{ fontSize: "0.82rem", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+            <img
+              src={BOTTLE_ICON_PATH}
+              alt="Bio Farm bottle"
+              width={18}
+              height={18}
+              style={{ display: "inline-block", objectFit: "contain", borderRadius: 3 }}
+            />
+            <span>Bottles per spray: {plan.bottlesPerSpray}</span>
+          </div>
           <div style={{ fontSize: "0.82rem" }}>📦 Bottles needed this season: {plan.totalBottles}</div>
           <div style={{ fontSize: "0.82rem" }}>💧 Water needed: {plan.waterRequiredL}L</div>
         </div>

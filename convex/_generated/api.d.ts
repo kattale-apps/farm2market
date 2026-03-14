@@ -35,6 +35,7 @@ import type * as farmcoinTest from "../farmcoinTest.js";
 import type * as farmerDashboard from "../farmerDashboard.js";
 import type * as farmerOnboarding from "../farmerOnboarding.js";
 import type * as farmerProfile from "../farmerProfile.js";
+import type * as fertilizerPlanner from "../fertilizerPlanner.js";
 import type * as files from "../files.js";
 import type * as finance from "../finance.js";
 import type * as forms from "../forms.js";
@@ -120,6 +121,7 @@ declare const fullApi: ApiFromModules<{
   farmerDashboard: typeof farmerDashboard;
   farmerOnboarding: typeof farmerOnboarding;
   farmerProfile: typeof farmerProfile;
+  fertilizerPlanner: typeof fertilizerPlanner;
   files: typeof files;
   finance: typeof finance;
   forms: typeof forms;

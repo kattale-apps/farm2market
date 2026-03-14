@@ -19,6 +19,75 @@ const BRAND_BG = "#e8f5e9";
 const GOLD = "#f9a825";
 const GOLD_LIGHT = "#fff8e1";
 const FONT = '"Montserrat", sans-serif';
+const REWARD_VIDEO_SRC = "/videos/COIN-2-SOIL.mp4";
+
+function FarmCoinRewardVideo({
+  coinsEarned,
+  onDone,
+  onFallback,
+}: {
+  coinsEarned: number;
+  onDone: () => void;
+  onFallback: () => void;
+}) {
+  const [showContinue, setShowContinue] = useState(false);
+
+  useEffect(() => {
+    // Safety timeout: always show a continue button even if playback stalls.
+    const timer = setTimeout(() => setShowContinue(true), 12000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 9999,
+        background: "rgba(0,0,0,0.85)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "1rem",
+      }}
+    >
+      <div style={{ width: "100%", maxWidth: 640, textAlign: "center", color: "#fff", fontFamily: FONT }}>
+        <video
+          src={REWARD_VIDEO_SRC}
+          autoPlay
+          muted
+          playsInline
+          preload="metadata"
+          onEnded={onDone}
+          onError={onFallback}
+          style={{ width: "100%", borderRadius: 14, boxShadow: "0 8px 28px rgba(0,0,0,0.45)", background: "#000" }}
+        />
+        <p style={{ margin: "0.75rem 0 0", fontSize: "1.15rem", fontWeight: 700, color: GOLD }}>
+          +{coinsEarned} FarmCoin{coinsEarned > 1 ? "s" : ""}
+        </p>
+        {showContinue && (
+          <button
+            onClick={onDone}
+            style={{
+              marginTop: "0.6rem",
+              padding: "0.7rem 1.8rem",
+              borderRadius: 10,
+              border: "none",
+              background: "linear-gradient(135deg, #43a047, #2e7d32)",
+              color: "#fff",
+              fontSize: "0.95rem",
+              fontWeight: 700,
+              cursor: "pointer",
+              fontFamily: FONT,
+            }}
+          >
+            Continue
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 // ─── Coin Plant Animation Overlay ───────────────────────────────────
 function CoinPlantAnimation({
@@ -400,6 +469,13 @@ export default function TrackerFillPage() {
   const [seeAllFields, setSeeAllFields] = useState(false);
   const [showCoinAnimation, setShowCoinAnimation] = useState(false);
   const [coinsEarned, setCoinsEarned] = useState(0);
+  const [preferRewardVideo, setPreferRewardVideo] = useState(true);
+
+  useEffect(() => {
+    if (showCoinAnimation) {
+      setPreferRewardVideo(true);
+    }
+  }, [showCoinAnimation]);
 
   useEffect(() => {
     try {
@@ -623,7 +699,17 @@ export default function TrackerFillPage() {
 
   return (
     <div style={{ fontFamily: FONT, paddingBottom: "5rem", minHeight: "100vh", background: "#f5f5f5" }}>
-      {showCoinAnimation && <CoinPlantAnimation coinsEarned={coinsEarned} onDone={handleCoinAnimationDone} />}
+      {showCoinAnimation && (
+        preferRewardVideo ? (
+          <FarmCoinRewardVideo
+            coinsEarned={coinsEarned}
+            onDone={handleCoinAnimationDone}
+            onFallback={() => setPreferRewardVideo(false)}
+          />
+        ) : (
+          <CoinPlantAnimation coinsEarned={coinsEarned} onDone={handleCoinAnimationDone} />
+        )
+      )}
 
       {/* Header */}
       <div style={{ background: "linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%)", padding: "1rem 1rem 0.75rem", color: "#fff" }}>

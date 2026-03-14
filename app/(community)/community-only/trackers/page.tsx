@@ -12,6 +12,7 @@ import { useOfflineQuery } from "@/app/hooks/useOfflineQuery";
 
 const BRAND = "#2e7d32";
 const FONT = '"Montserrat", sans-serif';
+const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
 
 const CATEGORY_LABELS: Record<string, string> = {
   revenue: "Revenue",
@@ -53,6 +54,7 @@ export default function TrackersHubPage() {
 
   const forms = Array.isArray(formsRaw) ? formsRaw : formsRaw === undefined ? undefined : null;
   const activeForms = (Array.isArray(forms) ? forms : []).filter((f: any) => f.isActive);
+  const isBioFarm = communityId === BIOFARM_COMMUNITY_ID;
 
   if (!communityId) {
     return (
@@ -96,37 +98,31 @@ export default function TrackersHubPage() {
         )}
 
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-          {activeForms.map((form: any) => (
+          {isBioFarm && (
             <Link
-              key={form._id}
-              href={`/community-only/trackers/fill?communityId=${communityId}&formId=${form._id}`}
+              href={`/community-only/trackers/fertilizer?communityId=${communityId}`}
               style={{ textDecoration: "none", color: "inherit" }}
             >
               <div style={{
                 padding: "1rem",
                 borderRadius: 12,
                 background: "#fff",
-                border: `2px solid ${CATEGORY_COLORS[form.category] || "#e0e0e0"}`,
+                border: "2px solid #7cb342",
                 boxShadow: "0 2px 6px rgba(0,0,0,0.06)",
-                transition: "transform 0.15s",
               }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
                   <div style={{
                     width: 44,
                     height: 44,
                     borderRadius: 10,
-                    background: `${CATEGORY_COLORS[form.category] || BRAND}15`,
+                    background: "#f1f8e9",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     fontSize: "1.3rem",
                     flexShrink: 0,
                   }}>
-                    {form.category === "revenue" ? "💰" :
-                     form.category === "expense" ? "💸" :
-                     form.category === "inventory" ? "📦" :
-                     form.category === "profit_loss" ? "📈" :
-                     form.category === "cashflow" ? "🔄" : "📝"}
+                    🌱
                   </div>
                   <div style={{ flex: 1 }}>
                     <span style={{
@@ -134,23 +130,104 @@ export default function TrackersHubPage() {
                       fontWeight: 700,
                       textTransform: "uppercase",
                       letterSpacing: "0.08em",
-                      color: CATEGORY_COLORS[form.category] || "#666",
+                      color: "#558b2f",
                     }}>
-                      {CATEGORY_LABELS[form.category] || "Custom"}
+                      Bio Farm
                     </span>
                     <h3 style={{ margin: "0.15rem 0 0 0", fontSize: "0.95rem", fontWeight: 600, color: "#1a1a1a" }}>
-                      {form.name}
+                      Fertilizer Planner
                     </h3>
-                    {form.description && (
-                      <p style={{ margin: "0.15rem 0 0 0", fontSize: "0.75rem", color: "#888" }}>
-                        {form.description}
-                      </p>
-                    )}
+                    <p style={{ margin: "0.15rem 0 0 0", fontSize: "0.75rem", color: "#888" }}>
+                      View plans, spray schedule, and log applications
+                    </p>
                   </div>
                   <span style={{ fontSize: "1.2rem", color: "#ccc" }}>→</span>
                 </div>
               </div>
             </Link>
+          )}
+
+          {activeForms.map((form: any) => (
+            <div
+              key={form._id}
+              style={{
+                padding: "1rem",
+                borderRadius: 12,
+                background: "#fff",
+                border: `2px solid ${CATEGORY_COLORS[form.category] || "#e0e0e0"}`,
+                boxShadow: "0 2px 6px rgba(0,0,0,0.06)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                <div style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 10,
+                  background: `${CATEGORY_COLORS[form.category] || BRAND}15`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "1.3rem",
+                  flexShrink: 0,
+                }}>
+                  {form.category === "revenue" ? "💰" :
+                   form.category === "expense" ? "💸" :
+                   form.category === "inventory" ? "📦" :
+                   form.category === "profit_loss" ? "📈" :
+                   form.category === "cashflow" ? "🔄" : "📝"}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{
+                    fontSize: "0.6rem",
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.08em",
+                    color: CATEGORY_COLORS[form.category] || "#666",
+                  }}>
+                    {CATEGORY_LABELS[form.category] || "Custom"}
+                  </span>
+                  <h3 style={{ margin: "0.15rem 0 0 0", fontSize: "0.95rem", fontWeight: 600, color: "#1a1a1a" }}>
+                    {form.name}
+                  </h3>
+                  {form.description && (
+                    <p style={{ margin: "0.15rem 0 0 0", fontSize: "0.75rem", color: "#888" }}>
+                      {form.description}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.75rem", flexWrap: "wrap" }}>
+                <Link
+                  href={`/community-only/trackers/fill?communityId=${communityId}&formId=${form._id}`}
+                  style={{
+                    textDecoration: "none",
+                    padding: "0.45rem 0.7rem",
+                    borderRadius: 8,
+                    background: "#f1f8e9",
+                    color: "#2e7d32",
+                    fontSize: "0.8rem",
+                    fontWeight: 700,
+                  }}
+                >
+                  Open Form
+                </Link>
+                <Link
+                  href={`/community-only/trackers/view?communityId=${communityId}&formId=${form._id}`}
+                  style={{
+                    textDecoration: "none",
+                    padding: "0.45rem 0.7rem",
+                    borderRadius: 8,
+                    background: "#f5f5f5",
+                    color: "#333",
+                    fontSize: "0.8rem",
+                    fontWeight: 700,
+                  }}
+                >
+                  📋 My entries
+                </Link>
+              </div>
+            </div>
           ))}
         </div>
 

@@ -294,6 +294,8 @@ export const submitFormResponse = mutation({
     formId: v.id("communityForms"),
     communityId: v.id("communities"),
     memberId: v.id("users"),
+    planId: v.optional(v.id("fertilizerPlans")),
+    plannedSprayDate: v.optional(v.string()),
     fieldValues: v.array(v.object({
       fieldId: v.id("formFields"),
       value: v.string(),
@@ -314,6 +316,8 @@ export const submitFormResponse = mutation({
       formId: args.formId,
       communityId: args.communityId,
       memberId: args.memberId,
+      planId: args.planId,
+      plannedSprayDate: args.plannedSprayDate,
       createdAt: getUgandaTime(),
       updatedAt: getUgandaTime(),
     });
@@ -513,6 +517,8 @@ export const saveDraftResponse = mutation({
     formId: v.id("communityForms"),
     communityId: v.id("communities"),
     memberId: v.id("users"),
+    planId: v.optional(v.id("fertilizerPlans")),
+    plannedSprayDate: v.optional(v.string()),
     fieldValues: v.array(v.object({
       fieldId: v.id("formFields"),
       value: v.string(),
@@ -532,7 +538,11 @@ export const saveDraftResponse = mutation({
     let responseId: Id<"formResponses">;
     if (draft) {
       responseId = draft._id;
-      await ctx.db.patch(responseId, { updatedAt: now });
+      await ctx.db.patch(responseId, {
+        updatedAt: now,
+        planId: args.planId,
+        plannedSprayDate: args.plannedSprayDate,
+      });
       // Delete old values
       const oldValues = await ctx.db
         .query("formResponseValues")
@@ -546,6 +556,8 @@ export const saveDraftResponse = mutation({
         formId: args.formId,
         communityId: args.communityId,
         memberId: args.memberId,
+        planId: args.planId,
+        plannedSprayDate: args.plannedSprayDate,
         status: "DRAFT",
         createdAt: now,
         updatedAt: now,
@@ -613,16 +625,21 @@ export const submitDraft = mutation({
   args: {
     responseId: v.id("formResponses"),
     memberId: v.id("users"),
+    planId: v.optional(v.id("fertilizerPlans")),
+    plannedSprayDate: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const response = await ctx.db.get(args.responseId);
     if (!response) throw new Error("Response not found");
     if (response.memberId !== args.memberId) throw new Error("Not authorized");
-
-    await ctx.db.patch(args.responseId, {
+    const updates: any = {
       status: "SUBMITTED",
       updatedAt: getUgandaTime(),
-    });
+    };
+    if (args.planId !== undefined) updates.planId = args.planId;
+    if (args.plannedSprayDate !== undefined) updates.plannedSprayDate = args.plannedSprayDate;
+
+    await ctx.db.patch(args.responseId, updates);
 
     // Increment response count on form
     const form = await ctx.db.get(response.formId);
@@ -644,6 +661,7 @@ export const getMySubmissions = query({
   args: {
     memberId: v.id("users"),
     communityId: v.id("communities"),
+    formId: v.optional(v.id("communityForms")),
   },
   handler: async (ctx, args) => {
     const responses = await ctx.db
@@ -651,14 +669,28 @@ export const getMySubmissions = query({
       .withIndex("by_member", (q) => q.eq("memberId", args.memberId))
       .collect();
 
-    const communityResponses = responses.filter(
-      (r) => r.communityId === args.communityId && (r as any).status !== "DRAFT"
-    );
+    const communityResponses = responses.filter((r) => {
+      if (r.communityId !== args.communityId) return false;
+      if ((r as any).status === "DRAFT") return false;
+      if (args.formId && r.formId !== args.formId) return false;
+      return true;
+    });
 
     // Group by form
     const formIds = [...new Set(communityResponses.map((r) => r.formId))];
     const forms = await Promise.all(formIds.map((id) => ctx.db.get(id)));
     const formMap = new Map(forms.filter(Boolean).map((f: any) => [String(f._id), f]));
+
+    const fieldsByForm = new Map<string, any[]>();
+    await Promise.all(
+      formIds.map(async (id) => {
+        const fields = await ctx.db
+          .query("formFields")
+          .withIndex("by_form", (q) => q.eq("formId", id))
+          .collect();
+        fieldsByForm.set(String(id), fields);
+      })
+    );
 
     const enriched = await Promise.all(
       communityResponses.map(async (r) => {
@@ -666,11 +698,24 @@ export const getMySubmissions = query({
           .query("formResponseValues")
           .withIndex("by_response", (q) => q.eq("responseId", r._id))
           .collect();
+
+        const formFields = fieldsByForm.get(String(r.formId)) || [];
+        const fieldMap = new Map(formFields.map((f: any) => [String(f._id), f]));
+
+        const enrichedValues = values.map((value) => {
+          const field = fieldMap.get(String(value.fieldId));
+          return {
+            ...value,
+            fieldLabel: field?.label || "Field",
+            fieldType: field?.fieldType || "text",
+          };
+        });
+
         return {
           ...r,
           formName: (formMap.get(String(r.formId)) as any)?.name || "Unknown Tracker",
           category: (formMap.get(String(r.formId)) as any)?.category || "custom",
-          values,
+          values: enrichedValues,
         };
       })
     );

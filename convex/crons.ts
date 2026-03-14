@@ -44,4 +44,10 @@ crons.interval(
   internal.scheduled.purgeJunkRows,
 );
 
+crons.interval(
+  "send spray reminders",
+  { hours: 1 },
+  (internal as any).fertilizerPlanner.sendSprayReminders,
+);
+
 export default crons;

@@ -1454,7 +1454,7 @@ export default defineSchema({
    */
   formFields: defineTable({
     formId: v.id("communityForms"),
-    fieldType: v.string(), // text, email, phone, number, select, textarea, checkbox, date
+    fieldType: v.string(), // text, email, phone, number, select, textarea, checkbox, date, camera, gps
     label: v.string(),
     required: v.boolean(),
     helpText: v.optional(v.string()),
@@ -1476,6 +1476,8 @@ export default defineSchema({
     formId: v.id("communityForms"),
     communityId: v.id("communities"),
     memberId: v.id("users"),
+    planId: v.optional(v.id("fertilizerPlans")), // Optional link to Bio Farm fertilizer plan
+    plannedSprayDate: v.optional(v.string()), // Optional planned spray date (ISO) for compliance checks
     status: v.optional(v.string()), // "DRAFT" | "SUBMITTED" — defaults to SUBMITTED for backward compat
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -1499,6 +1501,127 @@ export default defineSchema({
   })
     .index("by_response", ["responseId"])
     .index("by_field", ["fieldId"]),
+
+  /**
+   * Fertilizer Planner Config
+   * - One config document per community (Bio Farm uses this for dose/schedule logic)
+   * - All planner logic reads from this config so admin edits apply immediately
+   */
+  fertilizerConfig: defineTable({
+    communityId: v.id("communities"),
+    cropConfigs: v.array(v.object({
+      crop: v.string(),
+      doseMl: v.number(),
+      startDay: v.number(),
+      intervalDays: v.number(),
+      seasonLengthDays: v.number(),
+      stageOverrides: v.optional(v.array(v.object({
+        stage: v.string(),
+        startDayAdjust: v.optional(v.number()),
+        intervalAdjust: v.optional(v.number()),
+      }))),
+    })),
+    baselineYields: v.array(v.object({
+      crop: v.string(),
+      tonsPerAcre: v.number(),
+    })),
+    improvementFactor: v.number(),
+    bottleSizeMl: v.number(),
+    knapsacksPerAcre: v.number(),
+    waterPerKnapsackL: v.number(),
+    requiredPhotoCategories: v.array(v.string()),
+    guaranteeThresholds: v.object({
+      doseTolerancePct: v.number(),
+      scheduleDaysLateTolerance: v.number(),
+    }),
+    updatedAt: v.number(),
+    updatedBy: v.id("users"),
+  })
+    .index("by_community", ["communityId"]),
+
+  /**
+   * Fertilizer Plans
+   * - Stored computed outputs so farmers can re-open plan details later
+   */
+  fertilizerPlans: defineTable({
+    communityId: v.id("communities"),
+    farmerId: v.id("users"),
+    farmName: v.string(),
+    crop: v.string(),
+    cropStage: v.string(),
+    plantingDate: v.string(), // ISO date (YYYY-MM-DD)
+    acres: v.number(),
+    knapsacks: v.number(),
+    doseMl: v.number(),
+    intervalDays: v.number(),
+    startDay: v.number(),
+    seasonLengthDays: v.number(),
+    bottlesPerSpray: v.number(),
+    waterRequiredL: v.number(),
+    sprayDates: v.array(v.string()),
+    totalBottles: v.number(),
+    status: v.union(v.literal("active"), v.literal("completed"), v.literal("abandoned")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_farmer", ["farmerId"])
+    .index("by_community", ["communityId"])
+    .index("by_farmer_community", ["farmerId", "communityId"]),
+
+  /**
+   * Yield Guarantee Status
+   * - Eligibility state derived from dose/schedule/photo/record compliance
+   */
+  yieldGuaranteeStatus: defineTable({
+    communityId: v.id("communities"),
+    farmerId: v.id("users"),
+    planId: v.id("fertilizerPlans"),
+    eligible: v.boolean(),
+    doseCompliant: v.boolean(),
+    scheduleCompliant: v.boolean(),
+    photosComplete: v.boolean(),
+    recordsComplete: v.boolean(),
+    lastCheckedAt: v.number(),
+  })
+    .index("by_plan", ["planId"])
+    .index("by_farmer_community", ["farmerId", "communityId"]),
+
+  /**
+   * Spray Reminders
+   * - Tracks day-before, morning-of, and missed reminders per planned spray date
+   */
+  sprayReminders: defineTable({
+    communityId: v.id("communities"),
+    farmerId: v.id("users"),
+    planId: v.id("fertilizerPlans"),
+    scheduledDate: v.string(), // ISO date (YYYY-MM-DD)
+    reminderType: v.union(v.literal("day_before"), v.literal("morning_of"), v.literal("missed")),
+    sent: v.boolean(),
+    sentAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_plan", ["planId"])
+    .index("by_farmer", ["farmerId"])
+    .index("by_pending", ["sent", "scheduledDate"]),
+
+  /**
+   * Yield Projections
+   * - Stores baseline and projected yields for each fertilizer plan
+   */
+  yieldProjections: defineTable({
+    communityId: v.id("communities"),
+    farmerId: v.id("users"),
+    planId: v.id("fertilizerPlans"),
+    crop: v.string(),
+    acres: v.number(),
+    baselineYieldTons: v.number(),
+    projectedYieldTons: v.number(),
+    improvementFactor: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_plan", ["planId"])
+    .index("by_farmer_community", ["farmerId", "communityId"]),
 
   /**
    * Tracker Templates - pre-built financial tracker templates

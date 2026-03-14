@@ -9,9 +9,12 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import CommunityTabBar from "@/app/components/CommunityTabBar";
 import { useOfflineQuery } from "@/app/hooks/useOfflineQuery";
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
+import { YieldGuaranteeBadge } from "@/app/components/biofarm/YieldGuaranteeBadge";
 
 const BRAND = "#2e7d32";
 const FONT = '"Montserrat", sans-serif';
+const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
 
 const CATEGORY_COLORS: Record<string, string> = {
   revenue: "#2e7d32",
@@ -51,6 +54,16 @@ export default function MyInsightsPage() {
     userId && communityId ? { memberId: userId, communityId } : "skip"
   ) as any;
 
+  const fertilizerPlans = useOfflineQuery(
+    (api as any).fertilizerPlanner.getFarmerPlans,
+    userId && communityId === BIOFARM_COMMUNITY_ID ? { farmerId: userId, communityId } : "skip"
+  ) as any[] | undefined;
+
+  const fertilizerInsights = useOfflineQuery(
+    (api as any).fertilizerPlanner.getFertilizerInsightsData,
+    userId && communityId === BIOFARM_COMMUNITY_ID ? { farmerId: userId, communityId } : "skip"
+  ) as any;
+
   const formatUGX = (amount: number) => {
     return new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX", maximumFractionDigits: 0 }).format(amount);
   };
@@ -82,6 +95,78 @@ export default function MyInsightsPage() {
 
       {/* Content */}
       <div style={{ padding: "1rem" }}>
+        {communityId === BIOFARM_COMMUNITY_ID && (
+          <div style={{ marginBottom: "1rem", display: "grid", gap: "0.75rem" }}>
+            <div style={{ background: "#fff", border: "1px solid #d9ecd9", borderRadius: 12, padding: "0.85rem" }}>
+              <h2 style={{ margin: 0, fontSize: "1rem", color: "#1b5e20" }}>🌱 Fertilizer Planner</h2>
+              <p style={{ margin: "0.35rem 0 0", fontSize: "0.8rem", color: "#666" }}>
+                Yield guarantee and spray performance for your active plans.
+              </p>
+            </div>
+
+            {(fertilizerPlans || []).map((plan: any) => (
+              <YieldGuaranteeBadge
+                key={String(plan._id)}
+                guarantee={plan.guarantee}
+                projectedYieldTons={plan.projection?.projectedYieldTons}
+              />
+            ))}
+
+            {fertilizerInsights && (
+              <div style={{ display: "grid", gap: "0.75rem" }}>
+                <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #ececec", padding: "0.75rem" }}>
+                  <p style={{ margin: "0 0 0.45rem", fontSize: "0.85rem", fontWeight: 700, color: "#333" }}>Spray Compliance</p>
+                  <div style={{ width: "100%", height: 220 }}>
+                    <ResponsiveContainer>
+                      <BarChart data={fertilizerInsights.compliance || []}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="crop" tick={{ fontSize: 11 }} />
+                        <YAxis tick={{ fontSize: 11 }} />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="planned" fill="#9e9e9e" name="Planned" />
+                        <Bar dataKey="done" fill="#2e7d32" name="Done" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #ececec", padding: "0.75rem" }}>
+                  <p style={{ margin: "0 0 0.45rem", fontSize: "0.85rem", fontWeight: 700, color: "#333" }}>Fertilizer Use (ml by month)</p>
+                  <div style={{ width: "100%", height: 220 }}>
+                    <ResponsiveContainer>
+                      <BarChart data={fertilizerInsights.fertilizerByMonth || []}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                        <YAxis tick={{ fontSize: 11 }} />
+                        <Tooltip />
+                        <Bar dataKey="totalMl" fill="#1565c0" name="Total ml" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #ececec", padding: "0.75rem" }}>
+                  <p style={{ margin: "0 0 0.45rem", fontSize: "0.85rem", fontWeight: 700, color: "#333" }}>Yield Projection vs Baseline</p>
+                  <div style={{ width: "100%", height: 220 }}>
+                    <ResponsiveContainer>
+                      <BarChart data={fertilizerInsights.projections || []}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="crop" tick={{ fontSize: 11 }} />
+                        <YAxis tick={{ fontSize: 11 }} />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="baselineYieldTons" fill="#8d6e63" name="Baseline" />
+                        <Bar dataKey="projectedYieldTons" fill="#2e7d32" name="Projected" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {!insights && (
           <div style={{ textAlign: "center", padding: "2rem", color: "#888", background: "#fff", borderRadius: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}>
             <p style={{ fontSize: "clamp(0.95rem, 2.5vw, 1.05rem)" }}>Loading insights...</p>

@@ -12,9 +12,10 @@ import autoTable from "jspdf-autotable";
 import { BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { CommunityQRCode } from "../../components/CommunityQRCode";
 import { resolveCommunityLogo } from "../../lib/communityLogos";
+import { AdminFertilizerConfig } from "../../components/biofarm/AdminFertilizerConfig";
 
 /* ── Tab types for community cards ── */
-type CommunityTab = "members" | "noticeboard" | "messages" | "forms" | "insights";
+type CommunityTab = "members" | "noticeboard" | "messages" | "forms" | "insights" | "fertilizer";
 
 /* ── Noticeboard tab (per community) ── */
 function NoticeboardTab({ communityId, userId }: { communityId: Id<"communities">; userId: Id<"users"> }) {
@@ -695,6 +696,23 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
 
             {/* Fields */}
             <h6 style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", fontWeight: 700, color: "#333" }}>Fields</h6>
+            <div
+              style={{
+                marginBottom: "0.6rem",
+                padding: "0.55rem 0.65rem",
+                borderRadius: "8px",
+                border: "1px solid #dcedc8",
+                background: "#f1f8e9",
+                color: "#33691e",
+                fontSize: "0.76rem",
+                lineHeight: 1.45,
+              }}
+            >
+              <strong>Bio Farm Application Record labels (recommended):</strong>
+              <br />Form name: <code>Application Record</code> (or <code>Spray Day Record</code>)
+              <br />Numeric fields: <code>Fertilizer used ml</code>, <code>Acres sprayed</code>, <code>Knapsacks sprayed</code>
+              <br />Photo field labels: <code>Best leaf</code>, <code>Worst leaf</code>, <code>Whole plant</code>, <code>Flowers</code>, <code>Fruits</code>, <code>Field overview</code>
+            </div>
             {builderFields.map((field, idx) => (
               <div key={idx} style={{
                 padding: "0.75rem", borderRadius: "8px", border: "1px solid #d0d0d0",
@@ -718,6 +736,7 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
                     <option value="select">Select</option>
                     <option value="textarea">Textarea</option>
                     <option value="camera">📸 Camera Photo</option>
+                    <option value="gps">📍 GPS Location</option>
                   </select>
                   <label style={{ display: "flex", alignItems: "center", gap: "0.25rem", fontSize: "0.78rem", cursor: "pointer" }}>
                     <input
@@ -2201,9 +2220,15 @@ export default function CommunityDashboardPage() {
                 borderBottom: "2px solid #e0e0e0",
                 background: "#fafafa",
               }}>
-                {(["members", "noticeboard", "messages", "forms", "insights"] as CommunityTab[]).map((tab) => {
+                {((
+                  (currentUser as any)?.adminLevel === "super" ||
+                  (currentUser as any)?.adminLevel === undefined ||
+                  resolvedAdminCategory === "community"
+                    ? ["members", "noticeboard", "messages", "forms", "insights", "fertilizer"]
+                    : ["members", "noticeboard", "messages", "forms", "insights"]
+                ) as CommunityTab[]).map((tab) => {
                   const active = getActiveTab(communityId) === tab;
-                  const labels: Record<CommunityTab, string> = { members: "Members", noticeboard: "Noticeboard", messages: "Messages", forms: "Forms", insights: "📊 Insights" };
+                  const labels: Record<CommunityTab, string> = { members: "Members", noticeboard: "Noticeboard", messages: "Messages", forms: "Forms", insights: "📊 Insights", fertilizer: "🌱 Fertilizer" };
                   return (
                     <button
                       key={tab}
@@ -2246,6 +2271,11 @@ export default function CommunityDashboardPage() {
               {/* ── Insights Tab ── */}
               {getActiveTab(communityId) === "insights" && (
                 <InsightsTab communityId={communityId} userId={userId!} />
+              )}
+
+              {/* ── Fertilizer Tab ── */}
+              {getActiveTab(communityId) === "fertilizer" && (
+                <AdminFertilizerConfig communityId={communityId} userId={userId!} />
               )}
 
               {/* ── Members Tab (existing content) ── */}

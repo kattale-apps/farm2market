@@ -179,6 +179,87 @@ function CoinPlantAnimation({
 }
 
 // ─── Field Renderer ─────────────────────────────────────────────────
+function GpsFieldInput({
+  value,
+  onChange,
+  baseStyle,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  baseStyle: React.CSSProperties;
+}) {
+  const [capturing, setCapturing] = useState(false);
+  const [gpsError, setGpsError] = useState<string | null>(null);
+
+  const captureGps = useCallback(() => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setGpsError("Geolocation not available on this device.");
+      return;
+    }
+
+    setCapturing(true);
+    setGpsError(null);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = position.coords.latitude.toFixed(6);
+        const lng = position.coords.longitude.toFixed(6);
+        const accuracy = Math.round(position.coords.accuracy);
+        onChange(`${lat}, ${lng} (±${accuracy}m)`);
+        setCapturing(false);
+      },
+      (err) => {
+        setGpsError(err.message || "Unable to read GPS location.");
+        setCapturing(false);
+      },
+      { enableHighAccuracy: true, timeout: 15000 }
+    );
+  }, [onChange]);
+
+  useEffect(() => {
+    if (!value) {
+      captureGps();
+    }
+  }, [value, captureGps]);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="GPS coordinates"
+          style={baseStyle}
+        />
+        <button
+          type="button"
+          onClick={captureGps}
+          disabled={capturing}
+          style={{
+            padding: "0.55rem 0.8rem",
+            borderRadius: 10,
+            border: "1px solid #ccc",
+            background: "#fff",
+            color: "#333",
+            fontFamily: FONT,
+            fontSize: "0.85rem",
+            fontWeight: 600,
+            cursor: capturing ? "not-allowed" : "pointer",
+            minWidth: 96,
+          }}
+        >
+          {capturing ? "Locating..." : "📍 Refresh"}
+        </button>
+      </div>
+      {gpsError && (
+        <p style={{ margin: 0, color: "#c62828", fontSize: "0.78rem" }}>
+          {gpsError}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function FieldInput({
   field,
   value,
@@ -283,6 +364,9 @@ function FieldInput({
       </div>
     );
   }
+  if (field.fieldType === "gps") {
+    return <GpsFieldInput value={value} onChange={onChange} baseStyle={baseStyle} />;
+  }
   return (
     <input
       type={field.fieldType === "number" ? "number" : field.fieldType === "date" ? "date" : field.fieldType === "email" ? "email" : "text"}
@@ -303,6 +387,8 @@ export default function TrackerFillPage() {
   const router = useRouter();
   const communityId = searchParams.get("communityId") as Id<"communities"> | null;
   const formId = searchParams.get("formId") as Id<"communityForms"> | null;
+  const planId = searchParams.get("planId") as Id<"fertilizerPlans"> | null;
+  const plannedSprayDate = searchParams.get("plannedSprayDate");
   const [userId, setUserId] = useState<Id<"users"> | null>(null);
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -356,7 +442,7 @@ export default function TrackerFillPage() {
     }
   }, [existingDraft, draftLoaded]);
 
-  const autoSave = useCallback(() => {
+  const autoSave = () => {
     if (!formId || !communityId || !userId || Object.keys(fieldValues).length === 0) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
@@ -366,11 +452,18 @@ export default function TrackerFillPage() {
           fieldId: fieldId as Id<"formFields">,
           value: value || "",
         }));
-        await saveDraft({ formId, communityId, memberId: userId, fieldValues: fvArray });
+        await saveDraft({
+          formId,
+          communityId,
+          memberId: userId,
+          planId: planId || undefined,
+          plannedSprayDate: plannedSprayDate || undefined,
+          fieldValues: fvArray,
+        });
       } catch {}
       setSaving(false);
     }, 800);
-  }, [fieldValues, formId, communityId, userId, saveDraft]);
+  };
 
   const handleFieldChange = (fieldId: string, value: string) => {
     const next = { ...fieldValues, [fieldId]: value };
@@ -416,8 +509,20 @@ export default function TrackerFillPage() {
           fieldId: fieldId as Id<"formFields">,
           value: value || "",
         }));
-        await saveDraft({ formId, communityId, memberId: userId, fieldValues: fvArray });
-        const submitResult = await submitDraft({ responseId: existingDraft._id, memberId: userId });
+        await saveDraft({
+          formId,
+          communityId,
+          memberId: userId,
+          planId: planId || undefined,
+          plannedSprayDate: plannedSprayDate || undefined,
+          fieldValues: fvArray,
+        });
+        const submitResult = await submitDraft({
+          responseId: existingDraft._id,
+          memberId: userId,
+          planId: planId || undefined,
+          plannedSprayDate: plannedSprayDate || undefined,
+        });
         responseId = existingDraft._id;
         // If offline-queued, show optimistic coin animation and clear local draft
         if (submitResult && (submitResult as any).queued) {
@@ -438,7 +543,14 @@ export default function TrackerFillPage() {
         const fvArray = Object.entries(fieldValues)
           .filter(([_, value]) => value !== "")
           .map(([fieldId, value]) => ({ fieldId: fieldId as Id<"formFields">, value }));
-        const result = await submitFormResponse({ formId, communityId, memberId: userId, fieldValues: fvArray });
+        const result = await submitFormResponse({
+          formId,
+          communityId,
+          memberId: userId,
+          planId: planId || undefined,
+          plannedSprayDate: plannedSprayDate || undefined,
+          fieldValues: fvArray,
+        });
         // If offline-queued, show optimistic coin animation
         if (result && (result as any).queued) {
           const fields = formDetails?.fields || [];

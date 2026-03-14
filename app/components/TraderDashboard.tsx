@@ -811,7 +811,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
                 </div>
                 <div style={{ color: "#666", fontSize: "0.9rem", marginBottom: "0.5rem" }}>Last 10 transactions</div>
                 <div style={{ display: "grid", gap: "0.35rem" }}>
-                  {farmcoinSummary.recent?.length ? (
+                  {Array.isArray(farmcoinSummary?.recent) && farmcoinSummary.recent.length > 0 ? (
                     farmcoinSummary.recent.map((entry: any, idx: number) => (
                       <div key={idx} style={{
                         display: "flex",
@@ -1893,7 +1893,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
                   </div>
                   <div style={{ color: "#666", fontSize: "0.9rem", marginBottom: "0.5rem" }}>Last 10 transactions</div>
                   <div style={{ display: "grid", gap: "0.35rem" }}>
-                    {farmcoinSummary.recent?.length ? (
+                    {Array.isArray(farmcoinSummary?.recent) && farmcoinSummary.recent.length > 0 ? (
                       farmcoinSummary.recent.map((entry: any, idx: number) => (
                         <div key={idx} style={{
                           display: "flex",

@@ -220,6 +220,8 @@ function MessagesTab({ communityId, userId }: { communityId: Id<"communities">; 
     return "";
   };
 
+  const getSenderName = (m: any) => m.userAlias || m.userId || "Unknown";
+
   return (
     <div style={{ padding: "1.5rem", display: "flex", flexDirection: "column" }}>
       {/* Targeting Controls */}
@@ -328,6 +330,9 @@ function MessagesTab({ communityId, userId }: { communityId: Id<"communities">; 
         <div style={{ marginTop: "0.5rem", fontSize: "0.78rem", color: "#666" }}>
           Sending to: <strong>{getTargetLabel()}</strong>
         </div>
+        <div style={{ fontSize: "0.7rem", color: "#555", marginTop: "0.15rem" }}>
+          Tip: use <strong>Individual</strong> for private replies and <strong>All</strong> for community broadcasts.
+        </div>
       </div>
 
       {/* Messages feed */}
@@ -365,6 +370,9 @@ function MessagesTab({ communityId, userId }: { communityId: Id<"communities">; 
                     border: isMine ? "none" : "1px solid #e0e0e0",
                     fontSize: "0.88rem",
                   }}>
+                    <p style={{ margin: "0 0 0.2rem 0", fontSize: "0.72rem", opacity: 0.8, fontWeight: 600 }}>
+                      From: {getSenderName(m)}
+                    </p>
                     {m.text && <p style={{ margin: 0 }}>{m.text}</p>}
                     {m.imageStorageId && <span style={{ fontSize: "0.8rem" }}>📸 Image</span>}
                     <div style={{

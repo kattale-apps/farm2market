@@ -435,7 +435,22 @@ export const sendTextMessage = mutation({
     replyToPostId: v.optional(v.id("noticeboardPosts")),
   },
   handler: async (ctx, args) => {
-    // Verify user is a member of the community
+    const community = await ctx.db.get(args.communityId);
+    if (!community) {
+      throw new Error("Community not found");
+    }
+
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    const userIsSuperAdmin = user.role === "admin" && isSuperAdmin(user as any);
+    const assignedCommunityIds: string[] = ((user as any).assignedCommunityIds || []).map((id: any) => String(id));
+    const userIsCommunityAdmin =
+      user.role === "admin" &&
+      ((community as any).communityAdminId === user._id || assignedCommunityIds.includes(String(args.communityId)));
+
     const membership = await ctx.db
       .query("communityMemberships")
       .withIndex("by_community_user", (q) =>
@@ -443,7 +458,7 @@ export const sendTextMessage = mutation({
       )
       .first();
 
-    if (!membership) {
+    if (!membership && !userIsSuperAdmin && !userIsCommunityAdmin) {
       throw new Error("User is not a member of this community");
     }
 

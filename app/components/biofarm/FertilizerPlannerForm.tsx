@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "convex/react";
 import { Id } from "@/convex/_generated/dataModel";
 import { api } from "@/convex/_generated/api";
 import { useOfflineMutation } from "@/app/hooks/useOfflineMutation";
 
-const CROPS = [
+const CROPS: string[] = [
   "Coffee",
   "Wheat / Barley",
   "Leafy vegetables",
@@ -23,7 +24,7 @@ const CROPS = [
   "Bananas",
 ];
 
-const STAGES = [
+const STAGES: string[] = [
   "Seedling / Nursery",
   "Vegetative",
   "Flowering",
@@ -42,13 +43,25 @@ export function FertilizerPlannerForm({
   onCancel: () => void;
 }) {
   const createPlan = useOfflineMutation((api as any).fertilizerPlanner.createFertilizerPlan);
+  const config = useQuery((api as any).fertilizerPlanner.getFertilizerConfig, { communityId }) as any;
+  const availableCrops: string[] = useMemo(() => {
+    const list = (config?.cropConfigs || []).map((item: any) => String(item.crop || "")).filter(Boolean);
+    return list.length > 0 ? list : CROPS;
+  }, [config]);
+
   const [farmName, setFarmName] = useState("");
-  const [crop, setCrop] = useState("Maize");
+  const [crop, setCrop] = useState(availableCrops[0] || "Maize");
   const [plantingDate, setPlantingDate] = useState("");
   const [acres, setAcres] = useState("");
   const [cropStage, setCropStage] = useState("Vegetative");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (availableCrops.length > 0 && !availableCrops.includes(crop)) {
+      setCrop(availableCrops[0]);
+    }
+  }, [availableCrops, crop]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,7 +120,7 @@ export function FertilizerPlannerForm({
           onChange={(e) => setCrop(e.target.value)}
           style={{ padding: "0.6rem", borderRadius: 8, border: "1px solid #ccc", fontSize: "0.9rem" }}
         >
-          {CROPS.map((item) => (
+          {availableCrops.map((item: string) => (
             <option key={item} value={item}>{item}</option>
           ))}
         </select>

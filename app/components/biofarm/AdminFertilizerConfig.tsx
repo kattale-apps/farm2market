@@ -35,7 +35,15 @@ export function AdminFertilizerConfig({
   const [draft, setDraft] = useState<ConfigState | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [newCropName, setNewCropName] = useState("");
   const [tab, setTab] = useState<"doses" | "schedules" | "yields" | "system" | "guarantee">("doses");
+
+  const defaultStageOverrides = [
+    { stage: "Seedling / Nursery", startDayAdjust: 7, intervalAdjust: 0 },
+    { stage: "Vegetative", startDayAdjust: 0, intervalAdjust: 0 },
+    { stage: "Flowering", startDayAdjust: 0, intervalAdjust: -2 },
+    { stage: "Established perennial", startDayAdjust: 0, intervalAdjust: 0 },
+  ];
 
   useEffect(() => {
     if (config) {
@@ -95,8 +103,11 @@ export function AdminFertilizerConfig({
       {tab === "doses" && (
         <div style={{ display: "grid", gap: "0.45rem" }}>
           {draft.cropConfigs.map((crop, idx) => (
-            <div key={crop.crop} style={{ display: "grid", gridTemplateColumns: "1fr 110px", gap: "0.5rem", alignItems: "center" }}>
-              <span style={{ fontSize: "0.85rem", color: "#333" }}>{crop.crop}</span>
+            <div
+              key={`${crop.crop}-${idx}`}
+              style={{ display: "grid", gridTemplateColumns: "1fr 110px 80px", gap: "0.5rem", alignItems: "center" }}
+            >
+              <span style={{ fontSize: "0.85rem", color: "#333", overflowWrap: "anywhere" }}>{crop.crop}</span>
               <input
                 type="number"
                 value={crop.doseMl}
@@ -107,8 +118,51 @@ export function AdminFertilizerConfig({
                 }}
                 style={{ padding: "0.45rem", borderRadius: 8, border: "1px solid #ccc" }}
               />
+              <button
+                type="button"
+                onClick={() => {
+                  setDraft({ ...draft, cropConfigs: draft.cropConfigs.filter((_, i) => i !== idx) });
+                }}
+                style={{ borderRadius: 8, border: "1px solid #ccc", padding: "0.35rem", background: "#fff", cursor: "pointer" }}
+              >
+                Remove
+              </button>
             </div>
           ))}
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 110px", gap: "0.5rem", alignItems: "center", marginTop: "0.4rem" }}>
+            <input
+              value={newCropName}
+              onChange={(e) => setNewCropName(e.target.value)}
+              placeholder="New crop name"
+              style={{ padding: "0.45rem", borderRadius: 8, border: "1px solid #ccc" }}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                const candidate = newCropName.trim();
+                if (!candidate) return;
+                if (draft.cropConfigs.some((c) => c.crop.toLowerCase() === candidate.toLowerCase())) {
+                  setMessage("Crop already exists");
+                  return;
+                }
+                const newCrop = {
+                  crop: candidate,
+                  doseMl: 55,
+                  startDay: 14,
+                  intervalDays: 12,
+                  seasonLengthDays: 120,
+                  stageOverrides: draft.cropConfigs[0]?.stageOverrides || defaultStageOverrides,
+                };
+                setDraft({ ...draft, cropConfigs: [...draft.cropConfigs, newCrop] });
+                setNewCropName("");
+                setMessage(null);
+              }}
+              style={{ borderRadius: 8, border: "1px solid #2e7d32", background: "#2e7d32", color: "#fff", cursor: "pointer", fontWeight: 700 }}
+            >
+              + Add crop
+            </button>
+          </div>
         </div>
       )}
 

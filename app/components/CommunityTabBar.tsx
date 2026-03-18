@@ -39,7 +39,7 @@ export default function CommunityTabBar() {
       boxShadow: "0 -2px 8px rgba(0,0,0,0.08)",
       gap: "0.25rem",
     }}>
-      {TABS.map((tab) => {
+      {Array.isArray(TABS) && TABS.length > 0 ? TABS.map((tab) => {
         const isActive = pathname === tab.path || pathname?.startsWith(tab.path + "/");
         const href = communityId ? `${tab.path}?communityId=${communityId}` : tab.path;
         return (
@@ -70,7 +70,7 @@ export default function CommunityTabBar() {
             <span>{tab.label}</span>
           </Link>
         );
-      })}
+      }) : null}
     </nav>
   );
 }

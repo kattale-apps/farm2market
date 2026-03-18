@@ -418,7 +418,7 @@ function MessagesList({ communityId, userId, onReply }: { communityId: Id<"commu
         return (
           <div key={message._id} className="flex justify-start">
             <div className="flex flex-col gap-1">
-              <div className="bg-white rounded-2xl rounded-tl-none px-4 py-2 max-w-xs break-words border border-gray-200">
+              <div className="rounded-2xl rounded-tl-none px-4 py-2 max-w-xs break-words" style={{ background: "#fff", border: "1px solid #e0e0e0", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>
                 <p className="text-xs text-gray-500 mb-1">From: <strong>{message.userAlias || message.userId || 'Unknown'}</strong></p>
                 {message.text && (
                   <p className="text-gray-800 text-sm">{message.text}</p>

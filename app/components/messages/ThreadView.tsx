@@ -126,9 +126,9 @@ export function ThreadView({ userId, utid, onClose }: ThreadViewProps) {
         }}
       >
         {thread === undefined ? (
-          <p style={{ textAlign: "center", color: "#999" }}>Loading messages...</p>
+          <p style={{ textAlign: "center", color: "#999", background: "#fff", padding: "1rem", borderRadius: "8px", border: "1px solid #e0e0e0", margin: "1rem 0" }}>Loading messages...</p>
         ) : thread.length === 0 ? (
-          <p style={{ textAlign: "center", color: "#666" }}>No messages yet. Start the conversation!</p>
+          <p style={{ textAlign: "center", color: "#666", background: "#fff", padding: "1rem", borderRadius: "8px", border: "1px solid #e0e0e0", margin: "1rem 0" }}>No messages yet. Start the conversation!</p>
         ) : (
           thread.map((msg: any) => (
             <div
@@ -144,16 +144,18 @@ export function ThreadView({ userId, utid, onClose }: ThreadViewProps) {
                   maxWidth: "85%",
                   padding: "0.75rem 1rem",
                   borderRadius: "12px",
-                  background: msg.isFromMe ? "#4caf50" : "#fff",
+                  background: msg.isFromMe ? "#45a049" : "#fff",
                   color: msg.isFromMe ? "white" : "#333",
-                  border: msg.isFromMe ? "none" : "1px solid #ddd",
+                  border: msg.isFromMe ? "1px solid #45a049" : "1px solid #e0e0e0",
+                  boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                  wordBreak: "break-word",
                 }}
               >
-                <div style={{ fontSize: "0.85rem", marginBottom: "0.25rem", opacity: 0.8 }}>
+                <div style={{ fontSize: "0.85rem", marginBottom: "0.25rem", opacity: 0.9, fontWeight: msg.isFromMe ? "normal" : "600" }}>
                   {msg.isFromMe ? "You" : msg.fromAlias}
                 </div>
-                <div>{msg.message}</div>
-                <div style={{ fontSize: "0.75rem", marginTop: "0.25rem", opacity: 0.7 }}>
+                <div style={{ fontSize: "0.95rem", lineHeight: "1.4" }}>{msg.message}</div>
+                <div style={{ fontSize: "0.75rem", marginTop: "0.25rem", opacity: msg.isFromMe ? 0.8 : 0.6 }}>
                   {new Date(msg.createdAt).toLocaleString()}
                 </div>
               </div>

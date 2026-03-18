@@ -298,9 +298,9 @@ export default function MemberMessagingFeed() {
                 ) : (
                   getRepliesForPost(post._id).map((reply) => (
                     <div key={reply._id} className="flex justify-start">
-                      <div className="bg-gray-200 rounded-2xl rounded-tl px-4 py-2 max-w-[75%]">
-                        <p className="text-xs text-gray-600 font-medium mb-1">Member</p>
-                        {reply.text && <p className="text-sm text-gray-900">{reply.text}</p>}
+                      <div className="rounded-2xl rounded-tl px-4 py-2 max-w-[75%]" style={{ background: "#fff", border: "1px solid #e0e0e0", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>
+                        <p className="text-xs text-gray-600 font-semibold mb-1" style={{ opacity: 0.9 }}>Member</p>
+                        {reply.text && <p className="text-sm text-gray-900" style={{ fontSize: "0.95rem", lineHeight: "1.4" }}>{reply.text}</p>}
                         {reply.imageStorageId && (
                           <div className="mt-2 bg-gray-300 rounded w-32 h-32 flex items-center justify-center text-xs text-gray-600">
                             Image

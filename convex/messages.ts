@@ -858,6 +858,7 @@ export const sendTargetedCommunityMessage = mutation({
     ),
     targetUserIds: v.optional(v.array(v.id("users"))),
     targetRole: v.optional(v.string()),
+    replyToPostId: v.optional(v.id("noticeboardPosts")),
   },
   handler: async (ctx, args) => {
     if (!args.text.trim()) throw new Error("Message cannot be empty");
@@ -870,7 +871,7 @@ export const sendTargetedCommunityMessage = mutation({
       userId: args.userId,
       imageStorageId: undefined,
       text: args.text.trim(),
-      replyToPostId: undefined,
+      replyToPostId: args.replyToPostId,
       createdAt,
     });
 
@@ -890,6 +891,7 @@ export const sendTargetedCommunityMessage = mutation({
       userId: args.userId,
       text: args.text,
       targetType: args.targetType,
+      replyToPostId: args.replyToPostId,
       createdAt,
     };
   },

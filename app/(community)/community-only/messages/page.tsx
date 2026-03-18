@@ -87,29 +87,17 @@ function BottomSheet({ isOpen, onClose, onSelectImage }: { isOpen: boolean; onCl
   );
 }
 
-function MessageComposer({ communityId }: { communityId: Id<"communities"> }) {
+function MessageComposer({ communityId, userId, replyToMessage, onClearReply }: { communityId: Id<"communities">; userId: Id<"users"> | null; replyToMessage?: any; onClearReply: () => void }) {
   const [text, setText] = useState("");
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const sendTextMessage = useMutation(api.messages.sendTextMessage);
-  const sendMessageWithImage = useMutation(api.messages.sendMessageWithImage);
-
-  const userId = (() => {
-    try {
-      const raw = localStorage.getItem("pilot_user");
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      return (parsed?.userId || parsed?._id || parsed?.id || parsed) as Id<"users">;
-    } catch {
-      return localStorage.getItem("pilot_user") as Id<"users"> | null;
-    }
-  })();
+  const sendTargetedMessage = useMutation(api.messages.sendTargetedCommunityMessage);
 
   const handleImageSelect = (file: File) => {
     setSelectedImage(file);
-    // Create preview URL
     const reader = new FileReader();
     reader.onloadend = () => {
       setImagePreviewUrl(reader.result as string);
@@ -128,41 +116,28 @@ function MessageComposer({ communityId }: { communityId: Id<"communities"> }) {
 
     setIsSubmitting(true);
     try {
-      if (selectedImage && !text.trim()) {
-        // Image only - send with placeholder text
+      const messageText = selectedImage && !text.trim() ? "📷 [Image attached]" : `${text.trim()}${selectedImage ? " 📷" : ""}`;
+      if (replyToMessage) {
+        await sendTargetedMessage({
+          communityId,
+          userId,
+          text: messageText,
+          targetType: "individual",
+          targetUserIds: [replyToMessage.userId],
+          replyToPostId: replyToMessage._id,
+        });
+        onClearReply();
+      } else {
         await sendTextMessage({
           communityId,
           userId,
-          text: "📷 [Image attached]",
+          text: messageText,
           replyToPostId: undefined,
         });
-        clearImage();
-        return;
       }
 
-      if (selectedImage) {
-        // Text + Image message - send text for now, image upload TBD
-        await sendTextMessage({
-          communityId,
-          userId,
-          text: `${text.trim()} 📷`,
-          replyToPostId: undefined,
-        });
-        setText("");
-        clearImage();
-        return;
-      }
-
-      // Text only message
-      if (text.trim()) {
-        await sendTextMessage({
-          communityId,
-          userId,
-          text: text.trim(),
-          replyToPostId: undefined,
-        });
-        setText("");
-      }
+      setText("");
+      clearImage();
     } catch (error) {
       console.error("Failed to send message:", error);
       alert("Failed to send message. Please try again.");
@@ -203,6 +178,14 @@ function MessageComposer({ communityId }: { communityId: Id<"communities"> }) {
 
       {/* Composer Section */}
       <form onSubmit={handleSubmit} className="p-3">
+        {replyToMessage && (
+          <div className="mb-2 p-2 rounded-lg bg-blue-50 border border-blue-100 text-xs text-blue-800 flex items-center justify-between">
+            <div>
+              Replying to <strong>{replyToMessage.userAlias || replyToMessage.userId}</strong>: {String(replyToMessage.text || '').slice(0, 60)}
+            </div>
+            <button type="button" onClick={onClearReply} className="text-blue-600 font-semibold underline">Cancel</button>
+          </div>
+        )}
         {/* Free Text Label */}
         <p style={{ fontSize: "0.75rem", color: "#666", fontWeight: 600, marginBottom: 6, fontFamily: '"Montserrat", sans-serif' }}>
           Text messages are free
@@ -293,18 +276,7 @@ function MessageComposer({ communityId }: { communityId: Id<"communities"> }) {
   );
 }
 
-function MessagesList({ communityId }: { communityId: Id<"communities"> }) {
-  const userId = (() => {
-    try {
-      const raw = localStorage.getItem("pilot_user");
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      return (parsed?.userId || parsed?._id || parsed?.id || parsed) as Id<"users">;
-    } catch {
-      return localStorage.getItem("pilot_user") as Id<"users"> | null;
-    }
-  })();
-
+function MessagesList({ communityId, userId, onReply }: { communityId: Id<"communities">; userId: Id<"users"> | null; onReply: (message: any) => void }) {
   const messages = useOfflineQuery(api.messages.getCommunityMessages, {
     communityId,
     userId: userId || undefined,
@@ -446,7 +418,7 @@ function MessagesList({ communityId }: { communityId: Id<"communities"> }) {
         return (
           <div key={message._id} className="flex justify-start">
             <div className="flex flex-col gap-1">
-              <div className="bg-gray-100 rounded-2xl rounded-tl-none px-4 py-2 max-w-xs break-words">
+              <div className="bg-white rounded-2xl rounded-tl-none px-4 py-2 max-w-xs break-words border border-gray-200">
                 {message.text && (
                   <p className="text-gray-800 text-sm">{message.text}</p>
                 )}
@@ -458,6 +430,13 @@ function MessagesList({ communityId }: { communityId: Id<"communities"> }) {
                 <div className="text-xs text-gray-500 mt-1">
                   {new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </div>
+                <button
+                  onClick={() => onReply(message)}
+                  className="mt-1 text-xs font-medium text-blue-600 hover:text-blue-800"
+                  style={{ background: 'transparent', border: 'none', padding: 0 }}
+                >
+                  ↩ Reply
+                </button>
               </div>
 
               {/* Like/Dislike Buttons */}
@@ -514,11 +493,22 @@ function MessagesList({ communityId }: { communityId: Id<"communities"> }) {
 export default function CommunityMessagingPage() {
   const searchParams = useSearchParams();
   const communityIdParam = searchParams.get("communityId") || "";
-  
+
   const [communityId, setCommunityId] = useState<Id<"communities"> | null>(null);
+  const [replyToMessage, setReplyToMessage] = useState<any>(null);
+
+  const userId = useMemo(() => {
+    try {
+      const raw = localStorage.getItem("pilot_user");
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return (parsed?.userId || parsed?._id || parsed?.id || parsed) as Id<"users">;
+    } catch {
+      return localStorage.getItem("pilot_user") as Id<"users"> | null;
+    }
+  }, []);
 
   useEffect(() => {
-    // Get community ID from URL params
     if (communityIdParam) {
       setCommunityId(communityIdParam as Id<"communities">);
     }
@@ -539,28 +529,25 @@ export default function CommunityMessagingPage() {
   }
 
   return (
-      <div className="flex flex-col h-screen bg-white">
-        {/* Header */}
-        <div style={{
-          background: "linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%)",
-          padding: "1.25rem 1rem",
-          color: "#fff",
-        }}>
-          <h1 style={{ margin: 0, fontSize: "1.3rem", fontWeight: 700, fontFamily: '"Montserrat", sans-serif' }}>
-            💬 Messages
-          </h1>
-        </div>
-
-        {/* Messages Container - Scrollable */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          <MessagesList communityId={communityId} />
-        </div>
-
-        {/* Message Composer - Fixed Footer with safe area */}
-        <div className="pb-safe">
-          <MessageComposer communityId={communityId} />
-        </div>
-        <CommunityTabBar />
+    <div className="flex flex-col h-screen bg-white">
+      <div style={{
+        background: "linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%)",
+        padding: "1.25rem 1rem",
+        color: "#fff",
+      }}>
+        <h1 style={{ margin: 0, fontSize: "1.3rem", fontWeight: 700, fontFamily: '"Montserrat", sans-serif' }}>
+          💬 Messages
+        </h1>
       </div>
+
+      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        <MessagesList communityId={communityId} userId={userId} onReply={setReplyToMessage} />
+      </div>
+
+      <div className="pb-safe">
+        <MessageComposer communityId={communityId} userId={userId} replyToMessage={replyToMessage} onClearReply={() => setReplyToMessage(null)} />
+      </div>
+      <CommunityTabBar />
+    </div>
   );
 }

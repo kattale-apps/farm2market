@@ -3,7 +3,7 @@
 export const dynamic = "force-dynamic";
 
 import { api } from "@/convex/_generated/api";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { Id } from "@/convex/_generated/dataModel";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -34,7 +34,40 @@ const CATEGORY_LABELS: Record<string, string> = {
   custom: "Custom",
 };
 
-export default function MyInsightsPage() {
+export default function MyInsightsPageWrapper() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <MyInsightsPage />
+    </Suspense>
+  );
+}
+
+function LoadingFallback() {
+  const FONT = '"Montserrat", sans-serif';
+  return (
+    <div style={{ fontFamily: FONT, paddingBottom: "5rem" }}>
+      <div style={{
+        background: "linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%)",
+        padding: "1.25rem 1rem",
+        color: "#fff",
+      }}>
+        <h1 style={{ margin: 0, fontSize: "1.3rem", fontWeight: 700 }}>
+          📈 My Performance Insights
+        </h1>
+        <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.85rem", opacity: 0.9, fontStyle: "italic" }}>
+          Know Your Numbers
+        </p>
+      </div>
+      <div style={{ padding: "1rem" }}>
+        <div style={{ textAlign: "center", padding: "2rem", color: "#888", background: "#fff", borderRadius: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}>
+          <p style={{ fontSize: "clamp(0.95rem, 2.5vw, 1.05rem)" }}>Loading insights...</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MyInsightsPage() {
   const searchParams = useSearchParams();
   const communityId = searchParams.get("communityId") as Id<"communities"> | null;
   const [userId, setUserId] = useState<Id<"users"> | null>(null);

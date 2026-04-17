@@ -58,3 +58,10 @@ export const RATE_LIMITS = {
  * All test users share this password during pilot phase
  */
 export const PILOT_SHARED_PASSWORD = "Farm2Market2024";
+
+/**
+ * BCU Community: Preset Password for Bulk-Imported Members
+ * Used when junior admins activate imported community members
+ * Format: farmer_[phone]@bcu.com with this preset password
+ */
+export const BCU_PRESET_PASSWORD = "bcu2026";

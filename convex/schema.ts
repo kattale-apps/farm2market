@@ -1737,4 +1737,29 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_userId", ["userId"]),
+
+  /**
+   * Community Imported Members
+   * - Placeholder entries for bulk-imported community members before account creation
+   * - Used by junior community admins to upload and manage member lists
+   * - Isolated from communityMembers/communityApplications to avoid breaking existing flows
+   */
+  communityImportedMembers: defineTable({
+    communityId: v.id("communities"),
+    fullName: v.string(),
+    phoneNumber: v.string(), // Unique within community
+    email: v.optional(v.string()),
+    communityRole: v.optional(v.string()),
+    status: v.union(v.literal("IMPORTED"), v.literal("ACTIVATED")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    accountUserId: v.optional(v.id("users")), // Links to created account after activation
+    presetPasswordHash: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    // Store all additional Excel columns as flexible JSON data
+    additionalData: v.optional(v.any()),
+  })
+    .index("by_community", ["communityId"])
+    .index("by_phone", ["phoneNumber"])
+    .index("by_community_status", ["communityId", "status"]),
 });

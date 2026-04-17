@@ -11,6 +11,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { CommunityQRCode } from "../../components/CommunityQRCode";
+import { CommunityMemberCard } from "../../components/CommunityMemberCard";
 import { resolveCommunityLogo } from "../../lib/communityLogos";
 import { AdminFertilizerConfig } from "../../components/biofarm/AdminFertilizerConfig";
 
@@ -1328,7 +1329,7 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
                 </div>
 
                 {/* Charts grid */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "1rem" }}>
                   {/* Role Distribution (donut) */}
                   <div style={{ background: "#fafafa", borderRadius: "10px", border: "1px solid #eee", padding: "1rem" }}>
                     <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", fontWeight: 700, color: "#333" }}>Distribution of Members by Role</h4>
@@ -1400,7 +1401,7 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
 
                 {/* Full-width charts below the grid */}
                 {memberInsights.hasFarmData && (
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginTop: "1rem" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "1rem", marginTop: "1rem" }}>
                     {/* Farm Size Histogram */}
                     <div style={{ background: "#fafafa", borderRadius: "10px", border: "1px solid #eee", padding: "1rem" }}>
                       <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", fontWeight: 700, color: "#333" }}>Distribution of Farm Size (Acres)</h4>
@@ -1435,7 +1436,7 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
 
                 {/* Region & Supply Chain Role charts (only if data exists) */}
                 {(memberInsights.regionData.length > 0 || memberInsights.scRoleData.length > 0) && (
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginTop: "1rem" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "1rem", marginTop: "1rem" }}>
                     {memberInsights.regionData.length > 0 && (
                       <div style={{ background: "#fafafa", borderRadius: "10px", border: "1px solid #eee", padding: "1rem" }}>
                         <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", fontWeight: 700, color: "#333" }}>Members by Region</h4>
@@ -1705,15 +1706,22 @@ export default function CommunityDashboardPage() {
   const rejectApplication = useMutation(api.communityApplications.rejectApplication);
   const revokeMembership = useMutation(api.communityApplications.revokeMembership);
 
+  // Community imports mutations
+  const importCommunityMembersFromExcel = useMutation(api.communityImports.importCommunityMembersFromExcel);
+  const activateImportedCommunityMember = useMutation(api.communityImports.activateImportedCommunityMember);
+
   const [pendingPage, setPendingPage] = useState(1);
   const [pendingPageSize, setPendingPageSize] = useState(20);
   const [approvedPage, setApprovedPage] = useState(1);
   const [approvedPageSize, setApprovedPageSize] = useState(20);
   const [membersPage, setMembersPage] = useState(1);
   const [membersPageSize, setMembersPageSize] = useState(20);
+  const [importedMembersPage, setImportedMembersPage] = useState(1);
+  const [importedMembersPageSize, setImportedMembersPageSize] = useState(20);
   const pendingPageKey = "community_pending_applications";
   const approvedPageKey = "community_approved_members";
   const membersPageKey = "community_members_list";
+  const importedMembersPageKey = "community_imported_members";
 
   // Tab state per community
   const [activeTabs, setActiveTabs] = useState<Record<string, CommunityTab>>({});
@@ -1721,12 +1729,37 @@ export default function CommunityDashboardPage() {
   const setActiveTab = (cId: string, tab: CommunityTab) =>
     setActiveTabs((prev) => ({ ...prev, [cId]: tab }));
 
+  // Upload state for community imports
+  const [uploadStateByComm, setUploadStateByComm] = useState<Record<string, {
+    file: File | null;
+    isUploading: boolean;
+    parsedRows: any[];
+    showPreview: boolean;
+    importResults: { success: any[]; errors: any[] } | null;
+  }>>({});
+
+  const getUploadState = (cId: string) => uploadStateByComm[cId] || {
+    file: null,
+    isUploading: false,
+    parsedRows: [],
+    showPreview: false,
+    importResults: null,
+  };
+
+  const setUploadState = (cId: string, updates: Partial<typeof uploadStateByComm[string]>) => {
+    setUploadStateByComm((prev) => ({
+      ...prev,
+      [cId]: { ...getUploadState(cId), ...updates },
+    }));
+  };
+
   useEffect(() => {
     if (!paginationPreferences) return;
     const defaultSize = paginationPreferences.defaultPageSize ?? 20;
     const nextPending = paginationPreferences.list?.[pendingPageKey] ?? defaultSize;
     const nextApproved = paginationPreferences.list?.[approvedPageKey] ?? defaultSize;
     const nextMembers = paginationPreferences.list?.[membersPageKey] ?? defaultSize;
+    const nextImported = paginationPreferences.list?.[importedMembersPageKey] ?? defaultSize;
     if (nextPending !== pendingPageSize) {
       setPendingPageSize(nextPending);
       setPendingPage(1);
@@ -1739,7 +1772,11 @@ export default function CommunityDashboardPage() {
       setMembersPageSize(nextMembers);
       setMembersPage(1);
     }
-  }, [paginationPreferences, pendingPageKey, approvedPageKey, membersPageKey, pendingPageSize, approvedPageSize, membersPageSize]);
+    if (nextImported !== importedMembersPageSize) {
+      setImportedMembersPageSize(nextImported);
+      setImportedMembersPage(1);
+    }
+  }, [paginationPreferences, pendingPageKey, approvedPageKey, membersPageKey, importedMembersPageKey, pendingPageSize, approvedPageSize, membersPageSize, importedMembersPageSize]);
 
   const selectedApplicationDetails = useQuery(
     api.communityApplications.getApplicationDetails,
@@ -1776,6 +1813,17 @@ export default function CommunityDashboardPage() {
           adminId: userId,
           communityIds,
           status: "APPROVED",
+        }
+      : "skip"
+  );
+
+  // Query to get imported community members
+  const getImportedCommunityMembers = useQuery(
+    api.communityImports.getImportedCommunityMembersByCommunityIds,
+    userId && communityIds.length > 0
+      ? {
+          adminId: userId,
+          communityIds,
         }
       : "skip"
   );
@@ -2288,6 +2336,293 @@ export default function CommunityDashboardPage() {
 
               {/* ── Members Tab (existing content) ── */}
               {getActiveTab(communityId) === "members" && (<>
+
+              {/* Import Members From Excel */}
+              <div style={{ padding: "1.5rem", borderBottom: "1px solid #eee", background: "#fafafa" }}>
+                <h3 style={{
+                  margin: "0 0 1rem 0",
+                  fontSize: "1.05rem",
+                  fontWeight: "600",
+                  color: "#2c2c2c",
+                }}>
+                  📥 Import Members from Excel
+                </h3>
+                
+                {/* File Upload Input */}
+                <div style={{
+                  marginBottom: "1rem",
+                  padding: "1rem",
+                  background: "#fff",
+                  borderRadius: "8px",
+                  border: "2px dashed #2e7d32",
+                  textAlign: "center",
+                  cursor: "pointer",
+                }}>
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setUploadState(communityId as string, { file });
+                        // Auto-parse file
+                        const reader = new FileReader();
+                        reader.onload = (event: any) => {
+                          try {
+                            const data = event.target.result;
+                            const workbook = XLSX.read(data, { type: "array" });
+                            const firstSheet = workbook.SheetNames[0];
+                            const rows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet]);
+                            setUploadState(communityId as string, { parsedRows: rows, showPreview: true });
+                          } catch (err: any) {
+                            setMessage({ type: "error", text: "Failed to parse Excel file: " + err?.message });
+                          }
+                        };
+                        reader.readAsArrayBuffer(file);
+                      }
+                    }}
+                    style={{ display: "none" }}
+                    id={`file-input-${communityId}`}
+                  />
+                  <label
+                    htmlFor={`file-input-${communityId}`}
+                    style={{
+                      display: "block",
+                      padding: "2rem 1rem",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <div style={{ fontSize: "1rem", fontWeight: 600, color: "#2e7d32", marginBottom: "0.5rem" }}>
+                      Click to upload or drag & drop
+                    </div>
+                    <div style={{ fontSize: "0.85rem", color: "#666" }}>
+                      Excel files (.xlsx, .xls) with required columns: fullName, phoneNumber. Optional: email, communityRole, notes, and any other fields.
+                    </div>
+                  </label>
+                  {getUploadState(communityId as string).file && (
+                    <div style={{ marginTop: "0.75rem", fontSize: "0.9rem", color: "#2e7d32", fontWeight: 600 }}>
+                      ✓ {getUploadState(communityId as string).file.name}
+                    </div>
+                  )}
+                </div>
+
+                {/* Preview Table */}
+                {getUploadState(communityId as string).showPreview && getUploadState(communityId as string).parsedRows.length > 0 && (
+                  <div style={{ marginBottom: "1rem" }}>
+                    <h4 style={{ margin: "0 0 0.75rem 0", fontSize: "0.95rem", fontWeight: 600, color: "#333" }}>
+                      Preview ({getUploadState(communityId as string).parsedRows.length} rows)
+                    </h4>
+                    <div style={{ overflowX: "auto", marginBottom: "0.75rem" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
+                        <thead>
+                          <tr style={{ textAlign: "left", background: "#e8f5e9", borderBottom: "1px solid #81c784" }}>
+                            <th style={{ padding: "0.5rem" }}>Full Name</th>
+                            <th style={{ padding: "0.5rem" }}>Phone</th>
+                            <th style={{ padding: "0.5rem" }}>Email</th>
+                            <th style={{ padding: "0.5rem" }}>Role</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {getUploadState(communityId as string).parsedRows.slice(0, 5).map((row: any, idx: number) => (
+                            <tr key={idx} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                              <td style={{ padding: "0.5rem" }}>{row.fullName || "-"}</td>
+                              <td style={{ padding: "0.5rem" }}>{row.phoneNumber || "-"}</td>
+                              <td style={{ padding: "0.5rem" }}>{row.email || "-"}</td>
+                              <td style={{ padding: "0.5rem" }}>{row.communityRole || "-"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {getUploadState(communityId as string).parsedRows.length > 5 && (
+                      <div style={{ fontSize: "0.85rem", color: "#999", marginBottom: "0.75rem" }}>
+                        ... and {getUploadState(communityId as string).parsedRows.length - 5} more rows
+                      </div>
+                    )}
+                    <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+                      <button
+                        onClick={async () => {
+                          if (!getUploadState(communityId as string).parsedRows.length) {
+                            setMessage({ type: "error", text: "No rows to import" });
+                            return;
+                          }
+                          setUploadState(communityId as string, { isUploading: true });
+                          try {
+                            const result = await importCommunityMembersFromExcel({
+                              adminId: userId as any,
+                              communityId: communityId as any,
+                              rows: getUploadState(communityId as string).parsedRows,
+                            });
+                            setUploadState(communityId as string, {
+                              importResults: result,
+                              isUploading: false,
+                              file: null,
+                              parsedRows: [],
+                              showPreview: false,
+                            });
+                            setMessage({ type: "success", text: `Imported ${result.success.length} members successfully` });
+                          } catch (error: any) {
+                            setUploadState(communityId as string, { isUploading: false });
+                            setMessage({ type: "error", text: error?.message || "Import failed" });
+                          }
+                        }}
+                        disabled={getUploadState(communityId as string).isUploading}
+                        style={{
+                          padding: "0.6rem 1.25rem",
+                          background: getUploadState(communityId as string).isUploading ? "#bbb" : "#2e7d32",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: "8px",
+                          fontWeight: 600,
+                          cursor: getUploadState(communityId as string).isUploading ? "not-allowed" : "pointer",
+                          minHeight: "44px",
+                        }}
+                      >
+                        {getUploadState(communityId as string).isUploading ? "Importing..." : "Import Members"}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setUploadState(communityId as string, { showPreview: false, parsedRows: [], file: null });
+                        }}
+                        style={{
+                          padding: "0.6rem 1.25rem",
+                          background: "#f0f0f0",
+                          color: "#333",
+                          border: "none",
+                          borderRadius: "8px",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          minHeight: "44px",
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Import Results */}
+                {getUploadState(communityId as string).importResults && (
+                  <div style={{
+                    marginBottom: "1rem",
+                    padding: "1rem",
+                    background: "#e8f5e9",
+                    border: "1px solid #81c784",
+                    borderRadius: "8px",
+                    fontSize: "0.9rem",
+                  }}>
+                    <h4 style={{ margin: "0 0 0.5rem 0", fontWeight: 600, color: "#2e7d32" }}>
+                      ✓ Import Complete
+                    </h4>
+                    <div style={{ color: "#333", marginBottom: "0.5rem" }}>
+                      <strong>{getUploadState(communityId as string).importResults!.success.length}</strong> members imported successfully
+                    </div>
+                    {getUploadState(communityId as string).importResults!.errors.length > 0 && (
+                      <div style={{ color: "#c62828", marginTop: "0.5rem" }}>
+                        <strong>{getUploadState(communityId as string).importResults!.errors.length}</strong> errors encountered
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Imported Members Cards */}
+              {getImportedCommunityMembers && getImportedCommunityMembers.length > 0 && (
+                <div style={{ padding: "1.5rem", borderBottom: "1px solid #eee" }}>
+                  <h3 style={{
+                    margin: "0 0 1rem 0",
+                    fontSize: "1.05rem",
+                    fontWeight: "600",
+                    color: "#2c2c2c",
+                  }}>
+                    📋 Imported Members
+                  </h3>
+                  {(() => {
+                    const imported = getImportedCommunityMembers.filter((m: any) => String(m.communityId) === String(communityId));
+                    const importedTotal = imported.length;
+                    const importedTotalPages = Math.max(1, Math.ceil(importedTotal / importedMembersPageSize));
+                    const safeImportedPage = Math.min(importedMembersPage, importedTotalPages);
+                    const importedStart = importedTotal === 0 ? 0 : (safeImportedPage - 1) * importedMembersPageSize + 1;
+                    const importedEnd = Math.min(safeImportedPage * importedMembersPageSize, importedTotal);
+                    const pagedImported = imported.slice(
+                      (safeImportedPage - 1) * importedMembersPageSize,
+                      safeImportedPage * importedMembersPageSize
+                    );
+
+                    if (imported.length === 0) {
+                      return <p style={{ color: "#999" }}>No imported members.</p>;
+                    }
+
+                    return (
+                      <div>
+                        <div style={{
+                          display: "grid",
+                          gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(280px, 1fr))",
+                          gap: "1rem",
+                          marginBottom: "1rem",
+                        }}>
+                          {pagedImported.map((member: any) => (
+                            <CommunityMemberCard
+                              key={member._id}
+                              member={member}
+                              adminId={userId as string}
+                              onActivationComplete={() => {
+                                // Refresh imported members after activation
+                                if (message) {
+                                  setMessage(null);
+                                  setTimeout(() => {
+                                    // Force refresh by refetching
+                                  }, 500);
+                                }
+                              }}
+                            />
+                          ))}
+                        </div>
+
+                        {importedTotalPages > 1 && (
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
+                            <div style={{ fontSize: "0.85rem", color: "#666" }}>
+                              Showing {importedStart}-{importedEnd} of {importedTotal}
+                            </div>
+                            <div style={{ display: "flex", gap: "0.5rem" }}>
+                              <button
+                                type="button"
+                                onClick={() => setImportedMembersPage((p) => Math.max(1, p - 1))}
+                                disabled={safeImportedPage === 1}
+                                style={{
+                                  padding: "0.35rem 0.7rem",
+                                  borderRadius: 6,
+                                  border: "1px solid #ddd",
+                                  background: safeImportedPage === 1 ? "#f1f5f9" : "#fff",
+                                  cursor: safeImportedPage === 1 ? "not-allowed" : "pointer",
+                                  fontWeight: 600,
+                                }}
+                              >
+                                Prev
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setImportedMembersPage((p) => Math.min(importedTotalPages, p + 1))}
+                                disabled={safeImportedPage >= importedTotalPages}
+                                style={{
+                                  padding: "0.35rem 0.7rem",
+                                  borderRadius: 6,
+                                  border: "1px solid #ddd",
+                                  background: safeImportedPage >= importedTotalPages ? "#f1f5f9" : "#fff",
+                                  cursor: safeImportedPage >= importedTotalPages ? "not-allowed" : "pointer",
+                                  fontWeight: 600,
+                                }}
+                              >
+                                Next
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
 
               {/* Pending Applications */}
               <div style={{ padding: "1.5rem", borderBottom: "1px solid #eee" }}>

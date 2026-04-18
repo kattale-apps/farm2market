@@ -998,6 +998,13 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
   );
   const chartRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [showMemberInsights, setShowMemberInsights] = useState(true);
+  const [isMobile, setIsMobile] = useState(typeof window !== "undefined" ? window.innerWidth < 768 : true);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   const trackerForms = (forms ?? []).filter((f: any) => f.formPurpose === "tracker" || !f.formPurpose);
   const profileForms = (forms ?? []).filter((f: any) => f.formPurpose === "profile");

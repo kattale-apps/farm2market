@@ -23,6 +23,7 @@ import type * as buyerDashboard from "../buyerDashboard.js";
 import type * as buyers from "../buyers.js";
 import type * as communities from "../communities.js";
 import type * as communityApplications from "../communityApplications.js";
+import type * as communityImports from "../communityImports.js";
 import type * as constants from "../constants.js";
 import type * as crons from "../crons.js";
 import type * as demoData from "../demoData.js";
@@ -109,6 +110,7 @@ declare const fullApi: ApiFromModules<{
   buyers: typeof buyers;
   communities: typeof communities;
   communityApplications: typeof communityApplications;
+  communityImports: typeof communityImports;
   constants: typeof constants;
   crons: typeof crons;
   demoData: typeof demoData;

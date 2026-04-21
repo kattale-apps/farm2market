@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from "react";
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { useRouter, useSearchParams } from "next/navigation";
+import MarketPricePanel from "../components/MarketPricePanel";
 
 /**
  * Login Page
@@ -56,6 +57,14 @@ function LoginPageInner() {
       if (stored) {
         setPendingCommunitySlug(stored);
       }
+    }
+  }, [searchParams]);
+
+  // Handle buy intent from market price panel — pre-select buyer signup
+  useEffect(() => {
+    if (searchParams.get("intent") === "buy") {
+      setIsSignup(true);
+      setRole("buyer");
     }
   }, [searchParams]);
 
@@ -140,22 +149,41 @@ function LoginPageInner() {
   };
 
   return (
-    <main style={{
-      display: "flex",
-      justifyContent: "center",
-      alignItems: "center",
-      minHeight: "100vh",
-      padding: "2rem",
-      background: "transparent"
-    }}>
-      <div style={{
-        background: "#fff",
-        padding: "2rem",
-        borderRadius: "12px",
-        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        maxWidth: "400px",
-        width: "100%"
-      }}>
+    <>
+      <style>{`
+        .f2m-login-grid {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          min-height: 100vh;
+          padding: 2rem 1rem;
+          background: transparent;
+          gap: 1.5rem;
+        }
+        .f2m-login-card {
+          background: #fff;
+          padding: 2rem;
+          border-radius: 12px;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+          max-width: 400px;
+          width: 100%;
+        }
+        .f2m-panel-desktop { display: none; }
+        .f2m-panel-mobile { max-width: 400px; width: 100%; }
+        @media (min-width: 900px) {
+          .f2m-login-grid {
+            flex-direction: row;
+            align-items: flex-start;
+            justify-content: center;
+            padding: 2rem;
+          }
+          .f2m-login-card { max-width: 400px; flex-shrink: 0; }
+          .f2m-panel-desktop { display: block; max-width: 460px; width: 100%; align-self: flex-start; }
+          .f2m-panel-mobile { display: none; }
+        }
+      `}</style>
+    <main className="f2m-login-grid">
+      <div className="f2m-login-card">
         <h1 style={{ 
           fontSize: "1.8rem", 
           marginBottom: "0.5rem", 
@@ -530,7 +558,18 @@ function LoginPageInner() {
         </div>
 
       </div>
+
+      {/* Mobile: price panel below login card */}
+      <div className="f2m-panel-mobile">
+        <MarketPricePanel mobileMode />
+      </div>
+
+      {/* Desktop: price panel to the right */}
+      <div className="f2m-panel-desktop">
+        <MarketPricePanel />
+      </div>
     </main>
+    </>
   );
 }
 

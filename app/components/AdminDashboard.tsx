@@ -289,6 +289,65 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
 
   const logExport = useMutation(api.communities.logExport);
 
+  // ── Market Price Reports ──────────────────────────────────────────────────
+  const adminSnapshots = useQuery(
+    (api as any).marketPrices.getAdminSnapshots,
+    isSuperAdmin ? { adminId } : "skip"
+  );
+  const updatePriceSheetPricing = useMutation((api as any).marketPrices.updatePriceSheetPricing);
+  const priceSheetPricing = useQuery((api as any).marketPrices.getPriceSheetPricing);
+  const recordPriceDownloadAudit = useMutation((api as any).marketPrices.recordDownloadAudit);
+  const [priceSheetDownloadRequest, setPriceSheetDownloadRequest] = useState<{
+    productType: "daily" | "weekly" | "monthly";
+    scopeDateKey: string;
+  } | null>(null);
+  const priceSheetDownloadRows = useQuery(
+    (api as any).marketPrices.getSnapshotRowsForDownload,
+    priceSheetDownloadRequest
+      ? { userId: adminId, productType: priceSheetDownloadRequest.productType, scopeDateKey: priceSheetDownloadRequest.scopeDateKey }
+      : "skip"
+  );
+  const [pricingInputs, setPricingInputs] = useState<{ daily: string; weekly: string; monthly: string }>({
+    daily: "",
+    weekly: "",
+    monthly: "",
+  });
+  const [pricingReason, setPricingReason] = useState("");
+  const [pricingMessage, setPricingMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [pricingLoading, setPricingLoading] = useState(false);
+
+  // Trigger XLSX download when rows arrive (SuperAdmin free download)
+  useEffect(() => {
+    if (!priceSheetDownloadRows || !priceSheetDownloadRequest) return;
+    const { rows, scopeDateKey } = priceSheetDownloadRows as any;
+    if (!rows || rows.length === 0) {
+      setPricingMessage({ type: "error", text: `No published data for ${scopeDateKey}` });
+      setPriceSheetDownloadRequest(null);
+      return;
+    }
+    const worksheetData = rows.map((r: any) => ({
+      Date: r.date,
+      Commodity: r.commodity,
+      Unit: r.unit,
+      Market: r.marketName,
+      "Min Price (UGX)": r.minPriceUGX,
+      "Median Price (UGX)": r.medianPriceUGX,
+      "Max Price (UGX)": r.maxPriceUGX,
+      "Latest Price (UGX)": r.latestPriceUGX,
+      Source: r.source,
+    }));
+    const ws = XLSX.utils.json_to_sheet(worksheetData);
+    ws["!cols"] = [
+      { wch: 12 }, { wch: 20 }, { wch: 8 }, { wch: 22 },
+      { wch: 16 }, { wch: 18 }, { wch: 16 }, { wch: 18 }, { wch: 12 },
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Market Prices");
+    XLSX.writeFile(wb, `Farm2Market_Prices_${scopeDateKey}.xlsx`);
+    recordPriceDownloadAudit({ userId: adminId, productType: priceSheetDownloadRequest.productType, scopeDateKey });
+    setPriceSheetDownloadRequest(null);
+  }, [priceSheetDownloadRows]);
+
   const notificationRecipients = useQuery(
     api.notifications.getNotificationRecipients,
     canMessageAdmin ? { adminId } : "skip"
@@ -1179,6 +1238,157 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
             </a>
 
           </div>
+
+          {/* Market Price Reports — SuperAdmin */}
+          <div style={{
+            marginTop: "2rem",
+            padding: "1.5rem",
+            background: "#fff",
+            borderRadius: "12px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.07)",
+            border: "1px solid #e8f5e9",
+          }}>
+            <h3 style={{ fontWeight: "700", fontSize: "1.1rem", marginBottom: "0.25rem", fontFamily: '"Montserrat", sans-serif' }}>
+              📈 Market Price Reports
+            </h3>
+            <p style={{ fontSize: "0.85rem", color: "#666", marginBottom: "1.25rem" }}>
+              Control price sheet pricing for buyers. Download any published daily snapshot as Excel.
+            </p>
+
+            {pricingMessage && (
+              <div style={{
+                padding: "0.75rem",
+                borderRadius: "8px",
+                marginBottom: "1rem",
+                background: pricingMessage.type === "success" ? "#e8f5e9" : "#ffebee",
+                color: pricingMessage.type === "success" ? "#2e7d32" : "#c62828",
+                fontSize: "0.9rem",
+              }}>
+                {pricingMessage.text}
+                <button onClick={() => setPricingMessage(null)} style={{ background: "none", border: "none", cursor: "pointer", float: "right", fontWeight: "700" }}>×</button>
+              </div>
+            )}
+
+            {/* Pricing controls */}
+            <div style={{ background: "#f9fbf9", border: "1px solid #e0ece0", borderRadius: "10px", padding: "1rem", marginBottom: "1.5rem" }}>
+              <p style={{ fontWeight: "600", fontSize: "0.9rem", marginBottom: "0.75rem", color: "#333" }}>Price Sheet Pricing (UGX)</p>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: "0.75rem", marginBottom: "0.75rem" }}>
+                {["daily", "weekly", "monthly"].map((period) => (
+                  <div key={period}>
+                    <label style={{ display: "block", fontSize: "0.8rem", fontWeight: "600", color: "#555", marginBottom: "0.3rem", textTransform: "capitalize" }}>
+                      {period === "daily" ? "📅" : period === "weekly" ? "📆" : "🗓️"} {period}
+                      {priceSheetPricing && (
+                        <span style={{ fontWeight: "400", color: "#888", marginLeft: "0.4rem" }}>
+                          (current: {(priceSheetPricing as any)[`${period}PriceUGX`]?.toLocaleString("en-UG") ?? "0"})
+                        </span>
+                      )}
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="500"
+                      placeholder="e.g. 5000"
+                      value={(pricingInputs as any)[period]}
+                      onChange={(e) => setPricingInputs((prev) => ({ ...prev, [period]: e.target.value }))}
+                      style={{
+                        width: "100%",
+                        padding: "0.5rem",
+                        border: "1px solid #ddd",
+                        borderRadius: "6px",
+                        fontSize: "0.9rem",
+                        boxSizing: "border-box",
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+              <input
+                type="text"
+                placeholder="Reason for price change (required)"
+                value={pricingReason}
+                onChange={(e) => setPricingReason(e.target.value)}
+                style={{ width: "100%", padding: "0.5rem", border: "1px solid #ddd", borderRadius: "6px", fontSize: "0.9rem", marginBottom: "0.75rem", boxSizing: "border-box" }}
+              />
+              <button
+                disabled={pricingLoading || !pricingReason.trim()}
+                onClick={async () => {
+                  if (!pricingReason.trim()) { setPricingMessage({ type: "error", text: "Reason is required" }); return; }
+                  setPricingLoading(true);
+                  setPricingMessage(null);
+                  try {
+                    const patch: any = { adminId, reason: pricingReason };
+                    if (pricingInputs.daily !== "") patch.dailyPriceUGX = Number(pricingInputs.daily);
+                    if (pricingInputs.weekly !== "") patch.weeklyPriceUGX = Number(pricingInputs.weekly);
+                    if (pricingInputs.monthly !== "") patch.monthlyPriceUGX = Number(pricingInputs.monthly);
+                    await updatePriceSheetPricing(patch);
+                    setPricingMessage({ type: "success", text: "Pricing updated successfully." });
+                    setPricingInputs({ daily: "", weekly: "", monthly: "" });
+                    setPricingReason("");
+                  } catch (e: any) {
+                    setPricingMessage({ type: "error", text: e.message || "Update failed" });
+                  } finally {
+                    setPricingLoading(false);
+                  }
+                }}
+                style={{
+                  padding: "0.6rem 1.2rem",
+                  background: pricingLoading || !pricingReason.trim() ? "#c8e6c9" : "#2e7d32",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: "7px",
+                  cursor: pricingLoading || !pricingReason.trim() ? "not-allowed" : "pointer",
+                  fontWeight: "600",
+                  fontSize: "0.9rem",
+                }}
+              >
+                {pricingLoading ? "Saving…" : "💾 Save Prices"}
+              </button>
+            </div>
+
+            {/* Snapshot list */}
+            <p style={{ fontWeight: "600", fontSize: "0.9rem", marginBottom: "0.75rem", color: "#333" }}>Published Snapshots</p>
+            {adminSnapshots === undefined ? (
+              <p style={{ color: "#999", fontSize: "0.9rem" }}>Loading snapshots…</p>
+            ) : !adminSnapshots || (adminSnapshots as any[]).length === 0 ? (
+              <p style={{ color: "#888", fontSize: "0.9rem" }}>No published snapshots yet. The cron publishes a snapshot daily at midnight Uganda time.</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxHeight: "300px", overflowY: "auto" }}>
+                {(adminSnapshots as any[]).slice(0, 30).map((snap: any) => (
+                  <div key={snap.id} style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "0.6rem 0.8rem",
+                    background: "#f5f5f5",
+                    borderRadius: "8px",
+                    fontSize: "0.85rem",
+                  }}>
+                    <div>
+                      <span style={{ fontWeight: "600" }}>{snap.dateKey}</span>
+                      <span style={{ color: "#666", marginLeft: "0.75rem" }}>{snap.rowCount} commodities</span>
+                    </div>
+                    <button
+                      disabled={priceSheetDownloadRequest?.scopeDateKey === snap.dateKey}
+                      onClick={() => setPriceSheetDownloadRequest({ productType: "daily", scopeDateKey: snap.dateKey })}
+                      style={{
+                        padding: "0.35rem 0.7rem",
+                        background: priceSheetDownloadRequest?.scopeDateKey === snap.dateKey ? "#c8e6c9" : "#2e7d32",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: "6px",
+                        cursor: priceSheetDownloadRequest?.scopeDateKey === snap.dateKey ? "not-allowed" : "pointer",
+                        fontSize: "0.8rem",
+                        fontWeight: "600",
+                      }}
+                    >
+                      {priceSheetDownloadRequest?.scopeDateKey === snap.dateKey ? "⏳" : "⬇️ Excel"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
         </>
       )}
 

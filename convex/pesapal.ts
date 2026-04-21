@@ -462,6 +462,20 @@ export const verifyPesapalPayment = action({
       paymentStatus: paymentStatus,
     });
 
+    // If this payment corresponds to a price-sheet download purchase, confirm it
+    const pesapalStatus = paymentStatus.payment_status_description || paymentStatus.status || "";
+    const isCompleted = pesapalStatus.toLowerCase().includes("completed") ||
+                        paymentStatus.payment_status_code === "1";
+    if (isCompleted) {
+      try {
+        await ctx.runMutation(internal.marketPrices.confirmDownloadPurchasePesapal, {
+          pesapalTrackingId: args.orderTrackingId,
+        });
+      } catch {
+        // Not every payment is a download purchase — ignore if no matching record
+      }
+    }
+
     return {
       status: paymentStatus.payment_status_description || paymentStatus.status || "unknown",
       orderTrackingId: args.orderTrackingId,

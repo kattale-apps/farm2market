@@ -144,7 +144,7 @@ export const createListing = mutation({
       if (!args.pricePerUnit || args.pricePerUnit <= 0) {
         throw new Error("Price per unit is required for packaging mode");
       }
-      if (!args.packagingTypeEnum) {
+      if (!args.packagingTypeEnum && !args.packagingTypeCustom) {
         throw new Error("Packaging type is required for packaging mode");
       }
     } else if (listingMode === "garden") {

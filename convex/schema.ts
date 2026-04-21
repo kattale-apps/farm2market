@@ -519,6 +519,9 @@ export default defineSchema({
     traderCommissionPercentage: v.optional(v.number()), // Trader commission percentage on sales. Default: 0
     farmcoinPostingCost: v.optional(v.number()), // FarmCoin Tokens required to post a listing
     farmcoinEtaChangeCost: v.optional(v.number()), // FarmCoin Tokens required to change ETA
+    priceSheetDailyPriceUGX: v.optional(v.number()), // Price buyers pay for a daily market price Excel sheet
+    priceSheetWeeklyPriceUGX: v.optional(v.number()), // Price buyers pay for a weekly market price Excel sheet
+    priceSheetMonthlyPriceUGX: v.optional(v.number()), // Price buyers pay for a monthly market price Excel sheet
   }),
 
   /**
@@ -549,7 +552,8 @@ export default defineSchema({
       v.literal("buyer_confirmation_reward"),
       v.literal("sentify_cashout"),
       v.literal("buyer_reward_cashout"),
-      v.literal("form_field_reward")
+      v.literal("form_field_reward"),
+      v.literal("price_sheet_download")
     ),
     utid: v.string(),
     listingId: v.optional(v.id("listings")),
@@ -1763,4 +1767,109 @@ export default defineSchema({
     .index("by_community", ["communityId"])
     .index("by_phone", ["phoneNumber"])
     .index("by_community_status", ["communityId", "status"]),
+
+  /**
+   * Market Price Submissions
+   * - Explicit vendor price submissions for the public market price panel
+   * - Separate from listings; vendors can submit a price directly
+   */
+  marketPriceSubmissions: defineTable({
+    vendorId: v.id("users"),
+    commodity: v.string(),
+    commodityEmoji: v.optional(v.string()),
+    unit: v.string(), // e.g. "kg", "bunch", "crate"
+    priceUGX: v.number(),
+    marketName: v.string(),
+    marketType: v.optional(v.string()),
+    submittedAt: v.number(),
+  })
+    .index("by_vendor", ["vendorId"])
+    .index("by_submitted_at", ["submittedAt"]),
+
+  /**
+   * Daily Price Snapshots
+   * - One per calendar day, frozen by cron at midnight Uganda time
+   * - The public price panel reads from the most recent published snapshot
+   */
+  dailyPriceSnapshots: defineTable({
+    dateKey: v.string(), // e.g. "2026-04-21"
+    status: v.union(
+      v.literal("building"),
+      v.literal("published"),
+      v.literal("archived")
+    ),
+    publishedAt: v.optional(v.number()),
+    rowCount: v.number(),
+  })
+    .index("by_date_key", ["dateKey"])
+    .index("by_status", ["status"]),
+
+  /**
+   * Daily Price Snapshot Rows
+   * - Aggregated price rows within a daily snapshot
+   * - One row per (commodity × marketName) pair
+   */
+  dailyPriceSnapshotRows: defineTable({
+    snapshotId: v.id("dailyPriceSnapshots"),
+    commodity: v.string(),
+    commodityEmoji: v.optional(v.string()),
+    unit: v.string(),
+    marketName: v.string(),
+    marketEmoji: v.optional(v.string()),
+    minPriceUGX: v.number(),
+    medianPriceUGX: v.number(),
+    maxPriceUGX: v.number(),
+    latestPriceUGX: v.number(),
+    latestUpdatedAt: v.number(),
+    rankOrder: v.number(),
+    source: v.union(
+      v.literal("listing"),
+      v.literal("submission"),
+      v.literal("combined")
+    ),
+  })
+    .index("by_snapshot", ["snapshotId"])
+    .index("by_snapshot_updated", ["snapshotId", "latestUpdatedAt"]),
+
+  /**
+   * Download Purchases
+   * - Buyer entitlements to download market price Excel sheets
+   * - Paid via Pesapal or FarmCoin buyer_reward balance
+   */
+  downloadPurchases: defineTable({
+    buyerId: v.id("users"),
+    productType: v.union(
+      v.literal("daily"),
+      v.literal("weekly"),
+      v.literal("monthly")
+    ),
+    scopeDateKey: v.string(), // e.g. "2026-04-21" (daily), "2026-W17" (weekly), "2026-04" (monthly)
+    status: v.union(
+      v.literal("pending"),
+      v.literal("completed"),
+      v.literal("failed")
+    ),
+    paymentMethod: v.union(
+      v.literal("pesapal"),
+      v.literal("farmcoin")
+    ),
+    pesapalTrackingId: v.optional(v.string()),
+    amountUGX: v.number(),
+    purchasedAt: v.number(),
+    entitlementExpiresAt: v.optional(v.number()),
+  })
+    .index("by_buyer", ["buyerId"])
+    .index("by_buyer_scope", ["buyerId", "scopeDateKey"]),
+
+  /**
+   * Download Audit Log
+   * - Records every actual file download for audit purposes
+   */
+  downloadAuditLog: defineTable({
+    userId: v.id("users"),
+    productType: v.string(),
+    scopeDateKey: v.string(),
+    downloadedAt: v.number(),
+  })
+    .index("by_user", ["userId"]),
 });

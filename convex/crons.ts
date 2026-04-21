@@ -50,4 +50,11 @@ crons.interval(
   (internal as any).fertilizerPlanner.sendSprayReminders,
 );
 
+// Freeze and publish the daily market price snapshot at midnight Uganda time (21:00 UTC)
+crons.daily(
+  "freeze daily price snapshot",
+  { hourUTC: 21, minuteUTC: 0 },
+  internal.marketPrices.freezeDailySnapshot,
+);
+
 export default crons;

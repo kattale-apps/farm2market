@@ -5,6 +5,7 @@ import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { FarmCoinReward, FarmCoinVideoPreloader } from "./FarmCoinAnimation";
 
 interface CreateListingProps {
   userId: Id<"users">;
@@ -16,6 +17,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
   const effectiveRole = userRole || "farmer";
   const isVendorOrStore = effectiveRole === "vendor" || effectiveRole === "store";
   const createListing = useMutation(api.listings.createListing);
+  const submitVendorPrice = useMutation((api as any).marketPrices.submitVendorPrice);
   const qualityOptions = useQuery(api.listings.getActiveQualityOptions, {});
   const produceOptions = useQuery(api.listings.getActiveProduceOptions, {});
   const storageLocations = useQuery(api.listings.getActiveStorageLocations, {});
@@ -24,12 +26,46 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
     isVendorOrStore ? { userId } : "skip"
   );
   const onboardingStatus = useQuery(api.farmerOnboarding.checkOnboardingStatus, { farmerId: userId });  // supports farmer/vendor/store
+  const recentCommodities = useQuery(
+    api.marketPrices.getVendorRecentCommodities,
+    isVendorOrStore ? { userId } : "skip"
+  );
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   
   const [listingMode, setListingMode] = useState<"unit" | "garden" | "packaging">("unit");
   const [gardenSizeMode, setGardenSizeMode] = useState<"acres" | "emiigo">("acres");
+
+  // ── Vendor daily price form ───────────────────────────────────────────────
+  const [showPriceForm, setShowPriceForm] = useState(false);
+  const [priceFormData, setPriceFormData] = useState({
+    commodity: "", unit: "kg", priceUGX: "", marketName: "", marketType: "",
+  });
+  const [priceLoading, setPriceLoading] = useState(false);
+  const [priceMessage, setPriceMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [showCoinAnim, setShowCoinAnim] = useState(false);
+  const [coinsEarned, setCoinsEarned] = useState(0);
+
+  // ── Custom products & packaging (vendor/store, persisted in localStorage) ─
+  const CUSTOM_PRODUCTS_KEY = `f2m_vendor_custom_products_${userId}`;
+  const CUSTOM_PACKAGING_KEY = `f2m_vendor_custom_packaging_${userId}`;
+
+  const [customProducts, setCustomProducts] = useState<{ emoji: string; name: string }[]>([]);
+  const [customPackagingList, setCustomPackagingList] = useState<string[]>([]);
+  const [showAddCustomProduct, setShowAddCustomProduct] = useState(false);
+  const [customProductEmoji, setCustomProductEmoji] = useState("🌿");
+  const [customProductName, setCustomProductName] = useState("");
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [customPackagingInput, setCustomPackagingInput] = useState("");
+
+  const FOOD_EMOJIS = [
+    "🌽","🍅","🥬","🥕","🧅","🧄","🫛","🫘","🌶️","🥦",
+    "🍆","🎃","🥔","🍠","🌾","🍌","🍍","🥭","🍊","🍋",
+    "🍇","🍓","🫐","🥝","🍈","🥑","🥚","🍗","🥩","🐟",
+    "🥛","🧈","☕","🍵","🍯","🫒","🌰","🥜","🌻","🌿",
+  ];
+
   const [formData, setFormData] = useState({
     produceType: "",
     totalKilos: "",
@@ -47,6 +83,52 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
     availableUnits: "",
     pricePerUnit: "",
   });
+
+  // Load custom products and packaging from localStorage
+  useEffect(() => {
+    if (!isVendorOrStore) return;
+    try {
+      const p = localStorage.getItem(CUSTOM_PRODUCTS_KEY);
+      if (p) setCustomProducts(JSON.parse(p));
+    } catch {}
+    try {
+      const k = localStorage.getItem(CUSTOM_PACKAGING_KEY);
+      if (k) setCustomPackagingList(JSON.parse(k));
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isVendorOrStore]);
+
+  // Auto-fill market name from vendor profile
+  useEffect(() => {
+    if (isVendorOrStore && autoStorageLocation?.collectionText) {
+      const ct = autoStorageLocation.collectionText;
+      setPriceFormData((prev) => ({ ...prev, marketName: prev.marketName || ct }));
+    }
+  }, [isVendorOrStore, autoStorageLocation]);
+
+  const saveCustomProduct = (emoji: string, name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setCustomProducts((prev) => {
+      const exists = prev.some((p) => p.name.toLowerCase() === trimmed.toLowerCase());
+      if (exists) return prev;
+      const next = [{ emoji, name: trimmed }, ...prev].slice(0, 20);
+      try { localStorage.setItem(CUSTOM_PRODUCTS_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+
+  const saveCustomPackaging = (val: string) => {
+    const trimmed = val.trim();
+    if (!trimmed) return;
+    setCustomPackagingList((prev) => {
+      const exists = prev.some((p) => p.toLowerCase() === trimmed.toLowerCase());
+      if (exists) return prev;
+      const next = [trimmed, ...prev].slice(0, 10);
+      try { localStorage.setItem(CUSTOM_PACKAGING_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
 
   // Check onboarding status
   useEffect(() => {
@@ -110,6 +192,44 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
     });
   }, [formData.storageLocationId, produceOptions, storageLocations, isVendorOrStore]);
 
+  const handlePriceSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const priceNum = parseFloat(priceFormData.priceUGX);
+    if (!priceFormData.commodity.trim()) {
+      setPriceMessage({ type: "error", text: "Commodity name is required" });
+      return;
+    }
+    if (isNaN(priceNum) || priceNum <= 0) {
+      setPriceMessage({ type: "error", text: "Please enter a valid price" });
+      return;
+    }
+    if (!priceFormData.marketName.trim()) {
+      setPriceMessage({ type: "error", text: "Market name is required" });
+      return;
+    }
+    setPriceLoading(true);
+    setPriceMessage(null);
+    try {
+      const result = await submitVendorPrice({
+        userId,
+        commodity: priceFormData.commodity.trim(),
+        unit: priceFormData.unit.trim() || "kg",
+        priceUGX: priceNum,
+        marketName: priceFormData.marketName.trim(),
+        marketType: priceFormData.marketType.trim() || undefined,
+      });
+      setCoinsEarned(result.coinsEarned);
+      setShowCoinAnim(true);
+      // Keep market name for next entry, reset the rest
+      setPriceFormData((prev) => ({ commodity: "", unit: "kg", priceUGX: "", marketName: prev.marketName, marketType: "" }));
+      setTimeout(() => { setShowPriceForm(false); }, 4000);
+    } catch (err: any) {
+      setPriceMessage({ type: "error", text: err?.message || "Failed to submit price" });
+    } finally {
+      setPriceLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -158,11 +278,20 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
           return;
         }
 
+        const isCustomPkg = formData.packagingType === "__custom__";
+        if (isCustomPkg && !customPackagingInput.trim()) {
+          setMessage({ type: "error", text: "Please enter your custom packaging type" });
+          setLoading(false);
+          return;
+        }
+        if (isCustomPkg) saveCustomPackaging(customPackagingInput.trim());
+
         const result = await createListing({
           farmerId: userId,
           produceType: formData.produceType.trim(),
           listingMode: "packaging",
-          packagingTypeEnum: formData.packagingType,
+          packagingTypeEnum: isCustomPkg ? undefined : formData.packagingType,
+          packagingTypeCustom: isCustomPkg ? customPackagingInput.trim() : undefined,
           availableUnits: units,
           pricingUnit: "per_package" as const,
           pricePerUnit: ppu,
@@ -171,9 +300,10 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
           storageLocationId: formData.storageLocationId ? (formData.storageLocationId as any) : undefined,
         });
 
+        const displayPkg = isCustomPkg ? customPackagingInput.trim() : formData.packagingType;
         setMessage({
           type: "success",
-          text: `Listing created! UTID: ${result.utid}. ${result.totalUnits} ${formData.packagingType}(s) listed.`,
+          text: `Listing created! UTID: ${result.utid}. ${result.totalUnits} ${displayPkg}(s) listed.`,
         });
 
         // Reset form
@@ -182,6 +312,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
           storageLocationId: "", gardenSize: "", gardenLength: "", gardenWidth: "", totalPrice: "",
           packagingType: "", availableUnits: "", pricePerUnit: "",
         });
+        setCustomPackagingInput("");
         setListingMode("unit");
         setTimeout(() => { setShowForm(false); setMessage(null); }, 5000);
         setLoading(false);
@@ -300,9 +431,13 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
     }
   };
 
-  if (!showForm) {
+  if (!showForm && !showPriceForm) {
     return (
-      <div style={{ marginBottom: "2rem" }}>
+      <div style={{ marginBottom: "2rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+        {showCoinAnim && (
+          <FarmCoinReward coinsEarned={coinsEarned} onDone={() => setShowCoinAnim(false)} />
+        )}
+        <FarmCoinVideoPreloader />
         <button
           onClick={() => setShowForm(true)}
           style={{
@@ -322,6 +457,204 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
         >
           Tunda Ebirime • Create New Listing
         </button>
+        {isVendorOrStore && (
+          <button
+            onClick={() => setShowPriceForm(true)}
+            style={{
+              padding: "0.85rem 1.5rem",
+              background: "#e3f2fd",
+              color: "#1565c0",
+              border: "2px solid #1565c0",
+              borderRadius: "10px",
+              cursor: "pointer",
+              fontSize: "1.05rem",
+              fontWeight: "700",
+              width: "100%",
+              textAlign: "center",
+            }}
+          >
+            📊 Submit Today's Market Price
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (showPriceForm) {
+    return (
+      <div style={{
+        marginBottom: "2rem",
+        padding: "1.5rem",
+        background: "#fff",
+        borderRadius: "12px",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        border: "1px solid #90caf9",
+      }}>
+        {showCoinAnim && (
+          <FarmCoinReward coinsEarned={coinsEarned} onDone={() => setShowCoinAnim(false)} />
+        )}
+        <FarmCoinVideoPreloader />
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+          <h3 style={{ margin: 0, fontSize: "1.2rem", color: "#1565c0" }}>📊 Submit Today's Market Price</h3>
+          <button
+            type="button"
+            onClick={() => { setShowPriceForm(false); setPriceMessage(null); }}
+            style={{ padding: "0.5rem 1rem", background: "#f5f5f5", border: "1px solid #ddd", borderRadius: "6px", cursor: "pointer", fontSize: "0.9rem" }}
+          >
+            Cancel
+          </button>
+        </div>
+        <p style={{ fontSize: "0.85rem", color: "#555", marginBottom: "1rem" }}>
+          Report a commodity price at your market today. You earn 🪙 FarmCoins for each submission!
+        </p>
+
+        {priceMessage && (
+          <div style={{
+            padding: "0.85rem 1rem",
+            marginBottom: "1rem",
+            background: priceMessage.type === "success" ? "#e8f5e9" : "#ffebee",
+            border: `1px solid ${priceMessage.type === "success" ? "#4caf50" : "#ef5350"}`,
+            borderRadius: "8px",
+            color: priceMessage.type === "success" ? "#2e7d32" : "#c62828",
+          }}>
+            {priceMessage.text}
+          </div>
+        )}
+
+        <form onSubmit={handlePriceSubmit}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+
+            {customProducts.length > 0 && (
+              <div>
+                <p style={{ fontSize: "0.8rem", color: "#555", marginBottom: "0.4rem", fontWeight: "600" }}>⭐ My saved products</p>
+                <div style={{ display: "flex", gap: "0.5rem", overflowX: "auto", paddingBottom: "0.25rem" }}>
+                  {customProducts.map((cp) => {
+                    const val = `${cp.emoji} ${cp.name}`;
+                    return (
+                      <button
+                        key={cp.name}
+                        type="button"
+                        onClick={() => setPriceFormData((prev) => ({ ...prev, commodity: val }))}
+                        style={{
+                          flexShrink: 0,
+                          padding: "0.45rem 0.8rem",
+                          background: priceFormData.commodity === val ? "#e3f2fd" : "#fff8e1",
+                          border: `1.5px solid ${priceFormData.commodity === val ? "#1565c0" : "#f9a825"}`,
+                          borderRadius: "20px",
+                          cursor: "pointer",
+                          fontSize: "0.82rem",
+                          fontWeight: priceFormData.commodity === val ? "600" : "400",
+                          color: priceFormData.commodity === val ? "#1565c0" : "#333",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {cp.emoji} {cp.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                Commodity *
+              </label>
+              <input
+                type="text"
+                value={priceFormData.commodity}
+                onChange={(e) => setPriceFormData((prev) => ({ ...prev, commodity: e.target.value }))}
+                placeholder="e.g. Tomatoes, Maize, Bananas..."
+                required
+                style={{ width: "100%", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "6px", fontSize: "1rem" }}
+              />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+              <div>
+                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                  Unit *
+                </label>
+                <select
+                  value={priceFormData.unit}
+                  onChange={(e) => setPriceFormData((prev) => ({ ...prev, unit: e.target.value }))}
+                  style={{ width: "100%", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "6px", fontSize: "1rem", background: "#fff" }}
+                >
+                  <option value="kg">kg</option>
+                  <option value="crate">Crate</option>
+                  <option value="bunch">Bunch</option>
+                  <option value="basket">Basket</option>
+                  <option value="bag">Bag (50kg)</option>
+                  <option value="tin">Tin / Debe</option>
+                  <option value="sack">Sack</option>
+                  <option value="bundle">Bundle</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                  Price (UGX) *
+                </label>
+                <input
+                  type="number"
+                  value={priceFormData.priceUGX}
+                  onChange={(e) => setPriceFormData((prev) => ({ ...prev, priceUGX: e.target.value }))}
+                  placeholder="e.g. 3000"
+                  min="1"
+                  step="1"
+                  required
+                  style={{ width: "100%", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "6px", fontSize: "1rem" }}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                Market Name *
+              </label>
+              <input
+                type="text"
+                value={priceFormData.marketName}
+                onChange={(e) => setPriceFormData((prev) => ({ ...prev, marketName: e.target.value }))}
+                placeholder="e.g. Nakasero Market, Owino Market..."
+                required
+                style={{ width: "100%", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "6px", fontSize: "1rem" }}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#666" }}>
+                Market Type (optional)
+              </label>
+              <select
+                value={priceFormData.marketType}
+                onChange={(e) => setPriceFormData((prev) => ({ ...prev, marketType: e.target.value }))}
+                style={{ width: "100%", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "6px", fontSize: "1rem", background: "#fff" }}
+              >
+                <option value="">— Select —</option>
+                <option value="wholesale">Wholesale</option>
+                <option value="retail">Retail</option>
+                <option value="mixed">Mixed (Wholesale + Retail)</option>
+              </select>
+            </div>
+
+            <button
+              type="submit"
+              disabled={priceLoading}
+              style={{
+                padding: "0.85rem 1.5rem",
+                background: priceLoading ? "#ccc" : "#1565c0",
+                color: "#fff",
+                border: "none",
+                borderRadius: "8px",
+                cursor: priceLoading ? "not-allowed" : "pointer",
+                fontSize: "1rem",
+                fontWeight: "700",
+              }}
+            >
+              {priceLoading ? "Submitting..." : "📤 Submit Price & Earn 🪙"}
+            </button>
+          </div>
+        </form>
       </div>
     );
   }
@@ -596,6 +929,86 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
             <label style={{ display: "block", marginBottom: "0.75rem", fontWeight: "600", color: "#333" }}>
               Select Produce Type *
             </label>
+
+            {/* Vendor custom products — chips */}
+            {isVendorOrStore && customProducts.length > 0 && (
+              <div style={{ marginBottom: "0.75rem" }}>
+                <p style={{ fontSize: "0.8rem", color: "#555", marginBottom: "0.4rem", fontWeight: "600" }}>⭐ My custom products</p>
+                <div style={{ display: "flex", gap: "0.5rem", overflowX: "auto", paddingBottom: "0.25rem", WebkitOverflowScrolling: "touch" as any }}>
+                  {customProducts.map((cp) => {
+                    const val = `${cp.emoji} ${cp.name}`;
+                    return (
+                      <button
+                        key={cp.name}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, produceType: val })}
+                        style={{
+                          flexShrink: 0,
+                          padding: "0.45rem 0.8rem",
+                          background: formData.produceType === val ? "#e8f5e9" : "#fff8e1",
+                          border: `1.5px solid ${formData.produceType === val ? "#4caf50" : "#f9a825"}`,
+                          borderRadius: "20px",
+                          cursor: "pointer",
+                          fontSize: "0.82rem",
+                          fontWeight: formData.produceType === val ? "600" : "400",
+                          color: formData.produceType === val ? "#2e7d32" : "#333",
+                          minHeight: "36px",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {cp.emoji} {cp.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Vendor commodity memory — suggestion chips */}
+            {isVendorOrStore && recentCommodities && recentCommodities.commodities.length > 0 && (
+              <div style={{ marginBottom: "0.75rem" }}>
+                <p style={{ fontSize: "0.8rem", color: "#555", marginBottom: "0.4rem", fontWeight: "600" }}>
+                  🔄 Recent commodities
+                </p>
+                <div style={{
+                  display: "flex",
+                  gap: "0.5rem",
+                  overflowX: "auto",
+                  paddingBottom: "0.25rem",
+                  WebkitOverflowScrolling: "touch",
+                }}>
+                  {recentCommodities.commodities.map((c: any) => (
+                    <button
+                      key={c.commodity}
+                      type="button"
+                      onClick={() => {
+                        setFormData({ ...formData, produceType: c.commodity });
+                      }}
+                      style={{
+                        flexShrink: 0,
+                        padding: "0.45rem 0.8rem",
+                        background: formData.produceType === c.commodity ? "#e8f5e9" : "#f5f5f5",
+                        border: `1.5px solid ${formData.produceType === c.commodity ? "#4caf50" : "#ddd"}`,
+                        borderRadius: "20px",
+                        cursor: "pointer",
+                        fontSize: "0.82rem",
+                        fontWeight: formData.produceType === c.commodity ? "600" : "400",
+                        color: formData.produceType === c.commodity ? "#2e7d32" : "#333",
+                        minHeight: "36px",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {c.emoji} {c.commodity}
+                      {c.latestPriceUGX > 0 && (
+                        <span style={{ color: "#666", marginLeft: "0.3rem", fontSize: "0.75rem" }}>
+                          · {c.latestPriceUGX.toLocaleString("en-UG")} UGX
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {!formData.storageLocationId && !isVendorOrStore ? (
               <p style={{ color: "#666", fontSize: "0.9rem", padding: "1rem", background: "#fff3cd", borderRadius: "6px" }}>
                 Please select a storage location first to see available produce types.
@@ -672,6 +1085,134 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
                     {filteredProduceOptions.length} produce type(s) available for selected location
                   </p>
                 )}
+
+                {/* Add & save custom product (vendor/store only) */}
+                {isVendorOrStore && (
+                  <div style={{ marginTop: "0.75rem" }}>
+                    {!showAddCustomProduct ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowAddCustomProduct(true)}
+                        style={{ fontSize: "0.82rem", color: "#1565c0", background: "none", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline" }}
+                      >
+                        ➕ Save a custom product name
+                      </button>
+                    ) : (
+                      <div style={{ background: "#f9f9f9", border: "1px solid #ddd", borderRadius: "10px", padding: "0.75rem", position: "relative" }}>
+                        <p style={{ fontWeight: "600", fontSize: "0.85rem", marginBottom: "0.5rem", color: "#333" }}>Add custom product</p>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem", position: "relative" }}>
+                          <button
+                            type="button"
+                            onClick={() => setShowEmojiPicker((v) => !v)}
+                            title="Choose emoji"
+                            style={{
+                              fontSize: "1.5rem",
+                              width: 44,
+                              height: 44,
+                              border: "1.5px solid #ddd",
+                              borderRadius: "8px",
+                              background: "#fff",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              flexShrink: 0,
+                            }}
+                          >
+                            {customProductEmoji}
+                          </button>
+
+                          {showEmojiPicker && (
+                            <div style={{
+                              position: "absolute",
+                              top: "3rem",
+                              left: 0,
+                              zIndex: 200,
+                              background: "#fff",
+                              border: "1px solid #ddd",
+                              borderRadius: "10px",
+                              boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+                              padding: "0.5rem",
+                              width: "min(260px, 90vw)",
+                            }}>
+                              <div style={{ display: "grid", gridTemplateColumns: "repeat(8, 1fr)", gap: 3 }}>
+                                {FOOD_EMOJIS.map((em) => (
+                                  <button
+                                    key={em}
+                                    type="button"
+                                    onClick={() => { setCustomProductEmoji(em); setShowEmojiPicker(false); }}
+                                    style={{
+                                      fontSize: "1.2rem",
+                                      padding: 3,
+                                      border: em === customProductEmoji ? "2px solid #4caf50" : "1px solid transparent",
+                                      borderRadius: "5px",
+                                      background: em === customProductEmoji ? "#e8f5e9" : "transparent",
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    {em}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          <input
+                            type="text"
+                            value={customProductName}
+                            onChange={(e) => setCustomProductName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                if (!customProductName.trim()) return;
+                                saveCustomProduct(customProductEmoji, customProductName.trim());
+                                setFormData({ ...formData, produceType: `${customProductEmoji} ${customProductName.trim()}` });
+                                setCustomProductName("");
+                                setShowAddCustomProduct(false);
+                                setShowEmojiPicker(false);
+                              }
+                            }}
+                            placeholder="e.g. Jackfruit, Tilapia, Nile Perch..."
+                            maxLength={40}
+                            style={{ flex: 1, padding: "0.6rem", border: "1px solid #ddd", borderRadius: "6px", fontSize: "0.95rem" }}
+                          />
+                          <button
+                            type="button"
+                            disabled={!customProductName.trim()}
+                            onClick={() => {
+                              if (!customProductName.trim()) return;
+                              saveCustomProduct(customProductEmoji, customProductName.trim());
+                              setFormData({ ...formData, produceType: `${customProductEmoji} ${customProductName.trim()}` });
+                              setCustomProductName("");
+                              setShowAddCustomProduct(false);
+                              setShowEmojiPicker(false);
+                            }}
+                            style={{
+                              padding: "0.6rem 0.9rem",
+                              background: customProductName.trim() ? "#2e7d32" : "#ccc",
+                              color: "#fff",
+                              border: "none",
+                              borderRadius: "6px",
+                              cursor: customProductName.trim() ? "pointer" : "not-allowed",
+                              fontSize: "0.85rem",
+                              fontWeight: "600",
+                              flexShrink: 0,
+                            }}
+                          >
+                            Save
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => { setShowAddCustomProduct(false); setCustomProductName(""); setShowEmojiPicker(false); }}
+                          style={{ fontSize: "0.78rem", color: "#999", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -711,7 +1252,10 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
                 </label>
                 <select
                   value={formData.packagingType}
-                  onChange={(e) => setFormData({ ...formData, packagingType: e.target.value })}
+                  onChange={(e) => {
+                    setFormData({ ...formData, packagingType: e.target.value });
+                    if (e.target.value !== "__custom__") setCustomPackagingInput("");
+                  }}
                   required
                   style={{ width: "100%", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "6px", fontSize: "1rem", background: "#fff" }}
                 >
@@ -723,7 +1267,26 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
                   <option value="tin">Tin / Debe</option>
                   <option value="sack">Sack</option>
                   <option value="bundle">Bundle</option>
+                  {customPackagingList.length > 0 && (
+                    <optgroup label="My custom types">
+                      {customPackagingList.map((pkg) => (
+                        <option key={pkg} value={pkg}>{pkg}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                  <option value="__custom__">✏️ Custom (enter your own)…</option>
                 </select>
+                {formData.packagingType === "__custom__" && (
+                  <input
+                    type="text"
+                    value={customPackagingInput}
+                    onChange={(e) => setCustomPackagingInput(e.target.value)}
+                    placeholder="e.g. Jerry Can, Bottle, Tray, Box..."
+                    maxLength={40}
+                    autoFocus
+                    style={{ width: "100%", marginTop: "0.5rem", padding: "0.75rem", border: "1.5px solid #1565c0", borderRadius: "6px", fontSize: "1rem", boxSizing: "border-box" as any }}
+                  />
+                )}
               </div>
               <div>
                 <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>

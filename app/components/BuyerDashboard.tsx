@@ -51,6 +51,60 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   
   const initiateDeposit = useAction(api.pesapal.initiateBuyerDeposit);
   const paymentTransactions = useQuery(api.pesapal.getUserPaymentTransactions, { userId });
+
+  // ── Market price reports ──────────────────────────────────────────────────
+  const priceSheetPricing = useQuery((api as any).marketPrices.getPriceSheetPricing);
+  const buyerFarmcoinBalance = useQuery((api as any).marketPrices.getBuyerRewardBalance, { buyerId: userId } as any);
+  const [priceDownloadRequest, setPriceDownloadRequest] = useState<{
+    productType: "daily" | "weekly" | "monthly";
+    scopeDateKey: string;
+  } | null>(null);
+  const priceSheetRows = useQuery(
+    (api as any).marketPrices.getSnapshotRowsForDownload,
+    priceDownloadRequest
+      ? { userId, productType: priceDownloadRequest.productType, scopeDateKey: priceDownloadRequest.scopeDateKey }
+      : "skip"
+  );
+  const purchasePriceSheetFarmcoin = useMutation((api as any).marketPrices.purchasePriceSheetFarmcoin);
+  const recordPriceDownloadAudit = useMutation((api as any).marketPrices.recordDownloadAudit);
+  const initiatePriceSheetPesapal = useAction((api as any).marketPrices.purchasePriceSheetPesapal);
+  const [priceReportMessage, setPriceReportMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [priceReportLoading, setPriceReportLoading] = useState<string | null>(null);
+
+  // Trigger XLSX download when rows arrive
+  useEffect(() => {
+    if (!priceSheetRows || !priceDownloadRequest) return;
+    const { rows, scopeDateKey } = priceSheetRows as any;
+    if (!rows || rows.length === 0) {
+      setPriceReportMessage({ type: "error", text: "No published price data available for this period yet." });
+      setPriceDownloadRequest(null);
+      return;
+    }
+    // Build XLSX using existing xlsx library (same pattern as AdminDashboard)
+    const XLSX = require("xlsx");
+    const worksheetData = rows.map((r: any) => ({
+      Date: r.date,
+      Commodity: r.commodity,
+      Unit: r.unit,
+      Market: r.marketName,
+      "Min Price (UGX)": r.minPriceUGX,
+      "Median Price (UGX)": r.medianPriceUGX,
+      "Max Price (UGX)": r.maxPriceUGX,
+      "Latest Price (UGX)": r.latestPriceUGX,
+      Source: r.source,
+    }));
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(worksheetData);
+    ws["!cols"] = [
+      { wch: 12 }, { wch: 20 }, { wch: 8 }, { wch: 22 },
+      { wch: 16 }, { wch: 18 }, { wch: 16 }, { wch: 18 }, { wch: 12 },
+    ];
+    XLSX.utils.book_append_sheet(wb, ws, "Market Prices");
+    XLSX.writeFile(wb, `Farm2Market_Prices_${scopeDateKey}.xlsx`);
+    recordPriceDownloadAudit({ userId, productType: priceDownloadRequest.productType, scopeDateKey });
+    setPriceDownloadRequest(null);
+    setPriceReportLoading(null);
+  }, [priceSheetRows]);
   
   const [purchasing, setPurchasing] = useState<Id<"traderInventory"> | null>(null);
   const [purchaseMessage, setPurchaseMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -3112,6 +3166,158 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
             </div>
           </>
         )}
+      </div>
+
+      {/* Market Price Reports Section */}
+      <div style={{
+        marginTop: "2rem",
+        padding: "1.5rem",
+        background: "#fff",
+        borderRadius: "12px",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.07)",
+        border: "1px solid #e8f5e9",
+      }}>
+        <h3 style={{
+          fontSize: "1.1rem",
+          fontWeight: "700",
+          color: "#2c2c2c",
+          marginBottom: "0.25rem",
+          fontFamily: '"Montserrat", sans-serif',
+        }}>
+          📊 Market Price Reports
+        </h3>
+        <p style={{ fontSize: "0.85rem", color: "#666", marginBottom: "1.25rem" }}>
+          Download daily, weekly or monthly market price sheets as Excel files.
+          Pay with FarmCoin or via Pesapal.
+        </p>
+
+        {priceReportMessage && (
+          <div style={{
+            padding: "0.75rem",
+            borderRadius: "8px",
+            marginBottom: "1rem",
+            background: priceReportMessage.type === "success" ? "#e8f5e9" : "#ffebee",
+            color: priceReportMessage.type === "success" ? "#2e7d32" : "#c62828",
+            fontSize: "0.9rem",
+          }}>
+            {priceReportMessage.text}
+            <button
+              onClick={() => setPriceReportMessage(null)}
+              style={{ background: "none", border: "none", cursor: "pointer", float: "right", fontWeight: "700" }}
+            >×</button>
+          </div>
+        )}
+
+        {priceSheetPricing === undefined ? (
+          <p style={{ color: "#999", fontSize: "0.9rem" }}>Loading pricing…</p>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "1rem" }}>
+            {([
+              { type: "daily" as const, label: "Today\'s Prices", emoji: "📅", scopeKey: priceSheetPricing.currentDailyKey, priceUGX: priceSheetPricing.dailyPriceUGX },
+              { type: "weekly" as const, label: "This Week", emoji: "📆", scopeKey: priceSheetPricing.currentWeeklyKey, priceUGX: priceSheetPricing.weeklyPriceUGX },
+              { type: "monthly" as const, label: "This Month", emoji: "🗓️", scopeKey: priceSheetPricing.currentMonthlyKey, priceUGX: priceSheetPricing.monthlyPriceUGX },
+            ]).map(({ type, label, emoji, scopeKey, priceUGX }) => (
+              <div key={type} style={{
+                background: "#f9fbf9",
+                border: "1px solid #e0ece0",
+                borderRadius: "10px",
+                padding: "1rem",
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.5rem",
+              }}>
+                <div style={{ fontWeight: "700", fontSize: "1rem", color: "#1b5e20" }}>
+                  {emoji} {label}
+                </div>
+                <div style={{ fontSize: "0.78rem", color: "#666" }}>{scopeKey}</div>
+                <div style={{ fontWeight: "700", color: "#2e7d32", fontSize: "1rem" }}>
+                  {priceUGX > 0 ? `UGX ${priceUGX.toLocaleString("en-UG")}` : "Free"}
+                </div>
+                {priceUGX > 0 && (
+                  <div style={{ fontSize: "0.75rem", color: "#888" }}>
+                    FarmCoin balance: {(buyerFarmcoinBalance as any)?.balance?.toLocaleString("en-UG") ?? "0"}
+                  </div>
+                )}
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", marginTop: "0.25rem" }}>
+                  {/* FarmCoin payment */}
+                  <button
+                    disabled={priceReportLoading === `${type}-fc`}
+                    onClick={async () => {
+                      setPriceReportMessage(null);
+                      setPriceReportLoading(`${type}-fc`);
+                      try {
+                        const result = await purchasePriceSheetFarmcoin({ buyerId: userId, productType: type, scopeDateKey: scopeKey } as any);
+                        setPriceReportMessage({ type: "success", text: "Paid! Preparing download…" });
+                        setPriceDownloadRequest({ productType: type, scopeDateKey: scopeKey });
+                      } catch (e: any) {
+                        // If already owned, allow direct download
+                        if (e.message?.includes("already have")) {
+                          setPriceDownloadRequest({ productType: type, scopeDateKey: scopeKey });
+                        } else {
+                          setPriceReportMessage({ type: "error", text: e.message || "Payment failed" });
+                          setPriceReportLoading(null);
+                        }
+                      }
+                    }}
+                    style={{
+                      padding: "0.5rem",
+                      background: priceReportLoading === `${type}-fc` ? "#c8e6c9" : "#2e7d32",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: "7px",
+                      cursor: priceReportLoading === `${type}-fc` ? "not-allowed" : "pointer",
+                      fontSize: "0.82rem",
+                      fontWeight: "600",
+                    }}
+                  >
+                    {priceReportLoading === `${type}-fc` ? "⏳ Processing…" : "🪙 Pay with FarmCoin"}
+                  </button>
+                  {/* Pesapal payment */}
+                  {priceUGX > 0 && (
+                    <button
+                      disabled={priceReportLoading === `${type}-pp`}
+                      onClick={async () => {
+                        setPriceReportMessage(null);
+                        setPriceReportLoading(`${type}-pp`);
+                        try {
+                          const callbackUrl = `${window.location.origin}/payment/callback?type=price_sheet`;
+                          const cancelUrl = `${window.location.origin}/`;
+                          const result: any = await initiatePriceSheetPesapal({
+                            buyerId: userId,
+                            productType: type,
+                            scopeDateKey: scopeKey,
+                            callbackUrl,
+                            cancelUrl,
+                          } as any);
+                          if (result?.redirectUrl) window.location.href = result.redirectUrl;
+                        } catch (e: any) {
+                          setPriceReportMessage({ type: "error", text: e.message || "Payment initiation failed" });
+                          setPriceReportLoading(null);
+                        }
+                      }}
+                      style={{
+                        padding: "0.5rem",
+                        background: priceReportLoading === `${type}-pp` ? "#bbdefb" : "#1976d2",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: "7px",
+                        cursor: priceReportLoading === `${type}-pp` ? "not-allowed" : "pointer",
+                        fontSize: "0.82rem",
+                        fontWeight: "600",
+                      }}
+                    >
+                      {priceReportLoading === `${type}-pp` ? "⏳ Redirecting…" : "💳 Pay via Pesapal"}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <p style={{ fontSize: "0.72rem", color: "#aaa", marginTop: "1rem" }}>
+          Downloads include indicative prices only. Includes N days of available published market data.
+        </p>
       </div>
 
       {/* Contact Us Section */}

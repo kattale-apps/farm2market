@@ -285,7 +285,7 @@ test.describe("QR Community Components", () => {
     
     // Verify page has content and loaded
     const pageContent = await page.content();
-    expect(pageContent.length).toBeGreaterThan(100
+    expect(pageContent.length).toBeGreaterThan(100);
     // Click role dropdown
     const dropdown = page.locator('select');
     await dropdown.click();

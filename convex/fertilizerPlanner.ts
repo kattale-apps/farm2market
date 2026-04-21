@@ -352,11 +352,15 @@ export const getFertilizerInsightsData = query({
       (r: any) => r.communityId === args.communityId && r.status !== "DRAFT" && !!r.planId
     );
 
+    const planById = new Map(plans.map((p) => [String(p._id), p]));
+
     const compliance = plans.map((p) => {
       const done = linkedResponses.filter((r: any) => r.planId === p._id).length;
       const planned = p.sprayDates.length;
       return {
         planId: p._id,
+        farmName: p.farmName,
+        label: p.farmName || p.crop,
         crop: p.crop,
         planned,
         done,
@@ -364,6 +368,7 @@ export const getFertilizerInsightsData = query({
     });
 
     const fertilizerByMonthMap = new Map<string, number>();
+    const fertilizerByMonthByFarmMap = new Map<string, Map<string, number>>();
     for (const response of linkedResponses) {
       const values = await ctx.db
         .query("formResponseValues")
@@ -382,11 +387,26 @@ export const getFertilizerInsightsData = query({
       const keyDate = toIsoDateOnly(new Date(response.createdAt));
       const monthKey = keyDate.slice(0, 7);
       fertilizerByMonthMap.set(monthKey, (fertilizerByMonthMap.get(monthKey) || 0) + ml);
+
+      const relatedPlan = planById.get(String(response.planId));
+      const farmKey = String(relatedPlan?.farmName || "Unassigned Farm");
+      const farmMonthMap = fertilizerByMonthByFarmMap.get(farmKey) || new Map<string, number>();
+      farmMonthMap.set(monthKey, (farmMonthMap.get(monthKey) || 0) + ml);
+      fertilizerByMonthByFarmMap.set(farmKey, farmMonthMap);
     }
 
     const fertilizerByMonth = Array.from(fertilizerByMonthMap.entries())
       .map(([month, totalMl]) => ({ month, totalMl }))
       .sort((a, b) => a.month.localeCompare(b.month));
+
+    const fertilizerByMonthByFarm = Object.fromEntries(
+      Array.from(fertilizerByMonthByFarmMap.entries()).map(([farmName, monthMap]) => {
+        const rows = Array.from(monthMap.entries())
+          .map(([month, totalMl]) => ({ month, totalMl }))
+          .sort((a, b) => a.month.localeCompare(b.month));
+        return [farmName, rows];
+      })
+    );
 
     const projections = await Promise.all(
       plans.map(async (plan) => {
@@ -395,6 +415,9 @@ export const getFertilizerInsightsData = query({
           .withIndex("by_plan", (q: any) => q.eq("planId", plan._id))
           .first();
         return {
+          planId: plan._id,
+          farmName: plan.farmName,
+          label: plan.farmName || plan.crop,
           crop: plan.crop,
           baselineYieldTons: row?.baselineYieldTons || 0,
           projectedYieldTons: row?.projectedYieldTons || 0,
@@ -405,6 +428,7 @@ export const getFertilizerInsightsData = query({
     return {
       compliance,
       fertilizerByMonth,
+      fertilizerByMonthByFarm,
       projections,
     };
   },

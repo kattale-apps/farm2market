@@ -453,6 +453,16 @@ export default function FarmerCommunitiesPage() {
                         ✓ You are a member
                       </p>
                     )}
+                    {community.showMemberCount !== false && community.memberCount !== undefined && (
+                      <p style={{
+                        margin: "0.5rem 0",
+                        fontSize: "0.9rem",
+                        color: "#555",
+                        fontWeight: "600",
+                      }}>
+                        👥 {community.memberCount} members
+                      </p>
+                    )}
                     {isAgroFreshCommunity(community) && latestForm && (
                       <div style={{
                         marginTop: "0.75rem",

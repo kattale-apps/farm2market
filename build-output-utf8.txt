@@ -1,0 +1,74 @@
+
+> farm2market-uganda@1.0.0 build
+> next build
+
+  ▲ Next.js 14.2.35
+
+   Creating an optimized production build ...
+ ⚠ Found lockfile missing swc dependencies, patching...
+> [PWA] Compile server
+> [PWA] Compile server
+> [PWA] Compile client (static)
+> [PWA] Auto register service worker with: C:\Users\jj\repo\node_modules\next-pwa\register.js
+> [PWA] Service worker: C:\Users\jj\repo\public\sw.js
+> [PWA]   url: /sw.js
+> [PWA]   scope: /
+ ⨯ Failed to patch lockfile, please try uninstalling and reinstalling next in this workspace
+TypeError: Cannot read properties of undefined (reading 'os')
+    at fetchPkgInfo (C:\Users\jj\repo\node_modules\next\dist\lib\patch-incorrect-lockfile.js:73:25)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async Promise.all (index 0)
+    at async patchIncorrectLockfile (C:\Users\jj\repo\node_modules\next\dist\lib\patch-incorrect-lockfile.js:162:26)
+Failed to compile.
+
+./node_modules/es-toolkit/dist/compat/array/uniqBy.js
+Module not found: Can't resolve '../../function/ary.js'
+
+https://nextjs.org/docs/messages/module-not-found
+
+Import trace for requested module:
+./node_modules/es-toolkit/compat/uniqBy.js
+./node_modules/recharts/es6/util/payload/getUniqPayload.js
+./node_modules/recharts/es6/component/Tooltip.js
+__barrel_optimize__?names=Bar,BarChart,CartesianGrid,Cell,Legend,Pie,PieChart,ResponsiveContainer,Tooltip,XAxis,YAxis!=!./node_modules/recharts/es6/index.js
+./app/admin/performance-insights/page.tsx
+
+./node_modules/es-toolkit/dist/compat/array/uniqBy.js
+Module not found: Can't resolve '../../function/identity.js'
+
+https://nextjs.org/docs/messages/module-not-found
+
+Import trace for requested module:
+./node_modules/es-toolkit/compat/uniqBy.js
+./node_modules/recharts/es6/util/payload/getUniqPayload.js
+./node_modules/recharts/es6/component/Tooltip.js
+__barrel_optimize__?names=Bar,BarChart,CartesianGrid,Cell,Legend,Pie,PieChart,ResponsiveContainer,Tooltip,XAxis,YAxis!=!./node_modules/recharts/es6/index.js
+./app/admin/performance-insights/page.tsx
+
+./node_modules/es-toolkit/dist/compat/function/debounce.js
+Module not found: Can't resolve '../../function/debounce.js'
+
+https://nextjs.org/docs/messages/module-not-found
+
+Import trace for requested module:
+./node_modules/es-toolkit/dist/compat/function/throttle.js
+./node_modules/es-toolkit/compat/throttle.js
+./node_modules/recharts/es6/component/ResponsiveContainer.js
+__barrel_optimize__?names=Bar,BarChart,CartesianGrid,Cell,Legend,Pie,PieChart,ResponsiveContainer,Tooltip,XAxis,YAxis!=!./node_modules/recharts/es6/index.js
+./app/admin/performance-insights/page.tsx
+
+./node_modules/es-toolkit/dist/compat/util/iteratee.js
+Module not found: Can't resolve '../../function/identity.js'
+
+https://nextjs.org/docs/messages/module-not-found
+
+Import trace for requested module:
+./node_modules/es-toolkit/dist/compat/array/uniqBy.js
+./node_modules/es-toolkit/compat/uniqBy.js
+./node_modules/recharts/es6/util/payload/getUniqPayload.js
+./node_modules/recharts/es6/component/Tooltip.js
+__barrel_optimize__?names=Bar,BarChart,CartesianGrid,Cell,Legend,Pie,PieChart,ResponsiveContainer,Tooltip,XAxis,YAxis!=!./node_modules/recharts/es6/index.js
+./app/admin/performance-insights/page.tsx
+
+
+> Build failed because of webpack errors

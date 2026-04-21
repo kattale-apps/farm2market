@@ -855,6 +855,7 @@ export default defineSchema({
     qrLogoUrl: v.optional(v.string()), // URL to logo displayed in QR code join flow
     // Discovery and search
     searchPriorityScore: v.optional(v.number()), // Higher scores appear first in community search results
+    showMemberCount: v.optional(v.boolean()), // Controls whether non-admin users can see member counts
   })
     .index("by_active", ["isGlobal", "geoLocked"])
     .index("by_created_by", ["createdBy"]),

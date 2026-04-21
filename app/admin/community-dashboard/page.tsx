@@ -1716,6 +1716,8 @@ export default function CommunityDashboardPage() {
   // Community imports mutations
   const importCommunityMembersFromExcel = useMutation(api.communityImports.importCommunityMembersFromExcel);
   const activateImportedCommunityMember = useMutation(api.communityImports.activateImportedCommunityMember);
+  const toggleCommunityMemberCountVisibility = useMutation(api.communities.toggleCommunityMemberCountVisibility);
+  const [togglingMemberCountByCommunity, setTogglingMemberCountByCommunity] = useState<Record<string, boolean>>({});
 
   const [pendingPage, setPendingPage] = useState(1);
   const [pendingPageSize, setPendingPageSize] = useState(20);
@@ -1939,6 +1941,40 @@ export default function CommunityDashboardPage() {
       setExportCommunityName("");
     }
   }, [exportMembersData, exportCommunityId, exportCommunityName, logExport, userId, buildExportRows]);
+
+  const handleToggleMemberCountVisibility = async (communityId: Id<"communities">, nextValue: boolean) => {
+    if (!userId) return;
+
+    setTogglingMemberCountByCommunity((prev) => ({
+      ...prev,
+      [String(communityId)]: true,
+    }));
+    setMessage(null);
+
+    try {
+      await toggleCommunityMemberCountVisibility({
+        adminId: userId,
+        communityId,
+        showMemberCount: nextValue,
+      });
+      setMessage({
+        type: "success",
+        text: nextValue
+          ? "Member count is now visible to users in this community"
+          : "Member count is now hidden from users in this community",
+      });
+    } catch (error: any) {
+      setMessage({
+        type: "error",
+        text: error?.message || "Failed to update member count visibility",
+      });
+    } finally {
+      setTogglingMemberCountByCommunity((prev) => ({
+        ...prev,
+        [String(communityId)]: false,
+      }));
+    }
+  };
 
   if (!userId) {
     return (
@@ -2265,6 +2301,40 @@ export default function CommunityDashboardPage() {
                       >
                         Geo-locked
                       </div>
+                    )}
+                  </div>
+                  <div
+                    style={{
+                      marginTop: "0.85rem",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.75rem",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <label
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                        fontSize: "0.85rem",
+                        color: "#374151",
+                        fontWeight: 600,
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={community.showMemberCount !== false}
+                        disabled={!!togglingMemberCountByCommunity[String(communityId)]}
+                        onChange={(e) => {
+                          handleToggleMemberCountVisibility(communityId as Id<"communities">, e.target.checked);
+                        }}
+                        style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                      />
+                      Show member count to users
+                    </label>
+                    {togglingMemberCountByCommunity[String(communityId)] && (
+                      <span style={{ fontSize: "0.8rem", color: "#666" }}>Saving...</span>
                     )}
                   </div>
                   {/* QR Code Button */}

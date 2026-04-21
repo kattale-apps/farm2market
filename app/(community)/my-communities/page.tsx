@@ -182,9 +182,11 @@ function JoinedCommunityCard({
       {/* Info */}
       <div className="flex-1 min-w-0">
         <h3 className="text-sm font-bold text-gray-900 truncate">{community.name}</h3>
-        <p className="text-xs text-gray-500 mt-0.5">
-          {(community as any).memberCount || 0} members
-        </p>
+        {(community as any).showMemberCount !== false && (
+          <p className="text-xs text-gray-500 mt-0.5">
+            {(community as any).memberCount || 0} members
+          </p>
+        )}
       </div>
 
       {/* Open Button */}

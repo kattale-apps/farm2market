@@ -237,7 +237,7 @@ export function TraderDashboardSafe({ userId }: TraderDashboardSafeProps) {
                             Global
                           </span>
                         )}
-                        {c.memberCount !== undefined && (
+                        {c.showMemberCount !== false && c.memberCount !== undefined && (
                           <span style={{
                             padding: "0.2rem 0.6rem", borderRadius: "999px", fontSize: "0.75rem",
                             fontWeight: 600, background: "#f5f5f5", color: "#666", border: "1px solid #e0e0e0"

@@ -64,6 +64,24 @@ export const getCommunitiesForAdmin = query({
   },
 });
 
+async function resolveLogoUrl(
+  ctx: { storage: { getUrl: (id: any) => Promise<string | null> } },
+  logoPath: string | undefined,
+): Promise<string | undefined> {
+  if (!logoPath) return undefined;
+  // Already a usable URL or static path
+  if (
+    logoPath.startsWith("/") ||
+    logoPath.startsWith("http") ||
+    logoPath.startsWith("data:")
+  ) {
+    return logoPath;
+  }
+  // Convex storage ID — resolve to a signed URL
+  const url = await ctx.storage.getUrl(logoPath as any);
+  return url ?? undefined;
+}
+
 async function enrichWithStats(ctx: any, communities: any[]) {
   return await Promise.all(
     communities.map(async (c) => {
@@ -71,8 +89,10 @@ async function enrichWithStats(ctx: any, communities: any[]) {
         .query("communityMemberships")
         .withIndex("by_community", (q: any) => q.eq("communityId", c._id))
         .collect();
+      const resolvedLogo = await resolveLogoUrl(ctx, c.logoPath || c.qrLogoUrl);
       return {
         ...c,
+        logoPath: resolvedLogo,
         memberCount: memberships.length,
       };
     })

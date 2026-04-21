@@ -1227,3 +1227,67 @@ export const mintFarmerFormCoin = mutation({
     return { success: true, coinsEarned: args.fieldCount, balance: newBalance };
   },
 });
+
+/**
+ * Mint FarmCoins for a farmer upon Farm Toolbox tracker entry submission
+ * - 1 coin per completed (non-empty) field
+ * - Duplicate-safe via trackerEntryId check
+ * - Mirrors mintFarmerFormCoin but uses trackerEntryId for dedup
+ */
+export const mintTrackerEntryCoin = mutation({
+  args: {
+    farmerId: v.id("users"),
+    trackerEntryId: v.id("farmTrackerEntries"),
+    fieldCount: v.number(),
+  },
+  handler: async (ctx, args) => {
+    if (args.fieldCount <= 0) {
+      return { success: false, reason: "No fields to reward" };
+    }
+
+    // Prevent duplicate rewards for same entry
+    const existing = await ctx.db
+      .query("farmcoinLedger")
+      .withIndex("by_account", (q: any) => q.eq("accountType", "farmer"))
+      .filter((q: any) =>
+        q.and(
+          q.eq(q.field("userId"), args.farmerId),
+          q.eq(q.field("trackerEntryId"), args.trackerEntryId)
+        )
+      )
+      .first();
+
+    if (existing) {
+      return { success: false, reason: "Already rewarded for this entry", balance: existing.balanceAfter };
+    }
+
+    // Get current farmer balance
+    const latestEntry = await ctx.db
+      .query("farmcoinLedger")
+      .withIndex("by_account", (q: any) => q.eq("accountType", "farmer"))
+      .filter((q: any) => q.eq(q.field("userId"), args.farmerId))
+      .order("desc")
+      .first();
+
+    const currentBalance = latestEntry?.balanceAfter ?? 0;
+    const newBalance = currentBalance + args.fieldCount;
+
+    const now = getUgandaTime();
+    const utid = generateUTID("ftr");
+
+    await ctx.db.insert("farmcoinLedger", {
+      accountType: "farmer",
+      userId: args.farmerId,
+      delta: args.fieldCount,
+      balanceAfter: newBalance,
+      source: "tracker_entry_reward",
+      utid,
+      trackerEntryId: args.trackerEntryId,
+      fieldCount: args.fieldCount,
+      reason: `Tracker entry reward: ${args.fieldCount} field${args.fieldCount > 1 ? "s" : ""} submitted`,
+      createdAt: now,
+    });
+
+    return { success: true, coinsEarned: args.fieldCount, balance: newBalance };
+  },
+});

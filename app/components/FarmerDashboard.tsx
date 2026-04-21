@@ -984,6 +984,57 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
         </div>
       </div>
 
+      {/* Farm Toolbox + Planner quick links */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr",
+        gap: "0.75rem",
+        marginBottom: "1.25rem",
+      }}>
+        <Link href="/farmer/toolbox" style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "0.4rem",
+          padding: "1rem",
+          background: "#e8f5e9",
+          border: "1.5px solid #a5d6a7",
+          borderRadius: "14px",
+          textDecoration: "none",
+          color: "#2e7d32",
+          fontFamily: '"Montserrat", sans-serif',
+          fontWeight: 700,
+          fontSize: "clamp(0.82rem,2.5vw,0.95rem)",
+          boxShadow: "0 2px 6px rgba(46,125,50,0.12)",
+          minHeight: 72,
+        }}>
+          <span style={{ fontSize: "1.8rem" }}>🧰</span>
+          My Farm Toolbox
+        </Link>
+        <Link href="/farmer/planner" style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "0.4rem",
+          padding: "1rem",
+          background: "#e3f2fd",
+          border: "1.5px solid #90caf9",
+          borderRadius: "14px",
+          textDecoration: "none",
+          color: "#1565c0",
+          fontFamily: '"Montserrat", sans-serif',
+          fontWeight: 700,
+          fontSize: "clamp(0.82rem,2.5vw,0.95rem)",
+          boxShadow: "0 2px 6px rgba(21,101,192,0.10)",
+          minHeight: 72,
+        }}>
+          <span style={{ fontSize: "1.8rem" }}>🗓️</span>
+          My Planner
+        </Link>
+      </div>
+
       {communitiesSection}
 
       {messageInboxOpen && (

@@ -329,6 +329,18 @@ export const buildDailySnapshot = internalMutation({
   },
 });
 
+/**
+ * Public mutation — any authenticated client can trigger a snapshot rebuild.
+ * Used by the MarketPricePanel to seed data on first load when no snapshot exists yet.
+ */
+export const triggerTodaySnapshot = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await runBuildSnapshot(ctx);
+    return { ok: true };
+  },
+});
+
 export const freezeDailySnapshot = internalMutation({
   args: {},
   handler: async (ctx) => {
@@ -395,15 +407,20 @@ export const getPublicPriceCards = query({
   handler: async (ctx, args) => {
     const cap = Math.min(args.limit ?? 20, 20);
 
-    // Try today's snapshot, fall back to yesterday's
+    // Today's snapshot is shown regardless of status ("building" = live data, "published" = frozen).
+    // Fall back to yesterday's only if it was published.
     let snapshot = null;
-    for (const dk of [getTodayDateKey(), getYesterdayDateKey()]) {
+    snapshot = await ctx.db
+      .query("dailyPriceSnapshots")
+      .withIndex("by_date_key", (q: any) => q.eq("dateKey", getTodayDateKey()))
+      .first();
+
+    if (!snapshot) {
       snapshot = await ctx.db
         .query("dailyPriceSnapshots")
-        .withIndex("by_date_key", (q: any) => q.eq("dateKey", dk))
+        .withIndex("by_date_key", (q: any) => q.eq("dateKey", getYesterdayDateKey()))
         .filter((q: any) => q.eq(q.field("status"), "published"))
         .first();
-      if (snapshot) break;
     }
 
     if (!snapshot) return { cards: [], dateKey: null };

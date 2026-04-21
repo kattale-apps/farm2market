@@ -263,9 +263,17 @@ export default function MemberMessagingFeed() {
 
               {/* Post Image */}
               {post.imageStorageId && (
-                <div className="bg-gray-100 w-full h-64 flex items-center justify-center text-gray-500">
-                  <span>Image Post</span>
-                </div>
+                post.imageUrl ? (
+                  <img
+                    src={post.imageUrl}
+                    alt={post.caption || "Post image"}
+                    style={{ width: "100%", maxHeight: 360, objectFit: "cover", display: "block" }}
+                  />
+                ) : (
+                  <div className="bg-gray-100 w-full h-40 flex items-center justify-center text-gray-400 text-sm">
+                    📸 Loading image...
+                  </div>
+                )
               )}
 
               {/* Post Caption */}
@@ -302,9 +310,17 @@ export default function MemberMessagingFeed() {
                         <p className="text-xs text-gray-600 font-semibold mb-1" style={{ opacity: 0.9 }}>Member</p>
                         {reply.text && <p className="text-sm text-gray-900" style={{ fontSize: "0.95rem", lineHeight: "1.4" }}>{reply.text}</p>}
                         {reply.imageStorageId && (
-                          <div className="mt-2 bg-gray-300 rounded w-32 h-32 flex items-center justify-center text-xs text-gray-600">
-                            Image
-                          </div>
+                          reply.imageUrl ? (
+                            <img
+                              src={reply.imageUrl}
+                              alt="Reply image"
+                              style={{ marginTop: 8, width: "100%", maxWidth: 240, borderRadius: 8, objectFit: "cover" }}
+                            />
+                          ) : (
+                            <div className="mt-2 bg-gray-200 rounded w-32 h-24 flex items-center justify-center text-xs text-gray-500">
+                              📸 Loading...
+                            </div>
+                          )
                         )}
                         <p className="text-xs text-gray-500 mt-1">{new Date(reply.createdAt).toLocaleTimeString()}</p>
                       </div>

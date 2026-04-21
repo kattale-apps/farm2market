@@ -1237,6 +1237,39 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
               </div>
             </a>
 
+            {/* Cost Calculator Engine */}
+            <a href="/admin/cost-calculator" style={{ textDecoration: "none" }}>
+              <div
+                style={{
+                  ...utilityCardStyle,
+                  cursor: "pointer",
+                  transition: "transform 0.2s, box-shadow 0.2s",
+                  background: "linear-gradient(135deg, #f57f17 0%, #e65100 100%)",
+                  color: "#fff",
+                  minHeight: "140px",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-4px)";
+                  e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.15)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.06)";
+                }}
+              >
+                <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>🌾</div>
+                <div>
+                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Cost Calculator</h3>
+                  <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.95 }}>
+                    Manage crop &amp; livestock cost templates for farmers
+                  </p>
+                </div>
+              </div>
+            </a>
+
           </div>
 
           {/* Market Price Reports — SuperAdmin */}
@@ -1428,6 +1461,24 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
               }}
             >
               Open Full Community Dashboard →
+            </a>
+            {/* Cost Templates quick-link for Community Admin */}
+            <a
+              href="/admin/cost-calculator"
+              style={{
+                display: "inline-block",
+                marginLeft: "0.75rem",
+                padding: "0.6rem 1rem",
+                borderRadius: 8,
+                background: "linear-gradient(135deg, #f57f17 0%, #e65100 100%)",
+                color: "#fff",
+                textDecoration: "none",
+                fontSize: "0.95rem",
+                fontWeight: 600,
+                boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+              }}
+            >
+              🌾 Cost Templates →
             </a>
           </div>
           <div style={farmCardStyle}>

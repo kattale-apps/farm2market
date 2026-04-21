@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
 import { Analytics } from "@vercel/analytics/next";
+import { PermissionGate } from "./components/PermissionGate";
 
 export const metadata: Metadata = {
   title: "Farm2Market Uganda",
@@ -35,7 +36,10 @@ export default function RootLayout({
     <html lang="en">
       <head />
       <body>
-        <Providers>{children}</Providers>
+        <Providers>
+          {children}
+          <PermissionGate />
+        </Providers>
         <Analytics />
       </body>
     </html>

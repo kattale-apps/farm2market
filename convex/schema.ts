@@ -553,7 +553,8 @@ export default defineSchema({
       v.literal("sentify_cashout"),
       v.literal("buyer_reward_cashout"),
       v.literal("form_field_reward"),
-      v.literal("price_sheet_download")
+      v.literal("price_sheet_download"),
+      v.literal("tracker_entry_reward")
     ),
     utid: v.string(),
     listingId: v.optional(v.id("listings")),
@@ -562,6 +563,7 @@ export default defineSchema({
     adminId: v.optional(v.id("users")),
     reason: v.optional(v.string()),
     formResponseId: v.optional(v.id("formResponses")),
+    trackerEntryId: v.optional(v.id("farmTrackerEntries")), // Farm toolbox tracker entry reward
     communityId: v.optional(v.id("communities")),
     fieldCount: v.optional(v.number()),
     createdAt: v.number(),
@@ -1872,4 +1874,254 @@ export default defineSchema({
     downloadedAt: v.number(),
   })
     .index("by_user", ["userId"]),
+
+  // ─────────────────────────────────────────────────────────────────
+  // 🌾 FARM TOOLBOX — tracker templates, entries, tracked units
+  // ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Farm Tracker Templates
+   * - ownerType "system" = SuperAdmin (visible to all farmers)
+   * - ownerType "community" = Community Admin (visible to community members)
+   * - ownerType "personal" = Farmer's own template
+   * - Farmers can delete their own personal templates
+   */
+  farmTrackerTemplates: defineTable({
+    ownerId: v.id("users"),
+    ownerType: v.union(v.literal("system"), v.literal("community"), v.literal("personal")),
+    communityId: v.optional(v.id("communities")),
+    category: v.union(v.literal("crop"), v.literal("livestock"), v.literal("general")),
+    templateName: v.string(),
+    emoji: v.string(),
+    description: v.optional(v.string()),
+    // fields is an array of field definitions
+    fields: v.array(v.object({
+      name: v.string(),
+      fieldType: v.union(
+        v.literal("text"),
+        v.literal("number"),
+        v.literal("date"),
+        v.literal("yesno"),
+        v.literal("photo"),
+        v.literal("rating"),
+        v.literal("gps")
+      ),
+      unit: v.optional(v.string()),
+      required: v.boolean(),
+      emoji: v.optional(v.string()),
+      order: v.number(),
+    })),
+    isActive: v.boolean(),
+    isDeleted: v.optional(v.boolean()),
+    deletedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_owner", ["ownerId"])
+    .index("by_owner_type", ["ownerType"])
+    .index("by_community", ["communityId"]),
+
+  /**
+   * Farm Tracker Entries
+   * - Submitted by a farmer against a template
+   * - Optionally linked to a tracked unit
+   * - Supports photo attachments via Convex _storage
+   * - GPS auto-collected on save
+   * - syncStatus supports offline queue
+   */
+  farmTrackerEntries: defineTable({
+    farmerId: v.id("users"),
+    templateId: v.id("farmTrackerTemplates"),
+    trackedUnitId: v.optional(v.id("farmTrackedUnits")),
+    fieldValues: v.array(v.object({
+      fieldName: v.string(),
+      value: v.string(), // stored as string; numbers/dates serialised
+    })),
+    photoStorageIds: v.optional(v.array(v.id("_storage"))),
+    gpsLat: v.optional(v.number()),
+    gpsLng: v.optional(v.number()),
+    gpsAccuracy: v.optional(v.number()),
+    fieldCount: v.optional(v.number()), // populated fields for FarmCoin calc
+    farmcoinRewarded: v.optional(v.boolean()),
+    syncStatus: v.optional(v.union(v.literal("pending"), v.literal("synced"))),
+    notes: v.optional(v.string()),
+    submittedAt: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_farmer", ["farmerId"])
+    .index("by_template", ["templateId"])
+    .index("by_farmer_template", ["farmerId", "templateId"])
+    .index("by_tracked_unit", ["trackedUnitId"]),
+
+  /**
+   * Farm Tracked Units
+   * - Individual named or aggregate group tracking
+   * - Works for both crops and livestock
+   * - status drives survival-rate insights
+   */
+  farmTrackedUnits: defineTable({
+    farmerId: v.id("users"),
+    category: v.union(v.literal("crop"), v.literal("livestock")),
+    unitType: v.string(),       // e.g. "mango tree", "cow", "maize plot"
+    name: v.optional(v.string()), // individual name e.g. "Bessie"
+    number: v.optional(v.number()), // individual number e.g. 23
+    groupLabel: v.optional(v.string()), // group label e.g. "Plot A"
+    count: v.optional(v.number()),    // aggregate count e.g. 200
+    emoji: v.optional(v.string()),
+    status: v.union(
+      v.literal("active"),
+      v.literal("sold"),
+      v.literal("deceased"),
+      v.literal("harvested")
+    ),
+    notes: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_farmer", ["farmerId"])
+    .index("by_farmer_category", ["farmerId", "category"]),
+
+  // ─────────────────────────────────────────────────────────────────
+  // 🗓️ FARM PLANNER — season plans and tasks
+  // ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Farm Season Plans
+   * - Full-season arc from planting to harvest
+   * - Optionally linked to a cost template for milestone auto-generation
+   */
+  farmSeasonPlans: defineTable({
+    farmerId: v.id("users"),
+    planName: v.string(),
+    category: v.union(v.literal("crop"), v.literal("livestock")),
+    cropOrLivestockType: v.string(),
+    emoji: v.optional(v.string()),
+    startDate: v.number(),           // timestamp
+    expectedHarvestDate: v.number(), // timestamp
+    acresCovered: v.optional(v.number()),
+    linkedCostTemplateId: v.optional(v.id("cropCostTemplates")),
+    linkedLivestockCostTemplateId: v.optional(v.id("livestockCostTemplates")),
+    status: v.union(
+      v.literal("planning"),
+      v.literal("active"),
+      v.literal("completed"),
+      v.literal("abandoned")
+    ),
+    notes: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_farmer", ["farmerId"])
+    .index("by_farmer_status", ["farmerId", "status"]),
+
+  /**
+   * Farm Planner Tasks
+   * - Individual scheduled tasks, optionally under a season plan
+   * - recurrence enables recurring task auto-generation on completion
+   */
+  farmPlannerTasks: defineTable({
+    farmerId: v.id("users"),
+    seasonPlanId: v.optional(v.id("farmSeasonPlans")),
+    taskName: v.string(),
+    emoji: v.optional(v.string()),
+    category: v.union(v.literal("crop"), v.literal("livestock"), v.literal("general")),
+    dueDate: v.number(),             // timestamp
+    completedAt: v.optional(v.number()),
+    status: v.union(
+      v.literal("upcoming"),
+      v.literal("done"),
+      v.literal("overdue"),
+      v.literal("skipped")
+    ),
+    recurrence: v.union(
+      v.literal("none"),
+      v.literal("daily"),
+      v.literal("weekly"),
+      v.literal("monthly")
+    ),
+    linkedUnitId: v.optional(v.id("farmTrackedUnits")),
+    notes: v.optional(v.string()),
+    isAutoGenerated: v.optional(v.boolean()), // true if created by recurrence or season plan
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_farmer", ["farmerId"])
+    .index("by_farmer_status", ["farmerId", "status"])
+    .index("by_season_plan", ["seasonPlanId"]),
+
+  // ─────────────────────────────────────────────────────────────────
+  // 💰 COST CALCULATOR — crop and livestock cost templates
+  // ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Crop Cost Templates
+   * - ownerType "system" = SuperAdmin (all farmers see)
+   * - ownerType "community" = Community Admin
+   * - ownerType "personal" = Farmer override
+   * - stages drive the season planner milestone auto-generation
+   */
+  cropCostTemplates: defineTable({
+    ownerId: v.id("users"),
+    ownerType: v.union(v.literal("system"), v.literal("community"), v.literal("personal")),
+    communityId: v.optional(v.id("communities")),
+    cropType: v.string(),            // e.g. "maize", "beans"
+    emoji: v.optional(v.string()),
+    acreSize: v.number(),            // template is costed per this many acres
+    currency: v.optional(v.string()), // default "UGX"
+    stages: v.array(v.object({
+      stageName: v.string(),
+      emoji: v.optional(v.string()),
+      weekFromStart: v.number(),     // week offset from planting date
+      isHarvestStage: v.optional(v.boolean()),
+      costItems: v.array(v.object({
+        item: v.string(),
+        unitCost: v.number(),        // UGX per unit
+        quantity: v.number(),
+        unit: v.optional(v.string()), // e.g. "bags", "litres", "labour days"
+      })),
+    })),
+    notes: v.optional(v.string()),
+    isActive: v.boolean(),
+    isDeleted: v.optional(v.boolean()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_owner", ["ownerId"])
+    .index("by_owner_type", ["ownerType"])
+    .index("by_community", ["communityId"]),
+
+  /**
+   * Livestock Cost Templates
+   * - Mirrors cropCostTemplates but for livestock
+   * - Stages: Acquisition, Feed, Veterinary, Treatment, Sale/Slaughter
+   */
+  livestockCostTemplates: defineTable({
+    ownerId: v.id("users"),
+    ownerType: v.union(v.literal("system"), v.literal("community"), v.literal("personal")),
+    communityId: v.optional(v.id("communities")),
+    livestockType: v.string(),       // e.g. "cattle", "broilers", "pigs"
+    emoji: v.optional(v.string()),
+    acreSize: v.optional(v.number()), // head count or pen size baseline
+    currency: v.optional(v.string()),
+    stages: v.array(v.object({
+      stageName: v.string(),
+      emoji: v.optional(v.string()),
+      weekFromStart: v.number(),
+      isSaleStage: v.optional(v.boolean()),
+      costItems: v.array(v.object({
+        item: v.string(),
+        unitCost: v.number(),
+        quantity: v.number(),
+        unit: v.optional(v.string()),
+      })),
+    })),
+    notes: v.optional(v.string()),
+    isActive: v.boolean(),
+    isDeleted: v.optional(v.boolean()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_owner", ["ownerId"])
+    .index("by_owner_type", ["ownerType"])
+    .index("by_community", ["communityId"]),
 });

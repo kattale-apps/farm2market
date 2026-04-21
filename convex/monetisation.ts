@@ -520,10 +520,30 @@ export const getMemberMessagingFeed = query({
       };
     }
 
+    // Resolve image URLs for noticeboard posts (server-side, Convex _storage)
+    const noticeboardPostsWithUrls = await Promise.all(
+      noticeboardPosts.map(async (post) => {
+        const imageUrl = post.imageStorageId
+          ? await ctx.storage.getUrl(post.imageStorageId)
+          : null;
+        return { ...post, imageUrl };
+      })
+    );
+
+    // Resolve image URLs for replies
+    const repliesWithUrls = await Promise.all(
+      replies.map(async (reply) => {
+        const imageUrl = reply.imageStorageId
+          ? await ctx.storage.getUrl(reply.imageStorageId)
+          : null;
+        return { ...reply, imageUrl };
+      })
+    );
+
     return {
       community,
-      noticeboardPosts,
-      replies,
+      noticeboardPosts: noticeboardPostsWithUrls,
+      replies: repliesWithUrls,
       messageImagePrice,
       postInteractions,
     };

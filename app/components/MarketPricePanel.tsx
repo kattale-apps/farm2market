@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery } from "convex/react";
+import { useState, useEffect } from "react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { useRouter } from "next/navigation";
 
@@ -13,12 +13,24 @@ interface MarketPricePanelProps {
 export default function MarketPricePanel({ mobileMode = false }: MarketPricePanelProps) {
   const defaultLimit = mobileMode ? 4 : 6;
   const result = useQuery(api.marketPrices.getPublicPriceCards, { limit: 20 });
+  const triggerSnapshot = useMutation((api as any).marketPrices.triggerTodaySnapshot);
   const router = useRouter();
   const [showAll, setShowAll] = useState(false);
+  const [triggered, setTriggered] = useState(false);
 
   const cards = result?.cards ?? [];
   const dateKey = result?.dateKey ?? null;
   const isLoading = result === undefined;
+
+  // If the query loaded and returned no cards, trigger a snapshot build once.
+  // This handles the case where vendor data exists in listings/submissions but
+  // no snapshot has been built yet today.
+  useEffect(() => {
+    if (!isLoading && cards.length === 0 && !triggered) {
+      setTriggered(true);
+      triggerSnapshot({}).catch(() => {/* ignore */});
+    }
+  }, [isLoading, cards.length, triggered, triggerSnapshot]);
   const visibleCards = showAll ? cards : cards.slice(0, defaultLimit);
 
   const panelStyle: React.CSSProperties = {

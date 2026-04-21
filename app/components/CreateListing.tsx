@@ -473,7 +473,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
               textAlign: "center",
             }}
           >
-            📊 Submit Today's Market Price
+            📊 Submit Today&apos;s Market Price
           </button>
         )}
       </div>
@@ -495,7 +495,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
         )}
         <FarmCoinVideoPreloader />
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-          <h3 style={{ margin: 0, fontSize: "1.2rem", color: "#1565c0" }}>📊 Submit Today's Market Price</h3>
+          <h3 style={{ margin: 0, fontSize: "1.2rem", color: "#1565c0" }}>📊 Submit Today&apos;s Market Price</h3>
           <button
             type="button"
             onClick={() => { setShowPriceForm(false); setPriceMessage(null); }}

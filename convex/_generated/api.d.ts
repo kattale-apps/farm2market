@@ -46,6 +46,7 @@ import type * as introspection from "../introspection.js";
 import type * as inventoryBlocks from "../inventoryBlocks.js";
 import type * as listings from "../listings.js";
 import type * as locations from "../locations.js";
+import type * as marketPrices from "../marketPrices.js";
 import type * as messages from "../messages.js";
 import type * as monetisation from "../monetisation.js";
 import type * as negotiations from "../negotiations.js";
@@ -133,6 +134,7 @@ declare const fullApi: ApiFromModules<{
   inventoryBlocks: typeof inventoryBlocks;
   listings: typeof listings;
   locations: typeof locations;
+  marketPrices: typeof marketPrices;
   messages: typeof messages;
   monetisation: typeof monetisation;
   negotiations: typeof negotiations;

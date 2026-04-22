@@ -95,8 +95,16 @@ function TemplatesTab({ userId, onSelectTemplate }: { userId: Id<"users">; onSel
 }
 
 // ─── CREATE TEMPLATE FORM ────────────────────────────────────────────────────
-const FIELD_TYPES = ["text", "number", "date", "yesno", "photo", "rating", "gps"] as const;
-type FieldType = typeof FIELD_TYPES[number];
+const FIELD_TYPE_OPTIONS = [
+  { value: "text", label: "text" },
+  { value: "number", label: "number" },
+  { value: "date", label: "date" },
+  { value: "yesno", label: "yes/no" },
+  { value: "photo", label: "photo (camera/gallery)" },
+  { value: "rating", label: "rating" },
+  { value: "gps", label: "gps" },
+] as const;
+type FieldType = (typeof FIELD_TYPE_OPTIONS)[number]["value"];
 
 function CreateTemplateForm({ userId, onDone }: { userId: Id<"users">; onDone: () => void }) {
   const [name, setName] = useState("");
@@ -126,13 +134,13 @@ function CreateTemplateForm({ userId, onDone }: { userId: Id<"users">; onDone: (
 
   return (
     <div style={{ border: "1.5px dashed #a5d6a7", borderRadius: 10, padding: "1rem", marginBottom: "1rem" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "auto 1fr auto", gap: "0.5rem", marginBottom: "0.75rem", alignItems: "end" }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.75rem", alignItems: "end" }}>
         <input value={emoji} onChange={(e) => setEmoji(e.target.value)}
           style={{ width: 44, textAlign: "center", padding: "0.45rem", border: "1px solid #ddd", borderRadius: 8, fontSize: "1.2rem" }} />
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Template name…"
-          style={{ padding: "0.45rem 0.7rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.88rem" }} />
+          style={{ flex: "1 1 180px", minWidth: 0, padding: "0.45rem 0.7rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.88rem" }} />
         <select value={category} onChange={(e) => setCategory(e.target.value as any)}
-          style={{ padding: "0.45rem 0.6rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.82rem" }}>
+          style={{ flex: "0 1 140px", padding: "0.45rem 0.6rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.82rem" }}>
           <option value="general">General</option>
           <option value="crop">Crop</option>
           <option value="livestock">Livestock</option>
@@ -141,12 +149,12 @@ function CreateTemplateForm({ userId, onDone }: { userId: Id<"users">; onDone: (
       <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description (optional)…"
         style={{ width: "100%", padding: "0.4rem 0.7rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.82rem", boxSizing: "border-box", marginBottom: "0.75rem" }} />
       {fields.map((f, i) => (
-        <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr auto auto auto", gap: "0.35rem", marginBottom: "0.35rem", alignItems: "center" }}>
+        <div key={i} style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", marginBottom: "0.35rem", alignItems: "center" }}>
           <input value={f.name} onChange={(e) => updateField(i, "name", e.target.value)} placeholder="Field name…"
-            style={{ padding: "0.35rem 0.5rem", border: "1px solid #ddd", borderRadius: 6, fontFamily: FONT, fontSize: "0.8rem" }} />
+            style={{ flex: "1 1 180px", minWidth: 0, padding: "0.35rem 0.5rem", border: "1px solid #ddd", borderRadius: 6, fontFamily: FONT, fontSize: "0.8rem" }} />
           <select value={f.fieldType} onChange={(e) => updateField(i, "fieldType", e.target.value)}
-            style={{ padding: "0.35rem 0.4rem", border: "1px solid #ddd", borderRadius: 6, fontFamily: FONT, fontSize: "0.75rem" }}>
-            {FIELD_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+            style={{ flex: "0 1 170px", padding: "0.35rem 0.4rem", border: "1px solid #ddd", borderRadius: 6, fontFamily: FONT, fontSize: "0.75rem" }}>
+            {FIELD_TYPE_OPTIONS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
           <label style={{ fontSize: "0.72rem", display: "flex", alignItems: "center", gap: "0.2rem", cursor: "pointer" }}>
             <input type="checkbox" checked={f.required} onChange={(e) => updateField(i, "required", e.target.checked)} /> Req
@@ -154,12 +162,12 @@ function CreateTemplateForm({ userId, onDone }: { userId: Id<"users">; onDone: (
           <button onClick={() => removeField(i)} style={{ background: "#ffebee", border: "none", borderRadius: 6, padding: "0.25rem 0.4rem", cursor: "pointer", fontSize: "0.8rem" }}>✕</button>
         </div>
       ))}
-      <button onClick={addField} style={{ padding: "0.3rem 0.7rem", background: BRAND_BG, border: "1px solid #a5d6a7", borderRadius: 6, cursor: "pointer", fontSize: "0.78rem", color: BRAND, fontFamily: FONT, marginBottom: "0.75rem" }}>
+      <button onClick={addField} style={{ width: "100%", maxWidth: 170, padding: "0.45rem 0.7rem", background: BRAND_BG, border: "1px solid #a5d6a7", borderRadius: 6, cursor: "pointer", fontSize: "0.78rem", color: BRAND, fontFamily: FONT, marginBottom: "0.75rem" }}>
         + Add Field
       </button>
       {error && <p style={{ color: "#c62828", fontSize: "0.78rem", margin: "0 0 0.5rem" }}>⚠️ {error}</p>}
       <button onClick={handleSave} disabled={saving}
-        style={{ padding: "0.55rem 1.2rem", background: BRAND, color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", fontFamily: FONT, fontSize: "0.85rem", opacity: saving ? 0.7 : 1 }}>
+        style={{ width: "100%", maxWidth: 240, padding: "0.55rem 1.2rem", background: BRAND, color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", fontFamily: FONT, fontSize: "0.85rem", opacity: saving ? 0.7 : 1 }}>
         {saving ? "Saving…" : "💾 Save Template"}
       </button>
     </div>
@@ -192,10 +200,18 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
   const [error, setError] = useState<string | null>(null);
 
   const submitEntry = useOfflineMutation<any>((api as any).farmToolbox.submitEntry, { expectedCoins: 1 });
+  const entries = useOfflineQuery(
+    (api as any).farmToolbox.listEntries,
+    { farmerId: userId, limit: 50 },
+    `toolbox_entries_${userId}`
+  ) as any[] | undefined;
+  const deleteEntry = useOfflineMutation<any>((api as any).farmToolbox.deleteEntry);
   const generateUploadUrl = useMutation(api.files.generateUploadUrl);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
   const [photoStorageIds, setPhotoStorageIds] = useState<string[]>([]);
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [deletingEntryId, setDeletingEntryId] = useState<string | null>(null);
 
   const captureGPS = () => {
     setGpsLoading(true);
@@ -206,15 +222,86 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
   };
 
   const handlePhotoUpload = async (file: File) => {
+    if (file.size > 10 * 1024 * 1024) {
+      setError("Photo too large. Maximum allowed size is 10MB.");
+      return;
+    }
     setPhotoUploading(true);
     try {
       const uploadUrl = await generateUploadUrl();
       const res = await fetch(uploadUrl, { method: "POST", headers: { "Content-Type": file.type }, body: file });
       const { storageId } = await res.json();
       setPhotoStorageIds((prev) => [...prev, storageId]);
-    } catch {}
+    } catch {
+      setError("Failed to upload photo. Please try again.");
+    }
     setPhotoUploading(false);
   };
+
+  const handleDeleteEntry = async (entryId: string) => {
+    if (!confirm("Delete this submitted entry?")) return;
+    setDeletingEntryId(entryId);
+    setError(null);
+    try {
+      await deleteEntry({ entryId: entryId as Id<"farmTrackerEntries">, requestingUserId: userId });
+      setSuccessMsg("Entry deleted successfully.");
+    } catch (e: any) {
+      setError(e.message ?? "Failed to delete entry");
+    }
+    setDeletingEntryId(null);
+  };
+
+  const renderEntriesList = () => (
+    <div style={{ background: "#fff", borderRadius: 12, padding: "1rem", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", marginTop: "1rem" }}>
+      <h3 style={{ margin: "0 0 0.75rem", fontSize: "0.92rem", fontWeight: 700 }}>🗂 My Submitted Entries</h3>
+      {entries === undefined ? (
+        <p style={{ margin: 0, color: "#888", fontSize: "0.82rem" }}>Loading entries…</p>
+      ) : entries.length === 0 ? (
+        <p style={{ margin: 0, color: "#888", fontSize: "0.82rem" }}>No entries submitted yet.</p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+          {entries.map((entry: any) => {
+            const submittedAt = new Date(entry.submittedAt ?? entry.createdAt).toLocaleString();
+            const previewFields = (entry.fieldValues ?? []).slice(0, 3);
+            return (
+              <div key={entry._id} style={{ border: "1px solid #e0e0e0", borderRadius: 10, padding: "0.75rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
+                  <div>
+                    <div style={{ fontSize: "0.82rem", fontWeight: 700 }}>{submittedAt}</div>
+                    <div style={{ fontSize: "0.74rem", color: "#666" }}>
+                      {entry.fieldCount ?? 0} field(s) filled {entry.photoUrls?.length ? `· ${entry.photoUrls.length} photo(s)` : ""}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteEntry(String(entry._id))}
+                    disabled={deletingEntryId === String(entry._id)}
+                    style={{
+                      padding: "0.35rem 0.7rem",
+                      background: "#ffebee",
+                      border: "1px solid #ef9a9a",
+                      borderRadius: 6,
+                      fontSize: "0.74rem",
+                      cursor: deletingEntryId === String(entry._id) ? "not-allowed" : "pointer",
+                      color: "#c62828",
+                      fontFamily: FONT,
+                    }}
+                  >
+                    {deletingEntryId === String(entry._id) ? "Deleting…" : "🗑 Delete"}
+                  </button>
+                </div>
+                {previewFields.length > 0 && (
+                  <div style={{ marginTop: "0.45rem", fontSize: "0.75rem", color: "#555", wordBreak: "break-word" }}>
+                    {previewFields.map((fv: any) => `${fv.fieldName}: ${fv.value || "—"}`).join(" · ")}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 
   const handleSubmit = async () => {
     if (!selectedTemplate) return;
@@ -269,6 +356,7 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
             ))}
           </div>
         )}
+        {renderEntriesList()}
       </div>
     );
   }
@@ -329,12 +417,23 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
               </div>
             ) : field.fieldType === "photo" ? (
               <div>
-                <input ref={fileInputRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }}
+                <input ref={galleryInputRef} type="file" accept="image/*" style={{ display: "none" }}
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePhotoUpload(f); }} />
-                <button onClick={() => fileInputRef.current?.click()} disabled={photoUploading}
-                  style={{ padding: "0.5rem 1rem", background: "#f5f5f5", border: "1px solid #ddd", borderRadius: 8, cursor: "pointer", fontFamily: FONT, fontSize: "0.82rem" }}>
-                  {photoUploading ? "Uploading…" : `📷 ${photoStorageIds.length > 0 ? `${photoStorageIds.length} photo(s) ✓` : "Take Photo"}`}
-                </button>
+                <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }}
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePhotoUpload(f); }} />
+                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                  <button type="button" onClick={() => cameraInputRef.current?.click()} disabled={photoUploading}
+                    style={{ padding: "0.5rem 0.8rem", background: "#f5f5f5", border: "1px solid #ddd", borderRadius: 8, cursor: "pointer", fontFamily: FONT, fontSize: "0.82rem" }}>
+                    {photoUploading ? "Uploading…" : "📷 Camera"}
+                  </button>
+                  <button type="button" onClick={() => galleryInputRef.current?.click()} disabled={photoUploading}
+                    style={{ padding: "0.5rem 0.8rem", background: "#f5f5f5", border: "1px solid #ddd", borderRadius: 8, cursor: "pointer", fontFamily: FONT, fontSize: "0.82rem" }}>
+                    {photoUploading ? "Uploading…" : "🖼 Gallery"}
+                  </button>
+                  <span style={{ fontSize: "0.75rem", color: photoStorageIds.length > 0 ? BRAND : "#666", alignSelf: "center" }}>
+                    {photoStorageIds.length > 0 ? `${photoStorageIds.length} photo(s) uploaded` : "No photo uploaded yet"}
+                  </span>
+                </div>
               </div>
             ) : field.fieldType === "gps" ? (
               <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
@@ -364,6 +463,8 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
           {submitting ? "Submitting…" : "💾 Submit Entry · Earn 🪙 FarmCoins"}
         </button>
       </div>
+
+      {renderEntriesList()}
     </div>
   );
 }
@@ -409,22 +510,22 @@ function UnitsTab({ userId }: { userId: Id<"users"> }) {
 
       {showForm && (
         <div style={{ background: "#fff", borderRadius: 12, padding: "1.25rem", marginBottom: "1rem", boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "auto 1fr 1fr", gap: "0.5rem", marginBottom: "0.5rem", alignItems: "end" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.5rem", alignItems: "end" }}>
             <input value={newUnit.emoji} onChange={(e) => setNewUnit({ ...newUnit, emoji: e.target.value })} placeholder="🌱"
               style={{ width: 44, textAlign: "center", padding: "0.45rem", border: "1px solid #ddd", borderRadius: 8, fontSize: "1.2rem" }} />
             <input value={newUnit.unitType} onChange={(e) => setNewUnit({ ...newUnit, unitType: e.target.value })} placeholder="Type (e.g. maize, cow)"
-              style={{ padding: "0.45rem 0.7rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.85rem" }} />
+              style={{ flex: "1 1 180px", minWidth: 0, padding: "0.45rem 0.7rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.85rem" }} />
             <select value={newUnit.category} onChange={(e) => setNewUnit({ ...newUnit, category: e.target.value as any })}
-              style={{ padding: "0.45rem 0.6rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.82rem" }}>
+              style={{ flex: "0 1 130px", padding: "0.45rem 0.6rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.82rem" }}>
               <option value="crop">Crop</option>
               <option value="livestock">Livestock</option>
             </select>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", marginBottom: "0.75rem" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.75rem" }}>
             <input value={newUnit.name} onChange={(e) => setNewUnit({ ...newUnit, name: e.target.value })} placeholder="Name/ID (optional)"
-              style={{ padding: "0.45rem 0.7rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.85rem" }} />
+              style={{ flex: "1 1 180px", minWidth: 0, padding: "0.45rem 0.7rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.85rem" }} />
             <input type="number" value={newUnit.count} onChange={(e) => setNewUnit({ ...newUnit, count: Number(e.target.value) })} placeholder="Count"
-              style={{ padding: "0.45rem 0.7rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.85rem" }} />
+              style={{ flex: "1 1 120px", minWidth: 0, padding: "0.45rem 0.7rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.85rem" }} />
           </div>
           <input value={newUnit.notes} onChange={(e) => setNewUnit({ ...newUnit, notes: e.target.value })} placeholder="Notes (optional)"
             style={{ width: "100%", padding: "0.45rem 0.7rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.85rem", boxSizing: "border-box", marginBottom: "0.75rem" }} />

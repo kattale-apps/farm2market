@@ -140,6 +140,22 @@ function normalizeMarketName(name: string): string {
   return name.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+/**
+ * Strip vendor-identifying stall/booth/stand/shop/unit/block identifiers
+ * from a submitted market name so only the market name is shown publicly.
+ * Examples:
+ *   "Wandegeya Market South Wing, Stall SW-101" → "Wandegeya Market South Wing"
+ *   "Owino Market Stall 45"                    → "Owino Market"
+ *   "Nakasero Market, Booth B12"               → "Nakasero Market"
+ *   "Kalerwe Market Stand 7"                   → "Kalerwe Market"
+ */
+function sanitizeMarketNameForDisplay(name: string): string {
+  return name
+    .replace(/,?\s*(stall|booth|stand|shop|unit|block|space|bay|shed|kiosk)\s+[\w\-\/]+\s*$/i, "")
+    .replace(/,?\s*#\s*[\w\-]+\s*$/i, "")
+    .trim();
+}
+
 function normalizeCommodity(commodity: string): string {
   return commodity.trim().toLowerCase().replace(/\s+/g, " ");
 }
@@ -577,7 +593,7 @@ export const getPublicMarketCards = query({
         if (cardsByMarket.size >= marketsCap) continue;
         card = {
           marketKey,
-          marketName: rawName,
+          marketName: sanitizeMarketNameForDisplay(rawName),
           marketEmoji: getMarketEmoji(s.marketType),
           latestPostedAt: s.submittedAt,
           itemCount: 0,
@@ -589,7 +605,7 @@ export const getPublicMarketCards = query({
       card.itemCount += 1;
       if (s.submittedAt >= card.latestPostedAt) {
         card.latestPostedAt = s.submittedAt;
-        card.marketName = rawName;
+        card.marketName = sanitizeMarketNameForDisplay(rawName);
         card.marketEmoji = getMarketEmoji(s.marketType);
       }
 

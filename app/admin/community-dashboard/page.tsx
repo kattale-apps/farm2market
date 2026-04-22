@@ -430,6 +430,106 @@ function MessagesTab({ communityId, userId }: { communityId: Id<"communities">; 
   );
 }
 
+function FormInlineQRCode({
+  formId,
+  compact = true,
+}: {
+  formId: Id<"communityForms">;
+  compact?: boolean;
+}) {
+  const qrData = useQuery((api as any).forms.getFormQrData, { formId }) as any;
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!qrData?.fillPath) return;
+    const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
+    const fullUrl = `${baseUrl}${qrData.fillPath}`;
+    QRCode.toDataURL(fullUrl, {
+      width: compact ? 96 : 320,
+      margin: 2,
+      color: { dark: "#000000", light: "#ffffff" },
+      errorCorrectionLevel: "H",
+    })
+      .then((url: string) => setQrDataUrl(url))
+      .catch(() => setQrDataUrl(null));
+  }, [qrData?.fillPath, compact]);
+
+  if (!qrData?.qrEnabled) {
+    return null;
+  }
+
+  const handleDownload = () => {
+    if (!qrDataUrl || !qrData) return;
+    const link = document.createElement("a");
+    link.href = qrDataUrl;
+    link.download = `${String(qrData.formName || "form").replace(/\s+/g, "-").toLowerCase()}-qr.png`;
+    link.click();
+  };
+
+  const handleCopy = async () => {
+    if (!qrData?.fillPath) return;
+    const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
+    try {
+      await navigator.clipboard.writeText(`${baseUrl}${qrData.fillPath}`);
+    } catch {}
+  };
+
+  if (compact) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+        {qrDataUrl ? (
+          <img src={qrDataUrl} alt="Form QR" style={{ width: 54, height: 54, borderRadius: 6, border: "1px solid #ddd", background: "#fff" }} />
+        ) : (
+          <div style={{ width: 54, height: 54, borderRadius: 6, border: "1px solid #ddd", background: "#f5f5f5" }} />
+        )}
+        <span style={{ fontSize: "0.62rem", color: "#666", fontWeight: 600 }}>QR</span>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.85rem" }}>
+      {qrDataUrl ? (
+        <img src={qrDataUrl} alt="Form QR" style={{ width: 112, height: 112, borderRadius: 8, border: "1px solid #ddd", background: "#fff" }} />
+      ) : (
+        <div style={{ width: 112, height: 112, borderRadius: 8, border: "1px solid #ddd", background: "#f5f5f5" }} />
+      )}
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
+        <button
+          onClick={handleDownload}
+          style={{
+            padding: "0.35rem 0.7rem",
+            borderRadius: "6px",
+            border: "1px solid #2e7d32",
+            background: "#e8f5e9",
+            color: "#2e7d32",
+            fontSize: "0.78rem",
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          Download QR PNG
+        </button>
+        <button
+          onClick={handleCopy}
+          style={{
+            padding: "0.35rem 0.7rem",
+            borderRadius: "6px",
+            border: "1px solid #1976d2",
+            background: "#e3f2fd",
+            color: "#1565c0",
+            fontSize: "0.78rem",
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          Copy Form Link
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ── Forms & Templates tab (per community) ── */
 function FormsTab({ communityId, userId }: { communityId: Id<"communities">; userId: Id<"users"> }) {
   const forms = useQuery((api as any).forms.getCommunityForms, { communityId });

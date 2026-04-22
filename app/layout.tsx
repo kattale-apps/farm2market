@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
+
+export const dynamic = "force-dynamic";
 import { Analytics } from "@vercel/analytics/next";
 import { PermissionGate } from "./components/PermissionGate";
 

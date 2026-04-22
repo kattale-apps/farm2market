@@ -99,6 +99,7 @@ const FIELD_TYPE_OPTIONS = [
   { value: "text", label: "text" },
   { value: "number", label: "number" },
   { value: "date", label: "date" },
+  { value: "select", label: "select (comma options)" },
   { value: "yesno", label: "yes/no" },
   { value: "photo", label: "photo (camera/gallery)" },
   { value: "rating", label: "rating" },
@@ -106,27 +107,63 @@ const FIELD_TYPE_OPTIONS = [
 ] as const;
 type FieldType = (typeof FIELD_TYPE_OPTIONS)[number]["value"];
 
+type TemplateField = {
+  name: string;
+  fieldType: FieldType;
+  required: boolean;
+  emoji?: string;
+  unit?: string;
+  order: number;
+  options?: string[];
+};
+
 function CreateTemplateForm({ userId, onDone }: { userId: Id<"users">; onDone: () => void }) {
   const [name, setName] = useState("");
   const [emoji, setEmoji] = useState("📋");
   const [category, setCategory] = useState<"crop" | "livestock" | "general">("general");
   const [description, setDescription] = useState("");
-  const [fields, setFields] = useState<{ name: string; fieldType: FieldType; required: boolean; emoji?: string; unit?: string; order: number }[]>([]);
+  const [fields, setFields] = useState<TemplateField[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const createTemplate = useOfflineMutation<any>((api as any).farmToolbox.createTemplate);
 
-  const addField = () => setFields([...fields, { name: "", fieldType: "text", required: false, emoji: "", unit: "", order: fields.length }]);
+  const addField = () => setFields([...fields, { name: "", fieldType: "text", required: false, emoji: "", unit: "", order: fields.length, options: [] }]);
   const removeField = (i: number) => setFields(fields.filter((_, idx) => idx !== i));
   const updateField = (i: number, key: string, value: any) => setFields(fields.map((f, idx) => idx === i ? { ...f, [key]: value } : f));
 
   const handleSave = async () => {
     if (!name.trim()) { setError("Template name is required"); return; }
     if (fields.length === 0) { setError("Add at least one field"); return; }
+
+    const normalizedNames = fields.map((f) => f.name.trim()).filter(Boolean);
+    if (normalizedNames.length !== fields.length) {
+      setError("Every field must have a name.");
+      return;
+    }
+
+    const lowered = normalizedNames.map((n) => n.toLowerCase());
+    if (new Set(lowered).size !== lowered.length) {
+      setError("Field names must be unique.");
+      return;
+    }
+
+    const normalizedFields = fields.map((f, idx) => {
+      const cleanedOptions = (f.options || []).map((opt) => opt.trim()).filter(Boolean);
+      if (f.fieldType === "select" && cleanedOptions.length === 0) {
+        throw new Error(`Select field \"${f.name || `#${idx + 1}`}\" needs at least one option.`);
+      }
+      return {
+        ...f,
+        name: f.name.trim(),
+        order: idx,
+        options: f.fieldType === "select" ? cleanedOptions : undefined,
+      };
+    });
+
     setSaving(true);
     try {
-      await createTemplate({ ownerId: userId, ownerType: "personal", category, templateName: name, emoji, description, fields });
+      await createTemplate({ ownerId: userId, ownerType: "personal", category, templateName: name.trim(), emoji, description: description.trim() || undefined, fields: normalizedFields });
       onDone();
     } catch (e: any) { setError(e.message ?? "Failed"); }
     setSaving(false);
@@ -156,6 +193,14 @@ function CreateTemplateForm({ userId, onDone }: { userId: Id<"users">; onDone: (
             style={{ flex: "0 1 170px", padding: "0.35rem 0.4rem", border: "1px solid #ddd", borderRadius: 6, fontFamily: FONT, fontSize: "0.75rem" }}>
             {FIELD_TYPE_OPTIONS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
+          {f.fieldType === "select" && (
+            <input
+              value={(f.options || []).join(", ")}
+              onChange={(e) => updateField(i, "options", e.target.value.split(",").map((opt) => opt.trim()).filter(Boolean))}
+              placeholder="Options, separated by commas"
+              style={{ flex: "1 1 220px", minWidth: 0, padding: "0.35rem 0.5rem", border: "1px solid #ddd", borderRadius: 6, fontFamily: FONT, fontSize: "0.75rem" }}
+            />
+          )}
           <label style={{ fontSize: "0.72rem", display: "flex", alignItems: "center", gap: "0.2rem", cursor: "pointer" }}>
             <input type="checkbox" checked={f.required} onChange={(e) => updateField(i, "required", e.target.checked)} /> Req
           </label>
@@ -406,6 +451,17 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
                   </button>
                 ))}
               </div>
+            ) : field.fieldType === "select" ? (
+              <select
+                value={fieldValues[field.name] ?? ""}
+                onChange={(e) => setFieldValues((fv) => ({ ...fv, [field.name]: e.target.value }))}
+                style={{ width: "100%", padding: "0.5rem 0.75rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.88rem", boxSizing: "border-box" }}
+              >
+                <option value="">Select...</option>
+                {(field.options || []).map((opt: string) => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
             ) : field.fieldType === "rating" ? (
               <div style={{ display: "flex", gap: "0.4rem" }}>
                 {[1, 2, 3, 4, 5].map((n) => (

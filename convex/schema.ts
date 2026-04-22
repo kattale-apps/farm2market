@@ -1908,11 +1908,13 @@ export default defineSchema({
         v.literal("text"),
         v.literal("number"),
         v.literal("date"),
+        v.literal("select"),
         v.literal("yesno"),
         v.literal("photo"),
         v.literal("rating"),
         v.literal("gps")
       ),
+      options: v.optional(v.array(v.string())),
       unit: v.optional(v.string()),
       required: v.boolean(),
       emoji: v.optional(v.string()),

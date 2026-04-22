@@ -75,11 +75,13 @@ export const createTemplate = mutation({
         v.literal("text"),
         v.literal("number"),
         v.literal("date"),
+        v.literal("select"),
         v.literal("yesno"),
         v.literal("photo"),
         v.literal("rating"),
         v.literal("gps")
       ),
+      options: v.optional(v.array(v.string())),
       unit: v.optional(v.string()),
       required: v.boolean(),
       emoji: v.optional(v.string()),
@@ -88,15 +90,49 @@ export const createTemplate = mutation({
   },
   handler: async (ctx, args): Promise<Id<"farmTrackerTemplates">> => {
     const now = getUgandaTime();
+
+    const templateName = args.templateName.trim();
+    if (!templateName) {
+      throw new Error("Template name is required");
+    }
+
+    if (args.fields.length === 0) {
+      throw new Error("Add at least one field");
+    }
+
+    const cleanedFields = args.fields.map((field, idx) => {
+      const cleanedName = field.name.trim();
+      if (!cleanedName) {
+        throw new Error(`Field #${idx + 1} is missing a name`);
+      }
+
+      const cleanedOptions = (field.options || []).map((opt) => opt.trim()).filter(Boolean);
+      if (field.fieldType === "select" && cleanedOptions.length === 0) {
+        throw new Error(`Select field \"${cleanedName}\" requires at least one option`);
+      }
+
+      return {
+        ...field,
+        name: cleanedName,
+        options: field.fieldType === "select" ? cleanedOptions : undefined,
+        order: idx,
+      };
+    });
+
+    const loweredNames = cleanedFields.map((field) => field.name.toLowerCase());
+    if (new Set(loweredNames).size !== loweredNames.length) {
+      throw new Error("Field names must be unique");
+    }
+
     return await ctx.db.insert("farmTrackerTemplates", {
       ownerId: args.ownerId,
       ownerType: args.ownerType,
       communityId: args.communityId,
       category: args.category,
-      templateName: args.templateName,
+      templateName,
       emoji: args.emoji,
-      description: args.description,
-      fields: args.fields,
+      description: args.description?.trim() || undefined,
+      fields: cleanedFields,
       isActive: true,
       createdAt: now,
       updatedAt: now,

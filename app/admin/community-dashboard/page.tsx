@@ -10,6 +10,7 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import QRCode from "qrcode";
 import { CommunityQRCode } from "../../components/CommunityQRCode";
 import { CommunityMemberCard } from "../../components/CommunityMemberCard";
 import { resolveCommunityLogo } from "../../lib/communityLogos";
@@ -899,10 +900,55 @@ function FormDetailView({ formId, formName, isActive, onToggleActive, onDelete }
   onDelete: () => void;
 }) {
   const formDetails = useQuery((api as any).forms.getFormDetails, { formId });
-  const responses = useQuery((api as any).forms.getFormResponses, { formId });
+  const responses = useQuery((api as any).forms.getFormResponses, { formId }) as any;
+
+  const handleDownloadTrackerFormPdf = () => {
+    if (!formDetails) return;
+    const isTracker = (formDetails as any).formPurpose !== "profile";
+    if (!isTracker) return;
+
+    const doc = new jsPDF({ orientation: "portrait" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    doc.setFontSize(16);
+    doc.text(`${formName} - Tracker Form`, pageWidth / 2, 18, { align: "center" });
+    doc.setFontSize(9);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth / 2, 25, { align: "center" });
+
+    const tableRows = ((formDetails as any).fields || []).map((f: any, idx: number) => [
+      String(idx + 1),
+      f.label,
+      f.fieldType,
+      f.required ? "Yes" : "No",
+      (f.options || []).join(", ") || "-",
+    ]);
+
+    autoTable(doc, {
+      startY: 32,
+      head: [["#", "Field", "Type", "Required", "Options"]],
+      body: tableRows,
+      theme: "grid",
+      headStyles: { fillColor: [46, 125, 50], fontSize: 9 },
+      bodyStyles: { fontSize: 8 },
+      margin: { left: 14, right: 14 },
+    });
+
+    const finalY = (doc as any).lastAutoTable?.finalY || 42;
+    doc.setFontSize(9);
+    doc.text("Manual entry space:", 14, finalY + 12);
+    for (let i = 0; i < 5; i += 1) {
+      const y = finalY + 18 + i * 8;
+      doc.line(14, y, pageWidth - 14, y);
+    }
+
+    doc.save(`${formName.replace(/\s+/g, "-").toLowerCase()}-tracker-form.pdf`);
+  };
 
   return (
     <div style={{ padding: "1rem" }}>
+      <h6 style={{ margin: "0 0 0.5rem 0", fontSize: "0.85rem", fontWeight: 700, color: "#333" }}>
+        Form QR
+      </h6>
+      <FormInlineQRCode formId={formId} compact={false} />
       {/* Form fields */}
       <h6 style={{ margin: "0 0 0.5rem 0", fontSize: "0.85rem", fontWeight: 700, color: "#333" }}>
         Fields
@@ -952,11 +998,23 @@ function FormDetailView({ formId, formName, isActive, onToggleActive, onDelete }
 
       {/* Responses count */}
       <div style={{ fontSize: "0.85rem", color: "#555", marginBottom: "0.75rem" }}>
-        <strong>Responses:</strong> {responses === undefined ? "..." : Array.isArray(responses) ? responses.length : 0}
+        <strong>Responses:</strong> {responses === undefined ? "..." : (responses?.responses?.length ?? 0)}
       </div>
 
       {/* Actions */}
-      <div style={{ display: "flex", gap: "0.5rem" }}>
+      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+        {(formDetails as any)?.formPurpose !== "profile" && (
+          <button
+            onClick={handleDownloadTrackerFormPdf}
+            style={{
+              padding: "0.35rem 0.7rem", borderRadius: "6px", border: "1px solid #6a1b9a",
+              background: "#f3e5f5", color: "#6a1b9a",
+              fontSize: "0.8rem", fontWeight: 600, cursor: "pointer",
+            }}
+          >
+            Download Tracker PDF
+          </button>
+        )}
         <button
           onClick={onToggleActive}
           style={{
@@ -988,9 +1046,19 @@ const CHART_COLORS = ["#2e7d32","#1565c0","#ef6c00","#8e24aa","#c62828","#00838f
 function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; userId: Id<"users"> }) {
   const forms = useQuery((api as any).forms.getCommunityForms, { communityId });
   const [selectedFormId, setSelectedFormId] = useState<string>("");
+  const [selectedTrackedUnitId, setSelectedTrackedUnitId] = useState<string>("");
+  const trackedUnits = useQuery(
+    (api as any).farmToolbox.listTrackedUnits,
+    userId ? { farmerId: userId } : "skip"
+  ) as any[] | undefined;
   const formResponses = useQuery(
     (api as any).forms.getFormResponses,
-    selectedFormId ? { formId: selectedFormId as Id<"communityForms"> } : "skip"
+    selectedFormId
+      ? {
+          formId: selectedFormId as Id<"communityForms">,
+          trackedUnitId: selectedTrackedUnitId ? (selectedTrackedUnitId as Id<"farmTrackedUnits">) : undefined,
+        }
+      : "skip"
   );
   const membersRaw = useQuery(
     api.communityApplications.getCommunityMembersByCommunityIds,
@@ -1176,6 +1244,9 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
         "Email": r.member?.email || "—",
         "Phone": r.member?.phoneNumber || "—",
         "Submitted": new Date(r.createdAt).toLocaleString(),
+        "Tracked Unit": r.trackedUnit ? `${r.trackedUnit.emoji || ""} ${r.trackedUnit.name || r.trackedUnit.groupLabel || r.trackedUnit.unitType}`.trim() : "—",
+        "Unit Type": r.trackedUnit?.unitType || "—",
+        "Unit Category": r.trackedUnit?.category || "—",
       };
       fields.forEach((f: any) => {
         const v = (r.values || []).find((rv: any) => String(rv.fieldId) === String(f._id));
@@ -1219,7 +1290,8 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
       return [agg.field.label, agg.field.fieldType, (agg.barData || []).map((d: any) => `${d.name}: ${d.value}`).join(", ")];
     });
     autoTable(doc, { head: [["Field", "Type", "Summary"]], body: summaryRows, startY: 34, styles: { fontSize: 8 }, headStyles: { fillColor: [46, 125, 50] } });
-    const headers = ["Member", ...fields.map((f: any) => f.label)];
+    const hasUnits = responses.some((r: any) => r.trackedUnit);
+    const headers = ["Member", ...(hasUnits ? ["Tracked Unit"] : []), ...fields.map((f: any) => f.label)];
     const body = responses.map((r: any) => {
       const memberName = r.member?.alias || "Unknown";
       const vals = fields.map((f: any) => {
@@ -1228,7 +1300,8 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
         if (f.fieldType === "camera") { try { val = JSON.parse(val).capturedAt || "photo"; } catch { val = val ? "photo" : ""; } }
         return val.length > 40 ? val.slice(0, 38) + "…" : val;
       });
-      return [memberName, ...vals];
+      const unitLabel = r.trackedUnit ? `${r.trackedUnit.emoji || ""} ${r.trackedUnit.name || r.trackedUnit.groupLabel || r.trackedUnit.unitType}`.trim() : "";
+      return [memberName, ...(hasUnits ? [unitLabel] : []), ...vals];
     });
     autoTable(doc, { head: [headers], body, startY: (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 10 : 80, styles: { fontSize: 7 }, headStyles: { fillColor: [21, 101, 192] }, alternateRowStyles: { fillColor: [245, 245, 245] } });
     doc.save(`${selectedForm?.name || "form"}-report.pdf`);
@@ -1497,7 +1570,10 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
             <label style={{ fontWeight: 600, fontSize: "0.9rem", color: "#333", display: "block", marginBottom: "0.35rem" }}>Select Form</label>
             <select
               value={selectedFormId}
-              onChange={(e) => setSelectedFormId(e.target.value)}
+              onChange={(e) => {
+                setSelectedFormId(e.target.value);
+                setSelectedTrackedUnitId("");
+              }}
               style={{ width: "100%", padding: "0.5rem", borderRadius: "8px", border: "1px solid #ccc", fontSize: "0.9rem" }}
             >
               <option value="">— Choose a form —</option>
@@ -1513,6 +1589,28 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
               )}
             </select>
           </div>
+
+          {selectedFormId && trackedUnits && trackedUnits.length > 0 && (
+            <div style={{ marginBottom: "1rem" }}>
+              <label style={{ fontWeight: 600, fontSize: "0.82rem", color: "#333", display: "block", marginBottom: "0.35rem" }}>
+                Filter by tracked unit
+              </label>
+              <select
+                value={selectedTrackedUnitId}
+                onChange={(e) => setSelectedTrackedUnitId(e.target.value)}
+                style={{ width: "100%", padding: "0.45rem", borderRadius: "8px", border: "1px solid #ccc", fontSize: "0.85rem" }}
+              >
+                <option value="">All units</option>
+                {trackedUnits
+                  .filter((u: any) => u.status === "active")
+                  .map((u: any) => (
+                    <option key={u._id} value={u._id}>
+                      {(u.emoji || "🌱")} {u.name || u.groupLabel || u.unitType} ({u.category})
+                    </option>
+                  ))}
+              </select>
+            </div>
+          )}
 
           {!selectedFormId && (
             <div style={{ padding: "2rem", textAlign: "center", color: "#999" }}>Select a form above to view insights.</div>

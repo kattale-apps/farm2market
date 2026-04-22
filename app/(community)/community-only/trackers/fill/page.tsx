@@ -235,6 +235,7 @@ export default function TrackerFillPage() {
   const formId = searchParams.get("formId") as Id<"communityForms"> | null;
   const planId = searchParams.get("planId") as Id<"fertilizerPlans"> | null;
   const plannedSprayDate = searchParams.get("plannedSprayDate");
+  const trackedUnitIdParam = searchParams.get("trackedUnitId") as Id<"farmTrackedUnits"> | null;
   const [userId, setUserId] = useState<Id<"users"> | null>(null);
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -246,6 +247,7 @@ export default function TrackerFillPage() {
   const [seeAllFields, setSeeAllFields] = useState(false);
   const [showCoinAnimation, setShowCoinAnimation] = useState(false);
   const [coinsEarned, setCoinsEarned] = useState(0);
+  const [selectedTrackedUnitId, setSelectedTrackedUnitId] = useState<Id<"farmTrackedUnits"> | null>(trackedUnitIdParam);
 
   useEffect(() => {
     try {
@@ -258,6 +260,10 @@ export default function TrackerFillPage() {
   }, []);
 
   const formDetails = useOfflineQuery((api as any).forms.getFormDetails, formId ? { formId } : "skip") as any;
+  const trackedUnits = useOfflineQuery(
+    (api as any).farmToolbox.listTrackedUnits,
+    userId ? { farmerId: userId } : "skip"
+  ) as any[] | undefined;
   const existingDraft = useOfflineQuery(
     (api as any).forms.getDraftResponse,
     formId && userId
@@ -266,6 +272,7 @@ export default function TrackerFillPage() {
           memberId: userId,
           planId: planId || undefined,
           plannedSprayDate: plannedSprayDate || undefined,
+          trackedUnitId: selectedTrackedUnitId || undefined,
         }
       : "skip"
   ) as any;
@@ -294,6 +301,9 @@ export default function TrackerFillPage() {
         values[String(v.fieldId)] = v.value;
       }
       setFieldValues(values);
+      if ((existingDraft as any)?.trackedUnitId) {
+        setSelectedTrackedUnitId((existingDraft as any).trackedUnitId as Id<"farmTrackedUnits">);
+      }
       setDraftLoaded(true);
     }
   }, [existingDraft, draftLoaded]);
@@ -314,6 +324,7 @@ export default function TrackerFillPage() {
           memberId: userId,
           planId: planId || undefined,
           plannedSprayDate: plannedSprayDate || undefined,
+          trackedUnitId: selectedTrackedUnitId || undefined,
           fieldValues: fvArray,
         });
       } catch {}
@@ -353,7 +364,7 @@ export default function TrackerFillPage() {
   useEffect(() => {
     if (draftLoaded || Object.keys(fieldValues).length > 0) autoSave();
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [fieldValues]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fieldValues, selectedTrackedUnitId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSubmit = async () => {
     if (!formId || !communityId || !userId) return;
@@ -371,6 +382,7 @@ export default function TrackerFillPage() {
           memberId: userId,
           planId: planId || undefined,
           plannedSprayDate: plannedSprayDate || undefined,
+          trackedUnitId: selectedTrackedUnitId || undefined,
           fieldValues: fvArray,
         });
         const submitResult = await submitDraft({
@@ -378,6 +390,7 @@ export default function TrackerFillPage() {
           memberId: userId,
           planId: planId || undefined,
           plannedSprayDate: plannedSprayDate || undefined,
+          trackedUnitId: selectedTrackedUnitId || undefined,
         });
         responseId = existingDraft._id;
         // If offline-queued, show optimistic coin animation and clear local draft
@@ -405,6 +418,7 @@ export default function TrackerFillPage() {
           memberId: userId,
           planId: planId || undefined,
           plannedSprayDate: plannedSprayDate || undefined,
+          trackedUnitId: selectedTrackedUnitId || undefined,
           fieldValues: fvArray,
         });
         // If offline-queued, show optimistic coin animation
@@ -529,6 +543,28 @@ export default function TrackerFillPage() {
       )}
 
       {!formDetails && <div style={{ padding: "3rem", textAlign: "center" }}><p style={{ color: "#888", fontSize: "1rem" }}>Loading form...</p></div>}
+
+      {trackedUnits && trackedUnits.length > 0 && (
+        <div style={{ margin: "0.5rem 1rem 0.75rem", background: "#fff", border: "1px solid #e0e0e0", borderRadius: 12, padding: "0.75rem" }}>
+          <label style={{ display: "block", marginBottom: "0.35rem", fontSize: "0.8rem", fontWeight: 700, color: "#2e7d32" }}>
+            Tracked Unit (optional)
+          </label>
+          <select
+            value={selectedTrackedUnitId || ""}
+            onChange={(e) => setSelectedTrackedUnitId((e.target.value || null) as Id<"farmTrackedUnits"> | null)}
+            style={{ width: "100%", padding: "0.55rem", border: "1px solid #ccc", borderRadius: 8, fontSize: "0.85rem", fontFamily: FONT }}
+          >
+            <option value="">-- No tracked unit --</option>
+            {trackedUnits
+              .filter((u: any) => u.status === "active")
+              .map((u: any) => (
+                <option key={u._id} value={u._id}>
+                  {(u.emoji || "🌱")} {u.name || u.groupLabel || u.unitType} ({u.category})
+                </option>
+              ))}
+          </select>
+        </div>
+      )}
 
       {/* ALL FIELDS VIEW */}
       {formDetails && seeAllFields && (

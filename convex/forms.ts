@@ -1,7 +1,11 @@
-import { v } from "convex/values";
+﻿import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { getUgandaTime } from "./utils";
+
+function buildFormQrSlug(formId: Id<"communityForms">) {
+  return `form-${String(formId).slice(0, 12)}`;
+}
 
 /**
  * Create a new community form
@@ -45,7 +49,17 @@ export const createForm = mutation({
       responseCount: 0,
       category: args.category,
       formPurpose: args.formPurpose || "tracker",
+      qrEnabled: true,
+      qrSlug: "pending",
+      qrCreatedAt: now,
       createdAt: now,
+      updatedAt: now,
+    });
+
+    await ctx.db.patch(formId, {
+      qrEnabled: true,
+      qrSlug: buildFormQrSlug(formId),
+      qrCreatedAt: now,
       updatedAt: now,
     });
 
@@ -296,6 +310,7 @@ export const submitFormResponse = mutation({
     memberId: v.id("users"),
     planId: v.optional(v.id("fertilizerPlans")),
     plannedSprayDate: v.optional(v.string()),
+    trackedUnitId: v.optional(v.id("farmTrackedUnits")),
     fieldValues: v.array(v.object({
       fieldId: v.id("formFields"),
       value: v.string(),
@@ -312,12 +327,22 @@ export const submitFormResponse = mutation({
     }
 
     // Create response
+        // Validate tracked unit ownership
+        if (args.trackedUnitId) {
+          const unit = await ctx.db.get(args.trackedUnitId);
+          if (!unit || unit.farmerId !== args.memberId) {
+            throw new Error("Tracked unit not found or not owned by this member");
+          }
+        }
+
+        // Create response
     const responseId = await ctx.db.insert("formResponses", {
       formId: args.formId,
       communityId: args.communityId,
       memberId: args.memberId,
       planId: args.planId,
       plannedSprayDate: args.plannedSprayDate,
+      trackedUnitId: args.trackedUnitId,
       createdAt: getUgandaTime(),
       updatedAt: getUgandaTime(),
     });
@@ -348,13 +373,17 @@ export const submitFormResponse = mutation({
 export const getFormResponses = query({
   args: {
     formId: v.id("communityForms"),
+    trackedUnitId: v.optional(v.id("farmTrackedUnits")),
   },
   handler: async (ctx, args) => {
-    const responses = await ctx.db
+    const allResponses = await ctx.db
       .query("formResponses")
       .withIndex("by_form", (q) => q.eq("formId", args.formId))
       .order("desc")
       .collect();
+    const responses = args.trackedUnitId
+      ? allResponses.filter((r: any) => String((r as any).trackedUnitId || "") === String(args.trackedUnitId))
+      : allResponses;
 
     const form = await ctx.db.get(args.formId);
     const fields = await ctx.db
@@ -371,14 +400,27 @@ export const getFormResponses = query({
           .collect();
 
         const member = await ctx.db.get(response.memberId);
+        const trackedUnit = (response as any).trackedUnitId
+          ? await ctx.db.get((response as any).trackedUnitId as Id<"farmTrackedUnits">)
+          : null;
 
         return {
           _id: response._id,
           member: {
             alias: (member as any)?.alias || "Unknown",
-            email: (member as any)?.email || "—",
-            phoneNumber: (member as any)?.phoneNumber || "—",
+            email: (member as any)?.email || "â€”",
+            phoneNumber: (member as any)?.phoneNumber || "â€”",
           },
+          trackedUnit: trackedUnit
+            ? {
+                _id: trackedUnit._id,
+                category: trackedUnit.category,
+                unitType: trackedUnit.unitType,
+                name: trackedUnit.name,
+                emoji: trackedUnit.emoji,
+                status: trackedUnit.status,
+              }
+            : null,
           values,
           createdAt: response.createdAt,
         };
@@ -394,7 +436,7 @@ export const getFormResponses = query({
 });
 
 /**
- * Get form export data (for billing calculation: rows × columns × price-per-cell)
+ * Get form export data (for billing calculation: rows Ã— columns Ã— price-per-cell)
  * Returns data in format suitable for Excel export and billing
  */
 export const getFormExportData = query({
@@ -435,8 +477,8 @@ export const getFormExportData = query({
 
         const row: any = {
           "Member Name": (member as any)?.alias || "Unknown",
-          "Email": (member as any)?.email || "—",
-          "Phone": (member as any)?.phoneNumber || "—",
+          "Email": (member as any)?.email || "â€”",
+          "Phone": (member as any)?.phoneNumber || "â€”",
           "Submitted": new Date(response.createdAt).toLocaleString(),
         };
 
@@ -449,7 +491,7 @@ export const getFormExportData = query({
       })
     );
 
-    // Calculate billing: rows × columns × price-per-cell
+    // Calculate billing: rows Ã— columns Ã— price-per-cell
     const rowCount = rows.length;
     const colCount = 4 + sortedFields.length; // Member Name, Email, Phone, Submitted + form fields
     const pricePerCell = 100; // UGX per cell (configurable)
@@ -466,11 +508,11 @@ export const getFormExportData = query({
   },
 });
 
-// ─────────────── Business Tracker Extensions ───────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Business Tracker Extensions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Compute calculated field values based on formula.
- * Formula uses field labels (lowercased, spaces→underscores).
+ * Formula uses field labels (lowercased, spacesâ†’underscores).
  * Only supports +, -, *, / with numeric values. No eval().
  */
 function computeCalculatedFields(
@@ -478,7 +520,7 @@ function computeCalculatedFields(
   values: Record<string, string>
 ): Record<string, string> {
   const result = { ...values };
-  // Build a label→value map
+  // Build a labelâ†’value map
   const labelMap: Record<string, number> = {};
   for (const f of fields) {
     if (f.isCalculated) continue;
@@ -519,6 +561,7 @@ export const saveDraftResponse = mutation({
     memberId: v.id("users"),
     planId: v.optional(v.id("fertilizerPlans")),
     plannedSprayDate: v.optional(v.string()),
+    trackedUnitId: v.optional(v.id("farmTrackedUnits")),
     fieldValues: v.array(v.object({
       fieldId: v.id("formFields"),
       value: v.string(),
@@ -528,7 +571,8 @@ export const saveDraftResponse = mutation({
     const now = getUgandaTime();
     const sameContext = (row: any) =>
       String(row?.planId || "") === String(args.planId || "") &&
-      String(row?.plannedSprayDate || "") === String(args.plannedSprayDate || "");
+      String(row?.plannedSprayDate || "") === String(args.plannedSprayDate || "") &&
+      String(row?.trackedUnitId || "") === String(args.trackedUnitId || "");
 
     // Find existing draft
     const existing = await ctx.db
@@ -546,6 +590,7 @@ export const saveDraftResponse = mutation({
         updatedAt: now,
         planId: args.planId,
         plannedSprayDate: args.plannedSprayDate,
+        trackedUnitId: args.trackedUnitId,
       });
       // Delete old values
       const oldValues = await ctx.db
@@ -562,6 +607,7 @@ export const saveDraftResponse = mutation({
         memberId: args.memberId,
         planId: args.planId,
         plannedSprayDate: args.plannedSprayDate,
+        trackedUnitId: args.trackedUnitId,
         status: "DRAFT",
         createdAt: now,
         updatedAt: now,
@@ -604,11 +650,21 @@ export const getDraftResponse = query({
     memberId: v.id("users"),
     planId: v.optional(v.id("fertilizerPlans")),
     plannedSprayDate: v.optional(v.string()),
+    trackedUnitId: v.optional(v.id("farmTrackedUnits")),
   },
   handler: async (ctx, args) => {
+    // Validate tracked unit ownership
+    if (args.trackedUnitId) {
+      const unit = await ctx.db.get(args.trackedUnitId);
+      if (!unit || unit.farmerId !== args.memberId) {
+        throw new Error("Tracked unit not found or not owned by this member");
+      }
+    }
+
     const sameContext = (row: any) =>
       String(row?.planId || "") === String(args.planId || "") &&
-      String(row?.plannedSprayDate || "") === String(args.plannedSprayDate || "");
+      String(row?.plannedSprayDate || "") === String(args.plannedSprayDate || "") &&
+      String(row?.trackedUnitId || "") === String(args.trackedUnitId || "");
 
     const responses = await ctx.db
       .query("formResponses")
@@ -629,7 +685,7 @@ export const getDraftResponse = query({
 });
 
 /**
- * Submit a draft (change DRAFT → SUBMITTED)
+ * Submit a draft (change DRAFT â†’ SUBMITTED)
  */
 export const submitDraft = mutation({
   args: {
@@ -637,17 +693,25 @@ export const submitDraft = mutation({
     memberId: v.id("users"),
     planId: v.optional(v.id("fertilizerPlans")),
     plannedSprayDate: v.optional(v.string()),
+    trackedUnitId: v.optional(v.id("farmTrackedUnits")),
   },
   handler: async (ctx, args) => {
     const response = await ctx.db.get(args.responseId);
     if (!response) throw new Error("Response not found");
     if (response.memberId !== args.memberId) throw new Error("Not authorized");
+        if (args.trackedUnitId) {
+          const unit = await ctx.db.get(args.trackedUnitId);
+          if (!unit || unit.farmerId !== args.memberId) {
+            throw new Error("Tracked unit not found or not owned by this member");
+          }
+        }
     const updates: any = {
       status: "SUBMITTED",
       updatedAt: getUgandaTime(),
     };
     if (args.planId !== undefined) updates.planId = args.planId;
     if (args.plannedSprayDate !== undefined) updates.plannedSprayDate = args.plannedSprayDate;
+    if (args.trackedUnitId !== undefined) updates.trackedUnitId = args.trackedUnitId;
 
     await ctx.db.patch(args.responseId, updates);
 
@@ -709,6 +773,10 @@ export const getMySubmissions = query({
           .withIndex("by_response", (q) => q.eq("responseId", r._id))
           .collect();
 
+        const trackedUnit = (r as any).trackedUnitId
+          ? await ctx.db.get((r as any).trackedUnitId as Id<"farmTrackedUnits">)
+          : null;
+
         const formFields = fieldsByForm.get(String(r.formId)) || [];
         const fieldMap = new Map(formFields.map((f: any) => [String(f._id), f]));
 
@@ -725,6 +793,16 @@ export const getMySubmissions = query({
           ...r,
           formName: (formMap.get(String(r.formId)) as any)?.name || "Unknown Tracker",
           category: (formMap.get(String(r.formId)) as any)?.category || "custom",
+          trackedUnit: trackedUnit
+            ? {
+                _id: trackedUnit._id,
+                category: trackedUnit.category,
+                unitType: trackedUnit.unitType,
+                name: trackedUnit.name,
+                emoji: trackedUnit.emoji,
+                status: trackedUnit.status,
+              }
+            : null,
           values: enrichedValues,
         };
       })
@@ -735,7 +813,7 @@ export const getMySubmissions = query({
 });
 
 /**
- * Seed tracker templates (idempotent — only inserts if table is empty)
+ * Seed tracker templates (idempotent â€” only inserts if table is empty)
  */
 export const seedTrackerTemplates = mutation({
   args: {},
@@ -876,7 +954,19 @@ export const createTrackerFromTemplate = mutation({
       isActive: true,
       responseCount: 0,
       category: template.category,
+      formPurpose: "tracker",
+      qrEnabled: true,
+      qrSlug: "pending",
+      qrCreatedAt: now,
       createdAt: now,
+      updatedAt: now,
+    });
+
+    await ctx.db.patch(formId, {
+      formPurpose: "tracker",
+      qrEnabled: true,
+      qrSlug: buildFormQrSlug(formId),
+      qrCreatedAt: now,
       updatedAt: now,
     });
 
@@ -903,7 +993,31 @@ export const createTrackerFromTemplate = mutation({
 });
 
 /**
- * Performance Insights — Admin community-wide analytics
+ * Get QR metadata for a community form.
+ */
+export const getFormQrData = query({
+  args: {
+    formId: v.id("communityForms"),
+  },
+  handler: async (ctx, args) => {
+    const form = await ctx.db.get(args.formId);
+    if (!form) return null;
+
+    const qrSlug = (form as any).qrSlug || buildFormQrSlug(args.formId);
+    const fillPath = `/community-only/trackers/fill?communityId=${form.communityId}&formId=${form._id}&qr=${qrSlug}`;
+
+    return {
+      formId: form._id,
+      formName: form.name,
+      qrSlug,
+      qrEnabled: (form as any).qrEnabled ?? true,
+      fillPath,
+    };
+  },
+});
+
+/**
+ * Performance Insights â€” Admin community-wide analytics
  * Returns aggregated numeric data from all submitted responses for a community
  */
 export const getPerformanceInsights = query({
@@ -962,7 +1076,7 @@ export const getPerformanceInsights = query({
 });
 
 /**
- * Member Personal Insights — aggregated data for a single member
+ * Member Personal Insights â€” aggregated data for a single member
  */
 export const getMemberInsights = query({
   args: {
@@ -1115,7 +1229,7 @@ export const getCommunityProfileForms = query({
   },
 });
 
-// ─────────────── Profile Form Live-Save Functions ───────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Profile Form Live-Save Functions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Upsert a single profile form field value (live save on blur).
@@ -1194,55 +1308,24 @@ export const upsertProfileFormField = mutation({
 });
 
 /**
- * Get all profile form responses for a member in a community.
- * Returns a map of formId → { responseId, fieldValues: { fieldId → value } }
+ * Backfill QR slugs for legacy forms created before auto-QR was introduced.
+ * Idempotent - safe to run multiple times.
  */
-export const getMyProfileFormResponses = query({
-  args: {
-    communityId: v.id("communities"),
-    memberId: v.id("users"),
-  },
-  handler: async (ctx, args) => {
-    // Get all profile forms for this community
-    const forms = await ctx.db
-      .query("communityForms")
-      .withIndex("by_community", (q: any) => q.eq("communityId", args.communityId))
-      .collect();
-    const profileForms = forms.filter(
-      (f: any) => f.formPurpose === "profile" && f.isActive
-    );
-
-    const result: Record<string, {
-      responseId: string;
-      fieldValues: Record<string, string>;
-      updatedAt: number;
-    }> = {};
-
-    for (const form of profileForms) {
-      const responses = await ctx.db
-        .query("formResponses")
-        .withIndex("by_form_member", (q) =>
-          q.eq("formId", form._id).eq("memberId", args.memberId)
-        )
-        .collect();
-      const response = responses[0]; // Take first (there should be at most one DRAFT)
-      if (response) {
-        const values = await ctx.db
-          .query("formResponseValues")
-          .withIndex("by_response", (q) => q.eq("responseId", response._id))
-          .collect();
-        const fieldValues: Record<string, string> = {};
-        for (const v of values) {
-          fieldValues[String(v.fieldId)] = v.value;
-        }
-        result[String(form._id)] = {
-          responseId: String(response._id),
-          fieldValues,
-          updatedAt: response.updatedAt,
-        };
+export const backfillFormQrSlugs = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const allForms = await ctx.db.query("communityForms").collect();
+    let patched = 0;
+    for (const form of allForms) {
+      if (!(form as any).qrSlug || (form as any).qrSlug === "pending") {
+        await ctx.db.patch(form._id, {
+          qrSlug: buildFormQrSlug(form._id),
+          qrEnabled: true,
+          qrCreatedAt: getUgandaTime(),
+        });
+        patched++;
       }
     }
-
-    return result;
+    return { patched, total: allForms.length };
   },
 });

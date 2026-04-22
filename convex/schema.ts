@@ -1447,12 +1447,16 @@ export default defineSchema({
     responseCount: v.number(),
     category: v.optional(v.string()),
     formPurpose: v.optional(v.union(v.literal("tracker"), v.literal("profile"))),
+    qrEnabled: v.optional(v.boolean()),
+    qrSlug: v.optional(v.string()),
+    qrCreatedAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_community", ["communityId"])
     .index("by_admin", ["adminId"])
-    .index("by_active", ["isActive"]),
+    .index("by_active", ["isActive"])
+    .index("by_qr_slug", ["qrSlug"]),
 
   /**
    * Form Fields - individual fields within a form
@@ -1485,6 +1489,7 @@ export default defineSchema({
     memberId: v.id("users"),
     planId: v.optional(v.id("fertilizerPlans")), // Optional link to Bio Farm fertilizer plan
     plannedSprayDate: v.optional(v.string()), // Optional planned spray date (ISO) for compliance checks
+    trackedUnitId: v.optional(v.id("farmTrackedUnits")), // Optional link to farm toolbox tracked unit
     status: v.optional(v.string()), // "DRAFT" | "SUBMITTED" — defaults to SUBMITTED for backward compat
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -1492,7 +1497,9 @@ export default defineSchema({
     .index("by_form", ["formId"])
     .index("by_community", ["communityId"])
     .index("by_member", ["memberId"])
-    .index("by_form_member", ["formId", "memberId"]),
+    .index("by_form_member", ["formId", "memberId"])
+    .index("by_tracked_unit", ["trackedUnitId"])
+    .index("by_form_tracked_unit", ["formId", "trackedUnitId"]),
 
   /**
    * Form Response Values - individual field responses

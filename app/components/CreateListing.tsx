@@ -58,34 +58,12 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
   const [customProductName, setCustomProductName] = useState("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [customPackagingInput, setCustomPackagingInput] = useState("");
-  const [customUnitInput, setCustomUnitInput] = useState("");
 
   const FOOD_EMOJIS = [
     "🌽","🍅","🥬","🥕","🧅","🧄","🫛","🫘","🌶️","🥦",
     "🍆","🎃","🥔","🍠","🌾","🍌","🍍","🥭","🍊","🍋",
     "🍇","🍓","🫐","🥝","🍈","🥑","🥚","🍗","🥩","🐟",
     "🥛","🧈","☕","🍵","🍯","🫒","🌰","🥜","🌻","🌿",
-  ];
-
-  const PRESET_COMMODITIES: { emoji: string; name: string }[] = [
-    { emoji: "🍅", name: "Tomatoes" },
-    { emoji: "🌽", name: "Maize" },
-    { emoji: "🥬", name: "Cabbages" },
-    { emoji: "🥕", name: "Carrots" },
-    { emoji: "🧅", name: "Onions" },
-    { emoji: "🧄", name: "Garlic" },
-    { emoji: "🫘", name: "Beans" },
-    { emoji: "🍌", name: "Bananas" },
-    { emoji: "🥔", name: "Potatoes" },
-    { emoji: "🌾", name: "Rice" },
-    { emoji: "🍆", name: "Eggplant" },
-    { emoji: "🌶️", name: "Pepper" },
-    { emoji: "🥭", name: "Mangoes" },
-    { emoji: "🍍", name: "Pineapples" },
-    { emoji: "🍠", name: "Sweet Potato" },
-    { emoji: "🫛", name: "Peas" },
-    { emoji: "🌻", name: "Sunflower" },
-    { emoji: "🥜", name: "Groundnuts" },
   ];
 
   const [formData, setFormData] = useState({
@@ -232,11 +210,10 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
     setPriceLoading(true);
     setPriceMessage(null);
     try {
-      const resolvedUnit = priceFormData.unit === "__custom__" ? customUnitInput.trim() || "kg" : priceFormData.unit;
       const result = await submitVendorPrice({
         userId,
         commodity: priceFormData.commodity.trim(),
-        unit: resolvedUnit,
+        unit: priceFormData.unit.trim() || "kg",
         priceUGX: priceNum,
         marketName: priceFormData.marketName.trim(),
         marketType: priceFormData.marketType.trim() || undefined,
@@ -244,7 +221,6 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
       setCoinsEarned(result.coinsEarned);
       setShowCoinAnim(true);
       // Keep market name for next entry, reset the rest
-      setCustomUnitInput("");
       setPriceFormData((prev) => ({ commodity: "", unit: "kg", priceUGX: "", marketName: prev.marketName, marketType: "" }));
       setTimeout(() => { setShowPriceForm(false); }, 4000);
     } catch (err: any) {
@@ -548,76 +524,47 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
         <form onSubmit={handlePriceSubmit}>
           <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
 
+            {customProducts.length > 0 && (
+              <div>
+                <p style={{ fontSize: "0.8rem", color: "#555", marginBottom: "0.4rem", fontWeight: "600" }}>⭐ My saved products</p>
+                <div style={{ display: "flex", gap: "0.5rem", overflowX: "auto", paddingBottom: "0.25rem" }}>
+                  {customProducts.map((cp) => {
+                    const val = `${cp.emoji} ${cp.name}`;
+                    return (
+                      <button
+                        key={cp.name}
+                        type="button"
+                        onClick={() => setPriceFormData((prev) => ({ ...prev, commodity: val }))}
+                        style={{
+                          flexShrink: 0,
+                          padding: "0.45rem 0.8rem",
+                          background: priceFormData.commodity === val ? "#e3f2fd" : "#fff8e1",
+                          border: `1.5px solid ${priceFormData.commodity === val ? "#1565c0" : "#f9a825"}`,
+                          borderRadius: "20px",
+                          cursor: "pointer",
+                          fontSize: "0.82rem",
+                          fontWeight: priceFormData.commodity === val ? "600" : "400",
+                          color: priceFormData.commodity === val ? "#1565c0" : "#333",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {cp.emoji} {cp.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <div>
               <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
                 Commodity *
               </label>
-
-              {/* Emoji-first: preset commodity grid */}
-              {(() => {
-                // Merge recent + custom + preset, dedupe by name
-                const recentList = (recentCommodities?.commodities ?? []).map((c: any) => ({ emoji: c.emoji || "🛒", name: c.commodity }));
-                const customList = customProducts.map((cp) => ({ emoji: cp.emoji, name: cp.name }));
-                const seen = new Set<string>();
-                const merged: { emoji: string; name: string }[] = [];
-                for (const item of [...recentList, ...customList, ...PRESET_COMMODITIES]) {
-                  const key = item.name.toLowerCase();
-                  if (!seen.has(key)) { seen.add(key); merged.push(item); }
-                }
-                return (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(72px, 1fr))", gap: "0.5rem", marginBottom: "0.75rem" }}>
-                    {merged.slice(0, 24).map(({ emoji, name }) => {
-                      const val = `${emoji} ${name}`;
-                      const isSelected = priceFormData.commodity === val;
-                      return (
-                        <button
-                          key={name}
-                          type="button"
-                          onClick={() => setPriceFormData((prev) => ({ ...prev, commodity: val }))}
-                          style={{
-                            padding: "0.55rem 0.3rem",
-                            background: isSelected ? "#e3f2fd" : "#f5f5f5",
-                            border: `2px solid ${isSelected ? "#1565c0" : "#e0e0e0"}`,
-                            borderRadius: "10px",
-                            cursor: "pointer",
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            gap: "0.2rem",
-                          }}
-                        >
-                          <span style={{ fontSize: "1.6rem" }}>{emoji}</span>
-                          <span style={{ fontSize: "0.65rem", color: isSelected ? "#1565c0" : "#555", fontWeight: isSelected ? "700" : "400", textAlign: "center", lineHeight: 1.2, wordBreak: "break-word" }}>{name}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
-
-              {/* Text fallback — auto-selects matching emoji when typing */}
               <input
                 type="text"
                 value={priceFormData.commodity}
-                onChange={(e) => {
-                  const text = e.target.value;
-                  // Auto-select emoji if text doesn't already start with one
-                  if (text.trim() && !/^\p{Emoji_Presentation}/u.test(text.trim())) {
-                    const lower = text.toLowerCase().trim();
-                    const allOptions = [
-                      ...(recentCommodities?.commodities ?? []).map((c: any) => ({ emoji: c.emoji || "", name: c.commodity })),
-                      ...customProducts,
-                      ...PRESET_COMMODITIES,
-                    ];
-                    const match = allOptions.find((c) => c.name.toLowerCase().startsWith(lower) && lower.length >= 2);
-                    if (match && match.emoji) {
-                      setPriceFormData((prev) => ({ ...prev, commodity: `${match.emoji} ${text}` }));
-                      return;
-                    }
-                  }
-                  setPriceFormData((prev) => ({ ...prev, commodity: text }));
-                }}
-                placeholder="Or type a commodity name..."
+                onChange={(e) => setPriceFormData((prev) => ({ ...prev, commodity: e.target.value }))}
+                placeholder="e.g. Tomatoes, Maize, Bananas..."
                 required
                 style={{ width: "100%", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "6px", fontSize: "1rem" }}
               />
@@ -630,10 +577,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
                 </label>
                 <select
                   value={priceFormData.unit}
-                  onChange={(e) => {
-                    setPriceFormData((prev) => ({ ...prev, unit: e.target.value }));
-                    if (e.target.value !== "__custom__") setCustomUnitInput("");
-                  }}
+                  onChange={(e) => setPriceFormData((prev) => ({ ...prev, unit: e.target.value }))}
                   style={{ width: "100%", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "6px", fontSize: "1rem", background: "#fff" }}
                 >
                   <option value="kg">kg</option>
@@ -644,19 +588,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
                   <option value="tin">Tin / Debe</option>
                   <option value="sack">Sack</option>
                   <option value="bundle">Bundle</option>
-                  <option value="__custom__">✏️ Custom (type your own)…</option>
                 </select>
-                {priceFormData.unit === "__custom__" && (
-                  <input
-                    type="text"
-                    value={customUnitInput}
-                    onChange={(e) => setCustomUnitInput(e.target.value)}
-                    placeholder="e.g. Jerrican, Tray, Bucket, Box..."
-                    maxLength={30}
-                    autoFocus
-                    style={{ width: "100%", marginTop: "0.5rem", padding: "0.75rem", border: "1.5px solid #1565c0", borderRadius: "6px", fontSize: "1rem", boxSizing: "border-box" }}
-                  />
-                )}
               </div>
               <div>
                 <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
@@ -691,7 +623,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
 
             <div>
               <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#666" }}>
-                Sale Type (optional)
+                Market Type (optional)
               </label>
               <select
                 value={priceFormData.marketType}

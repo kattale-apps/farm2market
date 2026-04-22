@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useRef, useState, useCallback } from "react";
+import { validateImageFile, fileToBase64DataUrl, getGPSLocation } from "../utils/imageValidation";
 
 interface GeneralCameraCaptureProps {
   onCapture: (jsonValue: string) => void;
@@ -14,6 +15,7 @@ interface GeneralCameraCaptureProps {
 export function GeneralCameraCapture({ onCapture }: GeneralCameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,6 +43,65 @@ export function GeneralCameraCapture({ onCapture }: GeneralCameraCaptureProps) {
     stream?.getTracks().forEach((track) => track.stop());
     setStream(null);
   }, [stream]);
+
+  const handleGallerySelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setError(null);
+    setIsCapturing(true);
+
+    try {
+      // Validate file
+      const validation = validateImageFile(file);
+      if (!validation.valid) {
+        setError(validation.error || "Invalid file");
+        setIsCapturing(false);
+        return;
+      }
+
+      // Get GPS location (best-effort)
+      let latitude: number | null = null;
+      let longitude: number | null = null;
+      let accuracy: number | null = null;
+      try {
+        const gpsData = await getGPSLocation();
+        if (gpsData) {
+          latitude = gpsData.latitude;
+          longitude = gpsData.longitude;
+          accuracy = gpsData.accuracy;
+        }
+      } catch {
+        // GPS unavailable — continue without it
+      }
+
+      const capturedAt = new Date();
+
+      // Convert image to base64 data URL
+      const dataUrl = await fileToBase64DataUrl(file);
+
+      // Build JSON value with same structure as camera capture
+      const result = JSON.stringify({
+        dataUrl,
+        lat: latitude,
+        lng: longitude,
+        accuracy,
+        capturedAt: capturedAt.toISOString(),
+      });
+
+      setPreview(dataUrl);
+      onCapture(result);
+    } catch (err) {
+      console.error("Gallery upload failed:", err);
+      setError(`Gallery upload failed: ${(err as Error).message}`);
+    } finally {
+      setIsCapturing(false);
+      // Reset input
+      if (galleryInputRef.current) {
+        galleryInputRef.current.value = "";
+      }
+    }
+  }, [onCapture]);
 
   const handleCapture = async () => {
     if (!videoRef.current || !canvasRef.current) return;
@@ -144,22 +205,50 @@ export function GeneralCameraCapture({ onCapture }: GeneralCameraCaptureProps) {
       )}
 
       {!stream && !preview && (
-        <button
-          type="button"
-          onClick={startCamera}
-          style={{
-            padding: "0.75rem 1.25rem",
-            background: "#1976d2",
-            color: "#fff",
-            border: "none",
-            borderRadius: "8px",
-            cursor: "pointer",
-            fontSize: "1rem",
-          }}
-        >
-          📷 Open Camera
-        </button>
+        <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={startCamera}
+            style={{
+              padding: "0.75rem 1.25rem",
+              background: "#1976d2",
+              color: "#fff",
+              border: "none",
+              borderRadius: "8px",
+              cursor: "pointer",
+              fontSize: "1rem",
+            }}
+          >
+            📷 Open Camera
+          </button>
+          <button
+            type="button"
+            onClick={() => galleryInputRef.current?.click()}
+            disabled={isCapturing}
+            style={{
+              padding: "0.75rem 1.25rem",
+              background: "#1976d2",
+              color: "#fff",
+              border: "none",
+              borderRadius: "8px",
+              cursor: isCapturing ? "not-allowed" : "pointer",
+              fontSize: "1rem",
+              opacity: isCapturing ? 0.6 : 1,
+            }}
+          >
+            📁 Choose from Gallery
+          </button>
+        </div>
       )}
+
+      {/* Hidden gallery input */}
+      <input
+        ref={galleryInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleGallerySelect}
+        style={{ display: "none" }}
+      />
 
       {stream && (
         <div>

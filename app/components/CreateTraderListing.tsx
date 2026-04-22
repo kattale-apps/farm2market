@@ -533,33 +533,12 @@ export function CreateTraderListing({ userId }: CreateTraderListingProps) {
               }}
             />
 
-            <div style={{ display: "grid", gap: "0.5rem" }}>
-              <label style={{ fontWeight: 600 }}>Packaging type</label>
-              <select
-                value={packagingTypeEnum}
-                onChange={(e) => setPackagingTypeEnum(e.target.value)}
-                disabled={loading}
-                style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  border: "1px solid #ddd",
-                  borderRadius: "6px",
-                  fontSize: "0.9rem",
-                }}
-              >
-                <option value="">Select packaging</option>
-                {packagingOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-              {packagingTypeEnum === "Other" && (
-                <input
-                  type="text"
-                  placeholder="Custom packaging type"
-                  value={packagingTypeCustom}
-                  onChange={(e) => setPackagingTypeCustom(e.target.value)}
+            <div style={{ display: "grid", gap: "0.75rem" }}>
+              <div>
+                <label style={{ fontWeight: 600, marginBottom: "0.35rem", display: "block" }}>Packaging Type</label>
+                <select
+                  value={packagingTypeEnum}
+                  onChange={(e) => setPackagingTypeEnum(e.target.value)}
                   disabled={loading}
                   style={{
                     width: "100%",
@@ -568,8 +547,39 @@ export function CreateTraderListing({ userId }: CreateTraderListingProps) {
                     borderRadius: "6px",
                     fontSize: "0.9rem",
                   }}
+                >
+                  <option value="">Select packaging</option>
+                  {packagingOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontWeight: 600, marginBottom: "0.35rem", display: "block" }}>
+                  Additional Packaging Details (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="E.g., 'Kraft paper bags', 'Food-grade plastic', 'labeled with batch date'"
+                  value={packagingTypeCustom}
+                  onChange={(e) => setPackagingTypeCustom(e.target.value)}
+                  disabled={loading}
+                  maxLength={200}
+                  style={{
+                    width: "100%",
+                    padding: "0.75rem",
+                    border: "1px solid #ddd",
+                    borderRadius: "6px",
+                    fontSize: "0.9rem",
+                  }}
                 />
-              )}
+                <div style={{ fontSize: "0.75rem", color: "#999", marginTop: "0.25rem" }}>
+                  Add extra details about packaging (e.g., material, condition, labeling). {packagingTypeCustom.length}/200 characters
+                </div>
+              </div>
             </div>
 
             <input

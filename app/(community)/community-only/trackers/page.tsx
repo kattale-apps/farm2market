@@ -9,6 +9,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import CommunityTabBar from "@/app/components/CommunityTabBar";
 import { useOfflineQuery } from "@/app/hooks/useOfflineQuery";
+import QRCode from "qrcode";
 
 const BRAND = "#2e7d32";
 const FONT = '"Montserrat", sans-serif';
@@ -31,6 +32,58 @@ const CATEGORY_COLORS: Record<string, string> = {
   cashflow: "#00838f",
   custom: "#7b1fa2",
 };
+
+function FormCardQRCode({ formId }: { formId: Id<"communityForms"> }) {
+  const qrData = useOfflineQuery((api as any).forms.getFormQrData, { formId }) as any;
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!qrData?.fillPath) return;
+    const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
+    const fullUrl = `${baseUrl}${qrData.fillPath}`;
+
+    QRCode.toDataURL(fullUrl, {
+      width: 96,
+      margin: 2,
+      color: { dark: "#000000", light: "#ffffff" },
+      errorCorrectionLevel: "H",
+    })
+      .then((url: string) => setQrDataUrl(url))
+      .catch(() => setQrDataUrl(null));
+  }, [qrData?.fillPath]);
+
+  if (!qrData?.qrEnabled) return null;
+
+  return (
+    <div style={{ width: 64, textAlign: "center", flexShrink: 0 }}>
+      {qrDataUrl ? (
+        <img
+          src={qrDataUrl}
+          alt="Form QR"
+          style={{ width: 56, height: 56, borderRadius: 6, border: "1px solid #ddd", background: "#fff" }}
+        />
+      ) : (
+        <div
+          style={{
+            width: 56,
+            height: 56,
+            borderRadius: 6,
+            border: "1px solid #ddd",
+            background: "#f5f5f5",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "0.62rem",
+            color: "#888",
+          }}
+        >
+          QR
+        </div>
+      )}
+      <div style={{ fontSize: "0.62rem", color: "#666", marginTop: 2, fontWeight: 700 }}>QR</div>
+    </div>
+  );
+}
 
 export default function TrackersHubPage() {
   const searchParams = useSearchParams();
@@ -195,6 +248,7 @@ export default function TrackersHubPage() {
                     </p>
                   )}
                 </div>
+                <FormCardQRCode formId={form._id} />
               </div>
 
               <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.75rem", flexWrap: "wrap" }}>

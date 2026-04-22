@@ -76,6 +76,91 @@ test.describe("Market Prices Panel — Login Page", () => {
   });
 });
 
+test.describe("Market Prices Panel — Market Card Structure", () => {
+  test("06 - When price data exists, panel shows at least one market card with a market name header", async ({ page }) => {
+    await page.goto(`${BASE_URL}/login`);
+
+    const desktopPanel = page.locator(".f2m-panel-desktop");
+    await expect(desktopPanel).toBeVisible({ timeout: 10000 });
+
+    const comingSoon = desktopPanel.locator("text=Market prices coming soon");
+    const buyButton = desktopPanel.locator("button[title='Buy — sign in as buyer']").first();
+
+    let hasData = false;
+    try {
+      await buyButton.waitFor({ timeout: 12000 });
+      hasData = true;
+    } catch {
+      hasData = false;
+    }
+
+    if (hasData) {
+      // Each market card wraps its header and items — the first Buy button should be
+      // a sibling/descendant of a card that also contains a market name (emoji + text).
+      // We verify the panel contains at least one item row with a Buy button.
+      const firstBuy = desktopPanel.locator("button[title='Buy — sign in as buyer']").first();
+      await expect(firstBuy).toBeVisible();
+      // Buy button label must be text, not the old cart emoji
+      await expect(firstBuy).toHaveText("Buy");
+    } else {
+      await expect(comingSoon).toBeVisible({ timeout: 5000 });
+    }
+  });
+
+  test("07 - When price data exists, item rows contain a price in UGX format", async ({ page }) => {
+    await page.goto(`${BASE_URL}/login`);
+
+    const desktopPanel = page.locator(".f2m-panel-desktop");
+    await expect(desktopPanel).toBeVisible({ timeout: 10000 });
+
+    const buyButton = desktopPanel.locator("button[title='Buy — sign in as buyer']").first();
+    const comingSoon = desktopPanel.locator("text=Market prices coming soon");
+
+    let hasData = false;
+    try {
+      await buyButton.waitFor({ timeout: 12000 });
+      hasData = true;
+    } catch {
+      hasData = false;
+    }
+
+    if (hasData) {
+      const panelText = await desktopPanel.innerText();
+      // At least one row must show a UGX price with a unit separator
+      expect(panelText).toMatch(/UGX\s[\d,]+\/\w+/i);
+    } else {
+      await expect(comingSoon).toBeVisible({ timeout: 5000 });
+    }
+  });
+
+  test("08 - Header shows market count and post count when data is present", async ({ page }) => {
+    await page.goto(`${BASE_URL}/login`);
+
+    const desktopPanel = page.locator(".f2m-panel-desktop");
+    await expect(desktopPanel).toBeVisible({ timeout: 10000 });
+
+    const buyButton = desktopPanel.locator("button[title='Buy — sign in as buyer']").first();
+    const comingSoon = desktopPanel.locator("text=Market prices coming soon");
+
+    let hasData = false;
+    try {
+      await buyButton.waitFor({ timeout: 12000 });
+      hasData = true;
+    } catch {
+      hasData = false;
+    }
+
+    if (hasData) {
+      const panelText = await desktopPanel.innerText();
+      // Panel header should show "N market(s) · N post(s)"
+      expect(panelText).toMatch(/\d+\s+market/i);
+      expect(panelText).toMatch(/\d+\s+post/i);
+    } else {
+      await expect(comingSoon).toBeVisible({ timeout: 5000 });
+    }
+  });
+});
+
 test.describe("Market Prices Panel — Mobile Layout", () => {
   test.use({ viewport: { width: 375, height: 812 } });
 

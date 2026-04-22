@@ -131,6 +131,69 @@ function resolveDateKeys(
   return keys;
 }
 
+function toDateKeyFromTimestamp(ts: number): string {
+  const d = new Date(ts);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
+function normalizeMarketName(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function normalizeCommodity(commodity: string): string {
+  return commodity.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function formatRelativeTime(postedAt: number, now: number): string {
+  const diff = Math.max(0, now - postedAt);
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
+
+function formatAbsoluteShort(postedAt: number): string {
+  return new Date(postedAt).toLocaleString("en-UG", {
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function movementTrend(current: number, baseline?: number) {
+  if (baseline === undefined || baseline <= 0) {
+    return { direction: "unknown" as const, deltaUGX: null, deltaPct: null };
+  }
+
+  if (current < baseline) {
+    const delta = baseline - current;
+    return {
+      direction: "cheaper" as const,
+      deltaUGX: delta,
+      deltaPct: Number(((delta / baseline) * 100).toFixed(1)),
+    };
+  }
+
+  if (current > baseline) {
+    const delta = current - baseline;
+    return {
+      direction: "costlier" as const,
+      deltaUGX: delta,
+      deltaPct: Number(((delta / baseline) * 100).toFixed(1)),
+    };
+  }
+
+  return { direction: "flat" as const, deltaUGX: 0, deltaPct: 0 };
+}
+
+function trendKeyForSnapshot(marketName: string, commodity: string, unit: string): string {
+  return `${normalizeMarketName(marketName)}||${normalizeCommodity(commodity)}||${unit.trim().toLowerCase()}`;
+}
+
 // ── Auth helpers ─────────────────────────────────────────────────────────────
 
 function assertSuperAdmin(user: any) {
@@ -443,6 +506,131 @@ export const getPublicPriceCards = query({
         latestPriceUGX: r.latestPriceUGX,
         latestUpdatedAt: r.latestUpdatedAt,
       })),
+    };
+  },
+});
+
+/**
+ * Public market cards — grouped by submitted market names.
+ * One card per normalized market name, each with latest post line-items.
+ */
+export const getPublicMarketCards = query({
+  args: {
+    marketsLimit: v.optional(v.number()),
+    itemsPerMarket: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const marketsCap = Math.min(Math.max(args.marketsLimit ?? 8, 1), 20);
+    const itemsCap = Math.min(Math.max(args.itemsPerMarket ?? 5, 1), 8);
+    const now = getUgandaTime();
+
+    const submissions = await ctx.db
+      .query("marketPriceSubmissions")
+      .withIndex("by_submitted_at", (q: any) => q.lte("submittedAt", now))
+      .order("desc")
+      .take(800);
+
+    if (submissions.length === 0) {
+      return { dateKey: getTodayDateKey(), markets: [] };
+    }
+
+    // Use previous published day as movement baseline.
+    const publishedSnapshots = await ctx.db
+      .query("dailyPriceSnapshots")
+      .withIndex("by_status", (q: any) => q.eq("status", "published"))
+      .order("desc")
+      .take(21);
+
+    const todayKey = getTodayDateKey();
+    const previousPublished = publishedSnapshots.find((s: any) => s.dateKey < todayKey) ?? null;
+
+    const baselineByTrendKey = new Map<string, number>();
+    if (previousPublished) {
+      const baselineRows = await ctx.db
+        .query("dailyPriceSnapshotRows")
+        .withIndex("by_snapshot", (q: any) => q.eq("snapshotId", previousPublished._id))
+        .collect();
+
+      for (const row of baselineRows) {
+        const k = trendKeyForSnapshot(row.marketName, row.commodity, row.unit);
+        baselineByTrendKey.set(k, row.latestPriceUGX);
+      }
+    }
+
+    type MarketCard = {
+      marketKey: string;
+      marketName: string;
+      marketEmoji: string;
+      latestPostedAt: number;
+      itemCount: number;
+      items: any[];
+    };
+
+    const cardsByMarket = new Map<string, MarketCard>();
+
+    for (const s of submissions) {
+      const rawName = (s.marketName ?? "Unknown Market").trim() || "Unknown Market";
+      const marketKey = normalizeMarketName(rawName);
+
+      let card = cardsByMarket.get(marketKey);
+      if (!card) {
+        if (cardsByMarket.size >= marketsCap) continue;
+        card = {
+          marketKey,
+          marketName: rawName,
+          marketEmoji: getMarketEmoji(s.marketType),
+          latestPostedAt: s.submittedAt,
+          itemCount: 0,
+          items: [],
+        };
+        cardsByMarket.set(marketKey, card);
+      }
+
+      card.itemCount += 1;
+      if (s.submittedAt >= card.latestPostedAt) {
+        card.latestPostedAt = s.submittedAt;
+        card.marketName = rawName;
+        card.marketEmoji = getMarketEmoji(s.marketType);
+      }
+
+      if (card.items.length >= itemsCap) continue;
+
+      const key = trendKeyForSnapshot(rawName, s.commodity, s.unit);
+      const baseline = baselineByTrendKey.get(key);
+      const movement = movementTrend(s.priceUGX, baseline);
+
+      card.items.push({
+        id: s._id,
+        commodity: s.commodity,
+        commodityEmoji: s.commodityEmoji ?? getCommodityEmoji(s.commodity),
+        unit: s.unit,
+        priceUGX: s.priceUGX,
+        postedAt: s.submittedAt,
+        relativeTime: formatRelativeTime(s.submittedAt, now),
+        absoluteTime: formatAbsoluteShort(s.submittedAt),
+        trendDirection: movement.direction,
+        trendDeltaUGX: movement.deltaUGX,
+        trendDeltaPct: movement.deltaPct,
+      });
+    }
+
+    const markets = Array.from(cardsByMarket.values())
+      .sort((a, b) => b.latestPostedAt - a.latestPostedAt)
+      .map((m) => ({
+        marketKey: m.marketKey,
+        marketName: m.marketName,
+        marketEmoji: m.marketEmoji,
+        latestPostedAt: m.latestPostedAt,
+        latestPostedAtDateKey: toDateKeyFromTimestamp(m.latestPostedAt),
+        latestPostedAtRelative: formatRelativeTime(m.latestPostedAt, now),
+        latestPostedAtAbsolute: formatAbsoluteShort(m.latestPostedAt),
+        itemCount: m.itemCount,
+        items: m.items,
+      }));
+
+    return {
+      dateKey: getTodayDateKey(),
+      markets,
     };
   },
 });

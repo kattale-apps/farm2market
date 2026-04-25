@@ -298,6 +298,68 @@ export const deleteEntry = mutation({
   },
 });
 
+/** Get a single entry by ID with resolved photo URLs and enriched template/unit details */
+export const getEntryById = query({
+  args: {
+    entryId: v.id("farmTrackerEntries"),
+  },
+  handler: async (ctx, args) => {
+    const entry = await ctx.db.get(args.entryId);
+    if (!entry) return null;
+
+    // Resolve photo URLs
+    const photoUrls = entry.photoStorageIds
+      ? await Promise.all(entry.photoStorageIds.map((sid: any) => ctx.storage.getUrl(sid)))
+      : [];
+
+    // Get template details
+    const template = await ctx.db.get(entry.templateId);
+
+    // Get tracked unit details if referenced
+    const trackedUnit = entry.trackedUnitId ? await ctx.db.get(entry.trackedUnitId) : null;
+
+    return {
+      ...entry,
+      photoUrls,
+      templateDetails: template,
+      unitDetails: trackedUnit,
+    };
+  },
+});
+
+/** Get multiple entries by IDs with resolved photo URLs and enriched details (for batch export) */
+export const getEntriesByIds = query({
+  args: {
+    entryIds: v.array(v.id("farmTrackerEntries")),
+  },
+  handler: async (ctx, args) => {
+    const entries = await Promise.all(args.entryIds.map((id) => ctx.db.get(id)));
+    const valid = entries.filter((e) => e !== null);
+
+    return await Promise.all(
+      valid.map(async (entry: any) => {
+        // Resolve photo URLs
+        const photoUrls = entry.photoStorageIds
+          ? await Promise.all(entry.photoStorageIds.map((sid: any) => ctx.storage.getUrl(sid)))
+          : [];
+
+        // Get template details
+        const template = await ctx.db.get(entry.templateId);
+
+        // Get tracked unit details if referenced
+        const trackedUnit = entry.trackedUnitId ? await ctx.db.get(entry.trackedUnitId) : null;
+
+        return {
+          ...entry,
+          photoUrls,
+          templateDetails: template,
+          unitDetails: trackedUnit,
+        };
+      })
+    );
+  },
+});
+
 // ─── TRACKED UNITS ───────────────────────────────────────────────────────────
 
 /** List farmer's tracked units (optional category filter) */

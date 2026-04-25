@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useMutation } from "convex/react";
+import { useConvex, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useOfflineQuery } from "@/app/hooks/useOfflineQuery";
 import { useOfflineMutation } from "@/app/hooks/useOfflineMutation";
 import Link from "next/link";
+import { exportSubmissionsToPDF } from "@/app/utils/exportUtils";
+import SubmissionPhotoGallery from "@/app/components/SubmissionPhotoGallery";
 
 const BRAND = "#2e7d32";
 const BRAND_BG = "#e8f5e9";
@@ -252,11 +254,60 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
   ) as any[] | undefined;
   const deleteEntry = useOfflineMutation<any>((api as any).farmToolbox.deleteEntry);
   const generateUploadUrl = useMutation(api.files.generateUploadUrl);
+  const convex = useConvex();
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const [photoStorageIds, setPhotoStorageIds] = useState<string[]>([]);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [deletingEntryId, setDeletingEntryId] = useState<string | null>(null);
+  const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
+  const [showBatchOptions, setShowBatchOptions] = useState(false);
+  const [selectedEntryIds, setSelectedEntryIds] = useState<Set<string>>(new Set());
+  const [singleExportingId, setSingleExportingId] = useState<string | null>(null);
+  const [batchExporting, setBatchExporting] = useState(false);
+
+  const toggleSelectedEntry = (entryId: string, selected: boolean) => {
+    setSelectedEntryIds((prev) => {
+      const next = new Set(prev);
+      if (selected) next.add(entryId);
+      else next.delete(entryId);
+      return next;
+    });
+  };
+
+  const handleSingleExport = async (entry: any) => {
+    const entryId = String(entry._id);
+    setSingleExportingId(entryId);
+    try {
+      const fullEntry = await convex.query((api as any).farmToolbox.getEntryById, {
+        entryId: entry._id,
+      });
+      const datePart = new Date().toISOString().split("T")[0];
+      await exportSubmissionsToPDF(
+        [fullEntry || entry],
+        `farm_toolbox_submission_${datePart}`
+      );
+    } catch {
+      setError("Failed to export PDF. Please try again.");
+    }
+    setSingleExportingId(null);
+  };
+
+  const handleBatchExport = async () => {
+    if (selectedEntryIds.size === 0) return;
+    setBatchExporting(true);
+    try {
+      const ids = Array.from(selectedEntryIds).map((id) => id as Id<"farmTrackerEntries">);
+      const enriched = await convex.query((api as any).farmToolbox.getEntriesByIds, {
+        entryIds: ids,
+      });
+      const datePart = new Date().toISOString().split("T")[0];
+      await exportSubmissionsToPDF(enriched || [], `farm_toolbox_submissions_${datePart}`);
+    } catch {
+      setError("Failed to export selected entries as PDF.");
+    }
+    setBatchExporting(false);
+  };
 
   const captureGPS = () => {
     setGpsLoading(true);
@@ -298,7 +349,49 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
 
   const renderEntriesList = () => (
     <div style={{ background: "#fff", borderRadius: 12, padding: "1rem", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", marginTop: "1rem" }}>
-      <h3 style={{ margin: "0 0 0.75rem", fontSize: "0.92rem", fontWeight: 700 }}>🗂 My Submitted Entries</h3>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
+        <h3 style={{ margin: 0, fontSize: "0.92rem", fontWeight: 700 }}>🗂 My Submitted Entries</h3>
+        <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={() => {
+              setShowBatchOptions((prev) => !prev);
+              if (showBatchOptions) setSelectedEntryIds(new Set());
+            }}
+            style={{
+              padding: "0.3rem 0.6rem",
+              background: "#fff",
+              border: "1px solid #d0d7de",
+              borderRadius: 6,
+              fontSize: "0.74rem",
+              cursor: "pointer",
+              fontFamily: FONT,
+            }}
+          >
+            {showBatchOptions ? "Hide batch options" : "Show batch options"}
+          </button>
+          {showBatchOptions && (
+            <button
+              type="button"
+              onClick={handleBatchExport}
+              disabled={batchExporting || selectedEntryIds.size === 0}
+              style={{
+                padding: "0.3rem 0.6rem",
+                background: selectedEntryIds.size === 0 ? "#e0e0e0" : BRAND,
+                color: selectedEntryIds.size === 0 ? "#777" : "#fff",
+                border: "none",
+                borderRadius: 6,
+                fontSize: "0.74rem",
+                cursor: selectedEntryIds.size === 0 || batchExporting ? "not-allowed" : "pointer",
+                fontFamily: FONT,
+                fontWeight: 700,
+              }}
+            >
+              {batchExporting ? "Exporting…" : `📥 Download PDF (Batch${selectedEntryIds.size ? `: ${selectedEntryIds.size}` : ""})`}
+            </button>
+          )}
+        </div>
+      </div>
       {entries === undefined ? (
         <p style={{ margin: 0, color: "#888", fontSize: "0.82rem" }}>Loading entries…</p>
       ) : entries.length === 0 ? (
@@ -308,6 +401,8 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
           {entries.map((entry: any) => {
             const submittedAt = new Date(entry.submittedAt ?? entry.createdAt).toLocaleString();
             const previewFields = (entry.fieldValues ?? []).slice(0, 3);
+            const isExpanded = expandedEntryId === String(entry._id);
+            const isSelected = selectedEntryIds.has(String(entry._id));
             return (
               <div key={entry._id} style={{ border: "1px solid #e0e0e0", borderRadius: 10, padding: "0.75rem" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
@@ -317,27 +412,107 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
                       {entry.fieldCount ?? 0} field(s) filled {entry.photoUrls?.length ? `· ${entry.photoUrls.length} photo(s)` : ""}
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteEntry(String(entry._id))}
-                    disabled={deletingEntryId === String(entry._id)}
-                    style={{
-                      padding: "0.35rem 0.7rem",
-                      background: "#ffebee",
-                      border: "1px solid #ef9a9a",
-                      borderRadius: 6,
-                      fontSize: "0.74rem",
-                      cursor: deletingEntryId === String(entry._id) ? "not-allowed" : "pointer",
-                      color: "#c62828",
-                      fontFamily: FONT,
-                    }}
-                  >
-                    {deletingEntryId === String(entry._id) ? "Deleting…" : "🗑 Delete"}
-                  </button>
+                  <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", alignItems: "center" }}>
+                    {showBatchOptions && (
+                      <label style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.74rem", color: "#555" }}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => toggleSelectedEntry(String(entry._id), e.target.checked)}
+                        />
+                        Select
+                      </label>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setExpandedEntryId(isExpanded ? null : String(entry._id))}
+                      style={{
+                        padding: "0.35rem 0.7rem",
+                        background: isExpanded ? "#eef7ee" : "#f5f5f5",
+                        border: "1px solid #d9d9d9",
+                        borderRadius: 6,
+                        fontSize: "0.74rem",
+                        cursor: "pointer",
+                        color: isExpanded ? BRAND : "#444",
+                        fontFamily: FONT,
+                        fontWeight: 700,
+                      }}
+                    >
+                      {isExpanded ? "▲ Close full view" : "▼ Open full view"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSingleExport(entry)}
+                      disabled={singleExportingId === String(entry._id)}
+                      style={{
+                        padding: "0.35rem 0.7rem",
+                        background: BRAND_BG,
+                        border: "1px solid #a5d6a7",
+                        borderRadius: 6,
+                        fontSize: "0.74rem",
+                        cursor: singleExportingId === String(entry._id) ? "not-allowed" : "pointer",
+                        color: BRAND,
+                        fontFamily: FONT,
+                        fontWeight: 700,
+                      }}
+                    >
+                      {singleExportingId === String(entry._id) ? "Preparing…" : "📥 Download PDF"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteEntry(String(entry._id))}
+                      disabled={deletingEntryId === String(entry._id)}
+                      style={{
+                        padding: "0.35rem 0.7rem",
+                        background: "#ffebee",
+                        border: "1px solid #ef9a9a",
+                        borderRadius: 6,
+                        fontSize: "0.74rem",
+                        cursor: deletingEntryId === String(entry._id) ? "not-allowed" : "pointer",
+                        color: "#c62828",
+                        fontFamily: FONT,
+                      }}
+                    >
+                      {deletingEntryId === String(entry._id) ? "Deleting…" : "🗑 Delete"}
+                    </button>
+                  </div>
                 </div>
-                {previewFields.length > 0 && (
+                {!isExpanded && previewFields.length > 0 && (
                   <div style={{ marginTop: "0.45rem", fontSize: "0.75rem", color: "#555", wordBreak: "break-word" }}>
                     {previewFields.map((fv: any) => `${fv.fieldName}: ${fv.value || "—"}`).join(" · ")}
+                  </div>
+                )}
+                {isExpanded && (
+                  <div style={{ marginTop: "0.55rem", borderTop: "1px solid #efefef", paddingTop: "0.55rem" }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+                      {(entry.fieldValues || []).map((fv: any, idx: number) => (
+                        <div key={idx} style={{ display: "grid", gridTemplateColumns: "minmax(110px, 40%) 1fr", gap: "0.45rem" }}>
+                          <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#666", overflowWrap: "anywhere" }}>{fv.fieldName || "Field"}</div>
+                          <div style={{ fontSize: "0.76rem", color: "#1f2937", overflowWrap: "anywhere" }}>{fv.value || "—"}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {!!entry.notes && (
+                      <div style={{ marginTop: "0.6rem", fontSize: "0.76rem", color: "#555" }}>
+                        <strong>Notes:</strong> {entry.notes}
+                      </div>
+                    )}
+
+                    {(entry.gpsLat !== undefined && entry.gpsLng !== undefined) && (
+                      <div style={{ marginTop: "0.45rem", fontSize: "0.76rem", color: "#555" }}>
+                        <strong>GPS:</strong> {entry.gpsLat}, {entry.gpsLng}
+                      </div>
+                    )}
+
+                    {!!entry.photoUrls?.length && (
+                      <div style={{ marginTop: "0.7rem" }}>
+                        <div style={{ fontSize: "0.76rem", fontWeight: 700, color: "#444", marginBottom: "0.4rem" }}>
+                          Photos ({entry.photoUrls.length})
+                        </div>
+                        <SubmissionPhotoGallery photos={entry.photoUrls} />
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

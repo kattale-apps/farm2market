@@ -9,6 +9,9 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import CommunityTabBar from "@/app/components/CommunityTabBar";
 import { useOfflineQuery } from "@/app/hooks/useOfflineQuery";
+import { useConvex } from "convex/react";
+import { exportFormSubmissionsToPDF } from "@/app/utils/exportUtils";
+import SubmissionPhotoGallery from "@/app/components/SubmissionPhotoGallery";
 
 const BRAND = "#2e7d32";
 const FONT = '"Montserrat", sans-serif';
@@ -28,6 +31,11 @@ export default function TrackerViewPage() {
   const formId = searchParams.get("formId") as Id<"communityForms"> | null;
   const [userId, setUserId] = useState<Id<"users"> | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [showBatchOptions, setShowBatchOptions] = useState(false);
+  const [selectedSubmissionIds, setSelectedSubmissionIds] = useState<Set<string>>(new Set());
+  const [singleExportingId, setSingleExportingId] = useState<string | null>(null);
+  const [batchExporting, setBatchExporting] = useState(false);
+  const convex = useConvex();
 
   useEffect(() => {
     try {
@@ -47,6 +55,44 @@ export default function TrackerViewPage() {
   ) as any;
 
   const selectedFormName = submissions?.[0]?.formName || "My Submissions";
+
+  const toggleSelectedSubmission = (submissionId: string, selected: boolean) => {
+    setSelectedSubmissionIds((prev) => {
+      const next = new Set(prev);
+      if (selected) next.add(submissionId);
+      else next.delete(submissionId);
+      return next;
+    });
+  };
+
+  const handleSingleExport = async (submissionId: Id<"formResponses">) => {
+    setSingleExportingId(String(submissionId));
+    try {
+      const exportRows = await convex.query((api as any).forms.getSubmissionsForExport, {
+        submissionIds: [submissionId],
+      });
+      const datePart = new Date().toISOString().split("T")[0];
+      await exportFormSubmissionsToPDF(exportRows || [], `community_submission_${datePart}`);
+    } catch {
+      alert("Failed to export submission PDF.");
+    }
+    setSingleExportingId(null);
+  };
+
+  const handleBatchExport = async () => {
+    if (selectedSubmissionIds.size === 0) return;
+    setBatchExporting(true);
+    try {
+      const exportRows = await convex.query((api as any).forms.getSubmissionsForExport, {
+        submissionIds: Array.from(selectedSubmissionIds) as Id<"formResponses">[],
+      });
+      const datePart = new Date().toISOString().split("T")[0];
+      await exportFormSubmissionsToPDF(exportRows || [], `community_submissions_${datePart}`);
+    } catch {
+      alert("Failed to export selected submissions PDF.");
+    }
+    setBatchExporting(false);
+  };
 
   if (!communityId) {
     return (
@@ -86,6 +132,50 @@ export default function TrackerViewPage() {
 
       {/* Content */}
       <div style={{ padding: "1rem" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
+          <div style={{ fontSize: "0.82rem", color: "#555", fontWeight: 600 }}>
+            {submissions?.length ? `${submissions.length} submission(s)` : ""}
+          </div>
+          <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={() => {
+                setShowBatchOptions((prev) => !prev);
+                if (showBatchOptions) setSelectedSubmissionIds(new Set());
+              }}
+              style={{
+                padding: "0.35rem 0.6rem",
+                borderRadius: 8,
+                border: "1px solid #d0d7de",
+                background: "#fff",
+                fontSize: "0.75rem",
+                cursor: "pointer",
+              }}
+            >
+              {showBatchOptions ? "Hide batch options" : "Show batch options"}
+            </button>
+            {showBatchOptions && (
+              <button
+                type="button"
+                onClick={handleBatchExport}
+                disabled={batchExporting || selectedSubmissionIds.size === 0}
+                style={{
+                  padding: "0.35rem 0.6rem",
+                  borderRadius: 8,
+                  border: "none",
+                  background: selectedSubmissionIds.size === 0 ? "#e0e0e0" : BRAND,
+                  color: selectedSubmissionIds.size === 0 ? "#777" : "#fff",
+                  fontSize: "0.75rem",
+                  fontWeight: 700,
+                  cursor: batchExporting || selectedSubmissionIds.size === 0 ? "not-allowed" : "pointer",
+                }}
+              >
+                {batchExporting ? "Exporting…" : `📥 Download PDF (Batch${selectedSubmissionIds.size ? `: ${selectedSubmissionIds.size}` : ""})`}
+              </button>
+            )}
+          </div>
+        </div>
+
         {!submissions && (
           <div style={{ textAlign: "center", padding: "2rem", color: "#888" }}>Loading...</div>
         )}
@@ -106,6 +196,8 @@ export default function TrackerViewPage() {
         <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
           {submissions && submissions.map((sub: any) => {
             const isExpanded = expandedId === String(sub._id);
+            const isSelected = selectedSubmissionIds.has(String(sub._id));
+            const photoValues = (sub.values || []).filter((v: any) => v.fieldType === "photo" && v.photoUrl);
             return (
               <div key={sub._id} style={{
                 padding: "0.85rem",
@@ -155,6 +247,36 @@ export default function TrackerViewPage() {
                   {isExpanded ? "▲ Close full view" : "▼ Open full view"}
                 </button>
 
+                <div style={{ marginTop: "0.45rem", display: "flex", gap: "0.35rem", flexWrap: "wrap", alignItems: "center" }}>
+                  {showBatchOptions && (
+                    <label style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.72rem", color: "#555" }}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => toggleSelectedSubmission(String(sub._id), e.target.checked)}
+                      />
+                      Select
+                    </label>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleSingleExport(sub._id)}
+                    disabled={singleExportingId === String(sub._id)}
+                    style={{
+                      border: "1px solid #b7e1bc",
+                      background: "#eef7ee",
+                      color: BRAND,
+                      borderRadius: 8,
+                      padding: "0.32rem 0.6rem",
+                      fontSize: "0.74rem",
+                      fontWeight: 700,
+                      cursor: singleExportingId === String(sub._id) ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    {singleExportingId === String(sub._id) ? "Preparing…" : "📥 Download PDF"}
+                  </button>
+                </div>
+
                 {!isExpanded && (
                   <div style={{ marginTop: "0.45rem", display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
                     {(sub.values || []).slice(0, 3).map((v: any, i: number) => (
@@ -178,6 +300,11 @@ export default function TrackerViewPage() {
 
                 {isExpanded && (
                   <div style={{ marginTop: "0.6rem", borderTop: "1px solid #eee", paddingTop: "0.5rem" }}>
+                    {sub.trackedUnit && (
+                      <div style={{ marginBottom: "0.45rem", fontSize: "0.74rem", color: "#555" }}>
+                        <strong>Tracked unit:</strong> {sub.trackedUnit.emoji || "🌱"} {sub.trackedUnit.name || sub.trackedUnit.unitType}
+                      </div>
+                    )}
                     {(sub.values || []).map((valueRow: any, idx: number) => (
                       <div
                         key={idx}
@@ -197,6 +324,15 @@ export default function TrackerViewPage() {
                         </div>
                       </div>
                     ))}
+
+                    {photoValues.length > 0 && (
+                      <div style={{ marginTop: "0.6rem" }}>
+                        <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#555", marginBottom: "0.35rem" }}>
+                          Photos ({photoValues.length})
+                        </div>
+                        <SubmissionPhotoGallery photos={photoValues.map((p: any) => p.photoUrl).filter(Boolean)} />
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

@@ -780,14 +780,27 @@ export const getMySubmissions = query({
         const formFields = fieldsByForm.get(String(r.formId)) || [];
         const fieldMap = new Map(formFields.map((f: any) => [String(f._id), f]));
 
-        const enrichedValues = values.map((value) => {
-          const field = fieldMap.get(String(value.fieldId));
-          return {
-            ...value,
-            fieldLabel: field?.label || "Field",
-            fieldType: field?.fieldType || "text",
-          };
-        });
+        const enrichedValues = await Promise.all(
+          values.map(async (value) => {
+            const field = fieldMap.get(String(value.fieldId));
+            let photoUrl = null;
+
+            if (field?.fieldType === "photo" && value.value) {
+              try {
+                photoUrl = await ctx.storage.getUrl(value.value as Id<"_storage">);
+              } catch {
+                photoUrl = null;
+              }
+            }
+
+            return {
+              ...value,
+              fieldLabel: field?.label || "Field",
+              fieldType: field?.fieldType || "text",
+              photoUrl,
+            };
+          })
+        );
 
         return {
           ...r,
@@ -815,6 +828,100 @@ export const getMySubmissions = query({
 /**
  * Seed tracker templates (idempotent â€” only inserts if table is empty)
  */
+
+/**
+ * Get multiple submissions for batch export by their IDs
+ * Returns full enriched data with photo URL resolution if available
+ */
+export const getSubmissionsForExport = query({
+  args: {
+    submissionIds: v.array(v.id("formResponses")),
+  },
+  handler: async (ctx, args) => {
+    const responses = await Promise.all(args.submissionIds.map((id) => ctx.db.get(id)));
+    const valid = responses.filter((r) => r !== null);
+
+    // Get all unique form IDs and form fields
+    const formIds = [...new Set(valid.map((r: any) => r.formId))];
+    const forms = await Promise.all(formIds.map((id) => ctx.db.get(id)));
+    const formMap = new Map(forms.filter(Boolean).map((f: any) => [String(f._id), f]));
+
+    const fieldsByForm = new Map<string, any[]>();
+    await Promise.all(
+      formIds.map(async (id) => {
+        const fields = await ctx.db
+          .query("formFields")
+          .withIndex("by_form", (q) => q.eq("formId", id))
+          .collect();
+        fieldsByForm.set(String(id), fields);
+      })
+    );
+
+    // Enrich each response
+    const enriched = await Promise.all(
+      valid.map(async (r: any) => {
+        const values = await ctx.db
+          .query("formResponseValues")
+          .withIndex("by_response", (q) => q.eq("responseId", r._id))
+          .collect();
+
+        const trackedUnit = r.trackedUnitId
+          ? await ctx.db.get(r.trackedUnitId as Id<"farmTrackedUnits">)
+          : null;
+
+        const formFields = fieldsByForm.get(String(r.formId)) || [];
+        const fieldMap = new Map(formFields.map((f: any) => [String(f._id), f]));
+
+        const enrichedValues = await Promise.all(
+          values.map(async (value) => {
+            const field = fieldMap.get(String(value.fieldId));
+            let photoUrl = null;
+
+            // Attempt to resolve photo URL if this is a photo field
+            if (field?.fieldType === "photo" && value.value) {
+              try {
+                photoUrl = await ctx.storage.getUrl(value.value as any);
+              } catch {
+                // Silently fail if storage resolution doesn't work
+              }
+            }
+
+            return {
+              ...value,
+              fieldLabel: field?.label || "Field",
+              fieldType: field?.fieldType || "text",
+              photoUrl,
+            };
+          })
+        );
+
+        return {
+          ...r,
+          formName: (formMap.get(String(r.formId)) as any)?.name || "Unknown Tracker",
+          category: (formMap.get(String(r.formId)) as any)?.category || "custom",
+          trackedUnit: trackedUnit
+            ? {
+                _id: trackedUnit._id,
+                category: trackedUnit.category,
+                unitType: trackedUnit.unitType,
+                name: trackedUnit.name,
+                emoji: trackedUnit.emoji,
+                status: trackedUnit.status,
+              }
+            : null,
+          values: enrichedValues,
+        };
+      })
+    );
+
+    return enriched.sort((a, b) => b.createdAt - a.createdAt);
+  },
+});
+
+/**
+ * Seed tracker templates (idempotent – only inserts if table is empty)
+ */
+
 export const seedTrackerTemplates = mutation({
   args: {},
   handler: async (ctx) => {
@@ -1015,7 +1122,6 @@ export const getFormQrData = query({
     };
   },
 });
-
 /**
  * Performance Insights â€” Admin community-wide analytics
  * Returns aggregated numeric data from all submitted responses for a community

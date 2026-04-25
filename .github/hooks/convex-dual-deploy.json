@@ -1,0 +1,13 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "type": "command",
+        "windows": {
+          "command": "powershell -ExecutionPolicy Bypass -File ./.github/hooks/scripts/convex-dual-deploy.ps1"
+        },
+        "timeout": 15
+      }
+    ]
+  }
+}

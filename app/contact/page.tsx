@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { ThreadView } from "../components/messages/ThreadView";
+import { useStoredUser } from "../hooks/useStoredUser";
 
 /**
  * Contact Us Page
@@ -18,7 +19,7 @@ export default function ContactPage() {
   const [message, setMessage] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const { user: currentUser } = useStoredUser();
 
   useEffect(() => {
     const checkMobile = () => {
@@ -29,20 +30,6 @@ export default function ContactPage() {
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  // Get current user from localStorage
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const stored = localStorage.getItem("pilot_user");
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          setCurrentUser(parsed);
-        }
-      } catch (err) {
-        console.error("Failed to parse pilot_user", err);
-      }
-    }
-  }, []);
   const isCommunityAdmin = currentUser?.role === "admin" && 
     currentUser?.adminLevel === "junior" && 
     currentUser?.adminCategory === "community";

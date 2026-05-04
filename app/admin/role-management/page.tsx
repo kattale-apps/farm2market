@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
+import { useStoredUser } from "../../hooks/useStoredUser";
 
 /* ───────────────── Types ───────────────── */
 
@@ -70,7 +71,8 @@ const glassPanelStyle: React.CSSProperties = {
 
 export default function AdminRoleManagementPage() {
   const router = useRouter();
-  const [userId, setUserId] = useState<Id<"users"> | null>(null);
+  const { user, status: authStatus } = useStoredUser();
+  const userId = (user?.userId as Id<"users"> | undefined) ?? null;
   const [selectedAdmin, setSelectedAdmin] = useState<AnyUser | null>(null);
   const [editData, setEditData] = useState<EditAdminState | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -93,18 +95,6 @@ export default function AdminRoleManagementPage() {
     checkMobile();
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
-  }, []);
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("pilot_user");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        setUserId(parsed.userId as Id<"users">);
-      }
-    } catch (err) {
-      console.error("Failed to load pilot user", err);
-    }
   }, []);
 
   const allUsers = useQuery(
@@ -226,6 +216,22 @@ export default function AdminRoleManagementPage() {
   };
 
   /* ───────────────── UI ───────────────── */
+
+  if (authStatus === "loading") {
+    return (
+      <div style={containerStyle}>
+        <p style={{ textAlign: "center", color: "#666" }}>Loading your session...</p>
+      </div>
+    );
+  }
+
+  if (!userId) {
+    return (
+      <div style={containerStyle}>
+        <p style={{ textAlign: "center", color: "#666" }}>Please log in to access admin role management.</p>
+      </div>
+    );
+  }
 
   return (
     <div style={containerStyle}>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { getStoredUser } from "../utils/authStorage";
 
 /**
  * Contact Us Component
@@ -53,23 +54,20 @@ export function ContactUs({ isMobile = false, onOpenInbox }: ContactUsProps) {
     setShowContact(false);
   };
 
-  const handleShowContact = () => {
-    if (typeof window !== "undefined") {
-      try {
-        const stored = localStorage.getItem("pilot_user");
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          const contact = parsed?.email || parsed?.phoneNumber;
-          const alias = parsed?.alias;
-          if (alias && contact) {
-            setAccountLabel(`${alias} (${contact})`);
-          } else if (alias) {
-            setAccountLabel(alias);
-          }
+  const handleShowContact = async () => {
+    try {
+      const stored = await getStoredUser();
+      if (stored) {
+        const contact = stored?.email || stored?.phoneNumber;
+        const alias = stored?.alias;
+        if (alias && contact) {
+          setAccountLabel(`${alias} (${contact})`);
+        } else if (alias) {
+          setAccountLabel(alias);
         }
-      } catch {
-        setAccountLabel("");
       }
+    } catch {
+      setAccountLabel("");
     }
     setShowContact(true);
   };

@@ -3,7 +3,7 @@
 export const dynamic = "force-dynamic";
 
 import { api } from "@/convex/_generated/api";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Id } from "@/convex/_generated/dataModel";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -12,6 +12,7 @@ import { useOfflineQuery } from "@/app/hooks/useOfflineQuery";
 import { useConvex } from "convex/react";
 import { exportFormSubmissionsToPDF } from "@/app/utils/exportUtils";
 import SubmissionPhotoGallery from "@/app/components/SubmissionPhotoGallery";
+import { useStoredUser } from "@/app/hooks/useStoredUser";
 
 const BRAND = "#2e7d32";
 const FONT = '"Montserrat", sans-serif';
@@ -29,23 +30,14 @@ export default function TrackerViewPage() {
   const searchParams = useSearchParams();
   const communityId = searchParams.get("communityId") as Id<"communities"> | null;
   const formId = searchParams.get("formId") as Id<"communityForms"> | null;
-  const [userId, setUserId] = useState<Id<"users"> | null>(null);
+  const { user, status: authStatus } = useStoredUser();
+  const userId = (user?.userId as Id<"users"> | undefined) || null;
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showBatchOptions, setShowBatchOptions] = useState(false);
   const [selectedSubmissionIds, setSelectedSubmissionIds] = useState<Set<string>>(new Set());
   const [singleExportingId, setSingleExportingId] = useState<string | null>(null);
   const [batchExporting, setBatchExporting] = useState(false);
   const convex = useConvex();
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem("pilot_user");
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed?.userId) setUserId(parsed.userId as Id<"users">);
-      }
-    } catch {}
-  }, []);
 
   const submissions = useOfflineQuery(
     (api as any).forms.getMySubmissions,
@@ -99,6 +91,23 @@ export default function TrackerViewPage() {
       <div style={{ padding: "2rem", fontFamily: FONT, textAlign: "center" }}>
         <p>No community selected.</p>
         <Link href="/my-communities" style={{ color: BRAND }}>Back to Communities</Link>
+      </div>
+    );
+  }
+
+  if (authStatus === "loading") {
+    return (
+      <div style={{ padding: "2rem", fontFamily: FONT, textAlign: "center" }}>
+        <p>Loading user session...</p>
+      </div>
+    );
+  }
+
+  if (authStatus === "unauthenticated" || !userId) {
+    return (
+      <div style={{ padding: "2rem", fontFamily: FONT, textAlign: "center" }}>
+        <p>Your session expired. Please log in again.</p>
+        <Link href="/login" style={{ color: BRAND }}>Go to Login</Link>
       </div>
     );
   }

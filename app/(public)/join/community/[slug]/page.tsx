@@ -5,6 +5,7 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useStoredUser } from "../../../../hooks/useStoredUser";
 
 interface CommunityInfo {
   _id: string;
@@ -18,7 +19,8 @@ interface CommunityInfo {
 export default function JoinCommunityPage({ params }: { params: { slug: string } }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [userId, setUserId] = useState<Id<"users"> | null>(null);
+  const { user } = useStoredUser();
+  const userId = (user?.userId as Id<"users"> | undefined) ?? null;
   const [isJoining, setIsJoining] = useState(false);
   const [joinMessage, setJoinMessage] = useState("");
   const [joinSuccess, setJoinSuccess] = useState(false);
@@ -30,23 +32,6 @@ export default function JoinCommunityPage({ params }: { params: { slug: string }
 
   // Join community mutation
   const joinCommunityByQr = useMutation(api.communities.joinCommunityByQr);
-
-  // Get userId from localStorage
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const stored = localStorage.getItem("pilot_user");
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (parsed && parsed.userId) {
-            setUserId(parsed.userId);
-          }
-        }
-      } catch (error) {
-        console.error("Failed to parse stored user:", error);
-      }
-    }
-  }, []);
 
   // Handle auto-join after signup/login redirect
   useEffect(() => {

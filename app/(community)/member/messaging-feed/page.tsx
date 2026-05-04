@@ -8,13 +8,14 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useSearchParams } from "next/navigation";
 import CommunitySwitcher from "@/app/components/CommunitySwitcher";
+import { useStoredUser } from "@/app/hooks/useStoredUser";
 
 export default function MemberMessagingFeed() {
   const searchParams = useSearchParams();
   const communityId = (searchParams.get("communityId") || "") as Id<"communities">;
   
-  const [userId, setUserId] = useState<Id<"users"> | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { user, status: authStatus } = useStoredUser();
+  const userId = (user?.userId as Id<"users"> | undefined) ?? null;
   const [userEmail, setUserEmail] = useState("");
   const [messageText, setMessageText] = useState("");
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
@@ -30,16 +31,10 @@ export default function MemberMessagingFeed() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  // Get user ID from localStorage
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const uid = localStorage.getItem("pilot_user");
       const email = localStorage.getItem("pilot_email") || "member@farm2market.ug";
-      if (uid) {
-        setUserId(uid as Id<"users">);
-        setUserEmail(email);
-      }
-      setIsLoading(false);
+      setUserEmail(email);
     }
   }, []);
 
@@ -63,7 +58,7 @@ export default function MemberMessagingFeed() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [feedData?.replies]);
 
-  if (isLoading || !userId || !communityId) {
+  if (authStatus === "loading" || !userId || !communityId) {
     return (
       <div className="min-h-screen bg-gray-50 p-4 flex items-center justify-center">
         <div className="text-center">

@@ -6,6 +6,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useState, useEffect } from "react";
 import { Id } from "@/convex/_generated/dataModel";
+import { useStoredUser } from "@/app/hooks/useStoredUser";
 
 type RoleCategory = "farmer" | "trader" | "buyer" | "admin" | "all";
 
@@ -48,7 +49,8 @@ function Toast({ message, onClose }: { message: string; onClose: () => void }) {
 }
 
 function TutorialManagementContent() {
-  const [adminId, setAdminId] = useState<Id<"users"> | null>(null);
+  const { user, status: authStatus } = useStoredUser();
+  const adminId = (user?._id as Id<"users"> | undefined) ?? null;
   const [activeTab, setActiveTab] = useState<RoleCategory>("all");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<Id<"tutorialVideos"> | null>(null);
@@ -61,15 +63,7 @@ function TutorialManagementContent() {
   const [roleCategory, setRoleCategory] = useState<RoleCategory>("all");
 
   // Load admin ID from localStorage
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("pilot_user");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed._id) setAdminId(parsed._id as Id<"users">);
-      }
-    } catch {}
-  }, []);
+  // (replaced by useStoredUser above)
 
   const tutorials = useQuery(
     api.tutorials.getAllTutorials,

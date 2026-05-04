@@ -192,20 +192,21 @@ export default function Home() {
               style={{
                 display: "inline-block",
                 padding: "0.6rem 1.2rem",
-                background: "#111827",
-                color: "white",
+                background: "#ffffff",
+                color: "#111827",
                 textDecoration: "none",
                 borderRadius: "6px",
                 fontSize: "0.9rem",
                 fontWeight: "700",
+                border: "1px solid #111827",
                 minWidth: "130px",
                 textAlign: "center",
                 height: "auto",
                 lineHeight: "1.5",
                 transition: "background 0.3s"
               }}
-              onMouseEnter={(e) => e.currentTarget.style.background = "#0f172a"}
-              onMouseLeave={(e) => e.currentTarget.style.background = "#111827"}
+              onMouseEnter={(e) => e.currentTarget.style.background = "#f8fafc"}
+              onMouseLeave={(e) => e.currentTarget.style.background = "#ffffff"}
             >
               Download APP
             </a>
@@ -214,29 +215,7 @@ export default function Home() {
               style={{
                 display: "inline-block",
                 padding: "0.6rem 1.2rem",
-                background: "#2e7d32",
-                color: "white",
-                textDecoration: "none",
-                borderRadius: "6px",
-                fontSize: "0.9rem",
-                fontWeight: "700",
-                minWidth: "130px",
-                textAlign: "center",
-                height: "auto",
-                lineHeight: "1.5",
-                transition: "background 0.3s"
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.background = "#1b5e20"}
-              onMouseLeave={(e) => e.currentTarget.style.background = "#2e7d32"}
-            >
-              Contact Us
-            </a>
-            <a
-              href="/privacy-policy"
-              style={{
-                display: "inline-block",
-                padding: "0.6rem 1.2rem",
-                background: "transparent",
+                background: "#ffffff",
                 color: "#2e7d32",
                 textDecoration: "none",
                 borderRadius: "6px",
@@ -249,14 +228,31 @@ export default function Home() {
                 lineHeight: "1.5",
                 transition: "background 0.3s"
               }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#2e7d32";
-                e.currentTarget.style.color = "white";
+              onMouseEnter={(e) => e.currentTarget.style.background = "#f8fff9"}
+              onMouseLeave={(e) => e.currentTarget.style.background = "#ffffff"}
+            >
+              Contact Us
+            </a>
+            <a
+              href="/privacy-policy"
+              style={{
+                display: "inline-block",
+                padding: "0.6rem 1.2rem",
+                background: "#ffffff",
+                color: "#2e7d32",
+                textDecoration: "none",
+                borderRadius: "6px",
+                fontSize: "0.9rem",
+                fontWeight: "700",
+                border: "1px solid #2e7d32",
+                minWidth: "130px",
+                textAlign: "center",
+                height: "auto",
+                lineHeight: "1.5",
+                transition: "background 0.3s"
               }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "transparent";
-                e.currentTarget.style.color = "#2e7d32";
-              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = "#f8fff9"}
+              onMouseLeave={(e) => e.currentTarget.style.background = "#ffffff"}
             >
               Privacy Policy
             </a>
@@ -270,8 +266,8 @@ export default function Home() {
                 style={{
                   display: "inline-block",
                   padding: "0.6rem 1.2rem",
-                  background: "#1976d2",
-                  color: "#ffffff",
+                  background: "#ffffff",
+                  color: "#1976d2",
                   textDecoration: "none",
                   borderRadius: "6px",
                   fontSize: "0.9rem",
@@ -284,10 +280,10 @@ export default function Home() {
                   transition: "background 0.3s"
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "#1565c0";
+                  e.currentTarget.style.background = "#f5f9ff";
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "#1976d2";
+                  e.currentTarget.style.background = "#ffffff";
                 }}
               >
                 {isSuperAdmin ? "Create a Community" : user?.adminCategory === "community" ? "Community Dashboard" : "Join A Community"}
@@ -387,13 +383,13 @@ export default function Home() {
             }}
             style={{
               padding: "0.6rem 1.2rem",
-              background: "#dc3545",
-              border: "none",
+              background: "#ffffff",
+              border: "1px solid #dc3545",
               borderRadius: "6px",
               cursor: "pointer",
               fontSize: "0.9rem",
               fontWeight: "700",
-              color: "#fff",
+              color: "#dc3545",
               display: "inline-block",
               minWidth: "130px",
               textAlign: "center",
@@ -402,8 +398,8 @@ export default function Home() {
               boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
               transition: "background 0.2s"
             }}
-            onMouseEnter={(e) => e.currentTarget.style.background = "#c82333"}
-            onMouseLeave={(e) => e.currentTarget.style.background = "#dc3545"}
+            onMouseEnter={(e) => e.currentTarget.style.background = "#fff5f5"}
+            onMouseLeave={(e) => e.currentTarget.style.background = "#ffffff"}
           >
             Logout
           </button>

@@ -9,6 +9,7 @@ import { Id } from "@/convex/_generated/dataModel";
 import CommunityTabBar from "@/app/components/CommunityTabBar";
 import { useSearchParams } from "next/navigation";
 import { useOfflineQuery } from "@/app/hooks/useOfflineQuery";
+import { useStoredUser } from "@/app/hooks/useStoredUser";
 
 function QuotaWidget({ communityId }: { communityId: Id<"communities"> }) {
   const quotaStatus = useOfflineQuery(api.noticeboard.getAdminNoticeboardQuotaStatus, {
@@ -212,26 +213,15 @@ function PostCard({
 export default function CommunityNoticeboardPage() {
   const searchParams = useSearchParams();
   const communityIdParam = searchParams.get("communityId") || "";
+  const { user, status: authStatus } = useStoredUser();
   
   const [communityId, setCommunityId] = useState<Id<"communities"> | null>(null);
-  const [userId, setUserId] = useState<Id<"users"> | null>(null);
-  const [userRole, setUserRole] = useState<string | null>(null);
+  const userId = (user?.userId as Id<"users"> | undefined) ?? null;
+  const userRole = user?.role ?? null;
 
   useEffect(() => {
     if (communityIdParam) {
       setCommunityId(communityIdParam as Id<"communities">);
-    }
-
-    // Parse from JSON — pilot_user is stored as JSON string
-    const stored = localStorage.getItem("pilot_user");
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        setUserId(parsed.userId as Id<"users">);
-        setUserRole(parsed.role ?? null);
-      } catch {
-        /* invalid JSON — ignore */
-      }
     }
   }, [communityIdParam]);
 
@@ -240,6 +230,16 @@ export default function CommunityNoticeboardPage() {
     api.noticeboard.getCommunityNoticeboardPosts,
     communityId ? { communityId } : "skip"
   ) as any;
+
+  if (authStatus === "loading") {
+    return (
+      <div className="min-h-screen bg-gray-50 p-4 md:p-8">
+        <div className="text-center text-gray-500 p-8">
+          Loading your session...
+        </div>
+      </div>
+    );
+  }
 
   if (!communityId || !userId) {
     return (

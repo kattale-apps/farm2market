@@ -8,6 +8,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Id } from "../../../convex/_generated/dataModel";
+import { useStoredUser } from "../../hooks/useStoredUser";
 
 export default function ChangePasswordPage() {
   const router = useRouter();
@@ -17,19 +18,10 @@ export default function ChangePasswordPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [userId, setUserId] = useState<Id<"users"> | null>(null);
+  const { user, status: authStatus } = useStoredUser();
+  const userId = (user?.userId as Id<"users"> | undefined) ?? null;
 
   const changePassword = useMutation(api.auth.changePassword);
-
-  useEffect(() => {
-    const stored = localStorage.getItem("pilot_user");
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      setUserId(parsed.userId);
-    } else {
-      router.push("/login");
-    }
-  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -38,6 +38,10 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
     (api as any).farmcoin.getFarmerFarmcoinBalance,
     { farmerId: userId }
   ) as any;
+  const farm2MarketAccess = useOfflineQuery(
+    (api as any).farmcoin.getFarm2MarketAccess,
+    { farmerId: userId }
+  ) as any;
   const paginationPreferences = useOfflineQuery(
     (api as any).userSettings.getPaginationPreferences,
     { userId } as any
@@ -96,6 +100,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
   const [isMobile, setIsMobile] = useState(false);
   const [transactionsExpanded, setTransactionsExpanded] = useState(true);
   const [ledgerExpanded, setLedgerExpanded] = useState(true);
+  const [communitiesExpanded, setCommunitiesExpanded] = useState(true);
   const [clearingConcluded, setClearingConcluded] = useState(false);
   const [deletingNegId, setDeletingNegId] = useState<string | null>(null);
   const inboxRef = useRef<HTMLDivElement>(null);
@@ -709,7 +714,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
       boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
       border: "1px solid #e0e0e0",
     }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: communitiesExpanded ? "1rem" : 0 }}>
         <h3 style={{
           margin: 0,
           fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)",
@@ -720,23 +725,49 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
         }}>
           🌾 My Communities
         </h3>
-        <Link
-          href="/farmer/communities"
-          style={{
-            padding: "0.4rem 0.8rem",
-            background: "#1976d2",
-            color: "#fff",
-            textDecoration: "none",
-            borderRadius: "8px",
-            fontSize: "0.85rem",
-            fontWeight: "600",
-            transition: "background 0.2s",
-          }}
-        >
-          Browse All
-        </Link>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", justifyContent: "flex-end" }}>
+          <button
+            type="button"
+            onClick={() => setCommunitiesExpanded((prev) => !prev)}
+            style={{
+              padding: "0.4rem 0.8rem",
+              background: "#f5f5f5",
+              color: "#4b5563",
+              border: "1px solid #d1d5db",
+              borderRadius: "8px",
+              cursor: "pointer",
+              fontSize: "0.85rem",
+              fontWeight: 600,
+              minWidth: isMobile ? "auto" : "108px",
+            }}
+            aria-expanded={communitiesExpanded}
+            aria-label={communitiesExpanded ? "Hide communities" : "Show communities"}
+          >
+            {communitiesExpanded ? "Hide ▲" : "Show ▼"}
+          </button>
+          <Link
+            href="/farmer/communities"
+            style={{
+              padding: "0.4rem 0.8rem",
+              background: "#fff",
+              color: "#1976d2",
+              textDecoration: "none",
+              borderRadius: "8px",
+              fontSize: "0.85rem",
+              fontWeight: "600",
+              border: "1px solid #1976d2",
+              transition: "background 0.2s",
+            }}
+          >
+            Browse All
+          </Link>
+        </div>
       </div>
-      {!communities ? (
+      {!communitiesExpanded ? (
+        <p style={{ color: "#9ca3af", fontSize: "0.85rem", margin: "0.25rem 0 0" }}>
+          Communities list hidden.
+        </p>
+      ) : !communities ? (
         <p style={{ color: "#999", fontSize: "0.9rem" }}>Loading communities...</p>
       ) : memberCommunities.length === 0 ? (
         <p style={{ color: "#6b7280", fontSize: "0.9rem" }}>
@@ -923,32 +954,37 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
           )}
         </div>
         <div style={{
-          display: "flex",
+          display: "grid",
+          gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
           gap: "0.75rem",
-          alignItems: "flex-start",
-          flexWrap: "wrap",
-          width: isMobile ? "100%" : "auto",
+          alignItems: "stretch",
+          width: isMobile ? "100%" : "min(460px, 100%)",
+          minWidth: 0,
         }}>
           <Link
             href="/farmer/profile"
             style={{
-              padding: "1rem 1.25rem",
-              background: "#4CAF50",
-              color: "white",
+              padding: "0.85rem 0.7rem",
+              background: "#e3f2fd",
+              color: "#1565c0",
               textDecoration: "none",
               borderRadius: "12px",
-              fontSize: "1rem",
+              border: "2px solid #2196f3",
+              boxShadow: "0 4px 12px rgba(33, 150, 243, 0.28)",
+              fontSize: "clamp(0.92rem, 2.8vw, 1rem)",
               fontWeight: "600",
               display: "inline-flex",
               alignItems: "center",
               justifyContent: "center",
               minHeight: "64px",
-              minWidth: "96px",
+              width: "100%",
+              minWidth: 0,
+              textAlign: "center",
             }}
           >
             Profile
           </Link>
-          <div id="notification-inbox">
+          <div id="notification-inbox" style={{ width: "100%", minWidth: 0 }}>
             <NotificationMailbox userId={userId} />
           </div>
           <button
@@ -961,19 +997,24 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
               }
             }}
             style={{
-              padding: "1rem 1.25rem",
-              background: messageInboxOpen ? "#1976d2" : "#f5f5f5",
-              color: messageInboxOpen ? "#fff" : "#1a1a1a",
-              border: "2px solid #ddd",
+              padding: "0.85rem 0.7rem",
+              background: messageInboxOpen ? "#1976d2" : "#e3f2fd",
+              color: messageInboxOpen ? "#fff" : "#1565c0",
+              border: "2px solid #2196f3",
+              boxShadow: messageInboxOpen
+                ? "0 6px 16px rgba(25, 118, 210, 0.35)"
+                : "0 4px 12px rgba(33, 150, 243, 0.28)",
               borderRadius: "12px",
               cursor: "pointer",
-              fontSize: "1rem",
+              fontSize: "clamp(0.92rem, 2.8vw, 1rem)",
               fontWeight: "600",
               display: "inline-flex",
               alignItems: "center",
               justifyContent: "center",
               minHeight: "64px",
-              minWidth: "96px",
+              width: "100%",
+              minWidth: 0,
+              textAlign: "center",
             }}
           >
             📩 Inbox {Array.isArray(messageThreads) && messageThreads.length > 0
@@ -1070,22 +1111,87 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
           justifyContent: "center",
           gap: "0.45rem",
           padding: "0.95rem",
-          background: "#fbc02d",
-          border: "1.5px solid #f9a825",
+          background: farm2MarketAccess?.allowed === false ? "#e8e0c8" : "#fbc02d",
+          border: farm2MarketAccess?.allowed === false ? "1.5px solid #bbb" : "1.5px solid #f9a825",
           borderRadius: "14px",
           textDecoration: "none",
-          color: "#2c2c2c",
+          color: farm2MarketAccess?.allowed === false ? "#777" : "#2c2c2c",
           fontFamily: '"Montserrat", sans-serif',
           fontWeight: 700,
           fontSize: "clamp(0.8rem,2.4vw,0.95rem)",
-          boxShadow: "0 2px 6px rgba(249,168,37,0.22)",
+          boxShadow: farm2MarketAccess?.allowed === false
+            ? "0 2px 6px rgba(0,0,0,0.10)"
+            : "0 2px 6px rgba(249,168,37,0.22)",
           minHeight: 88,
           minWidth: 0,
           textAlign: "center",
           overflowWrap: "anywhere",
+          position: "relative",
+          opacity: farm2MarketAccess?.allowed === false ? 0.72 : 1,
         }}>
+          {/* Lock badge — shown only when access is blocked */}
+          {farm2MarketAccess?.allowed === false && (
+            <span
+              title={farm2MarketAccess.reason ?? "Unlock Farm 2 Market by earning more FarmCoins"}
+              style={{
+                position: "absolute",
+                top: 6,
+                right: 8,
+                fontSize: "1rem",
+                lineHeight: 1,
+                cursor: "help",
+              }}
+              aria-label="Locked"
+            >
+              🔒
+            </span>
+          )}
           <span style={{ fontSize: "1.8rem" }}>🛒</span>
           Farm 2 Market
+          {/* Informer handle — shows progress toward 500 FarmCoins threshold */}
+          {farm2MarketAccess?.allowed === false && (
+            <span style={{
+              fontSize: "0.65rem",
+              fontWeight: 600,
+              color: "#795548",
+              lineHeight: 1.2,
+              marginTop: "0.1rem",
+            }}>
+              🪙 {farm2MarketAccess.balance ?? 0} / 500
+            </span>
+          )}
+        </Link>
+          {/* Lock badge — shown only when access is blocked */}
+          {farm2MarketAccess?.allowed === false && (
+            <span
+              title={farm2MarketAccess.reason ?? "Unlock Farm 2 Market by earning more FarmCoins"}
+              style={{
+                position: "absolute",
+                top: 6,
+                right: 8,
+                fontSize: "1rem",
+                lineHeight: 1,
+                cursor: "help",
+              }}
+              aria-label="Locked"
+            >
+              🔒
+            </span>
+          )}
+          <span style={{ fontSize: "1.8rem" }}>🛒</span>
+          Farm 2 Market
+          {/* Informer handle — shows progress toward 500 FarmCoins threshold */}
+          {farm2MarketAccess?.allowed === false && (
+            <span style={{
+              fontSize: "0.65rem",
+              fontWeight: 600,
+              color: "#795548",
+              lineHeight: 1.2,
+              marginTop: "0.1rem",
+            }}>
+              🪙 {farm2MarketAccess.balance ?? 0} / 500
+            </span>
+          )}
         </Link>
       </div>
 

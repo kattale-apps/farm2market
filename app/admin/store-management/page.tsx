@@ -5,6 +5,7 @@ import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useStoredUser } from "../../hooks/useStoredUser";
 
 type Tab = "stores" | "audit";
 type ViewMode = "actions" | "deliveries" | "inventory";
@@ -13,21 +14,16 @@ type ViewMode = "actions" | "deliveries" | "inventory";
 export default function StoreManagementPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("stores");
-  const [userId, setUserId] = useState<Id<"users"> | null>(null);
+  const { user, status: authStatus } = useStoredUser();
+  const userId = (user?.userId as Id<"users"> | undefined) ?? null;
 
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const stored = localStorage.getItem("pilot_user");
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (parsed.userId) setUserId(parsed.userId as Id<"users">);
-        }
-      } catch (e) {
-        console.error("Error reading user from localStorage:", e);
-      }
-    }
-  }, []);
+  if (authStatus === "loading") {
+    return (
+      <div style={{ padding: "2rem", textAlign: "center" }}>
+        <p>Loading your session...</p>
+      </div>
+    );
+  }
 
   if (!userId) {
     return (

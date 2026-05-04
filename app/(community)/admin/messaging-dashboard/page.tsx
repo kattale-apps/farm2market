@@ -8,12 +8,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import CommunitySwitcher from "@/app/components/CommunitySwitcher";
+import { useStoredUser } from "@/app/hooks/useStoredUser";
 
 export default function MessagingDashboard() {
   const searchParams = useSearchParams();
   const communityIdParam = (searchParams.get("communityId") || "") as Id<"communities">;
-  const [userId, setUserId] = useState<Id<"users"> | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { user, status: authStatus } = useStoredUser();
+  const userId = (user?.userId as Id<"users"> | undefined) ?? null;
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState("");
   const [caption, setCaption] = useState("");
@@ -24,15 +25,6 @@ export default function MessagingDashboard() {
     file: File;
     caption: string;
   } | null>(null);
-
-  // Get user ID from localStorage (set during auth)
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const uid = localStorage.getItem("pilot_user");
-      if (uid) setUserId(uid as Id<"users">);
-      setIsLoading(false);
-    }
-  }, []);
 
   // Fetch dashboard data
   const dashboardData = useQuery(
@@ -47,7 +39,7 @@ export default function MessagingDashboard() {
   const confirmPayment = useMutation(api.monetisation.confirmPayment);
   const decrementQuota = useMutation(api.monetisation.decrementQuota);
 
-  if (isLoading || !userId) {
+  if (authStatus === "loading" || !userId) {
     return (
       <div className="min-h-screen bg-gray-50 p-4 flex items-center justify-center">
         <div className="text-center">

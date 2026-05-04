@@ -5,6 +5,7 @@ import { api } from "@/convex/_generated/api";
 import { useState, useEffect, useRef } from "react";
 import { Id } from "@/convex/_generated/dataModel";
 import { useRouter } from "next/navigation";
+import { useStoredUser } from "../../hooks/useStoredUser";
 
 function Toast({ message, onClose }: { message: string; onClose: () => void }) {
   useEffect(() => {
@@ -257,34 +258,23 @@ function JoinedCommunitiesList({ userId, refreshKey }: { userId: Id<"users">; re
 
 export default function MyCommunities() {
   const router = useRouter();
-  const [userId, setUserId] = useState<Id<"users"> | null>(null);
+  const { user, status: authStatus } = useStoredUser();
+  const userId = (user?.userId as Id<"users"> | undefined) ?? null;
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem("pilot_user");
-      if (stored) {
-        // pilot_user may be a JSON object { userId, role, ... } or a raw ID string
-        try {
-          const parsed = JSON.parse(stored);
-          if (parsed && parsed.userId) {
-            setUserId(parsed.userId as Id<"users">);
-          } else {
-            // Unexpected JSON shape — redirect
-            router.push("/join/community");
-          }
-        } catch {
-          // Not JSON — treat as a raw user ID string (legacy format)
-          setUserId(stored as Id<"users">);
-        }
-      } else {
-        router.push("/join/community");
-      }
-    } catch (error) {
-      console.error("Failed to read pilot_user from localStorage:", error);
+    if (authStatus === "unauthenticated") {
       router.push("/join/community");
     }
-  }, [router]);
+  }, [authStatus, router]);
+
+  if (authStatus === "loading") {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <p className="text-gray-500">Loading your session...</p>
+      </div>
+    );
+  }
 
   if (!userId) {
     return (

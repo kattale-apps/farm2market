@@ -1119,6 +1119,51 @@ export const setTraderVerificationStatus = mutation({
 
 // ─── Farmer Form Field Rewards ───────────────────────────────────────
 
+// ─── Farm 2 Market Access Gate ────────────────────────────────────────
+
+const FARM2MARKET_REQUIRED_FARMCOINS = 500;
+const PILOT_EMAIL_DOMAIN = "@pilot.farm2market";
+
+/**
+ * Evaluate whether a farmer is allowed to access Farm 2 Market.
+ * Criteria:
+ *   - Farmer has >= 500 FarmCoins, OR
+ *   - Farmer's email ends with @pilot.farm2market (pilot users are always allowed)
+ */
+export const getFarm2MarketAccess = query({
+  args: { farmerId: v.id("users") },
+  handler: async (ctx, args) => {
+    // Fetch user to check pilot-email exemption
+    const user = await ctx.db.get(args.farmerId);
+    const email: string = (user as any)?.email ?? "";
+    const isPilotExempt = email.toLowerCase().endsWith(PILOT_EMAIL_DOMAIN);
+
+    // Fetch current farmer FarmCoin balance
+    const latestEntry = await ctx.db
+      .query("farmcoinLedger")
+      .withIndex("by_account", (q: any) => q.eq("accountType", "farmer"))
+      .filter((q: any) => q.eq(q.field("userId"), args.farmerId))
+      .order("desc")
+      .first();
+    const balance: number = latestEntry?.balanceAfter ?? 0;
+
+    const meetsThreshold = balance >= FARM2MARKET_REQUIRED_FARMCOINS;
+    const allowed = isPilotExempt || meetsThreshold;
+
+    return {
+      allowed,
+      isPilotExempt,
+      balance,
+      requiredBalance: FARM2MARKET_REQUIRED_FARMCOINS,
+      reason: allowed
+        ? null
+        : `You need ${FARM2MARKET_REQUIRED_FARMCOINS - balance} more FarmCoin${FARM2MARKET_REQUIRED_FARMCOINS - balance === 1 ? "" : "s"} to unlock Farm 2 Market.`,
+    };
+  },
+});
+
+// ─── Farmer Farmcoin Balance ───────────────────────────────────────────
+
 /**
  * Get farmer FarmCoin balance (for the counter badge)
  */

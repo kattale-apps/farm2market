@@ -8,9 +8,11 @@ import { Id } from "../../../convex/_generated/dataModel";
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import * as XLSX from "xlsx";
+import { useStoredUser } from "../../hooks/useStoredUser";
 
 export default function FinanceDashboardPage() {
-  const [userId, setUserId] = useState<Id<"users"> | null>(null);
+  const { user, status: authStatus } = useStoredUser();
+  const userId = (user?.userId as Id<"users"> | undefined) ?? null;
   const [pricingReason, setPricingReason] = useState("");
   const [postingCost, setPostingCost] = useState<string>("");
   const [etaCost, setEtaCost] = useState<string>("");
@@ -82,23 +84,6 @@ export default function FinanceDashboardPage() {
   const sentifyPageKey = "finance_sentify_batches";
   const grantsPageKey = "finance_token_grants";
   const returnsPageKey = "finance_token_returns";
-
-  // Get current user from localStorage (pilot mode)
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const stored = localStorage.getItem("pilot_user");
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (parsed.userId) {
-            setUserId(parsed.userId as Id<"users">);
-          }
-        }
-      } catch (e) {
-        console.error("Error reading user from localStorage:", e);
-      }
-    }
-  }, []);
 
   useEffect(() => {
     if (!paginationPreferences) return;
@@ -269,6 +254,14 @@ export default function FinanceDashboardPage() {
     XLSX.utils.book_append_sheet(wb, sentifyWs, "Sentify Wallet");
     XLSX.writeFile(wb, "farmcoin-ledger-export.xlsx");
   };
+
+  if (authStatus === "loading") {
+    return (
+      <div style={{ padding: "2rem", textAlign: "center" }}>
+        <p>Loading your session...</p>
+      </div>
+    );
+  }
 
   if (!userId) {
     return (

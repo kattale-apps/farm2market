@@ -8,6 +8,7 @@ import { Id } from "../../../convex/_generated/dataModel";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import FarmSizePreview from "../../components/FarmSizePreview";
+import { useStoredUser } from "../../hooks/useStoredUser";
 
 const REGION_GROUPS = [
   {
@@ -85,7 +86,8 @@ const REGION_GROUPS = [
 
 export default function FarmerOnboardingPage() {
   const router = useRouter();
-  const [userId, setUserId] = useState<Id<"users"> | null>(null);
+  const { user, status: authStatus } = useStoredUser();
+  const userId = (user?.userId as Id<"users"> | undefined) ?? null;
   
   // Location data
   const districts = useQuery(api.locations.getActiveDistricts, {});
@@ -137,23 +139,6 @@ export default function FarmerOnboardingPage() {
   const completeOnboarding = useMutation(api.farmerOnboarding.completeOnboarding);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-
-  // Get current user from localStorage (pilot mode)
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const stored = localStorage.getItem("pilot_user");
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (parsed.userId) {
-            setUserId(parsed.userId as Id<"users">);
-          }
-        }
-      } catch (e) {
-        console.error("Error reading user from localStorage:", e);
-      }
-    }
-  }, []);
 
   // Check onboarding status
   const onboardingStatus = useQuery(
@@ -261,6 +246,14 @@ export default function FarmerOnboardingPage() {
   useEffect(() => {
     setSelectedParishId("");
   }, [selectedSubcountyId]);
+
+  if (authStatus === "loading") {
+    return (
+      <div style={{ padding: "2rem", textAlign: "center" }}>
+        <p>Loading your session...</p>
+      </div>
+    );
+  }
 
   if (!userId) {
     return (

@@ -11,11 +11,13 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { savePdfFromJsPDF } from "../../utils/pdfDownload";
+import { useStoredUser } from "../../hooks/useStoredUser";
 
 type StatusFilter = "PENDING" | "APPROVED" | "REJECTED" | "REVOKED" | "all";
 
 export default function AgroFreshUGAdminPage() {
-  const [adminId, setAdminId] = useState<Id<"users"> | null>(null);
+  const { user, status: authStatus } = useStoredUser();
+  const adminId = (user?.userId as Id<"users"> | undefined) ?? null;
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("PENDING");
   const [selectedApplicationId, setSelectedApplicationId] = useState<Id<"communityApplications"> | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -29,18 +31,7 @@ export default function AgroFreshUGAdminPage() {
   const [subCountyFilter, setSubCountyFilter] = useState("");
   const [enterpriseFilter, setEnterpriseFilter] = useState("");
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const stored = localStorage.getItem("pilot_user");
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        setAdminId(parsed.userId);
-      } catch {
-        setAdminId(null);
-      }
-    }
-  }, []);
+  // (replaced by useStoredUser above)
 
   useEffect(() => {
     setPage(1);

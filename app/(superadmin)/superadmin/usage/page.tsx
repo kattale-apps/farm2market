@@ -4,6 +4,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useState, useEffect } from "react";
 import { Id } from "@/convex/_generated/dataModel";
+import { useStoredUser } from "@/app/hooks/useStoredUser";
 
 function Toast({ message, onClose }: { message: string; onClose: () => void }) {
   useEffect(() => {
@@ -350,24 +351,12 @@ function CommunitiesList({ adminId }: { adminId: Id<"users"> }) {
 }
 
 export default function SuperadminUsagePage() {
-  const [adminId, setAdminId] = useState<Id<"users"> | null>(null);
+  const { user, status: authStatus } = useStoredUser();
+  const adminId = (user?.userId as Id<"users"> | undefined) ?? null;
 
-  useEffect(() => {
-    // Get current user ID from localStorage (pilot_user for testing)
-    try {
-      const stored = localStorage.getItem("pilot_user");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed?.userId) {
-          setAdminId(parsed.userId as Id<"users">);
-        }
-      }
-    } catch {
-      // If stored value is a raw ID string (legacy), use directly
-      const stored = localStorage.getItem("pilot_user");
-      if (stored) setAdminId(stored as Id<"users">);
-    }
-  }, []);
+  if (authStatus === "loading") {
+    return <div style={{ padding: "2rem", textAlign: "center" }}><p>Loading your session...</p></div>;
+  }
 
   return (
       <div className="min-h-screen bg-gray-50 p-4 md:p-8 pb-safe">

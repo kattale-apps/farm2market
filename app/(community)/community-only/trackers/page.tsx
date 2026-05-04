@@ -10,6 +10,7 @@ import Link from "next/link";
 import CommunityTabBar from "@/app/components/CommunityTabBar";
 import { useOfflineQuery } from "@/app/hooks/useOfflineQuery";
 import QRCode from "qrcode";
+import { useStoredUser } from "@/app/hooks/useStoredUser";
 
 const BRAND = "#2e7d32";
 const FONT = '"Montserrat", sans-serif';
@@ -88,17 +89,8 @@ function FormCardQRCode({ formId }: { formId: Id<"communityForms"> }) {
 export default function TrackersHubPage() {
   const searchParams = useSearchParams();
   const communityId = searchParams.get("communityId") as Id<"communities"> | null;
-  const [userId, setUserId] = useState<string | null>(null);
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem("pilot_user");
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed?.userId) setUserId(parsed.userId);
-      }
-    } catch {}
-  }, []);
+  const { user, status: authStatus } = useStoredUser();
+  const userId = user?.userId || null;
 
   const formsRaw = useOfflineQuery(
     (api as any).forms.getCommunityForms,
@@ -114,6 +106,23 @@ export default function TrackersHubPage() {
       <div style={{ padding: "2rem", fontFamily: FONT, textAlign: "center" }}>
         <p>No community selected.</p>
         <Link href="/my-communities" style={{ color: BRAND }}>Back to Communities</Link>
+      </div>
+    );
+  }
+
+  if (authStatus === "loading") {
+    return (
+      <div style={{ padding: "2rem", fontFamily: FONT, textAlign: "center" }}>
+        <p>Loading user session...</p>
+      </div>
+    );
+  }
+
+  if (authStatus === "unauthenticated" || !userId) {
+    return (
+      <div style={{ padding: "2rem", fontFamily: FONT, textAlign: "center" }}>
+        <p>Your session expired. Please log in again.</p>
+        <Link href="/login" style={{ color: BRAND }}>Go to Login</Link>
       </div>
     );
   }

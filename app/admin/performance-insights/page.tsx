@@ -11,6 +11,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend
 } from "recharts";
 import { savePdfFromJsPDF } from "../../utils/pdfDownload";
+import { useStoredUser } from "../../hooks/useStoredUser";
 
 const BRAND = "#2e7d32";
 const FONT = '"Montserrat", sans-serif';
@@ -36,19 +37,12 @@ const CATEGORY_LABELS: Record<string, string> = {
 const CHART_COLORS = ["#2e7d32", "#1976d2", "#f57c00", "#d32f2f", "#00838f", "#7b1fa2", "#c2185b", "#00695c"];
 
 export default function PerformanceInsightsPage() {
-  const [userId, setUserId] = useState<Id<"users"> | null>(null);
+  const { user, status: authStatus } = useStoredUser();
+  const userId = (user?.userId as Id<"users"> | undefined) ?? null;
   const [selectedCommunityId, setSelectedCommunityId] = useState<Id<"communities"> | null>(null);
   const [drilldownFormId, setDrilldownFormId] = useState<Id<"communityForms"> | null>(null);
 
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem("pilot_user");
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed?.userId) setUserId(parsed.userId as Id<"users">);
-      }
-    } catch {}
-  }, []);
+  // (replaced by useStoredUser above)
 
   const currentUser = useQuery(api.auth.getUser, userId ? { userId } : "skip");
   const isSuperAdmin = currentUser?.role === "admin" && (

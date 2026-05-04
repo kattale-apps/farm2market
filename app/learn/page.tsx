@@ -6,25 +6,17 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useState, useEffect } from "react";
 import { Id } from "@/convex/_generated/dataModel";
+import { useStoredUser } from "../hooks/useStoredUser";
 
 type RoleCategory = "farmer" | "trader" | "buyer" | "admin";
 
 export default function LearnPage() {
-  const [userRole, setUserRole] = useState<RoleCategory | null>(null);
+  const { user, status: authStatus } = useStoredUser();
+  const userRole = (user?.role as RoleCategory | undefined) ?? null;
   const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
   const [selectedVideoId, setSelectedVideoId] = useState<Id<"tutorialVideos"> | null>(null);
 
   const incrementView = useMutation(api.tutorials.incrementViewCount);
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("pilot_user");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed.role) setUserRole(parsed.role as RoleCategory);
-      }
-    } catch {}
-  }, []);
 
   const tutorials = useQuery(
     api.tutorials.getTutorialsByRole,
@@ -39,6 +31,21 @@ export default function LearnPage() {
     } catch {}
   };
 
+  if (authStatus === "loading") {
+    return (
+      <div style={{
+        minHeight: "100vh",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        fontFamily: "'Montserrat', sans-serif",
+        background: "#f5f5f5",
+      }}>
+        <p style={{ color: "#999" }}>Loading your session...</p>
+      </div>
+    );
+  }
+
   if (!userRole) {
     return (
       <div style={{
@@ -49,7 +56,7 @@ export default function LearnPage() {
         fontFamily: "'Montserrat', sans-serif",
         background: "#f5f5f5",
       }}>
-        <p style={{ color: "#999" }}>Loading...</p>
+        <p style={{ color: "#999" }}>Please log in to view tutorials.</p>
       </div>
     );
   }

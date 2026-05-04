@@ -10,6 +10,7 @@ import {
   markAutoJoinComplete,
   isNativePlatform,
 } from '../utils/communityNativeBridge';
+import { getStoredUser } from '../utils/authStorage';
 
 /**
  * CommunityAutoJoin Component
@@ -66,14 +67,14 @@ export function CommunityAutoJoin() {
         // Wait a bit for user to be loaded
         await new Promise(resolve => setTimeout(resolve, 1000));
 
-        // Get current user from localStorage
-        const storedUser = localStorage.getItem('pilot_user');
+        // Get current user from storage
+        const storedUser = await getStoredUser();
         if (!storedUser) {
           console.log('[CommunityAutoJoin] User not logged in yet, skipping');
           return;
         }
 
-        const { userId } = JSON.parse(storedUser);
+        const userId = storedUser.userId;
         if (!userId) {
           console.log('[CommunityAutoJoin] Invalid user data, skipping');
           return;
@@ -141,10 +142,10 @@ export function CommunityAutoJoinWithLookup() {
 
         await new Promise(resolve => setTimeout(resolve, 1000));
 
-        const storedUser = localStorage.getItem('pilot_user');
+        const storedUser = await getStoredUser();
         if (!storedUser) return;
 
-        const { userId } = JSON.parse(storedUser);
+        const userId = storedUser.userId;
         if (!userId) return;
 
         // Fetch community by slug via Convex query

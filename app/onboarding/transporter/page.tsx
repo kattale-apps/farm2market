@@ -7,6 +7,7 @@ import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useStoredUser } from "../../hooks/useStoredUser";
 
 const REGION_GROUPS = [
   { key: "central_buganda", label: "Central (Buganda)", districts: ["Kampala","Wakiso","Mukono","Buikwe","Kayunga","Luweero","Nakaseke","Nakasongola","Mityana","Kiboga","Mpigi","Butambala","Gomba","Masaka","Lwengo","Kalungu","Bukomansimbi","Sembabule","Lyantonde","Rakai","Kyotera","Mubende","Kassanda"] },
@@ -50,7 +51,8 @@ const labelStyle = {
 
 export default function TransporterOnboardingPage() {
   const router = useRouter();
-  const [userId, setUserId] = useState<Id<"users"> | null>(null);
+  const { user, status: authStatus } = useStoredUser();
+  const userId = (user?.userId as Id<"users"> | undefined) ?? null;
 
   // Departure location (optional but encouraged)
   const districts = useQuery(api.locations.getActiveDistricts, {});
@@ -76,18 +78,6 @@ export default function TransporterOnboardingPage() {
   const completeOnboarding = useMutation(api.transporterOnboarding.completeOnboarding);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const stored = localStorage.getItem("pilot_user");
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (parsed.userId) setUserId(parsed.userId as Id<"users">);
-        }
-      } catch (e) { console.error(e); }
-    }
-  }, []);
 
   const onboardingStatus = useQuery(
     api.transporterOnboarding.checkOnboardingStatus,
@@ -130,6 +120,8 @@ export default function TransporterOnboardingPage() {
       setMessage({ type: "error", text: error.message || "Failed to complete onboarding" });
     } finally { setLoading(false); }
   };
+
+  if (authStatus === "loading") return <div style={{ padding: "2rem", textAlign: "center" }}><p>Loading your session...</p></div>;
 
   if (!userId) return <div style={{ padding: "2rem", textAlign: "center" }}><p>Please log in to complete onboarding.</p></div>;
 

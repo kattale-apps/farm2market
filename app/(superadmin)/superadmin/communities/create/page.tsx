@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import QRCode from "qrcode";
+import { useStoredUser } from "@/app/hooks/useStoredUser";
 
 type CommunityFormData = {
   name: string;
@@ -25,26 +26,11 @@ type CreateStatus = "idle" | "loading" | "success" | "error";
 
 export default function CreateCommunityPage() {
   const router = useRouter();
-  const [userId, setUserId] = useState<Id<"users"> | null>(null);
+  const { user, status: authStatus } = useStoredUser();
+  const userId = (user?.userId as Id<"users"> | undefined) ?? null;
   const [status, setStatus] = useState<CreateStatus>("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [successCommunityId, setSuccessCommunityId] = useState<string>("");
-  
-  // Get user ID from localStorage on mount
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("pilot_user");
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          if (parsed.userId) setUserId(parsed.userId as Id<"users">);
-        } catch {
-          // legacy raw string fallback
-          setUserId(stored as Id<"users">);
-        }
-      }
-    }
-  }, []);
   
   const [formData, setFormData] = useState<CommunityFormData>({
     name: "",

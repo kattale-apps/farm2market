@@ -7,6 +7,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import Link from "next/link";
+import { useStoredUser } from "@/app/hooks/useStoredUser";
 
 const BRAND = "#1565c0";
 const BRAND_BG = "#e3f2fd";
@@ -263,17 +264,11 @@ function CreateTemplateForm({ userId, type, onDone }: { userId: Id<"users">; typ
 
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 export default function CostCalculatorPage() {
-  const [userId, setUserId] = useState<Id<"users"> | null>(null);
+  const { user, status: authStatus } = useStoredUser();
+  const userId = (user?.userId as Id<"users"> | undefined) ?? null;
   const [activeTab, setActiveTab] = useState<Tab>("crop");
   const [mode, setMode] = useState<Mode>("list");
   const [calcTarget, setCalcTarget] = useState<any | null>(null);
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("pilot_user");
-      if (stored) setUserId(JSON.parse(stored).userId as Id<"users">);
-    } catch {}
-  }, []);
 
   const cropTemplates = useQuery(
     (api as any).farmCostTemplates.listCropCostTemplates,

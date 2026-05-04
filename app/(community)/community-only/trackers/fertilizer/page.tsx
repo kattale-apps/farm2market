@@ -8,6 +8,7 @@ import Link from "next/link";
 import { Id } from "@/convex/_generated/dataModel";
 import CommunityTabBar from "@/app/components/CommunityTabBar";
 import { FertilizerPlansView } from "@/app/components/biofarm/FertilizerPlansView";
+import { useStoredUser } from "@/app/hooks/useStoredUser";
 
 const FONT = '"Montserrat", sans-serif';
 const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
@@ -15,17 +16,8 @@ const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
 export default function FertilizerPlannerPage() {
   const searchParams = useSearchParams();
   const communityId = searchParams.get("communityId") as Id<"communities"> | null;
-  const [userId, setUserId] = useState<Id<"users"> | null>(null);
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem("pilot_user");
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed?.userId) setUserId(parsed.userId as Id<"users">);
-      }
-    } catch {}
-  }, []);
+  const { user, status: authStatus } = useStoredUser();
+  const userId = (user?.userId as Id<"users"> | undefined) || null;
 
   if (!communityId) {
     return (
@@ -43,6 +35,23 @@ export default function FertilizerPlannerPage() {
         <Link href={`/community-only/trackers?communityId=${communityId}`} style={{ color: "#2e7d32" }}>
           Back to Trackers
         </Link>
+      </div>
+    );
+  }
+
+  if (authStatus === "loading") {
+    return (
+      <div style={{ padding: "2rem", fontFamily: FONT, textAlign: "center" }}>
+        <p>Loading user session...</p>
+      </div>
+    );
+  }
+
+  if (authStatus === "unauthenticated" || !userId) {
+    return (
+      <div style={{ padding: "2rem", fontFamily: FONT, textAlign: "center" }}>
+        <p>Your session expired. Please log in again.</p>
+        <Link href="/login" style={{ color: "#2e7d32" }}>Go to Login</Link>
       </div>
     );
   }
@@ -70,13 +79,7 @@ export default function FertilizerPlannerPage() {
       </div>
 
       <div style={{ padding: "0.9rem" }}>
-        {userId ? (
-          <FertilizerPlansView communityId={communityId} farmerId={userId} />
-        ) : (
-          <div style={{ border: "1px solid #e0e0e0", borderRadius: 10, background: "#fff", padding: "0.8rem", color: "#666" }}>
-            Loading user session...
-          </div>
-        )}
+        <FertilizerPlansView communityId={communityId} farmerId={userId} />
       </div>
 
       <CommunityTabBar />

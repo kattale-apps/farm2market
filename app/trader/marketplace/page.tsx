@@ -7,9 +7,11 @@ import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { useState, useEffect, useMemo } from "react";
 import { NegotiationPanel } from "../../components/NegotiationPanel";
+import { useStoredUser } from "../../hooks/useStoredUser";
 
 export default function TraderMarketplacePage() {
-  const [userId, setUserId] = useState<Id<"users"> | null>(null);
+  const { user, status: authStatus } = useStoredUser();
+  const userId = (user?.userId as Id<"users"> | undefined) ?? null;
   const [expandedUtids, setExpandedUtids] = useState<Set<string>>(new Set());
   const [filters, setFilters] = useState({
     dateFrom: "",
@@ -24,23 +26,6 @@ export default function TraderMarketplacePage() {
     userId ? { traderId: userId } : "skip"
   );
   const cancelNegotiation = useMutation(api.negotiations.cancelNegotiation);
-
-  // Get current user from localStorage (pilot mode)
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const stored = localStorage.getItem("pilot_user");
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (parsed.userId) {
-            setUserId(parsed.userId as Id<"users">);
-          }
-        }
-      } catch (e) {
-        console.error("Error reading user from localStorage:", e);
-      }
-    }
-  }, []);
 
   const formatUGX = (amount: number) => {
     return new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX" }).format(amount);
@@ -105,6 +90,14 @@ export default function TraderMarketplacePage() {
     }
     setExpandedUtids(newExpanded);
   };
+
+  if (authStatus === "loading") {
+    return (
+      <div style={{ padding: "2rem", textAlign: "center" }}>
+        <p>Loading your session...</p>
+      </div>
+    );
+  }
 
   if (!userId) {
     return (

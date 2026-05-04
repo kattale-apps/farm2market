@@ -9,6 +9,7 @@ import { useOfflineMutation } from "@/app/hooks/useOfflineMutation";
 import Link from "next/link";
 import { exportSubmissionsToPDF } from "@/app/utils/exportUtils";
 import SubmissionPhotoGallery from "@/app/components/SubmissionPhotoGallery";
+import { useStoredUser } from "@/app/hooks/useStoredUser";
 
 const BRAND = "#2e7d32";
 const BRAND_BG = "#e8f5e9";
@@ -835,16 +836,10 @@ function ComingSoonCard({ emoji, label, phase }: { emoji: string; label: string;
 
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 export default function FarmToolboxPage() {
-  const [userId, setUserId] = useState<Id<"users"> | null>(null);
+  const { user, status: authStatus } = useStoredUser();
+  const userId = (user?.userId as Id<"users"> | undefined) || null;
   const [activeTab, setActiveTab] = useState<Tab>("templates");
   const [selectedTemplate, setSelectedTemplate] = useState<any | null>(null);
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("pilot_user");
-      if (stored) setUserId(JSON.parse(stored).userId as Id<"users">);
-    } catch {}
-  }, []);
 
   const tabs: { id: Tab; emoji: string; label: string; phase?: string }[] = [
     { id: "templates", emoji: "📋", label: "Templates" },
@@ -883,7 +878,14 @@ export default function FarmToolboxPage() {
 
       <div style={{ padding: "clamp(1rem,4vw,1.25rem)", maxWidth: 680, margin: "0 auto", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
         {!userId ? (
-          <div style={{ textAlign: "center", padding: "2rem", color: "#888" }}>Loading…</div>
+          authStatus === "loading" ? (
+            <div style={{ textAlign: "center", padding: "2rem", color: "#888" }}>Loading user session...</div>
+          ) : (
+            <div style={{ textAlign: "center", padding: "2rem", color: "#666" }}>
+              <p style={{ margin: "0 0 0.5rem" }}>Your session expired. Please log in again.</p>
+              <Link href="/login" style={{ color: BRAND, textDecoration: "none", fontWeight: 700 }}>Go to Login</Link>
+            </div>
+          )
         ) : activeTab === "templates" ? (
           <TemplatesTab userId={userId} onSelectTemplate={handleSelectTemplate} />
         ) : activeTab === "log" ? (

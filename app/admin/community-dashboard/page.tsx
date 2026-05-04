@@ -18,6 +18,7 @@ import { CommunityMemberCard } from "../../components/CommunityMemberCard";
 import { resolveCommunityLogo } from "../../lib/communityLogos";
 import { AdminFertilizerConfig } from "../../components/biofarm/AdminFertilizerConfig";
 import { savePdfFromJsPDF } from "../../utils/pdfDownload";
+import { useStoredUser } from "../../hooks/useStoredUser";
 
 /* ── Tab types for community cards ── */
 type CommunityTab = "members" | "noticeboard" | "messages" | "forms" | "insights" | "fertilizer";
@@ -1837,9 +1838,10 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
 
 export default function CommunityDashboardPage() {
   const router = useRouter();
-  const [userId, setUserId] = useState<Id<"users"> | null>(null);
-  const [userRole, setUserRole] = useState<string>("");
-  const [userAdminCategory, setUserAdminCategory] = useState<string>("");
+  const { user, status: authStatus } = useStoredUser();
+  const userId = (user?.userId as Id<"users"> | undefined) ?? null;
+  const userRole = user?.role ?? "";
+  const userAdminCategory = (user as any)?.adminCategory ?? "";
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -1864,23 +1866,7 @@ export default function CommunityDashboardPage() {
   const [locationFilter, setLocationFilter] = useState<"all" | "district" | "subcounty" | "parish">("all");
 
   // Get current user
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const stored = localStorage.getItem("pilot_user");
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          setUserId(parsed.userId);
-          setUserRole(parsed.role || "");
-          setUserAdminCategory(parsed.adminCategory || "");
-        } else {
-          router.push("/login");
-        }
-      } catch (error) {
-        router.push("/login");
-      }
-    }
-  }, [router]);
+  // (replaced by useStoredUser above)
 
   useEffect(() => {
     if (typeof window === "undefined") return;

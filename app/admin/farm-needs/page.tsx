@@ -6,13 +6,15 @@ import { api } from "../../../convex/_generated/api";
 import Link from "next/link";
 import { useOfflineQuery } from "../../hooks/useOfflineQuery";
 import { useOfflineMutation } from "../../hooks/useOfflineMutation";
+import { useStoredUser } from "../../hooks/useStoredUser";
 
 const BRAND = "#2e7d32";
 const FONT = '"Montserrat", sans-serif';
 
 export default function AdminFarmNeedsPage() {
-  const [adminId, setAdminId] = useState<Id<"users"> | null>(null);
-  const [adminRole, setAdminRole] = useState<"super" | "community" | null>(null);
+  const { user, status: authStatus } = useStoredUser();
+  const adminId = (user?.userId as Id<"users"> | undefined) ?? null;
+  const adminRole = (user?.role as "super" | "community" | undefined) ?? null;
   const [communities, setCommunities] = useState<any[]>([]);
   const [selectedCommunity, setSelectedCommunity] = useState<Id<"communities"> | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -32,16 +34,7 @@ export default function AdminFarmNeedsPage() {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Get admin user
-  useEffect(() => {
-    const stored = localStorage.getItem("pilot_user");
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        setAdminId(parsed.userId);
-        setAdminRole(parsed.role || "community");
-      } catch { /* ignore */ }
-    }
-  }, []);
+  // (replaced by useStoredUser above)
 
   // Fetch communities
   useEffect(() => {

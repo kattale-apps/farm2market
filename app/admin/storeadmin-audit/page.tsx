@@ -7,12 +7,14 @@ import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useStoredUser } from "../../hooks/useStoredUser";
 
 type ViewMode = "actions" | "deliveries" | "inventory";
 
 export default function StoreAdminAuditPage() {
   const router = useRouter();
-  const [userId, setUserId] = useState<Id<"users"> | null>(null);
+  const { user, status: authStatus } = useStoredUser();
+  const userId = (user?.userId as Id<"users"> | undefined) ?? null;
   const [selectedStoreAdminId, setSelectedStoreAdminId] = useState<Id<"users"> | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode | null>(null);
   const [selectedLocationId, setSelectedLocationId] = useState<Id<"storageLocations"> | null>(null);
@@ -32,21 +34,15 @@ export default function StoreAdminAuditPage() {
   );
 
   // Get current user from localStorage (pilot mode)
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const stored = localStorage.getItem("pilot_user");
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (parsed.userId) {
-            setUserId(parsed.userId as Id<"users">);
-          }
-        }
-      } catch (e) {
-        console.error("Error reading user from localStorage:", e);
-      }
-    }
-  }, []);
+  // (replaced by useStoredUser above)
+
+  if (authStatus === "loading") {
+    return (
+      <div style={{ padding: "2rem", textAlign: "center" }}>
+        <p>Loading your session...</p>
+      </div>
+    );
+  }
 
   if (!userId) {
     return (

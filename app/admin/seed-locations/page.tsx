@@ -7,10 +7,12 @@ import { api } from "../../../convex/_generated/api";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Id } from "../../../convex/_generated/dataModel";
+import { useStoredUser } from "../../hooks/useStoredUser";
 
 export default function SeedLocationsPage() {
   const router = useRouter();
-  const [userId, setUserId] = useState<Id<"users"> | null>(null);
+  const { user, status: authStatus } = useStoredUser();
+  const userId = (user?.userId as Id<"users"> | undefined) ?? null;
   const seedLocations = useMutation(api.seedUgandaLocations.seedUgandaLocations);
   const [status, setStatus] = useState<string | null>(null);
   const [results, setResults] = useState<any>(null);
@@ -19,26 +21,7 @@ export default function SeedLocationsPage() {
   const [batchSize, setBatchSize] = useState(200);
 
   // Get current user from localStorage (pilot mode)
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const stored = localStorage.getItem("pilot_user");
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (parsed.userId && parsed.role === "admin") {
-            setUserId(parsed.userId as Id<"users">);
-          } else {
-            router.push("/");
-          }
-        } else {
-          router.push("/login");
-        }
-      } catch (e) {
-        console.error("Error reading user from localStorage:", e);
-        router.push("/login");
-      }
-    }
-  }, [router]);
+  // (replaced by useStoredUser above)
 
   const runBatchStage = async (stage: "subcounties" | "parishes") => {
     if (!userId) return { created: 0, skipped: 0, errors: [] as string[] };

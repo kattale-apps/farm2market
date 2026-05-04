@@ -8,6 +8,7 @@ import { Id } from "@/convex/_generated/dataModel";
 import CommunityTabBar from "@/app/components/CommunityTabBar";
 import { useOfflineQuery } from "@/app/hooks/useOfflineQuery";
 import { useOfflineMutation } from "@/app/hooks/useOfflineMutation";
+import { useStoredUser } from "@/app/hooks/useStoredUser";
 
 const BRAND = "#2e7d32";
 const FONT = '"Montserrat", sans-serif';
@@ -179,8 +180,9 @@ export default function CommunityProfilePage() {
   const router = useRouter();
   const communityId = searchParams.get("communityId") as Id<"communities"> | null;
 
-  const [userId, setUserId] = useState<Id<"users"> | null>(null);
-  const [userRole, setUserRole] = useState<string>("");
+  const { user, status: authStatus } = useStoredUser();
+  const userId = (user?.userId as Id<"users"> | undefined) ?? null;
+  const userRole = user?.role || "";
   const [selectedRole, setSelectedRole] = useState<string>("");
   const [otherRoleText, setOtherRoleText] = useState<string>("");
   const [isSaving, setIsSaving] = useState(false);
@@ -215,19 +217,6 @@ export default function CommunityProfilePage() {
     (api as any).forms.getMyProfileFormResponses,
     communityId && userId ? { communityId, memberId: userId } : "skip"
   ) as any;
-
-  useEffect(() => {
-    const raw = localStorage.getItem("pilot_user");
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw);
-        setUserId((parsed?.userId || parsed?._id || parsed?.id || parsed) as Id<"users">);
-        setUserRole(parsed?.role || "");
-      } catch {
-        setUserId(raw as Id<"users">);
-      }
-    }
-  }, []);
 
   const agroFreshCommunityId = process.env.NEXT_PUBLIC_AGROFRESH_COMMUNITY_ID;
   const isAgroFresh = !!(agroFreshCommunityId && communityId === agroFreshCommunityId);
@@ -278,10 +267,18 @@ export default function CommunityProfilePage() {
     }
   };
 
+  if (authStatus === "loading") {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", fontFamily: FONT }}>
+        <p style={{ color: "#999", fontSize: "1.1rem" }}>Loading your session...</p>
+      </div>
+    );
+  }
+
   if (!userId) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", fontFamily: FONT }}>
-        <p style={{ color: "#999", fontSize: "1.1rem" }}>Loading...</p>
+        <p style={{ color: "#999", fontSize: "1.1rem" }}>Please log in to view your profile.</p>
       </div>
     );
   }

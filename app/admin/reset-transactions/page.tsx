@@ -6,9 +6,11 @@ import { useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useStoredUser } from "../../hooks/useStoredUser";
 
 export default function ResetTransactionsPage() {
   const router = useRouter();
+  const { user, status: authStatus } = useStoredUser();
   const resetTransactions = useMutation(api.admin.resetAllTransactions);
   const [status, setStatus] = useState<string | null>(null);
   const [results, setResults] = useState<any>(null);
@@ -27,22 +29,22 @@ export default function ResetTransactionsPage() {
       return;
     }
 
+    const userId = user?.userId;
+    if (!userId) {
+      setStatus("Not logged in");
+      return;
+    }
+    if (user?.role !== "admin") {
+      setStatus("Only admins can reset transactions");
+      return;
+    }
+
     setLoading(true);
     setStatus("Resetting all transactions...");
-    
-    try {
-      // Get admin user from localStorage
-      const userStr = localStorage.getItem("pilot_user");
-      if (!userStr) {
-        throw new Error("Not logged in");
-      }
-      const user = JSON.parse(userStr);
-      if (user.role !== "admin") {
-        throw new Error("Only admins can reset transactions");
-      }
 
+    try {
       const res = await resetTransactions({
-        adminId: user.userId,
+        adminId: userId as any,
         reason: reason.trim(),
       });
       

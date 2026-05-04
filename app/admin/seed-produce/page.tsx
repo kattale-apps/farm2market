@@ -7,33 +7,25 @@ import { api } from "../../../convex/_generated/api";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Id } from "../../../convex/_generated/dataModel";
+import { useStoredUser } from "../../hooks/useStoredUser";
 
 export default function SeedProducePage() {
   const router = useRouter();
-  const [userId, setUserId] = useState<Id<"users"> | null>(null);
+  const { user, status: authStatus } = useStoredUser();
+  const userId = (user?.userId as Id<"users"> | undefined) ?? null;
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
   const [results, setResults] = useState<{ created: number; skipped: number; total: number } | null>(null);
 
   const seedProduce = useMutation((api as any).seedProduce.seedProduce);
 
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("pilot_user");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed.userId && parsed.role === "admin") {
-          setUserId(parsed.userId as Id<"users">);
-        } else {
-          router.push("/");
-        }
-      } else {
-        router.push("/");
-      }
-    } catch {
-      router.push("/");
-    }
-  }, [router]);
+  if (authStatus === "loading") {
+    return <div style={{ padding: "2rem" }}>Checking admin access...</div>;
+  }
+
+  if (!userId) {
+    return <div style={{ padding: "2rem" }}>Checking admin access...</div>;
+  }
 
   const handleSeed = async () => {
     if (!userId) return;

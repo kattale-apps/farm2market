@@ -4,11 +4,12 @@ export const dynamic = "force-dynamic";
 
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { Id } from "@/convex/_generated/dataModel";
 import CommunityTabBar from "@/app/components/CommunityTabBar";
 import { useOfflineQuery } from "@/app/hooks/useOfflineQuery";
+import { useStoredUser } from "@/app/hooks/useStoredUser";
 
 function Skeleton({ className = "" }: { className?: string } = {}) {
   return <div className={`h-4 bg-gray-200 rounded animate-pulse ${className}`} />;
@@ -497,17 +498,8 @@ export default function CommunityMessagingPage() {
 
   const [communityId, setCommunityId] = useState<Id<"communities"> | null>(null);
   const [replyToMessage, setReplyToMessage] = useState<any>(null);
-
-  const userId = useMemo(() => {
-    try {
-      const raw = localStorage.getItem("pilot_user");
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      return (parsed?.userId || parsed?._id || parsed?.id || parsed) as Id<"users">;
-    } catch {
-      return localStorage.getItem("pilot_user") as Id<"users"> | null;
-    }
-  }, []);
+  const { user, status: authStatus } = useStoredUser();
+  const userId = (user?.userId as Id<"users"> | undefined) ?? null;
 
   useEffect(() => {
     if (communityIdParam) {
@@ -515,7 +507,21 @@ export default function CommunityMessagingPage() {
     }
   }, [communityIdParam]);
 
-  if (!communityId) {
+  if (authStatus === "loading") {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div style={{
+          textAlign: "center", padding: "2rem", margin: "1rem",
+          background: "#fff", borderRadius: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+          color: "#888", fontFamily: '"Montserrat", sans-serif',
+        }}>
+          <p style={{ fontSize: "clamp(0.95rem, 2.5vw, 1.05rem)" }}>Loading your session...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!communityId || !userId) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div style={{

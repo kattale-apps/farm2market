@@ -7,9 +7,11 @@ import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { useState, useEffect } from "react";
 import jsPDF from "jspdf";
+import { useStoredUser } from "../../hooks/useStoredUser";
 
 export default function DeliveryVerificationPage() {
-  const [userId, setUserId] = useState<Id<"users"> | null>(null);
+  const { user, status: authStatus } = useStoredUser();
+  const userId = (user?.userId as Id<"users"> | undefined) ?? null;
   const [selectedUtid, setSelectedUtid] = useState<string | null>(null);
   const [comment, setComment] = useState("");
   const [photos, setPhotos] = useState<File[]>([]);
@@ -22,23 +24,6 @@ export default function DeliveryVerificationPage() {
   );
   const verifyDelivery = useMutation(api.storeAdmin.verifyDeliveryWithProof);
   const linkPDF = useMutation(api.storeAdmin.linkDeliveryPDF);
-
-  // Get current user from localStorage (pilot mode)
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const stored = localStorage.getItem("pilot_user");
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (parsed.userId) {
-            setUserId(parsed.userId as Id<"users">);
-          }
-        }
-      } catch (e) {
-        console.error("Error reading user from localStorage:", e);
-      }
-    }
-  }, []);
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -136,6 +121,14 @@ export default function DeliveryVerificationPage() {
       setLoading(false);
     }
   };
+
+  if (authStatus === "loading") {
+    return (
+      <div style={{ padding: "2rem", textAlign: "center" }}>
+        <p>Loading your session...</p>
+      </div>
+    );
+  }
 
   if (!userId) {
     return (

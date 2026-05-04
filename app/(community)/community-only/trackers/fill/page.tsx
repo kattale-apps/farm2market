@@ -13,6 +13,7 @@ import { useOfflineQuery } from "@/app/hooks/useOfflineQuery";
 import { useOfflineMutation } from "@/app/hooks/useOfflineMutation";
 import { useFormDraftPersistence, clearFormDraft } from "@/app/hooks/useFormDraftPersistence";
 import { FarmCoinReward, FarmCoinVideoPreloader } from "@/app/components/FarmCoinAnimation";
+import { useStoredUser } from "@/app/hooks/useStoredUser";
 
 const BRAND = "#2e7d32";
 const BRAND_LIGHT = "#43a047";
@@ -236,7 +237,8 @@ export default function TrackerFillPage() {
   const planId = searchParams.get("planId") as Id<"fertilizerPlans"> | null;
   const plannedSprayDate = searchParams.get("plannedSprayDate");
   const trackedUnitIdParam = searchParams.get("trackedUnitId") as Id<"farmTrackedUnits"> | null;
-  const [userId, setUserId] = useState<Id<"users"> | null>(null);
+  const { user, status: authStatus } = useStoredUser();
+  const userId = (user?.userId as Id<"users"> | undefined) || null;
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -248,16 +250,6 @@ export default function TrackerFillPage() {
   const [showCoinAnimation, setShowCoinAnimation] = useState(false);
   const [coinsEarned, setCoinsEarned] = useState(0);
   const [selectedTrackedUnitId, setSelectedTrackedUnitId] = useState<Id<"farmTrackedUnits"> | null>(trackedUnitIdParam);
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem("pilot_user");
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed?.userId) setUserId(parsed.userId as Id<"users">);
-      }
-    } catch {}
-  }, []);
 
   const formDetails = useOfflineQuery((api as any).forms.getFormDetails, formId ? { formId } : "skip") as any;
   const trackedUnits = useOfflineQuery(
@@ -474,6 +466,23 @@ export default function TrackerFillPage() {
     setShowCoinAnimation(false);
     router.push(`/community-only/trackers/view?communityId=${communityId}`);
   };
+
+  if (authStatus === "loading") {
+    return (
+      <div style={{ padding: "2rem", fontFamily: FONT, textAlign: "center" }}>
+        <p>Loading user session...</p>
+      </div>
+    );
+  }
+
+  if (authStatus === "unauthenticated" || !userId) {
+    return (
+      <div style={{ padding: "2rem", fontFamily: FONT, textAlign: "center" }}>
+        <p>Your session expired. Please log in again.</p>
+        <Link href="/login" style={{ color: BRAND }}>Go to Login</Link>
+      </div>
+    );
+  }
 
   if (!communityId || !formId) {
     return (

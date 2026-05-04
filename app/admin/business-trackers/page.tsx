@@ -7,6 +7,7 @@ import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
+import { useStoredUser } from "../../hooks/useStoredUser";
 
 const BRAND = "#2e7d32";
 const FONT = '"Montserrat", sans-serif';
@@ -30,7 +31,8 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 export default function BusinessTrackersPage() {
-  const [userId, setUserId] = useState<Id<"users"> | null>(null);
+  const { user, status: authStatus } = useStoredUser();
+  const userId = (user?.userId as Id<"users"> | undefined) ?? null;
   const [selectedCommunityId, setSelectedCommunityId] = useState<Id<"communities"> | null>(null);
   const [showBuilder, setShowBuilder] = useState(false);
   const [builderName, setBuilderName] = useState("");
@@ -40,15 +42,7 @@ export default function BusinessTrackersPage() {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [managingFormId, setManagingFormId] = useState<Id<"communityForms"> | null>(null);
 
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem("pilot_user");
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed?.userId) setUserId(parsed.userId as Id<"users">);
-      }
-    } catch {}
-  }, []);
+  // (replaced by useStoredUser above)
 
   const currentUser = useQuery(api.auth.getUser, userId ? { userId } : "skip");
   const isSuperAdmin = currentUser?.role === "admin" && (

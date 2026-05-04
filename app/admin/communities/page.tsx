@@ -8,10 +8,12 @@ import { Id } from "../../../convex/_generated/dataModel";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { CommunityQRCode } from "../../components/CommunityQRCode";
+import { useStoredUser } from "../../hooks/useStoredUser";
 
 export default function CommunitiesPage() {
   const router = useRouter();
-  const [userId, setUserId] = useState<Id<"users"> | null>(null);
+  const { user: storedUser, status: authStatus } = useStoredUser();
+  const userId = (storedUser?.userId as Id<"users"> | undefined) ?? null;
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] =
@@ -123,23 +125,15 @@ export default function CommunitiesPage() {
     );
   }
 
-  // ✅ Load userId from localStorage
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const stored = localStorage.getItem("pilot_user");
-    if (!stored) return;
-
-    try {
-      const parsed = JSON.parse(stored);
-      if (parsed.userId) {
-        setUserId(parsed.userId as Id<"users">);
-      }
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
   // 🚫 Block unauthenticated access
+  if (authStatus === "loading") {
+    return (
+      <div style={{ padding: "2rem", textAlign: "center" }}>
+        <p>Loading your session...</p>
+      </div>
+    );
+  }
+
   if (!userId) {
     return (
       <div style={{ padding: "2rem", textAlign: "center" }}>

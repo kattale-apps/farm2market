@@ -6,6 +6,7 @@ import { api } from "../../../convex/_generated/api";
 import Link from "next/link";
 import { useOfflineQuery } from "../../hooks/useOfflineQuery";
 import { useOfflineMutation } from "../../hooks/useOfflineMutation";
+import { useStoredUser } from "../../hooks/useStoredUser";
 
 const BRAND = "#2e7d32";
 const BRAND_BG = "#e8f5e9";
@@ -13,23 +14,14 @@ const GOLD = "#f9a825";
 const FONT = '"Montserrat", sans-serif';
 
 export default function FarmNeedsPage() {
-  const [userId, setUserId] = useState<Id<"users"> | null>(null);
+  const { user, status: authStatus } = useStoredUser();
+  const userId = (user?.userId as Id<"users"> | undefined) || null;
   const [activeTab, setActiveTab] = useState<"crops" | "livestock">("crops");
   const [selectedForm, setSelectedForm] = useState<any | null>(null);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const stored = localStorage.getItem("pilot_user");
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        setUserId(parsed.userId);
-      } catch { /* ignore */ }
-    }
-  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -98,10 +90,19 @@ export default function FarmNeedsPage() {
     }
   };
 
-  if (!userId) {
+  if (authStatus === "loading") {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
-        <p style={{ color: "#666" }}>Loading...</p>
+        <p style={{ color: "#666" }}>Loading user session...</p>
+      </div>
+    );
+  }
+
+  if (authStatus === "unauthenticated" || !userId) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", flexDirection: "column", gap: "0.6rem" }}>
+        <p style={{ color: "#666", margin: 0 }}>Your session expired. Please log in again.</p>
+        <Link href="/login" style={{ color: BRAND, textDecoration: "none", fontWeight: 700 }}>Go to Login</Link>
       </div>
     );
   }

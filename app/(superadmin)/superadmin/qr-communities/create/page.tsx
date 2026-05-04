@@ -7,22 +7,14 @@ import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useRouter } from "next/navigation";
 import { Id } from "@/convex/_generated/dataModel";
+import { useStoredUser } from "@/app/hooks/useStoredUser";
 
 export default function CreateQRCommunity() {
   const router = useRouter();
   const createQRCommunity = useMutation(api.communities.createQRCommunity as any);
   const generateUploadUrl = useMutation(api.files.generateUploadUrl);
-  const [userId, setUserId] = useState<Id<"users"> | null>(null);
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("pilot_user");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed.userId) setUserId(parsed.userId as Id<"users">);
-      }
-    } catch {}
-  }, []);
+  const { user, status: authStatus } = useStoredUser();
+  const userId = (user?.userId as Id<"users"> | undefined) ?? null;
 
   const [formData, setFormData] = useState({
     name: "",

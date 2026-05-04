@@ -10,6 +10,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { resolveCommunityLogo } from "../../lib/communityLogos";
+import { useStoredUser } from "../../hooks/useStoredUser";
 
 export default function FarmerCommunitiesPage() {
   // Inject responsive styles for communities (client-side only)
@@ -43,8 +44,9 @@ export default function FarmerCommunitiesPage() {
   }, []);
 
   const router = useRouter();
-  const [userId, setUserId] = useState<Id<"users"> | null>(null);
-  const [userRole, setUserRole] = useState<string | null>(null);
+  const { user, status: authStatus } = useStoredUser();
+  const userId = (user?.userId as Id<"users"> | undefined) ?? null;
+  const userRole = user?.role ?? null;
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [selectedCommunityId, setSelectedCommunityId] = useState<Id<"communities"> | null>(null);
@@ -64,20 +66,10 @@ export default function FarmerCommunitiesPage() {
     args: { farmerId: Id<"users"> }
   ) => Promise<Id<"agroFreshUGFarmValidations">>;
   useEffect(() => {
-    const storedUser = localStorage.getItem("pilot_user");
-    if (storedUser) {
-      try {
-        const parsed = JSON.parse(storedUser);
-        setUserId(parsed.userId);
-        setUserRole(parsed.role || null);
-      } catch (e) {
-        console.error("Failed to parse stored user:", e);
-        router.push("/login");
-      }
-    } else {
+    if (authStatus === "unauthenticated") {
       router.push("/login");
     }
-  }, [router]);
+  }, [authStatus, router]);
 
   useEffect(() => {
     if (!communities || !agroFreshCommunityId) return;
@@ -166,6 +158,14 @@ export default function FarmerCommunitiesPage() {
       setLoadingAction(null);
     }
   };
+
+  if (authStatus === "loading") {
+    return (
+      <div style={{ padding: "2rem", textAlign: "center", color: "#666" }}>
+        <p>Loading your session...</p>
+      </div>
+    );
+  }
 
   if (!userId) {
     return (

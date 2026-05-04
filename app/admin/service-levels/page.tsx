@@ -8,32 +8,19 @@ import { Id } from "../../../convex/_generated/dataModel";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useStoredUser } from "../../hooks/useStoredUser";
 
 export default function ManageServiceLevelsPage() {
   const router = useRouter();
-  const [userId, setUserId] = useState<Id<"users"> | null>(null);
-  const [userRole, setUserRole] = useState<string>("");
+  const { user, status: authStatus } = useStoredUser();
+  const userId = (user?.userId as Id<"users"> | undefined) ?? null;
+  const userRole = user?.role ?? "";
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [loadingUserId, setLoadingUserId] = useState<string | null>(null);
 
   // Get current user
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const stored = localStorage.getItem("pilot_user");
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          setUserId(parsed.userId);
-          setUserRole(parsed.role || "");
-        } else {
-          router.push("/login");
-        }
-      } catch (error) {
-        router.push("/login");
-      }
-    }
-  }, [router]);
+  // (replaced by useStoredUser above)
 
   // Query all users (filtered to show only community admins)
   const allUsers = useQuery(api.introspection.getAllUsers, userId ? { adminId: userId } : "skip");

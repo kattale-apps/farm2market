@@ -8,11 +8,13 @@ import { Id } from "../../../convex/_generated/dataModel";
 import { useCallback, useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useStoredUser } from "../../hooks/useStoredUser";
 
 export default function FarmerProfilePage() {
   const router = useRouter();
-  const [userId, setUserId] = useState<Id<"users"> | null>(null);
-  const [userRole, setUserRole] = useState<string>("farmer");
+  const { user, status: authStatus } = useStoredUser();
+  const userId = (user?.userId as Id<"users"> | undefined) ?? null;
+  const userRole = user?.role ?? "farmer";
   const [isEditing, setIsEditing] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -135,27 +137,12 @@ export default function FarmerProfilePage() {
     return match?.key || "";
   }, [regionGroups]);
 
-  // Get user from localStorage
+  // Redirect if auth bootstrap resolves with no session
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const stored = localStorage.getItem("pilot_user");
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (parsed && parsed.userId && ["farmer", "vendor", "store"].includes(parsed.role)) {
-            setUserId(parsed.userId);
-            setUserRole(parsed.role);
-          } else {
-            router.push("/login");
-          }
-        } else {
-          router.push("/login");
-        }
-      } catch (error) {
-        router.push("/login");
-      }
+    if (authStatus === "unauthenticated") {
+      router.push("/login");
     }
-  }, [router]);
+  }, [authStatus, router]);
 
   // Get profile data
   const profile = useQuery(

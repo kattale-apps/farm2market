@@ -6,6 +6,7 @@ import { Id } from "@/convex/_generated/dataModel";
 import { useOfflineQuery } from "@/app/hooks/useOfflineQuery";
 import { useOfflineMutation } from "@/app/hooks/useOfflineMutation";
 import Link from "next/link";
+import { useStoredUser } from "@/app/hooks/useStoredUser";
 
 const BRAND = "#2e7d32";
 const BRAND_BG = "#e8f5e9";
@@ -429,15 +430,9 @@ function CalendarTab({ userId }: { userId: Id<"users"> }) {
 
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 export default function FarmPlannerPage() {
-  const [userId, setUserId] = useState<Id<"users"> | null>(null);
+  const { user, status: authStatus } = useStoredUser();
+  const userId = (user?.userId as Id<"users"> | undefined) || null;
   const [activeTab, setActiveTab] = useState<Tab>("tasks");
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("pilot_user");
-      if (stored) setUserId(JSON.parse(stored).userId as Id<"users">);
-    } catch {}
-  }, []);
 
   const tabs: { id: Tab; emoji: string; label: string }[] = [
     { id: "tasks",    emoji: "✅", label: "Tasks" },
@@ -466,7 +461,14 @@ export default function FarmPlannerPage() {
       </div>
       <div style={{ padding: "clamp(1rem,4vw,1.25rem)", maxWidth: 680, margin: "0 auto", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
         {!userId ? (
-          <div style={{ textAlign: "center", padding: "2rem", color: "#888" }}>Loading…</div>
+          authStatus === "loading" ? (
+            <div style={{ textAlign: "center", padding: "2rem", color: "#888" }}>Loading user session...</div>
+          ) : (
+            <div style={{ textAlign: "center", padding: "2rem", color: "#666" }}>
+              <p style={{ margin: "0 0 0.5rem" }}>Your session expired. Please log in again.</p>
+              <Link href="/login" style={{ color: BRAND, textDecoration: "none", fontWeight: 700 }}>Go to Login</Link>
+            </div>
+          )
         ) : activeTab === "tasks" ? (
           <TasksTab userId={userId} />
         ) : activeTab === "seasons" ? (

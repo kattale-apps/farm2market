@@ -45,24 +45,25 @@ export function NotificationMailbox({ userId }: NotificationMailboxProps) {
   return (
     <>
       {/* Mailbox Icon Button */}
-      <div style={{ position: "relative" }}>
+      <div style={{ position: "relative", width: "100%", minWidth: 0 }}>
         <button
           onClick={() => setIsOpen(!isOpen)}
           style={{
             position: "relative",
-            padding: "1rem 1.25rem",
+            padding: "0.85rem 0.7rem",
             background: unreadCount > 0 ? "#e3f2fd" : "#fff",
             border: `2px solid ${unreadCount > 0 ? "#2196f3" : "#ddd"}`,
             borderRadius: "12px",
             cursor: "pointer",
-            fontSize: "2rem",
+            fontSize: "1.8rem",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             boxShadow: unreadCount > 0 ? "0 4px 12px rgba(33, 150, 243, 0.3)" : "0 2px 8px rgba(0,0,0,0.15)",
             transition: "all 0.2s",
-            minWidth: "60px",
-            minHeight: "60px",
+            minHeight: "64px",
+            width: "100%",
+            minWidth: 0,
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.background = unreadCount > 0 ? "#bbdefb" : "#f5f5f5";

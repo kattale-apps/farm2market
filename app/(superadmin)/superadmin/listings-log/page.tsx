@@ -7,30 +7,17 @@ import { api } from "@/convex/_generated/api";
 import { useState, useEffect } from "react";
 import { Id } from "@/convex/_generated/dataModel";
 import { formatUgandaDate } from "../../../utils/timeUtils";
+import { useStoredUser } from "@/app/hooks/useStoredUser";
 
 const formatUGX = (amount: number) =>
   `UGX ${amount.toLocaleString("en-UG")}`;
 
 export default function SuperadminListingsLogPage() {
-  const [adminId, setAdminId] = useState<Id<"users"> | null>(null);
+  const { user, status: authStatus } = useStoredUser();
+  const adminId = (user?.userId as Id<"users"> | undefined) ?? null;
   const [page, setPage] = useState(1);
   const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("pilot_user");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed?.userId) {
-          setAdminId(parsed.userId as Id<"users">);
-        }
-      }
-    } catch {
-      const stored = localStorage.getItem("pilot_user");
-      if (stored) setAdminId(stored as Id<"users">);
-    }
-  }, []);
 
   const data = useQuery(
     (api as any).adminListings.getAllListingsLog,
@@ -39,7 +26,7 @@ export default function SuperadminListingsLogPage() {
       : "skip"
   );
 
-  if (!adminId) {
+  if (authStatus === "loading") {
     return (
       <div style={{ padding: "2rem", textAlign: "center", color: "#666" }}>
         Loading user information...

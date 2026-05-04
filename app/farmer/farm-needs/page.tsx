@@ -52,8 +52,9 @@ export default function FarmNeedsPage() {
   const submitResponse = useOfflineMutation(api.farmNeeds.submitFarmNeedsResponse);
 
   const activeForms = useMemo(() => {
-    if (!forms) return [];
-    return activeTab === "crops" ? forms.crops : forms.livestock;
+    const cropsForms = Array.isArray(forms?.crops) ? forms.crops : [];
+    const livestockForms = Array.isArray(forms?.livestock) ? forms.livestock : [];
+    return activeTab === "crops" ? cropsForms : livestockForms;
   }, [forms, activeTab]);
 
   const handleFillForm = (form: any) => {
@@ -73,7 +74,8 @@ export default function FarmNeedsPage() {
     setMessage(null);
 
     try {
-      const fieldValues = selectedForm.fields.map((field: any) => ({
+      const selectedFields = Array.isArray(selectedForm.fields) ? selectedForm.fields : [];
+      const fieldValues = selectedFields.map((field: any) => ({
         fieldId: field._id,
         value: formValues[field._id] || "",
       }));
@@ -192,44 +194,47 @@ export default function FarmNeedsPage() {
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            {activeForms.map((form: any) => (
-              <div key={form.formId} style={{
-                padding: "1.25rem",
-                background: "#fff",
-                borderRadius: "12px",
-                border: `1px solid ${form.category === "crops" ? "#a5d6a7" : "#ffe0b2"}`,
-                boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
-              }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem", flexWrap: "wrap" }}>
-                  <div style={{ flex: 1 }}>
-                    <h3 style={{ margin: "0 0 0.25rem", fontSize: "1.1rem", color: "#2c2c2c", fontWeight: 700, fontFamily: FONT }}>
-                      {form.name}
-                    </h3>
-                    {form.description && (
-                      <p style={{ margin: "0.5rem 0 0", fontSize: "0.9rem", color: "#666" }}>{form.description}</p>
-                    )}
-                    <p style={{ margin: "0.5rem 0 0", fontSize: "0.85rem", color: "#999" }}>
-                      {form.communityName} • {form.fields.length} fields
-                    </p>
+            {activeForms.map((form: any) => {
+              const formFields = Array.isArray(form.fields) ? form.fields : [];
+              return (
+                <div key={form.formId} style={{
+                  padding: "1.25rem",
+                  background: "#fff",
+                  borderRadius: "12px",
+                  border: `1px solid ${form.category === "crops" ? "#a5d6a7" : "#ffe0b2"}`,
+                  boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem", flexWrap: "wrap" }}>
+                    <div style={{ flex: 1 }}>
+                      <h3 style={{ margin: "0 0 0.25rem", fontSize: "1.1rem", color: "#2c2c2c", fontWeight: 700, fontFamily: FONT }}>
+                        {form.name}
+                      </h3>
+                      {form.description && (
+                        <p style={{ margin: "0.5rem 0 0", fontSize: "0.9rem", color: "#666" }}>{form.description}</p>
+                      )}
+                      <p style={{ margin: "0.5rem 0 0", fontSize: "0.85rem", color: "#999" }}>
+                        {form.communityName} • {formFields.length} fields
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleFillForm(form)}
+                      style={{
+                        padding: "0.6rem 1.2rem",
+                        background: BRAND,
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: "8px",
+                        cursor: "pointer",
+                        fontSize: "0.9rem",
+                        fontWeight: 600,
+                        whiteSpace: "nowrap",
+                      }}>
+                      Fill Form →
+                    </button>
                   </div>
-                  <button
-                    onClick={() => handleFillForm(form)}
-                    style={{
-                      padding: "0.6rem 1.2rem",
-                      background: BRAND,
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: "8px",
-                      cursor: "pointer",
-                      fontSize: "0.9rem",
-                      fontWeight: 600,
-                      whiteSpace: "nowrap",
-                    }}>
-                    Fill Form →
-                  </button>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
@@ -311,7 +316,7 @@ export default function FarmNeedsPage() {
             )}
 
             <form style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-              {selectedForm.fields.map((field: any) => (
+              {(Array.isArray(selectedForm.fields) ? selectedForm.fields : []).map((field: any) => (
                 <div key={field._id}>
                   <label style={{
                     display: "block",

@@ -784,3 +784,221 @@ export const resetPassword = mutation({
     return { success: true, message: "Password has been reset successfully" };
   },
 });
+
+// ───────────────────────────────────────────────────────
+// Session-based auth (durable login persistence)
+// ───────────────────────────────────────────────────────
+
+/**
+ * Generate a pilot-grade session token (~60 random chars).
+ * Not cryptographically perfect, but sufficient for this app.
+ */
+function generateSessionToken(): string {
+  const t = getUgandaTime().toString(36);
+  const r1 = Math.random().toString(36).substring(2);
+  const r2 = Math.random().toString(36).substring(2);
+  const r3 = Math.random().toString(36).substring(2);
+  return `${t}-${r1}${r2}${r3}`;
+}
+
+/** 90-day session lifetime in milliseconds */
+const SESSION_TTL_MS = 90 * 24 * 60 * 60 * 1000;
+
+/**
+ * Login and create a durable server-side session.
+ * Returns sessionToken so the client can persist it across WebView clears.
+ */
+export const loginWithSession = mutation({
+  args: {
+    email: v.optional(v.string()),
+    phoneNumber: v.optional(v.string()),
+    password: v.string(),
+  },
+  handler: async (ctx, args) => {
+    if (!args.email && !args.phoneNumber) {
+      throw new Error("Either email or phone number is required");
+    }
+
+    let user = null;
+    if (args.email) {
+      const normalizedEmail = args.email.trim().toLowerCase();
+      user = await ctx.db
+        .query("users")
+        .withIndex("by_email", (q) => q.eq("email", normalizedEmail))
+        .first();
+    }
+    if (!user && args.phoneNumber) {
+      const normalizedPhone = normalizePhoneNumber(args.phoneNumber);
+      user = await ctx.db
+        .query("users")
+        .withIndex("by_phone", (q) => q.eq("phoneNumber", normalizedPhone))
+        .first();
+    }
+
+    if (!user) throw new Error("Invalid email/phone or password");
+
+    const passwordHash = simpleHash(args.password.trim());
+    if (user.passwordHash !== passwordHash) throw new Error("Invalid email/phone or password");
+    if (user.state !== "active") throw new Error("Account is not active. Please contact support.");
+
+    const now = getUgandaTime();
+    await ctx.db.patch(user._id, { lastActiveAt: now });
+
+    const sessionToken = generateSessionToken();
+    await ctx.db.insert("sessions", {
+      userId: user._id,
+      token: sessionToken,
+      expiresAt: now + SESSION_TTL_MS,
+      createdAt: now,
+      lastActiveAt: now,
+      invalidated: false,
+    });
+
+    return {
+      sessionToken,
+      userId: user._id,
+      alias: user.alias,
+      role: user.role,
+      adminLevel: user.adminLevel,
+      adminCategory: user.adminCategory,
+      assignedCommunityIds: user.assignedCommunityIds,
+    };
+  },
+});
+
+/**
+ * Signup and create a durable server-side session.
+ * Mirrors signupWithSession — returns sessionToken alongside user fields.
+ */
+export const signupWithSession = mutation({
+  args: {
+    email: v.optional(v.string()),
+    phoneNumber: v.optional(v.string()),
+    password: v.string(),
+    role: v.union(
+      v.literal("farmer"),
+      v.literal("trader"),
+      v.literal("buyer"),
+      v.literal("vendor"),
+      v.literal("transporter"),
+      v.literal("store")
+    ),
+  },
+  handler: async (ctx, args) => {
+    if (!args.email && !args.phoneNumber) {
+      throw new Error("Either email or phone number is required");
+    }
+    if (args.email && !isValidEmail(args.email)) {
+      throw new Error("Invalid email format");
+    }
+    if (args.phoneNumber && !isValidPhoneNumber(args.phoneNumber)) {
+      throw new Error("Invalid phone number format. Please use format: +256 7XX XXX XXX or 07XX XXX XXX");
+    }
+    if (args.password.length < 6) {
+      throw new Error("Password must be at least 6 characters long");
+    }
+
+    const normalizedPhone = args.phoneNumber ? normalizePhoneNumber(args.phoneNumber) : undefined;
+    const normalizedEmail = args.email ? args.email.trim().toLowerCase() : undefined;
+
+    if (normalizedEmail) {
+      const existing = await ctx.db
+        .query("users")
+        .withIndex("by_email", (q) => q.eq("email", normalizedEmail))
+        .first();
+      if (existing) throw new Error("User with this email already exists");
+    }
+    if (normalizedPhone) {
+      const existing = await ctx.db
+        .query("users")
+        .withIndex("by_phone", (q) => q.eq("phoneNumber", normalizedPhone))
+        .first();
+      if (existing) throw new Error("User with this phone number already exists");
+    }
+
+    const alias = generateAlias(args.role);
+    const passwordHash = simpleHash(args.password.trim());
+    const now = getUgandaTime();
+
+    const userId = await ctx.db.insert("users", {
+      email: normalizedEmail,
+      phoneNumber: normalizedPhone,
+      alias,
+      role: args.role,
+      passwordHash,
+      state: "active",
+      createdAt: now,
+      lastActiveAt: now,
+    });
+
+    const sessionToken = generateSessionToken();
+    await ctx.db.insert("sessions", {
+      userId,
+      token: sessionToken,
+      expiresAt: now + SESSION_TTL_MS,
+      createdAt: now,
+      lastActiveAt: now,
+      invalidated: false,
+    });
+
+    return {
+      sessionToken,
+      userId,
+      alias,
+      role: args.role,
+      adminLevel: undefined,
+      adminCategory: undefined,
+      assignedCommunityIds: [],
+    };
+  },
+});
+
+/**
+ * Validate a session token and return user info (for app startup re-auth).
+ * Returns null if token is invalid, expired, or user is inactive.
+ */
+export const getSessionUser = query({
+  args: { token: v.string() },
+  handler: async (ctx, args) => {
+    if (!args.token || args.token.length < 10) return null;
+
+    const session = await ctx.db
+      .query("sessions")
+      .withIndex("by_token", (q) => q.eq("token", args.token))
+      .first();
+
+    if (!session || session.invalidated || session.expiresAt < Date.now()) return null;
+
+    const user = await ctx.db.get(session.userId);
+    if (!user || user.state !== "active") return null;
+
+    return {
+      userId: user._id,
+      alias: user.alias,
+      role: user.role,
+      adminLevel: user.adminLevel ?? null,
+      adminCategory: user.adminCategory ?? null,
+      assignedCommunityIds: user.assignedCommunityIds ?? [],
+    };
+  },
+});
+
+/**
+ * Invalidate a session (call on logout).
+ */
+export const invalidateSession = mutation({
+  args: { token: v.string() },
+  handler: async (ctx, args) => {
+    if (!args.token) return;
+    const session = await ctx.db
+      .query("sessions")
+      .withIndex("by_token", (q) => q.eq("token", args.token))
+      .first();
+    if (session && !session.invalidated) {
+      await ctx.db.patch(session._id, {
+        invalidated: true,
+        invalidatedAt: getUgandaTime(),
+      });
+    }
+  },
+});

@@ -5,6 +5,7 @@ import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { useRouter, useSearchParams } from "next/navigation";
 import MarketPricePanel from "../components/MarketPricePanel";
+import { saveAuth, getLastCredential, saveLastCredential } from "../utils/authStorage";
 
 /**
  * Login Page
@@ -39,8 +40,21 @@ function LoginPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
-  const login = useMutation(api.auth.login);
-  const signup = useMutation(api.auth.signup);
+  const loginWithSession = useMutation((api as any).auth.loginWithSession);
+  const signupWithSession = useMutation((api as any).auth.signupWithSession);
+
+  // Pre-fill last used credential on mount
+  useEffect(() => {
+    const lastCred = getLastCredential();
+    if (lastCred) {
+      if (lastCred.includes("@")) {
+        setEmail(lastCred);
+      } else {
+        setPhoneNumber(lastCred);
+        setUsePhone(true);
+      }
+    }
+  }, []);
 
   // On mount, detect QR community join intent from URL param or localStorage
   useEffect(() => {
@@ -104,17 +118,19 @@ function LoginPageInner() {
           return;
         }
 
-        // Signup
-        const result = await signup({
+        // Signup with session
+        const result = await signupWithSession({
           email: usePhone ? undefined : email.trim(),
           phoneNumber: usePhone ? phoneNumber.trim() : undefined,
           password: password.trim(),
           role: role,
         });
 
-        // Store user info in localStorage
-        localStorage.setItem("pilot_user", JSON.stringify(result));
-        
+        // Persist to all storage layers (localStorage + native Preferences)
+        const { sessionToken, ...user } = result;
+        await saveAuth(user, sessionToken);
+        saveLastCredential(usePhone ? phoneNumber.trim() : email.trim());
+
         // Redirect: if pending community join, go back to join page; otherwise go home
         if (pendingCommunitySlug) {
           router.push(`/join/community/${pendingCommunitySlug}?from_signup=1`);
@@ -122,16 +138,18 @@ function LoginPageInner() {
           router.push("/");
         }
       } else {
-        // Login
-        const result = await login({
+        // Login with session
+        const result = await loginWithSession({
           email: usePhone ? undefined : email.trim(),
           phoneNumber: usePhone ? phoneNumber.trim() : undefined,
           password: password.trim(),
         });
 
-        // Store user info in localStorage
-        localStorage.setItem("pilot_user", JSON.stringify(result));
-        
+        // Persist to all storage layers (localStorage + native Preferences)
+        const { sessionToken, ...user } = result;
+        await saveAuth(user, sessionToken);
+        saveLastCredential(usePhone ? phoneNumber.trim() : email.trim());
+
         // Redirect: if pending community join, go back to join page; otherwise go home
         if (pendingCommunitySlug) {
           router.push(`/join/community/${pendingCommunitySlug}?from_signup=1`);

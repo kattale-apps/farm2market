@@ -14,6 +14,7 @@ import { VendorDashboard } from "./components/VendorDashboard";
 import { TransporterDashboard } from "./components/TransporterDashboard";
 import { StoreDashboard } from "./components/StoreDashboard";
 import { Id } from "../convex/_generated/dataModel";
+import { getStoredUser, clearAuth } from "./utils/authStorage";
 // import { useMutation } from "convex/react";
 // import { initializePushNotifications } from "./utils/pushNotifications";
 
@@ -49,32 +50,21 @@ export default function Home() {
   //   }
   // }, [user?.userId]);
   
-  // Check if user is logged in (pilot mode)
+  // Check if user is logged in — tries native Preferences first (survives
+  // WebView clears on mobile), then falls back to localStorage.
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const stored = localStorage.getItem("pilot_user");
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          // Validate user object has required properties
-          if (parsed && parsed.userId && parsed.role && parsed.alias) {
-            setUser(parsed);
-          } else {
-            // Invalid user data, clear and redirect
-            localStorage.removeItem("pilot_user");
-            router.push("/login");
-          }
-        } else {
-          // Redirect to login if not logged in
-          router.push("/login");
-        }
-      } catch (error) {
-        // JSON parse failed, clear corrupted data
-        console.error("Failed to parse user data:", error);
-        localStorage.removeItem("pilot_user");
+    if (typeof window === "undefined") return;
+    getStoredUser().then((parsed) => {
+      if (parsed && parsed.userId && parsed.role && parsed.alias) {
+        setUser(parsed);
+      } else {
+        clearAuth();
         router.push("/login");
       }
-    }
+    }).catch(() => {
+      clearAuth();
+      router.push("/login");
+    });
   }, [router]);
 
   // Check if farmer/vendor/store needs onboarding (hooks must be called unconditionally)
@@ -393,8 +383,7 @@ export default function Home() {
           )}
           <button
             onClick={() => {
-              localStorage.removeItem("pilot_user");
-              router.push("/login");
+              clearAuth().finally(() => router.push("/login"));
             }}
             style={{
               padding: "0.6rem 1.2rem",

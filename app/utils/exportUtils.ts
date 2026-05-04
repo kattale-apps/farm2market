@@ -151,6 +151,44 @@ async function urlToBase64(url: string): Promise<string> {
   }
 }
 
+function addReportHeader(doc: jsPDF, title: string, subtitle?: string) {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  doc.setFillColor(34, 100, 55);
+  doc.rect(0, 0, pageWidth, 26, "F");
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(16);
+  doc.setFont(undefined, "bold");
+  doc.text(title, 10, 12);
+
+  if (subtitle) {
+    doc.setFontSize(10);
+    doc.setFont(undefined, "normal");
+    doc.text(subtitle, 10, 19);
+  }
+
+  doc.setTextColor(30, 30, 30);
+}
+
+function addSectionTitle(doc: jsPDF, y: number, title: string) {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  doc.setFillColor(244, 247, 245);
+  doc.rect(10, y - 4, pageWidth - 20, 8, "F");
+  doc.setFontSize(11);
+  doc.setFont(undefined, "bold");
+  doc.text(title, 12, y + 1);
+  doc.setFont(undefined, "normal");
+  return y + 8;
+}
+
+function autoTableEndY(doc: jsPDF): number {
+  return ((doc as any).lastAutoTable?.finalY ?? 30) as number;
+}
+
+function imageFormatFromBase64(dataUrl: string): "PNG" | "JPEG" {
+  return dataUrl.startsWith("data:image/png") ? "PNG" : "JPEG";
+}
+
 /**
  * Export farm toolbox submissions to PDF (single or batch)
  * Embeds photos as base64 for offline readability
@@ -160,164 +198,134 @@ export async function exportSubmissionsToPDF(
   filename: string,
   userAlias?: string
 ): Promise<void> {
-  if (entries.length === 0) {
-    console.warn("No entries to export");
-    return;
-  }
+  if (!entries.length) return;
 
-  const doc = new jsPDF();
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 12;
-  const contentWidth = pageWidth - 2 * margin;
-  let currentY = margin;
+  const margin = 10;
+  const contentWidth = pageWidth - margin * 2;
 
-  // Title page
-  doc.setFontSize(20);
-  doc.text("Farm Toolbox Submissions", pageWidth / 2, currentY + 15, { align: "center" });
-
-  doc.setFontSize(11);
-  currentY += 35;
-  doc.text(`Total Submissions: ${entries.length}`, margin, currentY);
-  currentY += 6;
-  doc.text(`Generated: ${formatUgandaDateTime(getUgandaTime())}`, margin, currentY);
+  addReportHeader(doc, "Farm Toolbox Submissions", "Readable export report");
+  let y = 38;
+  doc.setFontSize(12);
+  doc.text(`Total Submissions: ${entries.length}`, margin, y);
+  y += 8;
+  doc.text(`Generated: ${formatUgandaDateTime(getUgandaTime())}`, margin, y);
   if (userAlias) {
-    currentY += 6;
-    doc.text(`User: ${userAlias}`, margin, currentY);
+    y += 8;
+    doc.text(`User: ${userAlias}`, margin, y);
   }
 
-  // Add each submission
-  for (let index = 0; index < entries.length; index++) {
-    const entry = entries[index];
-    currentY += 20;
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    doc.addPage();
 
-    // Check if we need a new page
-    if (currentY > pageHeight - 30) {
-      doc.addPage();
-      currentY = margin;
-    }
-
-    // Submission header
-    doc.setFontSize(13);
-    doc.setFont(undefined, "bold");
-    const templateName = entry.templateDetails?.templateName || "Unknown Template";
-    doc.text(
-      `Submission ${index + 1}: ${templateName}`,
-      margin,
-      currentY
-    );
-    currentY += 6;
-
-    // Metadata
-    doc.setFontSize(9);
-    doc.setFont(undefined, "normal");
     const submittedDate = formatUgandaDate(entry.submittedAt || entry.createdAt);
-    doc.text(`Date: ${submittedDate}`, margin, currentY);
-    currentY += 4;
+    addReportHeader(
+      doc,
+      `Submission ${i + 1} of ${entries.length}`,
+      `${entry.templateDetails?.templateName || "Unknown Template"} - ${submittedDate}`
+    );
 
-    if (entry.unitDetails) {
-      doc.text(
-        `Unit: ${entry.unitDetails.name || entry.unitDetails.unitType || "N/A"}`,
-        margin,
-        currentY
-      );
-      currentY += 4;
-    }
+    y = 34;
+    y = addSectionTitle(doc, y, "Submission Details");
+    const detailsRows: string[][] = [
+      ["Template", entry.templateDetails?.templateName || "Unknown Template"],
+      ["Submitted", submittedDate],
+      ["Unit", entry.unitDetails?.name || entry.unitDetails?.unitType || "N/A"],
+      [
+        "GPS",
+        entry.gpsLat && entry.gpsLng
+          ? `${Number(entry.gpsLat).toFixed(5)}, ${Number(entry.gpsLng).toFixed(5)}`
+          : "N/A",
+      ],
+      ["Notes", entry.notes || "N/A"],
+    ];
 
-    if (entry.gpsLat && entry.gpsLng) {
-      doc.text(
-        `GPS: ${entry.gpsLat.toFixed(4)}, ${entry.gpsLng.toFixed(4)}`,
-        margin,
-        currentY
-      );
-      currentY += 4;
-    }
+    autoTable(doc, {
+      startY: y,
+      margin: { left: margin, right: margin },
+      head: [["Field", "Value"]],
+      body: detailsRows,
+      theme: "grid",
+      styles: { fontSize: 10, cellPadding: 2.2, overflow: "linebreak", valign: "top" },
+      headStyles: { fillColor: [46, 125, 50], textColor: 255, fontSize: 10.5 },
+      columnStyles: {
+        0: { cellWidth: 48, fontStyle: "bold", fillColor: [247, 250, 248] },
+        1: { cellWidth: contentWidth - 48 },
+      },
+    });
 
-    currentY += 2;
+    y = autoTableEndY(doc) + 4;
+    y = addSectionTitle(doc, y, "Field Values");
+    const fieldRows: string[][] = (entry.fieldValues || []).map((fv: any) => [
+      String(fv.fieldName || "Field"),
+      fv.value == null || fv.value === "" ? "-" : String(fv.value),
+    ]);
 
-    // Field values
-    if (entry.fieldValues && entry.fieldValues.length > 0) {
-      doc.setFontSize(10);
-      doc.setFont(undefined, "bold");
-      doc.text("Field Values:", margin, currentY);
-      currentY += 4;
+    if (!fieldRows.length) fieldRows.push(["No fields", "No values recorded"]);
 
-      doc.setFontSize(9);
-      doc.setFont(undefined, "normal");
-      entry.fieldValues.forEach((fv: any) => {
-        const fieldText = `${fv.fieldName}: ${fv.value || "—"}`;
-        const lines = doc.splitTextToSize(fieldText, contentWidth - 10);
-        lines.forEach((line: string) => {
-          if (currentY > pageHeight - 20) {
-            doc.addPage();
-            currentY = margin;
-          }
-          doc.text(line, margin + 5, currentY);
-          currentY += 3;
-        });
-      });
-    }
+    autoTable(doc, {
+      startY: y,
+      margin: { left: margin, right: margin },
+      head: [["Field", "Response"]],
+      body: fieldRows,
+      theme: "striped",
+      styles: { fontSize: 10, cellPadding: 2.1, overflow: "linebreak", valign: "top" },
+      headStyles: { fillColor: [62, 140, 76], textColor: 255, fontSize: 10.5 },
+      alternateRowStyles: { fillColor: [249, 251, 250] },
+      columnStyles: {
+        0: { cellWidth: 56, fontStyle: "bold" },
+        1: { cellWidth: contentWidth - 56 },
+      },
+    });
 
-    currentY += 3;
-
-    // Photos (if any) - embed as base64
-    if (entry.photoUrls && entry.photoUrls.length > 0) {
-      doc.setFontSize(10);
-      doc.setFont(undefined, "bold");
-      doc.text(`Photos (${entry.photoUrls.length}):`, margin, currentY);
-      currentY += 5;
-
-      // Add photos inline (max 3 per row for readability)
-      const photoWidth = (contentWidth - 6) / 3;
-      const photoHeight = 35;
-      let photosInRow = 0;
-      let photoRowStartY = currentY;
-
-      for (const photoUrl of entry.photoUrls) {
-        if (!photoUrl) continue;
-
-        if (photosInRow > 0 && photosInRow % 3 === 0) {
-          currentY = photoRowStartY + photoHeight + 3;
-          photoRowStartY = currentY;
-          photosInRow = 0;
-
-          if (currentY > pageHeight - 20) {
-            doc.addPage();
-            currentY = margin;
-            photoRowStartY = currentY;
-          }
-        }
-
-        const xPos = margin + photosInRow * (photoWidth + 2);
-
-        // Convert URL to base64 and embed image
-        try {
-          const base64Image = await urlToBase64(photoUrl);
-          if (base64Image) {
-            doc.addImage(base64Image, "JPEG", xPos, photoRowStartY, photoWidth, photoHeight);
-          } else {
-            doc.rect(xPos, photoRowStartY, photoWidth, photoHeight);
-            doc.setFontSize(7);
-            doc.text("[Photo unavailable]", xPos + photoWidth / 2, photoRowStartY + photoHeight / 2, { align: "center" });
-          }
-        } catch {
-          doc.rect(xPos, photoRowStartY, photoWidth, photoHeight);
-          doc.setFontSize(7);
-          doc.text("[Photo unavailable]", xPos + photoWidth / 2, photoRowStartY + photoHeight / 2, { align: "center" });
-        }
-
-        photosInRow++;
+    y = autoTableEndY(doc) + 6;
+    const photos: string[] = (entry.photoUrls || []).filter(Boolean);
+    if (photos.length) {
+      if (y > pageHeight - 80) {
+        doc.addPage();
+        addReportHeader(doc, `Submission ${i + 1} Photos`);
+        y = 34;
       }
 
-      currentY = photoRowStartY + photoHeight + 5;
-    }
+      y = addSectionTitle(doc, y, `Photos (${photos.length})`);
+      const gap = 4;
+      const photoWidth = (contentWidth - gap) / 2;
+      const photoHeight = 62;
 
-    // Divider
-    if (index < entries.length - 1) {
-      currentY += 3;
-      doc.setDrawColor(200, 200, 200);
-      doc.line(margin, currentY, pageWidth - margin, currentY);
-      currentY += 3;
+      for (let p = 0; p < photos.length; p++) {
+        const col = p % 2;
+        const row = Math.floor(p / 2);
+        const x = margin + col * (photoWidth + gap);
+        const py = y + row * (photoHeight + 6);
+
+        if (py + photoHeight > pageHeight - margin) {
+          doc.addPage();
+          addReportHeader(doc, `Submission ${i + 1} Photos (cont.)`);
+          y = addSectionTitle(doc, 34, `Photos (${photos.length})`);
+          p--;
+          continue;
+        }
+
+        try {
+          const base64 = await urlToBase64(photos[p]);
+          if (base64) {
+            doc.addImage(base64, imageFormatFromBase64(base64), x, py, photoWidth, photoHeight);
+          } else {
+            doc.setDrawColor(180);
+            doc.rect(x, py, photoWidth, photoHeight);
+            doc.setFontSize(9);
+            doc.text("Photo unavailable", x + photoWidth / 2, py + photoHeight / 2, { align: "center" });
+          }
+        } catch {
+          doc.setDrawColor(180);
+          doc.rect(x, py, photoWidth, photoHeight);
+          doc.setFontSize(9);
+          doc.text("Photo unavailable", x + photoWidth / 2, py + photoHeight / 2, { align: "center" });
+        }
+      }
     }
   }
 
@@ -333,142 +341,135 @@ export async function exportFormSubmissionsToPDF(
   filename: string,
   userAlias?: string
 ): Promise<void> {
-  if (submissions.length === 0) {
-    console.warn("No submissions to export");
-    return;
-  }
+  if (!submissions.length) return;
 
-  const doc = new jsPDF();
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 12;
-  const contentWidth = pageWidth - 2 * margin;
-  let currentY = margin;
+  const margin = 10;
+  const contentWidth = pageWidth - margin * 2;
 
-  // Title page
-  doc.setFontSize(20);
-  doc.text("Form Submissions", pageWidth / 2, currentY + 15, { align: "center" });
-
-  doc.setFontSize(11);
-  currentY += 35;
-  doc.text(`Total Submissions: ${submissions.length}`, margin, currentY);
-  currentY += 6;
-  doc.text(`Generated: ${formatUgandaDateTime(getUgandaTime())}`, margin, currentY);
+  addReportHeader(doc, "Community Form Submissions", "Readable export report");
+  let y = 38;
+  doc.setFontSize(12);
+  doc.text(`Total Submissions: ${submissions.length}`, margin, y);
+  y += 8;
+  doc.text(`Generated: ${formatUgandaDateTime(getUgandaTime())}`, margin, y);
   if (userAlias) {
-    currentY += 6;
-    doc.text(`User: ${userAlias}`, margin, currentY);
+    y += 8;
+    doc.text(`User: ${userAlias}`, margin, y);
   }
 
-  // Add each submission
-  for (let index = 0; index < submissions.length; index++) {
-    const submission = submissions[index];
-    currentY += 20;
+  for (let i = 0; i < submissions.length; i++) {
+    const submission = submissions[i];
+    doc.addPage();
 
-    // Check if we need a new page
-    if (currentY > pageHeight - 30) {
-      doc.addPage();
-      currentY = margin;
-    }
+    addReportHeader(
+      doc,
+      `Submission ${i + 1} of ${submissions.length}`,
+      `${submission.formName || "Unknown Form"} - ${formatUgandaDate(submission.createdAt)}`
+    );
 
-    // Submission header
-    doc.setFontSize(13);
-    doc.setFont(undefined, "bold");
-    const formName = submission.formName || "Unknown Form";
-    doc.text(`${index + 1}. ${formName}`, margin, currentY);
-    currentY += 6;
+    y = 34;
+    y = addSectionTitle(doc, y, "Submission Details");
+    const detailsRows: string[][] = [
+      ["Form", submission.formName || "Unknown Form"],
+      ["Category", submission.category || "N/A"],
+      ["Submitted", formatUgandaDate(submission.createdAt)],
+      [
+        "Tracked Unit",
+        submission.trackedUnit
+          ? `${submission.trackedUnit.emoji || ""} ${submission.trackedUnit.name || submission.trackedUnit.unitType || ""}`.trim()
+          : "N/A",
+      ],
+    ];
 
-    // Metadata
-    doc.setFontSize(9);
-    doc.setFont(undefined, "normal");
-    const createdDate = formatUgandaDate(submission.createdAt);
-    doc.text(`Submitted: ${createdDate}`, margin, currentY);
-    currentY += 4;
+    autoTable(doc, {
+      startY: y,
+      margin: { left: margin, right: margin },
+      head: [["Field", "Value"]],
+      body: detailsRows,
+      theme: "grid",
+      styles: { fontSize: 10, cellPadding: 2.2, overflow: "linebreak", valign: "top" },
+      headStyles: { fillColor: [46, 125, 50], textColor: 255, fontSize: 10.5 },
+      columnStyles: {
+        0: { cellWidth: 48, fontStyle: "bold", fillColor: [247, 250, 248] },
+        1: { cellWidth: contentWidth - 48 },
+      },
+    });
 
-    currentY += 2;
+    y = autoTableEndY(doc) + 4;
+    y = addSectionTitle(doc, y, "Responses");
+    const responseRows: string[][] = (submission.values || []).map((value: any) => [
+      String(value.fieldLabel || "Field"),
+      value.value == null || value.value === "" ? "-" : String(value.value),
+    ]);
 
-    // Field values
-    if (submission.values && submission.values.length > 0) {
-      doc.setFontSize(10);
-      doc.setFont(undefined, "bold");
-      doc.text("Responses:", margin, currentY);
-      currentY += 4;
+    if (!responseRows.length) responseRows.push(["No responses", "No values recorded"]);
 
-      doc.setFontSize(9);
-      doc.setFont(undefined, "normal");
-      submission.values.forEach((value: any) => {
-        const fieldLabel = value.fieldLabel || "Field";
-        const fieldValue = value.value || "—";
-        const fieldText = `${fieldLabel}: ${fieldValue}`;
-        const lines = doc.splitTextToSize(fieldText, contentWidth - 10);
+    autoTable(doc, {
+      startY: y,
+      margin: { left: margin, right: margin },
+      head: [["Field", "Response"]],
+      body: responseRows,
+      theme: "striped",
+      styles: { fontSize: 10, cellPadding: 2.1, overflow: "linebreak", valign: "top" },
+      headStyles: { fillColor: [62, 140, 76], textColor: 255, fontSize: 10.5 },
+      alternateRowStyles: { fillColor: [249, 251, 250] },
+      columnStyles: {
+        0: { cellWidth: 56, fontStyle: "bold" },
+        1: { cellWidth: contentWidth - 56 },
+      },
+    });
 
-        lines.forEach((line: string) => {
-          if (currentY > pageHeight - 20) {
-            doc.addPage();
-            currentY = margin;
-          }
-          doc.text(line, margin + 5, currentY);
-          currentY += 3;
-        });
-      });
-    }
+    y = autoTableEndY(doc) + 6;
+    const photos = (submission.values || [])
+      .filter((value: any) => value.fieldType === "photo" && value.photoUrl)
+      .map((value: any) => value.photoUrl);
 
-    // Photo values (if any)
-    const submissionPhotos = (submission.values || []).filter((value: any) => value.fieldType === "photo" && value.photoUrl);
-    if (submissionPhotos.length > 0) {
-      doc.setFontSize(10);
-      doc.setFont(undefined, "bold");
-      doc.text(`Photos (${submissionPhotos.length}):`, margin, currentY);
-      currentY += 5;
-
-      const photoWidth = (contentWidth - 6) / 3;
-      const photoHeight = 35;
-      let photosInRow = 0;
-      let photoRowStartY = currentY;
-
-      for (const photoValue of submissionPhotos) {
-        if (photosInRow > 0 && photosInRow % 3 === 0) {
-          currentY = photoRowStartY + photoHeight + 3;
-          photoRowStartY = currentY;
-          photosInRow = 0;
-
-          if (currentY > pageHeight - 20) {
-            doc.addPage();
-            currentY = margin;
-            photoRowStartY = currentY;
-          }
-        }
-
-        const xPos = margin + photosInRow * (photoWidth + 2);
-
-        try {
-          const base64Image = await urlToBase64(photoValue.photoUrl);
-          if (base64Image) {
-            doc.addImage(base64Image, "JPEG", xPos, photoRowStartY, photoWidth, photoHeight);
-          } else {
-            doc.rect(xPos, photoRowStartY, photoWidth, photoHeight);
-            doc.setFontSize(7);
-            doc.text("[Photo unavailable]", xPos + photoWidth / 2, photoRowStartY + photoHeight / 2, { align: "center" });
-          }
-        } catch {
-          doc.rect(xPos, photoRowStartY, photoWidth, photoHeight);
-          doc.setFontSize(7);
-          doc.text("[Photo unavailable]", xPos + photoWidth / 2, photoRowStartY + photoHeight / 2, { align: "center" });
-        }
-
-        photosInRow++;
+    if (photos.length) {
+      if (y > pageHeight - 80) {
+        doc.addPage();
+        addReportHeader(doc, `Submission ${i + 1} Photos`);
+        y = 34;
       }
 
-      currentY = photoRowStartY + photoHeight + 5;
-    }
+      y = addSectionTitle(doc, y, `Photos (${photos.length})`);
+      const gap = 4;
+      const photoWidth = (contentWidth - gap) / 2;
+      const photoHeight = 62;
 
-    currentY += 3;
+      for (let p = 0; p < photos.length; p++) {
+        const col = p % 2;
+        const row = Math.floor(p / 2);
+        const x = margin + col * (photoWidth + gap);
+        const py = y + row * (photoHeight + 6);
 
-    // Divider
-    if (index < submissions.length - 1) {
-      currentY += 3;
-      doc.setDrawColor(200, 200, 200);
-      doc.line(margin, currentY, pageWidth - margin, currentY);
-      currentY += 3;
+        if (py + photoHeight > pageHeight - margin) {
+          doc.addPage();
+          addReportHeader(doc, `Submission ${i + 1} Photos (cont.)`);
+          y = addSectionTitle(doc, 34, `Photos (${photos.length})`);
+          p--;
+          continue;
+        }
+
+        try {
+          const base64 = await urlToBase64(photos[p]);
+          if (base64) {
+            doc.addImage(base64, imageFormatFromBase64(base64), x, py, photoWidth, photoHeight);
+          } else {
+            doc.setDrawColor(180);
+            doc.rect(x, py, photoWidth, photoHeight);
+            doc.setFontSize(9);
+            doc.text("Photo unavailable", x + photoWidth / 2, py + photoHeight / 2, { align: "center" });
+          }
+        } catch {
+          doc.setDrawColor(180);
+          doc.rect(x, py, photoWidth, photoHeight);
+          doc.setFontSize(9);
+          doc.text("Photo unavailable", x + photoWidth / 2, py + photoHeight / 2, { align: "center" });
+        }
+      }
     }
   }
 

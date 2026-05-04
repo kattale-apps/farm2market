@@ -2719,13 +2719,16 @@ export default function CommunityDashboardPage() {
                 borderBottom: "2px solid #e0e0e0",
                 background: "#fafafa",
               }}>
-                {((
-                  (currentUser as any)?.adminLevel === "super" ||
-                  (currentUser as any)?.adminLevel === undefined ||
-                  resolvedAdminCategory === "community"
-                    ? ["members", "noticeboard", "messages", "forms", "insights", "fertilizer", "farmNeeds"]
-                    : ["members", "noticeboard", "messages", "forms", "insights", "farmNeeds"]
-                ) as CommunityTab[]).map((tab) => {
+                {((): CommunityTab[] => {
+                  const isSuperAdmin =
+                    (currentUser as any)?.adminLevel === "super" ||
+                    (currentUser as any)?.adminLevel === undefined;
+                  const showFarmNeeds = isSuperAdmin || !!(community as any).farmNeedsEnabled;
+                  const baseTabs: CommunityTab[] = isSuperAdmin || resolvedAdminCategory === "community"
+                    ? ["members", "noticeboard", "messages", "forms", "insights", "fertilizer"]
+                    : ["members", "noticeboard", "messages", "forms", "insights"];
+                  return showFarmNeeds ? [...baseTabs, "farmNeeds"] : baseTabs;
+                })().map((tab) => {
                   const active = getActiveTab(communityId) === tab;
                   const labels: Record<CommunityTab, string> = { members: "Members", noticeboard: "Noticeboard", messages: "Messages", forms: "Forms", insights: "📊 Insights", fertilizer: "🌱 Fertilizer", farmNeeds: "🌾 Farm Needs" };
                   return (

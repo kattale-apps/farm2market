@@ -1040,20 +1040,20 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
           gap: "0.45rem",
           padding: "0.95rem",
           background: "#d32f2f",
-          border: "1.5px solid #b71c1c",
+          border: "2px solid #c62828",
           borderRadius: "14px",
           textDecoration: "none",
           color: "#fff",
           fontFamily: '"Montserrat", sans-serif',
           fontWeight: 700,
           fontSize: "clamp(0.8rem,2.4vw,0.95rem)",
-          boxShadow: "0 2px 6px rgba(183,28,28,0.25)",
+          boxShadow: "0 0 0 2px rgba(244,67,54,0.22), 0 8px 18px rgba(183,28,28,0.28)",
           minHeight: 88,
           minWidth: 0,
           textAlign: "center",
           overflowWrap: "anywhere",
         }}>
-          <span style={{ fontSize: "1.8rem" }}>🌱</span>
+          <span style={{ fontSize: "1.9rem", textShadow: "0 0 10px rgba(255,255,255,0.55), 0 0 16px rgba(255,205,210,0.65)" }}>🌱</span>
           Farm Needs
         </Link>
         <Link href="/farmer/toolbox" style={{
@@ -1064,20 +1064,20 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
           gap: "0.45rem",
           padding: "0.95rem",
           background: "#2e7d32",
-          border: "1.5px solid #1b5e20",
+          border: "2px solid #2e7d32",
           borderRadius: "14px",
           textDecoration: "none",
           color: "#fff",
           fontFamily: '"Montserrat", sans-serif',
           fontWeight: 700,
           fontSize: "clamp(0.8rem,2.4vw,0.95rem)",
-          boxShadow: "0 2px 6px rgba(27,94,32,0.24)",
+          boxShadow: "0 0 0 2px rgba(102,187,106,0.24), 0 8px 18px rgba(27,94,32,0.26)",
           minHeight: 88,
           minWidth: 0,
           textAlign: "center",
           overflowWrap: "anywhere",
         }}>
-          <span style={{ fontSize: "1.8rem" }}>🧰</span>
+          <span style={{ fontSize: "1.9rem", textShadow: "0 0 10px rgba(255,255,255,0.5), 0 0 16px rgba(200,230,201,0.65)" }}>🧰</span>
           Farm Toolbox
         </Link>
         <Link href="/farmer/planner" style={{
@@ -1088,20 +1088,20 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
           gap: "0.45rem",
           padding: "0.95rem",
           background: "#1565c0",
-          border: "1.5px solid #0d47a1",
+          border: "2px solid #1565c0",
           borderRadius: "14px",
           textDecoration: "none",
           color: "#fff",
           fontFamily: '"Montserrat", sans-serif',
           fontWeight: 700,
           fontSize: "clamp(0.8rem,2.4vw,0.95rem)",
-          boxShadow: "0 2px 6px rgba(13,71,161,0.24)",
+          boxShadow: "0 0 0 2px rgba(100,181,246,0.25), 0 8px 18px rgba(13,71,161,0.27)",
           minHeight: 88,
           minWidth: 0,
           textAlign: "center",
           overflowWrap: "anywhere",
         }}>
-          <span style={{ fontSize: "1.8rem" }}>🗓️</span>
+          <span style={{ fontSize: "1.9rem", textShadow: "0 0 10px rgba(255,255,255,0.55), 0 0 16px rgba(187,222,251,0.7)" }}>🗓️</span>
           Farm Calender
         </Link>
         <Link href="/farmer/farm2market" style={{
@@ -1111,23 +1111,21 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
           justifyContent: "center",
           gap: "0.45rem",
           padding: "0.95rem",
-          background: farm2MarketAccess?.allowed === false ? "#e8e0c8" : "#fbc02d",
-          border: farm2MarketAccess?.allowed === false ? "1.5px solid #bbb" : "1.5px solid #f9a825",
+          background: "#fbc02d",
+          border: "2px solid #f9a825",
           borderRadius: "14px",
           textDecoration: "none",
-          color: farm2MarketAccess?.allowed === false ? "#777" : "#2c2c2c",
+          color: "#2c2c2c",
           fontFamily: '"Montserrat", sans-serif',
           fontWeight: 700,
           fontSize: "clamp(0.8rem,2.4vw,0.95rem)",
-          boxShadow: farm2MarketAccess?.allowed === false
-            ? "0 2px 6px rgba(0,0,0,0.10)"
-            : "0 2px 6px rgba(249,168,37,0.22)",
+          boxShadow: "0 0 0 2px rgba(255,224,130,0.35), 0 8px 18px rgba(249,168,37,0.3)",
           minHeight: 88,
           minWidth: 0,
           textAlign: "center",
           overflowWrap: "anywhere",
           position: "relative",
-          opacity: farm2MarketAccess?.allowed === false ? 0.72 : 1,
+          opacity: 1,
         }}>
           {/* Lock badge — shown only when access is blocked */}
           {farm2MarketAccess?.allowed === false && (
@@ -1146,7 +1144,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
               🔒
             </span>
           )}
-          <span style={{ fontSize: "1.8rem" }}>🛒</span>
+          <span style={{ fontSize: "1.9rem", textShadow: "0 0 10px rgba(255,255,255,0.55), 0 0 16px rgba(255,241,118,0.8)" }}>🛒</span>
           Farm 2 Market
           {/* Informer handle — shows progress toward 500 FarmCoins threshold */}
           {farm2MarketAccess?.allowed === false && (

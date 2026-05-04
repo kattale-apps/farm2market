@@ -151,6 +151,17 @@ export const submitFarmNeedsResponse = mutation({
           createdAt: getUgandaTime(),
         });
         coinsEarned = filledCount;
+        // Send system notification to the farmer
+        await ctx.db.insert("notifications", {
+          userId: farmerId,
+          type: "system",
+          category: "farmcoin_reward",
+          title: "👌 FarmCoin Reward",
+          message: `You earned ${filledCount} FarmCoin${filledCount > 1 ? "s" : ""} for submitting your Farm Needs form!`,
+          utid: generateUTID("ntf"),
+          read: false,
+          createdAt: getUgandaTime(),
+        });
       }
     }
 

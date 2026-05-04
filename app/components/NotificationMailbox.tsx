@@ -76,7 +76,7 @@ export function NotificationMailbox({ userId }: NotificationMailboxProps) {
             e.currentTarget.style.boxShadow = unreadCount > 0 ? "0 4px 12px rgba(33, 150, 243, 0.3)" : "0 2px 8px rgba(0,0,0,0.15)";
           }}
         >
-          📬
+          �
           {unreadCount > 0 && (
             <span
               style={{
@@ -155,7 +155,7 @@ export function NotificationMailbox({ userId }: NotificationMailboxProps) {
                   fontWeight: "600",
                 }}
               >
-                📬 Inbox
+                � Notifications
                 {unreadCount > 0 && (
                   <span
                     style={{

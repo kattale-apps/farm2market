@@ -400,6 +400,17 @@ export const submitFormResponse = mutation({
             createdAt: getUgandaTime(),
           });
           coinsEarned = filledCount;
+          // Send system notification to the user
+          await ctx.db.insert("notifications", {
+            userId: args.memberId,
+            type: "system",
+            category: "farmcoin_reward",
+            title: "👌 FarmCoin Reward",
+            message: `You earned ${filledCount} FarmCoin${filledCount > 1 ? "s" : ""} for completing your form submission!`,
+            utid: generateUTID("ntf"),
+            read: false,
+            createdAt: getUgandaTime(),
+          });
         }
       }
     }
@@ -806,6 +817,17 @@ export const submitDraft = mutation({
             createdAt: getUgandaTime(),
           });
           coinsEarned = filledCount;
+          // Send system notification to the user
+          await ctx.db.insert("notifications", {
+            userId: args.memberId,
+            type: "system",
+            category: "farmcoin_reward",
+            title: "👌 FarmCoin Reward",
+            message: `You earned ${filledCount} FarmCoin${filledCount > 1 ? "s" : ""} for submitting your tracker entry!`,
+            utid: generateUTID("ntf"),
+            read: false,
+            createdAt: getUgandaTime(),
+          });
         }
       }
     }

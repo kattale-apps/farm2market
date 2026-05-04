@@ -862,6 +862,7 @@ export default defineSchema({
     // Discovery and search
     searchPriorityScore: v.optional(v.number()), // Higher scores appear first in community search results
     showMemberCount: v.optional(v.boolean()), // Controls whether non-admin users can see member counts
+    farmNeedsEnabled: v.optional(v.boolean()), // Whether Farm Needs feature is enabled for this community
   })
     .index("by_active", ["isGlobal", "geoLocked"])
     .index("by_created_by", ["createdBy"]),
@@ -1446,7 +1447,7 @@ export default defineSchema({
     isActive: v.boolean(),
     responseCount: v.number(),
     category: v.optional(v.string()),
-    formPurpose: v.optional(v.union(v.literal("tracker"), v.literal("profile"))),
+    formPurpose: v.optional(v.union(v.literal("tracker"), v.literal("profile"), v.literal("farmNeeds"))),
     qrEnabled: v.optional(v.boolean()),
     qrSlug: v.optional(v.string()),
     qrCreatedAt: v.optional(v.number()),

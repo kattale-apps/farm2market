@@ -462,6 +462,8 @@ export const getActiveCommunities = query({
           isGlobal: c.isGlobal,
           geoLocked: c.geoLocked,
           showMemberCount: (c as any).showMemberCount,
+          fertilizerEnabled: (c as any).fertilizerEnabled,
+          farmNeedsEnabled: (c as any).farmNeedsEnabled,
           isMember,
           memberCount: memberships.length,
           roleBreakdown,

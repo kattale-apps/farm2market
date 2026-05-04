@@ -1837,6 +1837,73 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
   );
 }
 
+/* ── Fertilizer Tab (per community) ── */
+function FertilizerTab({
+  communityId,
+  adminId,
+  initialFertilizerEnabled,
+  canToggle,
+}: {
+  communityId: Id<"communities">;
+  adminId: Id<"users">;
+  initialFertilizerEnabled: boolean;
+  canToggle: boolean;
+}) {
+  const enableFertilizer = useMutation((api as any).farmNeeds.enableCommunityFertilizer);
+  const [fertilizerEnabled, setFertilizerEnabled] = useState<boolean>(initialFertilizerEnabled);
+  const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const handleToggle = async () => {
+    if (!canToggle) return;
+    try {
+      const next = !fertilizerEnabled;
+      await enableFertilizer({ adminId, communityId, enabled: next });
+      setFertilizerEnabled(next);
+      setMsg({ type: "success", text: `Fertilizer ${next ? "enabled" : "disabled"}` });
+      setTimeout(() => setMsg(null), 3000);
+    } catch (e: any) {
+      setMsg({ type: "error", text: e.message });
+    }
+  };
+
+  return (
+    <div style={{ padding: "1.25rem" }}>
+      {msg && (
+        <div style={{ marginBottom: "1rem", padding: "0.75rem", borderRadius: 8, background: msg.type === "success" ? "#e8f5e9" : "#ffebee", color: msg.type === "success" ? "#2e7d32" : "#c62828", border: `1px solid ${msg.type === "success" ? "#c8e6c9" : "#ffcdd2"}`, fontSize: "0.85rem" }}>
+          {msg.text}
+        </div>
+      )}
+
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1rem", background: "#f5f5f5", borderRadius: 10, marginBottom: "1.25rem", border: "1px solid #e0e0e0" }}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: "0.95rem", color: "#333", fontFamily: FONT }}>🌱 Fertilizer Feature</div>
+          <div style={{ fontSize: "0.78rem", color: "#666", marginTop: 2 }}>Enable fertilizer planner tools for selected communities</div>
+        </div>
+        {canToggle ? (
+          <button
+            onClick={handleToggle}
+            style={{ padding: "0.45rem 1rem", borderRadius: 8, border: "none", background: fertilizerEnabled ? "#4caf50" : "#bdbdbd", color: "#fff", fontWeight: 700, fontSize: "0.85rem", cursor: "pointer", fontFamily: FONT }}
+          >
+            {fertilizerEnabled ? "Enabled" : "Disabled"}
+          </button>
+        ) : (
+          <span style={{ fontSize: "0.8rem", color: fertilizerEnabled ? "#2e7d32" : "#777", fontWeight: 700 }}>
+            {fertilizerEnabled ? "Enabled" : "Disabled"}
+          </span>
+        )}
+      </div>
+
+      {fertilizerEnabled ? (
+        <AdminFertilizerConfig communityId={communityId} userId={adminId} />
+      ) : (
+        <div style={{ border: "1px solid #eee", borderRadius: 10, padding: "0.9rem", background: "#fff", color: "#666", fontSize: "0.85rem" }}>
+          Fertilizer tools are disabled for this community.
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Farm Needs Tab (per community) ── */
 function FarmNeedsTab({ communityId, adminId, initialFarmNeedsEnabled }: { communityId: Id<"communities">; adminId: Id<"users">; initialFarmNeedsEnabled: boolean }) {
   const enableFarmNeeds = useMutation((api as any).farmNeeds.enableCommunityFarmNeeds);
@@ -2723,11 +2790,12 @@ export default function CommunityDashboardPage() {
                   const isSuperAdmin =
                     (currentUser as any)?.adminLevel === "super" ||
                     (currentUser as any)?.adminLevel === undefined;
+                  const showFertilizer = isSuperAdmin || !!(community as any).fertilizerEnabled;
                   const showFarmNeeds = isSuperAdmin || !!(community as any).farmNeedsEnabled;
-                  const baseTabs: CommunityTab[] = isSuperAdmin || resolvedAdminCategory === "community"
-                    ? ["members", "noticeboard", "messages", "forms", "insights", "fertilizer"]
-                    : ["members", "noticeboard", "messages", "forms", "insights"];
-                  return showFarmNeeds ? [...baseTabs, "farmNeeds"] : baseTabs;
+                  const baseTabs: CommunityTab[] = ["members", "noticeboard", "messages", "forms", "insights"];
+                  if (showFertilizer) baseTabs.push("fertilizer");
+                  if (showFarmNeeds) baseTabs.push("farmNeeds");
+                  return baseTabs;
                 })().map((tab) => {
                   const active = getActiveTab(communityId) === tab;
                   const labels: Record<CommunityTab, string> = { members: "Members", noticeboard: "Noticeboard", messages: "Messages", forms: "Forms", insights: "📊 Insights", fertilizer: "🌱 Fertilizer", farmNeeds: "🌾 Farm Needs" };
@@ -2777,7 +2845,15 @@ export default function CommunityDashboardPage() {
 
               {/* ── Fertilizer Tab ── */}
               {getActiveTab(communityId) === "fertilizer" && (
-                <AdminFertilizerConfig communityId={communityId} userId={userId!} />
+                <FertilizerTab
+                  communityId={communityId as Id<"communities">}
+                  adminId={userId!}
+                  initialFertilizerEnabled={community.fertilizerEnabled ?? false}
+                  canToggle={
+                    (currentUser as any)?.adminLevel === "super" ||
+                    (currentUser as any)?.adminLevel === undefined
+                  }
+                />
               )}
 
               {/* ── Farm Needs Tab ── */}

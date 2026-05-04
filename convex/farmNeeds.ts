@@ -323,6 +323,37 @@ export const enableCommunityFarmNeeds = mutation({
 });
 
 /**
+ * Enable/disable Fertilizer feature for a community (SuperAdmin only)
+ */
+export const enableCommunityFertilizer = mutation({
+  args: {
+    adminId: v.id("users"),
+    communityId: v.id("communities"),
+    enabled: v.boolean(),
+  },
+  handler: async (ctx, { adminId, communityId, enabled }) => {
+    const admin = await ctx.db.get(adminId);
+    if (!admin) throw new Error("User not found");
+
+    // Verify SuperAdmin
+    const isSuperAdmin = (admin as any).adminLevel === "super" || !(admin as any).adminLevel;
+    if (!isSuperAdmin) {
+      throw new Error("Only SuperAdmin can enable/disable community features");
+    }
+
+    const community = await ctx.db.get(communityId);
+    if (!community) throw new Error("Community not found");
+
+    // Update community
+    await ctx.db.patch(communityId, {
+      fertilizerEnabled: enabled,
+    });
+
+    return { success: true };
+  },
+});
+
+/**
  * Get all Farm Needs forms for a community (Admin view)
  */
 export const getCommunityFarmNeedsForms = query({

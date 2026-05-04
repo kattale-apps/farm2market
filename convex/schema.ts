@@ -862,6 +862,7 @@ export default defineSchema({
     // Discovery and search
     searchPriorityScore: v.optional(v.number()), // Higher scores appear first in community search results
     showMemberCount: v.optional(v.boolean()), // Controls whether non-admin users can see member counts
+    fertilizerEnabled: v.optional(v.boolean()), // Whether Fertilizer feature is enabled for this community
     farmNeedsEnabled: v.optional(v.boolean()), // Whether Farm Needs feature is enabled for this community
   })
     .index("by_active", ["isGlobal", "geoLocked"])

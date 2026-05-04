@@ -13,6 +13,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { resolveCommunityLogo } from "../lib/communityLogos";
 import { UserProfileCard } from "./UserProfileCard";
+import { savePdfFromJsPDF } from "../utils/pdfDownload";
 
 interface BuyerDashboardProps {
   userId: Id<"users">;
@@ -426,7 +427,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       },
     });
 
-    doc.save(`Buyer_Transaction_Ledger_${new Date().toISOString().split("T")[0]}.pdf`);
+    void savePdfFromJsPDF(doc, `Buyer_Transaction_Ledger_${new Date().toISOString().split("T")[0]}.pdf`);
   };
 
   const exportWalletReportToExcel = () => {
@@ -566,7 +567,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       });
     }
 
-    doc.save(`Buyer_Wallet_Report_${new Date().toISOString().split("T")[0]}.pdf`);
+    void savePdfFromJsPDF(doc, `Buyer_Wallet_Report_${new Date().toISOString().split("T")[0]}.pdf`);
   };
 
   const handleExportAnalyticsPDF = () => {
@@ -673,7 +674,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
         margin: { left: 14 },
       });
 
-      doc.save(`buyer_analytics_${new Date().toISOString().split("T")[0]}.pdf`);
+      void savePdfFromJsPDF(doc, `buyer_analytics_${new Date().toISOString().split("T")[0]}.pdf`);
     } catch (e) {
       alert("PDF export failed. Please try again.");
     }

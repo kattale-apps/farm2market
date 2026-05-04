@@ -17,6 +17,7 @@ import { CommunityQRCode } from "../../components/CommunityQRCode";
 import { CommunityMemberCard } from "../../components/CommunityMemberCard";
 import { resolveCommunityLogo } from "../../lib/communityLogos";
 import { AdminFertilizerConfig } from "../../components/biofarm/AdminFertilizerConfig";
+import { savePdfFromJsPDF } from "../../utils/pdfDownload";
 
 /* ── Tab types for community cards ── */
 type CommunityTab = "members" | "noticeboard" | "messages" | "forms" | "insights" | "fertilizer";
@@ -1042,7 +1043,7 @@ function FormDetailView({ formId, formName, isActive, onToggleActive, onDelete }
       doc.line(14, y, pageWidth - 14, y);
     }
 
-    doc.save(`${formName.replace(/\s+/g, "-").toLowerCase()}-tracker-form.pdf`);
+    void savePdfFromJsPDF(doc, `${formName.replace(/\s+/g, "-").toLowerCase()}-tracker-form.pdf`);
   };
 
   return (
@@ -1406,7 +1407,7 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
       return [memberName, ...(hasUnits ? [unitLabel] : []), ...vals];
     });
     autoTable(doc, { head: [headers], body, startY: (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 10 : 80, styles: { fontSize: 7 }, headStyles: { fillColor: [21, 101, 192] }, alternateRowStyles: { fillColor: [245, 245, 245] } });
-    doc.save(`${selectedForm?.name || "form"}-report.pdf`);
+    void savePdfFromJsPDF(doc, `${selectedForm?.name || "form"}-report.pdf`);
   }, [responses, fields, selectedForm, isProfile, fieldAggregations]);
 
   // ── Export: Members Excel ──
@@ -1453,7 +1454,7 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
       m.farmer?.farmSizeAcres != null ? String(m.farmer.farmSizeAcres) : "—",
     ]);
     autoTable(doc, { head: [headers], body, startY: 34, styles: { fontSize: 7 }, headStyles: { fillColor: [46, 125, 50] }, alternateRowStyles: { fillColor: [245, 245, 245] } });
-    doc.save("community-members-report.pdf");
+    void savePdfFromJsPDF(doc, "community-members-report.pdf");
   }, [memberList]);
 
   if (!forms) return <div style={{ padding: "1rem", color: "#999" }}>Loading forms...</div>;

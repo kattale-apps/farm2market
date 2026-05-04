@@ -9,6 +9,7 @@ import { exportToExcel, exportToPDF, formatUTIDDataForExport } from "../utils/ex
 import { formatUgandaDateTime, getUgandaTime } from "../utils/timeUtils";
 import { useOfflineQuery } from "../hooks/useOfflineQuery";
 import { useOfflineMutation } from "../hooks/useOfflineMutation";
+import { savePdfFromJsPDF } from "../utils/pdfDownload";
 
 interface Farm2MarketContentProps {
   userId: Id<"users">;
@@ -365,7 +366,7 @@ export function Farm2MarketContent({ userId, userRole, isMobile }: Farm2MarketCo
         margin: { left: 14 },
         ...autoTableHooks,
       });
-      doc.save(`farm2market_analytics_${new Date().toISOString().split("T")[0]}.pdf`);
+      void savePdfFromJsPDF(doc, `farm2market_analytics_${new Date().toISOString().split("T")[0]}.pdf`);
     } catch {
       alert("PDF export failed. Please try again.");
     }

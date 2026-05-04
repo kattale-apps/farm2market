@@ -12,6 +12,7 @@ import { NotificationMailbox } from "./NotificationMailbox";
 import { ThreadView } from "./messages/ThreadView";
 import { formatUgandaDateTime, formatUgandaTimeOnly, getUgandaTime } from "../utils/timeUtils";
 import { ContactUs } from "./ContactUs";
+import { savePdfFromJsPDF } from "../utils/pdfDownload";
 
 interface TraderDashboardProps {
   userId: Id<"users">;
@@ -390,7 +391,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
         });
       }
 
-      doc.save(`trader_analytics_${new Date().toISOString().split("T")[0]}.pdf`);
+      void savePdfFromJsPDF(doc, `trader_analytics_${new Date().toISOString().split("T")[0]}.pdf`);
     } catch (e) {
       alert("PDF export failed. Please try again.");
     }

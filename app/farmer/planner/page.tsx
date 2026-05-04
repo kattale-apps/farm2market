@@ -442,11 +442,11 @@ export default function FarmPlannerPage() {
   const tabs: { id: Tab; emoji: string; label: string }[] = [
     { id: "tasks",    emoji: "✅", label: "Tasks" },
     { id: "seasons",  emoji: "🌾", label: "Season Plans" },
-    { id: "calendar", emoji: "📅", label: "Calendar" },
+    { id: "calendar", emoji: "📅", label: "Farm Calender" },
   ];
 
   return (
-    <div style={{ fontFamily: FONT, minHeight: "100vh", background: "#f9fafb", paddingBottom: 80 }}>
+    <div style={{ fontFamily: FONT, minHeight: "100vh", background: "#f9fafb", paddingBottom: 80, width: "100%", overflowX: "hidden", boxSizing: "border-box" }}>
       <div style={{ background: BRAND, padding: "clamp(1rem,4vw,1.5rem)", color: "#fff" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
           <Link href="/" style={{ color: "#fff", textDecoration: "none", fontSize: "1.2rem" }}>←</Link>
@@ -464,7 +464,7 @@ export default function FarmPlannerPage() {
           </button>
         ))}
       </div>
-      <div style={{ padding: "clamp(1rem,4vw,1.25rem)", maxWidth: 680, margin: "0 auto" }}>
+      <div style={{ padding: "clamp(1rem,4vw,1.25rem)", maxWidth: 680, margin: "0 auto", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
         {!userId ? (
           <div style={{ textAlign: "center", padding: "2rem", color: "#888" }}>Loading…</div>
         ) : activeTab === "tasks" ? (

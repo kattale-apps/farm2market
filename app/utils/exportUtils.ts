@@ -8,6 +8,7 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { formatUgandaDate, formatUgandaTimeOnly, formatUgandaDateTime, getUgandaTime } from "./timeUtils";
+import { savePdfFromJsPDF } from "./pdfDownload";
 
 export interface UTIDReportData {
   utid: string;
@@ -114,7 +115,7 @@ export function exportToPDF(
   });
 
   // Save PDF
-  doc.save(`${filename}.pdf`);
+  void savePdfFromJsPDF(doc, `${filename}.pdf`);
 }
 
 /**
@@ -329,7 +330,7 @@ export async function exportSubmissionsToPDF(
     }
   }
 
-  doc.save(`${filename}.pdf`);
+  void savePdfFromJsPDF(doc, `${filename}.pdf`);
 }
 
 /**
@@ -473,5 +474,5 @@ export async function exportFormSubmissionsToPDF(
     }
   }
 
-  doc.save(`${filename}.pdf`);
+  void savePdfFromJsPDF(doc, `${filename}.pdf`);
 }

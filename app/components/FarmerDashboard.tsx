@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import { resolveCommunityLogo } from "../lib/communityLogos";
 import { useOfflineQuery } from "../hooks/useOfflineQuery";
 import { useOfflineMutation } from "../hooks/useOfflineMutation";
+import { savePdfFromJsPDF } from "../utils/pdfDownload";
 
 interface FarmerDashboardProps {
   userId: Id<"users">;
@@ -457,7 +458,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
         ...autoTableHooks,
       });
 
-      doc.save(`farmer_analytics_${new Date().toISOString().split("T")[0]}.pdf`);
+      void savePdfFromJsPDF(doc, `farmer_analytics_${new Date().toISOString().split("T")[0]}.pdf`);
     } catch (e) {
       alert("PDF export failed. Please try again.");
     }
@@ -986,26 +987,30 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
       <div style={{
         display: "grid",
         gridTemplateColumns: "1fr 1fr",
-        gap: "0.75rem",
+        gap: "0.8rem",
         marginBottom: "1.25rem",
+        alignItems: "stretch",
       }}>
         <Link href="/farmer/farm-needs" style={{
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          gap: "0.4rem",
-          padding: "1rem",
-          background: "#f1f8e9",
-          border: "1.5px solid #aed581",
+          gap: "0.45rem",
+          padding: "0.95rem",
+          background: "#d32f2f",
+          border: "1.5px solid #b71c1c",
           borderRadius: "14px",
           textDecoration: "none",
-          color: "#558b2f",
+          color: "#fff",
           fontFamily: '"Montserrat", sans-serif',
           fontWeight: 700,
-          fontSize: "clamp(0.82rem,2.5vw,0.95rem)",
-          boxShadow: "0 2px 6px rgba(85,139,47,0.12)",
-          minHeight: 80,
+          fontSize: "clamp(0.8rem,2.4vw,0.95rem)",
+          boxShadow: "0 2px 6px rgba(183,28,28,0.25)",
+          minHeight: 88,
+          minWidth: 0,
+          textAlign: "center",
+          overflowWrap: "anywhere",
         }}>
           <span style={{ fontSize: "1.8rem" }}>🌱</span>
           Farm Needs
@@ -1015,18 +1020,21 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          gap: "0.4rem",
-          padding: "1rem",
-          background: "#e8f5e9",
-          border: "1.5px solid #a5d6a7",
+          gap: "0.45rem",
+          padding: "0.95rem",
+          background: "#2e7d32",
+          border: "1.5px solid #1b5e20",
           borderRadius: "14px",
           textDecoration: "none",
-          color: "#2e7d32",
+          color: "#fff",
           fontFamily: '"Montserrat", sans-serif',
           fontWeight: 700,
-          fontSize: "clamp(0.82rem,2.5vw,0.95rem)",
-          boxShadow: "0 2px 6px rgba(46,125,50,0.12)",
-          minHeight: 80,
+          fontSize: "clamp(0.8rem,2.4vw,0.95rem)",
+          boxShadow: "0 2px 6px rgba(27,94,32,0.24)",
+          minHeight: 88,
+          minWidth: 0,
+          textAlign: "center",
+          overflowWrap: "anywhere",
         }}>
           <span style={{ fontSize: "1.8rem" }}>🧰</span>
           Farm Toolbox
@@ -1036,39 +1044,45 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          gap: "0.4rem",
-          padding: "1rem",
-          background: "#e3f2fd",
-          border: "1.5px solid #90caf9",
+          gap: "0.45rem",
+          padding: "0.95rem",
+          background: "#1565c0",
+          border: "1.5px solid #0d47a1",
           borderRadius: "14px",
           textDecoration: "none",
-          color: "#1565c0",
+          color: "#fff",
           fontFamily: '"Montserrat", sans-serif',
           fontWeight: 700,
-          fontSize: "clamp(0.82rem,2.5vw,0.95rem)",
-          boxShadow: "0 2px 6px rgba(21,101,192,0.10)",
-          minHeight: 80,
+          fontSize: "clamp(0.8rem,2.4vw,0.95rem)",
+          boxShadow: "0 2px 6px rgba(13,71,161,0.24)",
+          minHeight: 88,
+          minWidth: 0,
+          textAlign: "center",
+          overflowWrap: "anywhere",
         }}>
           <span style={{ fontSize: "1.8rem" }}>🗓️</span>
-          Planner
+          Farm Calender
         </Link>
         <Link href="/farmer/farm2market" style={{
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          gap: "0.4rem",
-          padding: "1rem",
-          background: "#fff8e1",
-          border: "1.5px solid #ffd54f",
+          gap: "0.45rem",
+          padding: "0.95rem",
+          background: "#fbc02d",
+          border: "1.5px solid #f9a825",
           borderRadius: "14px",
           textDecoration: "none",
-          color: "#f57f17",
+          color: "#2c2c2c",
           fontFamily: '"Montserrat", sans-serif',
           fontWeight: 700,
-          fontSize: "clamp(0.82rem,2.5vw,0.95rem)",
-          boxShadow: "0 2px 6px rgba(245,127,23,0.12)",
-          minHeight: 80,
+          fontSize: "clamp(0.8rem,2.4vw,0.95rem)",
+          boxShadow: "0 2px 6px rgba(249,168,37,0.22)",
+          minHeight: 88,
+          minWidth: 0,
+          textAlign: "center",
+          overflowWrap: "anywhere",
         }}>
           <span style={{ fontSize: "1.8rem" }}>🛒</span>
           Farm 2 Market

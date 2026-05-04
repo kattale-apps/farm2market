@@ -107,7 +107,7 @@ export default function FarmNeedsPage() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f5f5f5", fontFamily: FONT }}>
+    <div style={{ minHeight: "100vh", background: "#f5f5f5", fontFamily: FONT, width: "100%", overflowX: "hidden", boxSizing: "border-box" }}>
       {/* Header */}
       <div style={{
         background: BRAND,
@@ -131,7 +131,7 @@ export default function FarmNeedsPage() {
       </div>
 
       {/* Content */}
-      <div style={{ padding: "1rem", maxWidth: "900px", margin: "0 auto" }}>
+      <div style={{ padding: "1rem", maxWidth: "900px", margin: "0 auto", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
         {message && (
           <div style={{
             padding: "1rem",
@@ -147,34 +147,47 @@ export default function FarmNeedsPage() {
         )}
 
         {/* Tabs */}
-        <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem", borderBottom: "2px solid #e0e0e0" }}>
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: "0.75rem",
+          marginBottom: "1.5rem",
+          borderBottom: "2px solid #e0e0e0",
+          paddingBottom: "0.2rem",
+        }}>
           <button
             onClick={() => setActiveTab("crops")}
             style={{
-              padding: "0.75rem 1.5rem",
+              padding: "0.75rem 0.9rem",
               background: activeTab === "crops" ? BRAND : "transparent",
               color: activeTab === "crops" ? "#fff" : "#666",
-              border: "none",
+              border: activeTab === "crops" ? "none" : "1px solid #dcdcdc",
               borderBottom: activeTab === "crops" ? `3px solid ${GOLD}` : "none",
+              borderRadius: "8px",
               cursor: "pointer",
-              fontSize: "1rem",
+              fontSize: "clamp(0.92rem, 3.1vw, 1rem)",
               fontWeight: activeTab === "crops" ? 700 : 600,
               fontFamily: FONT,
+              width: "100%",
+              minWidth: 0,
             }}>
             🌾 Crops
           </button>
           <button
             onClick={() => setActiveTab("livestock")}
             style={{
-              padding: "0.75rem 1.5rem",
+              padding: "0.75rem 0.9rem",
               background: activeTab === "livestock" ? BRAND : "transparent",
               color: activeTab === "livestock" ? "#fff" : "#666",
-              border: "none",
+              border: activeTab === "livestock" ? "none" : "1px solid #dcdcdc",
               borderBottom: activeTab === "livestock" ? `3px solid ${GOLD}` : "none",
+              borderRadius: "8px",
               cursor: "pointer",
-              fontSize: "1rem",
+              fontSize: "clamp(0.92rem, 3.1vw, 1rem)",
               fontWeight: activeTab === "livestock" ? 700 : 600,
               fontFamily: FONT,
+              width: "100%",
+              minWidth: 0,
             }}>
             🐄 Livestock
           </button>

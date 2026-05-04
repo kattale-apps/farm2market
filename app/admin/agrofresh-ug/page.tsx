@@ -10,6 +10,7 @@ import Link from "next/link";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { savePdfFromJsPDF } from "../../utils/pdfDownload";
 
 type StatusFilter = "PENDING" | "APPROVED" | "REJECTED" | "REVOKED" | "all";
 
@@ -258,7 +259,7 @@ export default function AgroFreshUGAdminPage() {
     const headers = Object.keys(data[0]);
     const rows = data.map((row) => headers.map((h) => String((row as any)[h] ?? "")));
     autoTable(doc, { head: [headers], body: rows, styles: { fontSize: 6 } });
-    doc.save("agrofresh_ug_members.pdf");
+    void savePdfFromJsPDF(doc, "agrofresh_ug_members.pdf");
   };
 
   if (!adminId) {

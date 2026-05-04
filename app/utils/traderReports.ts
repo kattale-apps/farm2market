@@ -8,6 +8,7 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { formatUgandaDate, formatUgandaTimeOnly, formatUgandaDateTime, getUgandaTime } from "./timeUtils";
+import { savePdfFromJsPDF } from "./pdfDownload";
 
 /**
  * Export UTIDs by category to Excel
@@ -111,7 +112,7 @@ export function exportUTIDsByCategoryPDF(
     alternateRowStyles: { fillColor: [245, 245, 245] },
   });
 
-  doc.save(`${filename}_${category}.pdf`);
+  void savePdfFromJsPDF(doc, `${filename}_${category}.pdf`);
 }
 
 /**
@@ -231,7 +232,7 @@ export function exportInventoryVolume(
       headStyles: { fillColor: [40, 167, 69] },
     });
 
-    doc.save(`${filename}_inventory_volume.pdf`);
+    void savePdfFromJsPDF(doc, `${filename}_inventory_volume.pdf`);
   }
 }
 
@@ -354,6 +355,6 @@ export function exportCapitalVolume(
       headStyles: { fillColor: [40, 167, 69] },
     });
 
-    doc.save(`${filename}_capital_volume.pdf`);
+    void savePdfFromJsPDF(doc, `${filename}_capital_volume.pdf`);
   }
 }

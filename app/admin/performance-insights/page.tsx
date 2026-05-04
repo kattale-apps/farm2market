@@ -10,6 +10,7 @@ import Link from "next/link";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend
 } from "recharts";
+import { savePdfFromJsPDF } from "../../utils/pdfDownload";
 
 const BRAND = "#2e7d32";
 const FONT = '"Montserrat", sans-serif';
@@ -130,7 +131,7 @@ export default function PerformanceInsightsPage() {
         yPos = (doc as any).lastAutoTable.finalY + 12;
       }
 
-      doc.save(`performance_insights_${new Date().toISOString().split("T")[0]}.pdf`);
+      void savePdfFromJsPDF(doc, `performance_insights_${new Date().toISOString().split("T")[0]}.pdf`);
     } catch (e) {
       alert("PDF export failed. Please try again.");
     }

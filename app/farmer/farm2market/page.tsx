@@ -39,7 +39,7 @@ export default function Farm2MarketPage() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f5f5f5", fontFamily: FONT }}>
+    <div style={{ minHeight: "100vh", background: "#f5f5f5", fontFamily: FONT, width: "100%", overflowX: "hidden", boxSizing: "border-box" }}>
       {/* Header */}
       <div style={{
         background: BRAND,

@@ -1161,38 +1161,6 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
             </span>
           )}
         </Link>
-          {/* Lock badge — shown only when access is blocked */}
-          {farm2MarketAccess?.allowed === false && (
-            <span
-              title={farm2MarketAccess.reason ?? "Unlock Farm 2 Market by earning more FarmCoins"}
-              style={{
-                position: "absolute",
-                top: 6,
-                right: 8,
-                fontSize: "1rem",
-                lineHeight: 1,
-                cursor: "help",
-              }}
-              aria-label="Locked"
-            >
-              🔒
-            </span>
-          )}
-          <span style={{ fontSize: "1.8rem" }}>🛒</span>
-          Farm 2 Market
-          {/* Informer handle — shows progress toward 500 FarmCoins threshold */}
-          {farm2MarketAccess?.allowed === false && (
-            <span style={{
-              fontSize: "0.65rem",
-              fontWeight: 600,
-              color: "#795548",
-              lineHeight: 1.2,
-              marginTop: "0.1rem",
-            }}>
-              🪙 {farm2MarketAccess.balance ?? 0} / 500
-            </span>
-          )}
-        </Link>
       </div>
 
       {communitiesSection}

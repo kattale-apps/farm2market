@@ -374,7 +374,7 @@ function CalendarTab({ userId }: { userId: Id<"users"> }) {
 
   const calendarTasks = useOfflineQuery(
     (api as any).farmPlanner.getCalendarTasks,
-    { farmerId: userId, startDate: firstDay.getTime(), endDate: lastDay.getTime() },
+    { farmerId: userId, fromDate: firstDay.getTime(), toDate: lastDay.getTime() },
     `planner_cal_${userId}_${viewYear}_${viewMonth}`
   ) as Record<string, any[]> | undefined;
 

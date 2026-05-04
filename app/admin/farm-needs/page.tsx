@@ -32,6 +32,7 @@ export default function AdminFarmNeedsPage() {
   }>>([{ fieldType: "text", label: "", required: true, order: 0 }]);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [origin, setOrigin] = useState("");
 
   // Get admin user
   // (replaced by useStoredUser above)
@@ -55,6 +56,12 @@ export default function AdminFarmNeedsPage() {
     };
     loadCommunities();
   }, [adminId]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setOrigin(window.location.origin);
+    }
+  }, []);
 
   const enableFarmNeeds = useOfflineMutation(api.farmNeeds.enableCommunityFarmNeeds);
   const createFarmNeedsForm = useOfflineMutation(api.farmNeeds.createFarmNeedsForm);
@@ -499,25 +506,46 @@ export default function AdminFarmNeedsPage() {
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center",
+                      gap: "1rem",
+                      flexWrap: "wrap",
                     }}>
-                      <div>
+                      <div style={{ minWidth: 0, flex: "1 1 260px" }}>
                         <h4 style={{ margin: "0 0 0.25rem", fontSize: "0.95rem", fontWeight: 600 }}>
                           {form.name}
                         </h4>
                         <p style={{ margin: 0, fontSize: "0.85rem", color: "#666" }}>
                           {form.category === "crops" ? "🌾" : "🐄"} {form.category.toUpperCase()} • {form.fieldCount} fields • {form.responseCount} responses
                         </p>
+                        {form.qrPath && origin && (
+                          <a
+                            href={`${origin}${form.qrPath}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{ display: "inline-block", marginTop: "0.45rem", fontSize: "0.78rem", color: "#1565c0", textDecoration: "none", fontWeight: 600 }}
+                          >
+                            Open Form Link
+                          </a>
+                        )}
                       </div>
-                      <span style={{
-                        padding: "0.3rem 0.8rem",
-                        borderRadius: "999px",
-                        fontSize: "0.8rem",
-                        fontWeight: 600,
-                        background: form.isActive ? "#e8f5e9" : "#f5f5f5",
-                        color: form.isActive ? "#2e7d32" : "#999",
-                      }}>
-                        {form.isActive ? "Active" : "Inactive"}
-                      </span>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginLeft: "auto", flexShrink: 0 }}>
+                        {form.qrPath && origin && (
+                          <img
+                            src={`https://api.qrserver.com/v1/create-qr-code/?size=90x90&data=${encodeURIComponent(`${origin}${form.qrPath}`)}`}
+                            alt={`QR for ${form.name}`}
+                            style={{ width: 72, height: 72, borderRadius: 8, border: "1px solid #ddd", background: "#fff", padding: 4 }}
+                          />
+                        )}
+                        <span style={{
+                          padding: "0.3rem 0.8rem",
+                          borderRadius: "999px",
+                          fontSize: "0.8rem",
+                          fontWeight: 600,
+                          background: form.isActive ? "#e8f5e9" : "#f5f5f5",
+                          color: form.isActive ? "#2e7d32" : "#999",
+                        }}>
+                          {form.isActive ? "Active" : "Inactive"}
+                        </span>
+                      </div>
                     </div>
                   ))}
                 </div>

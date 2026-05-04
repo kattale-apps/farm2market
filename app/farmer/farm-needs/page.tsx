@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useOfflineQuery } from "../../hooks/useOfflineQuery";
 import { useOfflineMutation } from "../../hooks/useOfflineMutation";
 import { useStoredUser } from "../../hooks/useStoredUser";
+import { useSearchParams } from "next/navigation";
 
 const BRAND = "#2e7d32";
 const BRAND_BG = "#e8f5e9";
@@ -14,6 +15,7 @@ const GOLD = "#f9a825";
 const FONT = '"Montserrat", sans-serif';
 
 export default function FarmNeedsPage() {
+  const searchParams = useSearchParams();
   const { user, status: authStatus } = useStoredUser();
   const userId = (user?.userId as Id<"users"> | undefined) || null;
   const [activeTab, setActiveTab] = useState<"crops" | "livestock">("crops");
@@ -48,6 +50,23 @@ export default function FarmNeedsPage() {
     const livestockForms = Array.isArray(forms?.livestock) ? forms.livestock : [];
     return activeTab === "crops" ? cropsForms : livestockForms;
   }, [forms, activeTab]);
+
+  useEffect(() => {
+    if (!forms) return;
+    const targetFormId = searchParams.get("formId");
+    if (!targetFormId) return;
+
+    const allForms = [
+      ...(Array.isArray(forms?.crops) ? forms.crops : []),
+      ...(Array.isArray(forms?.livestock) ? forms.livestock : []),
+    ];
+    const matched = allForms.find((f: any) => String(f.formId) === String(targetFormId));
+    if (!matched) return;
+
+    setActiveTab(matched.category === "livestock" ? "livestock" : "crops");
+    setSelectedForm(matched);
+    setFormValues({});
+  }, [forms, searchParams]);
 
   const handleFillForm = (form: any) => {
     setSelectedForm(form);

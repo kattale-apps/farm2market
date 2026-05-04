@@ -111,7 +111,7 @@ export default function SuperadminListingsLogPage() {
 
           {data && (
             <span style={{ fontSize: "0.85rem", color: "#666" }}>
-              Showing {data.items.length} of {data.totalItems} listings (Page {data.currentPage} of {data.totalPages || 1})
+              Showing {data.items.length} listings (Page {data.currentPage})
             </span>
           )}
         </div>
@@ -228,7 +228,7 @@ export default function SuperadminListingsLogPage() {
         </div>
 
         {/* Pagination */}
-        {data && data.totalPages > 1 && (
+        {data && (data.currentPage > 1 || data.hasMore) && (
           <div style={{
             display: "flex",
             justifyContent: "center",
@@ -253,19 +253,19 @@ export default function SuperadminListingsLogPage() {
             </button>
 
             <span style={{ fontSize: "0.9rem", color: "#333", fontWeight: "600" }}>
-              Page {data.currentPage} of {data.totalPages}
+              Page {data.currentPage}
             </span>
 
             <button
-              onClick={() => setPage((p) => Math.min(data.totalPages, p + 1))}
-              disabled={page >= data.totalPages}
+              onClick={() => setPage((p) => p + 1)}
+              disabled={!data.hasMore}
               style={{
                 padding: "0.5rem 1rem",
-                background: page >= data.totalPages ? "#e0e0e0" : "#1976d2",
-                color: page >= data.totalPages ? "#999" : "#fff",
+                background: !data.hasMore ? "#e0e0e0" : "#1976d2",
+                color: !data.hasMore ? "#999" : "#fff",
                 border: "none",
                 borderRadius: "6px",
-                cursor: page >= data.totalPages ? "not-allowed" : "pointer",
+                cursor: !data.hasMore ? "not-allowed" : "pointer",
                 fontWeight: "600",
               }}
             >

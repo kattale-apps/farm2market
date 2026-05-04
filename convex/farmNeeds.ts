@@ -5,6 +5,10 @@ import { verifyAdminRole } from "./auth";
 import { isUserCommunityMember } from "./communities";
 import { Id } from "./_generated/dataModel";
 
+function buildFarmNeedsQrSlug(formId: Id<"communityForms">) {
+  return `farm-needs-${String(formId).slice(0, 12)}`;
+}
+
 /**
  * Get all active Farm Needs forms from communities the farmer is a member of
  * Grouped by community and categorized as crops/livestock
@@ -232,6 +236,8 @@ export const createFarmNeedsForm = mutation({
       throw new Error("Not authorized to manage this community");
     }
 
+    const now = getUgandaTime();
+
     // Create form
     const formId = await ctx.db.insert("communityForms", {
       communityId,
@@ -242,8 +248,18 @@ export const createFarmNeedsForm = mutation({
       responseCount: 0,
       category,
       formPurpose: "farmNeeds",
-      createdAt: getUgandaTime(),
-      updatedAt: getUgandaTime(),
+      qrEnabled: true,
+      qrSlug: "pending",
+      qrCreatedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await ctx.db.patch(formId, {
+      qrEnabled: true,
+      qrSlug: buildFarmNeedsQrSlug(formId),
+      qrCreatedAt: now,
+      updatedAt: now,
     });
 
     // Create fields
@@ -257,7 +273,7 @@ export const createFarmNeedsForm = mutation({
         helpText: field.helpText,
         options: field.options,
         order: field.order,
-        createdAt: getUgandaTime(),
+        createdAt: now,
       });
     }
 
@@ -342,6 +358,9 @@ export const getCommunityFarmNeedsForms = query({
           isActive: (form as any).isActive,
           responseCount: responses.length,
           fieldCount: fields.length,
+          qrEnabled: (form as any).qrEnabled ?? true,
+          qrSlug: (form as any).qrSlug || buildFarmNeedsQrSlug(form._id),
+          qrPath: `/farmer/farm-needs?formId=${String(form._id)}`,
           createdAt: (form as any).createdAt,
         });
       }

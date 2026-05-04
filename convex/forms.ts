@@ -1335,6 +1335,72 @@ export const getCommunityProfileForms = query({
   },
 });
 
+/**
+ * Get saved profile-form field values for a member in a community.
+ * Return shape is keyed by formId for direct UI lookup.
+ */
+export const getMyProfileFormResponses = query({
+  args: {
+    communityId: v.id("communities"),
+    memberId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const forms = await ctx.db
+      .query("communityForms")
+      .withIndex("by_community", (q: any) => q.eq("communityId", args.communityId))
+      .collect();
+
+    const profileFormIds = new Set(
+      forms
+        .filter((f: any) => f.formPurpose === "profile")
+        .map((f: any) => String(f._id))
+    );
+
+    const responses = await ctx.db
+      .query("formResponses")
+      .withIndex("by_member", (q) => q.eq("memberId", args.memberId))
+      .collect();
+
+    const output: Record<string, { responseId: Id<"formResponses">; fieldValues: Record<string, string>; _ts: number }> = {};
+
+    for (const response of responses) {
+      const formIdKey = String(response.formId);
+      if (response.communityId !== args.communityId) continue;
+      if (!profileFormIds.has(formIdKey)) continue;
+
+      const values = await ctx.db
+        .query("formResponseValues")
+        .withIndex("by_response", (q) => q.eq("responseId", response._id))
+        .collect();
+
+      const fieldValues: Record<string, string> = {};
+      for (const value of values) {
+        fieldValues[String(value.fieldId)] = value.value;
+      }
+
+      const existing = output[formIdKey];
+      const responseTs = response.updatedAt || response.createdAt || 0;
+      if (!existing || responseTs >= existing._ts) {
+        output[formIdKey] = {
+          responseId: response._id,
+          fieldValues,
+          _ts: responseTs,
+        };
+      }
+    }
+
+    const cleaned: Record<string, { responseId: Id<"formResponses">; fieldValues: Record<string, string> }> = {};
+    for (const [formId, value] of Object.entries(output)) {
+      cleaned[formId] = {
+        responseId: value.responseId,
+        fieldValues: value.fieldValues,
+      };
+    }
+
+    return cleaned;
+  },
+});
+
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Profile Form Live-Save Functions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**

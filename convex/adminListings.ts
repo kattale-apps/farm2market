@@ -21,47 +21,70 @@ export const getAllListingsLog = query({
       throw new Error("Only super admins can view the listings log");
     }
 
-    const page = args.page ?? 1;
-    const pageSize = args.pageSize ?? 50;
+    const page = Math.max(1, args.page ?? 1);
+    const pageSize = Math.min(100, Math.max(10, args.pageSize ?? 50));
+    const roleFilter = args.roleFilter && args.roleFilter !== "all" ? args.roleFilter : null;
+    const statusFilter = args.statusFilter && args.statusFilter !== "all" ? args.statusFilter : null;
 
-    // Fetch all listings sorted newest first
-    const allListings = await ctx.db.query("listings").order("desc").collect();
+    // Cap read volume: fetch a bounded window and paginate in-memory within that window.
+    const roleWindowMultiplier = roleFilter ? 6 : 2;
+    const windowSize = Math.min(2000, Math.max(page * pageSize * roleWindowMultiplier, pageSize));
 
-    // Filter by status
-    let filtered = allListings;
-    if (args.statusFilter && args.statusFilter !== "all") {
-      filtered = filtered.filter((l) => l.status === args.statusFilter);
-    }
+    const listingsWindow = statusFilter
+      ? await ctx.db
+          .query("listings")
+          .withIndex("by_status", (q) => q.eq("status", statusFilter as any))
+          .order("desc")
+          .take(windowSize)
+      : await ctx.db
+          .query("listings")
+          .order("desc")
+          .take(windowSize);
 
-    // Join user data and filter by role
-    const enriched = [];
-    for (const listing of filtered) {
-      const sellerId = listing.traderId || listing.farmerId;
-      const seller = sellerId ? await ctx.db.get(sellerId) : null;
+    const sellerIds = [...new Set(
+      listingsWindow
+        .map((l) => l.traderId || l.farmerId)
+        .filter(Boolean)
+        .map((id) => String(id))
+    )] as string[];
+    const sellerEntries = await Promise.all(
+      sellerIds.map(async (id) => [id, await ctx.db.get(id as any)] as const)
+    );
+    const sellerMap = new Map<string, any>(sellerEntries);
+
+    const filteredListings = roleFilter
+      ? listingsWindow.filter((listing) => {
+          const sellerId = String(listing.traderId || listing.farmerId || "");
+          const seller = sellerMap.get(sellerId);
+          const sellerRole = seller?.role || "unknown";
+          return sellerRole === roleFilter;
+        })
+      : listingsWindow;
+
+    const start = (page - 1) * pageSize;
+    const pageListings = filteredListings.slice(start, start + pageSize);
+
+    const items = [];
+    for (const listing of pageListings) {
+      const sellerId = String(listing.traderId || listing.farmerId || "");
+      const seller = sellerMap.get(sellerId) || null;
       const sellerRole = seller?.role || "unknown";
 
-      if (args.roleFilter && args.roleFilter !== "all") {
-        if (sellerRole !== args.roleFilter) continue;
-      }
-
-      // Get purchase count
       const purchases = await ctx.db
         .query("buyerListingPurchases")
-        .filter((q) => q.eq(q.field("listingId"), listing._id))
+        .withIndex("by_listing", (q) => q.eq("listingId", listing._id))
         .collect();
 
-      // Get available units count
-      const units = await ctx.db
-        .query("listingUnits")
-        .filter((q) =>
-          q.and(
-            q.eq(q.field("listingId"), listing._id),
-            q.eq(q.field("status"), "available")
-          )
-        )
-        .collect();
+      let availableUnits = listing.availableUnits;
+      if (availableUnits === undefined || availableUnits === null) {
+        const units = await ctx.db
+          .query("listingUnits")
+          .withIndex("by_listing", (q) => q.eq("listingId", listing._id))
+          .collect();
+        availableUnits = units.filter((u) => u.status === "available").length;
+      }
 
-      enriched.push({
+      items.push({
         listingId: listing._id,
         utid: listing.utid,
         produceType: listing.produceType,
@@ -70,7 +93,7 @@ export const getAllListingsLog = query({
         listingMode: listing.listingMode || "unit",
         totalKilos: listing.totalKilos,
         totalUnits: listing.totalUnits,
-        availableUnits: listing.availableUnits ?? units.length,
+        availableUnits,
         pricePerKilo: listing.pricePerKilo,
         pricePerUnit: listing.pricePerUnit,
         packagingTypeEnum: listing.packagingTypeEnum,
@@ -83,16 +106,16 @@ export const getAllListingsLog = query({
       });
     }
 
-    const totalItems = enriched.length;
-    const totalPages = Math.ceil(totalItems / pageSize);
-    const start = (page - 1) * pageSize;
-    const items = enriched.slice(start, start + pageSize);
+    const hasMore = filteredListings.length > start + items.length || listingsWindow.length === windowSize;
+    const totalItems = filteredListings.length;
+    const totalPages = hasMore ? page + 1 : Math.max(1, Math.ceil(totalItems / pageSize));
 
     return {
       items,
       totalItems,
       totalPages,
       currentPage: page,
+      hasMore,
     };
   },
 });

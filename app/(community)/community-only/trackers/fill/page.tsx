@@ -271,7 +271,6 @@ export default function TrackerFillPage() {
   const saveDraft = useOfflineMutation((api as any).forms.saveDraftResponse);
   const submitDraft = useOfflineMutation((api as any).forms.submitDraft);
   const submitFormResponse = useOfflineMutation((api as any).forms.submitFormResponse);
-  const mintFarmerFormCoin = useOfflineMutation((api as any).farmcoin.mintFarmerFormCoin);
 
   // Persist form drafts to IndexedDB for offline access
   useFormDraftPersistence(
@@ -363,6 +362,7 @@ export default function TrackerFillPage() {
     setSubmitting(true);
     try {
       let responseId: Id<"formResponses"> | undefined;
+      let serverCoins = 0;
       if (existingDraft?._id) {
         const fvArray = Object.entries(fieldValues).map(([fieldId, value]) => ({
           fieldId: fieldId as Id<"formFields">,
@@ -385,6 +385,7 @@ export default function TrackerFillPage() {
           trackedUnitId: selectedTrackedUnitId || undefined,
         });
         responseId = existingDraft._id;
+        serverCoins = (submitResult as any)?.coinsEarned ?? 0;
         // If offline-queued, show optimistic coin animation and clear local draft
         if (submitResult && (submitResult as any).queued) {
           const fields = formDetails?.fields || [];
@@ -428,31 +429,16 @@ export default function TrackerFillPage() {
           setSubmitting(false);
           return;
         }
+        serverCoins = (result as any)?.coinsEarned ?? 0;
         responseId = result?._id || result;
       }
       // Clear local IndexedDB draft on successful submission
       clearFormDraft(String(userId), "tracker", String(formId));
-      const fields = formDetails?.fields || [];
-      const filledCount = fields.filter((f: any) => !f.isCalculated && fieldValues[String(f._id)]?.trim()).length;
-      if (filledCount > 0 && responseId) {
-        try {
-          const fieldLabels = fields
-            .filter((f: any) => !f.isCalculated && fieldValues[String(f._id)]?.trim())
-            .map((f: any) => f.label);
-          const mintResult = await mintFarmerFormCoin({
-            farmerId: userId,
-            formResponseId: responseId,
-            communityId,
-            fieldCount: filledCount,
-            fieldLabels,
-          });
-          if (mintResult?.success) {
-            setCoinsEarned(mintResult.coinsEarned);
-            setShowCoinAnimation(true);
-            setSubmitting(false);
-            return;
-          }
-        } catch {}
+      if (serverCoins > 0) {
+        setCoinsEarned(serverCoins);
+        setShowCoinAnimation(true);
+        setSubmitting(false);
+        return;
       }
       setMessage({ type: "success", text: "Submitted successfully!" });
       setTimeout(() => router.push(`/community-only/trackers/view?communityId=${communityId}`), 1500);

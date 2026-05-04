@@ -9,6 +9,7 @@ import { useOfflineMutation } from "../../hooks/useOfflineMutation";
 import { useStoredUser } from "../../hooks/useStoredUser";
 import { useSearchParams } from "next/navigation";
 import { GeneralCameraCapture } from "../../components/GeneralCameraCapture";
+import { FarmCoinReward, FarmCoinVideoPreloader } from "../../components/FarmCoinAnimation";
 
 const BRAND = "#2e7d32";
 const BRAND_BG = "#e8f5e9";
@@ -111,6 +112,8 @@ export default function FarmNeedsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [showCoinAnimation, setShowCoinAnimation] = useState(false);
+  const [coinsEarned, setCoinsEarned] = useState(0);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -165,6 +168,10 @@ export default function FarmNeedsPage() {
     setFormValues(prev => ({ ...prev, [fieldId]: value }));
   };
 
+  const handleCoinAnimationDone = () => {
+    setShowCoinAnimation(false);
+  };
+
   const handleSubmit = async () => {
     if (!selectedForm || !userId) return;
 
@@ -178,17 +185,23 @@ export default function FarmNeedsPage() {
         value: formValues[field._id] || "",
       }));
 
-      await submitResponse({
+      const result = await submitResponse({
         farmerId: userId,
         formId: selectedForm.formId,
         communityId: selectedForm.communityId,
         fieldValues,
       });
 
-      setMessage({ type: "success", text: "Form submitted successfully!" });
+      const earned = (result as any)?.coinsEarned ?? 0;
       setSelectedForm(null);
       setFormValues({});
-      setTimeout(() => setMessage(null), 3000);
+      if (earned > 0) {
+        setCoinsEarned(earned);
+        setShowCoinAnimation(true);
+      } else {
+        setMessage({ type: "success", text: "Form submitted successfully!" });
+        setTimeout(() => setMessage(null), 3000);
+      }
     } catch (error: any) {
       setMessage({ type: "error", text: `Failed to submit: ${error.message}` });
     } finally {
@@ -639,6 +652,10 @@ export default function FarmNeedsPage() {
           </div>
         </div>
       )}
+      {showCoinAnimation && (
+        <FarmCoinReward coinsEarned={coinsEarned} onDone={handleCoinAnimationDone} />
+      )}
+      <FarmCoinVideoPreloader />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 ﻿import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
-import { getUgandaTime } from "./utils";
+import { generateUTID, getUgandaTime } from "./utils";
 
 function buildFormQrSlug(formId: Id<"communityForms">) {
   return `form-${String(formId).slice(0, 12)}`;
@@ -363,7 +363,48 @@ export const submitFormResponse = mutation({
       updatedAt: getUgandaTime(),
     });
 
-    return { _id: responseId };
+    // Mint FarmCoin: 1 coin per non-empty field (skip profile forms; dedup by formResponseId)
+    let coinsEarned = 0;
+    if ((form as any).formPurpose !== "profile") {
+      const filledCount = args.fieldValues.filter((fv) => fv.value && fv.value.trim() !== "").length;
+      if (filledCount > 0) {
+        const existing = await ctx.db
+          .query("farmcoinLedger")
+          .withIndex("by_account", (q: any) => q.eq("accountType", "farmer"))
+          .filter((q: any) =>
+            q.and(
+              q.eq(q.field("userId"), args.memberId),
+              q.eq(q.field("formResponseId"), responseId)
+            )
+          )
+          .first();
+        if (!existing) {
+          const latest = await ctx.db
+            .query("farmcoinLedger")
+            .withIndex("by_account", (q: any) => q.eq("accountType", "farmer"))
+            .filter((q: any) => q.eq(q.field("userId"), args.memberId))
+            .order("desc")
+            .first();
+          const currentBalance = latest?.balanceAfter ?? 0;
+          await ctx.db.insert("farmcoinLedger", {
+            accountType: "farmer",
+            userId: args.memberId,
+            delta: filledCount,
+            balanceAfter: currentBalance + filledCount,
+            source: "form_field_reward",
+            utid: generateUTID("fcr"),
+            formResponseId: responseId,
+            communityId: args.communityId,
+            fieldCount: filledCount,
+            reason: `Form submission reward: ${filledCount} field${filledCount > 1 ? "s" : ""} completed`,
+            createdAt: getUgandaTime(),
+          });
+          coinsEarned = filledCount;
+        }
+      }
+    }
+
+    return { _id: responseId, coinsEarned };
   },
 });
 
@@ -724,7 +765,52 @@ export const submitDraft = mutation({
       });
     }
 
-    return { success: true };
+    // Mint FarmCoin: 1 coin per non-empty field (skip profile forms; dedup by formResponseId)
+    let coinsEarned = 0;
+    if (form && (form as any).formPurpose !== "profile") {
+      const submittedValues = await ctx.db
+        .query("formResponseValues")
+        .withIndex("by_response", (q) => q.eq("responseId", args.responseId))
+        .collect();
+      const filledCount = submittedValues.filter((v: any) => v.value && v.value.trim() !== "").length;
+      if (filledCount > 0) {
+        const existing = await ctx.db
+          .query("farmcoinLedger")
+          .withIndex("by_account", (q: any) => q.eq("accountType", "farmer"))
+          .filter((q: any) =>
+            q.and(
+              q.eq(q.field("userId"), args.memberId),
+              q.eq(q.field("formResponseId"), args.responseId)
+            )
+          )
+          .first();
+        if (!existing) {
+          const latest = await ctx.db
+            .query("farmcoinLedger")
+            .withIndex("by_account", (q: any) => q.eq("accountType", "farmer"))
+            .filter((q: any) => q.eq(q.field("userId"), args.memberId))
+            .order("desc")
+            .first();
+          const currentBalance = latest?.balanceAfter ?? 0;
+          await ctx.db.insert("farmcoinLedger", {
+            accountType: "farmer",
+            userId: args.memberId,
+            delta: filledCount,
+            balanceAfter: currentBalance + filledCount,
+            source: "form_field_reward",
+            utid: generateUTID("fcr"),
+            formResponseId: args.responseId,
+            communityId: response.communityId,
+            fieldCount: filledCount,
+            reason: `Form submission reward: ${filledCount} field${filledCount > 1 ? "s" : ""} completed`,
+            createdAt: getUgandaTime(),
+          });
+          coinsEarned = filledCount;
+        }
+      }
+    }
+
+    return { success: true, coinsEarned };
   },
 });
 

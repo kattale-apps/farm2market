@@ -115,7 +115,46 @@ export const submitFarmNeedsResponse = mutation({
       });
     }
 
-    return { responseId };
+    // Mint FarmCoin: 1 coin per non-empty field (dedup by formResponseId)
+    const filledCount = fieldValues.filter((fv) => fv.value && fv.value.trim() !== "").length;
+    let coinsEarned = 0;
+    if (filledCount > 0) {
+      const existing = await ctx.db
+        .query("farmcoinLedger")
+        .withIndex("by_account", (q: any) => q.eq("accountType", "farmer"))
+        .filter((q: any) =>
+          q.and(
+            q.eq(q.field("userId"), farmerId),
+            q.eq(q.field("formResponseId"), responseId)
+          )
+        )
+        .first();
+      if (!existing) {
+        const latest = await ctx.db
+          .query("farmcoinLedger")
+          .withIndex("by_account", (q: any) => q.eq("accountType", "farmer"))
+          .filter((q: any) => q.eq(q.field("userId"), farmerId))
+          .order("desc")
+          .first();
+        const currentBalance = latest?.balanceAfter ?? 0;
+        await ctx.db.insert("farmcoinLedger", {
+          accountType: "farmer",
+          userId: farmerId,
+          delta: filledCount,
+          balanceAfter: currentBalance + filledCount,
+          source: "form_field_reward",
+          utid: generateUTID("fcr"),
+          formResponseId: responseId,
+          communityId,
+          fieldCount: filledCount,
+          reason: `Farm Needs submission reward: ${filledCount} field${filledCount > 1 ? "s" : ""} completed`,
+          createdAt: getUgandaTime(),
+        });
+        coinsEarned = filledCount;
+      }
+    }
+
+    return { responseId, coinsEarned };
   },
 });
 

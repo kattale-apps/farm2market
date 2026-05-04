@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Id } from "../../../convex/_generated/dataModel";
 import { api } from "../../../convex/_generated/api";
 import Link from "next/link";
@@ -14,6 +14,92 @@ const BRAND = "#2e7d32";
 const BRAND_BG = "#e8f5e9";
 const GOLD = "#f9a825";
 const FONT = '"Montserrat", sans-serif';
+
+function GpsFieldInput({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+}) {
+  const [capturing, setCapturing] = useState(false);
+  const [gpsError, setGpsError] = useState<string | null>(null);
+
+  const captureGps = useCallback(() => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setGpsError("Geolocation not available on this device.");
+      return;
+    }
+
+    setCapturing(true);
+    setGpsError(null);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = position.coords.latitude.toFixed(6);
+        const lng = position.coords.longitude.toFixed(6);
+        const accuracy = Math.round(position.coords.accuracy);
+        onChange(`${lat}, ${lng} (±${accuracy}m)`);
+        setCapturing(false);
+      },
+      (err) => {
+        setGpsError(err.message || "Unable to read GPS location.");
+        setCapturing(false);
+      },
+      { enableHighAccuracy: true, timeout: 15000 }
+    );
+  }, [onChange]);
+
+  useEffect(() => {
+    if (!value) {
+      captureGps();
+    }
+  }, [value, captureGps]);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="GPS coordinates"
+          style={{
+            flex: "1 1 220px",
+            minWidth: 0,
+            padding: "0.6rem 0.8rem",
+            borderRadius: "8px",
+            border: "1px solid #ddd",
+            fontSize: "0.95rem",
+            fontFamily: FONT,
+            boxSizing: "border-box",
+          }}
+        />
+        <button
+          type="button"
+          onClick={captureGps}
+          disabled={capturing}
+          style={{
+            padding: "0.6rem 0.85rem",
+            borderRadius: "8px",
+            border: "1px solid #ccc",
+            background: "#fff",
+            fontSize: "0.82rem",
+            fontWeight: 700,
+            color: "#333",
+            cursor: capturing ? "not-allowed" : "pointer",
+          }}
+        >
+          {capturing ? "Locating..." : "📍 Refresh GPS"}
+        </button>
+      </div>
+      {gpsError && (
+        <p style={{ margin: 0, color: "#c62828", fontSize: "0.8rem" }}>
+          {gpsError}
+        </p>
+      )}
+    </div>
+  );
+}
 
 export default function FarmNeedsPage() {
   const searchParams = useSearchParams();
@@ -273,11 +359,14 @@ export default function FarmNeedsPage() {
         )}
 
         {/* Past Submissions */}
-        {myResponses && myResponses.length > 0 && (
+        {myResponses !== undefined && (
           <div style={{ marginTop: "2rem", padding: "1.25rem", background: "#fff", borderRadius: "12px", border: "1px solid #e0e0e0" }}>
             <h3 style={{ margin: "0 0 1rem", fontSize: "1.1rem", color: "#2c2c2c", fontWeight: 700, fontFamily: FONT }}>
               📋 Your Submissions ({myResponses.length})
             </h3>
+            {myResponses.length === 0 ? (
+              <p style={{ margin: 0, fontSize: "0.9rem", color: "#888" }}>No submissions yet. Fill any form above to see your history here.</p>
+            ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
               {myResponses.map((response: any) => (
                 <div key={response.responseId} style={{
@@ -301,6 +390,8 @@ export default function FarmNeedsPage() {
                           ? <img src={fr.photoUrl} alt="photo" style={{ maxWidth: "100%", maxHeight: 150, borderRadius: 6, border: "1px solid #e0e0e0", display: "block" }} />
                           : fr.fieldType === "camera"
                             ? <span style={{ color: "#999" }}>📷 (no photo)</span>
+                            : fr.fieldType === "gps"
+                              ? (<a href={`https://maps.google.com/?q=${encodeURIComponent(fr.value || "")}`} target="_blank" rel="noreferrer" style={{ color: "#1565c0", textDecoration: "none" }}>{fr.value || "-"}</a>)
                             : (fr.value || "-")}
                       </div>
                     </div>
@@ -308,6 +399,7 @@ export default function FarmNeedsPage() {
                 </div>
               ))}
             </div>
+            )}
           </div>
         )}
       </div>
@@ -481,6 +573,11 @@ export default function FarmNeedsPage() {
                         </>);
                       })()}
                     </div>
+                  ) : field.fieldType === "gps" ? (
+                    <GpsFieldInput
+                      value={formValues[field._id] || ""}
+                      onChange={(val) => handleFieldChange(field._id, val)}
+                    />
                   ) : (
                     <input
                       type="text"

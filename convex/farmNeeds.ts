@@ -410,3 +410,90 @@ export const getCommunityFarmNeedsForms = query({
     return farmNeedsForms.sort((a: any, b: any) => b.createdAt - a.createdAt);
   },
 });
+
+/**
+ * Get Farm Needs insights for a community (Admin view)
+ */
+export const getCommunityFarmNeedsInsights = query({
+  args: { adminId: v.id("users"), communityId: v.id("communities") },
+  handler: async (ctx, { adminId, communityId }) => {
+    const admin = await ctx.db.get(adminId);
+    if (!admin || (admin as any).role !== "admin") {
+      throw new Error("Not an admin");
+    }
+
+    const community = await ctx.db.get(communityId);
+    if (!community) throw new Error("Community not found");
+
+    const isCommunityAdmin = (community as any).communityAdminId === adminId;
+    const isSuperAdmin = (admin as any).adminLevel === "super" || !(admin as any).adminLevel;
+    if (!isCommunityAdmin && !isSuperAdmin) {
+      throw new Error("Not authorized");
+    }
+
+    const forms = await ctx.db
+      .query("communityForms")
+      .withIndex("by_community", (q) => q.eq("communityId", communityId))
+      .collect();
+
+    const farmNeedsForms = forms.filter((f: any) => f.formPurpose === "farmNeeds");
+    const byCategory: Record<string, { forms: number; responses: number }> = {
+      crops: { forms: 0, responses: 0 },
+      livestock: { forms: 0, responses: 0 },
+    };
+
+    const recentRows: Array<{
+      responseId: Id<"formResponses">;
+      formName: string;
+      category: string;
+      memberId: Id<"users">;
+      submittedAt: number;
+    }> = [];
+
+    let totalResponses = 0;
+    for (const form of farmNeedsForms) {
+      const category = ((form as any).category || "crops") as "crops" | "livestock";
+      if (!byCategory[category]) byCategory[category] = { forms: 0, responses: 0 };
+      byCategory[category].forms += 1;
+
+      const responses = await ctx.db
+        .query("formResponses")
+        .withIndex("by_form", (q) => q.eq("formId", form._id))
+        .collect();
+
+      totalResponses += responses.length;
+      byCategory[category].responses += responses.length;
+
+      for (const r of responses) {
+        recentRows.push({
+          responseId: r._id,
+          formName: (form as any).name || "Form",
+          category,
+          memberId: (r as any).memberId,
+          submittedAt: r.createdAt,
+        });
+      }
+    }
+
+    const recent = recentRows
+      .sort((a, b) => b.submittedAt - a.submittedAt)
+      .slice(0, 10);
+
+    const recentWithMember = await Promise.all(
+      recent.map(async (row) => {
+        const member = await ctx.db.get(row.memberId);
+        return {
+          ...row,
+          memberAlias: (member as any)?.alias || "Member",
+        };
+      })
+    );
+
+    return {
+      totalForms: farmNeedsForms.length,
+      totalResponses,
+      byCategory,
+      recentSubmissions: recentWithMember,
+    };
+  },
+});

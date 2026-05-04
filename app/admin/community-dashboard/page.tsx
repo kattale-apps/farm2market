@@ -846,10 +846,13 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
                     style={{ padding: "0.4rem", borderRadius: "5px", border: "1px solid #ccc", fontSize: "0.82rem" }}
                   >
                     <option value="text">Text</option>
+                    <option value="email">Email</option>
+                    <option value="phone">Phone</option>
                     <option value="number">Number</option>
                     <option value="date">Date</option>
                     <option value="select">Select</option>
                     <option value="textarea">Textarea</option>
+                    <option value="checkbox">Checkbox</option>
                     <option value="camera">📸 Camera Photo</option>
                     <option value="gps">📍 GPS Location</option>
                   </select>
@@ -1909,6 +1912,7 @@ function FarmNeedsTab({ communityId, adminId, initialFarmNeedsEnabled }: { commu
   const enableFarmNeeds = useMutation((api as any).farmNeeds.enableCommunityFarmNeeds);
   const createFarmNeedsForm = useMutation((api as any).farmNeeds.createFarmNeedsForm);
   const communityForms = useQuery((api as any).farmNeeds.getCommunityFarmNeedsForms, { adminId, communityId });
+  const farmNeedsInsights = useQuery((api as any).farmNeeds.getCommunityFarmNeedsInsights, { adminId, communityId });
 
   const [farmNeedsEnabled, setFarmNeedsEnabled] = useState<boolean>(initialFarmNeedsEnabled);
   const [showBuilder, setShowBuilder] = useState(false);
@@ -1994,6 +1998,50 @@ function FarmNeedsTab({ communityId, adminId, initialFarmNeedsEnabled }: { commu
         </button>
       </div>
 
+      {/* Insights */}
+      <div style={{ marginBottom: "1.25rem" }}>
+        <h4 style={{ margin: "0 0 0.6rem", fontSize: "1rem", fontWeight: 700, color: "#1b5e20", fontFamily: FONT }}>📈 Farm Needs Insights</h4>
+        {!farmNeedsInsights ? (
+          <p style={{ color: "#999", fontSize: "0.85rem" }}>Loading insights…</p>
+        ) : (
+          <>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: "0.6rem", marginBottom: "0.7rem" }}>
+              <div style={{ border: "1px solid #dcedc8", background: "#f1f8e9", borderRadius: 8, padding: "0.65rem" }}>
+                <div style={{ fontSize: "0.72rem", color: "#558b2f", fontWeight: 700 }}>Total Forms</div>
+                <div style={{ fontSize: "1.15rem", color: "#33691e", fontWeight: 800 }}>{farmNeedsInsights.totalForms ?? 0}</div>
+              </div>
+              <div style={{ border: "1px solid #dcedc8", background: "#f1f8e9", borderRadius: 8, padding: "0.65rem" }}>
+                <div style={{ fontSize: "0.72rem", color: "#558b2f", fontWeight: 700 }}>Total Responses</div>
+                <div style={{ fontSize: "1.15rem", color: "#33691e", fontWeight: 800 }}>{farmNeedsInsights.totalResponses ?? 0}</div>
+              </div>
+              <div style={{ border: "1px solid #ffe0b2", background: "#fff8e1", borderRadius: 8, padding: "0.65rem" }}>
+                <div style={{ fontSize: "0.72rem", color: "#ef6c00", fontWeight: 700 }}>Crops</div>
+                <div style={{ fontSize: "0.95rem", color: "#e65100", fontWeight: 700 }}>{farmNeedsInsights.byCategory?.crops?.forms ?? 0} form(s), {farmNeedsInsights.byCategory?.crops?.responses ?? 0} response(s)</div>
+              </div>
+              <div style={{ border: "1px solid #ffe0b2", background: "#fff8e1", borderRadius: 8, padding: "0.65rem" }}>
+                <div style={{ fontSize: "0.72rem", color: "#ef6c00", fontWeight: 700 }}>Livestock</div>
+                <div style={{ fontSize: "0.95rem", color: "#e65100", fontWeight: 700 }}>{farmNeedsInsights.byCategory?.livestock?.forms ?? 0} form(s), {farmNeedsInsights.byCategory?.livestock?.responses ?? 0} response(s)</div>
+              </div>
+            </div>
+            <div style={{ border: "1px solid #e0e0e0", background: "#fff", borderRadius: 8, padding: "0.7rem" }}>
+              <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#444", marginBottom: "0.45rem" }}>Recent Submissions</div>
+              {farmNeedsInsights.recentSubmissions?.length ? (
+                <div style={{ display: "grid", gap: "0.35rem" }}>
+                  {farmNeedsInsights.recentSubmissions.map((row: any) => (
+                    <div key={String(row.responseId)} style={{ display: "flex", justifyContent: "space-between", gap: "0.6rem", flexWrap: "wrap", fontSize: "0.78rem", color: "#555", borderBottom: "1px dashed #eee", paddingBottom: "0.3rem" }}>
+                      <span><strong>{row.formName}</strong> ({row.category}) by {row.memberAlias}</span>
+                      <span>{new Date(row.submittedAt).toLocaleDateString()}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p style={{ margin: 0, fontSize: "0.78rem", color: "#999" }}>No submissions yet.</p>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
       {/* Existing forms */}
       <div style={{ marginBottom: "1.25rem" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
@@ -2031,12 +2079,15 @@ function FarmNeedsTab({ communityId, adminId, initialFarmNeedsEnabled }: { commu
                   <input value={field.label} onChange={(e) => handleFieldChange(idx, "label", e.target.value)} placeholder="Field label" style={{ padding: "0.4rem", borderRadius: 5, border: "1px solid #ccc", fontSize: "0.82rem" }} />
                   <select value={field.fieldType} onChange={(e) => handleFieldChange(idx, "fieldType", e.target.value)} style={{ padding: "0.4rem", borderRadius: 5, border: "1px solid #ccc", fontSize: "0.82rem" }}>
                     <option value="text">Text</option>
+                    <option value="email">Email</option>
+                    <option value="phone">Phone</option>
                     <option value="number">Number</option>
                     <option value="textarea">Textarea</option>
                     <option value="select">Select</option>
                     <option value="checkbox">Checkbox</option>
                     <option value="date">Date</option>
                     <option value="camera">📸 Camera</option>
+                    <option value="gps">📍 GPS Location</option>
                   </select>
                   <label style={{ display: "flex", alignItems: "center", gap: "0.25rem", fontSize: "0.75rem", cursor: "pointer", whiteSpace: "nowrap" }}>
                     <input type="checkbox" checked={field.required} onChange={(e) => handleFieldChange(idx, "required", e.target.checked)} /> Req

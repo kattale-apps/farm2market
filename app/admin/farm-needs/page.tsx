@@ -401,12 +401,14 @@ export default function AdminFarmNeedsPage() {
                         }}>
                         <option value="text">Text</option>
                         <option value="email">Email</option>
+                        <option value="phone">Phone</option>
                         <option value="number">Number</option>
                         <option value="textarea">Textarea</option>
                         <option value="select">Select</option>
                         <option value="checkbox">Checkbox</option>
                         <option value="date">Date</option>
                         <option value="camera">📸 Camera Photo</option>
+                        <option value="gps">📍 GPS Location</option>
                       </select>
                     </div>
                     <div style={{ gridColumn: "span 2" }}>

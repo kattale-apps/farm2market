@@ -418,6 +418,8 @@ export default function BusinessTrackersPage() {
                       <option value="email">Email</option>
                       <option value="phone">Phone</option>
                       <option value="checkbox">Checkbox</option>
+                      <option value="camera">Camera</option>
+                      <option value="gps">GPS Location</option>
                     </select>
                     <label style={{ fontSize: "0.8rem", display: "flex", alignItems: "center", gap: "0.25rem" }}>
                       <input

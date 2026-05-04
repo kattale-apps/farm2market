@@ -785,9 +785,10 @@ export const getMySubmissions = query({
             const field = fieldMap.get(String(value.fieldId));
             let photoUrl = null;
 
-            if (field?.fieldType === "photo" && value.value) {
+            if (field?.fieldType === "camera" && value.value) {
               try {
-                photoUrl = await ctx.storage.getUrl(value.value as Id<"_storage">);
+                const parsed = JSON.parse(value.value as string);
+                photoUrl = typeof parsed?.dataUrl === "string" ? parsed.dataUrl : null;
               } catch {
                 photoUrl = null;
               }
@@ -877,12 +878,13 @@ export const getSubmissionsForExport = query({
             const field = fieldMap.get(String(value.fieldId));
             let photoUrl = null;
 
-            // Attempt to resolve photo URL if this is a photo field
-            if (field?.fieldType === "photo" && value.value) {
+            // Attempt to resolve photo dataUrl if this is a camera field
+            if (field?.fieldType === "camera" && value.value) {
               try {
-                photoUrl = await ctx.storage.getUrl(value.value as any);
+                const parsed = JSON.parse(value.value as string);
+                photoUrl = typeof parsed?.dataUrl === "string" ? parsed.dataUrl : null;
               } catch {
-                // Silently fail if storage resolution doesn't work
+                photoUrl = null;
               }
             }
 

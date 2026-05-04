@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Id } from "../../../convex/_generated/dataModel";
 import { api } from "../../../convex/_generated/api";
 import Link from "next/link";
@@ -8,6 +8,7 @@ import { useOfflineQuery } from "../../hooks/useOfflineQuery";
 import { useOfflineMutation } from "../../hooks/useOfflineMutation";
 import { useStoredUser } from "../../hooks/useStoredUser";
 import { useSearchParams } from "next/navigation";
+import { GeneralCameraCapture } from "../../components/GeneralCameraCapture";
 
 const BRAND = "#2e7d32";
 const BRAND_BG = "#e8f5e9";
@@ -289,9 +290,21 @@ export default function FarmNeedsPage() {
                   <div style={{ fontWeight: 600, color: "#2c2c2c", marginBottom: "0.25rem" }}>
                     {response.formName}
                   </div>
-                  <div style={{ color: "#666", fontSize: "0.85rem" }}>
+                  <div style={{ color: "#666", fontSize: "0.85rem", marginBottom: "0.5rem" }}>
                     {response.communityName} • {new Date(response.submittedAt).toLocaleDateString()}
                   </div>
+                  {(response.fieldResponses || []).map((fr: any, idx: number) => (
+                    <div key={idx} style={{ display: "grid", gridTemplateColumns: "minmax(90px, 40%) 1fr", gap: "0.4rem", padding: "0.25rem 0", borderTop: "1px dashed #e0e0e0" }}>
+                      <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#666" }}>{fr.fieldLabel}</div>
+                      <div style={{ fontSize: "0.78rem", color: "#222" }}>
+                        {fr.fieldType === "camera" && fr.photoUrl
+                          ? <img src={fr.photoUrl} alt="photo" style={{ maxWidth: "100%", maxHeight: 150, borderRadius: 6, border: "1px solid #e0e0e0", display: "block" }} />
+                          : fr.fieldType === "camera"
+                            ? <span style={{ color: "#999" }}>📷 (no photo)</span>
+                            : (fr.value || "-")}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>
@@ -456,6 +469,18 @@ export default function FarmNeedsPage() {
                         fontFamily: FONT,
                         boxSizing: "border-box",
                       }} />
+                  ) : field.fieldType === "camera" ? (
+                    <div>
+                      {(() => {
+                        const val = formValues[field._id];
+                        let previewUrl: string | null = null;
+                        if (val) { try { const p = JSON.parse(val); previewUrl = typeof p?.dataUrl === "string" ? p.dataUrl : null; } catch {} }
+                        return (<>
+                          {previewUrl && <img src={previewUrl} alt="Captured" style={{ width: "100%", maxWidth: 320, borderRadius: 8, marginBottom: "0.5rem", display: "block" }} />}
+                          <GeneralCameraCapture onCapture={(jsonVal) => handleFieldChange(field._id, jsonVal)} />
+                        </>);
+                      })()}
+                    </div>
                   ) : (
                     <input
                       type="text"

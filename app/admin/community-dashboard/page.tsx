@@ -19,9 +19,10 @@ import { resolveCommunityLogo } from "../../lib/communityLogos";
 import { AdminFertilizerConfig } from "../../components/biofarm/AdminFertilizerConfig";
 import { savePdfFromJsPDF } from "../../utils/pdfDownload";
 import { useStoredUser } from "../../hooks/useStoredUser";
+import { GeneralCameraCapture } from "../../components/GeneralCameraCapture";
 
 /* ── Tab types for community cards ── */
-type CommunityTab = "members" | "noticeboard" | "messages" | "forms" | "insights" | "fertilizer";
+type CommunityTab = "members" | "noticeboard" | "messages" | "forms" | "insights" | "fertilizer" | "farmNeeds";
 
 /* ── Noticeboard tab (per community) ── */
 function NoticeboardTab({ communityId, userId }: { communityId: Id<"communities">; userId: Id<"users"> }) {
@@ -1836,6 +1837,184 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
   );
 }
 
+/* ── Farm Needs Tab (per community) ── */
+function FarmNeedsTab({ communityId, adminId, initialFarmNeedsEnabled }: { communityId: Id<"communities">; adminId: Id<"users">; initialFarmNeedsEnabled: boolean }) {
+  const enableFarmNeeds = useMutation((api as any).farmNeeds.enableCommunityFarmNeeds);
+  const createFarmNeedsForm = useMutation((api as any).farmNeeds.createFarmNeedsForm);
+  const communityForms = useQuery((api as any).farmNeeds.getCommunityFarmNeedsForms, { adminId, communityId });
+
+  const [farmNeedsEnabled, setFarmNeedsEnabled] = useState<boolean>(initialFarmNeedsEnabled);
+  const [showBuilder, setShowBuilder] = useState(false);
+  const [formName, setFormName] = useState("");
+  const [formDescription, setFormDescription] = useState("");
+  const [formCategory, setFormCategory] = useState<"crops" | "livestock">("crops");
+  const [fields, setFields] = useState<Array<{ fieldType: string; label: string; required: boolean; order: number; options?: string[] }>>([
+    { fieldType: "text", label: "", required: true, order: 0 },
+  ]);
+  const [submitting, setSubmitting] = useState(false);
+  const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [origin, setOrigin] = useState("");
+
+  useEffect(() => { if (typeof window !== "undefined") setOrigin(window.location.origin); }, []);
+
+  const handleToggle = async () => {
+    try {
+      const next = !farmNeedsEnabled;
+      await enableFarmNeeds({ adminId, communityId, enabled: next });
+      setFarmNeedsEnabled(next);
+      setMsg({ type: "success", text: `Farm Needs ${next ? "enabled" : "disabled"}` });
+      setTimeout(() => setMsg(null), 3000);
+    } catch (e: any) {
+      setMsg({ type: "error", text: e.message });
+    }
+  };
+
+  const handleAddField = () => setFields((f) => [...f, { fieldType: "text", label: "", required: true, order: f.length }]);
+  const handleRemoveField = (i: number) => setFields((f) => f.filter((_, idx) => idx !== i));
+  const handleFieldChange = (i: number, key: string, value: any) => {
+    setFields((f) => f.map((field, idx) => idx === i ? { ...field, [key]: value } : field));
+  };
+
+  const handleCreateForm = async () => {
+    if (!formName.trim() || fields.some((f) => !f.label.trim())) {
+      setMsg({ type: "error", text: "Form name and all field labels are required" });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await createFarmNeedsForm({
+        adminId,
+        communityId,
+        name: formName,
+        description: formDescription || undefined,
+        category: formCategory,
+        fields: fields.map((f, i) => ({ ...f, order: i })),
+      });
+      setMsg({ type: "success", text: "Farm Needs form created!" });
+      setFormName(""); setFormDescription(""); setFormCategory("crops");
+      setFields([{ fieldType: "text", label: "", required: true, order: 0 }]);
+      setShowBuilder(false);
+      setTimeout(() => setMsg(null), 3000);
+    } catch (e: any) {
+      setMsg({ type: "error", text: e.message });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const BRAND = "#2e7d32";
+  const FONT = '"Montserrat", sans-serif';
+
+  return (
+    <div style={{ padding: "1.25rem" }}>
+      {msg && (
+        <div style={{ marginBottom: "1rem", padding: "0.75rem", borderRadius: 8, background: msg.type === "success" ? "#e8f5e9" : "#ffebee", color: msg.type === "success" ? "#2e7d32" : "#c62828", border: `1px solid ${msg.type === "success" ? "#c8e6c9" : "#ffcdd2"}`, fontSize: "0.85rem" }}>
+          {msg.text}
+        </div>
+      )}
+
+      {/* Enable/Disable toggle */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1rem", background: "#f5f5f5", borderRadius: 10, marginBottom: "1.25rem", border: "1px solid #e0e0e0" }}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: "0.95rem", color: "#333", fontFamily: FONT }}>🌾 Farm Needs Feature</div>
+          <div style={{ fontSize: "0.78rem", color: "#666", marginTop: 2 }}>Allow farmers to submit crop/livestock need forms</div>
+        </div>
+        <button
+          onClick={handleToggle}
+          style={{ padding: "0.45rem 1rem", borderRadius: 8, border: "none", background: farmNeedsEnabled ? "#4caf50" : "#bdbdbd", color: "#fff", fontWeight: 700, fontSize: "0.85rem", cursor: "pointer", fontFamily: FONT }}
+        >
+          {farmNeedsEnabled ? "Enabled" : "Disabled"}
+        </button>
+      </div>
+
+      {/* Existing forms */}
+      <div style={{ marginBottom: "1.25rem" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+          <h4 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "#1b5e20", fontFamily: FONT }}>📋 Farm Needs Forms ({communityForms?.length ?? "…"})</h4>
+          <button onClick={() => setShowBuilder(!showBuilder)} style={{ padding: "0.4rem 0.75rem", borderRadius: 6, border: "none", background: showBuilder ? "#c62828" : BRAND, color: "#fff", fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" }}>
+            {showBuilder ? "Cancel" : "+ Create Form"}
+          </button>
+        </div>
+
+        {/* Form builder */}
+        {showBuilder && (
+          <div style={{ padding: "1.25rem", borderRadius: 10, border: "2px solid #2e7d32", background: "#f9fdf9", marginBottom: "1rem" }}>
+            <h5 style={{ margin: "0 0 1rem", fontSize: "0.95rem", fontWeight: 700, color: BRAND, fontFamily: FONT }}>New Farm Needs Form</h5>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "0.75rem" }}>
+              <div>
+                <label style={{ fontSize: "0.78rem", fontWeight: 600, color: "#444" }}>Form Name *</label>
+                <input value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="e.g., Crop Health Survey" style={{ width: "100%", padding: "0.45rem", borderRadius: 6, border: "1px solid #ccc", fontSize: "0.85rem", marginTop: 3, boxSizing: "border-box" as const }} />
+              </div>
+              <div>
+                <label style={{ fontSize: "0.78rem", fontWeight: 600, color: "#444" }}>Category</label>
+                <select value={formCategory} onChange={(e) => setFormCategory(e.target.value as "crops" | "livestock")} style={{ width: "100%", padding: "0.45rem", borderRadius: 6, border: "1px solid #ccc", fontSize: "0.85rem", marginTop: 3, boxSizing: "border-box" as const }}>
+                  <option value="crops">🌾 Crops</option>
+                  <option value="livestock">🐄 Livestock</option>
+                </select>
+              </div>
+            </div>
+            <div style={{ marginBottom: "0.75rem" }}>
+              <label style={{ fontSize: "0.78rem", fontWeight: 600, color: "#444" }}>Description</label>
+              <input value={formDescription} onChange={(e) => setFormDescription(e.target.value)} placeholder="Optional description" style={{ width: "100%", padding: "0.45rem", borderRadius: 6, border: "1px solid #ccc", fontSize: "0.85rem", marginTop: 3, boxSizing: "border-box" as const }} />
+            </div>
+            <div style={{ marginBottom: "0.75rem" }}>
+              <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "#444", display: "block", marginBottom: "0.4rem" }}>Fields</label>
+              {fields.map((field, idx) => (
+                <div key={idx} style={{ display: "grid", gridTemplateColumns: "1fr 130px auto auto", gap: "0.5rem", alignItems: "center", marginBottom: "0.4rem" }}>
+                  <input value={field.label} onChange={(e) => handleFieldChange(idx, "label", e.target.value)} placeholder="Field label" style={{ padding: "0.4rem", borderRadius: 5, border: "1px solid #ccc", fontSize: "0.82rem" }} />
+                  <select value={field.fieldType} onChange={(e) => handleFieldChange(idx, "fieldType", e.target.value)} style={{ padding: "0.4rem", borderRadius: 5, border: "1px solid #ccc", fontSize: "0.82rem" }}>
+                    <option value="text">Text</option>
+                    <option value="number">Number</option>
+                    <option value="textarea">Textarea</option>
+                    <option value="select">Select</option>
+                    <option value="checkbox">Checkbox</option>
+                    <option value="date">Date</option>
+                    <option value="camera">📸 Camera</option>
+                  </select>
+                  <label style={{ display: "flex", alignItems: "center", gap: "0.25rem", fontSize: "0.75rem", cursor: "pointer", whiteSpace: "nowrap" }}>
+                    <input type="checkbox" checked={field.required} onChange={(e) => handleFieldChange(idx, "required", e.target.checked)} /> Req
+                  </label>
+                  <button onClick={() => handleRemoveField(idx)} style={{ border: "none", background: "#ffebee", color: "#c62828", borderRadius: 5, padding: "0.3rem 0.45rem", cursor: "pointer", fontSize: "0.78rem" }}>✕</button>
+                </div>
+              ))}
+              <button onClick={handleAddField} style={{ marginTop: "0.3rem", padding: "0.35rem 0.7rem", borderRadius: 6, border: "1px dashed #999", background: "#fff", color: "#444", fontSize: "0.8rem", cursor: "pointer" }}>+ Add Field</button>
+            </div>
+            <button onClick={handleCreateForm} disabled={submitting} style={{ padding: "0.5rem 1.1rem", borderRadius: 7, border: "none", background: submitting ? "#ccc" : BRAND, color: "#fff", fontWeight: 700, fontSize: "0.85rem", cursor: submitting ? "not-allowed" : "pointer" }}>
+              {submitting ? "Creating…" : "Create Form"}
+            </button>
+          </div>
+        )}
+
+        {/* Forms list */}
+        {communityForms === undefined ? (
+          <p style={{ color: "#999", fontSize: "0.85rem" }}>Loading…</p>
+        ) : communityForms.length === 0 ? (
+          <p style={{ color: "#999", fontSize: "0.85rem" }}>No farm needs forms yet. Create one above.</p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+            {communityForms.map((form: any) => (
+              <div key={form.formId} style={{ padding: "0.85rem 1rem", borderRadius: 9, border: "1px solid #e0e0e0", background: "#fafafa", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: "0.9rem", color: "#1a1a1a" }}>{form.name}</div>
+                  <div style={{ fontSize: "0.78rem", color: "#777", marginTop: 2 }}>
+                    {form.category === "crops" ? "🌾" : "🐄"} {form.category} · {form.fieldCount} fields · {form.responseCount} responses
+                  </div>
+                  {form.qrPath && origin && (
+                    <a href={`${origin}${form.qrPath}`} target="_blank" rel="noreferrer" style={{ fontSize: "0.75rem", color: "#1565c0", display: "inline-block", marginTop: 3 }}>Open Form Link ↗</a>
+                  )}
+                </div>
+                {form.qrPath && origin && (
+                  <img src={`https://api.qrserver.com/v1/create-qr-code/?size=72x72&data=${encodeURIComponent(`${origin}${form.qrPath}`)}`} alt="QR" style={{ width: 60, height: 60, borderRadius: 6, border: "1px solid #ddd", background: "#fff" }} />
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function CommunityDashboardPage() {
   const router = useRouter();
   const { user, status: authStatus } = useStoredUser();
@@ -2544,11 +2723,11 @@ export default function CommunityDashboardPage() {
                   (currentUser as any)?.adminLevel === "super" ||
                   (currentUser as any)?.adminLevel === undefined ||
                   resolvedAdminCategory === "community"
-                    ? ["members", "noticeboard", "messages", "forms", "insights", "fertilizer"]
-                    : ["members", "noticeboard", "messages", "forms", "insights"]
+                    ? ["members", "noticeboard", "messages", "forms", "insights", "fertilizer", "farmNeeds"]
+                    : ["members", "noticeboard", "messages", "forms", "insights", "farmNeeds"]
                 ) as CommunityTab[]).map((tab) => {
                   const active = getActiveTab(communityId) === tab;
-                  const labels: Record<CommunityTab, string> = { members: "Members", noticeboard: "Noticeboard", messages: "Messages", forms: "Forms", insights: "📊 Insights", fertilizer: "🌱 Fertilizer" };
+                  const labels: Record<CommunityTab, string> = { members: "Members", noticeboard: "Noticeboard", messages: "Messages", forms: "Forms", insights: "📊 Insights", fertilizer: "🌱 Fertilizer", farmNeeds: "🌾 Farm Needs" };
                   return (
                     <button
                       key={tab}
@@ -2596,6 +2775,11 @@ export default function CommunityDashboardPage() {
               {/* ── Fertilizer Tab ── */}
               {getActiveTab(communityId) === "fertilizer" && (
                 <AdminFertilizerConfig communityId={communityId} userId={userId!} />
+              )}
+
+              {/* ── Farm Needs Tab ── */}
+              {getActiveTab(communityId) === "farmNeeds" && (
+                <FarmNeedsTab communityId={communityId as Id<"communities">} adminId={userId!} initialFarmNeedsEnabled={community.farmNeedsEnabled ?? false} />
               )}
 
               {/* ── Members Tab (existing content) ── */}

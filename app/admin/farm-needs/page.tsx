@@ -406,6 +406,7 @@ export default function AdminFarmNeedsPage() {
                         <option value="select">Select</option>
                         <option value="checkbox">Checkbox</option>
                         <option value="date">Date</option>
+                        <option value="camera">📸 Camera Photo</option>
                       </select>
                     </div>
                     <div style={{ gridColumn: "span 2" }}>

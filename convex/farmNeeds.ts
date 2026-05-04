@@ -157,9 +157,19 @@ export const getMyFarmNeedsResponses = query({
           submittedAt: response.createdAt,
           fieldResponses: values.map((v: any) => {
             const field = fields.find((f: any) => f._id === v.fieldId);
+            const fieldType = (field as any)?.fieldType || "text";
+            let photoUrl: string | null = null;
+            if (fieldType === "camera" && v.value) {
+              try {
+                const parsed = JSON.parse(v.value as string);
+                photoUrl = typeof parsed?.dataUrl === "string" ? parsed.dataUrl : null;
+              } catch { photoUrl = null; }
+            }
             return {
               fieldLabel: (field as any)?.label || "Unknown",
+              fieldType,
               value: v.value,
+              photoUrl,
             };
           }),
         });

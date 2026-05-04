@@ -206,7 +206,7 @@ export default function TrackerViewPage() {
           {submissions && submissions.map((sub: any) => {
             const isExpanded = expandedId === String(sub._id);
             const isSelected = selectedSubmissionIds.has(String(sub._id));
-            const photoValues = (sub.values || []).filter((v: any) => v.fieldType === "photo" && v.photoUrl);
+            const photoValues = (sub.values || []).filter((v: any) => v.fieldType === "camera" && v.photoUrl);
             return (
               <div key={sub._id} style={{
                 padding: "0.85rem",
@@ -288,7 +288,7 @@ export default function TrackerViewPage() {
 
                 {!isExpanded && (
                   <div style={{ marginTop: "0.45rem", display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
-                    {(sub.values || []).slice(0, 3).map((v: any, i: number) => (
+                    {(sub.values || []).filter((v: any) => v.fieldType !== "camera").slice(0, 3).map((v: any, i: number) => (
                       <span key={i} style={{
                         fontSize: "0.72rem",
                         background: "#f5f5f5",
@@ -299,6 +299,9 @@ export default function TrackerViewPage() {
                         {v.value}
                       </span>
                     ))}
+                    {(sub.values || []).some((v: any) => v.fieldType === "camera") && (
+                      <span style={{ fontSize: "0.72rem", background: "#e3f2fd", padding: "0.15rem 0.4rem", borderRadius: 4, color: "#1565c0" }}>📷 Photo</span>
+                    )}
                     {(sub.values || []).length > 3 && (
                       <span style={{ fontSize: "0.72rem", color: "#999" }}>
                         +{sub.values.length - 3} more
@@ -329,7 +332,11 @@ export default function TrackerViewPage() {
                           {valueRow.fieldLabel || "Field"}
                         </div>
                         <div style={{ fontSize: "0.78rem", color: "#222", overflowWrap: "anywhere" }}>
-                          {valueRow.value || "-"}
+                          {valueRow.fieldType === "camera" && valueRow.photoUrl
+                            ? <img src={valueRow.photoUrl} alt="captured" style={{ maxWidth: "100%", maxHeight: 180, borderRadius: 6, border: "1px solid #e0e0e0", display: "block" }} />
+                            : valueRow.fieldType === "camera"
+                              ? <span style={{ color: "#999" }}>📷 (no photo)</span>
+                              : (valueRow.value || "-")}
                         </div>
                       </div>
                     ))}

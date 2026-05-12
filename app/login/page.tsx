@@ -26,6 +26,7 @@ export default function LoginPage() {
 
 function LoginPageInner() {
   const [isSignup, setIsSignup] = useState(false);
+  const [loginIdentifier, setLoginIdentifier] = useState("");
   const [email, setEmail] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [usePhone, setUsePhone] = useState(false); // Toggle between email and phone
@@ -47,6 +48,7 @@ function LoginPageInner() {
   useEffect(() => {
     const lastCred = getLastCredential();
     if (lastCred) {
+      setLoginIdentifier(lastCred);
       if (lastCred.includes("@")) {
         setEmail(lastCred);
       } else {
@@ -88,17 +90,7 @@ function LoginPageInner() {
     setLoading(true);
 
     try {
-      // Validate inputs
-      if (!usePhone && !email.trim()) {
-        setError("Email is required");
-        setLoading(false);
-        return;
-      }
-      if (usePhone && !phoneNumber.trim()) {
-        setError("Phone number is required");
-        setLoading(false);
-        return;
-      }
+      // Validate password for both login and signup flows
       if (!password.trim()) {
         setError("Password is required");
         setLoading(false);
@@ -106,6 +98,18 @@ function LoginPageInner() {
       }
 
       if (isSignup) {
+        // Validate signup credential based on selected mode
+        if (!usePhone && !email.trim()) {
+          setError("Email is required");
+          setLoading(false);
+          return;
+        }
+        if (usePhone && !phoneNumber.trim()) {
+          setError("Phone number is required");
+          setLoading(false);
+          return;
+        }
+
         // Signup validation
         if (password.length < 6) {
           setError("Password must be at least 6 characters long");
@@ -138,17 +142,27 @@ function LoginPageInner() {
           router.push("/");
         }
       } else {
+        // Single login identifier auto-detects email vs phone
+        const identifier = loginIdentifier.trim();
+        if (!identifier) {
+          setError("Email or phone number is required");
+          setLoading(false);
+          return;
+        }
+
+        const identifierLooksLikeEmail = identifier.includes("@");
+
         // Login with session
         const result = await loginWithSession({
-          email: usePhone ? undefined : email.trim(),
-          phoneNumber: usePhone ? phoneNumber.trim() : undefined,
+          email: identifierLooksLikeEmail ? identifier : undefined,
+          phoneNumber: identifierLooksLikeEmail ? undefined : identifier,
           password: password.trim(),
         });
 
         // Persist to all storage layers (localStorage + native Preferences)
         const { sessionToken, ...user } = result;
         await saveAuth(user, sessionToken);
-        saveLastCredential(usePhone ? phoneNumber.trim() : email.trim());
+        saveLastCredential(identifier);
 
         // Redirect: if pending community join, go back to join page; otherwise go home
         if (pendingCommunitySlug) {
@@ -267,54 +281,78 @@ function LoginPageInner() {
         </div>
 
         <form onSubmit={handleSubmit}>
-          {/* Toggle between email and phone */}
-          <div style={{ marginBottom: "1rem", display: "flex", gap: "0.5rem" }}>
-            <button
-              type="button"
-              onClick={() => {
-                setUsePhone(false);
-                setError(null);
-              }}
-              style={{
-                flex: 1,
-                padding: "0.5rem",
-                background: !usePhone ? "#e3f2fd" : "transparent",
-                border: "1px solid",
-                borderColor: !usePhone ? "#1976d2" : "#ddd",
-                borderRadius: "6px",
-                color: !usePhone ? "#1976d2" : "#666",
-                cursor: "pointer",
-                fontSize: "0.9rem",
-                fontWeight: !usePhone ? "600" : "400"
-              }}
-            >
-              Email
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setUsePhone(true);
-                setError(null);
-              }}
-              style={{
-                flex: 1,
-                padding: "0.5rem",
-                background: usePhone ? "#e3f2fd" : "transparent",
-                border: "1px solid",
-                borderColor: usePhone ? "#1976d2" : "#ddd",
-                borderRadius: "6px",
-                color: usePhone ? "#1976d2" : "#666",
-                cursor: "pointer",
-                fontSize: "0.9rem",
-                fontWeight: usePhone ? "600" : "400"
-              }}
-            >
-              Phone
-            </button>
-          </div>
+          {isSignup && (
+            <>
+              {/* Toggle between email and phone for signup */}
+              <div style={{ marginBottom: "1rem", display: "flex", gap: "0.5rem" }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUsePhone(false);
+                    setError(null);
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: "0.5rem",
+                    background: !usePhone ? "#e3f2fd" : "transparent",
+                    border: "1px solid",
+                    borderColor: !usePhone ? "#1976d2" : "#ddd",
+                    borderRadius: "6px",
+                    color: !usePhone ? "#1976d2" : "#666",
+                    cursor: "pointer",
+                    fontSize: "0.9rem",
+                    fontWeight: !usePhone ? "600" : "400"
+                  }}
+                >
+                  Email
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUsePhone(true);
+                    setError(null);
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: "0.5rem",
+                    background: usePhone ? "#e3f2fd" : "transparent",
+                    border: "1px solid",
+                    borderColor: usePhone ? "#1976d2" : "#ddd",
+                    borderRadius: "6px",
+                    color: usePhone ? "#1976d2" : "#666",
+                    cursor: "pointer",
+                    fontSize: "0.9rem",
+                    fontWeight: usePhone ? "600" : "400"
+                  }}
+                >
+                  Phone
+                </button>
+              </div>
+            </>
+          )}
 
-          {/* Email or Phone input */}
-          {!usePhone ? (
+          {/* Login uses a single auto-detected identifier; signup keeps explicit mode */}
+          {!isSignup ? (
+            <div style={{ marginBottom: "1rem" }}>
+              <label style={{ display: "block", marginBottom: "0.5rem", color: "#333", fontWeight: "500" }}>
+                Email or Phone Number
+              </label>
+              <input
+                type="text"
+                value={loginIdentifier}
+                onChange={(e) => setLoginIdentifier(e.target.value)}
+                required={!isSignup}
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  border: "1px solid #ddd",
+                  borderRadius: "6px",
+                  fontSize: "1rem"
+                }}
+                placeholder="your@email.com or +256 7XX XXX XXX"
+              />
+            </div>
+          ) : !usePhone ? (
             <div style={{ marginBottom: "1rem" }}>
               <label style={{ display: "block", marginBottom: "0.5rem", color: "#333", fontWeight: "500" }}>
                 Email

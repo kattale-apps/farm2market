@@ -115,6 +115,7 @@ export function exportToPDF(
   });
 
   // Save PDF
+  addPageNumbersIfNeeded(doc);
   void savePdfFromJsPDF(doc, `${filename}.pdf`);
 }
 
@@ -188,6 +189,171 @@ function autoTableEndY(doc: jsPDF): number {
 
 function imageFormatFromBase64(dataUrl: string): "PNG" | "JPEG" {
   return dataUrl.startsWith("data:image/png") ? "PNG" : "JPEG";
+}
+
+type PhotoLayoutChoice = {
+  cols: number;
+  rows: number;
+  cell: number;
+  items: number;
+};
+
+function choosePhotoLayout(
+  remaining: number,
+  availableHeight: number,
+  contentWidth: number,
+  gap: number,
+  minCell: number
+): PhotoLayoutChoice | null {
+  let best: PhotoLayoutChoice | null = null;
+
+  for (let cols = 1; cols <= 4; cols++) {
+    const cellWidth = (contentWidth - (cols - 1) * gap) / cols;
+    if (cellWidth < minCell) continue;
+
+    const maxRows = Math.floor((availableHeight + gap) / (minCell + gap));
+    if (maxRows < 1) continue;
+
+    const capacity = cols * maxRows;
+    const items = Math.min(remaining, capacity);
+    const rows = Math.ceil(items / cols);
+    const cellHeight = (availableHeight - (rows - 1) * gap) / rows;
+    const cell = Math.min(cellWidth, cellHeight);
+
+    if (cell < minCell) continue;
+
+    if (
+      !best ||
+      items > best.items ||
+      (items === best.items && cell > best.cell)
+    ) {
+      best = { cols, rows, cell, items };
+    }
+  }
+
+  return best;
+}
+
+async function renderPhotosAdaptivePaged(params: {
+  doc: jsPDF;
+  photos: string[];
+  startY: number;
+  margin: number;
+  contentWidth: number;
+  pageHeight: number;
+  sectionTitle: string;
+  prepareContinuationPage: () => Promise<number>;
+}): Promise<void> {
+  const {
+    doc,
+    photos,
+    startY,
+    margin,
+    contentWidth,
+    pageHeight,
+    sectionTitle,
+    prepareContinuationPage,
+  } = params;
+
+  if (!photos.length) return;
+
+  const gap = 4;
+  const minCell = 18;
+
+  let photoIndex = 0;
+  let isFirstPage = true;
+  let sectionStartY = startY;
+
+  while (photoIndex < photos.length) {
+    if (!isFirstPage) {
+      sectionStartY = await prepareContinuationPage();
+    }
+
+    const sectionY = addSectionTitle(doc, sectionStartY, `${sectionTitle} (${photos.length})`);
+    const availableHeight = pageHeight - margin - sectionY;
+
+    let layout = choosePhotoLayout(
+      photos.length - photoIndex,
+      availableHeight,
+      contentWidth,
+      gap,
+      minCell
+    );
+
+    if (!layout && isFirstPage) {
+      isFirstPage = false;
+      continue;
+    }
+
+    if (!layout) {
+      layout = choosePhotoLayout(
+        photos.length - photoIndex,
+        availableHeight,
+        contentWidth,
+        gap,
+        12
+      );
+      if (!layout) break;
+    }
+
+    const gridWidth = layout.cols * layout.cell + (layout.cols - 1) * gap;
+    const startX = margin + (contentWidth - gridWidth) / 2;
+
+    for (let p = 0; p < layout.items; p++) {
+      const absoluteIndex = photoIndex + p;
+      const col = p % layout.cols;
+      const row = Math.floor(p / layout.cols);
+      const x = startX + col * (layout.cell + gap);
+      const y = sectionY + row * (layout.cell + gap);
+
+      try {
+        const base64 = await urlToBase64(photos[absoluteIndex]);
+        if (!base64) throw new Error("Empty image");
+
+        const props = (doc as any).getImageProperties(base64);
+        const iw = Number(props?.width || 1);
+        const ih = Number(props?.height || 1);
+        const scale = Math.min(layout.cell / iw, layout.cell / ih);
+        const drawW = iw * scale;
+        const drawH = ih * scale;
+        const dx = x + (layout.cell - drawW) / 2;
+        const dy = y + (layout.cell - drawH) / 2;
+
+        doc.setDrawColor(180);
+        doc.rect(x, y, layout.cell, layout.cell);
+        doc.addImage(base64, imageFormatFromBase64(base64), dx, dy, drawW, drawH);
+      } catch {
+        doc.setDrawColor(180);
+        doc.rect(x, y, layout.cell, layout.cell);
+        doc.setFontSize(8);
+        doc.text("Photo unavailable", x + layout.cell / 2, y + layout.cell / 2, {
+          align: "center",
+        });
+      }
+    }
+
+    photoIndex += layout.items;
+    isFirstPage = false;
+    sectionStartY = 34;
+  }
+}
+
+function addPageNumbersIfNeeded(doc: jsPDF): void {
+  const totalPages = doc.getNumberOfPages();
+  if (totalPages <= 1) return;
+
+  for (let page = 1; page <= totalPages; page++) {
+    doc.setPage(page);
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    doc.setFontSize(8);
+    doc.setTextColor(120, 120, 120);
+    doc.text(`Page ${page} of ${totalPages}`, pageWidth / 2, pageHeight - 5, {
+      align: "center",
+    });
+  }
+
+  doc.setTextColor(30, 30, 30);
 }
 
 // ── Farm Toolbox PDF branding constants ────────────────────────────────
@@ -476,50 +642,21 @@ export async function exportSubmissionsToPDF(
     y = autoTableEndY(doc) + 6;
     const photos: string[] = (entry.photoUrls || []).filter(Boolean);
     if (photos.length) {
-      if (y > pageHeight - 80) {
-        doc.addPage();
-        await addWatermark(doc, logoBase64);
-        addReportHeader(doc, `Submission ${i + 1} Photos`);
-        y = 34;
-      }
-
-      y = addSectionTitle(doc, y, `Photos (${photos.length})`);
-      const gap = 4;
-      const photoWidth = (contentWidth - gap) / 2;
-      const photoHeight = 62;
-
-      for (let p = 0; p < photos.length; p++) {
-        const col = p % 2;
-        const row = Math.floor(p / 2);
-        const x = margin + col * (photoWidth + gap);
-        const py = y + row * (photoHeight + 6);
-
-        if (py + photoHeight > pageHeight - margin) {
+      await renderPhotosAdaptivePaged({
+        doc,
+        photos,
+        startY: y,
+        margin,
+        contentWidth,
+        pageHeight,
+        sectionTitle: "Photos",
+        prepareContinuationPage: async () => {
           doc.addPage();
           await addWatermark(doc, logoBase64);
           addReportHeader(doc, `Submission ${i + 1} Photos (cont.)`);
-          y = addSectionTitle(doc, 34, `Photos (${photos.length})`);
-          p--;
-          continue;
-        }
-
-        try {
-          const base64 = await urlToBase64(photos[p]);
-          if (base64) {
-            doc.addImage(base64, imageFormatFromBase64(base64), x, py, photoWidth, photoHeight);
-          } else {
-            doc.setDrawColor(180);
-            doc.rect(x, py, photoWidth, photoHeight);
-            doc.setFontSize(9);
-            doc.text("Photo unavailable", x + photoWidth / 2, py + photoHeight / 2, { align: "center" });
-          }
-        } catch {
-          doc.setDrawColor(180);
-          doc.rect(x, py, photoWidth, photoHeight);
-          doc.setFontSize(9);
-          doc.text("Photo unavailable", x + photoWidth / 2, py + photoHeight / 2, { align: "center" });
-        }
-      }
+          return 34;
+        },
+      });
 
       // QR + link on last photo page of each submission
       const qrS = 22;
@@ -542,6 +679,7 @@ export async function exportSubmissionsToPDF(
     }
   }
 
+  addPageNumbersIfNeeded(doc);
   void savePdfFromJsPDF(doc, `${filename}.pdf`);
 }
 
@@ -641,50 +779,23 @@ export async function exportFormSubmissionsToPDF(
       .map((value: any) => value.photoUrl);
 
     if (photos.length) {
-      if (y > pageHeight - 80) {
-        doc.addPage();
-        addReportHeader(doc, `Submission ${i + 1} Photos`);
-        y = 34;
-      }
-
-      y = addSectionTitle(doc, y, `Photos (${photos.length})`);
-      const gap = 4;
-      const photoWidth = (contentWidth - gap) / 2;
-      const photoHeight = 62;
-
-      for (let p = 0; p < photos.length; p++) {
-        const col = p % 2;
-        const row = Math.floor(p / 2);
-        const x = margin + col * (photoWidth + gap);
-        const py = y + row * (photoHeight + 6);
-
-        if (py + photoHeight > pageHeight - margin) {
+      await renderPhotosAdaptivePaged({
+        doc,
+        photos,
+        startY: y,
+        margin,
+        contentWidth,
+        pageHeight,
+        sectionTitle: "Photos",
+        prepareContinuationPage: async () => {
           doc.addPage();
           addReportHeader(doc, `Submission ${i + 1} Photos (cont.)`);
-          y = addSectionTitle(doc, 34, `Photos (${photos.length})`);
-          p--;
-          continue;
-        }
-
-        try {
-          const base64 = await urlToBase64(photos[p]);
-          if (base64) {
-            doc.addImage(base64, imageFormatFromBase64(base64), x, py, photoWidth, photoHeight);
-          } else {
-            doc.setDrawColor(180);
-            doc.rect(x, py, photoWidth, photoHeight);
-            doc.setFontSize(9);
-            doc.text("Photo unavailable", x + photoWidth / 2, py + photoHeight / 2, { align: "center" });
-          }
-        } catch {
-          doc.setDrawColor(180);
-          doc.rect(x, py, photoWidth, photoHeight);
-          doc.setFontSize(9);
-          doc.text("Photo unavailable", x + photoWidth / 2, py + photoHeight / 2, { align: "center" });
-        }
-      }
+          return 34;
+        },
+      });
     }
   }
 
+  addPageNumbersIfNeeded(doc);
   void savePdfFromJsPDF(doc, `${filename}.pdf`);
 }

@@ -270,7 +270,7 @@ async function renderPhotosAdaptivePaged(params: {
     }
 
     const sectionY = addSectionTitle(doc, sectionStartY, `${sectionTitle} (${photos.length})`);
-    const availableHeight = pageHeight - margin - sectionY;
+    const availableHeight = Math.max(pageHeight - margin - 30, minCell + gap);
 
     let layout = choosePhotoLayout(
       photos.length - photoIndex,
@@ -280,12 +280,8 @@ async function renderPhotosAdaptivePaged(params: {
       minCell
     );
 
-    if (!layout && isFirstPage) {
-      isFirstPage = false;
-      continue;
-    }
-
     if (!layout) {
+      // Fallback to smaller minimum cell size
       layout = choosePhotoLayout(
         photos.length - photoIndex,
         availableHeight,
@@ -362,20 +358,26 @@ const TOOLBOX_QR_PATH   = "/farmcoin-community-qr.png";
 const TOOLBOX_SITE_URL  = "https://www.farm2marketuganda.com";
 
 /**
- * Draw the farm2market logo as a faint background watermark on the current page.
+ * Draw the farm2market logo as a tiled background watermark across the entire page.
  */
 async function addWatermark(doc: jsPDF, logoBase64: string): Promise<void> {
   if (!logoBase64) return;
   const pw = doc.internal.pageSize.getWidth();
   const ph = doc.internal.pageSize.getHeight();
-  const ww = 90;
-  const wh = 90;
   try {
-    // Use GState opacity when available (jsPDF >=2.x), otherwise render at very small alpha
     const gstate = new (doc as any).GState({ opacity: 0.09 });
     doc.saveGraphicsState();
     (doc as any).setGState(gstate);
-    doc.addImage(logoBase64, "JPEG", (pw - ww) / 2, (ph - wh) / 2, ww, wh);
+    // Tiled watermark across entire page
+    const tileW = 48;
+    const tileH = 48;
+    const gapX = 20;
+    const gapY = 26;
+    for (let y = -tileH * 0.5; y < ph + tileH; y += tileH + gapY) {
+      for (let x = -tileW * 0.5; x < pw + tileW; x += tileW + gapX) {
+        doc.addImage(logoBase64, "JPEG", x, y, tileW, tileH);
+      }
+    }
     doc.restoreGraphicsState();
   } catch {
     // GState not available in this build — skip watermark rather than crash

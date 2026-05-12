@@ -820,6 +820,372 @@ function UnitsTab({ userId }: { userId: Id<"users"> }) {
   );
 }
 
+// ─── INSIGHTS TAB ─────────────────────────────────────────────────────────────
+function InsightsTab({ userId }: { userId: Id<"users"> }) {
+  const insights = useOfflineQuery(
+    (api as any).farmToolbox.getToolboxInsights,
+    { farmerId: userId },
+    `toolbox_insights_${userId}`
+  ) as any | undefined;
+
+  const entries = useOfflineQuery(
+    (api as any).farmToolbox.listEntries,
+    { farmerId: userId },
+    `toolbox_entries_${userId}`
+  ) as any[] | undefined;
+
+  if (insights === undefined) return <div style={{ textAlign: "center", padding: "2rem", color: "#888" }}>Loading insights…</div>;
+
+  const activeUnits = (insights.unitSurvival ?? []).filter((u: any) => u.status === "active").length;
+  const totalUnits = (insights.unitSurvival ?? []).length;
+  const survivalPct = totalUnits > 0 ? Math.round((activeUnits / totalUnits) * 100) : 0;
+  const maxDay = Math.max(1, ...(insights.entriesByDay ?? []).map((d: any) => d.count));
+
+  return (
+    <div>
+      {/* Summary cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1rem" }}>
+        {[
+          { label: "Entries this month", value: insights.totalEntriesThisMonth, emoji: "📝" },
+          { label: "All-time entries", value: insights.totalEntriesAllTime, emoji: "📊" },
+          { label: "Active units", value: `${activeUnits} / ${totalUnits}`, emoji: "🌳" },
+          { label: "Top template", value: insights.topTemplateName ? `${insights.topTemplateEmoji ?? "📋"} ${insights.topTemplateName}` : "—", emoji: null },
+        ].map((card) => (
+          <div key={card.label} style={{ background: "#fff", borderRadius: 12, padding: "0.85rem 1rem", boxShadow: "0 2px 6px rgba(0,0,0,0.07)" }}>
+            <div style={{ fontSize: "0.72rem", color: "#888", marginBottom: "0.25rem" }}>{card.label}</div>
+            <div style={{ fontSize: "1.1rem", fontWeight: 700, color: BRAND }}>{card.emoji ? `${card.emoji} ` : ""}{card.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Unit survival bar */}
+      {totalUnits > 0 && (
+        <div style={{ background: "#fff", borderRadius: 12, padding: "1rem", boxShadow: "0 2px 6px rgba(0,0,0,0.07)", marginBottom: "1rem" }}>
+          <div style={{ fontWeight: 700, fontSize: "0.9rem", marginBottom: "0.75rem" }}>🌳 Unit Survival</div>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.4rem" }}>
+            <div style={{ flex: 1, height: 14, borderRadius: 7, background: "#e0e0e0", overflow: "hidden" }}>
+              <div style={{ width: `${survivalPct}%`, height: "100%", background: BRAND, borderRadius: 7, transition: "width 0.4s" }} />
+            </div>
+            <span style={{ fontSize: "0.82rem", fontWeight: 700, color: BRAND, minWidth: 38 }}>{survivalPct}%</span>
+          </div>
+          <div style={{ fontSize: "0.75rem", color: "#888" }}>{activeUnits} active out of {totalUnits} total units</div>
+        </div>
+      )}
+
+      {/* 30-day activity chart (inline bars) */}
+      {(insights.entriesByDay ?? []).length > 0 && (
+        <div style={{ background: "#fff", borderRadius: 12, padding: "1rem", boxShadow: "0 2px 6px rgba(0,0,0,0.07)", marginBottom: "1rem" }}>
+          <div style={{ fontWeight: 700, fontSize: "0.9rem", marginBottom: "0.75rem" }}>📅 Last 30 days</div>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 48 }}>
+            {insights.entriesByDay.map((d: any) => (
+              <div key={d.date} title={`${d.date}: ${d.count}`}
+                style={{ flex: 1, height: `${Math.max(4, Math.round((d.count / maxDay) * 48))}px`, background: BRAND, borderRadius: 2, minWidth: 4, opacity: 0.85 }} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Recent entries */}
+      {(insights.recentEntries ?? []).length > 0 && (
+        <div style={{ background: "#fff", borderRadius: 12, padding: "1rem", boxShadow: "0 2px 6px rgba(0,0,0,0.07)" }}>
+          <div style={{ fontWeight: 700, fontSize: "0.9rem", marginBottom: "0.75rem" }}>🕐 Recent Entries</div>
+          {insights.recentEntries.map((e: any) => (
+            <div key={e._id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.45rem 0", borderBottom: "1px solid #f0f0f0" }}>
+              <span style={{ fontSize: "0.85rem" }}>{e.templateEmoji ?? "📋"} {e.templateName}</span>
+              <span style={{ fontSize: "0.75rem", color: "#888" }}>{new Date(e.submittedAt).toLocaleDateString("en-UG")}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {insights.totalEntriesAllTime === 0 && (
+        <div style={{ textAlign: "center", padding: "2rem", color: "#888", fontSize: "0.9rem" }}>
+          No data yet. Start logging entries to see insights here.
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── SUPPLIES TAB ─────────────────────────────────────────────────────────────
+type SupplyCategory = "seed" | "fertiliser" | "chemical" | "equipment" | "labour" | "other";
+const SUPPLY_CATEGORIES: { value: SupplyCategory; label: string; emoji: string }[] = [
+  { value: "seed", label: "Seeds", emoji: "🌱" },
+  { value: "fertiliser", label: "Fertiliser", emoji: "🧪" },
+  { value: "chemical", label: "Chemical", emoji: "⚗️" },
+  { value: "equipment", label: "Equipment", emoji: "🔧" },
+  { value: "labour", label: "Labour", emoji: "👷" },
+  { value: "other", label: "Other", emoji: "📦" },
+];
+
+const BLANK_SUPPLY = { item: "", category: "seed" as SupplyCategory, quantity: "", unit: "bags", unitCost: "", supplier: "", notes: "", purchasedAt: new Date().toISOString().slice(0, 10) };
+
+function SuppliesTab({ userId }: { userId: Id<"users"> }) {
+  const [form, setForm] = useState({ ...BLANK_SUPPLY });
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [filterCat, setFilterCat] = useState<SupplyCategory | "all">("all");
+
+  const addSupply = useOfflineMutation<any>((api as any).farmToolbox.addSupplyEntry);
+  const deleteSupply = useOfflineMutation<any>((api as any).farmToolbox.deleteSupplyEntry);
+
+  const supplies = useOfflineQuery(
+    (api as any).farmToolbox.listSupplyEntries,
+    { farmerId: userId },
+    `toolbox_supplies_${userId}`
+  ) as any[] | undefined;
+
+  const filtered = filterCat === "all" ? supplies : (supplies ?? []).filter((s: any) => s.category === filterCat);
+  const totalSpend = (filtered ?? []).reduce((sum: number, s: any) => sum + (s.totalCost ?? 0), 0);
+
+  async function handleAdd() {
+    if (!form.item.trim() || !form.quantity || !form.unitCost) return;
+    setSaving(true);
+    try {
+      const qty = parseFloat(form.quantity);
+      const uc = parseFloat(form.unitCost);
+      await addSupply({
+        farmerId: userId,
+        item: form.item.trim(),
+        category: form.category,
+        quantity: qty,
+        unit: form.unit || "units",
+        unitCost: uc,
+        totalCost: qty * uc,
+        purchasedAt: new Date(form.purchasedAt).getTime(),
+        supplier: form.supplier.trim() || undefined,
+        notes: form.notes.trim() || undefined,
+      });
+      setForm({ ...BLANK_SUPPLY });
+      setShowForm(false);
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+        <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 700 }}>📦 Supply Tracker</h2>
+        <button onClick={() => setShowForm(!showForm)}
+          style={{ padding: "0.4rem 0.85rem", background: BRAND, color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, fontSize: "0.8rem", cursor: "pointer", fontFamily: FONT }}>
+          {showForm ? "Cancel" : "➕ Add"}
+        </button>
+      </div>
+
+      {/* Category filter pills */}
+      <div style={{ display: "flex", gap: "0.4rem", overflowX: "auto", paddingBottom: "0.5rem", marginBottom: "0.75rem" }}>
+        {[{ value: "all" as const, label: "All", emoji: "🗂️" }, ...SUPPLY_CATEGORIES].map((c) => (
+          <button key={c.value} onClick={() => setFilterCat(c.value)}
+            style={{ flexShrink: 0, padding: "0.3rem 0.7rem", border: `1px solid ${filterCat === c.value ? BRAND : "#ddd"}`, borderRadius: 20, background: filterCat === c.value ? BRAND_BG : "#fff", color: filterCat === c.value ? BRAND : "#666", fontWeight: filterCat === c.value ? 700 : 400, fontSize: "0.75rem", cursor: "pointer", fontFamily: FONT }}>
+            {c.emoji} {c.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Add form */}
+      {showForm && (
+        <div style={{ background: "#fff", borderRadius: 12, padding: "1rem", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", marginBottom: "1rem" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", marginBottom: "0.5rem" }}>
+            <input placeholder="Item name *" value={form.item} onChange={(e) => setForm({ ...form, item: e.target.value })}
+              style={{ gridColumn: "1/-1", padding: "0.45rem 0.7rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.85rem", boxSizing: "border-box", width: "100%" }} />
+            <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value as SupplyCategory })}
+              style={{ padding: "0.45rem 0.7rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.82rem" }}>
+              {SUPPLY_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.emoji} {c.label}</option>)}
+            </select>
+            <input type="date" value={form.purchasedAt} onChange={(e) => setForm({ ...form, purchasedAt: e.target.value })}
+              style={{ padding: "0.45rem 0.7rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.85rem" }} />
+            <input placeholder="Quantity *" type="number" min={0} value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })}
+              style={{ padding: "0.45rem 0.7rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.85rem" }} />
+            <input placeholder="Unit (bags, litres…)" value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })}
+              style={{ padding: "0.45rem 0.7rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.85rem" }} />
+            <input placeholder="Unit cost (UGX) *" type="number" min={0} value={form.unitCost} onChange={(e) => setForm({ ...form, unitCost: e.target.value })}
+              style={{ padding: "0.45rem 0.7rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.85rem" }} />
+            <div style={{ padding: "0.45rem 0.7rem", background: BRAND_BG, borderRadius: 8, fontSize: "0.82rem", color: BRAND, fontWeight: 700 }}>
+              Total: UGX {form.quantity && form.unitCost ? (parseFloat(form.quantity) * parseFloat(form.unitCost)).toLocaleString() : "0"}
+            </div>
+          </div>
+          <input placeholder="Supplier (optional)" value={form.supplier} onChange={(e) => setForm({ ...form, supplier: e.target.value })}
+            style={{ width: "100%", padding: "0.45rem 0.7rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.85rem", marginBottom: "0.5rem", boxSizing: "border-box" }} />
+          <input placeholder="Notes (optional)" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
+            style={{ width: "100%", padding: "0.45rem 0.7rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.85rem", marginBottom: "0.75rem", boxSizing: "border-box" }} />
+          <button onClick={handleAdd} disabled={saving || !form.item.trim() || !form.quantity || !form.unitCost}
+            style={{ width: "100%", padding: "0.6rem", background: BRAND, color: "#fff", border: "none", borderRadius: 8, fontFamily: FONT, fontWeight: 700, fontSize: "0.9rem", cursor: "pointer", opacity: saving ? 0.7 : 1 }}>
+            {saving ? "Saving…" : "Save Supply Entry"}
+          </button>
+        </div>
+      )}
+
+      {/* Summary */}
+      {(filtered ?? []).length > 0 && (
+        <div style={{ background: BRAND_BG, borderRadius: 10, padding: "0.7rem 1rem", marginBottom: "0.75rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontSize: "0.82rem", color: BRAND }}>{filtered!.length} entries</span>
+          <span style={{ fontWeight: 700, color: BRAND, fontSize: "0.9rem" }}>UGX {totalSpend.toLocaleString()}</span>
+        </div>
+      )}
+
+      {/* List */}
+      {supplies === undefined ? <div style={{ textAlign: "center", padding: "2rem", color: "#888" }}>Loading…</div> :
+        (filtered ?? []).length === 0 ? <div style={{ textAlign: "center", padding: "2rem", color: "#888", fontSize: "0.9rem" }}>No supply entries yet. Tap ➕ Add to record your first input.</div> :
+        (filtered ?? []).map((s: any) => {
+          const cat = SUPPLY_CATEGORIES.find((c) => c.value === s.category);
+          return (
+            <div key={s._id} style={{ background: "#fff", borderRadius: 12, padding: "0.85rem 1rem", boxShadow: "0 2px 6px rgba(0,0,0,0.06)", marginBottom: "0.6rem", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: "0.9rem", marginBottom: "0.2rem" }}>{cat?.emoji ?? "📦"} {s.item}</div>
+                <div style={{ fontSize: "0.78rem", color: "#666" }}>{s.quantity} {s.unit} × UGX {(s.unitCost ?? 0).toLocaleString()} = <strong>UGX {(s.totalCost ?? 0).toLocaleString()}</strong></div>
+                {s.supplier && <div style={{ fontSize: "0.75rem", color: "#888", marginTop: "0.15rem" }}>Supplier: {s.supplier}</div>}
+                <div style={{ fontSize: "0.72rem", color: "#aaa", marginTop: "0.15rem" }}>{new Date(s.purchasedAt).toLocaleDateString("en-UG")}</div>
+              </div>
+              <button onClick={() => deleteSupply({ entryId: s._id, farmerId: userId })}
+                style={{ background: "none", border: "none", cursor: "pointer", fontSize: "1rem", padding: "0 0.25rem", color: "#c62828", flexShrink: 0 }}>🗑️</button>
+            </div>
+          );
+        })}
+    </div>
+  );
+}
+
+// ─── FARM LEDGER TAB ──────────────────────────────────────────────────────────
+type LedgerType = "income" | "expense";
+type LedgerCategory = "crop_sale" | "livestock_sale" | "input_cost" | "labour" | "transport" | "equipment" | "other";
+const LEDGER_CATS: { value: LedgerCategory; label: string; emoji: string; type: LedgerType }[] = [
+  { value: "crop_sale", label: "Crop Sale", emoji: "🌾", type: "income" },
+  { value: "livestock_sale", label: "Livestock Sale", emoji: "🐄", type: "income" },
+  { value: "input_cost", label: "Input Cost", emoji: "🧪", type: "expense" },
+  { value: "labour", label: "Labour", emoji: "👷", type: "expense" },
+  { value: "transport", label: "Transport", emoji: "🚜", type: "expense" },
+  { value: "equipment", label: "Equipment", emoji: "🔧", type: "expense" },
+  { value: "other", label: "Other", emoji: "📋", type: "income" },
+];
+const BLANK_LEDGER = { type: "income" as LedgerType, category: "crop_sale" as LedgerCategory, amount: "", description: "", entryDate: new Date().toISOString().slice(0, 10), notes: "" };
+
+function FarmLedgerTab({ userId }: { userId: Id<"users"> }) {
+  const [form, setForm] = useState({ ...BLANK_LEDGER });
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [filterType, setFilterType] = useState<LedgerType | "all">("all");
+
+  const addEntry = useOfflineMutation<any>((api as any).farmToolbox.addFinancialEntry);
+  const deleteEntry = useOfflineMutation<any>((api as any).farmToolbox.deleteFinancialEntry);
+
+  const allEntries = useOfflineQuery(
+    (api as any).farmToolbox.listFinancialEntries,
+    { farmerId: userId },
+    `toolbox_ledger_${userId}`
+  ) as any[] | undefined;
+
+  const filtered = filterType === "all" ? allEntries : (allEntries ?? []).filter((e: any) => e.type === filterType);
+  const totalIncome = (allEntries ?? []).filter((e: any) => e.type === "income").reduce((sum: number, e: any) => sum + (e.amount ?? 0), 0);
+  const totalExpense = (allEntries ?? []).filter((e: any) => e.type === "expense").reduce((sum: number, e: any) => sum + (e.amount ?? 0), 0);
+  const profit = totalIncome - totalExpense;
+
+  // Auto-select a sensible category based on type
+  const availableCats = LEDGER_CATS.filter((c) => c.type === form.type || c.value === "other");
+
+  async function handleAdd() {
+    if (!form.description.trim() || !form.amount) return;
+    setSaving(true);
+    try {
+      await addEntry({
+        farmerId: userId,
+        type: form.type,
+        category: form.category,
+        amount: parseFloat(form.amount),
+        description: form.description.trim(),
+        entryDate: new Date(form.entryDate).getTime(),
+        notes: form.notes.trim() || undefined,
+      });
+      setForm({ ...BLANK_LEDGER });
+      setShowForm(false);
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+        <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 700 }}>🏦 Farm Ledger</h2>
+        <button onClick={() => setShowForm(!showForm)}
+          style={{ padding: "0.4rem 0.85rem", background: BRAND, color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, fontSize: "0.8rem", cursor: "pointer", fontFamily: FONT }}>
+          {showForm ? "Cancel" : "➕ Add"}
+        </button>
+      </div>
+
+      {/* Profit summary */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem", marginBottom: "0.85rem" }}>
+        {[
+          { label: "Income", value: totalIncome, color: "#2e7d32" },
+          { label: "Expenses", value: totalExpense, color: "#c62828" },
+          { label: "Profit", value: profit, color: profit >= 0 ? "#1565c0" : "#c62828" },
+        ].map((c) => (
+          <div key={c.label} style={{ background: "#fff", borderRadius: 10, padding: "0.7rem 0.5rem", textAlign: "center", boxShadow: "0 2px 6px rgba(0,0,0,0.06)" }}>
+            <div style={{ fontSize: "0.68rem", color: "#888", marginBottom: "0.2rem" }}>{c.label}</div>
+            <div style={{ fontWeight: 700, fontSize: "0.82rem", color: c.color }}>{profit < 0 && c.label === "Profit" ? "−" : ""}UGX {Math.abs(c.value).toLocaleString()}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Type filter */}
+      <div style={{ display: "flex", gap: "0.4rem", marginBottom: "0.75rem" }}>
+        {(["all", "income", "expense"] as const).map((t) => (
+          <button key={t} onClick={() => setFilterType(t)}
+            style={{ flex: 1, padding: "0.35rem 0", border: `1px solid ${filterType === t ? BRAND : "#ddd"}`, borderRadius: 20, background: filterType === t ? BRAND_BG : "#fff", color: filterType === t ? BRAND : "#666", fontWeight: filterType === t ? 700 : 400, fontSize: "0.78rem", cursor: "pointer", fontFamily: FONT }}>
+            {t === "all" ? "All" : t === "income" ? "💰 Income" : "💸 Expenses"}
+          </button>
+        ))}
+      </div>
+
+      {/* Add form */}
+      {showForm && (
+        <div style={{ background: "#fff", borderRadius: 12, padding: "1rem", boxShadow: "0 2px 8px rgba(0,0,0,0.07)", marginBottom: "1rem" }}>
+          <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.5rem" }}>
+            {(["income", "expense"] as LedgerType[]).map((t) => (
+              <button key={t} type="button" onClick={() => setForm({ ...form, type: t, category: t === "income" ? "crop_sale" : "input_cost" })}
+                style={{ flex: 1, padding: "0.4rem", border: `1px solid ${form.type === t ? BRAND : "#ddd"}`, borderRadius: 8, background: form.type === t ? BRAND_BG : "#fff", color: form.type === t ? BRAND : "#666", fontFamily: FONT, fontSize: "0.82rem", fontWeight: form.type === t ? 700 : 400, cursor: "pointer" }}>
+                {t === "income" ? "💰 Income" : "💸 Expense"}
+              </button>
+            ))}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", marginBottom: "0.5rem" }}>
+            <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value as LedgerCategory })}
+              style={{ padding: "0.45rem 0.7rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.82rem" }}>
+              {availableCats.map((c) => <option key={c.value} value={c.value}>{c.emoji} {c.label}</option>)}
+            </select>
+            <input type="date" value={form.entryDate} onChange={(e) => setForm({ ...form, entryDate: e.target.value })}
+              style={{ padding: "0.45rem 0.7rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.85rem" }} />
+          </div>
+          <input placeholder="Description *" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
+            style={{ width: "100%", padding: "0.45rem 0.7rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.85rem", marginBottom: "0.5rem", boxSizing: "border-box" }} />
+          <input placeholder="Amount (UGX) *" type="number" min={0} value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })}
+            style={{ width: "100%", padding: "0.45rem 0.7rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.85rem", marginBottom: "0.5rem", boxSizing: "border-box" }} />
+          <input placeholder="Notes (optional)" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
+            style={{ width: "100%", padding: "0.45rem 0.7rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.85rem", marginBottom: "0.75rem", boxSizing: "border-box" }} />
+          <button onClick={handleAdd} disabled={saving || !form.description.trim() || !form.amount}
+            style={{ width: "100%", padding: "0.6rem", background: BRAND, color: "#fff", border: "none", borderRadius: 8, fontFamily: FONT, fontWeight: 700, fontSize: "0.9rem", cursor: "pointer", opacity: saving ? 0.7 : 1 }}>
+            {saving ? "Saving…" : `Save ${form.type === "income" ? "Income" : "Expense"}`}
+          </button>
+        </div>
+      )}
+
+      {/* Entry list */}
+      {allEntries === undefined ? <div style={{ textAlign: "center", padding: "2rem", color: "#888" }}>Loading…</div> :
+        (filtered ?? []).length === 0 ? <div style={{ textAlign: "center", padding: "2rem", color: "#888", fontSize: "0.9rem" }}>No entries yet. Tap ➕ Add to record income or expenses.</div> :
+        (filtered ?? []).map((e: any) => {
+          const cat = LEDGER_CATS.find((c) => c.value === e.category);
+          return (
+            <div key={e._id} style={{ background: "#fff", borderRadius: 12, padding: "0.85rem 1rem", boxShadow: "0 2px 6px rgba(0,0,0,0.06)", marginBottom: "0.6rem", display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderLeft: `4px solid ${e.type === "income" ? "#2e7d32" : "#c62828"}` }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: "0.9rem", marginBottom: "0.15rem" }}>{cat?.emoji ?? "📋"} {e.description}</div>
+                <div style={{ fontSize: "0.78rem", color: e.type === "income" ? "#2e7d32" : "#c62828", fontWeight: 700 }}>{e.type === "income" ? "+" : "−"} UGX {(e.amount ?? 0).toLocaleString()}</div>
+                <div style={{ fontSize: "0.72rem", color: "#aaa", marginTop: "0.1rem" }}>{new Date(e.entryDate).toLocaleDateString("en-UG")}</div>
+              </div>
+              <button onClick={() => deleteEntry({ entryId: e._id, farmerId: userId })}
+                style={{ background: "none", border: "none", cursor: "pointer", fontSize: "1rem", padding: "0 0.25rem", color: "#c62828", flexShrink: 0 }}>🗑️</button>
+            </div>
+          );
+        })}
+    </div>
+  );
+}
+
 // ─── COMING SOON CARD ─────────────────────────────────────────────────────────
 function ComingSoonCard({ emoji, label, phase }: { emoji: string; label: string; phase: string }) {
   return (
@@ -892,6 +1258,12 @@ export default function FarmToolboxPage() {
           <LogEntryTab userId={userId} selectedTemplate={selectedTemplate} setSelectedTemplate={setSelectedTemplate} />
         ) : activeTab === "units" ? (
           <UnitsTab userId={userId} />
+        ) : activeTab === "insights" ? (
+          <InsightsTab userId={userId} />
+        ) : activeTab === "supply" ? (
+          <SuppliesTab userId={userId} />
+        ) : activeTab === "ledger" ? (
+          <FarmLedgerTab userId={userId} />
         ) : (
           <ComingSoonCard emoji={tabs.find((t) => t.id === activeTab)?.emoji ?? "🔜"} label={tabs.find((t) => t.id === activeTab)?.label ?? ""} phase={tabs.find((t) => t.id === activeTab)?.phase ?? ""} />
         )}

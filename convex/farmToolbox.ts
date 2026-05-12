@@ -459,20 +459,105 @@ export const deleteTrackedUnit = mutation({
 
 // ─── INSIGHTS (PHASE 4) ───────────────────────────────────────────────────────
 
-/** Aggregate entry data for charts (tracker trend, survival rate, cost vs harvest) */
+/** Aggregate entry data for dashboards — entry counts, unit survival, top template */
 export const getToolboxInsights = query({
   args: {
     farmerId: v.id("users"),
     templateId: v.optional(v.id("farmTrackerTemplates")),
     seasonPlanId: v.optional(v.id("farmSeasonPlans")),
   },
-  handler: async (_ctx, _args): Promise<{
-    trackerTrend: any[];
-    survivalRate: any;
-    costVsHarvest: any;
+  handler: async (ctx, args): Promise<{
+    totalEntriesThisMonth: number;
+    totalEntriesAllTime: number;
+    topTemplateName: string | null;
+    topTemplateEmoji: string | null;
+    unitSurvival: Array<{ unitId: string; name: string; unitType: string; emoji: string | null; status: string; entryCount: number }>;
+    recentEntries: Array<{ _id: string; templateName: string; templateEmoji: string | null; submittedAt: number; fieldCount: number }>;
+    entriesByDay: Array<{ date: string; count: number }>;
   }> => {
-    // TODO Phase 4: aggregate entry history for recharts-compatible datasets
-    return { trackerTrend: [], survivalRate: null, costVsHarvest: null };
+    const now = Date.now();
+    const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
+    const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
+
+    // All entries for this farmer
+    const allEntries = await ctx.db
+      .query("farmTrackerEntries")
+      .withIndex("by_farmer", (q: any) => q.eq("farmerId", args.farmerId))
+      .order("desc")
+      .collect();
+
+    const thisMonthEntries = allEntries.filter((e) => e.submittedAt >= startOfMonth);
+    const last30DaysEntries = allEntries.filter((e) => e.submittedAt >= thirtyDaysAgo);
+
+    // Top template by usage
+    const templateCounts: Record<string, number> = {};
+    for (const entry of allEntries) {
+      templateCounts[entry.templateId] = (templateCounts[entry.templateId] ?? 0) + 1;
+    }
+    const topTemplateId = Object.entries(templateCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
+    let topTemplateName: string | null = null;
+    let topTemplateEmoji: string | null = null;
+    if (topTemplateId) {
+      const tpl = await ctx.db.get(topTemplateId as any);
+      topTemplateName = tpl?.name ?? null;
+      topTemplateEmoji = tpl?.emoji ?? null;
+    }
+
+    // Unit survival: get all units + count entries per unit
+    const units = await ctx.db
+      .query("farmTrackedUnits")
+      .withIndex("by_farmer", (q: any) => q.eq("farmerId", args.farmerId))
+      .collect();
+    const unitEntryCounts: Record<string, number> = {};
+    for (const entry of allEntries) {
+      if (entry.trackedUnitId) {
+        unitEntryCounts[entry.trackedUnitId] = (unitEntryCounts[entry.trackedUnitId] ?? 0) + 1;
+      }
+    }
+    const unitSurvival = units.map((u) => ({
+      unitId: u._id as string,
+      name: u.name ?? u.groupLabel ?? u.unitType,
+      unitType: u.unitType,
+      emoji: u.emoji ?? null,
+      status: u.status,
+      entryCount: unitEntryCounts[u._id] ?? 0,
+    }));
+
+    // Recent entries (last 10) with template name
+    const recentRaw = allEntries.slice(0, 10);
+    const recentEntries = await Promise.all(
+      recentRaw.map(async (e) => {
+        const tpl = await ctx.db.get(e.templateId);
+        return {
+          _id: e._id as string,
+          templateName: tpl?.name ?? "Unknown",
+          templateEmoji: tpl?.emoji ?? null,
+          submittedAt: e.submittedAt,
+          fieldCount: e.fieldCount ?? e.fieldValues.length,
+        };
+      })
+    );
+
+    // Entries by day for the last 30 days (for inline bar chart)
+    const dayMap: Record<string, number> = {};
+    for (const entry of last30DaysEntries) {
+      const d = new Date(entry.submittedAt);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      dayMap[key] = (dayMap[key] ?? 0) + 1;
+    }
+    const entriesByDay = Object.entries(dayMap)
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([date, count]) => ({ date, count }));
+
+    return {
+      totalEntriesThisMonth: thisMonthEntries.length,
+      totalEntriesAllTime: allEntries.length,
+      topTemplateName,
+      topTemplateEmoji,
+      unitSurvival,
+      recentEntries,
+      entriesByDay,
+    };
   },
 });
 
@@ -480,18 +565,99 @@ export const getToolboxInsights = query({
 
 /** 5a: Input/Supply Tracker — list farm inputs/supplies */
 export const listSupplyEntries = query({
-  args: { farmerId: v.id("users") },
-  handler: async (_ctx, _args): Promise<any[]> => {
-    // TODO Phase 5a: implement supply tracker table and queries
-    return [];
+  args: { farmerId: v.id("users"), category: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const entries = await ctx.db
+      .query("farmSupplyEntries")
+      .withIndex("by_farmer", (q: any) => q.eq("farmerId", args.farmerId))
+      .order("desc")
+      .collect();
+    if (args.category) return entries.filter((e) => e.category === args.category);
+    return entries;
   },
 });
 
-/** 5b: Farm Financial Ledger — list farm income/expense entries */
+/** 5a: Add a supply entry */
+export const addSupplyEntry = mutation({
+  args: {
+    farmerId: v.id("users"),
+    item: v.string(),
+    category: v.union(
+      v.literal("seed"), v.literal("fertiliser"), v.literal("chemical"),
+      v.literal("equipment"), v.literal("labour"), v.literal("other")
+    ),
+    quantity: v.number(),
+    unit: v.string(),
+    unitCost: v.number(),
+    totalCost: v.number(),
+    purchasedAt: v.number(),
+    supplier: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    linkedSeasonPlanId: v.optional(v.id("farmSeasonPlans")),
+    linkedUnitId: v.optional(v.id("farmTrackedUnits")),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.insert("farmSupplyEntries", {
+      ...args,
+      createdAt: Date.now(),
+    });
+  },
+});
+
+/** 5a: Delete a supply entry */
+export const deleteSupplyEntry = mutation({
+  args: { entryId: v.id("farmSupplyEntries"), farmerId: v.id("users") },
+  handler: async (ctx, args) => {
+    const entry = await ctx.db.get(args.entryId);
+    if (!entry || entry.farmerId !== args.farmerId) throw new Error("Not found");
+    await ctx.db.delete(args.entryId);
+  },
+});
+
+/** 5b: Farm Financial Ledger — list income/expense entries */
 export const listFinancialEntries = query({
-  args: { farmerId: v.id("users") },
-  handler: async (_ctx, _args): Promise<any[]> => {
-    // TODO Phase 5b: implement farmFinancialLedger table and queries
-    return [];
+  args: { farmerId: v.id("users"), type: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const entries = await ctx.db
+      .query("farmFinancialEntries")
+      .withIndex("by_farmer", (q: any) => q.eq("farmerId", args.farmerId))
+      .order("desc")
+      .collect();
+    if (args.type) return entries.filter((e) => e.type === args.type);
+    return entries;
+  },
+});
+
+/** 5b: Add a financial ledger entry */
+export const addFinancialEntry = mutation({
+  args: {
+    farmerId: v.id("users"),
+    type: v.union(v.literal("income"), v.literal("expense")),
+    category: v.union(
+      v.literal("crop_sale"), v.literal("livestock_sale"), v.literal("input_cost"),
+      v.literal("labour"), v.literal("transport"), v.literal("equipment"), v.literal("other")
+    ),
+    amount: v.number(),
+    description: v.string(),
+    entryDate: v.number(),
+    linkedSeasonPlanId: v.optional(v.id("farmSeasonPlans")),
+    linkedUnitId: v.optional(v.id("farmTrackedUnits")),
+    notes: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.insert("farmFinancialEntries", {
+      ...args,
+      createdAt: Date.now(),
+    });
+  },
+});
+
+/** 5b: Delete a financial ledger entry */
+export const deleteFinancialEntry = mutation({
+  args: { entryId: v.id("farmFinancialEntries"), farmerId: v.id("users") },
+  handler: async (ctx, args) => {
+    const entry = await ctx.db.get(args.entryId);
+    if (!entry || entry.farmerId !== args.farmerId) throw new Error("Not found");
+    await ctx.db.delete(args.entryId);
   },
 });

@@ -307,17 +307,58 @@ export const calculateLivestockCost = query({
   },
 });
 
-// ─── PHASE 5d PLACEHOLDER ────────────────────────────────────────────────────
+// ─── PHASE 5d: FARMER BENCHMARKS ─────────────────────────────────────────────
 
-/** 5d: Farmer Benchmarks — aggregate anonymised cost/yield across regions */
+/** 5d: Farmer Benchmarks — aggregate cost data across active crop templates */
 export const getFarmerBenchmarks = query({
   args: {
     adminId: v.id("users"),
     cropType: v.optional(v.string()),
     regionDistrictId: v.optional(v.id("districts")),
   },
-  handler: async (_ctx, _args): Promise<any> => {
-    // TODO Phase 5d: aggregate cropCostTemplates + farmTrackerEntries for insights
-    return { message: "Benchmarks coming in Phase 5d" };
+  handler: async (ctx, args): Promise<Array<{
+    cropType: string;
+    avgTotalCost: number;
+    minTotalCost: number;
+    maxTotalCost: number;
+    templateCount: number;
+    currency: string;
+  }>> => {
+    const allTemplates = await ctx.db
+      .query("cropCostTemplates")
+      .withIndex("by_owner_type", (q: any) => q.eq("ownerType", "community"))
+      .collect();
+
+    const activeTemplates = allTemplates.filter(
+      (t) => t.isActive && !t.isDeleted && (!args.cropType || t.cropType === args.cropType)
+    );
+
+    // Group by cropType
+    const groups: Record<string, { totalCosts: number[]; currency: string }> = {};
+    for (const tpl of activeTemplates) {
+      const cropKey = tpl.cropType;
+      if (!groups[cropKey]) groups[cropKey] = { totalCosts: [], currency: tpl.currency ?? "UGX" };
+
+      // Sum all stage cost items
+      let templateTotal = 0;
+      for (const stage of tpl.stages ?? []) {
+        for (const item of stage.costItems ?? []) {
+          templateTotal += (item.unitCost ?? 0) * (item.quantity ?? 0);
+        }
+      }
+      groups[cropKey].totalCosts.push(templateTotal);
+    }
+
+    return Object.entries(groups).map(([cropType, { totalCosts, currency }]) => {
+      const avg = totalCosts.reduce((a, b) => a + b, 0) / totalCosts.length;
+      return {
+        cropType,
+        avgTotalCost: Math.round(avg),
+        minTotalCost: Math.min(...totalCosts),
+        maxTotalCost: Math.max(...totalCosts),
+        templateCount: totalCosts.length,
+        currency,
+      };
+    }).sort((a, b) => a.cropType.localeCompare(b.cropType));
   },
 });

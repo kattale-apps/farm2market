@@ -483,10 +483,10 @@ export async function exportSubmissionsToPDF(
       }
     }
 
-    // ── Photo box (fixed Y so QR & link always fit on same page) ────
-    const photoBoxY  = 148;
-    const photoBoxW  = 88;
-    const photoBoxH  = 54;
+    // ── Photo box (larger, still centered; QR block remains unchanged) ────
+    const photoBoxY  = 132;
+    const photoBoxW  = 120;
+    const photoBoxH  = 80;
     const photoBoxX  = (pageWidth - photoBoxW) / 2;
 
     doc.setDrawColor(180);
@@ -498,8 +498,17 @@ export async function exportSubmissionsToPDF(
       try {
         const photoB64 = await urlToBase64(firstPhoto);
         if (photoB64) {
-          doc.addImage(photoB64, imageFormatFromBase64(photoB64),
-            photoBoxX + 0.5, photoBoxY + 0.5, photoBoxW - 1, photoBoxH - 1);
+          const props = (doc as any).getImageProperties(photoB64);
+          const iw = Number(props?.width || 1);
+          const ih = Number(props?.height || 1);
+          const innerW = photoBoxW - 1;
+          const innerH = photoBoxH - 1;
+          const scale = Math.min(innerW / iw, innerH / ih);
+          const drawW = iw * scale;
+          const drawH = ih * scale;
+          const dx = photoBoxX + 0.5 + (innerW - drawW) / 2;
+          const dy = photoBoxY + 0.5 + (innerH - drawH) / 2;
+          doc.addImage(photoB64, imageFormatFromBase64(photoB64), dx, dy, drawW, drawH);
         } else {
           doc.setFontSize(8);
           doc.text("Photo unavailable", pageWidth / 2, photoBoxY + photoBoxH / 2, { align: "center" });

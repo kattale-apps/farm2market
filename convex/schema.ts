@@ -862,8 +862,7 @@ export default defineSchema({
     // Discovery and search
     searchPriorityScore: v.optional(v.number()), // Higher scores appear first in community search results
     showMemberCount: v.optional(v.boolean()), // Controls whether non-admin users can see member counts
-    fertilizerEnabled: v.optional(v.boolean()), // Whether Fertilizer feature is enabled for this community
-    farmNeedsEnabled: v.optional(v.boolean()), // Whether Farm Needs feature is enabled for this community
+    farmNeedsEnabled: v.optional(v.boolean()), // Whether farm needs/requests feature is enabled for this community
   })
     .index("by_active", ["isGlobal", "geoLocked"])
     .index("by_created_by", ["createdBy"]),
@@ -1448,7 +1447,7 @@ export default defineSchema({
     isActive: v.boolean(),
     responseCount: v.number(),
     category: v.optional(v.string()),
-    formPurpose: v.optional(v.union(v.literal("tracker"), v.literal("profile"), v.literal("farmNeeds"))),
+    formPurpose: v.optional(v.union(v.literal("tracker"), v.literal("profile"))),
     qrEnabled: v.optional(v.boolean()),
     qrSlug: v.optional(v.string()),
     qrCreatedAt: v.optional(v.number()),
@@ -1457,8 +1456,7 @@ export default defineSchema({
   })
     .index("by_community", ["communityId"])
     .index("by_admin", ["adminId"])
-    .index("by_active", ["isActive"])
-    .index("by_qr_slug", ["qrSlug"]),
+    .index("by_active", ["isActive"]),
 
   /**
    * Form Fields - individual fields within a form
@@ -1491,7 +1489,6 @@ export default defineSchema({
     memberId: v.id("users"),
     planId: v.optional(v.id("fertilizerPlans")), // Optional link to Bio Farm fertilizer plan
     plannedSprayDate: v.optional(v.string()), // Optional planned spray date (ISO) for compliance checks
-    trackedUnitId: v.optional(v.id("farmTrackedUnits")), // Optional link to farm toolbox tracked unit
     status: v.optional(v.string()), // "DRAFT" | "SUBMITTED" — defaults to SUBMITTED for backward compat
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -1499,9 +1496,7 @@ export default defineSchema({
     .index("by_form", ["formId"])
     .index("by_community", ["communityId"])
     .index("by_member", ["memberId"])
-    .index("by_form_member", ["formId", "memberId"])
-    .index("by_tracked_unit", ["trackedUnitId"])
-    .index("by_form_tracked_unit", ["formId", "trackedUnitId"]),
+    .index("by_form_member", ["formId", "memberId"]),
 
   /**
    * Form Response Values - individual field responses
@@ -1910,13 +1905,11 @@ export default defineSchema({
         v.literal("text"),
         v.literal("number"),
         v.literal("date"),
-        v.literal("select"),
         v.literal("yesno"),
         v.literal("photo"),
         v.literal("rating"),
         v.literal("gps")
       ),
-      options: v.optional(v.array(v.string())),
       unit: v.optional(v.string()),
       required: v.boolean(),
       emoji: v.optional(v.string()),
@@ -2135,4 +2128,60 @@ export default defineSchema({
     .index("by_owner", ["ownerId"])
     .index("by_owner_type", ["ownerType"])
     .index("by_community", ["communityId"]),
+
+  // ─────────────────────────────────────────────────────────────────
+  // 📦 FARM SUPPLY ENTRIES — input purchases & usage tracking
+  // ─────────────────────────────────────────────────────────────────
+
+  farmSupplyEntries: defineTable({
+    farmerId: v.id("users"),
+    item: v.string(),                 // e.g. "NPK Fertiliser 50kg bag"
+    category: v.union(
+      v.literal("seed"),
+      v.literal("fertiliser"),
+      v.literal("chemical"),
+      v.literal("equipment"),
+      v.literal("labour"),
+      v.literal("other")
+    ),
+    quantity: v.number(),
+    unit: v.string(),                 // e.g. "bags", "litres", "days"
+    unitCost: v.number(),             // UGX per unit
+    totalCost: v.number(),            // quantity * unitCost
+    purchasedAt: v.number(),          // timestamp
+    supplier: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    linkedSeasonPlanId: v.optional(v.id("farmSeasonPlans")),
+    linkedUnitId: v.optional(v.id("farmTrackedUnits")),
+    createdAt: v.number(),
+  })
+    .index("by_farmer", ["farmerId"])
+    .index("by_farmer_category", ["farmerId", "category"]),
+
+  // ─────────────────────────────────────────────────────────────────
+  // 🏦 FARM FINANCIAL ENTRIES — income & expense ledger
+  // ─────────────────────────────────────────────────────────────────
+
+  farmFinancialEntries: defineTable({
+    farmerId: v.id("users"),
+    type: v.union(v.literal("income"), v.literal("expense")),
+    category: v.union(
+      v.literal("crop_sale"),
+      v.literal("livestock_sale"),
+      v.literal("input_cost"),
+      v.literal("labour"),
+      v.literal("transport"),
+      v.literal("equipment"),
+      v.literal("other")
+    ),
+    amount: v.number(),               // UGX
+    description: v.string(),
+    entryDate: v.number(),            // timestamp
+    linkedSeasonPlanId: v.optional(v.id("farmSeasonPlans")),
+    linkedUnitId: v.optional(v.id("farmTrackedUnits")),
+    notes: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_farmer", ["farmerId"])
+    .index("by_farmer_type", ["farmerId", "type"]),
 });

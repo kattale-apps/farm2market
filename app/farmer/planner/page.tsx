@@ -44,26 +44,27 @@ function TasksTab({ userId }: { userId: Id<"users"> }) {
 
   const [showForm, setShowForm] = useState(false);
   const [filter, setFilter] = useState<"all" | "upcoming" | "done" | "skipped">("all");
-  const [newTask, setNewTask] = useState({ title: "", emoji: "✅", dueDate: "", notes: "", recurrence: "none" as Recurrence, seasonPlanId: "" });
+  const [newTask, setNewTask] = useState({ taskName: "", emoji: "✅", dueDate: "", notes: "", recurrence: "none" as Recurrence, seasonPlanId: "", category: "general" as "crop" | "livestock" | "general" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleCreate = async () => {
-    if (!newTask.title.trim()) { setError("Task title is required"); return; }
+    if (!newTask.taskName.trim()) { setError("Task title is required"); return; }
     if (!newTask.dueDate) { setError("Due date is required"); return; }
     setSaving(true);
     try {
       await createTask({
         farmerId: userId,
         seasonPlanId: newTask.seasonPlanId ? newTask.seasonPlanId as Id<"farmSeasonPlans"> : undefined,
-        title: newTask.title,
+        taskName: newTask.taskName,
         emoji: newTask.emoji,
+        category: newTask.category,
         dueDate: new Date(newTask.dueDate).getTime(),
         notes: newTask.notes || undefined,
         recurrence: newTask.recurrence,
       });
       setShowForm(false);
-      setNewTask({ title: "", emoji: "✅", dueDate: "", notes: "", recurrence: "none", seasonPlanId: "" });
+      setNewTask({ taskName: "", emoji: "✅", dueDate: "", notes: "", recurrence: "none", seasonPlanId: "", category: "general" });
       setError(null);
     } catch (e: any) { setError(e.message ?? "Failed"); }
     setSaving(false);
@@ -111,12 +112,20 @@ function TasksTab({ userId }: { userId: Id<"users"> }) {
           <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "0.5rem", marginBottom: "0.5rem", alignItems: "center" }}>
             <input value={newTask.emoji} onChange={(e) => setNewTask({ ...newTask, emoji: e.target.value })}
               style={{ width: 44, textAlign: "center", padding: "0.4rem", border: "1px solid #ddd", borderRadius: 8, fontSize: "1.2rem" }} />
-            <input value={newTask.title} onChange={(e) => setNewTask({ ...newTask, title: e.target.value })} placeholder="Task title…"
+            <input value={newTask.taskName} onChange={(e) => setNewTask({ ...newTask, taskName: e.target.value })} placeholder="Task title…"
               style={{ padding: "0.45rem 0.7rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.88rem" }} />
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", marginBottom: "0.5rem" }}>
             <input type="date" value={newTask.dueDate} onChange={(e) => setNewTask({ ...newTask, dueDate: e.target.value })}
               style={{ padding: "0.45rem 0.7rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.85rem" }} />
+            <select value={newTask.category} onChange={(e) => setNewTask({ ...newTask, category: e.target.value as "crop" | "livestock" | "general" })}
+              style={{ padding: "0.45rem 0.7rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.82rem" }}>
+              <option value="general">🌿 General</option>
+              <option value="crop">🌾 Crop</option>
+              <option value="livestock">🐄 Livestock</option>
+            </select>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", marginBottom: "0.5rem" }}>
             <select value={newTask.recurrence} onChange={(e) => setNewTask({ ...newTask, recurrence: e.target.value as Recurrence })}
               style={{ padding: "0.45rem 0.7rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.82rem" }}>
               <option value="none">No recurrence</option>
@@ -157,7 +166,7 @@ function TasksTab({ userId }: { userId: Id<"users"> }) {
                 <span style={{ fontSize: "1.4rem", marginTop: 2 }}>{task.emoji || "✅"}</span>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 600, fontSize: "0.88rem", color: task.status === "done" ? "#888" : "#1a1a1a", textDecoration: task.status === "done" ? "line-through" : "none" }}>
-                    {task.title}
+                    {task.taskName}
                   </div>
                   <div style={{ fontSize: "0.72rem", color: task.isOverdue ? "#c62828" : "#888", marginTop: "0.15rem" }}>
                     {task.isOverdue ? "🔴 Overdue · " : "📅 "}{formatDate(task.dueDate)}
@@ -218,7 +227,7 @@ function SeasonsTab({ userId }: { userId: Id<"users"> }) {
   const deletePlan = useOfflineMutation<any>((api as any).farmPlanner.deleteSeasonPlan);
 
   const [showForm, setShowForm] = useState(false);
-  const [newPlan, setNewPlan] = useState({ planName: "", emoji: "🌾", cropType: "", startDate: "", endDate: "", linkedCropTemplate: "", linkedLivestockTemplate: "", notes: "" });
+  const [newPlan, setNewPlan] = useState({ planName: "", emoji: "🌾", cropOrLivestockType: "", category: "crop" as "crop" | "livestock", startDate: "", expectedHarvestDate: "", linkedCropTemplate: "", linkedLivestockTemplate: "", notes: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -234,19 +243,22 @@ function SeasonsTab({ userId }: { userId: Id<"users"> }) {
     if (!newPlan.startDate) { setError("Start date is required"); return; }
     setSaving(true);
     try {
+      if (!newPlan.cropOrLivestockType.trim()) { setError("Crop/livestock type is required"); setSaving(false); return; }
+      if (!newPlan.expectedHarvestDate) { setError("Expected harvest/end date is required"); setSaving(false); return; }
       await createPlan({
         farmerId: userId,
         planName: newPlan.planName,
         emoji: newPlan.emoji,
-        cropType: newPlan.cropType || undefined,
+        category: newPlan.category,
+        cropOrLivestockType: newPlan.cropOrLivestockType,
         startDate: new Date(newPlan.startDate).getTime(),
-        endDate: newPlan.endDate ? new Date(newPlan.endDate).getTime() : undefined,
+        expectedHarvestDate: new Date(newPlan.expectedHarvestDate).getTime(),
         linkedCostTemplateId: newPlan.linkedCropTemplate ? newPlan.linkedCropTemplate as Id<"cropCostTemplates"> : undefined,
         linkedLivestockCostTemplateId: newPlan.linkedLivestockTemplate ? newPlan.linkedLivestockTemplate as Id<"livestockCostTemplates"> : undefined,
         notes: newPlan.notes || undefined,
       });
       setShowForm(false);
-      setNewPlan({ planName: "", emoji: "🌾", cropType: "", startDate: "", endDate: "", linkedCropTemplate: "", linkedLivestockTemplate: "", notes: "" });
+      setNewPlan({ planName: "", emoji: "🌾", cropOrLivestockType: "", category: "crop", startDate: "", expectedHarvestDate: "", linkedCropTemplate: "", linkedLivestockTemplate: "", notes: "" });
       setError(null);
     } catch (e: any) { setError(e.message ?? "Failed"); }
     setSaving(false);
@@ -269,8 +281,19 @@ function SeasonsTab({ userId }: { userId: Id<"users"> }) {
               style={{ width: 44, textAlign: "center", padding: "0.4rem", border: "1px solid #ddd", borderRadius: 8, fontSize: "1.2rem" }} />
             <input value={newPlan.planName} onChange={(e) => setNewPlan({ ...newPlan, planName: e.target.value })} placeholder="Plan name…"
               style={{ padding: "0.45rem 0.7rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.88rem" }} />
-            <input value={newPlan.cropType} onChange={(e) => setNewPlan({ ...newPlan, cropType: e.target.value })} placeholder="Crop/livestock type"
+            <input value={newPlan.cropOrLivestockType} onChange={(e) => setNewPlan({ ...newPlan, cropOrLivestockType: e.target.value })} placeholder="e.g. maize, beans, cattle"
               style={{ padding: "0.45rem 0.7rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.85rem" }} />
+          </div>
+          <div style={{ marginBottom: "0.5rem" }}>
+            <div style={{ fontSize: "0.72rem", color: "#666", marginBottom: "0.25rem" }}>Category *</div>
+            <div style={{ display: "flex", gap: "0.5rem" }}>
+              {(["crop", "livestock"] as const).map((cat) => (
+                <button key={cat} type="button" onClick={() => setNewPlan({ ...newPlan, category: cat })}
+                  style={{ flex: 1, padding: "0.4rem", border: `1px solid ${newPlan.category === cat ? BRAND : "#ddd"}`, borderRadius: 8, background: newPlan.category === cat ? BRAND_BG : "#fff", color: newPlan.category === cat ? BRAND : "#666", fontFamily: FONT, fontSize: "0.82rem", fontWeight: newPlan.category === cat ? 700 : 400, cursor: "pointer" }}>
+                  {cat === "crop" ? "🌾 Crop" : "🐄 Livestock"}
+                </button>
+              ))}
+            </div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", marginBottom: "0.5rem" }}>
             <div>
@@ -279,8 +302,8 @@ function SeasonsTab({ userId }: { userId: Id<"users"> }) {
                 style={{ width: "100%", padding: "0.45rem 0.7rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.85rem", boxSizing: "border-box" }} />
             </div>
             <div>
-              <div style={{ fontSize: "0.72rem", color: "#666", marginBottom: "0.2rem" }}>End date (optional)</div>
-              <input type="date" value={newPlan.endDate} onChange={(e) => setNewPlan({ ...newPlan, endDate: e.target.value })}
+              <div style={{ fontSize: "0.72rem", color: "#666", marginBottom: "0.2rem" }}>Expected harvest/end date *</div>
+              <input type="date" value={newPlan.expectedHarvestDate} onChange={(e) => setNewPlan({ ...newPlan, expectedHarvestDate: e.target.value })}
                 style={{ width: "100%", padding: "0.45rem 0.7rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.85rem", boxSizing: "border-box" }} />
             </div>
           </div>
@@ -327,8 +350,8 @@ function SeasonsTab({ userId }: { userId: Id<"users"> }) {
                     <div>
                       <div style={{ fontWeight: 700, fontSize: "0.9rem" }}>{plan.planName}</div>
                       <div style={{ fontSize: "0.72rem", color: "#888" }}>
-                        {formatDate(plan.startDate)}{plan.endDate ? ` → ${formatDate(plan.endDate)}` : ""}
-                        {plan.cropType ? ` · ${plan.cropType}` : ""}
+                        {formatDate(plan.startDate)}{plan.expectedHarvestDate ? ` → ${formatDate(plan.expectedHarvestDate)}` : ""}
+                        {plan.cropOrLivestockType ? ` · ${plan.cropOrLivestockType}` : ""}
                       </div>
                     </div>
                   </div>

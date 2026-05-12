@@ -10,6 +10,25 @@ interface NotificationMailboxProps {
   userId: Id<"users">;
 }
 
+function BellIcon({ size = 24 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path
+        d="M12 4a5 5 0 0 0-5 5v3.6c0 .9-.3 1.8-.9 2.4L4.5 17h15l-1.6-2c-.6-.6-.9-1.5-.9-2.4V9a5 5 0 0 0-5-5Z"
+        fill="#1565c0"
+      />
+      <path d="M9.6 18.5a2.4 2.4 0 0 0 4.8 0" stroke="#1565c0" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function NotificationMailbox({ userId }: NotificationMailboxProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
@@ -76,7 +95,7 @@ export function NotificationMailbox({ userId }: NotificationMailboxProps) {
             e.currentTarget.style.boxShadow = unreadCount > 0 ? "0 4px 12px rgba(33, 150, 243, 0.3)" : "0 2px 8px rgba(0,0,0,0.15)";
           }}
         >
-          �
+          <BellIcon size={28} />
           {unreadCount > 0 && (
             <span
               style={{
@@ -155,7 +174,10 @@ export function NotificationMailbox({ userId }: NotificationMailboxProps) {
                   fontWeight: "600",
                 }}
               >
-                � Notifications
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "0.45rem" }}>
+                  <BellIcon size={22} />
+                  Notifications
+                </span>
                 {unreadCount > 0 && (
                   <span
                     style={{

@@ -7,6 +7,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useRouter } from "next/navigation";
 import CommunitySwitcher from "@/app/components/CommunitySwitcher";
+import { CommunityQRCode } from "@/app/components/CommunityQRCode";
 
 export default function MyCommunitiesPage() {
   const router = useRouter();
@@ -48,10 +49,9 @@ export default function MyCommunitiesPage() {
   }
 
   const { joinedCommunities, adminCommunities } = navContext;
+  const isCommunityOnly = navContext.accountScope === "community_only";
+  const linkedCommunityId = navContext.onboardedViaCommunityId as string | null;
   const allCommunities = [...joinedCommunities];
-
-  // Don't show search/discover if user is admin-only
-  const showDiscoverSection = joinedCommunities.length > 0 || searchQuery.trim().length > 0;
 
   const handleJoinCommunity = async (communityId: string) => {
     try {
@@ -82,13 +82,13 @@ export default function MyCommunitiesPage() {
             <h1 className="text-2xl font-bold text-gray-900">My Communities</h1>
             <p className="text-gray-600 text-sm">Connect with farming communities</p>
           </div>
-          {allCommunities.length > 1 && <CommunitySwitcher variant="tabs" />}
+          {allCommunities.length > 1 && !isCommunityOnly && <CommunitySwitcher variant="tabs" />}
         </div>
       </div>
 
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Admin Communities Notice */}
-        {adminCommunities.length > 0 && (
+        {adminCommunities.length > 0 && !isCommunityOnly && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-8">
             <p className="text-sm text-blue-900">
               You are an admin of {adminCommunities.length} communit{adminCommunities.length === 1 ? 'y' : 'ies'}.{" "}
@@ -138,12 +138,16 @@ export default function MyCommunitiesPage() {
         {allCommunities.length === 0 && searchQuery.trim().length === 0 && (
           <div className="text-center py-12">
             <h2 className="text-2xl font-bold text-gray-900 mb-2">No Communities Yet</h2>
-            <p className="text-gray-600 mb-6">Search and join a community to get started!</p>
+            <p className="text-gray-600 mb-6">
+              {isCommunityOnly
+                ? "Use your linked community invite to complete joining."
+                : "Search and join a community to get started!"}
+            </p>
           </div>
         )}
 
         {/* Search Bar */}
-        <div className="mb-8">
+        {!isCommunityOnly && <div className="mb-8">
           <div className="relative">
             <input
               type="text"
@@ -166,10 +170,10 @@ export default function MyCommunitiesPage() {
               />
             </svg>
           </div>
-        </div>
+        </div>}
 
         {/* Search Results / Available Communities */}
-        {searchQuery.trim().length > 0 && searchResults && (
+        {!isCommunityOnly && searchQuery.trim().length > 0 && searchResults && (
           <div>
             <h2 className="text-xl font-bold text-gray-900 mb-4">Available Communities</h2>
             {searchResults.length === 0 ? (

@@ -190,9 +190,36 @@ function imageFormatFromBase64(dataUrl: string): "PNG" | "JPEG" {
   return dataUrl.startsWith("data:image/png") ? "PNG" : "JPEG";
 }
 
+// ── Farm Toolbox PDF branding constants ────────────────────────────────
+const TOOLBOX_LOGO_PATH = "/farm2marketlogo.jpeg";
+const TOOLBOX_QR_PATH   = "/farmcoin-community-qr.png";
+const TOOLBOX_SITE_URL  = "https://www.farm2marketuganda.com";
+
 /**
- * Export farm toolbox submissions to PDF (single or batch)
- * Embeds photos as base64 for offline readability
+ * Draw the farm2market logo as a faint background watermark on the current page.
+ */
+async function addWatermark(doc: jsPDF, logoBase64: string): Promise<void> {
+  if (!logoBase64) return;
+  const pw = doc.internal.pageSize.getWidth();
+  const ph = doc.internal.pageSize.getHeight();
+  const ww = 90;
+  const wh = 90;
+  try {
+    // Use GState opacity when available (jsPDF >=2.x), otherwise render at very small alpha
+    const gstate = new (doc as any).GState({ opacity: 0.09 });
+    doc.saveGraphicsState();
+    (doc as any).setGState(gstate);
+    doc.addImage(logoBase64, "JPEG", (pw - ww) / 2, (ph - wh) / 2, ww, wh);
+    doc.restoreGraphicsState();
+  } catch {
+    // GState not available in this build — skip watermark rather than crash
+  }
+}
+
+/**
+ * Export farm toolbox submissions to PDF.
+ * - Single entry  → exactly ONE page with watermark, photo, QR, website link.
+ * - Multiple entries → original multi-page layout (unchanged) plus branding on cover.
  */
 export async function exportSubmissionsToPDF(
   entries: any[],
@@ -201,13 +228,176 @@ export async function exportSubmissionsToPDF(
 ): Promise<void> {
   if (!entries.length) return;
 
-  const doc = new jsPDF({ unit: "mm", format: "a4" });
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 10;
-  const contentWidth = pageWidth - margin * 2;
+  // Pre-load brand assets (fail silently — they are decorative)
+  const [logoBase64, qrBase64] = await Promise.all([
+    urlToBase64(TOOLBOX_LOGO_PATH),
+    urlToBase64(TOOLBOX_QR_PATH),
+  ]);
 
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const pageWidth  = doc.internal.pageSize.getWidth();   // 210 mm
+  const pageHeight = doc.internal.pageSize.getHeight();  // 297 mm
+  const margin = 10;
+  const contentWidth = pageWidth - margin * 2;           // 190 mm
+
+  // ── SINGLE-ENTRY: compact one-page layout ───────────────────────────
+  if (entries.length === 1) {
+    const entry = entries[0];
+    const submittedDate = formatUgandaDate(entry.submittedAt || entry.createdAt);
+
+    // Watermark behind everything
+    await addWatermark(doc, logoBase64);
+
+    // Green header bar
+    addReportHeader(
+      doc,
+      "Farm Toolbox Submission",
+      `${entry.templateDetails?.templateName || "Unknown Template"}  |  ${submittedDate}`
+    );
+
+    // ── Metadata lines (compact, fixed Y, no autoTable) ─────────────
+    const metaLines: Array<[string, string]> = [
+      ["Template",  entry.templateDetails?.templateName || "Unknown Template"],
+      ["Submitted", submittedDate],
+      ["User",      userAlias || "N/A"],
+      ["Unit",      entry.unitDetails?.name || entry.unitDetails?.unitType || "N/A"],
+      ["GPS",       entry.gpsLat && entry.gpsLng
+                      ? `${Number(entry.gpsLat).toFixed(5)}, ${Number(entry.gpsLng).toFixed(5)}`
+                      : "N/A"],
+      ["Notes",     String(entry.notes || "N/A").slice(0, 90)],
+    ];
+    const fieldValues: Array<[string, string]> = (entry.fieldValues || []).slice(0, 8).map((fv: any) => [
+      String(fv.fieldName || "Field").slice(0, 28),
+      fv.value == null || fv.value === "" ? "-" : String(fv.value).slice(0, 60),
+    ]);
+
+    let y = 32;
+    doc.setFontSize(8.5);
+    const labelX = margin + 2;
+    const valueX = margin + 46;
+    const lineH  = 4.6;
+
+    // Section: submission details
+    doc.setFillColor(244, 247, 245);
+    doc.rect(margin, y - 3, contentWidth, 6, "F");
+    doc.setFont(undefined, "bold");
+    doc.setFontSize(9);
+    doc.text("Submission Details", labelX, y + 0.5);
+    doc.setFont(undefined, "normal");
+    y += 7;
+
+    doc.setFontSize(8.5);
+    for (const [label, value] of metaLines) {
+      doc.setFont(undefined, "bold");
+      doc.text(label, labelX, y);
+      doc.setFont(undefined, "normal");
+      doc.text(value, valueX, y, { maxWidth: contentWidth - 48 });
+      y += lineH;
+    }
+
+    // Section: field values
+    if (fieldValues.length) {
+      y += 2;
+      doc.setFillColor(244, 247, 245);
+      doc.rect(margin, y - 3, contentWidth, 6, "F");
+      doc.setFont(undefined, "bold");
+      doc.setFontSize(9);
+      doc.text("Field Values", labelX, y + 0.5);
+      doc.setFont(undefined, "normal");
+      y += 7;
+      doc.setFontSize(8.5);
+      for (const [label, value] of fieldValues) {
+        doc.setFont(undefined, "bold");
+        doc.text(label, labelX, y);
+        doc.setFont(undefined, "normal");
+        doc.text(value, valueX, y, { maxWidth: contentWidth - 48 });
+        y += lineH;
+      }
+    }
+
+    // ── Photo box (fixed Y so QR & link always fit on same page) ────
+    const photoBoxY  = 148;
+    const photoBoxW  = 88;
+    const photoBoxH  = 54;
+    const photoBoxX  = (pageWidth - photoBoxW) / 2;
+
+    doc.setDrawColor(180);
+    doc.setLineWidth(0.4);
+    doc.rect(photoBoxX, photoBoxY, photoBoxW, photoBoxH);
+
+    const firstPhoto: string | undefined = (entry.photoUrls || []).find(Boolean);
+    if (firstPhoto) {
+      try {
+        const photoB64 = await urlToBase64(firstPhoto);
+        if (photoB64) {
+          doc.addImage(photoB64, imageFormatFromBase64(photoB64),
+            photoBoxX + 0.5, photoBoxY + 0.5, photoBoxW - 1, photoBoxH - 1);
+        } else {
+          doc.setFontSize(8);
+          doc.text("Photo unavailable", pageWidth / 2, photoBoxY + photoBoxH / 2, { align: "center" });
+        }
+      } catch {
+        doc.setFontSize(8);
+        doc.text("Photo unavailable", pageWidth / 2, photoBoxY + photoBoxH / 2, { align: "center" });
+      }
+    } else {
+      doc.setFontSize(8);
+      doc.setTextColor(170, 170, 170);
+      doc.text("No photo attached", pageWidth / 2, photoBoxY + photoBoxH / 2, { align: "center" });
+      doc.setTextColor(30, 30, 30);
+    }
+
+    // ── Farmcoin community QR (static image provided by user) ───────
+    const qrSize = 32;
+    const qrX = (pageWidth - qrSize) / 2;
+    const qrY = photoBoxY + photoBoxH + 7;
+
+    if (qrBase64) {
+      try {
+        doc.addImage(qrBase64, "PNG", qrX, qrY, qrSize, qrSize);
+      } catch {
+        doc.setDrawColor(150);
+        doc.rect(qrX, qrY, qrSize, qrSize);
+      }
+    } else {
+      doc.setDrawColor(150);
+      doc.rect(qrX, qrY, qrSize, qrSize);
+      doc.setFontSize(7);
+      doc.text("QR", pageWidth / 2, qrY + qrSize / 2, { align: "center" });
+    }
+
+    // "FARMCOIN" label + caption
+    doc.setFontSize(8.5);
+    doc.setFont(undefined, "bold");
+    doc.setTextColor(30, 30, 30);
+    doc.text("FARMCOIN", pageWidth / 2, qrY + qrSize + 5, { align: "center" });
+    doc.setFont(undefined, "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(100, 100, 100);
+    doc.text("Scan to join this community", pageWidth / 2, qrY + qrSize + 9.5, { align: "center" });
+
+    // ── Website link ─────────────────────────────────────────────────
+    const linkY = qrY + qrSize + 15;
+    doc.setFontSize(8);
+    doc.setTextColor(34, 100, 55);
+    const anyDoc = doc as any;
+    if (typeof anyDoc.textWithLink === "function") {
+      anyDoc.textWithLink(TOOLBOX_SITE_URL, pageWidth / 2, linkY, {
+        align: "center",
+        url: TOOLBOX_SITE_URL,
+      });
+    } else {
+      doc.text(TOOLBOX_SITE_URL, pageWidth / 2, linkY, { align: "center" });
+    }
+    doc.setTextColor(30, 30, 30);
+
+    void savePdfFromJsPDF(doc, `${filename}.pdf`);
+    return;
+  }
+
+  // ── BATCH: original multi-page layout ───────────────────────────────
   addReportHeader(doc, "Farm Toolbox Submissions", "Readable export report");
+  await addWatermark(doc, logoBase64);
   let y = 38;
   doc.setFontSize(12);
   doc.text(`Total Submissions: ${entries.length}`, margin, y);
@@ -221,6 +411,7 @@ export async function exportSubmissionsToPDF(
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i];
     doc.addPage();
+    await addWatermark(doc, logoBase64);
 
     const submittedDate = formatUgandaDate(entry.submittedAt || entry.createdAt);
     addReportHeader(
@@ -287,6 +478,7 @@ export async function exportSubmissionsToPDF(
     if (photos.length) {
       if (y > pageHeight - 80) {
         doc.addPage();
+        await addWatermark(doc, logoBase64);
         addReportHeader(doc, `Submission ${i + 1} Photos`);
         y = 34;
       }
@@ -304,6 +496,7 @@ export async function exportSubmissionsToPDF(
 
         if (py + photoHeight > pageHeight - margin) {
           doc.addPage();
+          await addWatermark(doc, logoBase64);
           addReportHeader(doc, `Submission ${i + 1} Photos (cont.)`);
           y = addSectionTitle(doc, 34, `Photos (${photos.length})`);
           p--;
@@ -327,6 +520,25 @@ export async function exportSubmissionsToPDF(
           doc.text("Photo unavailable", x + photoWidth / 2, py + photoHeight / 2, { align: "center" });
         }
       }
+
+      // QR + link on last photo page of each submission
+      const qrS = 22;
+      const qrXb = pageWidth - margin - qrS;
+      const qrYb = pageHeight - margin - qrS;
+      if (qrBase64) {
+        try { doc.addImage(qrBase64, "PNG", qrXb, qrYb, qrS, qrS); } catch { /* decorative */ }
+      }
+      doc.setFontSize(7);
+      doc.setTextColor(34, 100, 55);
+      const ad = doc as any;
+      if (typeof ad.textWithLink === "function") {
+        ad.textWithLink(TOOLBOX_SITE_URL, margin, pageHeight - margin - 1, {
+          url: TOOLBOX_SITE_URL,
+        });
+      } else {
+        doc.text(TOOLBOX_SITE_URL, margin, pageHeight - margin - 1);
+      }
+      doc.setTextColor(30, 30, 30);
     }
   }
 

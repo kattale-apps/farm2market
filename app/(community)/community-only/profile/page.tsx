@@ -6,6 +6,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import CommunityTabBar from "@/app/components/CommunityTabBar";
+import { CommunityQRCode } from "@/app/components/CommunityQRCode";
 import { useOfflineQuery } from "@/app/hooks/useOfflineQuery";
 import { useOfflineMutation } from "@/app/hooks/useOfflineMutation";
 import { useStoredUser } from "@/app/hooks/useStoredUser";
@@ -456,6 +457,36 @@ export default function CommunityProfilePage() {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* Community QR Share */}
+        {communityId && (
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: 14,
+              padding: "clamp(1rem, 3vw, 1.25rem)",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+              border: "1px solid #e0e0e0",
+              marginBottom: "1.25rem",
+              textAlign: "center",
+            }}
+          >
+            <h2
+              style={{
+                fontSize: "clamp(1.05rem, 3vw, 1.2rem)",
+                fontWeight: 700,
+                color: "#1a1a1a",
+                margin: "0 0 0.5rem",
+              }}
+            >
+              Share Community
+            </h2>
+            <p style={{ fontSize: "0.86rem", color: "#666", margin: "0 0 0.9rem" }}>
+              Open your QR card to download and share this community invite link.
+            </p>
+            <CommunityQRCode communityId={communityId} mode="button" buttonLabel="Share QR Card" />
           </div>
         )}
       </div>

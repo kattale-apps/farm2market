@@ -675,15 +675,30 @@ export const getUserCommunities = query({
     userId: v.id("users"),
   },
   handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      return [];
+    }
+
     // Get all community memberships for the user
     const memberships = await ctx.db
       .query("communityMemberships")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .collect();
 
+    const seenCommunityIds = new Set<string>();
+    const uniqueMemberships = memberships.filter((membership) => {
+      const id = String(membership.communityId);
+      if (seenCommunityIds.has(id)) {
+        return false;
+      }
+      seenCommunityIds.add(id);
+      return true;
+    });
+
     // Get community details for each membership
     const communities = await Promise.all(
-      memberships.map(async (m) => {
+      uniqueMemberships.map(async (m) => {
         const community = await ctx.db.get(m.communityId);
         if (!community) return null;
         const communityMemberships = await ctx.db
@@ -705,6 +720,26 @@ export const getUserCommunities = query({
     );
 
     return communities.filter((c) => c !== null);
+  },
+});
+
+export const getUserCommunityScope = query({
+  args: {
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      return {
+        accountScope: null,
+        onboardedViaCommunityId: null,
+      };
+    }
+
+    return {
+      accountScope: user.accountScope ?? null,
+      onboardedViaCommunityId: user.onboardedViaCommunityId ?? null,
+    };
   },
 });
 
@@ -866,6 +901,7 @@ export const joinCommunityByQr = mutation({
           createdAt: getUgandaTime(),
           lastActiveAt: getUgandaTime(),
           passwordHash,
+          accountScope: "community_only",
           onboardedViaCommunityId: community._id,
         });
       }
@@ -1998,14 +2034,25 @@ export const getMyNavigationContext = query({
       }))
     );
 
+    const scopedAdminCommunities = adminCommunitiesMapped;
+
     // Get communities where user is a member
     const membershipRecords = await ctx.db
       .query("communityMemberships")
       .filter((q) => q.eq(q.field("userId"), userId))
       .collect();
 
+    const scopedMembershipRecords = membershipRecords;
+
     const joinedCommunities = [];
-    for (const membership of membershipRecords) {
+    const seenJoinedCommunityIds = new Set<string>();
+    for (const membership of scopedMembershipRecords) {
+      const joinedCommunityId = String(membership.communityId);
+      if (seenJoinedCommunityIds.has(joinedCommunityId)) {
+        continue;
+      }
+      seenJoinedCommunityIds.add(joinedCommunityId);
+
       const community = await ctx.db.get(membership.communityId);
       if (community) {
         joinedCommunities.push({
@@ -2019,22 +2066,24 @@ export const getMyNavigationContext = query({
 
     // Determine default community ID
     let defaultCommunityId: Id<"communities"> | null = null;
-    if (adminCommunitiesMapped.length > 0) {
+    if (scopedAdminCommunities.length > 0) {
       // Prefer admin communities
       const firstAdminCommunity = adminCommunities.find((c) =>
-        adminCommunitiesMapped.some((mc) => mc.communityId === c._id)
+        scopedAdminCommunities.some((mc) => mc.communityId === c._id)
       );
       defaultCommunityId = firstAdminCommunity?._id || null;
     } else if (joinedCommunities.length > 0) {
       // Fall back to first joined community
-      const firstJoinedMembership = membershipRecords[0];
+      const firstJoinedMembership = scopedMembershipRecords[0];
       defaultCommunityId = firstJoinedMembership?.communityId || null;
     }
 
     return {
       userId,
       isSuperadmin,
-      adminCommunities: adminCommunitiesMapped,
+      accountScope: user.accountScope,
+      onboardedViaCommunityId: user.onboardedViaCommunityId ?? null,
+      adminCommunities: scopedAdminCommunities,
       joinedCommunities,
       defaultCommunityId,
       error: undefined,

@@ -908,11 +908,14 @@ function InsightsTab({ userId }: { userId: Id<"users"> }) {
 }
 
 // ─── SUPPLIES TAB ─────────────────────────────────────────────────────────────
-type SupplyCategory = "seed" | "fertiliser" | "chemical" | "equipment" | "labour" | "other";
+type SupplyCategory = "seed" | "fertiliser" | "chemical" | "pesticide" | "vet_input" | "animal_feed" | "equipment" | "labour" | "other";
 const SUPPLY_CATEGORIES: { value: SupplyCategory; label: string; emoji: string }[] = [
   { value: "seed", label: "Seeds", emoji: "🌱" },
   { value: "fertiliser", label: "Fertiliser", emoji: "🧪" },
   { value: "chemical", label: "Chemical", emoji: "⚗️" },
+  { value: "pesticide", label: "Pesticides", emoji: "🧴" },
+  { value: "vet_input", label: "Vet Inputs", emoji: "💉" },
+  { value: "animal_feed", label: "Animal Feeds", emoji: "🌾" },
   { value: "equipment", label: "Equipment", emoji: "🔧" },
   { value: "labour", label: "Labour", emoji: "👷" },
   { value: "other", label: "Other", emoji: "📦" },

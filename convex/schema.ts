@@ -2140,6 +2140,9 @@ export default defineSchema({
       v.literal("seed"),
       v.literal("fertiliser"),
       v.literal("chemical"),
+      v.literal("pesticide"),
+      v.literal("vet_input"),
+      v.literal("animal_feed"),
       v.literal("equipment"),
       v.literal("labour"),
       v.literal("other")

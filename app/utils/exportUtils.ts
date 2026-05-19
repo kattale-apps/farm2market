@@ -153,6 +153,56 @@ async function urlToBase64(url: string): Promise<string> {
   }
 }
 
+/**
+ * Crop an image to a target aspect ratio from the center and return a JPEG data URL.
+ * This is used for cover-fit rendering in PDF boxes without letterboxing.
+ */
+async function cropBase64ToAspect(base64: string, targetAspect: number): Promise<string> {
+  if (!base64 || !Number.isFinite(targetAspect) || targetAspect <= 0) return base64;
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const iw = img.naturalWidth || img.width;
+      const ih = img.naturalHeight || img.height;
+      if (!iw || !ih) {
+        resolve(base64);
+        return;
+      }
+
+      const inputAspect = iw / ih;
+      let sx = 0;
+      let sy = 0;
+      let sw = iw;
+      let sh = ih;
+
+      if (inputAspect > targetAspect) {
+        // Input is wider than target: crop left and right.
+        sw = Math.round(ih * targetAspect);
+        sx = Math.max(0, Math.round((iw - sw) / 2));
+      } else if (inputAspect < targetAspect) {
+        // Input is taller than target: crop top and bottom.
+        sh = Math.round(iw / targetAspect);
+        sy = Math.max(0, Math.round((ih - sh) / 2));
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, sw);
+      canvas.height = Math.max(1, sh);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        resolve(base64);
+        return;
+      }
+
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", 0.92));
+    };
+    img.onerror = () => resolve(base64);
+    img.src = base64;
+  });
+}
+
 function addReportHeader(doc: jsPDF, title: string, subtitle?: string) {
   const pageWidth = doc.internal.pageSize.getWidth();
   doc.setFillColor(34, 100, 55);
@@ -498,17 +548,13 @@ export async function exportSubmissionsToPDF(
       try {
         const photoB64 = await urlToBase64(firstPhoto);
         if (photoB64) {
-          const props = (doc as any).getImageProperties(photoB64);
-          const iw = Number(props?.width || 1);
-          const ih = Number(props?.height || 1);
           const innerW = photoBoxW - 1;
           const innerH = photoBoxH - 1;
-          const scale = Math.min(innerW / iw, innerH / ih);
-          const drawW = iw * scale;
-          const drawH = ih * scale;
-          const dx = photoBoxX + 0.5 + (innerW - drawW) / 2;
-          const dy = photoBoxY + 0.5 + (innerH - drawH) / 2;
-          doc.addImage(photoB64, imageFormatFromBase64(photoB64), dx, dy, drawW, drawH);
+          const targetAspect = innerW / innerH;
+          const croppedB64 = await cropBase64ToAspect(photoB64, targetAspect);
+          const dx = photoBoxX + 0.5;
+          const dy = photoBoxY + 0.5;
+          doc.addImage(croppedB64, imageFormatFromBase64(croppedB64), dx, dy, innerW, innerH);
         } else {
           doc.setFontSize(8);
           doc.text("Photo unavailable", pageWidth / 2, photoBoxY + photoBoxH / 2, { align: "center" });

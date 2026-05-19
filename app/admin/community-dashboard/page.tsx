@@ -1,7 +1,5 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
@@ -12,17 +10,13 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import QRCode from "qrcode";
 import { CommunityQRCode } from "../../components/CommunityQRCode";
 import { CommunityMemberCard } from "../../components/CommunityMemberCard";
 import { resolveCommunityLogo } from "../../lib/communityLogos";
 import { AdminFertilizerConfig } from "../../components/biofarm/AdminFertilizerConfig";
-import { savePdfFromJsPDF } from "../../utils/pdfDownload";
-import { useStoredUser } from "../../hooks/useStoredUser";
-import { GeneralCameraCapture } from "../../components/GeneralCameraCapture";
 
 /* ── Tab types for community cards ── */
-type CommunityTab = "members" | "noticeboard" | "messages" | "forms" | "insights" | "fertilizer" | "farmNeeds";
+type CommunityTab = "members" | "noticeboard" | "messages" | "forms" | "insights" | "fertilizer";
 
 /* ── Noticeboard tab (per community) ── */
 function NoticeboardTab({ communityId, userId }: { communityId: Id<"communities">; userId: Id<"users"> }) {
@@ -122,7 +116,7 @@ function NoticeboardTab({ communityId, userId }: { communityId: Id<"communities"
       <h4 style={{ margin: "0 0 0.75rem 0", fontSize: "1rem", fontWeight: 600, color: "#333" }}>Recent Posts</h4>
       {posts === undefined ? (
         <p style={{ color: "#999" }}>Loading posts…</p>
-      ) : posts.length === 0 ? (
+      ) : !Array.isArray(posts) || posts.length === 0 ? (
         <p style={{ color: "#999" }}>No posts yet. Create the first one above!</p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
@@ -354,7 +348,7 @@ function MessagesTab({ communityId, userId }: { communityId: Id<"communities">; 
       }}>
         {messages === undefined ? (
           <p style={{ color: "#999", textAlign: "center", padding: "1rem" }}>Loading messages…</p>
-        ) : messages.length === 0 ? (
+        ) : !Array.isArray(messages) || messages.length === 0 ? (
           <p style={{ color: "#999", textAlign: "center", padding: "1rem" }}>No messages yet. Start the conversation!</p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
@@ -430,106 +424,6 @@ function MessagesTab({ communityId, userId }: { communityId: Id<"communities">; 
             {msg.text}
           </span>
         )}
-      </div>
-    </div>
-  );
-}
-
-function FormInlineQRCode({
-  formId,
-  compact = true,
-}: {
-  formId: Id<"communityForms">;
-  compact?: boolean;
-}) {
-  const qrData = useQuery((api as any).forms.getFormQrData, { formId }) as any;
-  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!qrData?.fillPath) return;
-    const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
-    const fullUrl = `${baseUrl}${qrData.fillPath}`;
-    QRCode.toDataURL(fullUrl, {
-      width: compact ? 96 : 320,
-      margin: 2,
-      color: { dark: "#000000", light: "#ffffff" },
-      errorCorrectionLevel: "H",
-    })
-      .then((url: string) => setQrDataUrl(url))
-      .catch(() => setQrDataUrl(null));
-  }, [qrData?.fillPath, compact]);
-
-  if (!qrData?.qrEnabled) {
-    return null;
-  }
-
-  const handleDownload = () => {
-    if (!qrDataUrl || !qrData) return;
-    const link = document.createElement("a");
-    link.href = qrDataUrl;
-    link.download = `${String(qrData.formName || "form").replace(/\s+/g, "-").toLowerCase()}-qr.png`;
-    link.click();
-  };
-
-  const handleCopy = async () => {
-    if (!qrData?.fillPath) return;
-    const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
-    try {
-      await navigator.clipboard.writeText(`${baseUrl}${qrData.fillPath}`);
-    } catch {}
-  };
-
-  if (compact) {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-        {qrDataUrl ? (
-          <img src={qrDataUrl} alt="Form QR" style={{ width: 54, height: 54, borderRadius: 6, border: "1px solid #ddd", background: "#fff" }} />
-        ) : (
-          <div style={{ width: 54, height: 54, borderRadius: 6, border: "1px solid #ddd", background: "#f5f5f5" }} />
-        )}
-        <span style={{ fontSize: "0.62rem", color: "#666", fontWeight: 600 }}>QR</span>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.85rem" }}>
-      {qrDataUrl ? (
-        <img src={qrDataUrl} alt="Form QR" style={{ width: 112, height: 112, borderRadius: 8, border: "1px solid #ddd", background: "#fff" }} />
-      ) : (
-        <div style={{ width: 112, height: 112, borderRadius: 8, border: "1px solid #ddd", background: "#f5f5f5" }} />
-      )}
-      <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
-        <button
-          onClick={handleDownload}
-          style={{
-            padding: "0.35rem 0.7rem",
-            borderRadius: "6px",
-            border: "1px solid #2e7d32",
-            background: "#e8f5e9",
-            color: "#2e7d32",
-            fontSize: "0.78rem",
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          Download QR PNG
-        </button>
-        <button
-          onClick={handleCopy}
-          style={{
-            padding: "0.35rem 0.7rem",
-            borderRadius: "6px",
-            border: "1px solid #1976d2",
-            background: "#e3f2fd",
-            color: "#1565c0",
-            fontSize: "0.78rem",
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          Copy Form Link
-        </button>
       </div>
     </div>
   );
@@ -846,13 +740,10 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
                     style={{ padding: "0.4rem", borderRadius: "5px", border: "1px solid #ccc", fontSize: "0.82rem" }}
                   >
                     <option value="text">Text</option>
-                    <option value="email">Email</option>
-                    <option value="phone">Phone</option>
                     <option value="number">Number</option>
                     <option value="date">Date</option>
                     <option value="select">Select</option>
                     <option value="textarea">Textarea</option>
-                    <option value="checkbox">Checkbox</option>
                     <option value="camera">📸 Camera Photo</option>
                     <option value="gps">📍 GPS Location</option>
                   </select>
@@ -1008,55 +899,10 @@ function FormDetailView({ formId, formName, isActive, onToggleActive, onDelete }
   onDelete: () => void;
 }) {
   const formDetails = useQuery((api as any).forms.getFormDetails, { formId });
-  const responses = useQuery((api as any).forms.getFormResponses, { formId }) as any;
-
-  const handleDownloadTrackerFormPdf = () => {
-    if (!formDetails) return;
-    const isTracker = (formDetails as any).formPurpose !== "profile";
-    if (!isTracker) return;
-
-    const doc = new jsPDF({ orientation: "portrait" });
-    const pageWidth = doc.internal.pageSize.getWidth();
-    doc.setFontSize(16);
-    doc.text(`${formName} - Tracker Form`, pageWidth / 2, 18, { align: "center" });
-    doc.setFontSize(9);
-    doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth / 2, 25, { align: "center" });
-
-    const tableRows = ((formDetails as any).fields || []).map((f: any, idx: number) => [
-      String(idx + 1),
-      f.label,
-      f.fieldType,
-      f.required ? "Yes" : "No",
-      (f.options || []).join(", ") || "-",
-    ]);
-
-    autoTable(doc, {
-      startY: 32,
-      head: [["#", "Field", "Type", "Required", "Options"]],
-      body: tableRows,
-      theme: "grid",
-      headStyles: { fillColor: [46, 125, 50], fontSize: 9 },
-      bodyStyles: { fontSize: 8 },
-      margin: { left: 14, right: 14 },
-    });
-
-    const finalY = (doc as any).lastAutoTable?.finalY || 42;
-    doc.setFontSize(9);
-    doc.text("Manual entry space:", 14, finalY + 12);
-    for (let i = 0; i < 5; i += 1) {
-      const y = finalY + 18 + i * 8;
-      doc.line(14, y, pageWidth - 14, y);
-    }
-
-    void savePdfFromJsPDF(doc, `${formName.replace(/\s+/g, "-").toLowerCase()}-tracker-form.pdf`);
-  };
+  const responses = useQuery((api as any).forms.getFormResponses, { formId });
 
   return (
     <div style={{ padding: "1rem" }}>
-      <h6 style={{ margin: "0 0 0.5rem 0", fontSize: "0.85rem", fontWeight: 700, color: "#333" }}>
-        Form QR
-      </h6>
-      <FormInlineQRCode formId={formId} compact={false} />
       {/* Form fields */}
       <h6 style={{ margin: "0 0 0.5rem 0", fontSize: "0.85rem", fontWeight: 700, color: "#333" }}>
         Fields
@@ -1106,23 +952,11 @@ function FormDetailView({ formId, formName, isActive, onToggleActive, onDelete }
 
       {/* Responses count */}
       <div style={{ fontSize: "0.85rem", color: "#555", marginBottom: "0.75rem" }}>
-        <strong>Responses:</strong> {responses === undefined ? "..." : (responses?.responses?.length ?? 0)}
+        <strong>Responses:</strong> {responses === undefined ? "..." : Array.isArray(responses) ? responses.length : 0}
       </div>
 
       {/* Actions */}
-      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-        {(formDetails as any)?.formPurpose !== "profile" && (
-          <button
-            onClick={handleDownloadTrackerFormPdf}
-            style={{
-              padding: "0.35rem 0.7rem", borderRadius: "6px", border: "1px solid #6a1b9a",
-              background: "#f3e5f5", color: "#6a1b9a",
-              fontSize: "0.8rem", fontWeight: 600, cursor: "pointer",
-            }}
-          >
-            Download Tracker PDF
-          </button>
-        )}
+      <div style={{ display: "flex", gap: "0.5rem" }}>
         <button
           onClick={onToggleActive}
           style={{
@@ -1154,19 +988,9 @@ const CHART_COLORS = ["#2e7d32","#1565c0","#ef6c00","#8e24aa","#c62828","#00838f
 function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; userId: Id<"users"> }) {
   const forms = useQuery((api as any).forms.getCommunityForms, { communityId });
   const [selectedFormId, setSelectedFormId] = useState<string>("");
-  const [selectedTrackedUnitId, setSelectedTrackedUnitId] = useState<string>("");
-  const trackedUnits = useQuery(
-    (api as any).farmToolbox.listTrackedUnits,
-    userId ? { farmerId: userId } : "skip"
-  ) as any[] | undefined;
   const formResponses = useQuery(
     (api as any).forms.getFormResponses,
-    selectedFormId
-      ? {
-          formId: selectedFormId as Id<"communityForms">,
-          trackedUnitId: selectedTrackedUnitId ? (selectedTrackedUnitId as Id<"farmTrackedUnits">) : undefined,
-        }
-      : "skip"
+    selectedFormId ? { formId: selectedFormId as Id<"communityForms"> } : "skip"
   );
   const membersRaw = useQuery(
     api.communityApplications.getCommunityMembersByCommunityIds,
@@ -1352,9 +1176,6 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
         "Email": r.member?.email || "—",
         "Phone": r.member?.phoneNumber || "—",
         "Submitted": new Date(r.createdAt).toLocaleString(),
-        "Tracked Unit": r.trackedUnit ? `${r.trackedUnit.emoji || ""} ${r.trackedUnit.name || r.trackedUnit.groupLabel || r.trackedUnit.unitType}`.trim() : "—",
-        "Unit Type": r.trackedUnit?.unitType || "—",
-        "Unit Category": r.trackedUnit?.category || "—",
       };
       fields.forEach((f: any) => {
         const v = (r.values || []).find((rv: any) => String(rv.fieldId) === String(f._id));
@@ -1398,8 +1219,7 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
       return [agg.field.label, agg.field.fieldType, (agg.barData || []).map((d: any) => `${d.name}: ${d.value}`).join(", ")];
     });
     autoTable(doc, { head: [["Field", "Type", "Summary"]], body: summaryRows, startY: 34, styles: { fontSize: 8 }, headStyles: { fillColor: [46, 125, 50] } });
-    const hasUnits = responses.some((r: any) => r.trackedUnit);
-    const headers = ["Member", ...(hasUnits ? ["Tracked Unit"] : []), ...fields.map((f: any) => f.label)];
+    const headers = ["Member", ...fields.map((f: any) => f.label)];
     const body = responses.map((r: any) => {
       const memberName = r.member?.alias || "Unknown";
       const vals = fields.map((f: any) => {
@@ -1408,11 +1228,10 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
         if (f.fieldType === "camera") { try { val = JSON.parse(val).capturedAt || "photo"; } catch { val = val ? "photo" : ""; } }
         return val.length > 40 ? val.slice(0, 38) + "…" : val;
       });
-      const unitLabel = r.trackedUnit ? `${r.trackedUnit.emoji || ""} ${r.trackedUnit.name || r.trackedUnit.groupLabel || r.trackedUnit.unitType}`.trim() : "";
-      return [memberName, ...(hasUnits ? [unitLabel] : []), ...vals];
+      return [memberName, ...vals];
     });
     autoTable(doc, { head: [headers], body, startY: (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 10 : 80, styles: { fontSize: 7 }, headStyles: { fillColor: [21, 101, 192] }, alternateRowStyles: { fillColor: [245, 245, 245] } });
-    void savePdfFromJsPDF(doc, `${selectedForm?.name || "form"}-report.pdf`);
+    doc.save(`${selectedForm?.name || "form"}-report.pdf`);
   }, [responses, fields, selectedForm, isProfile, fieldAggregations]);
 
   // ── Export: Members Excel ──
@@ -1459,7 +1278,7 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
       m.farmer?.farmSizeAcres != null ? String(m.farmer.farmSizeAcres) : "—",
     ]);
     autoTable(doc, { head: [headers], body, startY: 34, styles: { fontSize: 7 }, headStyles: { fillColor: [46, 125, 50] }, alternateRowStyles: { fillColor: [245, 245, 245] } });
-    void savePdfFromJsPDF(doc, "community-members-report.pdf");
+    doc.save("community-members-report.pdf");
   }, [memberList]);
 
   if (!forms) return <div style={{ padding: "1rem", color: "#999" }}>Loading forms...</div>;
@@ -1678,10 +1497,7 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
             <label style={{ fontWeight: 600, fontSize: "0.9rem", color: "#333", display: "block", marginBottom: "0.35rem" }}>Select Form</label>
             <select
               value={selectedFormId}
-              onChange={(e) => {
-                setSelectedFormId(e.target.value);
-                setSelectedTrackedUnitId("");
-              }}
+              onChange={(e) => setSelectedFormId(e.target.value)}
               style={{ width: "100%", padding: "0.5rem", borderRadius: "8px", border: "1px solid #ccc", fontSize: "0.9rem" }}
             >
               <option value="">— Choose a form —</option>
@@ -1697,28 +1513,6 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
               )}
             </select>
           </div>
-
-          {selectedFormId && trackedUnits && trackedUnits.length > 0 && (
-            <div style={{ marginBottom: "1rem" }}>
-              <label style={{ fontWeight: 600, fontSize: "0.82rem", color: "#333", display: "block", marginBottom: "0.35rem" }}>
-                Filter by tracked unit
-              </label>
-              <select
-                value={selectedTrackedUnitId}
-                onChange={(e) => setSelectedTrackedUnitId(e.target.value)}
-                style={{ width: "100%", padding: "0.45rem", borderRadius: "8px", border: "1px solid #ccc", fontSize: "0.85rem" }}
-              >
-                <option value="">All units</option>
-                {trackedUnits
-                  .filter((u: any) => u.status === "active")
-                  .map((u: any) => (
-                    <option key={u._id} value={u._id}>
-                      {(u.emoji || "🌱")} {u.name || u.groupLabel || u.unitType} ({u.category})
-                    </option>
-                  ))}
-              </select>
-            </div>
-          )}
 
           {!selectedFormId && (
             <div style={{ padding: "2rem", textAlign: "center", color: "#999" }}>Select a form above to view insights.</div>
@@ -1840,305 +1634,11 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
   );
 }
 
-/* ── Fertilizer Tab (per community) ── */
-function FertilizerTab({
-  communityId,
-  adminId,
-  initialFertilizerEnabled,
-  canToggle,
-}: {
-  communityId: Id<"communities">;
-  adminId: Id<"users">;
-  initialFertilizerEnabled: boolean;
-  canToggle: boolean;
-}) {
-  const enableFertilizer = useMutation((api as any).farmNeeds.enableCommunityFertilizer);
-  const [fertilizerEnabled, setFertilizerEnabled] = useState<boolean>(initialFertilizerEnabled);
-  const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
-
-  const handleToggle = async () => {
-    if (!canToggle) return;
-    try {
-      const next = !fertilizerEnabled;
-      await enableFertilizer({ adminId, communityId, enabled: next });
-      setFertilizerEnabled(next);
-      setMsg({ type: "success", text: `Fertilizer ${next ? "enabled" : "disabled"}` });
-      setTimeout(() => setMsg(null), 3000);
-    } catch (e: any) {
-      setMsg({ type: "error", text: e.message });
-    }
-  };
-
-  return (
-    <div style={{ padding: "1.25rem" }}>
-      {msg && (
-        <div style={{ marginBottom: "1rem", padding: "0.75rem", borderRadius: 8, background: msg.type === "success" ? "#e8f5e9" : "#ffebee", color: msg.type === "success" ? "#2e7d32" : "#c62828", border: `1px solid ${msg.type === "success" ? "#c8e6c9" : "#ffcdd2"}`, fontSize: "0.85rem" }}>
-          {msg.text}
-        </div>
-      )}
-
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1rem", background: "#f5f5f5", borderRadius: 10, marginBottom: "1.25rem", border: "1px solid #e0e0e0" }}>
-        <div>
-          <div style={{ fontWeight: 700, fontSize: "0.95rem", color: "#333", fontFamily: FONT }}>🌱 Fertilizer Feature</div>
-          <div style={{ fontSize: "0.78rem", color: "#666", marginTop: 2 }}>Enable fertilizer planner tools for selected communities</div>
-        </div>
-        {canToggle ? (
-          <button
-            onClick={handleToggle}
-            style={{ padding: "0.45rem 1rem", borderRadius: 8, border: "none", background: fertilizerEnabled ? "#4caf50" : "#bdbdbd", color: "#fff", fontWeight: 700, fontSize: "0.85rem", cursor: "pointer", fontFamily: FONT }}
-          >
-            {fertilizerEnabled ? "Enabled" : "Disabled"}
-          </button>
-        ) : (
-          <span style={{ fontSize: "0.8rem", color: fertilizerEnabled ? "#2e7d32" : "#777", fontWeight: 700 }}>
-            {fertilizerEnabled ? "Enabled" : "Disabled"}
-          </span>
-        )}
-      </div>
-
-      {fertilizerEnabled ? (
-        <AdminFertilizerConfig communityId={communityId} userId={adminId} />
-      ) : (
-        <div style={{ border: "1px solid #eee", borderRadius: 10, padding: "0.9rem", background: "#fff", color: "#666", fontSize: "0.85rem" }}>
-          Fertilizer tools are disabled for this community.
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ── Farm Needs Tab (per community) ── */
-function FarmNeedsTab({ communityId, adminId, initialFarmNeedsEnabled }: { communityId: Id<"communities">; adminId: Id<"users">; initialFarmNeedsEnabled: boolean }) {
-  const enableFarmNeeds = useMutation((api as any).farmNeeds.enableCommunityFarmNeeds);
-  const createFarmNeedsForm = useMutation((api as any).farmNeeds.createFarmNeedsForm);
-  const communityForms = useQuery((api as any).farmNeeds.getCommunityFarmNeedsForms, { adminId, communityId });
-  const farmNeedsInsights = useQuery((api as any).farmNeeds.getCommunityFarmNeedsInsights, { adminId, communityId });
-
-  const [farmNeedsEnabled, setFarmNeedsEnabled] = useState<boolean>(initialFarmNeedsEnabled);
-  const [showBuilder, setShowBuilder] = useState(false);
-  const [formName, setFormName] = useState("");
-  const [formDescription, setFormDescription] = useState("");
-  const [formCategory, setFormCategory] = useState<"crops" | "livestock">("crops");
-  const [fields, setFields] = useState<Array<{ fieldType: string; label: string; required: boolean; order: number; options?: string[] }>>([
-    { fieldType: "text", label: "", required: true, order: 0 },
-  ]);
-  const [submitting, setSubmitting] = useState(false);
-  const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [origin, setOrigin] = useState("");
-
-  useEffect(() => { if (typeof window !== "undefined") setOrigin(window.location.origin); }, []);
-
-  const handleToggle = async () => {
-    try {
-      const next = !farmNeedsEnabled;
-      await enableFarmNeeds({ adminId, communityId, enabled: next });
-      setFarmNeedsEnabled(next);
-      setMsg({ type: "success", text: `Farm Needs ${next ? "enabled" : "disabled"}` });
-      setTimeout(() => setMsg(null), 3000);
-    } catch (e: any) {
-      setMsg({ type: "error", text: e.message });
-    }
-  };
-
-  const handleAddField = () => setFields((f) => [...f, { fieldType: "text", label: "", required: true, order: f.length }]);
-  const handleRemoveField = (i: number) => setFields((f) => f.filter((_, idx) => idx !== i));
-  const handleFieldChange = (i: number, key: string, value: any) => {
-    setFields((f) => f.map((field, idx) => idx === i ? { ...field, [key]: value } : field));
-  };
-
-  const handleCreateForm = async () => {
-    if (!formName.trim() || fields.some((f) => !f.label.trim())) {
-      setMsg({ type: "error", text: "Form name and all field labels are required" });
-      return;
-    }
-    setSubmitting(true);
-    try {
-      await createFarmNeedsForm({
-        adminId,
-        communityId,
-        name: formName,
-        description: formDescription || undefined,
-        category: formCategory,
-        fields: fields.map((f, i) => ({ ...f, order: i })),
-      });
-      setMsg({ type: "success", text: "Farm Needs form created!" });
-      setFormName(""); setFormDescription(""); setFormCategory("crops");
-      setFields([{ fieldType: "text", label: "", required: true, order: 0 }]);
-      setShowBuilder(false);
-      setTimeout(() => setMsg(null), 3000);
-    } catch (e: any) {
-      setMsg({ type: "error", text: e.message });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const BRAND = "#2e7d32";
-  const FONT = '"Montserrat", sans-serif';
-
-  return (
-    <div style={{ padding: "1.25rem" }}>
-      {msg && (
-        <div style={{ marginBottom: "1rem", padding: "0.75rem", borderRadius: 8, background: msg.type === "success" ? "#e8f5e9" : "#ffebee", color: msg.type === "success" ? "#2e7d32" : "#c62828", border: `1px solid ${msg.type === "success" ? "#c8e6c9" : "#ffcdd2"}`, fontSize: "0.85rem" }}>
-          {msg.text}
-        </div>
-      )}
-
-      {/* Enable/Disable toggle */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1rem", background: "#f5f5f5", borderRadius: 10, marginBottom: "1.25rem", border: "1px solid #e0e0e0" }}>
-        <div>
-          <div style={{ fontWeight: 700, fontSize: "0.95rem", color: "#333", fontFamily: FONT }}>🌾 Farm Needs Feature</div>
-          <div style={{ fontSize: "0.78rem", color: "#666", marginTop: 2 }}>Allow farmers to submit crop/livestock need forms</div>
-        </div>
-        <button
-          onClick={handleToggle}
-          style={{ padding: "0.45rem 1rem", borderRadius: 8, border: "none", background: farmNeedsEnabled ? "#4caf50" : "#bdbdbd", color: "#fff", fontWeight: 700, fontSize: "0.85rem", cursor: "pointer", fontFamily: FONT }}
-        >
-          {farmNeedsEnabled ? "Enabled" : "Disabled"}
-        </button>
-      </div>
-
-      {/* Insights */}
-      <div style={{ marginBottom: "1.25rem" }}>
-        <h4 style={{ margin: "0 0 0.6rem", fontSize: "1rem", fontWeight: 700, color: "#1b5e20", fontFamily: FONT }}>📈 Farm Needs Insights</h4>
-        {!farmNeedsInsights ? (
-          <p style={{ color: "#999", fontSize: "0.85rem" }}>Loading insights…</p>
-        ) : (
-          <>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: "0.6rem", marginBottom: "0.7rem" }}>
-              <div style={{ border: "1px solid #dcedc8", background: "#f1f8e9", borderRadius: 8, padding: "0.65rem" }}>
-                <div style={{ fontSize: "0.72rem", color: "#558b2f", fontWeight: 700 }}>Total Forms</div>
-                <div style={{ fontSize: "1.15rem", color: "#33691e", fontWeight: 800 }}>{farmNeedsInsights.totalForms ?? 0}</div>
-              </div>
-              <div style={{ border: "1px solid #dcedc8", background: "#f1f8e9", borderRadius: 8, padding: "0.65rem" }}>
-                <div style={{ fontSize: "0.72rem", color: "#558b2f", fontWeight: 700 }}>Total Responses</div>
-                <div style={{ fontSize: "1.15rem", color: "#33691e", fontWeight: 800 }}>{farmNeedsInsights.totalResponses ?? 0}</div>
-              </div>
-              <div style={{ border: "1px solid #ffe0b2", background: "#fff8e1", borderRadius: 8, padding: "0.65rem" }}>
-                <div style={{ fontSize: "0.72rem", color: "#ef6c00", fontWeight: 700 }}>Crops</div>
-                <div style={{ fontSize: "0.95rem", color: "#e65100", fontWeight: 700 }}>{farmNeedsInsights.byCategory?.crops?.forms ?? 0} form(s), {farmNeedsInsights.byCategory?.crops?.responses ?? 0} response(s)</div>
-              </div>
-              <div style={{ border: "1px solid #ffe0b2", background: "#fff8e1", borderRadius: 8, padding: "0.65rem" }}>
-                <div style={{ fontSize: "0.72rem", color: "#ef6c00", fontWeight: 700 }}>Livestock</div>
-                <div style={{ fontSize: "0.95rem", color: "#e65100", fontWeight: 700 }}>{farmNeedsInsights.byCategory?.livestock?.forms ?? 0} form(s), {farmNeedsInsights.byCategory?.livestock?.responses ?? 0} response(s)</div>
-              </div>
-            </div>
-            <div style={{ border: "1px solid #e0e0e0", background: "#fff", borderRadius: 8, padding: "0.7rem" }}>
-              <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#444", marginBottom: "0.45rem" }}>Recent Submissions</div>
-              {farmNeedsInsights.recentSubmissions?.length ? (
-                <div style={{ display: "grid", gap: "0.35rem" }}>
-                  {farmNeedsInsights.recentSubmissions.map((row: any) => (
-                    <div key={String(row.responseId)} style={{ display: "flex", justifyContent: "space-between", gap: "0.6rem", flexWrap: "wrap", fontSize: "0.78rem", color: "#555", borderBottom: "1px dashed #eee", paddingBottom: "0.3rem" }}>
-                      <span><strong>{row.formName}</strong> ({row.category}) by {row.memberAlias}</span>
-                      <span>{new Date(row.submittedAt).toLocaleDateString()}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p style={{ margin: 0, fontSize: "0.78rem", color: "#999" }}>No submissions yet.</p>
-              )}
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Existing forms */}
-      <div style={{ marginBottom: "1.25rem" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
-          <h4 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "#1b5e20", fontFamily: FONT }}>📋 Farm Needs Forms ({communityForms?.length ?? "…"})</h4>
-          <button onClick={() => setShowBuilder(!showBuilder)} style={{ padding: "0.4rem 0.75rem", borderRadius: 6, border: "none", background: showBuilder ? "#c62828" : BRAND, color: "#fff", fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" }}>
-            {showBuilder ? "Cancel" : "+ Create Form"}
-          </button>
-        </div>
-
-        {/* Form builder */}
-        {showBuilder && (
-          <div style={{ padding: "1.25rem", borderRadius: 10, border: "2px solid #2e7d32", background: "#f9fdf9", marginBottom: "1rem" }}>
-            <h5 style={{ margin: "0 0 1rem", fontSize: "0.95rem", fontWeight: 700, color: BRAND, fontFamily: FONT }}>New Farm Needs Form</h5>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "0.75rem" }}>
-              <div>
-                <label style={{ fontSize: "0.78rem", fontWeight: 600, color: "#444" }}>Form Name *</label>
-                <input value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="e.g., Crop Health Survey" style={{ width: "100%", padding: "0.45rem", borderRadius: 6, border: "1px solid #ccc", fontSize: "0.85rem", marginTop: 3, boxSizing: "border-box" as const }} />
-              </div>
-              <div>
-                <label style={{ fontSize: "0.78rem", fontWeight: 600, color: "#444" }}>Category</label>
-                <select value={formCategory} onChange={(e) => setFormCategory(e.target.value as "crops" | "livestock")} style={{ width: "100%", padding: "0.45rem", borderRadius: 6, border: "1px solid #ccc", fontSize: "0.85rem", marginTop: 3, boxSizing: "border-box" as const }}>
-                  <option value="crops">🌾 Crops</option>
-                  <option value="livestock">🐄 Livestock</option>
-                </select>
-              </div>
-            </div>
-            <div style={{ marginBottom: "0.75rem" }}>
-              <label style={{ fontSize: "0.78rem", fontWeight: 600, color: "#444" }}>Description</label>
-              <input value={formDescription} onChange={(e) => setFormDescription(e.target.value)} placeholder="Optional description" style={{ width: "100%", padding: "0.45rem", borderRadius: 6, border: "1px solid #ccc", fontSize: "0.85rem", marginTop: 3, boxSizing: "border-box" as const }} />
-            </div>
-            <div style={{ marginBottom: "0.75rem" }}>
-              <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "#444", display: "block", marginBottom: "0.4rem" }}>Fields</label>
-              {fields.map((field, idx) => (
-                <div key={idx} style={{ display: "grid", gridTemplateColumns: "1fr 130px auto auto", gap: "0.5rem", alignItems: "center", marginBottom: "0.4rem" }}>
-                  <input value={field.label} onChange={(e) => handleFieldChange(idx, "label", e.target.value)} placeholder="Field label" style={{ padding: "0.4rem", borderRadius: 5, border: "1px solid #ccc", fontSize: "0.82rem" }} />
-                  <select value={field.fieldType} onChange={(e) => handleFieldChange(idx, "fieldType", e.target.value)} style={{ padding: "0.4rem", borderRadius: 5, border: "1px solid #ccc", fontSize: "0.82rem" }}>
-                    <option value="text">Text</option>
-                    <option value="email">Email</option>
-                    <option value="phone">Phone</option>
-                    <option value="number">Number</option>
-                    <option value="textarea">Textarea</option>
-                    <option value="select">Select</option>
-                    <option value="checkbox">Checkbox</option>
-                    <option value="date">Date</option>
-                    <option value="camera">📸 Camera</option>
-                    <option value="gps">📍 GPS Location</option>
-                  </select>
-                  <label style={{ display: "flex", alignItems: "center", gap: "0.25rem", fontSize: "0.75rem", cursor: "pointer", whiteSpace: "nowrap" }}>
-                    <input type="checkbox" checked={field.required} onChange={(e) => handleFieldChange(idx, "required", e.target.checked)} /> Req
-                  </label>
-                  <button onClick={() => handleRemoveField(idx)} style={{ border: "none", background: "#ffebee", color: "#c62828", borderRadius: 5, padding: "0.3rem 0.45rem", cursor: "pointer", fontSize: "0.78rem" }}>✕</button>
-                </div>
-              ))}
-              <button onClick={handleAddField} style={{ marginTop: "0.3rem", padding: "0.35rem 0.7rem", borderRadius: 6, border: "1px dashed #999", background: "#fff", color: "#444", fontSize: "0.8rem", cursor: "pointer" }}>+ Add Field</button>
-            </div>
-            <button onClick={handleCreateForm} disabled={submitting} style={{ padding: "0.5rem 1.1rem", borderRadius: 7, border: "none", background: submitting ? "#ccc" : BRAND, color: "#fff", fontWeight: 700, fontSize: "0.85rem", cursor: submitting ? "not-allowed" : "pointer" }}>
-              {submitting ? "Creating…" : "Create Form"}
-            </button>
-          </div>
-        )}
-
-        {/* Forms list */}
-        {communityForms === undefined ? (
-          <p style={{ color: "#999", fontSize: "0.85rem" }}>Loading…</p>
-        ) : communityForms.length === 0 ? (
-          <p style={{ color: "#999", fontSize: "0.85rem" }}>No farm needs forms yet. Create one above.</p>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-            {communityForms.map((form: any) => (
-              <div key={form.formId} style={{ padding: "0.85rem 1rem", borderRadius: 9, border: "1px solid #e0e0e0", background: "#fafafa", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: "0.9rem", color: "#1a1a1a" }}>{form.name}</div>
-                  <div style={{ fontSize: "0.78rem", color: "#777", marginTop: 2 }}>
-                    {form.category === "crops" ? "🌾" : "🐄"} {form.category} · {form.fieldCount} fields · {form.responseCount} responses
-                  </div>
-                  {form.qrPath && origin && (
-                    <a href={`${origin}${form.qrPath}`} target="_blank" rel="noreferrer" style={{ fontSize: "0.75rem", color: "#1565c0", display: "inline-block", marginTop: 3 }}>Open Form Link ↗</a>
-                  )}
-                </div>
-                {form.qrPath && origin && (
-                  <img src={`https://api.qrserver.com/v1/create-qr-code/?size=72x72&data=${encodeURIComponent(`${origin}${form.qrPath}`)}`} alt="QR" style={{ width: 60, height: 60, borderRadius: 6, border: "1px solid #ddd", background: "#fff" }} />
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 export default function CommunityDashboardPage() {
   const router = useRouter();
-  const { user, status: authStatus } = useStoredUser();
-  const userId = (user?.userId as Id<"users"> | undefined) ?? null;
-  const userRole = user?.role ?? "";
-  const userAdminCategory = (user as any)?.adminCategory ?? "";
+  const [userId, setUserId] = useState<Id<"users"> | null>(null);
+  const [userRole, setUserRole] = useState<string>("");
+  const [userAdminCategory, setUserAdminCategory] = useState<string>("");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -2163,7 +1663,23 @@ export default function CommunityDashboardPage() {
   const [locationFilter, setLocationFilter] = useState<"all" | "district" | "subcounty" | "parish">("all");
 
   // Get current user
-  // (replaced by useStoredUser above)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("pilot_user");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          setUserId(parsed.userId);
+          setUserRole(parsed.role || "");
+          setUserAdminCategory(parsed.adminCategory || "");
+        } else {
+          router.push("/login");
+        }
+      } catch (error) {
+        router.push("/login");
+      }
+    }
+  }, [router]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -2280,7 +1796,7 @@ export default function CommunityDashboardPage() {
 
   // For community admin: get their managed community
   const userCommunities = useMemo(() => {
-    if (!communities) return [];
+    if (!communities || !Array.isArray(communities)) return [];
     // Backend already enforces community-admin access. Use the returned list.
     return communities;
   }, [communities]);
@@ -2837,19 +2353,15 @@ export default function CommunityDashboardPage() {
                 borderBottom: "2px solid #e0e0e0",
                 background: "#fafafa",
               }}>
-                {((): CommunityTab[] => {
-                  const isSuperAdmin =
-                    (currentUser as any)?.adminLevel === "super" ||
-                    (currentUser as any)?.adminLevel === undefined;
-                  const showFertilizer = isSuperAdmin || !!(community as any).fertilizerEnabled;
-                  const showFarmNeeds = isSuperAdmin || !!(community as any).farmNeedsEnabled;
-                  const baseTabs: CommunityTab[] = ["members", "noticeboard", "messages", "forms", "insights"];
-                  if (showFertilizer) baseTabs.push("fertilizer");
-                  if (showFarmNeeds) baseTabs.push("farmNeeds");
-                  return baseTabs;
-                })().map((tab) => {
+                {((
+                  (currentUser as any)?.adminLevel === "super" ||
+                  (currentUser as any)?.adminLevel === undefined ||
+                  resolvedAdminCategory === "community"
+                    ? ["members", "noticeboard", "messages", "forms", "insights", "fertilizer"]
+                    : ["members", "noticeboard", "messages", "forms", "insights"]
+                ) as CommunityTab[]).map((tab) => {
                   const active = getActiveTab(communityId) === tab;
-                  const labels: Record<CommunityTab, string> = { members: "Members", noticeboard: "Noticeboard", messages: "Messages", forms: "Forms", insights: "📊 Insights", fertilizer: "🌱 Fertilizer", farmNeeds: "🌾 Farm Needs" };
+                  const labels: Record<CommunityTab, string> = { members: "Members", noticeboard: "Noticeboard", messages: "Messages", forms: "Forms", insights: "📊 Insights", fertilizer: "🌱 Fertilizer" };
                   return (
                     <button
                       key={tab}
@@ -2896,20 +2408,7 @@ export default function CommunityDashboardPage() {
 
               {/* ── Fertilizer Tab ── */}
               {getActiveTab(communityId) === "fertilizer" && (
-                <FertilizerTab
-                  communityId={communityId as Id<"communities">}
-                  adminId={userId!}
-                  initialFertilizerEnabled={community.fertilizerEnabled ?? false}
-                  canToggle={
-                    (currentUser as any)?.adminLevel === "super" ||
-                    (currentUser as any)?.adminLevel === undefined
-                  }
-                />
-              )}
-
-              {/* ── Farm Needs Tab ── */}
-              {getActiveTab(communityId) === "farmNeeds" && (
-                <FarmNeedsTab communityId={communityId as Id<"communities">} adminId={userId!} initialFarmNeedsEnabled={community.farmNeedsEnabled ?? false} />
+                <AdminFertilizerConfig communityId={communityId} userId={userId!} />
               )}
 
               {/* ── Members Tab (existing content) ── */}

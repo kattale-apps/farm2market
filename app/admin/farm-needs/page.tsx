@@ -491,7 +491,7 @@ export default function AdminFarmNeedsPage() {
           )}
 
           {/* List Forms */}
-          {selectedCommunity && getCommunityForms && !showCreateForm && (
+          {selectedCommunity && Array.isArray(getCommunityForms) && !showCreateForm && (
             <div>
               <h3 style={{ margin: "0 0 1rem", fontSize: "1.05rem", fontWeight: 700 }}>
                 Existing Forms ({getCommunityForms.length})

@@ -372,7 +372,7 @@ export default function FarmNeedsPage() {
         )}
 
         {/* Past Submissions */}
-        {myResponses !== undefined && (
+        {myResponses !== undefined && Array.isArray(myResponses) && (
           <div style={{ marginTop: "2rem", padding: "1.25rem", background: "#fff", borderRadius: "12px", border: "1px solid #e0e0e0" }}>
             <h3 style={{ margin: "0 0 1rem", fontSize: "1.1rem", color: "#2c2c2c", fontWeight: 700, fontFamily: FONT }}>
               📋 Your Submissions ({myResponses.length})

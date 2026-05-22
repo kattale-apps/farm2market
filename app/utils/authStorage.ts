@@ -30,7 +30,9 @@ export type StoredUser = {
 async function getPrefs() {
   if (!Capacitor.isNativePlatform()) return null;
   try {
-    const { Preferences } = await import("@capacitor/preferences");
+    const { Preferences } = await import(
+      /* webpackIgnore: true */ "@capacitor/preferences"
+    );
     return Preferences;
   } catch {
     return null;

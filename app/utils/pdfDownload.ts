@@ -27,8 +27,8 @@ export async function savePdfFromJsPDF(doc: any, filename: string): Promise<void
 
   try {
     const [{ Filesystem, Directory }, { Share }] = await Promise.all([
-      import("@capacitor/filesystem"),
-      import("@capacitor/share"),
+      import(/* webpackIgnore: true */ "@capacitor/filesystem"),
+      import(/* webpackIgnore: true */ "@capacitor/share"),
     ]);
 
     const pdfBlob: Blob = doc.output("blob");

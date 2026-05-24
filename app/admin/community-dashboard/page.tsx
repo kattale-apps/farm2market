@@ -14,7 +14,7 @@ import { CommunityQRCode } from "../../components/CommunityQRCode";
 import { CommunityMemberCard } from "../../components/CommunityMemberCard";
 import { resolveCommunityLogo } from "../../lib/communityLogos";
 import { AdminFertilizerConfig } from "../../components/biofarm/AdminFertilizerConfig";
-import { exportFormSubmissionsToPDF } from "../../utils/exportUtils";
+import { exportSubmissionsToPDF } from "../../utils/exportUtils";
 
 /* ── Tab types for community cards ── */
 type CommunityTab = "members" | "noticeboard" | "messages" | "forms" | "insights" | "fertilizer";
@@ -1954,7 +1954,7 @@ export default function CommunityDashboardPage() {
       : "skip"
   );
   const activeFarmseeByCommunity = useQuery(
-    (api as any).forms.getBioFarmActiveFarmseeMembersByCommunityIds,
+    (api as any).farmToolbox.getBioFarmActiveFarmseeMembersByCommunityIds,
     userId && communityIds.length > 0
       ? {
           adminId: userId,
@@ -1963,7 +1963,7 @@ export default function CommunityDashboardPage() {
       : "skip"
   );
   const selectedFarmseeEntries = useQuery(
-    (api as any).forms.getBioFarmMemberEntriesForAdmin,
+    (api as any).farmToolbox.getBioFarmMemberEntriesForAdmin,
     userId && selectedFarmseeMember
       ? {
           adminId: userId,
@@ -2112,18 +2112,18 @@ export default function CommunityDashboardPage() {
     }
   };
 
-  const handleFarmseeSingleExport = async (submissionId: Id<"formResponses">) => {
+  const handleFarmseeSingleExport = async (submissionId: Id<"farmTrackerEntries">) => {
     if (!userId || !selectedFarmseeMember) return;
     setFarmseeSingleExportingId(String(submissionId));
     try {
-      const rows = await convex.query((api as any).forms.getBioFarmMemberEntriesForExport, {
+      const rows = await convex.query((api as any).farmToolbox.getBioFarmMemberEntriesForExport, {
         adminId: userId,
         communityId: selectedFarmseeMember.communityId,
         memberId: selectedFarmseeMember.memberId,
         submissionIds: [submissionId],
       });
       const datePart = new Date().toISOString().split("T")[0];
-      await exportFormSubmissionsToPDF(
+      await exportSubmissionsToPDF(
         rows || [],
         `biofarm-${selectedFarmseeMember.alias || "member"}-entry-${datePart}`,
         selectedFarmseeMember.alias
@@ -2139,14 +2139,14 @@ export default function CommunityDashboardPage() {
     if (farmseeSelectedEntryIds.size === 0) return;
     setFarmseeBatchExporting(true);
     try {
-      const rows = await convex.query((api as any).forms.getBioFarmMemberEntriesForExport, {
+      const rows = await convex.query((api as any).farmToolbox.getBioFarmMemberEntriesForExport, {
         adminId: userId,
         communityId: selectedFarmseeMember.communityId,
         memberId: selectedFarmseeMember.memberId,
-        submissionIds: Array.from(farmseeSelectedEntryIds) as Id<"formResponses">[],
+        submissionIds: Array.from(farmseeSelectedEntryIds) as Id<"farmTrackerEntries">[],
       });
       const datePart = new Date().toISOString().split("T")[0];
-      await exportFormSubmissionsToPDF(
+      await exportSubmissionsToPDF(
         rows || [],
         `biofarm-${selectedFarmseeMember.alias || "member"}-entries-${datePart}`,
         selectedFarmseeMember.alias
@@ -2161,13 +2161,13 @@ export default function CommunityDashboardPage() {
     if (!userId || !selectedFarmseeMember) return;
     setFarmseeAllExporting(true);
     try {
-      const rows = await convex.query((api as any).forms.getBioFarmMemberEntriesForExport, {
+      const rows = await convex.query((api as any).farmToolbox.getBioFarmMemberEntriesForExport, {
         adminId: userId,
         communityId: selectedFarmseeMember.communityId,
         memberId: selectedFarmseeMember.memberId,
       });
       const datePart = new Date().toISOString().split("T")[0];
-      await exportFormSubmissionsToPDF(
+      await exportSubmissionsToPDF(
         rows || [],
         `biofarm-${selectedFarmseeMember.alias || "member"}-all-entries-${datePart}`,
         selectedFarmseeMember.alias
@@ -3642,6 +3642,13 @@ export default function CommunityDashboardPage() {
                   const entryId = String(entry._id);
                   const checked = farmseeSelectedEntryIds.has(entryId);
                   const expanded = expandedFarmseeEntryId === entryId;
+                  const submittedAt = entry.submittedAt || entry.createdAt;
+                  const photoCount = Array.isArray(entry.photoUrls) ? entry.photoUrls.length : 0;
+                  const fieldCount = typeof entry.fieldCount === "number"
+                    ? entry.fieldCount
+                    : (entry.fieldValues || []).filter((v: any) => String(v?.value || "").trim() !== "").length;
+                  const dateField = (entry.fieldValues || []).find((v: any) => /date/i.test(String(v?.fieldName || "")));
+                  const tagField = (entry.fieldValues || []).find((v: any) => /tag/i.test(String(v?.fieldName || "")));
                   return (
                     <div
                       key={entryId}
@@ -3706,28 +3713,50 @@ export default function CommunityDashboardPage() {
                         </div>
                       </div>
                       <div style={{ marginTop: "0.6rem", fontSize: "0.84rem", color: "#475569" }}>
-                        <div><strong>Form:</strong> {entry.formName || "Form"}</div>
-                        <div><strong>Submitted:</strong> {entry.submittedAt ? new Date(entry.submittedAt).toLocaleString() : "-"}</div>
+                        <div><strong>Template:</strong> {entry.templateDetails?.templateName || "Tracker Entry"}</div>
+                        <div><strong>Submitted:</strong> {submittedAt ? new Date(submittedAt).toLocaleString() : "-"}</div>
+                        <div>{fieldCount} field(s) filled · {photoCount} photo(s)</div>
+                        {(dateField || tagField) && (
+                          <div>
+                            {dateField ? `Date: ${String(dateField.value || "-")}` : ""}
+                            {dateField && tagField ? " · " : ""}
+                            {tagField ? `Tag Number: ${String(tagField.value || "-")}` : ""}
+                          </div>
+                        )}
                       </div>
                       {expanded && (
                         <div style={{ marginTop: "0.6rem", borderTop: "1px solid #eef2f7", paddingTop: "0.55rem", display: "grid", gap: "0.35rem" }}>
-                          {(entry.responseValues || []).map((value: any, idx: number) => (
+                          {(entry.fieldValues || []).map((value: any, idx: number) => (
                             <div key={`${entryId}-${idx}`} style={{ fontSize: "0.82rem", color: "#334155", lineHeight: 1.45 }}>
                               <strong>{value.fieldName || "Field"}:</strong>{" "}
-                              {value.photoUrl ? (
-                                <a
-                                  href={value.photoUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  style={{ color: "#1565c0", textDecoration: "underline" }}
-                                >
-                                  View photo
-                                </a>
-                              ) : (
-                                String(value.value ?? "-")
-                              )}
+                              {String(value.value ?? "-")}
                             </div>
                           ))}
+                          {entry.notes && (
+                            <div style={{ fontSize: "0.82rem", color: "#334155", lineHeight: 1.45 }}>
+                              <strong>Notes:</strong> {String(entry.notes)}
+                            </div>
+                          )}
+                          {(entry.gpsLat != null && entry.gpsLng != null) && (
+                            <div style={{ fontSize: "0.82rem", color: "#334155", lineHeight: 1.45 }}>
+                              <strong>GPS:</strong> {Number(entry.gpsLat).toFixed(5)}, {Number(entry.gpsLng).toFixed(5)}
+                            </div>
+                          )}
+                          {Array.isArray(entry.photoUrls) && entry.photoUrls.length > 0 && (
+                            <div style={{ display: "grid", gap: "0.3rem" }}>
+                              {entry.photoUrls.map((url: string, photoIdx: number) => (
+                                <a
+                                  key={`${entryId}-photo-${photoIdx}`}
+                                  href={url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  style={{ color: "#1565c0", textDecoration: "underline", fontSize: "0.82rem" }}
+                                >
+                                  View photo {photoIdx + 1}
+                                </a>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

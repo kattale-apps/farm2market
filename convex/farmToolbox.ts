@@ -13,6 +13,108 @@ import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { getUgandaTime, generateUTID } from "./utils";
 
+const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
+
+async function assertBioFarmAdminCommunityAccess(
+  ctx: any,
+  adminId: Id<"users">,
+  communityId: Id<"communities">
+) {
+  if (String(communityId) !== BIOFARM_COMMUNITY_ID) {
+    throw new Error("Active Farmsee is available only for Bio Farm community");
+  }
+
+  const adminUser = await ctx.db.get(adminId);
+  if (!adminUser || adminUser.role !== "admin") {
+    throw new Error("Not authorized");
+  }
+
+  const community = await ctx.db.get(communityId);
+  if (!community) {
+    throw new Error("Community not found");
+  }
+
+  const isSuperAdmin =
+    adminUser.adminLevel === "super" || adminUser.adminLevel === undefined;
+
+  if (isSuperAdmin) {
+    return { adminUser, community };
+  }
+
+  if (adminUser.adminCategory !== "community") {
+    throw new Error("Forbidden");
+  }
+
+  const assigned = (adminUser as any).assignedCommunityIds || [];
+  const assignedSet = new Set(assigned.map((id: any) => String(id)));
+  const isDirectAdmin = String((community as any).communityAdminId || "") === String(adminId);
+
+  if (!assignedSet.has(String(communityId)) && !isDirectAdmin) {
+    throw new Error("Not authorized for this community");
+  }
+
+  return { adminUser, community };
+}
+
+async function assertBioFarmMemberEligibility(
+  ctx: any,
+  communityId: Id<"communities">,
+  memberId: Id<"users">
+) {
+  const membership = await ctx.db
+    .query("communityMembers")
+    .withIndex("by_community_farmer", (q: any) =>
+      q.eq("communityId", communityId).eq("farmerId", memberId)
+    )
+    .first();
+
+  if (membership && membership.status === "APPROVED") {
+    return true;
+  }
+
+  const legacyMembership = await ctx.db
+    .query("communityMemberships")
+    .withIndex("by_community_user", (q: any) =>
+      q.eq("communityId", communityId).eq("userId", memberId)
+    )
+    .first();
+
+  if (!legacyMembership) {
+    throw new Error("Member is not approved in Bio Farm community");
+  }
+
+  return true;
+}
+
+async function enrichTrackerEntriesForAdmin(ctx: any, entries: any[]) {
+  if (!entries.length) return [];
+
+  const enriched = await Promise.all(
+    entries.map(async (entry: any) => {
+      const photoUrls = entry.photoStorageIds
+        ? await Promise.all(entry.photoStorageIds.map((sid: any) => ctx.storage.getUrl(sid)))
+        : [];
+
+      const templateDetails = await ctx.db.get(entry.templateId);
+      const unitDetails = entry.trackedUnitId
+        ? await ctx.db.get(entry.trackedUnitId as Id<"farmTrackedUnits">)
+        : null;
+
+      return {
+        ...entry,
+        photoUrls: photoUrls.filter(Boolean),
+        templateDetails,
+        unitDetails,
+      };
+    })
+  );
+
+  return enriched.sort(
+    (a: any, b: any) =>
+      (b.submittedAt || b.createdAt || 0) - (a.submittedAt || a.createdAt || 0)
+  );
+}
+
 // ─── TRACKER TEMPLATES ──────────────────────────────────────────────────────
 
 /** List templates visible to a farmer (system + their community + personal) */
@@ -205,6 +307,139 @@ export const listEntries = query({
         ? await Promise.all(entry.photoStorageIds.map((sid: any) => ctx.storage.getUrl(sid)))
         : [],
     })));
+  },
+});
+
+/**
+ * Active Farmsee list for Bio Farm community (approved members with Farm Toolbox entries)
+ */
+export const getBioFarmActiveFarmseeMembersByCommunityIds = query({
+  args: {
+    adminId: v.id("users"),
+    communityIds: v.array(v.id("communities")),
+  },
+  handler: async (ctx, args) => {
+    const results = await Promise.all(
+      args.communityIds.map(async (communityId) => {
+        try {
+          if (String(communityId) !== BIOFARM_COMMUNITY_ID) {
+            return { communityId, members: [] };
+          }
+
+          await assertBioFarmAdminCommunityAccess(ctx, args.adminId, communityId);
+
+          const memberships = await ctx.db
+            .query("communityMembers")
+            .withIndex("by_community", (q: any) => q.eq("communityId", communityId))
+            .collect();
+          let approvedMemberIds = memberships
+            .filter((m: any) => m.status === "APPROVED")
+            .map((m: any) => String(m.farmerId));
+
+          if (approvedMemberIds.length === 0) {
+            const legacyMemberships = await ctx.db
+              .query("communityMemberships")
+              .withIndex("by_community", (q: any) => q.eq("communityId", communityId))
+              .collect();
+            approvedMemberIds = legacyMemberships.map((m: any) => String(m.userId));
+          }
+
+          const members = await Promise.all(
+            approvedMemberIds.map(async (memberId) => {
+              const entries = await ctx.db
+                .query("farmTrackerEntries")
+                .withIndex("by_farmer", (q: any) => q.eq("farmerId", memberId as Id<"users">))
+                .order("desc")
+                .collect();
+
+              if (!entries.length) return null;
+
+              const member = await ctx.db.get(memberId as Id<"users">);
+              const latestSubmissionAt = Math.max(
+                ...entries.map((r: any) => r.submittedAt || r.createdAt || 0)
+              );
+
+              return {
+                memberId: memberId as Id<"users">,
+                alias: (member as any)?.alias || "Unknown",
+                phoneNumber: (member as any)?.phoneNumber || "-",
+                email: (member as any)?.email || "-",
+                role: (member as any)?.role || "farmer",
+                submissionCount: entries.length,
+                latestSubmissionAt,
+              };
+            })
+          );
+
+          return {
+            communityId,
+            members: members.filter(Boolean).sort((a: any, b: any) => b.latestSubmissionAt - a.latestSubmissionAt),
+          };
+        } catch (error: any) {
+          return {
+            communityId,
+            members: [],
+            error: error?.message || "Unable to load Active Farmsee members",
+          };
+        }
+      })
+    );
+
+    return results;
+  },
+});
+
+/**
+ * Admin read-only drill-down for a Bio Farm member's Farm Toolbox entries
+ */
+export const getBioFarmMemberEntriesForAdmin = query({
+  args: {
+    adminId: v.id("users"),
+    communityId: v.id("communities"),
+    memberId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    await assertBioFarmAdminCommunityAccess(ctx, args.adminId, args.communityId);
+    await assertBioFarmMemberEligibility(ctx, args.communityId, args.memberId);
+
+    const entries = await ctx.db
+      .query("farmTrackerEntries")
+      .withIndex("by_farmer", (q: any) => q.eq("farmerId", args.memberId))
+      .order("desc")
+      .collect();
+
+    return await enrichTrackerEntriesForAdmin(ctx, entries);
+  },
+});
+
+/**
+ * Secure export payload for Bio Farm member toolbox entries (single or batch)
+ */
+export const getBioFarmMemberEntriesForExport = query({
+  args: {
+    adminId: v.id("users"),
+    communityId: v.id("communities"),
+    memberId: v.id("users"),
+    submissionIds: v.optional(v.array(v.id("farmTrackerEntries"))),
+  },
+  handler: async (ctx, args) => {
+    await assertBioFarmAdminCommunityAccess(ctx, args.adminId, args.communityId);
+    await assertBioFarmMemberEligibility(ctx, args.communityId, args.memberId);
+
+    let entries: any[] = [];
+    if (args.submissionIds && args.submissionIds.length > 0) {
+      const fetched = await Promise.all(args.submissionIds.map((id) => ctx.db.get(id)));
+      entries = fetched.filter(Boolean) as any[];
+    } else {
+      entries = await ctx.db
+        .query("farmTrackerEntries")
+        .withIndex("by_farmer", (q: any) => q.eq("farmerId", args.memberId))
+        .order("desc")
+        .collect();
+    }
+
+    const scoped = entries.filter((entry: any) => String(entry.farmerId) === String(args.memberId));
+    return await enrichTrackerEntriesForAdmin(ctx, scoped);
   },
 });
 

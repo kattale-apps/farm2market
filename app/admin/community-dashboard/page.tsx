@@ -2552,8 +2552,11 @@ export default function CommunityDashboardPage() {
               {/* ── Tab Bar ── */}
               <div style={{
                 display: "flex",
+                overflowX: isMobile ? "auto" : "visible",
+                WebkitOverflowScrolling: isMobile ? "touch" : undefined,
                 borderBottom: "2px solid #e0e0e0",
                 background: "#fafafa",
+                paddingBottom: isMobile ? "0.15rem" : 0,
               }}>
                 {((
                   (currentUser as any)?.adminLevel === "super" ||
@@ -2569,8 +2572,10 @@ export default function CommunityDashboardPage() {
                       key={tab}
                       onClick={() => setActiveTab(communityId, tab)}
                       style={{
-                        flex: 1,
+                        flex: isMobile ? "0 0 auto" : 1,
+                        minWidth: isMobile ? "8.5rem" : 0,
                         padding: "0.75rem 0.5rem",
+                        whiteSpace: "nowrap",
                         border: "none",
                         borderBottom: active ? "3px solid #2e7d32" : "3px solid transparent",
                         background: active ? "#fff" : "transparent",

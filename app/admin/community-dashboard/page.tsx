@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useConvex } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
@@ -14,9 +14,13 @@ import { CommunityQRCode } from "../../components/CommunityQRCode";
 import { CommunityMemberCard } from "../../components/CommunityMemberCard";
 import { resolveCommunityLogo } from "../../lib/communityLogos";
 import { AdminFertilizerConfig } from "../../components/biofarm/AdminFertilizerConfig";
+import { exportFormSubmissionsToPDF } from "../../utils/exportUtils";
 
 /* ── Tab types for community cards ── */
 type CommunityTab = "members" | "noticeboard" | "messages" | "forms" | "insights" | "fertilizer";
+type MembersListTab = "approved" | "all" | "imported" | "activeFarmsee";
+
+const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
 
 /* ── Noticeboard tab (per community) ── */
 function NoticeboardTab({ communityId, userId }: { communityId: Id<"communities">; userId: Id<"users"> }) {
@@ -999,12 +1003,70 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
   const chartRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [showMemberInsights, setShowMemberInsights] = useState(true);
   const [isMobile, setIsMobile] = useState(typeof window !== "undefined" ? window.innerWidth < 768 : true);
+  const [viewportWidth, setViewportWidth] = useState(typeof window !== "undefined" ? window.innerWidth : 375);
 
   useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+      setViewportWidth(window.innerWidth);
+    };
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
+
+  const compactLabel = useCallback((value: any, mobileLimit = 12, desktopLimit = 20) => {
+    const text = String(value ?? "");
+    const max = isMobile ? mobileLimit : desktopLimit;
+    if (text.length <= max) return text;
+    return `${text.slice(0, Math.max(6, max - 1))}…`;
+  }, [isMobile]);
+
+  const pieLabel = useCallback(({ name, percent }: any) => {
+    return `${compactLabel(name, 10, 16)} ${(percent * 100).toFixed(0)}%`;
+  }, [compactLabel]);
+
+  const tooltipStyle = isMobile
+    ? { fontSize: "0.78rem", padding: "0.35rem 0.55rem", borderRadius: "6px" }
+    : { fontSize: "0.82rem", padding: "0.4rem 0.65rem", borderRadius: "6px" };
+
+  const pieLegendProps = isMobile
+    ? {
+        layout: "vertical" as const,
+        align: "left" as const,
+        verticalAlign: "bottom" as const,
+        iconSize: 10,
+        wrapperStyle: { paddingTop: "0.6rem", fontSize: "0.74rem", lineHeight: 1.45 },
+      }
+    : {
+        layout: "horizontal" as const,
+        align: "center" as const,
+        verticalAlign: "bottom" as const,
+        iconSize: 11,
+        wrapperStyle: { paddingTop: "0.4rem" },
+      };
+
+  const xAxisTickProps = isMobile
+    ? { fontSize: 9, angle: -35, textAnchor: "end" as const }
+    : { fontSize: 10 };
+
+  const xAxisHeight = isMobile ? 56 : 34;
+
+  const mobilePieTopN = useMemo(() => {
+    const width = viewportWidth;
+    if (width <= 360) return 4;
+    if (width <= 767) return 5;
+    return 6;
+  }, [viewportWidth]);
+
+  const getMobilePieData = useCallback((data: Array<{ name: string; value: number; fill?: string }>, topN = 5) => {
+    if (!Array.isArray(data)) return [];
+    if (!isMobile || data.length <= topN) return data;
+    const sorted = [...data].sort((a, b) => (b.value || 0) - (a.value || 0));
+    const top = sorted.slice(0, topN);
+    const otherValue = sorted.slice(topN).reduce((sum, item) => sum + (item.value || 0), 0);
+    if (otherValue <= 0) return top;
+    return [...top, { name: "Other", value: otherValue, fill: "#b0bec5" }];
+  }, [isMobile]);
 
   const trackerForms = (forms ?? []).filter((f: any) => f.formPurpose === "tracker" || !f.formPurpose);
   const profileForms = (forms ?? []).filter((f: any) => f.formPurpose === "profile");
@@ -1303,6 +1365,12 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
               </div>
             ) : (
               <>
+                {(() => {
+                  const rolePieData = getMobilePieData(memberInsights.roleData, mobilePieTopN);
+                  const sexPieData = getMobilePieData(memberInsights.sexData, mobilePieTopN);
+                  const districtPieData = getMobilePieData(memberInsights.districtData, mobilePieTopN);
+                  return (
+                    <>
                 {/* KPI Cards */}
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", marginBottom: "1rem" }}>
                   <div style={{ flex: "1 1 130px", background: "#e8f5e9", padding: "0.75rem", borderRadius: "8px", textAlign: "center" }}>
@@ -1340,32 +1408,52 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
                   {/* Role Distribution (donut) */}
                   <div style={{ background: "#fafafa", borderRadius: "10px", border: "1px solid #eee", padding: "1rem" }}>
                     <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", fontWeight: 700, color: "#333" }}>Distribution of Members by Role</h4>
-                    <ResponsiveContainer width="100%" height={240}>
+                    <ResponsiveContainer width="100%" height={isMobile ? 260 : 240}>
                       <PieChart>
-                        <Pie data={memberInsights.roleData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} label={({ name, percent }: any) => `${name} ${(percent * 100).toFixed(0)}%`}>
-                          {memberInsights.roleData.map((_: any, i: number) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                        <Pie
+                          data={rolePieData}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={isMobile ? 46 : 50}
+                          outerRadius={isMobile ? 74 : 80}
+                          labelLine={!isMobile}
+                          label={isMobile ? false : pieLabel}
+                        >
+                          {rolePieData.map((d: any, i: number) => <Cell key={i} fill={d.fill || CHART_COLORS[i % CHART_COLORS.length]} />)}
                         </Pie>
-                        <Tooltip />
-                        <Legend />
+                        <Tooltip contentStyle={tooltipStyle} />
+                        <Legend {...pieLegendProps} formatter={(value: any) => compactLabel(value, 12, 20)} />
                       </PieChart>
                     </ResponsiveContainer>
                     <div style={{ textAlign: "center", marginTop: "-130px", position: "relative", zIndex: 1, pointerEvents: "none" }}>
                       <div style={{ fontSize: "0.7rem", color: "#999" }}>Total</div>
                       <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "#333" }}>{memberInsights.totalMemberCount}</div>
                     </div>
-                    <div style={{ height: "100px" }} />
+                    <div style={{ height: isMobile ? "120px" : "100px" }} />
                   </div>
 
                   {/* Sex Distribution */}
                   <div style={{ background: "#fafafa", borderRadius: "10px", border: "1px solid #eee", padding: "1rem" }}>
                     <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", fontWeight: 700, color: "#333" }}>Distribution by Sex</h4>
-                    <ResponsiveContainer width="100%" height={240}>
+                    <ResponsiveContainer width="100%" height={isMobile ? 260 : 240}>
                       <PieChart>
-                        <Pie data={memberInsights.sexData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} label={({ name, percent }: any) => `${name} ${(percent * 100).toFixed(0)}%`}>
-                          {memberInsights.sexData.map((_: any, i: number) => <Cell key={i} fill={["#1565c0","#c62828","#bdbdbd"][i] || CHART_COLORS[i % CHART_COLORS.length]} />)}
+                        <Pie
+                          data={sexPieData}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={isMobile ? 46 : 50}
+                          outerRadius={isMobile ? 74 : 80}
+                          labelLine={!isMobile}
+                          label={isMobile ? false : pieLabel}
+                        >
+                          {sexPieData.map((d: any, i: number) => <Cell key={i} fill={d.fill || ["#1565c0","#c62828","#bdbdbd"][i] || CHART_COLORS[i % CHART_COLORS.length]} />)}
                         </Pie>
-                        <Tooltip />
-                        <Legend />
+                        <Tooltip contentStyle={tooltipStyle} />
+                        <Legend {...pieLegendProps} formatter={(value: any) => compactLabel(value, 12, 20)} />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
@@ -1373,31 +1461,41 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
                   {/* District Distribution (donut) */}
                   <div style={{ background: "#fafafa", borderRadius: "10px", border: "1px solid #eee", padding: "1rem" }}>
                     <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", fontWeight: 700, color: "#333" }}>Distribution of Members by District</h4>
-                    <ResponsiveContainer width="100%" height={240}>
+                    <ResponsiveContainer width="100%" height={isMobile ? 260 : 240}>
                       <PieChart>
-                        <Pie data={memberInsights.districtData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={52} outerRadius={80} label={({ name, percent }: any) => `${name} ${(percent * 100).toFixed(0)}%`}>
-                          {memberInsights.districtData.map((d: any, i: number) => <Cell key={i} fill={d.fill || CHART_COLORS[i % CHART_COLORS.length]} />)}
+                        <Pie
+                          data={districtPieData}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={isMobile ? 46 : 52}
+                          outerRadius={isMobile ? 74 : 80}
+                          labelLine={!isMobile}
+                          label={isMobile ? false : pieLabel}
+                        >
+                          {districtPieData.map((d: any, i: number) => <Cell key={i} fill={d.fill || CHART_COLORS[i % CHART_COLORS.length]} />)}
                         </Pie>
-                        <Tooltip />
-                        <Legend />
+                        <Tooltip contentStyle={tooltipStyle} />
+                        <Legend {...pieLegendProps} formatter={(value: any) => compactLabel(value, 12, 20)} />
                       </PieChart>
                     </ResponsiveContainer>
                     <div style={{ textAlign: "center", marginTop: "-130px", position: "relative", zIndex: 1, pointerEvents: "none" }}>
                       <div style={{ fontSize: "0.7rem", color: "#999" }}>Total Members</div>
                       <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "#333" }}>{memberInsights.totalMemberCount}</div>
                     </div>
-                    <div style={{ height: "100px" }} />
+                    <div style={{ height: isMobile ? "120px" : "100px" }} />
                   </div>
 
                   {/* Members per District & Subcounty (horizontal bar) */}
                   <div style={{ background: "#fafafa", borderRadius: "10px", border: "1px solid #eee", padding: "1rem" }}>
                     <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", fontWeight: 700, color: "#333" }}>Members per District & Subcounty</h4>
-                    <ResponsiveContainer width="100%" height={Math.max(200, memberInsights.subcountyData.length * 26)}>
+                    <ResponsiveContainer width="100%" height={Math.max(isMobile ? 240 : 200, memberInsights.subcountyData.length * (isMobile ? 30 : 26))}>
                       <BarChart data={memberInsights.subcountyData} layout="vertical">
                         <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis type="number" tick={{ fontSize: 10 }} label={{ value: "Number of Members", position: "insideBottom", offset: -2, fontSize: 10 }} />
-                        <YAxis dataKey="name" type="category" width={110} tick={{ fontSize: 9 }} />
-                        <Tooltip />
+                        <XAxis type="number" tick={{ fontSize: isMobile ? 9 : 10 }} label={{ value: "Number of Members", position: "insideBottom", offset: -2, fontSize: isMobile ? 9 : 10 }} />
+                        <YAxis dataKey="name" type="category" width={isMobile ? 84 : 110} tick={{ fontSize: isMobile ? 8 : 9 }} tickFormatter={(value) => compactLabel(value, 10, 18)} />
+                        <Tooltip contentStyle={tooltipStyle} />
                         <Bar dataKey="value" radius={[0,4,4,0]}>
                           {memberInsights.subcountyData.map((d: any, i: number) => <Cell key={i} fill={d.fill} />)}
                         </Bar>
@@ -1412,12 +1510,12 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
                     {/* Farm Size Histogram */}
                     <div style={{ background: "#fafafa", borderRadius: "10px", border: "1px solid #eee", padding: "1rem" }}>
                       <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", fontWeight: 700, color: "#333" }}>Distribution of Farm Size (Acres)</h4>
-                      <ResponsiveContainer width="100%" height={220}>
+                      <ResponsiveContainer width="100%" height={isMobile ? 250 : 220}>
                         <BarChart data={memberInsights.histData}>
                           <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="name" tick={{ fontSize: 9 }} />
-                          <YAxis tick={{ fontSize: 10 }} label={{ value: "Number of Members", angle: -90, position: "insideLeft", fontSize: 10 }} />
-                          <Tooltip />
+                          <XAxis dataKey="name" tick={xAxisTickProps} interval={0} height={xAxisHeight} tickFormatter={(value) => compactLabel(value, 10, 18)} />
+                          <YAxis tick={{ fontSize: isMobile ? 9 : 10 }} label={{ value: "Number of Members", angle: -90, position: "insideLeft", fontSize: isMobile ? 9 : 10 }} />
+                          <Tooltip contentStyle={tooltipStyle} />
                           <Bar dataKey="value" fill="#8e24aa" radius={[4,4,0,0]} />
                         </BarChart>
                       </ResponsiveContainer>
@@ -1426,12 +1524,12 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
                     {/* Avg Farm Size per District */}
                     <div style={{ background: "#fafafa", borderRadius: "10px", border: "1px solid #eee", padding: "1rem" }}>
                       <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", fontWeight: 700, color: "#333" }}>Average Farm Size (Acres) per District</h4>
-                      <ResponsiveContainer width="100%" height={220}>
+                      <ResponsiveContainer width="100%" height={isMobile ? 250 : 220}>
                         <BarChart data={memberInsights.avgFarmData}>
                           <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="name" tick={{ fontSize: 9 }} />
-                          <YAxis tick={{ fontSize: 10 }} label={{ value: "Avg Acres", angle: -90, position: "insideLeft", fontSize: 10 }} />
-                          <Tooltip />
+                          <XAxis dataKey="name" tick={xAxisTickProps} interval={0} height={xAxisHeight} tickFormatter={(value) => compactLabel(value, 10, 18)} />
+                          <YAxis tick={{ fontSize: isMobile ? 9 : 10 }} label={{ value: "Avg Acres", angle: -90, position: "insideLeft", fontSize: isMobile ? 9 : 10 }} />
+                          <Tooltip contentStyle={tooltipStyle} />
                           <Bar dataKey="value" radius={[4,4,0,0]}>
                             {memberInsights.avgFarmData.map((d: any, i: number) => <Cell key={i} fill={d.fill} />)}
                           </Bar>
@@ -1447,12 +1545,12 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
                     {memberInsights.regionData.length > 0 && (
                       <div style={{ background: "#fafafa", borderRadius: "10px", border: "1px solid #eee", padding: "1rem" }}>
                         <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", fontWeight: 700, color: "#333" }}>Members by Region</h4>
-                        <ResponsiveContainer width="100%" height={220}>
+                        <ResponsiveContainer width="100%" height={isMobile ? 250 : 220}>
                           <BarChart data={memberInsights.regionData}>
                             <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                            <YAxis tick={{ fontSize: 10 }} />
-                            <Tooltip />
+                            <XAxis dataKey="name" tick={xAxisTickProps} interval={0} height={xAxisHeight} tickFormatter={(value) => compactLabel(value, 10, 18)} />
+                            <YAxis tick={{ fontSize: isMobile ? 9 : 10 }} />
+                            <Tooltip contentStyle={tooltipStyle} />
                             <Bar dataKey="value" fill="#00838f" radius={[4,4,0,0]} />
                           </BarChart>
                         </ResponsiveContainer>
@@ -1461,12 +1559,12 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
                     {memberInsights.scRoleData.length > 0 && (
                       <div style={{ background: "#fafafa", borderRadius: "10px", border: "1px solid #eee", padding: "1rem" }}>
                         <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", fontWeight: 700, color: "#333" }}>Members by Supply Chain Role</h4>
-                        <ResponsiveContainer width="100%" height={220}>
+                        <ResponsiveContainer width="100%" height={isMobile ? 250 : 220}>
                           <BarChart data={memberInsights.scRoleData}>
                             <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                            <YAxis tick={{ fontSize: 10 }} />
-                            <Tooltip />
+                            <XAxis dataKey="name" tick={xAxisTickProps} interval={0} height={xAxisHeight} tickFormatter={(value) => compactLabel(value, 10, 18)} />
+                            <YAxis tick={{ fontSize: isMobile ? 9 : 10 }} />
+                            <Tooltip contentStyle={tooltipStyle} />
                             <Bar dataKey="value" fill="#6d4c41" radius={[4,4,0,0]} />
                           </BarChart>
                         </ResponsiveContainer>
@@ -1474,6 +1572,9 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
                     )}
                   </div>
                 )}
+                    </>
+                  );
+                })()}
               </>
             )}
           </>
@@ -1574,46 +1675,60 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
                               <span>Min: <strong>{agg.min}</strong></span>
                               <span>Max: <strong>{agg.max}</strong></span>
                             </div>
-                            <ResponsiveContainer width="100%" height={200}>
+                            <ResponsiveContainer width="100%" height={Math.max(isMobile ? 230 : 200, agg.barData.length * (isMobile ? 24 : 20))}>
                               <BarChart data={agg.barData}>
                                 <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                                <YAxis tick={{ fontSize: 10 }} />
-                                <Tooltip />
+                                <XAxis dataKey="name" tick={xAxisTickProps} interval={0} height={xAxisHeight} tickFormatter={(value) => compactLabel(value, 10, 16)} />
+                                <YAxis tick={{ fontSize: isMobile ? 9 : 10 }} />
+                                <Tooltip contentStyle={tooltipStyle} />
                                 <Bar dataKey="value" fill="#2e7d32" radius={[4,4,0,0]} />
                               </BarChart>
                             </ResponsiveContainer>
                           </>
                         )}
                         {agg.type === "pie" && (
-                          <ResponsiveContainer width="100%" height={220}>
+                          (() => {
+                            const aggPieData = getMobilePieData(agg.pieData, mobilePieTopN);
+                            return (
+                          <ResponsiveContainer width="100%" height={isMobile ? 260 : 220}>
                             <PieChart>
-                              <Pie data={agg.pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name, percent }: any) => `${name} ${(percent * 100).toFixed(0)}%`}>
-                                {agg.pieData.map((_: any, i: number) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                              <Pie
+                                data={aggPieData}
+                                dataKey="value"
+                                nameKey="name"
+                                cx="50%"
+                                cy="50%"
+                                outerRadius={isMobile ? 74 : 80}
+                                labelLine={!isMobile}
+                                label={isMobile ? false : pieLabel}
+                              >
+                                {aggPieData.map((d: any, i: number) => <Cell key={i} fill={d.fill || CHART_COLORS[i % CHART_COLORS.length]} />)}
                               </Pie>
-                              <Tooltip />
-                              <Legend />
+                              <Tooltip contentStyle={tooltipStyle} />
+                              <Legend {...pieLegendProps} formatter={(value: any) => compactLabel(value, 12, 20)} />
                             </PieChart>
                           </ResponsiveContainer>
+                            );
+                          })()
                         )}
                         {agg.type === "date" && (
-                          <ResponsiveContainer width="100%" height={200}>
+                          <ResponsiveContainer width="100%" height={Math.max(isMobile ? 230 : 200, agg.barData.length * (isMobile ? 22 : 18))}>
                             <BarChart data={agg.barData}>
                               <CartesianGrid strokeDasharray="3 3" />
-                              <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                              <YAxis tick={{ fontSize: 10 }} />
-                              <Tooltip />
+                              <XAxis dataKey="name" tick={xAxisTickProps} interval={0} height={xAxisHeight} tickFormatter={(value) => compactLabel(value, 10, 16)} />
+                              <YAxis tick={{ fontSize: isMobile ? 9 : 10 }} />
+                              <Tooltip contentStyle={tooltipStyle} />
                               <Bar dataKey="value" fill="#1565c0" radius={[4,4,0,0]} />
                             </BarChart>
                           </ResponsiveContainer>
                         )}
                         {agg.type === "text" && agg.barData.length > 0 && (
-                          <ResponsiveContainer width="100%" height={Math.max(150, agg.barData.length * 28)}>
+                          <ResponsiveContainer width="100%" height={Math.max(isMobile ? 200 : 150, agg.barData.length * (isMobile ? 32 : 28))}>
                             <BarChart data={agg.barData} layout="vertical">
                               <CartesianGrid strokeDasharray="3 3" />
-                              <XAxis type="number" tick={{ fontSize: 10 }} />
-                              <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 10 }} />
-                              <Tooltip />
+                              <XAxis type="number" tick={{ fontSize: isMobile ? 9 : 10 }} />
+                              <YAxis dataKey="name" type="category" width={isMobile ? 92 : 120} tick={{ fontSize: isMobile ? 9 : 10 }} tickFormatter={(value) => compactLabel(value, 10, 20)} />
+                              <Tooltip contentStyle={tooltipStyle} />
                               <Bar dataKey="value" fill="#ef6c00" radius={[0,4,4,0]} />
                             </BarChart>
                           </ResponsiveContainer>
@@ -1635,6 +1750,8 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
 }
 
 export default function CommunityDashboardPage() {
+  const FIXED_PAGE_SIZE = 20;
+  const convex = useConvex();
   const router = useRouter();
   const [userId, setUserId] = useState<Id<"users"> | null>(null);
   const [userRole, setUserRole] = useState<string>("");
@@ -1648,14 +1765,6 @@ export default function CommunityDashboardPage() {
   const [isMobile, setIsMobile] = useState(typeof window !== "undefined" ? window.innerWidth < 768 : true);
   const [exportCommunityId, setExportCommunityId] = useState<Id<"communities"> | null>(null);
   const [exportCommunityName, setExportCommunityName] = useState<string>("");
-
-  const paginationPreferences = useQuery(
-    (api as any).userSettings.getPaginationPreferences,
-    userId ? { userId } : "skip"
-  );
-  const updatePaginationPreferences = useMutation(
-    (api as any).userSettings.updatePaginationPreferences
-  );
 
   // Filter state
   const [filterType, setFilterType] = useState<"all" | "phone" | "email" | "location">( "all");
@@ -1720,23 +1829,37 @@ export default function CommunityDashboardPage() {
   const [togglingMemberCountByCommunity, setTogglingMemberCountByCommunity] = useState<Record<string, boolean>>({});
 
   const [pendingPage, setPendingPage] = useState(1);
-  const [pendingPageSize, setPendingPageSize] = useState(20);
+  const [pendingPageSize, setPendingPageSize] = useState(FIXED_PAGE_SIZE);
   const [approvedPage, setApprovedPage] = useState(1);
-  const [approvedPageSize, setApprovedPageSize] = useState(20);
+  const [approvedPageSize, setApprovedPageSize] = useState(FIXED_PAGE_SIZE);
   const [membersPage, setMembersPage] = useState(1);
-  const [membersPageSize, setMembersPageSize] = useState(20);
+  const [membersPageSize, setMembersPageSize] = useState(FIXED_PAGE_SIZE);
   const [importedMembersPage, setImportedMembersPage] = useState(1);
-  const [importedMembersPageSize, setImportedMembersPageSize] = useState(20);
-  const pendingPageKey = "community_pending_applications";
-  const approvedPageKey = "community_approved_members";
-  const membersPageKey = "community_members_list";
-  const importedMembersPageKey = "community_imported_members";
+  const [importedMembersPageSize, setImportedMembersPageSize] = useState(FIXED_PAGE_SIZE);
+  const [selectedFarmseeMember, setSelectedFarmseeMember] = useState<{
+    communityId: Id<"communities">;
+    memberId: Id<"users">;
+    alias: string;
+  } | null>(null);
+  const [expandedFarmseeEntryId, setExpandedFarmseeEntryId] = useState<string | null>(null);
+  const [farmseeSelectedEntryIds, setFarmseeSelectedEntryIds] = useState<Set<string>>(new Set());
+  const [farmseeBatchExporting, setFarmseeBatchExporting] = useState(false);
+  const [farmseeAllExporting, setFarmseeAllExporting] = useState(false);
+  const [farmseeSingleExportingId, setFarmseeSingleExportingId] = useState<string | null>(null);
+  const [activeFarmseeSearchByCommunity, setActiveFarmseeSearchByCommunity] = useState<Record<string, string>>({});
 
   // Tab state per community
   const [activeTabs, setActiveTabs] = useState<Record<string, CommunityTab>>({});
   const getActiveTab = (cId: string): CommunityTab => activeTabs[cId] || "members";
   const setActiveTab = (cId: string, tab: CommunityTab) =>
     setActiveTabs((prev) => ({ ...prev, [cId]: tab }));
+  const [membersListTabs, setMembersListTabs] = useState<Record<string, MembersListTab>>({});
+  const getMembersListTab = (cId: string): MembersListTab => membersListTabs[cId] || "approved";
+  const setMembersListTab = (cId: string, tab: MembersListTab) =>
+    setMembersListTabs((prev) => ({ ...prev, [cId]: tab }));
+  const getActiveFarmseeSearch = (cId: string) => activeFarmseeSearchByCommunity[cId] || "";
+  const setActiveFarmseeSearch = (cId: string, value: string) =>
+    setActiveFarmseeSearchByCommunity((prev) => ({ ...prev, [cId]: value }));
 
   // Upload state for community imports
   const [uploadStateByComm, setUploadStateByComm] = useState<Record<string, {
@@ -1744,7 +1867,7 @@ export default function CommunityDashboardPage() {
     isUploading: boolean;
     parsedRows: any[];
     showPreview: boolean;
-    importResults: { success: any[]; errors: any[] } | null;
+    importResults: { imported: number; failed: number; results: any[]; errors: any[] } | null;
   }>>({});
 
   const getUploadState = (cId: string) => uploadStateByComm[cId] || {
@@ -1763,29 +1886,23 @@ export default function CommunityDashboardPage() {
   };
 
   useEffect(() => {
-    if (!paginationPreferences) return;
-    const defaultSize = paginationPreferences.defaultPageSize ?? 20;
-    const nextPending = paginationPreferences.list?.[pendingPageKey] ?? defaultSize;
-    const nextApproved = paginationPreferences.list?.[approvedPageKey] ?? defaultSize;
-    const nextMembers = paginationPreferences.list?.[membersPageKey] ?? defaultSize;
-    const nextImported = paginationPreferences.list?.[importedMembersPageKey] ?? defaultSize;
-    if (nextPending !== pendingPageSize) {
-      setPendingPageSize(nextPending);
+    if (pendingPageSize !== FIXED_PAGE_SIZE) {
+      setPendingPageSize(FIXED_PAGE_SIZE);
       setPendingPage(1);
     }
-    if (nextApproved !== approvedPageSize) {
-      setApprovedPageSize(nextApproved);
+    if (approvedPageSize !== FIXED_PAGE_SIZE) {
+      setApprovedPageSize(FIXED_PAGE_SIZE);
       setApprovedPage(1);
     }
-    if (nextMembers !== membersPageSize) {
-      setMembersPageSize(nextMembers);
+    if (membersPageSize !== FIXED_PAGE_SIZE) {
+      setMembersPageSize(FIXED_PAGE_SIZE);
       setMembersPage(1);
     }
-    if (nextImported !== importedMembersPageSize) {
-      setImportedMembersPageSize(nextImported);
+    if (importedMembersPageSize !== FIXED_PAGE_SIZE) {
+      setImportedMembersPageSize(FIXED_PAGE_SIZE);
       setImportedMembersPage(1);
     }
-  }, [paginationPreferences, pendingPageKey, approvedPageKey, membersPageKey, importedMembersPageKey, pendingPageSize, approvedPageSize, membersPageSize, importedMembersPageSize]);
+  }, [pendingPageSize, approvedPageSize, membersPageSize, importedMembersPageSize, FIXED_PAGE_SIZE]);
 
   const selectedApplicationDetails = useQuery(
     api.communityApplications.getApplicationDetails,
@@ -1833,6 +1950,25 @@ export default function CommunityDashboardPage() {
       ? {
           adminId: userId,
           communityIds,
+        }
+      : "skip"
+  );
+  const activeFarmseeByCommunity = useQuery(
+    (api as any).forms.getBioFarmActiveFarmseeMembersByCommunityIds,
+    userId && communityIds.length > 0
+      ? {
+          adminId: userId,
+          communityIds,
+        }
+      : "skip"
+  );
+  const selectedFarmseeEntries = useQuery(
+    (api as any).forms.getBioFarmMemberEntriesForAdmin,
+    userId && selectedFarmseeMember
+      ? {
+          adminId: userId,
+          communityId: selectedFarmseeMember.communityId,
+          memberId: selectedFarmseeMember.memberId,
         }
       : "skip"
   );
@@ -1974,6 +2110,72 @@ export default function CommunityDashboardPage() {
         [String(communityId)]: false,
       }));
     }
+  };
+
+  const handleFarmseeSingleExport = async (submissionId: Id<"formResponses">) => {
+    if (!userId || !selectedFarmseeMember) return;
+    setFarmseeSingleExportingId(String(submissionId));
+    try {
+      const rows = await convex.query((api as any).forms.getBioFarmMemberEntriesForExport, {
+        adminId: userId,
+        communityId: selectedFarmseeMember.communityId,
+        memberId: selectedFarmseeMember.memberId,
+        submissionIds: [submissionId],
+      });
+      const datePart = new Date().toISOString().split("T")[0];
+      await exportFormSubmissionsToPDF(
+        rows || [],
+        `biofarm-${selectedFarmseeMember.alias || "member"}-entry-${datePart}`,
+        selectedFarmseeMember.alias
+      );
+    } catch (error: any) {
+      setMessage({ type: "error", text: error?.message || "Failed to export entry PDF" });
+    }
+    setFarmseeSingleExportingId(null);
+  };
+
+  const handleFarmseeBatchExport = async () => {
+    if (!userId || !selectedFarmseeMember) return;
+    if (farmseeSelectedEntryIds.size === 0) return;
+    setFarmseeBatchExporting(true);
+    try {
+      const rows = await convex.query((api as any).forms.getBioFarmMemberEntriesForExport, {
+        adminId: userId,
+        communityId: selectedFarmseeMember.communityId,
+        memberId: selectedFarmseeMember.memberId,
+        submissionIds: Array.from(farmseeSelectedEntryIds) as Id<"formResponses">[],
+      });
+      const datePart = new Date().toISOString().split("T")[0];
+      await exportFormSubmissionsToPDF(
+        rows || [],
+        `biofarm-${selectedFarmseeMember.alias || "member"}-entries-${datePart}`,
+        selectedFarmseeMember.alias
+      );
+    } catch (error: any) {
+      setMessage({ type: "error", text: error?.message || "Failed to export selected entries" });
+    }
+    setFarmseeBatchExporting(false);
+  };
+
+  const handleFarmseeAllExport = async () => {
+    if (!userId || !selectedFarmseeMember) return;
+    setFarmseeAllExporting(true);
+    try {
+      const rows = await convex.query((api as any).forms.getBioFarmMemberEntriesForExport, {
+        adminId: userId,
+        communityId: selectedFarmseeMember.communityId,
+        memberId: selectedFarmseeMember.memberId,
+      });
+      const datePart = new Date().toISOString().split("T")[0];
+      await exportFormSubmissionsToPDF(
+        rows || [],
+        `biofarm-${selectedFarmseeMember.alias || "member"}-all-entries-${datePart}`,
+        selectedFarmseeMember.alias
+      );
+    } catch (error: any) {
+      setMessage({ type: "error", text: error?.message || "Failed to export all entries" });
+    }
+    setFarmseeAllExporting(false);
   };
 
   if (!userId) {
@@ -2476,11 +2678,15 @@ export default function CommunityDashboardPage() {
                       Excel files (.xlsx, .xls) with required columns: fullName, phoneNumber. Optional: email, communityRole, notes, and any other fields.
                     </div>
                   </label>
-                  {getUploadState(communityId as string).file && (
-                    <div style={{ marginTop: "0.75rem", fontSize: "0.9rem", color: "#2e7d32", fontWeight: 600 }}>
-                      ✓ {getUploadState(communityId as string).file.name}
-                    </div>
-                  )}
+                  {(() => {
+                    const selectedFile = getUploadState(communityId as string).file;
+                    if (!selectedFile) return null;
+                    return (
+                      <div style={{ marginTop: "0.75rem", fontSize: "0.9rem", color: "#2e7d32", fontWeight: 600 }}>
+                        ✓ {selectedFile.name}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Preview Table */}
@@ -2531,13 +2737,13 @@ export default function CommunityDashboardPage() {
                               rows: getUploadState(communityId as string).parsedRows,
                             });
                             setUploadState(communityId as string, {
-                              importResults: result,
+                              importResults: result as any,
                               isUploading: false,
                               file: null,
                               parsedRows: [],
                               showPreview: false,
                             });
-                            setMessage({ type: "success", text: `Imported ${result.success.length} members successfully` });
+                            setMessage({ type: "success", text: `Imported ${(result as any).imported ?? 0} members successfully` });
                           } catch (error: any) {
                             setUploadState(communityId as string, { isUploading: false });
                             setMessage({ type: "error", text: error?.message || "Import failed" });
@@ -2592,7 +2798,7 @@ export default function CommunityDashboardPage() {
                       ✓ Import Complete
                     </h4>
                     <div style={{ color: "#333", marginBottom: "0.5rem" }}>
-                      <strong>{getUploadState(communityId as string).importResults!.success.length}</strong> members imported successfully
+                      <strong>{getUploadState(communityId as string).importResults!.imported}</strong> members imported successfully
                     </div>
                     {getUploadState(communityId as string).importResults!.errors.length > 0 && (
                       <div style={{ color: "#c62828", marginTop: "0.5rem" }}>
@@ -2602,104 +2808,6 @@ export default function CommunityDashboardPage() {
                   </div>
                 )}
               </div>
-
-              {/* Imported Members Cards */}
-              {getImportedCommunityMembers && getImportedCommunityMembers.length > 0 && (
-                <div style={{ padding: "1.5rem", borderBottom: "1px solid #eee" }}>
-                  <h3 style={{
-                    margin: "0 0 1rem 0",
-                    fontSize: "1.05rem",
-                    fontWeight: "600",
-                    color: "#2c2c2c",
-                  }}>
-                    📋 Imported Members
-                  </h3>
-                  {(() => {
-                    const imported = getImportedCommunityMembers.filter((m: any) => String(m.communityId) === String(communityId));
-                    const importedTotal = imported.length;
-                    const importedTotalPages = Math.max(1, Math.ceil(importedTotal / importedMembersPageSize));
-                    const safeImportedPage = Math.min(importedMembersPage, importedTotalPages);
-                    const importedStart = importedTotal === 0 ? 0 : (safeImportedPage - 1) * importedMembersPageSize + 1;
-                    const importedEnd = Math.min(safeImportedPage * importedMembersPageSize, importedTotal);
-                    const pagedImported = imported.slice(
-                      (safeImportedPage - 1) * importedMembersPageSize,
-                      safeImportedPage * importedMembersPageSize
-                    );
-
-                    if (imported.length === 0) {
-                      return <p style={{ color: "#999" }}>No imported members.</p>;
-                    }
-
-                    return (
-                      <div>
-                        <div style={{
-                          display: "grid",
-                          gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(280px, 1fr))",
-                          gap: "1rem",
-                          marginBottom: "1rem",
-                        }}>
-                          {pagedImported.map((member: any) => (
-                            <CommunityMemberCard
-                              key={member._id}
-                              member={member}
-                              adminId={userId as string}
-                              onActivationComplete={() => {
-                                // Refresh imported members after activation
-                                if (message) {
-                                  setMessage(null);
-                                  setTimeout(() => {
-                                    // Force refresh by refetching
-                                  }, 500);
-                                }
-                              }}
-                            />
-                          ))}
-                        </div>
-
-                        {importedTotalPages > 1 && (
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
-                            <div style={{ fontSize: "0.85rem", color: "#666" }}>
-                              Showing {importedStart}-{importedEnd} of {importedTotal}
-                            </div>
-                            <div style={{ display: "flex", gap: "0.5rem" }}>
-                              <button
-                                type="button"
-                                onClick={() => setImportedMembersPage((p) => Math.max(1, p - 1))}
-                                disabled={safeImportedPage === 1}
-                                style={{
-                                  padding: "0.35rem 0.7rem",
-                                  borderRadius: 6,
-                                  border: "1px solid #ddd",
-                                  background: safeImportedPage === 1 ? "#f1f5f9" : "#fff",
-                                  cursor: safeImportedPage === 1 ? "not-allowed" : "pointer",
-                                  fontWeight: 600,
-                                }}
-                              >
-                                Prev
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setImportedMembersPage((p) => Math.min(importedTotalPages, p + 1))}
-                                disabled={safeImportedPage >= importedTotalPages}
-                                style={{
-                                  padding: "0.35rem 0.7rem",
-                                  borderRadius: 6,
-                                  border: "1px solid #ddd",
-                                  background: safeImportedPage >= importedTotalPages ? "#f1f5f9" : "#fff",
-                                  cursor: safeImportedPage >= importedTotalPages ? "not-allowed" : "pointer",
-                                  fontWeight: 600,
-                                }}
-                              >
-                                Next
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })()}
-                </div>
-              )}
 
               {/* Pending Applications */}
               <div style={{ padding: "1.5rem", borderBottom: "1px solid #eee" }}>
@@ -2712,25 +2820,7 @@ export default function CommunityDashboardPage() {
                   Pending Applications
                 </h3>
                 <div style={{ marginBottom: "0.75rem", display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                  <span style={{ fontSize: "0.85rem", color: "#666" }}>Per page:</span>
-                  <select
-                    value={pendingPageSize}
-                    onChange={(e) => {
-                      const nextSize = Number(e.target.value);
-                      setPendingPageSize(nextSize);
-                      setPendingPage(1);
-                      updatePaginationPreferences({
-                        userId: userId as any,
-                        listKey: pendingPageKey,
-                        pageSize: nextSize,
-                      } as any);
-                    }}
-                    style={{ padding: "0.35rem 0.6rem", borderRadius: 6, border: "1px solid #ddd", fontSize: "0.85rem" }}
-                  >
-                    <option value={10}>10</option>
-                    <option value={20}>20</option>
-                    <option value={50}>50</option>
-                  </select>
+                  <span style={{ fontSize: "0.85rem", color: "#666" }}>Per page: {FIXED_PAGE_SIZE}</span>
                 </div>
                 {applicationsByCommunity === undefined ? (
                   <p style={{ color: "#999" }}>Loading applications...</p>
@@ -2854,415 +2944,601 @@ export default function CommunityDashboardPage() {
                 )}
               </div>
 
-              {/* Approved Members */}
-              <div style={{ padding: "1.5rem", borderBottom: "1px solid #eee" }}>
-                <h3 style={{
-                  margin: "0 0 1rem 0",
-                  fontSize: "1.05rem",
-                  fontWeight: "600",
-                  color: "#2c2c2c",
-                }}>
-                  Approved Members
-                </h3>
-                <div style={{ marginBottom: "0.75rem", display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                  <span style={{ fontSize: "0.85rem", color: "#666" }}>Per page:</span>
-                  <select
-                    value={approvedPageSize}
-                    onChange={(e) => {
-                      const nextSize = Number(e.target.value);
-                      setApprovedPageSize(nextSize);
-                      setApprovedPage(1);
-                      updatePaginationPreferences({
-                        userId: userId as any,
-                        listKey: approvedPageKey,
-                        pageSize: nextSize,
-                      } as any);
-                    }}
-                    style={{ padding: "0.35rem 0.6rem", borderRadius: 6, border: "1px solid #ddd", fontSize: "0.85rem" }}
-                  >
-                    <option value={10}>10</option>
-                    <option value={20}>20</option>
-                    <option value={50}>50</option>
-                  </select>
-                </div>
-                {approvedMembersByCommunity === undefined ? (
-                  <p style={{ color: "#999" }}>Loading members...</p>
-                ) : (
-                  (() => {
-                    const approved =
-                      approvedMembersByCommunity?.find((c: any) => c.communityId === communityId)?.members || [];
-                    const approvedTotal = approved.length;
-                    const approvedTotalPages = Math.max(1, Math.ceil(approvedTotal / approvedPageSize));
-                    const safeApprovedPage = Math.min(approvedPage, approvedTotalPages);
-                    const approvedStart = approvedTotal === 0 ? 0 : (safeApprovedPage - 1) * approvedPageSize + 1;
-                    const approvedEnd = Math.min(safeApprovedPage * approvedPageSize, approvedTotal);
-                    const pagedApproved = approved.slice(
-                      (safeApprovedPage - 1) * approvedPageSize,
-                      safeApprovedPage * approvedPageSize
-                    );
-                    if (approved.length === 0) {
-                      return <p style={{ color: "#999" }}>No approved members.</p>;
-                    }
-                    return (
-                      <div style={{ overflowX: "auto" }}>
-                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
-                          <thead>
-                            <tr style={{ textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>
-                              <th style={{ padding: "0.5rem" }}>Name</th>
-                              <th style={{ padding: "0.5rem" }}>Farm Name</th>
-                              <th style={{ padding: "0.5rem" }}>Phone</th>
-                              <th style={{ padding: "0.5rem" }}>District</th>
-                              <th style={{ padding: "0.5rem" }}>Approved On</th>
-                              <th style={{ padding: "0.5rem" }}>Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {pagedApproved.map((member: any) => (
-                              <tr key={member.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                                <td style={{ padding: "0.5rem" }}>{member.form?.section1?.farmerFullName || member.farmer?.alias || "-"}</td>
-                                <td style={{ padding: "0.5rem" }}>{member.form?.section1?.farmName || "-"}</td>
-                                <td style={{ padding: "0.5rem" }}>{member.form?.section1?.phoneNumber || member.farmer?.phoneNumber || "-"}</td>
-                                <td style={{ padding: "0.5rem" }}>{member.form?.section1?.districtSubCounty || member.farmer?.districtText || "-"}</td>
-                                <td style={{ padding: "0.5rem" }}>{member.joinedAt ? new Date(member.joinedAt).toLocaleString() : "-"}</td>
-                                <td style={{ padding: "0.5rem" }}>
-                                  <button
-                                    onClick={async () => {
-                                      if (!member.applicationId) {
-                                        setMessage({ type: "error", text: "No application linked for this member." });
-                                        return;
-                                      }
-                                      try {
-                                        await revokeMembership({ adminId: userId as any, applicationId: member.applicationId as any });
-                                        setMessage({ type: "success", text: "Membership revoked." });
-                                      } catch (error: any) {
-                                        setMessage({ type: "error", text: error?.message || "Failed to revoke" });
-                                      }
-                                    }}
-                                    style={{ padding: "0.35rem 0.6rem" }}
-                                  >
-                                    Revoke
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
-                          <div style={{ fontSize: "0.85rem", color: "#666" }}>
-                            Showing {approvedStart}-{approvedEnd} of {approvedTotal}
-                          </div>
-                          {approvedTotalPages > 1 && (
-                            <div style={{ display: "flex", gap: "0.5rem" }}>
+              {/* Member Lists */}
+              <div style={{ padding: "1.5rem" }}>
+                {(() => {
+                  const approved =
+                    approvedMembersByCommunity?.find((c: any) => c.communityId === communityId)?.members || [];
+                  const members = community.members || [];
+                  const imported = (getImportedCommunityMembers || []).filter(
+                    (m: any) => String(m.communityId) === String(communityId)
+                  );
+                  const activeFarmseeMembers =
+                    (activeFarmseeByCommunity || []).find(
+                      (c: any) => String(c.communityId) === String(communityId)
+                    )?.members || [];
+                  const isBioFarmCommunity = String(communityId) === BIOFARM_COMMUNITY_ID;
+                  const activeMembersTab = getMembersListTab(communityId);
+                  const activeFarmseeSearch = getActiveFarmseeSearch(String(communityId)).trim().toLowerCase();
+                  const filteredActiveFarmseeMembers = activeFarmseeSearch
+                    ? activeFarmseeMembers.filter((member: any) => {
+                        const alias = String(member.alias || "").toLowerCase();
+                        const phone = String(member.phoneNumber || "").toLowerCase();
+                        return alias.includes(activeFarmseeSearch) || phone.includes(activeFarmseeSearch);
+                      })
+                    : activeFarmseeMembers;
+                  const tabCounts: Record<MembersListTab, number> = {
+                    approved: approved.length,
+                    all: members.length,
+                    imported: imported.length,
+                    activeFarmsee: activeFarmseeMembers.length,
+                  };
+                  const tabLabels: Record<MembersListTab, string> = {
+                    approved: "Approved Members",
+                    all: "All Members",
+                    imported: "Imported Members",
+                    activeFarmsee: "Active Farmsee",
+                  };
+                  const membersTabs = (isBioFarmCommunity
+                    ? ["approved", "all", "imported", "activeFarmsee"]
+                    : ["approved", "all", "imported"]) as MembersListTab[];
+
+                  return (
+                    <>
+                      <h3 style={{
+                        margin: "0 0 1rem 0",
+                        fontSize: "1.1rem",
+                        fontWeight: "600",
+                        color: "#2c2c2c",
+                      }}>
+                        Member Lists
+                      </h3>
+
+                      <div style={{ position: "relative", marginBottom: "1rem" }}>
+                        <div style={{
+                          display: "flex",
+                          gap: "0.5rem",
+                          flexWrap: "nowrap",
+                          overflowX: "auto",
+                          WebkitOverflowScrolling: "touch",
+                          paddingBottom: "0.25rem",
+                          paddingLeft: isMobile ? "0.5rem" : 0,
+                          paddingRight: isMobile ? "0.5rem" : 0,
+                        }}>
+                          {membersTabs.map((tab) => {
+                            const active = activeMembersTab === tab;
+                            return (
                               <button
+                                key={tab}
                                 type="button"
-                                onClick={() => setApprovedPage((p) => Math.max(1, p - 1))}
-                                disabled={safeApprovedPage === 1}
+                                onClick={() => setMembersListTab(communityId, tab)}
+                                data-testid={tab === "activeFarmsee" ? "active-farmsee-tab-btn" : undefined}
                                 style={{
-                                  padding: "0.35rem 0.7rem",
-                                  borderRadius: 6,
-                                  border: "1px solid #ddd",
-                                  background: safeApprovedPage === 1 ? "#f1f5f9" : "#fff",
-                                  cursor: safeApprovedPage === 1 ? "not-allowed" : "pointer",
+                                  border: active ? "1px solid #2e7d32" : "1px solid #d0d7de",
+                                  background: active ? "#e8f5e9" : "#fff",
+                                  color: active ? "#1b5e20" : "#374151",
+                                  borderRadius: "999px",
+                                  padding: "0.4rem 0.85rem",
+                                  fontSize: "0.85rem",
                                   fontWeight: 600,
+                                  cursor: "pointer",
+                                  whiteSpace: "nowrap",
+                                  flex: "0 0 auto",
                                 }}
                               >
-                                Prev
+                                {tabLabels[tab]} ({tabCounts[tab]})
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => setApprovedPage((p) => Math.min(approvedTotalPages, p + 1))}
-                                disabled={safeApprovedPage >= approvedTotalPages}
-                                style={{
-                                  padding: "0.35rem 0.7rem",
-                                  borderRadius: 6,
-                                  border: "1px solid #ddd",
-                                  background: safeApprovedPage >= approvedTotalPages ? "#f1f5f9" : "#fff",
-                                  cursor: safeApprovedPage >= approvedTotalPages ? "not-allowed" : "pointer",
-                                  fontWeight: 600,
-                                }}
-                              >
-                                Next
-                              </button>
-                            </div>
-                          )}
+                            );
+                          })}
                         </div>
-                      </div>
-                    );
-                  })()
-                )}
-              </div>
-
-              {/* Members Section */}
-              {community.members && community.members.length > 0 ? (
-                <div style={{ padding: "1.5rem" }}>
-                  <h3 style={{
-                    margin: "0 0 1rem 0",
-                    fontSize: "1.1rem",
-                    fontWeight: "600",
-                    color: "#2c2c2c",
-                  }}>
-                    Members ({community.members.length})
-                  </h3>
-                  <div style={{ marginBottom: "0.75rem", display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                    <span style={{ fontSize: "0.85rem", color: "#666" }}>Per page:</span>
-                    <select
-                      value={membersPageSize}
-                      onChange={(e) => {
-                        const nextSize = Number(e.target.value);
-                        setMembersPageSize(nextSize);
-                        setMembersPage(1);
-                        updatePaginationPreferences({
-                          userId: userId as any,
-                          listKey: membersPageKey,
-                          pageSize: nextSize,
-                        } as any);
-                      }}
-                      style={{ padding: "0.35rem 0.6rem", borderRadius: 6, border: "1px solid #ddd", fontSize: "0.85rem" }}
-                    >
-                      <option value={10}>10</option>
-                      <option value={20}>20</option>
-                      <option value={50}>50</option>
-                    </select>
-                  </div>
-
-                  {/* Member List */}
-                  <div style={{
-                    overflowX: "auto",
-                    marginTop: "1rem",
-                  }}>
-                    <table style={{
-                      width: "100%",
-                      borderCollapse: "collapse",
-                      fontSize: "0.9rem",
-                    }}>
-                      <thead>
-                        <tr style={{ background: "#f5f5f5", borderBottom: "2px solid #e0e0e0" }}>
-                          <th style={{
-                            padding: "0.75rem",
-                            textAlign: "left",
-                            fontWeight: "600",
-                            color: "#2c2c2c",
-                          }}>
-                            Name
-                          </th>
-                          <th style={{
-                            padding: "0.75rem",
-                            textAlign: "left",
-                            fontWeight: "600",
-                            color: "#2c2c2c",
-                          }}>
-                            Role
-                          </th>
-                          <th style={{
-                            padding: "0.75rem",
-                            textAlign: "left",
-                            fontWeight: "600",
-                            color: "#2c2c2c",
-                          }}>
-                            Phone
-                          </th>
-                          <th style={{
-                            padding: "0.75rem",
-                            textAlign: "left",
-                            fontWeight: "600",
-                            color: "#2c2c2c",
-                          }}>
-                            Email
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(() => {
-                          const members = community.members || [];
-                          const membersTotal = members.length;
-                          const membersTotalPages = Math.max(1, Math.ceil(membersTotal / membersPageSize));
-                          const safeMembersPage = Math.min(membersPage, membersTotalPages);
-                          const pagedMembers = members.slice(
-                            (safeMembersPage - 1) * membersPageSize,
-                            safeMembersPage * membersPageSize
-                          );
-                          return pagedMembers.map((member: any, idx: number) => (
-                            <tr
-                              key={member.userId || `${idx}-${member.alias || "member"}`}
+                        {isMobile && (
+                          <>
+                            <div
                               style={{
-                                background: idx % 2 === 0 ? "#fff" : "#fafafa",
-                                borderBottom: "1px solid #eee",
+                                position: "absolute",
+                                left: 0,
+                                top: 0,
+                                bottom: "0.25rem",
+                                width: "1.4rem",
+                                pointerEvents: "none",
+                                background: "linear-gradient(to right, rgba(255,255,255,0.96), rgba(255,255,255,0))",
                               }}
-                            >
-                              <td style={{ padding: "0.75rem", color: "#2c2c2c" }}>
-                                {member.alias}
-                              </td>
-                              <td style={{ padding: "0.75rem" }}>
-                                {(() => {
-                                  const r = member.role || "unknown";
-                                  const rc: Record<string, { bg: string; text: string }> = {
-                                    farmer: { bg: "#e8f5e9", text: "#2e7d32" },
-                                    trader: { bg: "#e3f2fd", text: "#1565c0" },
-                                    buyer: { bg: "#f3e5f5", text: "#6a1b9a" },
-                                    vendor: { bg: "#fff3e0", text: "#e65100" },
-                                    transporter: { bg: "#e1f5fe", text: "#0277bd" },
-                                    store: { bg: "#ffebee", text: "#c62828" },
-                                    admin: { bg: "#eceff1", text: "#37474f" },
-                                  };
-                                  const cl = rc[r] || { bg: "#f5f5f5", text: "#616161" };
-                                  return (
-                                    <span style={{
-                                      padding: "0.15rem 0.5rem",
-                                      borderRadius: 999,
-                                      background: cl.bg,
-                                      color: cl.text,
-                                      fontWeight: 600,
-                                      fontSize: "0.78rem",
-                                      textTransform: "capitalize",
-                                    }}>
-                                      {r}
-                                    </span>
-                                  );
-                                })()}
-                              </td>
-                              <td style={{ padding: "0.75rem", color: "#666" }}>
-                                {member.phoneNumber || "—"}
-                              </td>
-                              <td style={{ padding: "0.75rem", color: "#666" }}>
-                                {member.email || "—"}
-                              </td>
-                            </tr>
-                          ));
-                        })()}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {(() => {
-                    const members = community.members || [];
-                    const membersTotal = members.length;
-                    const membersTotalPages = Math.max(1, Math.ceil(membersTotal / membersPageSize));
-                    const safeMembersPage = Math.min(membersPage, membersTotalPages);
-                    const membersStart = membersTotal === 0 ? 0 : (safeMembersPage - 1) * membersPageSize + 1;
-                    const membersEnd = Math.min(safeMembersPage * membersPageSize, membersTotal);
-                    return (
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
-                        <div style={{ fontSize: "0.85rem", color: "#666" }}>
-                          Showing {membersStart}-{membersEnd} of {membersTotal}
-                        </div>
-                        {membersTotalPages > 1 && (
-                          <div style={{ display: "flex", gap: "0.5rem" }}>
-                            <button
-                              type="button"
-                              onClick={() => setMembersPage((p) => Math.max(1, p - 1))}
-                              disabled={safeMembersPage === 1}
+                            />
+                            <div
                               style={{
-                                padding: "0.35rem 0.7rem",
-                                borderRadius: 6,
-                                border: "1px solid #ddd",
-                                background: safeMembersPage === 1 ? "#f1f5f9" : "#fff",
-                                cursor: safeMembersPage === 1 ? "not-allowed" : "pointer",
-                                fontWeight: 600,
+                                position: "absolute",
+                                right: 0,
+                                top: 0,
+                                bottom: "0.25rem",
+                                width: "1.4rem",
+                                pointerEvents: "none",
+                                background: "linear-gradient(to left, rgba(255,255,255,0.96), rgba(255,255,255,0))",
                               }}
-                            >
-                              Prev
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setMembersPage((p) => Math.min(membersTotalPages, p + 1))}
-                              disabled={safeMembersPage >= membersTotalPages}
-                              style={{
-                                padding: "0.35rem 0.7rem",
-                                borderRadius: 6,
-                                border: "1px solid #ddd",
-                                background: safeMembersPage >= membersTotalPages ? "#f1f5f9" : "#fff",
-                                cursor: safeMembersPage >= membersTotalPages ? "not-allowed" : "pointer",
-                                fontWeight: 600,
-                              }}
-                            >
-                              Next
-                            </button>
-                          </div>
+                            />
+                          </>
                         )}
                       </div>
-                    );
-                  })()}
 
-                  {/* Export Quota Info */}
-                  {exportQuota && (
-                    <div style={{
-                      marginTop: "1rem",
-                      padding: "1rem",
-                      background: exportQuota.remaining === 0 && exportQuota.serviceLevel === "Standard" ? "#ffebee" : "#e3f2fd",
-                      borderRadius: "8px",
-                      border: `1px solid ${exportQuota.remaining === 0 && exportQuota.serviceLevel === "Standard" ? "#ffcdd2" : "#bbdefb"}`,
-                    }}>
-                      <p style={{
-                        margin: "0 0 0.5rem 0",
-                        fontSize: "0.9rem",
-                        color: "#1565c0",
-                        fontWeight: "600",
-                      }}>
-                        📊 Service Level: {exportQuota.serviceLevel}
-                      </p>
-                      {exportQuota.serviceLevel === "Standard" ? (
-                        <p style={{
-                          margin: "0",
-                          fontSize: "0.85rem",
-                          color: exportQuota.remaining === 0 ? "#c62828" : "#666",
-                        }}>
-                          Exports used this month: {exportQuota.used}/{exportQuota.limit} | Remaining: <strong>{exportQuota.remaining}</strong>
-                        </p>
-                      ) : (
-                        <p style={{
-                          margin: "0",
-                          fontSize: "0.85rem",
-                          color: "#2e7d32",
-                        }}>
-                          ✓ Unlimited exports
-                        </p>
+                      {activeMembersTab === "approved" && (
+                        <>
+                          <div style={{ marginBottom: "0.75rem", display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                            <span style={{ fontSize: "0.85rem", color: "#666" }}>Per page: {FIXED_PAGE_SIZE}</span>
+                          </div>
+                          {approvedMembersByCommunity === undefined ? (
+                            <p style={{ color: "#999" }}>Loading approved members...</p>
+                          ) : (() => {
+                            const approvedTotal = approved.length;
+                            const approvedTotalPages = Math.max(1, Math.ceil(approvedTotal / approvedPageSize));
+                            const safeApprovedPage = Math.min(approvedPage, approvedTotalPages);
+                            const approvedStart = approvedTotal === 0 ? 0 : (safeApprovedPage - 1) * approvedPageSize + 1;
+                            const approvedEnd = Math.min(safeApprovedPage * approvedPageSize, approvedTotal);
+                            const pagedApproved = approved.slice(
+                              (safeApprovedPage - 1) * approvedPageSize,
+                              safeApprovedPage * approvedPageSize
+                            );
+                            if (approved.length === 0) {
+                              return <p style={{ color: "#999" }}>No approved members.</p>;
+                            }
+                            return (
+                              <div style={{ overflowX: "auto" }}>
+                                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
+                                  <thead>
+                                    <tr style={{ textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>
+                                      <th style={{ padding: "0.5rem" }}>Name</th>
+                                      <th style={{ padding: "0.5rem" }}>Farm Name</th>
+                                      <th style={{ padding: "0.5rem" }}>Phone</th>
+                                      <th style={{ padding: "0.5rem" }}>District</th>
+                                      <th style={{ padding: "0.5rem" }}>Approved On</th>
+                                      <th style={{ padding: "0.5rem" }}>Actions</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {pagedApproved.map((member: any) => (
+                                      <tr key={member.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                                        <td style={{ padding: "0.5rem" }}>{member.form?.section1?.farmerFullName || member.farmer?.alias || "-"}</td>
+                                        <td style={{ padding: "0.5rem" }}>{member.form?.section1?.farmName || "-"}</td>
+                                        <td style={{ padding: "0.5rem" }}>{member.form?.section1?.phoneNumber || member.farmer?.phoneNumber || "-"}</td>
+                                        <td style={{ padding: "0.5rem" }}>{member.form?.section1?.districtSubCounty || member.farmer?.districtText || "-"}</td>
+                                        <td style={{ padding: "0.5rem" }}>{member.joinedAt ? new Date(member.joinedAt).toLocaleString() : "-"}</td>
+                                        <td style={{ padding: "0.5rem" }}>
+                                          <button
+                                            onClick={async () => {
+                                              if (!member.applicationId) {
+                                                setMessage({ type: "error", text: "No application linked for this member." });
+                                                return;
+                                              }
+                                              try {
+                                                await revokeMembership({ adminId: userId as any, applicationId: member.applicationId as any });
+                                                setMessage({ type: "success", text: "Membership revoked." });
+                                              } catch (error: any) {
+                                                setMessage({ type: "error", text: error?.message || "Failed to revoke" });
+                                              }
+                                            }}
+                                            style={{ padding: "0.35rem 0.6rem" }}
+                                          >
+                                            Revoke
+                                          </button>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
+                                  <div style={{ fontSize: "0.85rem", color: "#666" }}>
+                                    Showing {approvedStart}-{approvedEnd} of {approvedTotal}
+                                  </div>
+                                  {approvedTotalPages > 1 && (
+                                    <div style={{ display: "flex", gap: "0.5rem" }}>
+                                      <button
+                                        type="button"
+                                        onClick={() => setApprovedPage((p) => Math.max(1, p - 1))}
+                                        disabled={safeApprovedPage === 1}
+                                        style={{
+                                          padding: "0.35rem 0.7rem",
+                                          borderRadius: 6,
+                                          border: "1px solid #ddd",
+                                          background: safeApprovedPage === 1 ? "#f1f5f9" : "#fff",
+                                          cursor: safeApprovedPage === 1 ? "not-allowed" : "pointer",
+                                          fontWeight: 600,
+                                        }}
+                                      >
+                                        Prev
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setApprovedPage((p) => Math.min(approvedTotalPages, p + 1))}
+                                        disabled={safeApprovedPage >= approvedTotalPages}
+                                        style={{
+                                          padding: "0.35rem 0.7rem",
+                                          borderRadius: 6,
+                                          border: "1px solid #ddd",
+                                          background: safeApprovedPage >= approvedTotalPages ? "#f1f5f9" : "#fff",
+                                          cursor: safeApprovedPage >= approvedTotalPages ? "not-allowed" : "pointer",
+                                          fontWeight: 600,
+                                        }}
+                                      >
+                                        Next
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </>
                       )}
-                    </div>
-                  )}
 
-                  {/* Export Button */}
-                  <div style={{ marginTop: "1.5rem", display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-                    <button
-                      onClick={() => handleExportMembers(communityId as any, community.name)}
-                      disabled={loading || (exportQuota?.remaining === 0 && exportQuota?.serviceLevel === "Standard")}
-                      style={{
-                        padding: "0.75rem 1.5rem",
-                        background: (exportQuota?.remaining === 0 && exportQuota?.serviceLevel === "Standard") || loading ? "#ccc" : "#2196f3",
-                        color: "#fff",
-                        border: "none",
-                        borderRadius: "8px",
-                        fontSize: "0.95rem",
-                        fontWeight: "600",
-                        cursor: (exportQuota?.remaining === 0 && exportQuota?.serviceLevel === "Standard") || loading ? "not-allowed" : "pointer",
-                        opacity: (exportQuota?.remaining === 0 && exportQuota?.serviceLevel === "Standard") || loading ? 0.6 : 1,
-                        transition: "all 0.3s ease",
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!loading && !(exportQuota?.remaining === 0 && exportQuota?.serviceLevel === "Standard")) {
-                          (e.target as HTMLButtonElement).style.background = "#1976d2";
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!loading && !(exportQuota?.remaining === 0 && exportQuota?.serviceLevel === "Standard")) {
-                          (e.target as HTMLButtonElement).style.background = "#2196f3";
-                        }
-                      }}
-                    >
-                      {loading ? "Exporting..." : "Export Members (Excel)"}
-                    </button>
+                      {activeMembersTab === "all" && (
+                        <>
+                          <div style={{ marginBottom: "0.75rem", display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                            <span style={{ fontSize: "0.85rem", color: "#666" }}>Per page: {FIXED_PAGE_SIZE}</span>
+                          </div>
 
+                          {members.length === 0 ? (
+                            <p style={{ color: "#999" }}>No members in this community yet.</p>
+                          ) : (
+                            <>
+                              <div style={{ overflowX: "auto", marginTop: "1rem" }}>
+                                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
+                                  <thead>
+                                    <tr style={{ background: "#f5f5f5", borderBottom: "2px solid #e0e0e0" }}>
+                                      <th style={{ padding: "0.75rem", textAlign: "left", fontWeight: "600", color: "#2c2c2c" }}>Name</th>
+                                      <th style={{ padding: "0.75rem", textAlign: "left", fontWeight: "600", color: "#2c2c2c" }}>Role</th>
+                                      <th style={{ padding: "0.75rem", textAlign: "left", fontWeight: "600", color: "#2c2c2c" }}>Phone</th>
+                                      <th style={{ padding: "0.75rem", textAlign: "left", fontWeight: "600", color: "#2c2c2c" }}>Email</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {(() => {
+                                      const membersTotal = members.length;
+                                      const membersTotalPages = Math.max(1, Math.ceil(membersTotal / membersPageSize));
+                                      const safeMembersPage = Math.min(membersPage, membersTotalPages);
+                                      const pagedMembers = members.slice(
+                                        (safeMembersPage - 1) * membersPageSize,
+                                        safeMembersPage * membersPageSize
+                                      );
+                                      return pagedMembers.map((member: any, idx: number) => (
+                                        <tr
+                                          key={member.userId || `${idx}-${member.alias || "member"}`}
+                                          style={{
+                                            background: idx % 2 === 0 ? "#fff" : "#fafafa",
+                                            borderBottom: "1px solid #eee",
+                                          }}
+                                        >
+                                          <td style={{ padding: "0.75rem", color: "#2c2c2c" }}>{member.alias}</td>
+                                          <td style={{ padding: "0.75rem" }}>
+                                            {(() => {
+                                              const r = member.role || "unknown";
+                                              const rc: Record<string, { bg: string; text: string }> = {
+                                                farmer: { bg: "#e8f5e9", text: "#2e7d32" },
+                                                trader: { bg: "#e3f2fd", text: "#1565c0" },
+                                                buyer: { bg: "#f3e5f5", text: "#6a1b9a" },
+                                                vendor: { bg: "#fff3e0", text: "#e65100" },
+                                                transporter: { bg: "#e1f5fe", text: "#0277bd" },
+                                                store: { bg: "#ffebee", text: "#c62828" },
+                                                admin: { bg: "#eceff1", text: "#37474f" },
+                                              };
+                                              const cl = rc[r] || { bg: "#f5f5f5", text: "#616161" };
+                                              return (
+                                                <span style={{
+                                                  padding: "0.15rem 0.5rem",
+                                                  borderRadius: 999,
+                                                  background: cl.bg,
+                                                  color: cl.text,
+                                                  fontWeight: 600,
+                                                  fontSize: "0.78rem",
+                                                  textTransform: "capitalize",
+                                                }}>
+                                                  {r}
+                                                </span>
+                                              );
+                                            })()}
+                                          </td>
+                                          <td style={{ padding: "0.75rem", color: "#666" }}>{member.phoneNumber || "—"}</td>
+                                          <td style={{ padding: "0.75rem", color: "#666" }}>{member.email || "—"}</td>
+                                        </tr>
+                                      ));
+                                    })()}
+                                  </tbody>
+                                </table>
+                              </div>
 
-                  </div>
-                </div>
-              ) : (
-                <div style={{
-                  padding: "1.5rem",
-                  textAlign: "center",
-                  color: "#999",
-                }}>
-                  <p>No members in this community yet.</p>
-                </div>
-              )}
+                              {(() => {
+                                const membersTotal = members.length;
+                                const membersTotalPages = Math.max(1, Math.ceil(membersTotal / membersPageSize));
+                                const safeMembersPage = Math.min(membersPage, membersTotalPages);
+                                const membersStart = membersTotal === 0 ? 0 : (safeMembersPage - 1) * membersPageSize + 1;
+                                const membersEnd = Math.min(safeMembersPage * membersPageSize, membersTotal);
+                                return (
+                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
+                                    <div style={{ fontSize: "0.85rem", color: "#666" }}>
+                                      Showing {membersStart}-{membersEnd} of {membersTotal}
+                                    </div>
+                                    {membersTotalPages > 1 && (
+                                      <div style={{ display: "flex", gap: "0.5rem" }}>
+                                        <button
+                                          type="button"
+                                          onClick={() => setMembersPage((p) => Math.max(1, p - 1))}
+                                          disabled={safeMembersPage === 1}
+                                          style={{
+                                            padding: "0.35rem 0.7rem",
+                                            borderRadius: 6,
+                                            border: "1px solid #ddd",
+                                            background: safeMembersPage === 1 ? "#f1f5f9" : "#fff",
+                                            cursor: safeMembersPage === 1 ? "not-allowed" : "pointer",
+                                            fontWeight: 600,
+                                          }}
+                                        >
+                                          Prev
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => setMembersPage((p) => Math.min(membersTotalPages, p + 1))}
+                                          disabled={safeMembersPage >= membersTotalPages}
+                                          style={{
+                                            padding: "0.35rem 0.7rem",
+                                            borderRadius: 6,
+                                            border: "1px solid #ddd",
+                                            background: safeMembersPage >= membersTotalPages ? "#f1f5f9" : "#fff",
+                                            cursor: safeMembersPage >= membersTotalPages ? "not-allowed" : "pointer",
+                                            fontWeight: 600,
+                                          }}
+                                        >
+                                          Next
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                            </>
+                          )}
+                        </>
+                      )}
+
+                      {activeMembersTab === "activeFarmsee" && (
+                        <>
+                          {activeFarmseeByCommunity === undefined ? (
+                            <p style={{ color: "#999" }}>Loading Active Farmsee members...</p>
+                          ) : activeFarmseeMembers.length === 0 ? (
+                            <p style={{ color: "#999" }}>
+                              No Bio Farm members with Farm Toolbox entries yet.
+                            </p>
+                          ) : (
+                            <>
+                              <div style={{ marginBottom: "0.75rem", display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                                <input
+                                  type="text"
+                                  data-testid="active-farmsee-search"
+                                  placeholder="Search farmer by name or phone"
+                                  value={getActiveFarmseeSearch(String(communityId))}
+                                  onChange={(e) => setActiveFarmseeSearch(String(communityId), e.target.value)}
+                                  style={{
+                                    width: isMobile ? "100%" : "320px",
+                                    padding: "0.45rem 0.65rem",
+                                    border: "1px solid #d0d7de",
+                                    borderRadius: 8,
+                                    fontSize: "0.85rem",
+                                  }}
+                                />
+                                <span style={{ fontSize: "0.82rem", color: "#64748b" }}>
+                                  Showing {filteredActiveFarmseeMembers.length} of {activeFarmseeMembers.length}
+                                </span>
+                              </div>
+
+                              {filteredActiveFarmseeMembers.length === 0 ? (
+                                <p style={{ color: "#999" }}>No farmers match your search.</p>
+                              ) : (
+                                <div
+                                  style={{
+                                    display: "grid",
+                                    gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(260px, 1fr))",
+                                    gap: "0.85rem",
+                                  }}
+                                >
+                                  {filteredActiveFarmseeMembers.map((member: any) => (
+                                    <button
+                                      key={String(member.memberId)}
+                                      type="button"
+                                      data-testid="active-farmsee-member-card"
+                                      onClick={() => {
+                                        setSelectedFarmseeMember({
+                                          communityId: communityId as Id<"communities">,
+                                          memberId: member.memberId as Id<"users">,
+                                          alias: member.alias || "Farmer",
+                                        });
+                                        setExpandedFarmseeEntryId(null);
+                                        setFarmseeSelectedEntryIds(new Set());
+                                      }}
+                                      style={{
+                                        border: "1px solid #d0d7de",
+                                        borderRadius: 12,
+                                        padding: "0.85rem",
+                                        background: "#fff",
+                                        cursor: "pointer",
+                                        textAlign: "left",
+                                      }}
+                                    >
+                                      <div style={{ fontWeight: 700, color: "#1f2937", marginBottom: "0.35rem" }}>
+                                        {member.alias || "Farmer"}
+                                      </div>
+                                      <div style={{ fontSize: "0.85rem", color: "#475569", marginBottom: "0.2rem" }}>
+                                        {member.phoneNumber || "No phone"}
+                                      </div>
+                                      <div style={{ fontSize: "0.82rem", color: "#64748b" }}>
+                                        Entries: {member.submissionCount || 0}
+                                      </div>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </>
+                      )}
+
+                      {activeMembersTab === "imported" && (
+                        <>
+                          <div style={{ marginBottom: "0.75rem", display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                            <span style={{ fontSize: "0.85rem", color: "#666" }}>Per page: {FIXED_PAGE_SIZE}</span>
+                          </div>
+
+                          {getImportedCommunityMembers === undefined ? (
+                            <p style={{ color: "#999" }}>Loading imported members...</p>
+                          ) : (() => {
+                            const importedTotal = imported.length;
+                            const importedTotalPages = Math.max(1, Math.ceil(importedTotal / importedMembersPageSize));
+                            const safeImportedPage = Math.min(importedMembersPage, importedTotalPages);
+                            const importedStart = importedTotal === 0 ? 0 : (safeImportedPage - 1) * importedMembersPageSize + 1;
+                            const importedEnd = Math.min(safeImportedPage * importedMembersPageSize, importedTotal);
+                            const pagedImported = imported.slice(
+                              (safeImportedPage - 1) * importedMembersPageSize,
+                              safeImportedPage * importedMembersPageSize
+                            );
+
+                            if (imported.length === 0) {
+                              return <p style={{ color: "#999" }}>No imported members.</p>;
+                            }
+
+                            return (
+                              <div>
+                                <div style={{
+                                  display: "grid",
+                                  gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(280px, 1fr))",
+                                  gap: "1rem",
+                                  marginBottom: "1rem",
+                                }}>
+                                  {pagedImported.map((member: any) => (
+                                    <CommunityMemberCard
+                                      key={member._id}
+                                      member={member}
+                                      adminId={userId as any}
+                                      onActivationComplete={() => {
+                                        if (message) {
+                                          setMessage(null);
+                                        }
+                                      }}
+                                    />
+                                  ))}
+                                </div>
+
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
+                                  <div style={{ fontSize: "0.85rem", color: "#666" }}>
+                                    Showing {importedStart}-{importedEnd} of {importedTotal}
+                                  </div>
+                                  {importedTotalPages > 1 && (
+                                    <div style={{ display: "flex", gap: "0.5rem" }}>
+                                      <button
+                                        type="button"
+                                        onClick={() => setImportedMembersPage((p) => Math.max(1, p - 1))}
+                                        disabled={safeImportedPage === 1}
+                                        style={{
+                                          padding: "0.35rem 0.7rem",
+                                          borderRadius: 6,
+                                          border: "1px solid #ddd",
+                                          background: safeImportedPage === 1 ? "#f1f5f9" : "#fff",
+                                          cursor: safeImportedPage === 1 ? "not-allowed" : "pointer",
+                                          fontWeight: 600,
+                                        }}
+                                      >
+                                        Prev
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setImportedMembersPage((p) => Math.min(importedTotalPages, p + 1))}
+                                        disabled={safeImportedPage >= importedTotalPages}
+                                        style={{
+                                          padding: "0.35rem 0.7rem",
+                                          borderRadius: 6,
+                                          border: "1px solid #ddd",
+                                          background: safeImportedPage >= importedTotalPages ? "#f1f5f9" : "#fff",
+                                          cursor: safeImportedPage >= importedTotalPages ? "not-allowed" : "pointer",
+                                          fontWeight: 600,
+                                        }}
+                                      >
+                                        Next
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </>
+                      )}
+
+                      {/* Export Quota Info */}
+                      {exportQuota && (
+                        <div style={{
+                          marginTop: "1rem",
+                          padding: "1rem",
+                          background: exportQuota.remaining === 0 && exportQuota.serviceLevel === "Standard" ? "#ffebee" : "#e3f2fd",
+                          borderRadius: "8px",
+                          border: `1px solid ${exportQuota.remaining === 0 && exportQuota.serviceLevel === "Standard" ? "#ffcdd2" : "#bbdefb"}`,
+                        }}>
+                          <p style={{
+                            margin: "0 0 0.5rem 0",
+                            fontSize: "0.9rem",
+                            color: "#1565c0",
+                            fontWeight: "600",
+                          }}>
+                            📊 Service Level: {exportQuota.serviceLevel}
+                          </p>
+                          {exportQuota.serviceLevel === "Standard" ? (
+                            <p style={{
+                              margin: "0",
+                              fontSize: "0.85rem",
+                              color: exportQuota.remaining === 0 ? "#c62828" : "#666",
+                            }}>
+                              Exports used this month: {exportQuota.used}/{exportQuota.limit} | Remaining: <strong>{exportQuota.remaining}</strong>
+                            </p>
+                          ) : (
+                            <p style={{
+                              margin: "0",
+                              fontSize: "0.85rem",
+                              color: "#2e7d32",
+                            }}>
+                              ✓ Unlimited exports
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Export Button */}
+                      <div style={{ marginTop: "1.5rem", display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+                        <button
+                          onClick={() => handleExportMembers(communityId as any, community.name)}
+                          disabled={loading || (exportQuota?.remaining === 0 && exportQuota?.serviceLevel === "Standard")}
+                          style={{
+                            padding: "0.75rem 1.5rem",
+                            background: (exportQuota?.remaining === 0 && exportQuota?.serviceLevel === "Standard") || loading ? "#ccc" : "#2196f3",
+                            color: "#fff",
+                            border: "none",
+                            borderRadius: "8px",
+                            fontSize: "0.95rem",
+                            fontWeight: "600",
+                            cursor: (exportQuota?.remaining === 0 && exportQuota?.serviceLevel === "Standard") || loading ? "not-allowed" : "pointer",
+                            opacity: (exportQuota?.remaining === 0 && exportQuota?.serviceLevel === "Standard") || loading ? 0.6 : 1,
+                            transition: "all 0.3s ease",
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!loading && !(exportQuota?.remaining === 0 && exportQuota?.serviceLevel === "Standard")) {
+                              (e.target as HTMLButtonElement).style.background = "#1976d2";
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!loading && !(exportQuota?.remaining === 0 && exportQuota?.serviceLevel === "Standard")) {
+                              (e.target as HTMLButtonElement).style.background = "#2196f3";
+                            }
+                          }}
+                        >
+                          {loading ? "Exporting..." : "Export Members (Excel)"}
+                        </button>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
 
               </>)}
             </div>
@@ -3270,6 +3546,198 @@ export default function CommunityDashboardPage() {
           })
         )}
       </div>
+
+      {selectedFarmseeMember && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 55,
+            padding: isMobile ? "0.6rem" : "1rem",
+          }}
+          onClick={() => setSelectedFarmseeMember(null)}
+        >
+          <div
+            data-testid="active-farmsee-entries-modal"
+            style={{
+              background: "#fff",
+              borderRadius: 12,
+              width: "100%",
+              maxWidth: 960,
+              maxHeight: "88vh",
+              overflowY: "auto",
+              padding: isMobile ? "0.9rem" : "1.2rem",
+              boxShadow: "0 14px 34px rgba(0,0,0,0.2)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem" }}>
+              <div>
+                <h3 style={{ margin: 0, color: "#1f2937", fontSize: isMobile ? "1rem" : "1.1rem" }}>
+                  Active Farmsee Entries
+                </h3>
+                <p style={{ margin: "0.25rem 0 0 0", color: "#64748b", fontSize: "0.85rem" }}>
+                  Farmer: {selectedFarmseeMember.alias}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedFarmseeMember(null)}
+                style={{ border: "none", background: "transparent", fontSize: "1.3rem", cursor: "pointer" }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{ marginTop: "0.85rem", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                data-testid="active-farmsee-download-all"
+                onClick={handleFarmseeAllExport}
+                disabled={farmseeAllExporting || selectedFarmseeEntries === undefined || selectedFarmseeEntries.length === 0}
+                style={{
+                  border: "1px solid #d0d7de",
+                  borderRadius: 8,
+                  padding: "0.45rem 0.8rem",
+                  background: farmseeAllExporting || selectedFarmseeEntries === undefined || selectedFarmseeEntries.length === 0 ? "#f8fafc" : "#fef3c7",
+                  color: farmseeAllExporting || selectedFarmseeEntries === undefined || selectedFarmseeEntries.length === 0 ? "#94a3b8" : "#92400e",
+                  cursor: farmseeAllExporting || selectedFarmseeEntries === undefined || selectedFarmseeEntries.length === 0 ? "not-allowed" : "pointer",
+                  fontWeight: 600,
+                  fontSize: "0.84rem",
+                }}
+              >
+                {farmseeAllExporting ? "Exporting all..." : "Download All PDF"}
+              </button>
+              <button
+                type="button"
+                data-testid="active-farmsee-download-selected"
+                onClick={handleFarmseeBatchExport}
+                disabled={farmseeBatchExporting || farmseeSelectedEntryIds.size === 0}
+                style={{
+                  border: "1px solid #d0d7de",
+                  borderRadius: 8,
+                  padding: "0.45rem 0.8rem",
+                  background: farmseeBatchExporting || farmseeSelectedEntryIds.size === 0 ? "#f8fafc" : "#e3f2fd",
+                  color: farmseeBatchExporting || farmseeSelectedEntryIds.size === 0 ? "#94a3b8" : "#0f4c81",
+                  cursor: farmseeBatchExporting || farmseeSelectedEntryIds.size === 0 ? "not-allowed" : "pointer",
+                  fontWeight: 600,
+                  fontSize: "0.84rem",
+                }}
+              >
+                {farmseeBatchExporting ? "Exporting..." : `Download Selected PDF (${farmseeSelectedEntryIds.size})`}
+              </button>
+            </div>
+
+            {selectedFarmseeEntries === undefined ? (
+              <p style={{ color: "#667085", marginTop: "1rem" }}>Loading entries...</p>
+            ) : selectedFarmseeEntries.length === 0 ? (
+              <p style={{ color: "#667085", marginTop: "1rem" }}>No entries available for this farmer.</p>
+            ) : (
+              <div style={{ marginTop: "0.9rem", display: "grid", gap: "0.8rem" }}>
+                {selectedFarmseeEntries.map((entry: any) => {
+                  const entryId = String(entry._id);
+                  const checked = farmseeSelectedEntryIds.has(entryId);
+                  const expanded = expandedFarmseeEntryId === entryId;
+                  return (
+                    <div
+                      key={entryId}
+                      style={{
+                        border: "1px solid #e2e8f0",
+                        borderRadius: 10,
+                        padding: "0.8rem",
+                        background: "#fff",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: "0.6rem", flexWrap: "wrap" }}>
+                        <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.84rem", color: "#334155" }}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              setFarmseeSelectedEntryIds((prev) => {
+                                const next = new Set(prev);
+                                if (e.target.checked) {
+                                  next.add(entryId);
+                                } else {
+                                  next.delete(entryId);
+                                }
+                                return next;
+                              });
+                            }}
+                          />
+                          Select for batch export
+                        </label>
+                        <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
+                          <button
+                            type="button"
+                            onClick={() => setExpandedFarmseeEntryId(expanded ? null : entryId)}
+                            style={{
+                              border: "1px solid #d0d7de",
+                              borderRadius: 8,
+                              padding: "0.35rem 0.65rem",
+                              background: "#fff",
+                              cursor: "pointer",
+                              fontSize: "0.82rem",
+                            }}
+                          >
+                            {expanded ? "Hide" : "View"} details
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleFarmseeSingleExport(entry._id)}
+                            disabled={farmseeSingleExportingId === entryId}
+                            style={{
+                              border: "1px solid #d0d7de",
+                              borderRadius: 8,
+                              padding: "0.35rem 0.65rem",
+                              background: farmseeSingleExportingId === entryId ? "#f1f5f9" : "#e8f5e9",
+                              color: farmseeSingleExportingId === entryId ? "#94a3b8" : "#1b5e20",
+                              cursor: farmseeSingleExportingId === entryId ? "not-allowed" : "pointer",
+                              fontSize: "0.82rem",
+                              fontWeight: 600,
+                            }}
+                          >
+                            {farmseeSingleExportingId === entryId ? "Exporting..." : "Download PDF"}
+                          </button>
+                        </div>
+                      </div>
+                      <div style={{ marginTop: "0.6rem", fontSize: "0.84rem", color: "#475569" }}>
+                        <div><strong>Form:</strong> {entry.formName || "Form"}</div>
+                        <div><strong>Submitted:</strong> {entry.submittedAt ? new Date(entry.submittedAt).toLocaleString() : "-"}</div>
+                      </div>
+                      {expanded && (
+                        <div style={{ marginTop: "0.6rem", borderTop: "1px solid #eef2f7", paddingTop: "0.55rem", display: "grid", gap: "0.35rem" }}>
+                          {(entry.responseValues || []).map((value: any, idx: number) => (
+                            <div key={`${entryId}-${idx}`} style={{ fontSize: "0.82rem", color: "#334155", lineHeight: 1.45 }}>
+                              <strong>{value.fieldName || "Field"}:</strong>{" "}
+                              {value.photoUrl ? (
+                                <a
+                                  href={value.photoUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  style={{ color: "#1565c0", textDecoration: "underline" }}
+                                >
+                                  View photo
+                                </a>
+                              ) : (
+                                String(value.value ?? "-")
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {selectedApplicationId && (
         <div

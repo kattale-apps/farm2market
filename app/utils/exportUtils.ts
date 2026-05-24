@@ -832,7 +832,7 @@ export async function exportFormSubmissionsToPDF(
 
     y = autoTableEndY(doc) + 6;
     const photos = (submission.values || [])
-      .filter((value: any) => value.fieldType === "photo" && value.photoUrl)
+      .filter((value: any) => ["photo", "camera"].includes(String(value.fieldType || "").toLowerCase()) && value.photoUrl)
       .map((value: any) => value.photoUrl);
 
     if (photos.length) {

@@ -7,6 +7,165 @@ function buildFormQrSlug(formId: Id<"communityForms">) {
   return `form-${String(formId).slice(0, 12)}`;
 }
 
+const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
+
+async function assertBioFarmAdminCommunityAccess(
+  ctx: any,
+  adminId: Id<"users">,
+  communityId: Id<"communities">
+) {
+  if (String(communityId) !== BIOFARM_COMMUNITY_ID) {
+    throw new Error("Active Farmsee is available only for Bio Farm community");
+  }
+
+  const adminUser = await ctx.db.get(adminId);
+  if (!adminUser || adminUser.role !== "admin") {
+    throw new Error("Not authorized");
+  }
+
+  const community = await ctx.db.get(communityId);
+  if (!community) {
+    throw new Error("Community not found");
+  }
+
+  const isSuperAdmin =
+    adminUser.adminLevel === "super" || adminUser.adminLevel === undefined;
+
+  if (isSuperAdmin) {
+    return { adminUser, community };
+  }
+
+  if (adminUser.adminCategory !== "community") {
+    throw new Error("Forbidden");
+  }
+
+  const assigned = (adminUser as any).assignedCommunityIds || [];
+  const assignedSet = new Set(assigned.map((id: any) => String(id)));
+  const isDirectAdmin = String((community as any).communityAdminId || "") === String(adminId);
+
+  if (!assignedSet.has(String(communityId)) && !isDirectAdmin) {
+    throw new Error("Not authorized for this community");
+  }
+
+  return { adminUser, community };
+}
+
+async function assertBioFarmMemberEligibility(
+  ctx: any,
+  communityId: Id<"communities">,
+  memberId: Id<"users">
+) {
+  const membership = await ctx.db
+    .query("communityMembers")
+    .withIndex("by_community_farmer", (q: any) =>
+      q.eq("communityId", communityId).eq("farmerId", memberId)
+    )
+    .first();
+
+  if (membership && membership.status === "APPROVED") {
+    return true;
+  }
+
+  const legacyMembership = await ctx.db
+    .query("communityMemberships")
+    .withIndex("by_community_user", (q: any) =>
+      q.eq("communityId", communityId).eq("userId", memberId)
+    )
+    .first();
+
+  if (!legacyMembership) {
+    throw new Error("Member is not approved in Bio Farm community");
+  }
+
+  return true;
+}
+
+async function enrichResponsesForAdmin(ctx: any, responses: any[]) {
+  if (!responses.length) return [];
+
+  const formIds = [...new Set(responses.map((r: any) => String(r.formId)))];
+  const forms = await Promise.all(
+    formIds.map((id) => ctx.db.get(id as Id<"communityForms">))
+  );
+  const formMap = new Map(forms.filter(Boolean).map((f: any) => [String(f._id), f]));
+
+  const fieldsByForm = new Map<string, any[]>();
+  await Promise.all(
+    formIds.map(async (id) => {
+      const formFields = await ctx.db
+        .query("formFields")
+        .withIndex("by_form", (q: any) => q.eq("formId", id as Id<"communityForms">))
+        .collect();
+      fieldsByForm.set(String(id), formFields);
+    })
+  );
+
+  const enriched = await Promise.all(
+    responses.map(async (r: any) => {
+      const values = await ctx.db
+        .query("formResponseValues")
+        .withIndex("by_response", (q: any) => q.eq("responseId", r._id))
+        .collect();
+
+      const trackedUnit = (r as any).trackedUnitId
+        ? await ctx.db.get((r as any).trackedUnitId as Id<"farmTrackedUnits">)
+        : null;
+
+      const fieldMap = new Map(
+        (fieldsByForm.get(String(r.formId)) || []).map((f: any) => [String(f._id), f])
+      );
+
+      const enrichedValues = values.map((value: any) => {
+        const field = fieldMap.get(String(value.fieldId));
+        let photoUrl = null;
+
+        if (field?.fieldType === "camera" && value.value) {
+          try {
+            const parsed = JSON.parse(value.value as string);
+            photoUrl = typeof parsed?.dataUrl === "string" ? parsed.dataUrl : null;
+          } catch {
+            photoUrl = null;
+          }
+        }
+
+        return {
+          ...value,
+          fieldLabel: field?.label || "Field",
+          fieldType: field?.fieldType || "text",
+          photoUrl,
+        };
+      });
+
+      const form = formMap.get(String(r.formId));
+      const member = await ctx.db.get(r.memberId);
+
+      return {
+        ...r,
+        formName: (form as any)?.name || "Unknown Tracker",
+        category: (form as any)?.category || "custom",
+        member: {
+          alias: (member as any)?.alias || "Unknown",
+          email: (member as any)?.email || "-",
+          phoneNumber: (member as any)?.phoneNumber || "-",
+        },
+        trackedUnit: trackedUnit
+          ? {
+              _id: trackedUnit._id,
+              category: trackedUnit.category,
+              unitType: trackedUnit.unitType,
+              name: trackedUnit.name,
+              emoji: trackedUnit.emoji,
+              status: trackedUnit.status,
+            }
+          : null,
+        values: enrichedValues,
+      };
+    })
+  );
+
+  return enriched.sort((a: any, b: any) => b.createdAt - a.createdAt);
+}
+
 /**
  * Create a new community form
  */
@@ -1025,6 +1184,177 @@ export const getSubmissionsForExport = query({
     );
 
     return enriched.sort((a, b) => b.createdAt - a.createdAt);
+  },
+});
+
+/**
+ * Active Farmsee list for Bio Farm community (approved members with submitted tracker entries)
+ */
+export const getBioFarmActiveFarmseeMembersByCommunityIds = query({
+  args: {
+    adminId: v.id("users"),
+    communityIds: v.array(v.id("communities")),
+  },
+  handler: async (ctx, args) => {
+    const results = await Promise.all(
+      args.communityIds.map(async (communityId) => {
+        try {
+          if (String(communityId) !== BIOFARM_COMMUNITY_ID) {
+            return { communityId, members: [] };
+          }
+
+          await assertBioFarmAdminCommunityAccess(ctx, args.adminId, communityId);
+
+          const memberships = await ctx.db
+            .query("communityMembers")
+            .withIndex("by_community", (q: any) => q.eq("communityId", communityId))
+            .collect();
+          let approvedMemberIds = memberships
+            .filter((m: any) => m.status === "APPROVED")
+            .map((m: any) => String(m.farmerId));
+
+          if (approvedMemberIds.length === 0) {
+            const legacyMemberships = await ctx.db
+              .query("communityMemberships")
+              .withIndex("by_community", (q: any) => q.eq("communityId", communityId))
+              .collect();
+            approvedMemberIds = legacyMemberships.map((m: any) => String(m.userId));
+          }
+
+          const members = await Promise.all(
+            approvedMemberIds.map(async (memberId) => {
+              const memberResponses = await ctx.db
+                .query("formResponses")
+                .withIndex("by_member", (q: any) => q.eq("memberId", memberId as Id<"users">))
+                .collect();
+
+              const scoped = memberResponses.filter(
+                (r: any) =>
+                  String(r.communityId) === String(communityId) &&
+                  (r as any).status !== "DRAFT"
+              );
+
+              if (!scoped.length) return null;
+
+              const trackerOnly: any[] = [];
+              for (const response of scoped) {
+                const form = await ctx.db.get(response.formId);
+                if (form && ((form as any).formPurpose === "tracker" || !(form as any).formPurpose)) {
+                  trackerOnly.push(response);
+                }
+              }
+
+              if (!trackerOnly.length) return null;
+
+              const member = await ctx.db.get(memberId as Id<"users">);
+              const latestSubmissionAt = Math.max(...trackerOnly.map((r: any) => r.createdAt || 0));
+
+              return {
+                memberId: memberId as Id<"users">,
+                alias: (member as any)?.alias || "Unknown",
+                phoneNumber: (member as any)?.phoneNumber || "-",
+                email: (member as any)?.email || "-",
+                role: (member as any)?.role || "farmer",
+                submissionCount: trackerOnly.length,
+                latestSubmissionAt,
+              };
+            })
+          );
+
+          return {
+            communityId,
+            members: members.filter(Boolean).sort((a: any, b: any) => b.latestSubmissionAt - a.latestSubmissionAt),
+          };
+        } catch (error: any) {
+          return {
+            communityId,
+            members: [],
+            error: error?.message || "Unable to load Active Farmsee members",
+          };
+        }
+      })
+    );
+
+    return results;
+  },
+});
+
+/**
+ * Admin read-only drill-down for a Bio Farm member's tracker entries
+ */
+export const getBioFarmMemberEntriesForAdmin = query({
+  args: {
+    adminId: v.id("users"),
+    communityId: v.id("communities"),
+    memberId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    await assertBioFarmAdminCommunityAccess(ctx, args.adminId, args.communityId);
+    await assertBioFarmMemberEligibility(ctx, args.communityId, args.memberId);
+
+    const responses = await ctx.db
+      .query("formResponses")
+      .withIndex("by_member", (q: any) => q.eq("memberId", args.memberId))
+      .collect();
+
+    const scoped = responses.filter(
+      (r: any) => String(r.communityId) === String(args.communityId) && (r as any).status !== "DRAFT"
+    );
+
+    const trackerResponses: any[] = [];
+    for (const response of scoped) {
+      const form = await ctx.db.get(response.formId);
+      if (form && ((form as any).formPurpose === "tracker" || !(form as any).formPurpose)) {
+        trackerResponses.push(response);
+      }
+    }
+
+    return await enrichResponsesForAdmin(ctx, trackerResponses);
+  },
+});
+
+/**
+ * Secure export payload for Bio Farm member entries (single or batch)
+ */
+export const getBioFarmMemberEntriesForExport = query({
+  args: {
+    adminId: v.id("users"),
+    communityId: v.id("communities"),
+    memberId: v.id("users"),
+    submissionIds: v.optional(v.array(v.id("formResponses"))),
+  },
+  handler: async (ctx, args) => {
+    await assertBioFarmAdminCommunityAccess(ctx, args.adminId, args.communityId);
+    await assertBioFarmMemberEligibility(ctx, args.communityId, args.memberId);
+
+    let responses: any[] = [];
+
+    if (args.submissionIds && args.submissionIds.length > 0) {
+      const fetched = await Promise.all(args.submissionIds.map((id) => ctx.db.get(id)));
+      responses = fetched.filter(Boolean) as any[];
+    } else {
+      responses = await ctx.db
+        .query("formResponses")
+        .withIndex("by_member", (q: any) => q.eq("memberId", args.memberId))
+        .collect();
+    }
+
+    const scoped = responses.filter(
+      (r: any) =>
+        String(r.memberId) === String(args.memberId) &&
+        String(r.communityId) === String(args.communityId) &&
+        (r as any).status !== "DRAFT"
+    );
+
+    const trackerResponses: any[] = [];
+    for (const response of scoped) {
+      const form = await ctx.db.get(response.formId);
+      if (form && ((form as any).formPurpose === "tracker" || !(form as any).formPurpose)) {
+        trackerResponses.push(response);
+      }
+    }
+
+    return await enrichResponsesForAdmin(ctx, trackerResponses);
   },
 });
 

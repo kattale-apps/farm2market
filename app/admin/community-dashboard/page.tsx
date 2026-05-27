@@ -2636,10 +2636,10 @@ export default function CommunityDashboardPage() {
                 {/* File Upload Input */}
                 <div style={{
                   marginBottom: "1rem",
-                  padding: "1rem",
+                  padding: "0.5rem",
                   background: "#fff",
                   borderRadius: "8px",
-                  border: "2px dashed #2e7d32",
+                  border: "1px dashed #2e7d32",
                   textAlign: "center",
                   cursor: "pointer",
                 }}>
@@ -2673,14 +2673,14 @@ export default function CommunityDashboardPage() {
                     htmlFor={`file-input-${communityId}`}
                     style={{
                       display: "block",
-                      padding: "2rem 1rem",
+                      padding: "0.5rem 0.25rem",
                       cursor: "pointer",
                     }}
                   >
-                    <div style={{ fontSize: "1rem", fontWeight: 600, color: "#2e7d32", marginBottom: "0.5rem" }}>
+                    <div style={{ fontSize: "0.72rem", fontWeight: 600, color: "#2e7d32", marginBottom: "0.25rem" }}>
                       Click to upload or drag & drop
                     </div>
-                    <div style={{ fontSize: "0.85rem", color: "#666" }}>
+                    <div style={{ fontSize: "0.62rem", color: "#666" }}>
                       Excel files (.xlsx, .xls) with required columns: fullName, phoneNumber. Optional: email, communityRole, notes, and any other fields.
                     </div>
                   </label>
@@ -2688,7 +2688,7 @@ export default function CommunityDashboardPage() {
                     const selectedFile = getUploadState(communityId as string).file;
                     if (!selectedFile) return null;
                     return (
-                      <div style={{ marginTop: "0.75rem", fontSize: "0.9rem", color: "#2e7d32", fontWeight: 600 }}>
+                      <div style={{ marginTop: "0.45rem", fontSize: "0.68rem", color: "#2e7d32", fontWeight: 600 }}>
                         ✓ {selectedFile.name}
                       </div>
                     );
@@ -2973,6 +2973,14 @@ export default function CommunityDashboardPage() {
                         return alias.includes(activeFarmseeSearch) || phone.includes(activeFarmseeSearch);
                       })
                     : activeFarmseeMembers;
+                  const totalActiveFarmEntries = activeFarmseeMembers.reduce(
+                    (sum: number, member: any) => sum + Number(member.submissionCount || 0),
+                    0
+                  );
+                  const filteredActiveFarmEntries = filteredActiveFarmseeMembers.reduce(
+                    (sum: number, member: any) => sum + Number(member.submissionCount || 0),
+                    0
+                  );
                   const tabCounts: Record<MembersListTab, number> = {
                     approved: approved.length,
                     all: members.length,
@@ -3330,6 +3338,14 @@ export default function CommunityDashboardPage() {
                                 <span style={{ fontSize: "0.82rem", color: "#64748b" }}>
                                   Showing {filteredActiveFarmseeMembers.length} of {activeFarmseeMembers.length}
                                 </span>
+                                <span style={{ fontSize: "0.82rem", color: "#1f2937", fontWeight: 600 }}>
+                                  Total coffee trees tagged: {totalActiveFarmEntries}
+                                </span>
+                                {filteredActiveFarmseeMembers.length !== activeFarmseeMembers.length && (
+                                  <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
+                                    Filtered trees: {filteredActiveFarmEntries}
+                                  </span>
+                                )}
                               </div>
 
                               {filteredActiveFarmseeMembers.length === 0 ? (
@@ -3372,12 +3388,12 @@ export default function CommunityDashboardPage() {
                                         {member.phoneNumber || "No phone"}
                                       </div>
                                       <div style={{ fontSize: "0.82rem", color: "#64748b" }}>
-                                        Entries: {member.submissionCount || 0}
+                                        Coffee trees tagged: {member.submissionCount || 0}
                                       </div>
-                                      {!!member.latestPhotoUrl && (
+                                      {!!member.latestPhotoUrls?.length && (
                                         <div style={{ marginTop: "0.55rem", maxWidth: 120 }}>
                                           <SubmissionPhotoGallery
-                                            photos={[member.latestPhotoUrl]}
+                                            photos={member.latestPhotoUrls}
                                             minTileWidth={110}
                                             tileHeight={72}
                                           />

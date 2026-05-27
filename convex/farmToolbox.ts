@@ -14,20 +14,31 @@ import { Id } from "./_generated/dataModel";
 import { getUgandaTime, generateUTID } from "./utils";
 
 const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
-const BIOFARM_TEMPLATE_NAME = "Bio Farm Coffee Tree Tag Form";
+const BIOFARM_TEMPLATE_NAME = "Bio Farm Coffee Tag";
+const LEGACY_BIOFARM_TEMPLATE_NAME = "Bio Farm Coffee Tree Tag Form";
 const LEGACY_DEFAULT_BIOFARM_TEMPLATE_NAME = "Default Bio Farm Coffee Tree Tag Form";
 const DEFAULT_TREE_TAG_PHOTO_FIELD = "Tree Tag Pic";
-const DEFAULT_COFFEE_PHOTO_FIELD = "Coffee Pic";
-const DEFAULT_OBSERVATION_DATE_FIELD = "Observation Date";
+const DEFAULT_COFFEE_PHOTO_FIELD = "Coffee Tree Pic";
+const LEGACY_COFFEE_PHOTO_FIELD = "Coffee Pic";
+const DEFAULT_OBSERVATION_DATE_FIELD = "Date";
+const LEGACY_OBSERVATION_DATE_FIELD = "Observation Date";
+const DEFAULT_TAG_NAME_FIELD = "Tag Name/ Number";
 const DEFAULT_GPS_FIELD = "GPS";
+
+function isBioFarmTemplateName(templateName: string) {
+  return (
+    templateName === BIOFARM_TEMPLATE_NAME ||
+    templateName === LEGACY_BIOFARM_TEMPLATE_NAME ||
+    templateName === LEGACY_DEFAULT_BIOFARM_TEMPLATE_NAME
+  );
+}
 
 function isDefaultBioFarmCoffeeTagTemplate(template: any) {
   const templateName = String(template?.templateName || "");
   return (
     template?.ownerType === "system" &&
     !template?.isDeleted &&
-    (templateName === BIOFARM_TEMPLATE_NAME ||
-      templateName === LEGACY_DEFAULT_BIOFARM_TEMPLATE_NAME)
+    isBioFarmTemplateName(templateName)
   );
 }
 
@@ -56,18 +67,25 @@ function buildDefaultBioFarmTemplateFields() {
       order: 1,
     },
     {
+      name: DEFAULT_TAG_NAME_FIELD,
+      fieldType: "text" as const,
+      required: true,
+      emoji: "🏷",
+      order: 2,
+    },
+    {
       name: DEFAULT_OBSERVATION_DATE_FIELD,
       fieldType: "date" as const,
       required: true,
       emoji: "📅",
-      order: 2,
+      order: 3,
     },
     {
       name: DEFAULT_GPS_FIELD,
       fieldType: "gps" as const,
       required: true,
       emoji: "📍",
-      order: 3,
+      order: 4,
     },
   ];
 }
@@ -172,6 +190,20 @@ async function enrichTrackerEntriesForAdmin(ctx: any, entries: any[]) {
   );
 }
 
+async function filterEntriesToBioFarmTemplate(ctx: any, entries: any[]) {
+  const checks = await Promise.all(
+    entries.map(async (entry: any) => {
+      const template = await ctx.db.get(entry.templateId);
+      return {
+        entry,
+        include: isDefaultBioFarmCoffeeTagTemplate(template),
+      };
+    })
+  );
+
+  return checks.filter((item: any) => item.include).map((item: any) => item.entry);
+}
+
 // ─── TRACKER TEMPLATES ──────────────────────────────────────────────────────
 
 /** List templates visible to a farmer (system + their community + personal) */
@@ -233,12 +265,12 @@ export const ensureDefaultBioFarmCoffeeTreeTagTemplate = mutation({
       isDefaultBioFarmCoffeeTagTemplate(tpl)
     );
     if (existingDefault) {
-      if (String(existingDefault.templateName || "") === LEGACY_DEFAULT_BIOFARM_TEMPLATE_NAME) {
-        await ctx.db.patch(existingDefault._id, {
-          templateName: BIOFARM_TEMPLATE_NAME,
-          updatedAt: getUgandaTime(),
-        });
-      }
+      await ctx.db.patch(existingDefault._id, {
+        templateName: BIOFARM_TEMPLATE_NAME,
+        emoji: "🍃",
+        fields: buildDefaultBioFarmTemplateFields(),
+        updatedAt: getUgandaTime(),
+      });
       return { templateId: existingDefault._id, created: false };
     }
 
@@ -248,7 +280,7 @@ export const ensureDefaultBioFarmCoffeeTreeTagTemplate = mutation({
       ownerType: "system",
       category: "crop",
       templateName: BIOFARM_TEMPLATE_NAME,
-      emoji: "☕",
+      emoji: "🍃",
       description:
         "Mandatory Bio Farm live-capture form for coffee tree tagging (camera + GPS + date)",
       fields: buildDefaultBioFarmTemplateFields(),
@@ -352,7 +384,7 @@ export const deleteTemplate = mutation({
     const template = await ctx.db.get(args.templateId);
     if (!template) throw new Error("Template not found");
     if (isDefaultBioFarmCoffeeTagTemplate(template)) {
-      throw new Error("Bio Farm Coffee Tree Tag Form cannot be deleted");
+      throw new Error("Bio Farm Coffee Tag cannot be deleted");
     }
     if (template.ownerId !== args.requestingUserId || template.ownerType !== "personal") {
       throw new Error("Not authorised — can only delete your own personal templates");
@@ -455,16 +487,20 @@ export const getBioFarmActiveFarmseeMembersByCommunityIds = query({
                 .order("desc")
                 .collect();
 
-              if (!entries.length) return null;
+              const bioFarmEntries = await filterEntriesToBioFarmTemplate(ctx, entries);
+
+              if (!bioFarmEntries.length) return null;
 
               const member = await ctx.db.get(memberId as Id<"users">);
-              const latestEntry = entries[0];
-              const latestPhotoStorageId = latestEntry?.photoStorageIds?.[0];
-              const latestPhotoUrl = latestPhotoStorageId
-                ? await ctx.storage.getUrl(latestPhotoStorageId)
-                : null;
+              const latestEntry = bioFarmEntries[0];
+              const latestPhotoStorageIds = (latestEntry?.photoStorageIds || []).slice(0, 2);
+              const latestPhotoUrls = latestPhotoStorageIds.length
+                ? (await Promise.all(
+                    latestPhotoStorageIds.map((sid: any) => ctx.storage.getUrl(sid))
+                  )).filter(Boolean)
+                : [];
               const latestSubmissionAt = Math.max(
-                ...entries.map((r: any) => r.submittedAt || r.createdAt || 0)
+                ...bioFarmEntries.map((r: any) => r.submittedAt || r.createdAt || 0)
               );
 
               return {
@@ -473,9 +509,9 @@ export const getBioFarmActiveFarmseeMembersByCommunityIds = query({
                 phoneNumber: (member as any)?.phoneNumber || "-",
                 email: (member as any)?.email || "-",
                 role: (member as any)?.role || "farmer",
-                submissionCount: entries.length,
+                submissionCount: bioFarmEntries.length,
                 latestSubmissionAt,
-                latestPhotoUrl,
+                latestPhotoUrls,
               };
             })
           );
@@ -517,7 +553,8 @@ export const getBioFarmMemberEntriesForAdmin = query({
       .order("desc")
       .collect();
 
-    return await enrichTrackerEntriesForAdmin(ctx, entries);
+    const scopedBioFarmEntries = await filterEntriesToBioFarmTemplate(ctx, entries);
+    return await enrichTrackerEntriesForAdmin(ctx, scopedBioFarmEntries);
   },
 });
 
@@ -548,7 +585,8 @@ export const getBioFarmMemberEntriesForExport = query({
     }
 
     const scoped = entries.filter((entry: any) => String(entry.farmerId) === String(args.memberId));
-    return await enrichTrackerEntriesForAdmin(ctx, scoped);
+    const scopedBioFarmEntries = await filterEntriesToBioFarmTemplate(ctx, scoped);
+    return await enrichTrackerEntriesForAdmin(ctx, scopedBioFarmEntries);
   },
 });
 
@@ -580,14 +618,15 @@ export const submitEntry = mutation({
 
     if (isDefaultBioFarmTemplate) {
       if (!args.photoStorageIds || args.photoStorageIds.length < 2) {
-        throw new Error("Tree Tag Pic and Coffee Pic are required");
+        throw new Error("Tree Tag Pic and Coffee Tree Pic are required");
       }
       if (args.gpsLat === undefined || args.gpsLng === undefined) {
         throw new Error("Live GPS capture is required before submitting this form");
       }
 
-      const dateFieldIndex = finalFieldValues.findIndex(
-        (fv) => fv.fieldName === DEFAULT_OBSERVATION_DATE_FIELD
+      const dateFieldIndex = finalFieldValues.findIndex((fv) =>
+        fv.fieldName === DEFAULT_OBSERVATION_DATE_FIELD ||
+        fv.fieldName === LEGACY_OBSERVATION_DATE_FIELD
       );
       const gpsFieldIndex = finalFieldValues.findIndex(
         (fv) => fv.fieldName === DEFAULT_GPS_FIELD
@@ -601,6 +640,7 @@ export const submitEntry = mutation({
       if (dateFieldIndex >= 0) {
         finalFieldValues[dateFieldIndex] = {
           ...finalFieldValues[dateFieldIndex],
+          fieldName: DEFAULT_OBSERVATION_DATE_FIELD,
           value: observationDate,
         };
       } else {
@@ -620,10 +660,20 @@ export const submitEntry = mutation({
         finalFieldValues.push({ fieldName: DEFAULT_GPS_FIELD, value: gpsValue });
       }
 
+      const normalizedFieldMap = new Map(
+        finalFieldValues.map((fv) => [String(fv.fieldName || ""), String(fv.value || "").trim()])
+      );
+      if (!normalizedFieldMap.get(DEFAULT_COFFEE_PHOTO_FIELD)) {
+        const legacyCoffeeValue = normalizedFieldMap.get(LEGACY_COFFEE_PHOTO_FIELD);
+        if (legacyCoffeeValue) {
+          normalizedFieldMap.set(DEFAULT_COFFEE_PHOTO_FIELD, legacyCoffeeValue);
+        }
+      }
+
       const missingRequired = (template.fields || [])
         .filter((field: any) => field.required && field.fieldType !== "photo")
         .filter((field: any) => {
-          const value = finalFieldValues.find((fv) => fv.fieldName === field.name)?.value || "";
+          const value = normalizedFieldMap.get(field.name) || "";
           return !String(value).trim();
         });
       if (missingRequired.length > 0) {

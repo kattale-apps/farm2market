@@ -17,16 +17,20 @@ const GOLD = "#f9a825";
 const FONT = '"Montserrat", sans-serif';
 
 type Tab = "templates" | "log" | "units" | "insights" | "supply" | "ledger";
-const BIOFARM_TEMPLATE_NAME = "Bio Farm Coffee Tree Tag Form";
+const BIOFARM_TEMPLATE_NAME = "Bio Farm Coffee Tag";
+const LEGACY_BIOFARM_TEMPLATE_NAME = "Bio Farm Coffee Tree Tag Form";
 const LEGACY_DEFAULT_BIOFARM_TEMPLATE_NAME = "Default Bio Farm Coffee Tree Tag Form";
 const DEFAULT_TREE_TAG_PHOTO_FIELD = "Tree Tag Pic";
-const DEFAULT_COFFEE_PHOTO_FIELD = "Coffee Pic";
-const DEFAULT_OBSERVATION_DATE_FIELD = "Observation Date";
+const DEFAULT_COFFEE_PHOTO_FIELD = "Coffee Tree Pic";
+const LEGACY_COFFEE_PHOTO_FIELD = "Coffee Pic";
+const DEFAULT_OBSERVATION_DATE_FIELD = "Date";
+const LEGACY_OBSERVATION_DATE_FIELD = "Observation Date";
 const DEFAULT_GPS_FIELD = "GPS";
 
 function isBioFarmTemplateName(templateName: string) {
   return (
     templateName === BIOFARM_TEMPLATE_NAME ||
+    templateName === LEGACY_BIOFARM_TEMPLATE_NAME ||
     templateName === LEGACY_DEFAULT_BIOFARM_TEMPLATE_NAME
   );
 }
@@ -41,6 +45,20 @@ function getDeviceLocalDateValue() {
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function isObservationDateFieldName(fieldName: string) {
+  return (
+    fieldName === DEFAULT_OBSERVATION_DATE_FIELD ||
+    fieldName === LEGACY_OBSERVATION_DATE_FIELD
+  );
+}
+
+function resolveObservationDateFieldName(template: any | null) {
+  const matched = (template?.fields || []).find((field: any) =>
+    isObservationDateFieldName(String(field?.name || ""))
+  );
+  return String(matched?.name || DEFAULT_OBSERVATION_DATE_FIELD);
 }
 
 function isDefaultBioFarmTemplate(tpl: any | null) {
@@ -89,7 +107,7 @@ function TemplatesTab({ userId, onSelectTemplate }: { userId: Id<"users">; onSel
             {templates.map((tpl: any) => (
               <div key={tpl._id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.85rem 1rem", background: "#f9fafb", borderRadius: 10, border: "1px solid #e8f5e9" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
-                  <span style={{ fontSize: "1.7rem" }}>{tpl.emoji || "📋"}</span>
+                  <span style={{ fontSize: "1.7rem" }}>{isDefaultBioFarmTemplate(tpl) ? "🍃" : (tpl.emoji || "📋")}</span>
                   <div>
                     <div style={{ fontWeight: 600, fontSize: "0.88rem" }}>
                       {getDisplayTemplateName(String(tpl.templateName || ""))}
@@ -305,6 +323,25 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
   const [batchExporting, setBatchExporting] = useState(false);
 
   const isDefaultTemplate = isDefaultBioFarmTemplate(selectedTemplate);
+  const defaultTemplateDateFieldName = resolveObservationDateFieldName(selectedTemplate);
+
+  const resetForFreshEntry = (clearMessages: boolean) => {
+    if (clearMessages) {
+      setSuccessMsg(null);
+      setError(null);
+    }
+    setFieldValues(
+      isDefaultTemplate
+        ? { [defaultTemplateDateFieldName]: getDeviceLocalDateValue() }
+        : {}
+    );
+    setNotes("");
+    setGps(null);
+    setPhotoStorageIds([]);
+    setPhotoStorageByField({});
+    setActivePhotoFieldName(null);
+    setSelectedUnitId("");
+  };
 
   const toggleSelectedEntry = (entryId: string, selected: boolean) => {
     setSelectedEntryIds((prev) => {
@@ -406,15 +443,15 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
     if (!isDefaultTemplate) return;
     const deviceLocalDate = getDeviceLocalDateValue();
     setFieldValues((prev) => {
-      if (prev[DEFAULT_OBSERVATION_DATE_FIELD] === deviceLocalDate) {
+      if (prev[defaultTemplateDateFieldName] === deviceLocalDate) {
         return prev;
       }
       return {
         ...prev,
-        [DEFAULT_OBSERVATION_DATE_FIELD]: deviceLocalDate,
+        [defaultTemplateDateFieldName]: deviceLocalDate,
       };
     });
-  }, [isDefaultTemplate, selectedTemplate?._id]);
+  }, [isDefaultTemplate, selectedTemplate?._id, defaultTemplateDateFieldName]);
 
   const handleDeleteEntry = async (entryId: string) => {
     if (!confirm("Delete this submitted entry?")) return;
@@ -613,8 +650,8 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
       const workingFieldValues = { ...fieldValues };
       const todayIso = getDeviceLocalDateValue();
 
-      if (isDefaultTemplate && !workingFieldValues[DEFAULT_OBSERVATION_DATE_FIELD]) {
-        workingFieldValues[DEFAULT_OBSERVATION_DATE_FIELD] = todayIso;
+      if (isDefaultTemplate && !workingFieldValues[defaultTemplateDateFieldName]) {
+        workingFieldValues[defaultTemplateDateFieldName] = todayIso;
       }
 
       let gpsToUse = gps;
@@ -637,9 +674,11 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
       let finalPhotoStorageIds: Id<"_storage">[] | undefined;
       if (isDefaultTemplate) {
         const treeTagStorageId = photoStorageByField[DEFAULT_TREE_TAG_PHOTO_FIELD];
-        const coffeeStorageId = photoStorageByField[DEFAULT_COFFEE_PHOTO_FIELD];
+        const coffeeStorageId =
+          photoStorageByField[DEFAULT_COFFEE_PHOTO_FIELD] ||
+          photoStorageByField[LEGACY_COFFEE_PHOTO_FIELD];
         if (!treeTagStorageId || !coffeeStorageId) {
-          throw new Error("Tree Tag Pic and Coffee Pic must be captured with camera.");
+          throw new Error("Tree Tag Pic and Coffee Tree Pic must be captured with camera.");
         }
         finalPhotoStorageIds = [
           treeTagStorageId as Id<"_storage">,
@@ -663,13 +702,7 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
       });
       const filled = fvArray.filter((fv) => fv.value.trim()).length;
       setSuccessMsg(`✅ Entry saved! You earned 🪙 ${filled} FarmCoin${filled !== 1 ? "s" : ""}!`);
-      setFieldValues({});
-      setNotes("");
-      setGps(null);
-      setPhotoStorageIds([]);
-      setPhotoStorageByField({});
-      setFieldValues(isDefaultTemplate ? { [DEFAULT_OBSERVATION_DATE_FIELD]: getDeviceLocalDateValue() } : {});
-      setSelectedUnitId("");
+      resetForFreshEntry(false);
     } catch (e: any) {
       setError(e.message ?? "Failed to submit");
     }
@@ -690,7 +723,7 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
             {templates.map((tpl: any) => (
               <button key={tpl._id} onClick={() => setSelectedTemplate(tpl)}
                 style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.85rem 1rem", background: "#fff", borderRadius: 10, border: "1.5px solid #e8f5e9", cursor: "pointer", textAlign: "left", fontFamily: FONT }}>
-                <span style={{ fontSize: "1.7rem" }}>{tpl.emoji || "📋"}</span>
+                <span style={{ fontSize: "1.7rem" }}>{isDefaultBioFarmTemplate(tpl) ? "🍃" : (tpl.emoji || "📋")}</span>
                 <div>
                   <div style={{ fontWeight: 600, fontSize: "0.88rem" }}>
                     {getDisplayTemplateName(String(tpl.templateName || ""))}
@@ -711,11 +744,30 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem" }}>
-        <button onClick={() => { setSelectedTemplate(null); setSuccessMsg(null); }}
-          style={{ background: "none", border: "none", fontSize: "1rem", cursor: "pointer", color: BRAND }}>← Back</button>
+        <button
+          type="button"
+          onClick={() => resetForFreshEntry(true)}
+          title="Clear current entry and start fresh"
+          style={{
+            width: 34,
+            height: 34,
+            borderRadius: 999,
+            border: "1px solid #d6d6d6",
+            background: "#f7f7f7",
+            fontSize: "1.2rem",
+            lineHeight: 1,
+            cursor: "pointer",
+            color: "#6b7280",
+          }}
+        >
+          ↻
+        </button>
         <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 700 }}>
-          {selectedTemplate.emoji} {getDisplayTemplateName(String(selectedTemplate.templateName || ""))}
+          🍃 {getDisplayTemplateName(String(selectedTemplate.templateName || ""))}
         </h2>
+      </div>
+      <div style={{ marginTop: "-0.55rem", marginBottom: "0.75rem", fontSize: "0.74rem", color: "#64748b" }}>
+        Refresh starts a fresh form capture and clears unsaved inputs.
       </div>
 
       {successMsg && (
@@ -825,11 +877,11 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
                 type={field.fieldType === "number" ? "number" : field.fieldType === "date" ? "date" : "text"}
                 value={fieldValues[field.name] ?? ""}
                 onChange={(e) => setFieldValues((fv) => ({ ...fv, [field.name]: e.target.value }))}
-                readOnly={isDefaultTemplate && field.name === DEFAULT_OBSERVATION_DATE_FIELD}
+                readOnly={isDefaultTemplate && isObservationDateFieldName(String(field.name || ""))}
                 style={{ width: "100%", padding: "0.5rem 0.75rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.88rem", boxSizing: "border-box" }}
               />
             )}
-            {isDefaultTemplate && field.name === DEFAULT_OBSERVATION_DATE_FIELD && (
+            {isDefaultTemplate && isObservationDateFieldName(String(field.name || "")) && (
               <div style={{ marginTop: "0.3rem", fontSize: "0.72rem", color: "#64748b" }}>
                 Auto-filled from this device&apos;s current date.
               </div>

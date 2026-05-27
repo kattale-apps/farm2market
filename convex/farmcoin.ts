@@ -1121,7 +1121,7 @@ export const setTraderVerificationStatus = mutation({
 
 // ─── Farm 2 Market Access Gate ────────────────────────────────────────
 
-const FARM2MARKET_REQUIRED_FARMCOINS = 500;
+const FARM2MARKET_REQUIRED_FARMCOINS = 1000;
 const PILOT_EMAIL_DOMAIN = "@pilot.farm2market";
 
 /**

@@ -17,6 +17,19 @@ const GOLD = "#f9a825";
 const FONT = '"Montserrat", sans-serif';
 
 type Tab = "templates" | "log" | "units" | "insights" | "supply" | "ledger";
+const DEFAULT_BIOFARM_TEMPLATE_NAME = "Default Bio Farm Coffee Tree Tag Form";
+const DEFAULT_TREE_TAG_PHOTO_FIELD = "Tree Tag Pic";
+const DEFAULT_COFFEE_PHOTO_FIELD = "Coffee Pic";
+const DEFAULT_OBSERVATION_DATE_FIELD = "Observation Date";
+const DEFAULT_GPS_FIELD = "GPS";
+
+function isDefaultBioFarmTemplate(tpl: any | null) {
+  return (
+    !!tpl &&
+    tpl.ownerType === "system" &&
+    String(tpl.templateName || "") === DEFAULT_BIOFARM_TEMPLATE_NAME
+  );
+}
 
 const STATUS_COLORS: Record<string, string> = {
   active: "#2e7d32", sold: "#1565c0", deceased: "#c62828", harvested: "#6a1e00",
@@ -258,7 +271,9 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
   const convex = useConvex();
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+  const [activePhotoFieldName, setActivePhotoFieldName] = useState<string | null>(null);
   const [photoStorageIds, setPhotoStorageIds] = useState<string[]>([]);
+  const [photoStorageByField, setPhotoStorageByField] = useState<Record<string, string>>({});
   const [photoUploading, setPhotoUploading] = useState(false);
   const [deletingEntryId, setDeletingEntryId] = useState<string | null>(null);
   const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
@@ -266,6 +281,8 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
   const [selectedEntryIds, setSelectedEntryIds] = useState<Set<string>>(new Set());
   const [singleExportingId, setSingleExportingId] = useState<string | null>(null);
   const [batchExporting, setBatchExporting] = useState(false);
+
+  const isDefaultTemplate = isDefaultBioFarmTemplate(selectedTemplate);
 
   const toggleSelectedEntry = (entryId: string, selected: boolean) => {
     setSelectedEntryIds((prev) => {
@@ -310,15 +327,33 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
     setBatchExporting(false);
   };
 
-  const captureGPS = () => {
+  const captureGPS = (): Promise<{ lat: number; lng: number; accuracy: number } | null> => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      return Promise.resolve(null);
+    }
     setGpsLoading(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => { setGps({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }); setGpsLoading(false); },
-      () => { setGpsLoading(false); }
-    );
+    return new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const coords = {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            accuracy: pos.coords.accuracy,
+          };
+          setGps(coords);
+          setGpsLoading(false);
+          resolve(coords);
+        },
+        () => {
+          setGpsLoading(false);
+          resolve(null);
+        },
+        { enableHighAccuracy: true, timeout: 15000 }
+      );
+    });
   };
 
-  const handlePhotoUpload = async (file: File) => {
+  const handlePhotoUpload = async (file: File, targetFieldName?: string) => {
     if (file.size > 10 * 1024 * 1024) {
       setError("Photo too large. Maximum allowed size is 10MB.");
       return;
@@ -328,12 +363,22 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
       const uploadUrl = await generateUploadUrl();
       const res = await fetch(uploadUrl, { method: "POST", headers: { "Content-Type": file.type }, body: file });
       const { storageId } = await res.json();
-      setPhotoStorageIds((prev) => [...prev, storageId]);
+      if (targetFieldName) {
+        setPhotoStorageByField((prev) => ({ ...prev, [targetFieldName]: storageId }));
+      } else {
+        setPhotoStorageIds((prev) => [...prev, storageId]);
+      }
     } catch {
       setError("Failed to upload photo. Please try again.");
     }
     setPhotoUploading(false);
   };
+
+  useEffect(() => {
+    if (isDefaultTemplate && !gps && !gpsLoading) {
+      void captureGPS();
+    }
+  }, [isDefaultTemplate, gps, gpsLoading]);
 
   const handleDeleteEntry = async (entryId: string) => {
     if (!confirm("Delete this submitted entry?")) return;
@@ -529,16 +574,55 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
     setSubmitting(true);
     setError(null);
     try {
-      const fvArray = Object.entries(fieldValues).map(([fieldName, value]) => ({ fieldName, value }));
+      const workingFieldValues = { ...fieldValues };
+      const todayIso = new Date().toISOString().slice(0, 10);
+
+      if (isDefaultTemplate && !workingFieldValues[DEFAULT_OBSERVATION_DATE_FIELD]) {
+        workingFieldValues[DEFAULT_OBSERVATION_DATE_FIELD] = todayIso;
+      }
+
+      let gpsToUse = gps;
+      if (isDefaultTemplate && !gpsToUse) {
+        gpsToUse = await captureGPS();
+      }
+
+      if (isDefaultTemplate && !gpsToUse) {
+        throw new Error("Live GPS is required for this form. Please allow location and retry.");
+      }
+
+      const requiredFields = (selectedTemplate.fields || []).filter((f: any) => f.required && f.fieldType !== "photo");
+      for (const field of requiredFields) {
+        const val = String(workingFieldValues[field.name] || "").trim();
+        if (!val) {
+          throw new Error(`${field.name} is required`);
+        }
+      }
+
+      let finalPhotoStorageIds: Id<"_storage">[] | undefined;
+      if (isDefaultTemplate) {
+        const treeTagStorageId = photoStorageByField[DEFAULT_TREE_TAG_PHOTO_FIELD];
+        const coffeeStorageId = photoStorageByField[DEFAULT_COFFEE_PHOTO_FIELD];
+        if (!treeTagStorageId || !coffeeStorageId) {
+          throw new Error("Tree Tag Pic and Coffee Pic must be captured with camera.");
+        }
+        finalPhotoStorageIds = [
+          treeTagStorageId as Id<"_storage">,
+          coffeeStorageId as Id<"_storage">,
+        ];
+      } else {
+        finalPhotoStorageIds = photoStorageIds.length ? (photoStorageIds as Id<"_storage">[]) : undefined;
+      }
+
+      const fvArray = Object.entries(workingFieldValues).map(([fieldName, value]) => ({ fieldName, value }));
       await submitEntry({
         farmerId: userId,
         templateId: selectedTemplate._id,
         trackedUnitId: selectedUnitId ? selectedUnitId as Id<"farmTrackedUnits"> : undefined,
         fieldValues: fvArray,
-        photoStorageIds: photoStorageIds.length ? photoStorageIds as Id<"_storage">[] : undefined,
-        gpsLat: gps?.lat,
-        gpsLng: gps?.lng,
-        gpsAccuracy: gps?.accuracy,
+        photoStorageIds: finalPhotoStorageIds,
+        gpsLat: gpsToUse?.lat,
+        gpsLng: gpsToUse?.lng,
+        gpsAccuracy: gpsToUse?.accuracy,
         notes: notes || undefined,
       });
       const filled = fvArray.filter((fv) => fv.value.trim()).length;
@@ -547,6 +631,7 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
       setNotes("");
       setGps(null);
       setPhotoStorageIds([]);
+      setPhotoStorageByField({});
       setSelectedUnitId("");
     } catch (e: any) {
       setError(e.message ?? "Failed to submit");
@@ -571,7 +656,9 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
                 <span style={{ fontSize: "1.7rem" }}>{tpl.emoji || "📋"}</span>
                 <div>
                   <div style={{ fontWeight: 600, fontSize: "0.88rem" }}>{tpl.templateName}</div>
-                  <div style={{ fontSize: "0.72rem", color: "#888" }}>{tpl.fields?.length ?? 0} fields</div>
+                  <div style={{ fontSize: "0.72rem", color: "#888" }}>
+                    {tpl.fields?.length ?? 0} fields{isDefaultBioFarmTemplate(tpl) ? " · mandatory default" : ""}
+                  </div>
                 </div>
               </button>
             ))}
@@ -652,24 +739,42 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
                 <input ref={galleryInputRef} type="file" accept="image/*" style={{ display: "none" }}
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePhotoUpload(f); }} />
                 <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }}
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePhotoUpload(f); }} />
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePhotoUpload(f, activePhotoFieldName || undefined); }} />
                 <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                  <button type="button" onClick={() => cameraInputRef.current?.click()} disabled={photoUploading}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isDefaultTemplate) {
+                        setActivePhotoFieldName(field.name);
+                      } else {
+                        setActivePhotoFieldName(null);
+                      }
+                      cameraInputRef.current?.click();
+                    }}
+                    disabled={photoUploading}
                     style={{ padding: "0.5rem 0.8rem", background: "#f5f5f5", border: "1px solid #ddd", borderRadius: 8, cursor: "pointer", fontFamily: FONT, fontSize: "0.82rem" }}>
                     {photoUploading ? "Uploading…" : "📷 Camera"}
                   </button>
-                  <button type="button" onClick={() => galleryInputRef.current?.click()} disabled={photoUploading}
-                    style={{ padding: "0.5rem 0.8rem", background: "#f5f5f5", border: "1px solid #ddd", borderRadius: 8, cursor: "pointer", fontFamily: FONT, fontSize: "0.82rem" }}>
-                    {photoUploading ? "Uploading…" : "🖼 Gallery"}
-                  </button>
-                  <span style={{ fontSize: "0.75rem", color: photoStorageIds.length > 0 ? BRAND : "#666", alignSelf: "center" }}>
-                    {photoStorageIds.length > 0 ? `${photoStorageIds.length} photo(s) uploaded` : "No photo uploaded yet"}
-                  </span>
+                  {!isDefaultTemplate && (
+                    <button type="button" onClick={() => galleryInputRef.current?.click()} disabled={photoUploading}
+                      style={{ padding: "0.5rem 0.8rem", background: "#f5f5f5", border: "1px solid #ddd", borderRadius: 8, cursor: "pointer", fontFamily: FONT, fontSize: "0.82rem" }}>
+                      {photoUploading ? "Uploading…" : "🖼 Gallery"}
+                    </button>
+                  )}
+                  {isDefaultTemplate ? (
+                    <span style={{ fontSize: "0.75rem", color: photoStorageByField[field.name] ? BRAND : "#c62828", alignSelf: "center", fontWeight: 600 }}>
+                      {photoStorageByField[field.name] ? "Live photo captured" : "Camera capture required"}
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: "0.75rem", color: photoStorageIds.length > 0 ? BRAND : "#666", alignSelf: "center" }}>
+                      {photoStorageIds.length > 0 ? `${photoStorageIds.length} photo(s) uploaded` : "No photo uploaded yet"}
+                    </span>
+                  )}
                 </div>
               </div>
             ) : field.fieldType === "gps" ? (
               <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                <button onClick={captureGPS} disabled={gpsLoading}
+                <button onClick={() => { void captureGPS(); }} disabled={gpsLoading}
                   style={{ padding: "0.5rem 1rem", background: gps ? BRAND_BG : "#f5f5f5", border: `1px solid ${gps ? "#a5d6a7" : "#ddd"}`, borderRadius: 8, cursor: "pointer", fontFamily: FONT, fontSize: "0.82rem", color: gps ? BRAND : "#333" }}>
                   {gpsLoading ? "Locating…" : gps ? `📍 ${gps.lat.toFixed(4)}, ${gps.lng.toFixed(4)}` : "📍 Capture GPS"}
                 </button>
@@ -1207,12 +1312,31 @@ function ComingSoonCard({ emoji, label, phase }: { emoji: string; label: string;
 export default function FarmToolboxPage() {
   const { user, status: authStatus } = useStoredUser();
   const userId = (user?.userId as Id<"users"> | undefined) || null;
-  const [activeTab, setActiveTab] = useState<Tab>("templates");
+  const [activeTab, setActiveTab] = useState<Tab>("log");
   const [selectedTemplate, setSelectedTemplate] = useState<any | null>(null);
+  const ensureDefaultTemplate = useOfflineMutation<any>((api as any).farmToolbox.ensureDefaultBioFarmCoffeeTreeTagTemplate);
+  const templates = useOfflineQuery(
+    (api as any).farmToolbox.listTemplates,
+    userId ? { farmerId: userId } : "skip",
+    userId ? `toolbox_templates_${userId}` : undefined
+  ) as any[] | undefined;
+
+  useEffect(() => {
+    if (!userId) return;
+    void ensureDefaultTemplate({ requestingUserId: userId });
+  }, [userId, ensureDefaultTemplate]);
+
+  useEffect(() => {
+    if (!userId || !templates || selectedTemplate || activeTab !== "log") return;
+    const defaultTemplate = templates.find((tpl: any) => isDefaultBioFarmTemplate(tpl));
+    if (defaultTemplate) {
+      setSelectedTemplate(defaultTemplate);
+    }
+  }, [userId, templates, selectedTemplate, activeTab]);
 
   const tabs: { id: Tab; emoji: string; label: string; phase?: string }[] = [
-    { id: "templates", emoji: "📋", label: "Templates" },
-    { id: "log",       emoji: "✏️",  label: "Log Entry" },
+    { id: "templates", emoji: "📋", label: "Create Form Template" },
+    { id: "log",       emoji: "✏️",  label: "View Form" },
     { id: "units",     emoji: "🌳",  label: "My Units" },
     { id: "insights",  emoji: "📊",  label: "Insights",   phase: "Phase 4" },
     { id: "supply",    emoji: "📦",  label: "Supplies",   phase: "Phase 5a" },
@@ -1239,7 +1363,7 @@ export default function FarmToolboxPage() {
       <div style={{ display: "flex", overflowX: "auto", background: "#fff", borderBottom: "1px solid #e0e0e0", padding: "0 0.25rem" }}>
         {tabs.map((t) => (
           <button key={t.id} onClick={() => { setActiveTab(t.id); if (t.id !== "log") setSelectedTemplate(null); }}
-            style={{ flexShrink: 0, padding: "0.7rem 0.85rem", border: "none", borderBottom: activeTab === t.id ? `3px solid ${BRAND}` : "3px solid transparent", background: "transparent", cursor: "pointer", fontFamily: FONT, fontSize: "0.78rem", fontWeight: activeTab === t.id ? 700 : 400, color: activeTab === t.id ? BRAND : "#666", whiteSpace: "nowrap" }}>
+            style={{ flexShrink: 0, padding: "0.7rem 0.85rem", border: "none", borderBottom: activeTab === t.id ? `3px solid ${BRAND}` : "3px solid transparent", background: t.id === "log" ? "#f1f8e9" : "transparent", cursor: "pointer", fontFamily: FONT, fontSize: "0.78rem", fontWeight: activeTab === t.id ? 700 : 400, color: activeTab === t.id ? BRAND : "#666", whiteSpace: "nowrap" }}>
             {t.emoji} {t.label}
           </button>
         ))}

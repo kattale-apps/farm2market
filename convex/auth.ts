@@ -13,6 +13,31 @@ import { Id } from "./_generated/dataModel";
 import { PILOT_SHARED_PASSWORD } from "./constants";
 import { getUgandaTime } from "./utils";
 
+const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
+
+async function ensureBioFarmMembershipForFarmer(
+  ctx: any,
+  userId: Id<"users">,
+  role: string
+) {
+  if (role !== "farmer") return;
+
+  const existing = await ctx.db
+    .query("communityMemberships")
+    .withIndex("by_community_user", (q: any) =>
+      q.eq("communityId", BIOFARM_COMMUNITY_ID as Id<"communities">).eq("userId", userId)
+    )
+    .first();
+
+  if (!existing) {
+    await ctx.db.insert("communityMemberships", {
+      communityId: BIOFARM_COMMUNITY_ID as Id<"communities">,
+      userId,
+      joinedAt: getUgandaTime(),
+    });
+  }
+}
+
 /**
  * Verify admin role - helper function for authorization checks
  * Returns authorization decision
@@ -249,6 +274,8 @@ export const createUser = mutation({
     // Create user
     const userId = await ctx.db.insert("users", userData);
 
+    await ensureBioFarmMembershipForFarmer(ctx, userId, args.role);
+
     return { userId, alias };
   },
 });
@@ -357,6 +384,8 @@ export const signup = mutation({
       lastActiveAt: getUgandaTime(),
       passwordHash,
     });
+
+    await ensureBioFarmMembershipForFarmer(ctx, userId, args.role);
 
     // Fetch the created user
     const user = await ctx.db.get(userId);
@@ -930,6 +959,8 @@ export const signupWithSession = mutation({
       createdAt: now,
       lastActiveAt: now,
     });
+
+    await ensureBioFarmMembershipForFarmer(ctx, userId, args.role);
 
     const sessionToken = generateSessionToken();
     await ctx.db.insert("sessions", {

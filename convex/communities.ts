@@ -4,6 +4,28 @@ import { generateUTID, getUgandaTime } from "./utils";
 import { verifyAdminRole } from "./auth";
 import { Id } from "./_generated/dataModel";
 
+const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
+
+async function ensureBioFarmMembershipForFarmer(ctx: any, userId: Id<"users">) {
+  const user = await ctx.db.get(userId);
+  if (!user || user.role !== "farmer") return;
+
+  const existing = await ctx.db
+    .query("communityMemberships")
+    .withIndex("by_community_user", (q: any) =>
+      q.eq("communityId", BIOFARM_COMMUNITY_ID as Id<"communities">).eq("userId", userId)
+    )
+    .first();
+
+  if (!existing) {
+    await ctx.db.insert("communityMemberships", {
+      communityId: BIOFARM_COMMUNITY_ID as Id<"communities">,
+      userId,
+      joinedAt: getUgandaTime(),
+    });
+  }
+}
+
 /**
  * Grower Communities
  * 
@@ -462,8 +484,6 @@ export const getActiveCommunities = query({
           isGlobal: c.isGlobal,
           geoLocked: c.geoLocked,
           showMemberCount: (c as any).showMemberCount,
-          fertilizerEnabled: (c as any).fertilizerEnabled,
-          farmNeedsEnabled: (c as any).farmNeedsEnabled,
           isMember,
           memberCount: memberships.length,
           roleBreakdown,
@@ -675,30 +695,15 @@ export const getUserCommunities = query({
     userId: v.id("users"),
   },
   handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.userId);
-    if (!user) {
-      return [];
-    }
-
     // Get all community memberships for the user
     const memberships = await ctx.db
       .query("communityMemberships")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .collect();
 
-    const seenCommunityIds = new Set<string>();
-    const uniqueMemberships = memberships.filter((membership) => {
-      const id = String(membership.communityId);
-      if (seenCommunityIds.has(id)) {
-        return false;
-      }
-      seenCommunityIds.add(id);
-      return true;
-    });
-
     // Get community details for each membership
     const communities = await Promise.all(
-      uniqueMemberships.map(async (m) => {
+      memberships.map(async (m) => {
         const community = await ctx.db.get(m.communityId);
         if (!community) return null;
         const communityMemberships = await ctx.db
@@ -720,26 +725,6 @@ export const getUserCommunities = query({
     );
 
     return communities.filter((c) => c !== null);
-  },
-});
-
-export const getUserCommunityScope = query({
-  args: {
-    userId: v.id("users"),
-  },
-  handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.userId);
-    if (!user) {
-      return {
-        accountScope: null,
-        onboardedViaCommunityId: null,
-      };
-    }
-
-    return {
-      accountScope: user.accountScope ?? null,
-      onboardedViaCommunityId: user.onboardedViaCommunityId ?? null,
-    };
   },
 });
 
@@ -901,7 +886,6 @@ export const joinCommunityByQr = mutation({
           createdAt: getUgandaTime(),
           lastActiveAt: getUgandaTime(),
           passwordHash,
-          accountScope: "community_only",
           onboardedViaCommunityId: community._id,
         });
       }
@@ -912,6 +896,8 @@ export const joinCommunityByQr = mutation({
     if (!user) {
       throw new Error("Failed to get user after creation");
     }
+
+    await ensureBioFarmMembershipForFarmer(ctx, userId);
 
 // Update onboardedViaCommunityId if not already set (analytics only — no accountScope restriction)
       if (!user.onboardedViaCommunityId) {
@@ -1322,6 +1308,87 @@ export const joinCommunity = mutation({
     });
 
     return { success: true };
+  },
+});
+
+/**
+ * Backfill existing farmer accounts into Bio Farm community membership (idempotent)
+ */
+export const backfillBioFarmMembershipForFarmers = mutation({
+  args: {
+    adminId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, args) => {
+    let adminId = args.adminId;
+
+    if (!adminId) {
+      const authUser = await ctx.auth.getUserIdentity();
+      if (!authUser) {
+        throw new Error("Not authenticated");
+      }
+
+      let user = null;
+      if (authUser.email) {
+        user = await ctx.db
+          .query("users")
+          .withIndex("by_email", (q) => q.eq("email", authUser.email))
+          .first();
+      }
+
+      if (!user && authUser.phoneNumber) {
+        user = await ctx.db
+          .query("users")
+          .withIndex("by_phone", (q) => q.eq("phoneNumber", authUser.phoneNumber))
+          .first();
+      }
+
+      if (!user) {
+        throw new Error("User not found");
+      }
+
+      adminId = user._id;
+    }
+
+    const admin = await ctx.db.get(adminId);
+    if (!admin || admin.role !== "admin") {
+      throw new Error("Only admins can run backfill");
+    }
+
+    const farmers = await ctx.db
+      .query("users")
+      .withIndex("by_role", (q) => q.eq("role", "farmer"))
+      .collect();
+
+    let created = 0;
+    let skipped = 0;
+
+    for (const farmer of farmers) {
+      const exists = await ctx.db
+        .query("communityMemberships")
+        .withIndex("by_community_user", (q) =>
+          q.eq("communityId", BIOFARM_COMMUNITY_ID as Id<"communities">).eq("userId", farmer._id)
+        )
+        .first();
+
+      if (exists) {
+        skipped += 1;
+        continue;
+      }
+
+      await ctx.db.insert("communityMemberships", {
+        communityId: BIOFARM_COMMUNITY_ID as Id<"communities">,
+        userId: farmer._id,
+        joinedAt: getUgandaTime(),
+      });
+      created += 1;
+    }
+
+    return {
+      success: true,
+      farmersEvaluated: farmers.length,
+      created,
+      skipped,
+    };
   },
 });
 
@@ -2034,25 +2101,14 @@ export const getMyNavigationContext = query({
       }))
     );
 
-    const scopedAdminCommunities = adminCommunitiesMapped;
-
     // Get communities where user is a member
     const membershipRecords = await ctx.db
       .query("communityMemberships")
       .filter((q) => q.eq(q.field("userId"), userId))
       .collect();
 
-    const scopedMembershipRecords = membershipRecords;
-
     const joinedCommunities = [];
-    const seenJoinedCommunityIds = new Set<string>();
-    for (const membership of scopedMembershipRecords) {
-      const joinedCommunityId = String(membership.communityId);
-      if (seenJoinedCommunityIds.has(joinedCommunityId)) {
-        continue;
-      }
-      seenJoinedCommunityIds.add(joinedCommunityId);
-
+    for (const membership of membershipRecords) {
       const community = await ctx.db.get(membership.communityId);
       if (community) {
         joinedCommunities.push({
@@ -2066,24 +2122,22 @@ export const getMyNavigationContext = query({
 
     // Determine default community ID
     let defaultCommunityId: Id<"communities"> | null = null;
-    if (scopedAdminCommunities.length > 0) {
+    if (adminCommunitiesMapped.length > 0) {
       // Prefer admin communities
       const firstAdminCommunity = adminCommunities.find((c) =>
-        scopedAdminCommunities.some((mc) => mc.communityId === c._id)
+        adminCommunitiesMapped.some((mc) => mc.communityId === c._id)
       );
       defaultCommunityId = firstAdminCommunity?._id || null;
     } else if (joinedCommunities.length > 0) {
       // Fall back to first joined community
-      const firstJoinedMembership = scopedMembershipRecords[0];
+      const firstJoinedMembership = membershipRecords[0];
       defaultCommunityId = firstJoinedMembership?.communityId || null;
     }
 
     return {
       userId,
       isSuperadmin,
-      accountScope: user.accountScope,
-      onboardedViaCommunityId: user.onboardedViaCommunityId ?? null,
-      adminCommunities: scopedAdminCommunities,
+      adminCommunities: adminCommunitiesMapped,
       joinedCommunities,
       defaultCommunityId,
       error: undefined,

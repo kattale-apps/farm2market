@@ -15,7 +15,7 @@ async function assertBioFarmAdminCommunityAccess(
   communityId: Id<"communities">
 ) {
   if (String(communityId) !== BIOFARM_COMMUNITY_ID) {
-    throw new Error("Active Farmsee is available only for Bio Farm community");
+    throw new Error("Active Farms is available only for Bio Farm community");
   }
 
   const adminUser = await ctx.db.get(adminId);
@@ -1188,7 +1188,7 @@ export const getSubmissionsForExport = query({
 });
 
 /**
- * Active Farmsee list for Bio Farm community (approved members with submitted tracker entries)
+ * Active Farms list for Bio Farm community (approved members with submitted tracker entries)
  */
 export const getBioFarmActiveFarmseeMembersByCommunityIds = query({
   args: {
@@ -1269,7 +1269,7 @@ export const getBioFarmActiveFarmseeMembersByCommunityIds = query({
           return {
             communityId,
             members: [],
-            error: error?.message || "Unable to load Active Farmsee members",
+            error: error?.message || "Unable to load Active Farms members",
           };
         }
       })

@@ -15,6 +15,7 @@ import { CommunityMemberCard } from "../../components/CommunityMemberCard";
 import { resolveCommunityLogo } from "../../lib/communityLogos";
 import { AdminFertilizerConfig } from "../../components/biofarm/AdminFertilizerConfig";
 import { exportSubmissionsToPDF } from "../../utils/exportUtils";
+import SubmissionPhotoGallery from "../../components/SubmissionPhotoGallery";
 
 /* ── Tab types for community cards ── */
 type CommunityTab = "members" | "noticeboard" | "messages" | "forms" | "insights" | "fertilizer";
@@ -2982,7 +2983,7 @@ export default function CommunityDashboardPage() {
                     approved: "Approved Members",
                     all: "All Members",
                     imported: "Imported Members",
-                    activeFarmsee: "Active Farmsee",
+                    activeFarmsee: "Active Farms",
                   };
                   const membersTabs = (isBioFarmCommunity
                     ? ["approved", "all", "imported", "activeFarmsee"]
@@ -3304,7 +3305,7 @@ export default function CommunityDashboardPage() {
                       {activeMembersTab === "activeFarmsee" && (
                         <>
                           {activeFarmseeByCommunity === undefined ? (
-                            <p style={{ color: "#999" }}>Loading Active Farmsee members...</p>
+                            <p style={{ color: "#999" }}>Loading Active Farms members...</p>
                           ) : activeFarmseeMembers.length === 0 ? (
                             <p style={{ color: "#999" }}>
                               No Bio Farm members with Farm Toolbox entries yet.
@@ -3373,6 +3374,15 @@ export default function CommunityDashboardPage() {
                                       <div style={{ fontSize: "0.82rem", color: "#64748b" }}>
                                         Entries: {member.submissionCount || 0}
                                       </div>
+                                      {!!member.latestPhotoUrl && (
+                                        <div style={{ marginTop: "0.55rem", maxWidth: 120 }}>
+                                          <SubmissionPhotoGallery
+                                            photos={[member.latestPhotoUrl]}
+                                            minTileWidth={110}
+                                            tileHeight={72}
+                                          />
+                                        </div>
+                                      )}
                                     </button>
                                   ))}
                                 </div>
@@ -3583,7 +3593,7 @@ export default function CommunityDashboardPage() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem" }}>
               <div>
                 <h3 style={{ margin: 0, color: "#1f2937", fontSize: isMobile ? "1rem" : "1.1rem" }}>
-                  Active Farmsee Entries
+                  Active Farms Entries
                 </h3>
                 <p style={{ margin: "0.25rem 0 0 0", color: "#64748b", fontSize: "0.85rem" }}>
                   Farmer: {selectedFarmseeMember.alias}
@@ -3749,17 +3759,7 @@ export default function CommunityDashboardPage() {
                           )}
                           {Array.isArray(entry.photoUrls) && entry.photoUrls.length > 0 && (
                             <div style={{ display: "grid", gap: "0.3rem" }}>
-                              {entry.photoUrls.map((url: string, photoIdx: number) => (
-                                <a
-                                  key={`${entryId}-photo-${photoIdx}`}
-                                  href={url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  style={{ color: "#1565c0", textDecoration: "underline", fontSize: "0.82rem" }}
-                                >
-                                  View photo {photoIdx + 1}
-                                </a>
-                              ))}
+                              <SubmissionPhotoGallery photos={entry.photoUrls} minTileWidth={90} tileHeight={78} />
                             </div>
                           )}
                         </div>

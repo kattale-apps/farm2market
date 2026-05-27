@@ -3,17 +3,17 @@ import { test, expect } from "@playwright/test";
 const BASE_URL = "http://localhost:3000";
 
 /**
- * Active Farmsee smoke coverage for Members -> Active Farmsee flow.
+ * Active Farms smoke coverage for Members -> Active Farms flow.
  *
  * This suite expects a valid admin user id for localStorage bootstrapping.
  * Set E2E_ADMIN_USER_ID to a users-table id for environments where seeded
  * Bio Farm data exists.
  */
 
-test.describe("Active Farmsee — Community Dashboard", () => {
-  test("01 - Active Farmsee tab is reachable and searchable", async ({ page }) => {
+test.describe("Active Farms — Community Dashboard", () => {
+  test("01 - Active Farms tab is reachable and searchable", async ({ page }) => {
     const adminUserId = process.env.E2E_ADMIN_USER_ID;
-    test.skip(!adminUserId, "Set E2E_ADMIN_USER_ID to run Active Farmsee smoke tests");
+    test.skip(!adminUserId, "Set E2E_ADMIN_USER_ID to run Active Farms smoke tests");
 
     await page.addInitScript((userId) => {
       localStorage.setItem(
@@ -43,7 +43,7 @@ test.describe("Active Farmsee — Community Dashboard", () => {
 
   test("02 - Entry modal exposes Download All and Download Selected controls", async ({ page }) => {
     const adminUserId = process.env.E2E_ADMIN_USER_ID;
-    test.skip(!adminUserId, "Set E2E_ADMIN_USER_ID to run Active Farmsee smoke tests");
+    test.skip(!adminUserId, "Set E2E_ADMIN_USER_ID to run Active Farms smoke tests");
 
     await page.addInitScript((userId) => {
       localStorage.setItem(
@@ -67,7 +67,7 @@ test.describe("Active Farmsee — Community Dashboard", () => {
 
     const farmerCard = page.getByTestId("active-farmsee-member-card").first();
     const farmerCount = await farmerCard.count();
-    test.skip(farmerCount === 0, "No Active Farmsee members with entries in current test data");
+    test.skip(farmerCount === 0, "No Active Farms members with entries in current test data");
 
     await farmerCard.click();
 

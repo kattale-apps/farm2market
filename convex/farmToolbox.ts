@@ -14,6 +14,56 @@ import { Id } from "./_generated/dataModel";
 import { getUgandaTime, generateUTID } from "./utils";
 
 const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
+const DEFAULT_BIOFARM_TEMPLATE_NAME = "Default Bio Farm Coffee Tree Tag Form";
+const DEFAULT_TREE_TAG_PHOTO_FIELD = "Tree Tag Pic";
+const DEFAULT_COFFEE_PHOTO_FIELD = "Coffee Pic";
+const DEFAULT_OBSERVATION_DATE_FIELD = "Observation Date";
+const DEFAULT_GPS_FIELD = "GPS";
+
+function isDefaultBioFarmCoffeeTagTemplate(template: any) {
+  return (
+    template?.ownerType === "system" &&
+    !template?.isDeleted &&
+    String(template?.templateName || "") === DEFAULT_BIOFARM_TEMPLATE_NAME
+  );
+}
+
+function formatIsoDateFromTimestamp(ts: number) {
+  return new Date(ts).toISOString().slice(0, 10);
+}
+
+function buildDefaultBioFarmTemplateFields() {
+  return [
+    {
+      name: DEFAULT_TREE_TAG_PHOTO_FIELD,
+      fieldType: "photo" as const,
+      required: true,
+      emoji: "🏷",
+      order: 0,
+    },
+    {
+      name: DEFAULT_COFFEE_PHOTO_FIELD,
+      fieldType: "photo" as const,
+      required: true,
+      emoji: "☕",
+      order: 1,
+    },
+    {
+      name: DEFAULT_OBSERVATION_DATE_FIELD,
+      fieldType: "date" as const,
+      required: true,
+      emoji: "📅",
+      order: 2,
+    },
+    {
+      name: DEFAULT_GPS_FIELD,
+      fieldType: "gps" as const,
+      required: true,
+      emoji: "📍",
+      order: 3,
+    },
+  ];
+}
 
 async function assertBioFarmAdminCommunityAccess(
   ctx: any,
@@ -21,7 +71,7 @@ async function assertBioFarmAdminCommunityAccess(
   communityId: Id<"communities">
 ) {
   if (String(communityId) !== BIOFARM_COMMUNITY_ID) {
-    throw new Error("Active Farmsee is available only for Bio Farm community");
+    throw new Error("Active Farms is available only for Bio Farm community");
   }
 
   const adminUser = await ctx.db.get(adminId);
@@ -161,6 +211,43 @@ export const listTemplates = query({
   },
 });
 
+/** Ensure the mandatory Bio Farm default template exists (idempotent). */
+export const ensureDefaultBioFarmCoffeeTreeTagTemplate = mutation({
+  args: {
+    requestingUserId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const existingSystemTemplates = await ctx.db
+      .query("farmTrackerTemplates")
+      .withIndex("by_owner_type", (q: any) => q.eq("ownerType", "system"))
+      .collect();
+
+    const existingDefault = existingSystemTemplates.find((tpl: any) =>
+      isDefaultBioFarmCoffeeTagTemplate(tpl)
+    );
+    if (existingDefault) {
+      return { templateId: existingDefault._id, created: false };
+    }
+
+    const now = getUgandaTime();
+    const templateId = await ctx.db.insert("farmTrackerTemplates", {
+      ownerId: args.requestingUserId,
+      ownerType: "system",
+      category: "crop",
+      templateName: DEFAULT_BIOFARM_TEMPLATE_NAME,
+      emoji: "☕",
+      description:
+        "Mandatory Bio Farm live-capture form for coffee tree tagging (camera + GPS + date)",
+      fields: buildDefaultBioFarmTemplateFields(),
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    return { templateId, created: true };
+  },
+});
+
 /** Create a system template (SuperAdmin) or community template (CommunityAdmin) or personal template (Farmer) */
 export const createTemplate = mutation({
   args: {
@@ -251,6 +338,9 @@ export const deleteTemplate = mutation({
   handler: async (ctx, args): Promise<void> => {
     const template = await ctx.db.get(args.templateId);
     if (!template) throw new Error("Template not found");
+    if (isDefaultBioFarmCoffeeTagTemplate(template)) {
+      throw new Error("Default Bio Farm Coffee Tree Tag Form cannot be deleted");
+    }
     if (template.ownerId !== args.requestingUserId || template.ownerType !== "personal") {
       throw new Error("Not authorised — can only delete your own personal templates");
     }
@@ -355,6 +445,11 @@ export const getBioFarmActiveFarmseeMembersByCommunityIds = query({
               if (!entries.length) return null;
 
               const member = await ctx.db.get(memberId as Id<"users">);
+              const latestEntry = entries[0];
+              const latestPhotoStorageId = latestEntry?.photoStorageIds?.[0];
+              const latestPhotoUrl = latestPhotoStorageId
+                ? await ctx.storage.getUrl(latestPhotoStorageId)
+                : null;
               const latestSubmissionAt = Math.max(
                 ...entries.map((r: any) => r.submittedAt || r.createdAt || 0)
               );
@@ -367,6 +462,7 @@ export const getBioFarmActiveFarmseeMembersByCommunityIds = query({
                 role: (member as any)?.role || "farmer",
                 submissionCount: entries.length,
                 latestSubmissionAt,
+                latestPhotoUrl,
               };
             })
           );
@@ -379,7 +475,7 @@ export const getBioFarmActiveFarmseeMembersByCommunityIds = query({
           return {
             communityId,
             members: [],
-            error: error?.message || "Unable to load Active Farmsee members",
+            error: error?.message || "Unable to load Active Farms members",
           };
         }
       })
@@ -461,13 +557,76 @@ export const submitEntry = mutation({
   },
   handler: async (ctx, args): Promise<Id<"farmTrackerEntries">> => {
     const now = getUgandaTime();
+    const template = await ctx.db.get(args.templateId);
+    if (!template || template.isDeleted || !template.isActive) {
+      throw new Error("Template is not available");
+    }
+
+    const isDefaultBioFarmTemplate = isDefaultBioFarmCoffeeTagTemplate(template);
+    const finalFieldValues = [...args.fieldValues];
+
+    if (isDefaultBioFarmTemplate) {
+      if (!args.photoStorageIds || args.photoStorageIds.length < 2) {
+        throw new Error("Tree Tag Pic and Coffee Pic are required");
+      }
+      if (args.gpsLat === undefined || args.gpsLng === undefined) {
+        throw new Error("Live GPS capture is required before submitting this form");
+      }
+
+      const dateFieldIndex = finalFieldValues.findIndex(
+        (fv) => fv.fieldName === DEFAULT_OBSERVATION_DATE_FIELD
+      );
+      const gpsFieldIndex = finalFieldValues.findIndex(
+        (fv) => fv.fieldName === DEFAULT_GPS_FIELD
+      );
+
+      const observationDate =
+        dateFieldIndex >= 0 && finalFieldValues[dateFieldIndex].value.trim()
+          ? finalFieldValues[dateFieldIndex].value.trim()
+          : formatIsoDateFromTimestamp(now);
+
+      if (dateFieldIndex >= 0) {
+        finalFieldValues[dateFieldIndex] = {
+          ...finalFieldValues[dateFieldIndex],
+          value: observationDate,
+        };
+      } else {
+        finalFieldValues.push({
+          fieldName: DEFAULT_OBSERVATION_DATE_FIELD,
+          value: observationDate,
+        });
+      }
+
+      const gpsValue = `${Number(args.gpsLat).toFixed(6)}, ${Number(args.gpsLng).toFixed(6)}`;
+      if (gpsFieldIndex >= 0) {
+        finalFieldValues[gpsFieldIndex] = {
+          ...finalFieldValues[gpsFieldIndex],
+          value: gpsValue,
+        };
+      } else {
+        finalFieldValues.push({ fieldName: DEFAULT_GPS_FIELD, value: gpsValue });
+      }
+
+      const missingRequired = (template.fields || [])
+        .filter((field: any) => field.required && field.fieldType !== "photo")
+        .filter((field: any) => {
+          const value = finalFieldValues.find((fv) => fv.fieldName === field.name)?.value || "";
+          return !String(value).trim();
+        });
+      if (missingRequired.length > 0) {
+        throw new Error(
+          `Missing required fields: ${missingRequired.map((f: any) => f.name).join(", ")}`
+        );
+      }
+    }
+
     // Count filled (non-empty) fields for FarmCoin reward
-    const fieldCount = args.fieldValues.filter((fv) => fv.value && fv.value.trim() !== "").length;
+    const fieldCount = finalFieldValues.filter((fv) => fv.value && fv.value.trim() !== "").length;
     const entryId = await ctx.db.insert("farmTrackerEntries", {
       farmerId: args.farmerId,
       templateId: args.templateId,
       trackedUnitId: args.trackedUnitId,
-      fieldValues: args.fieldValues,
+      fieldValues: finalFieldValues,
       photoStorageIds: args.photoStorageIds,
       gpsLat: args.gpsLat,
       gpsLng: args.gpsLng,

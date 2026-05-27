@@ -15,6 +15,25 @@ import { Id } from "./_generated/dataModel";
 import { BCU_PRESET_PASSWORD } from "./constants";
 import { getUgandaTime } from "./utils";
 
+const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
+
+async function ensureBioFarmMembershipForFarmer(ctx: any, userId: Id<"users">) {
+  const existing = await ctx.db
+    .query("communityMemberships")
+    .withIndex("by_community_user", (q: any) =>
+      q.eq("communityId", BIOFARM_COMMUNITY_ID as Id<"communities">).eq("userId", userId)
+    )
+    .first();
+
+  if (!existing) {
+    await ctx.db.insert("communityMemberships", {
+      communityId: BIOFARM_COMMUNITY_ID as Id<"communities">,
+      userId,
+      joinedAt: getUgandaTime(),
+    });
+  }
+}
+
 /**
  * Simple hash function for preset password (consistent with pilot password handling)
  */
@@ -336,6 +355,8 @@ export const activateImportedCommunityMember = mutation({
       joinedAt: getUgandaTime(),
       communityRole: importedMember.communityRole || null,
     });
+
+    await ensureBioFarmMembershipForFarmer(ctx, userId);
 
     return {
       success: true,

@@ -24,6 +24,7 @@ const DEFAULT_OBSERVATION_DATE_FIELD = "Date";
 const LEGACY_OBSERVATION_DATE_FIELD = "Observation Date";
 const DEFAULT_TAG_NAME_FIELD = "Tag Name/ Number";
 const DEFAULT_GPS_FIELD = "GPS";
+const BIO_FORM_ONLY_FOR_NEW_FARMERS_LIVE_AT_MS = Date.parse("2026-05-27T00:00:00+03:00");
 
 function isBioFarmTemplateName(templateName: string) {
   return (
@@ -188,20 +189,6 @@ async function enrichTrackerEntriesForAdmin(ctx: any, entries: any[]) {
     (a: any, b: any) =>
       (b.submittedAt || b.createdAt || 0) - (a.submittedAt || a.createdAt || 0)
   );
-}
-
-async function filterEntriesToBioFarmTemplate(ctx: any, entries: any[]) {
-  const checks = await Promise.all(
-    entries.map(async (entry: any) => {
-      const template = await ctx.db.get(entry.templateId);
-      return {
-        entry,
-        include: isDefaultBioFarmCoffeeTagTemplate(template),
-      };
-    })
-  );
-
-  return checks.filter((item: any) => item.include).map((item: any) => item.entry);
 }
 
 // ─── TRACKER TEMPLATES ──────────────────────────────────────────────────────
@@ -487,12 +474,10 @@ export const getBioFarmActiveFarmseeMembersByCommunityIds = query({
                 .order("desc")
                 .collect();
 
-              const bioFarmEntries = await filterEntriesToBioFarmTemplate(ctx, entries);
-
-              if (!bioFarmEntries.length) return null;
+              if (!entries.length) return null;
 
               const member = await ctx.db.get(memberId as Id<"users">);
-              const latestEntry = bioFarmEntries[0];
+              const latestEntry = entries[0];
               const latestPhotoStorageIds = (latestEntry?.photoStorageIds || []).slice(0, 2);
               const latestPhotoUrls = latestPhotoStorageIds.length
                 ? (await Promise.all(
@@ -500,7 +485,7 @@ export const getBioFarmActiveFarmseeMembersByCommunityIds = query({
                   )).filter(Boolean)
                 : [];
               const latestSubmissionAt = Math.max(
-                ...bioFarmEntries.map((r: any) => r.submittedAt || r.createdAt || 0)
+                ...entries.map((r: any) => r.submittedAt || r.createdAt || 0)
               );
 
               return {
@@ -509,7 +494,7 @@ export const getBioFarmActiveFarmseeMembersByCommunityIds = query({
                 phoneNumber: (member as any)?.phoneNumber || "-",
                 email: (member as any)?.email || "-",
                 role: (member as any)?.role || "farmer",
-                submissionCount: bioFarmEntries.length,
+                submissionCount: entries.length,
                 latestSubmissionAt,
                 latestPhotoUrls,
               };
@@ -553,8 +538,7 @@ export const getBioFarmMemberEntriesForAdmin = query({
       .order("desc")
       .collect();
 
-    const scopedBioFarmEntries = await filterEntriesToBioFarmTemplate(ctx, entries);
-    return await enrichTrackerEntriesForAdmin(ctx, scopedBioFarmEntries);
+    return await enrichTrackerEntriesForAdmin(ctx, entries);
   },
 });
 
@@ -585,8 +569,7 @@ export const getBioFarmMemberEntriesForExport = query({
     }
 
     const scoped = entries.filter((entry: any) => String(entry.farmerId) === String(args.memberId));
-    const scopedBioFarmEntries = await filterEntriesToBioFarmTemplate(ctx, scoped);
-    return await enrichTrackerEntriesForAdmin(ctx, scopedBioFarmEntries);
+    return await enrichTrackerEntriesForAdmin(ctx, scoped);
   },
 });
 
@@ -613,7 +596,20 @@ export const submitEntry = mutation({
       throw new Error("Template is not available");
     }
 
+    const farmer = await ctx.db.get(args.farmerId);
+    if (!farmer) {
+      throw new Error("Farmer account not found");
+    }
+
     const isDefaultBioFarmTemplate = isDefaultBioFarmCoffeeTagTemplate(template);
+    const isPostLaunchFarmer =
+      Number.isFinite(BIO_FORM_ONLY_FOR_NEW_FARMERS_LIVE_AT_MS) &&
+      Number((farmer as any).createdAt || 0) >= BIO_FORM_ONLY_FOR_NEW_FARMERS_LIVE_AT_MS;
+    if (!isDefaultBioFarmTemplate && isPostLaunchFarmer) {
+      throw new Error(
+        "New farmer accounts can only submit entries using the Bio Farm Coffee Tag form."
+      );
+    }
     const finalFieldValues = [...args.fieldValues];
 
     if (isDefaultBioFarmTemplate) {

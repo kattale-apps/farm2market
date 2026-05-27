@@ -3316,7 +3316,7 @@ export default function CommunityDashboardPage() {
                             <p style={{ color: "#999" }}>Loading Active Farms members...</p>
                           ) : activeFarmseeMembers.length === 0 ? (
                             <p style={{ color: "#999" }}>
-                              No Bio Farm members with Farm Toolbox entries yet.
+                              No members with Farm Toolbox entries yet.
                             </p>
                           ) : (
                             <>
@@ -3339,11 +3339,11 @@ export default function CommunityDashboardPage() {
                                   Showing {filteredActiveFarmseeMembers.length} of {activeFarmseeMembers.length}
                                 </span>
                                 <span style={{ fontSize: "0.82rem", color: "#1f2937", fontWeight: 600 }}>
-                                  Total coffee trees tagged: {totalActiveFarmEntries}
+                                  Total entries: {totalActiveFarmEntries}
                                 </span>
                                 {filteredActiveFarmseeMembers.length !== activeFarmseeMembers.length && (
                                   <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
-                                    Filtered trees: {filteredActiveFarmEntries}
+                                    Filtered entries: {filteredActiveFarmEntries}
                                   </span>
                                 )}
                               </div>
@@ -3388,7 +3388,7 @@ export default function CommunityDashboardPage() {
                                         {member.phoneNumber || "No phone"}
                                       </div>
                                       <div style={{ fontSize: "0.82rem", color: "#64748b" }}>
-                                        Coffee trees tagged: {member.submissionCount || 0}
+                                        Entries: {member.submissionCount || 0}
                                       </div>
                                       {!!member.latestPhotoUrls?.length && (
                                         <div style={{ marginTop: "0.55rem", maxWidth: 120 }}>

@@ -14,22 +14,29 @@ import { Id } from "./_generated/dataModel";
 import { getUgandaTime, generateUTID } from "./utils";
 
 const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
-const DEFAULT_BIOFARM_TEMPLATE_NAME = "Default Bio Farm Coffee Tree Tag Form";
+const BIOFARM_TEMPLATE_NAME = "Bio Farm Coffee Tree Tag Form";
+const LEGACY_DEFAULT_BIOFARM_TEMPLATE_NAME = "Default Bio Farm Coffee Tree Tag Form";
 const DEFAULT_TREE_TAG_PHOTO_FIELD = "Tree Tag Pic";
 const DEFAULT_COFFEE_PHOTO_FIELD = "Coffee Pic";
 const DEFAULT_OBSERVATION_DATE_FIELD = "Observation Date";
 const DEFAULT_GPS_FIELD = "GPS";
 
 function isDefaultBioFarmCoffeeTagTemplate(template: any) {
+  const templateName = String(template?.templateName || "");
   return (
     template?.ownerType === "system" &&
     !template?.isDeleted &&
-    String(template?.templateName || "") === DEFAULT_BIOFARM_TEMPLATE_NAME
+    (templateName === BIOFARM_TEMPLATE_NAME ||
+      templateName === LEGACY_DEFAULT_BIOFARM_TEMPLATE_NAME)
   );
 }
 
 function formatIsoDateFromTimestamp(ts: number) {
-  return new Date(ts).toISOString().slice(0, 10);
+  const date = new Date(ts);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function buildDefaultBioFarmTemplateFields() {
@@ -226,6 +233,12 @@ export const ensureDefaultBioFarmCoffeeTreeTagTemplate = mutation({
       isDefaultBioFarmCoffeeTagTemplate(tpl)
     );
     if (existingDefault) {
+      if (String(existingDefault.templateName || "") === LEGACY_DEFAULT_BIOFARM_TEMPLATE_NAME) {
+        await ctx.db.patch(existingDefault._id, {
+          templateName: BIOFARM_TEMPLATE_NAME,
+          updatedAt: getUgandaTime(),
+        });
+      }
       return { templateId: existingDefault._id, created: false };
     }
 
@@ -234,7 +247,7 @@ export const ensureDefaultBioFarmCoffeeTreeTagTemplate = mutation({
       ownerId: args.requestingUserId,
       ownerType: "system",
       category: "crop",
-      templateName: DEFAULT_BIOFARM_TEMPLATE_NAME,
+      templateName: BIOFARM_TEMPLATE_NAME,
       emoji: "☕",
       description:
         "Mandatory Bio Farm live-capture form for coffee tree tagging (camera + GPS + date)",
@@ -339,7 +352,7 @@ export const deleteTemplate = mutation({
     const template = await ctx.db.get(args.templateId);
     if (!template) throw new Error("Template not found");
     if (isDefaultBioFarmCoffeeTagTemplate(template)) {
-      throw new Error("Default Bio Farm Coffee Tree Tag Form cannot be deleted");
+      throw new Error("Bio Farm Coffee Tree Tag Form cannot be deleted");
     }
     if (template.ownerId !== args.requestingUserId || template.ownerType !== "personal") {
       throw new Error("Not authorised — can only delete your own personal templates");

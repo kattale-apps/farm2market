@@ -17,17 +17,37 @@ const GOLD = "#f9a825";
 const FONT = '"Montserrat", sans-serif';
 
 type Tab = "templates" | "log" | "units" | "insights" | "supply" | "ledger";
-const DEFAULT_BIOFARM_TEMPLATE_NAME = "Default Bio Farm Coffee Tree Tag Form";
+const BIOFARM_TEMPLATE_NAME = "Bio Farm Coffee Tree Tag Form";
+const LEGACY_DEFAULT_BIOFARM_TEMPLATE_NAME = "Default Bio Farm Coffee Tree Tag Form";
 const DEFAULT_TREE_TAG_PHOTO_FIELD = "Tree Tag Pic";
 const DEFAULT_COFFEE_PHOTO_FIELD = "Coffee Pic";
 const DEFAULT_OBSERVATION_DATE_FIELD = "Observation Date";
 const DEFAULT_GPS_FIELD = "GPS";
 
+function isBioFarmTemplateName(templateName: string) {
+  return (
+    templateName === BIOFARM_TEMPLATE_NAME ||
+    templateName === LEGACY_DEFAULT_BIOFARM_TEMPLATE_NAME
+  );
+}
+
+function getDisplayTemplateName(templateName: string) {
+  return isBioFarmTemplateName(templateName) ? BIOFARM_TEMPLATE_NAME : templateName;
+}
+
+function getDeviceLocalDateValue() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function isDefaultBioFarmTemplate(tpl: any | null) {
   return (
     !!tpl &&
     tpl.ownerType === "system" &&
-    String(tpl.templateName || "") === DEFAULT_BIOFARM_TEMPLATE_NAME
+    isBioFarmTemplateName(String(tpl.templateName || ""))
   );
 }
 
@@ -71,7 +91,9 @@ function TemplatesTab({ userId, onSelectTemplate }: { userId: Id<"users">; onSel
                 <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
                   <span style={{ fontSize: "1.7rem" }}>{tpl.emoji || "📋"}</span>
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: "0.88rem" }}>{tpl.templateName}</div>
+                    <div style={{ fontWeight: 600, fontSize: "0.88rem" }}>
+                      {getDisplayTemplateName(String(tpl.templateName || ""))}
+                    </div>
                     <div style={{ fontSize: "0.72rem", color: "#888" }}>
                       {tpl.category} · {tpl.fields?.length ?? 0} fields · <span style={{ color: BRAND }}>{tpl.ownerType}</span>
                     </div>
@@ -380,6 +402,20 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
     }
   }, [isDefaultTemplate, gps, gpsLoading]);
 
+  useEffect(() => {
+    if (!isDefaultTemplate) return;
+    const deviceLocalDate = getDeviceLocalDateValue();
+    setFieldValues((prev) => {
+      if (prev[DEFAULT_OBSERVATION_DATE_FIELD] === deviceLocalDate) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [DEFAULT_OBSERVATION_DATE_FIELD]: deviceLocalDate,
+      };
+    });
+  }, [isDefaultTemplate, selectedTemplate?._id]);
+
   const handleDeleteEntry = async (entryId: string) => {
     if (!confirm("Delete this submitted entry?")) return;
     setDeletingEntryId(entryId);
@@ -575,7 +611,7 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
     setError(null);
     try {
       const workingFieldValues = { ...fieldValues };
-      const todayIso = new Date().toISOString().slice(0, 10);
+      const todayIso = getDeviceLocalDateValue();
 
       if (isDefaultTemplate && !workingFieldValues[DEFAULT_OBSERVATION_DATE_FIELD]) {
         workingFieldValues[DEFAULT_OBSERVATION_DATE_FIELD] = todayIso;
@@ -632,6 +668,7 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
       setGps(null);
       setPhotoStorageIds([]);
       setPhotoStorageByField({});
+      setFieldValues(isDefaultTemplate ? { [DEFAULT_OBSERVATION_DATE_FIELD]: getDeviceLocalDateValue() } : {});
       setSelectedUnitId("");
     } catch (e: any) {
       setError(e.message ?? "Failed to submit");
@@ -655,9 +692,11 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
                 style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.85rem 1rem", background: "#fff", borderRadius: 10, border: "1.5px solid #e8f5e9", cursor: "pointer", textAlign: "left", fontFamily: FONT }}>
                 <span style={{ fontSize: "1.7rem" }}>{tpl.emoji || "📋"}</span>
                 <div>
-                  <div style={{ fontWeight: 600, fontSize: "0.88rem" }}>{tpl.templateName}</div>
+                  <div style={{ fontWeight: 600, fontSize: "0.88rem" }}>
+                    {getDisplayTemplateName(String(tpl.templateName || ""))}
+                  </div>
                   <div style={{ fontSize: "0.72rem", color: "#888" }}>
-                    {tpl.fields?.length ?? 0} fields{isDefaultBioFarmTemplate(tpl) ? " · mandatory default" : ""}
+                    {tpl.fields?.length ?? 0} fields{isDefaultBioFarmTemplate(tpl) ? " · mandatory Bio Farm form" : ""}
                   </div>
                 </div>
               </button>
@@ -674,7 +713,9 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem" }}>
         <button onClick={() => { setSelectedTemplate(null); setSuccessMsg(null); }}
           style={{ background: "none", border: "none", fontSize: "1rem", cursor: "pointer", color: BRAND }}>← Back</button>
-        <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 700 }}>{selectedTemplate.emoji} {selectedTemplate.templateName}</h2>
+        <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 700 }}>
+          {selectedTemplate.emoji} {getDisplayTemplateName(String(selectedTemplate.templateName || ""))}
+        </h2>
       </div>
 
       {successMsg && (
@@ -784,8 +825,14 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
                 type={field.fieldType === "number" ? "number" : field.fieldType === "date" ? "date" : "text"}
                 value={fieldValues[field.name] ?? ""}
                 onChange={(e) => setFieldValues((fv) => ({ ...fv, [field.name]: e.target.value }))}
+                readOnly={isDefaultTemplate && field.name === DEFAULT_OBSERVATION_DATE_FIELD}
                 style={{ width: "100%", padding: "0.5rem 0.75rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.88rem", boxSizing: "border-box" }}
               />
+            )}
+            {isDefaultTemplate && field.name === DEFAULT_OBSERVATION_DATE_FIELD && (
+              <div style={{ marginTop: "0.3rem", fontSize: "0.72rem", color: "#64748b" }}>
+                Auto-filled from this device&apos;s current date.
+              </div>
             )}
           </div>
         ))}
@@ -954,7 +1001,13 @@ function InsightsTab({ userId }: { userId: Id<"users"> }) {
           { label: "Entries this month", value: insights.totalEntriesThisMonth, emoji: "📝" },
           { label: "All-time entries", value: insights.totalEntriesAllTime, emoji: "📊" },
           { label: "Active units", value: `${activeUnits} / ${totalUnits}`, emoji: "🌳" },
-          { label: "Top template", value: insights.topTemplateName ? `${insights.topTemplateEmoji ?? "📋"} ${insights.topTemplateName}` : "—", emoji: null },
+          {
+            label: "Top template",
+            value: insights.topTemplateName
+              ? `${insights.topTemplateEmoji ?? "📋"} ${getDisplayTemplateName(String(insights.topTemplateName || ""))}`
+              : "—",
+            emoji: null,
+          },
         ].map((card) => (
           <div key={card.label} style={{ background: "#fff", borderRadius: 12, padding: "0.85rem 1rem", boxShadow: "0 2px 6px rgba(0,0,0,0.07)" }}>
             <div style={{ fontSize: "0.72rem", color: "#888", marginBottom: "0.25rem" }}>{card.label}</div>
@@ -996,7 +1049,9 @@ function InsightsTab({ userId }: { userId: Id<"users"> }) {
           <div style={{ fontWeight: 700, fontSize: "0.9rem", marginBottom: "0.75rem" }}>🕐 Recent Entries</div>
           {insights.recentEntries.map((e: any) => (
             <div key={e._id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.45rem 0", borderBottom: "1px solid #f0f0f0" }}>
-              <span style={{ fontSize: "0.85rem" }}>{e.templateEmoji ?? "📋"} {e.templateName}</span>
+              <span style={{ fontSize: "0.85rem" }}>
+                {e.templateEmoji ?? "📋"} {getDisplayTemplateName(String(e.templateName || ""))}
+              </span>
               <span style={{ fontSize: "0.75rem", color: "#888" }}>{new Date(e.submittedAt).toLocaleDateString("en-UG")}</span>
             </div>
           ))}

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useConvex, useMutation } from "convex/react";
+import { Capacitor, registerPlugin } from "@capacitor/core";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useOfflineQuery } from "@/app/hooks/useOfflineQuery";
@@ -16,58 +17,9 @@ const BRAND_BG = "#e8f5e9";
 const GOLD = "#f9a825";
 const FONT = '"Montserrat", sans-serif';
 
+const Geolocation = registerPlugin<any>("Geolocation");
+
 type Tab = "templates" | "log" | "units" | "insights" | "supply" | "ledger";
-const BIOFARM_TEMPLATE_NAME = "Bio Farm Coffee Tag";
-const LEGACY_BIOFARM_TEMPLATE_NAME = "Bio Farm Coffee Tree Tag Form";
-const LEGACY_DEFAULT_BIOFARM_TEMPLATE_NAME = "Default Bio Farm Coffee Tree Tag Form";
-const DEFAULT_TREE_TAG_PHOTO_FIELD = "Tree Tag Pic";
-const DEFAULT_COFFEE_PHOTO_FIELD = "Coffee Tree Pic";
-const LEGACY_COFFEE_PHOTO_FIELD = "Coffee Pic";
-const DEFAULT_OBSERVATION_DATE_FIELD = "Date";
-const LEGACY_OBSERVATION_DATE_FIELD = "Observation Date";
-const DEFAULT_GPS_FIELD = "GPS";
-
-function isBioFarmTemplateName(templateName: string) {
-  return (
-    templateName === BIOFARM_TEMPLATE_NAME ||
-    templateName === LEGACY_BIOFARM_TEMPLATE_NAME ||
-    templateName === LEGACY_DEFAULT_BIOFARM_TEMPLATE_NAME
-  );
-}
-
-function getDisplayTemplateName(templateName: string) {
-  return isBioFarmTemplateName(templateName) ? BIOFARM_TEMPLATE_NAME : templateName;
-}
-
-function getDeviceLocalDateValue() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function isObservationDateFieldName(fieldName: string) {
-  return (
-    fieldName === DEFAULT_OBSERVATION_DATE_FIELD ||
-    fieldName === LEGACY_OBSERVATION_DATE_FIELD
-  );
-}
-
-function resolveObservationDateFieldName(template: any | null) {
-  const matched = (template?.fields || []).find((field: any) =>
-    isObservationDateFieldName(String(field?.name || ""))
-  );
-  return String(matched?.name || DEFAULT_OBSERVATION_DATE_FIELD);
-}
-
-function isDefaultBioFarmTemplate(tpl: any | null) {
-  return (
-    !!tpl &&
-    tpl.ownerType === "system" &&
-    isBioFarmTemplateName(String(tpl.templateName || ""))
-  );
-}
 
 const STATUS_COLORS: Record<string, string> = {
   active: "#2e7d32", sold: "#1565c0", deceased: "#c62828", harvested: "#6a1e00",
@@ -107,11 +59,9 @@ function TemplatesTab({ userId, onSelectTemplate }: { userId: Id<"users">; onSel
             {templates.map((tpl: any) => (
               <div key={tpl._id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.85rem 1rem", background: "#f9fafb", borderRadius: 10, border: "1px solid #e8f5e9" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
-                  <span style={{ fontSize: "1.7rem" }}>{isDefaultBioFarmTemplate(tpl) ? "🍃" : (tpl.emoji || "📋")}</span>
+                  <span style={{ fontSize: "1.7rem" }}>{tpl.emoji || "📋"}</span>
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: "0.88rem" }}>
-                      {getDisplayTemplateName(String(tpl.templateName || ""))}
-                    </div>
+                    <div style={{ fontWeight: 600, fontSize: "0.88rem" }}>{tpl.templateName}</div>
                     <div style={{ fontSize: "0.72rem", color: "#888" }}>
                       {tpl.category} · {tpl.fields?.length ?? 0} fields · <span style={{ color: BRAND }}>{tpl.ownerType}</span>
                     </div>
@@ -295,6 +245,7 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
   const [notes, setNotes] = useState("");
   const [gps, setGps] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
   const [gpsLoading, setGpsLoading] = useState(false);
+  const [gpsError, setGpsError] = useState<string | null>(null);
   const [selectedUnitId, setSelectedUnitId] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -311,9 +262,7 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
   const convex = useConvex();
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
-  const [activePhotoFieldName, setActivePhotoFieldName] = useState<string | null>(null);
   const [photoStorageIds, setPhotoStorageIds] = useState<string[]>([]);
-  const [photoStorageByField, setPhotoStorageByField] = useState<Record<string, string>>({});
   const [photoUploading, setPhotoUploading] = useState(false);
   const [deletingEntryId, setDeletingEntryId] = useState<string | null>(null);
   const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
@@ -321,26 +270,23 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
   const [selectedEntryIds, setSelectedEntryIds] = useState<Set<string>>(new Set());
   const [singleExportingId, setSingleExportingId] = useState<string | null>(null);
   const [batchExporting, setBatchExporting] = useState(false);
+  const autoGpsTemplateIdRef = useRef<string | null>(null);
+  const gpsFieldPresent = !!(selectedTemplate?.fields ?? []).some((field: any) => field.fieldType === "gps");
 
-  const isDefaultTemplate = isDefaultBioFarmTemplate(selectedTemplate);
-  const defaultTemplateDateFieldName = resolveObservationDateFieldName(selectedTemplate);
+  const getGpsErrorMessage = (raw: any): string => {
+    const code = typeof raw?.code === "number" ? raw.code : undefined;
+    const message = String(raw?.message || "").toLowerCase();
 
-  const resetForFreshEntry = (clearMessages: boolean) => {
-    if (clearMessages) {
-      setSuccessMsg(null);
-      setError(null);
+    if (code === 1 || message.includes("permission")) {
+      return "Location permission denied. Enable location access in browser or app settings, then retry.";
     }
-    setFieldValues(
-      isDefaultTemplate
-        ? { [defaultTemplateDateFieldName]: getDeviceLocalDateValue() }
-        : {}
-    );
-    setNotes("");
-    setGps(null);
-    setPhotoStorageIds([]);
-    setPhotoStorageByField({});
-    setActivePhotoFieldName(null);
-    setSelectedUnitId("");
+    if (code === 2 || message.includes("unavailable")) {
+      return "GPS position unavailable right now. Move to an open area and retry.";
+    }
+    if (code === 3 || message.includes("timeout")) {
+      return "GPS request timed out. Check signal/network and retry.";
+    }
+    return "Unable to capture GPS right now. You can retry or continue without GPS.";
   };
 
   const toggleSelectedEntry = (entryId: string, selected: boolean) => {
@@ -386,33 +332,67 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
     setBatchExporting(false);
   };
 
-  const captureGPS = (): Promise<{ lat: number; lng: number; accuracy: number } | null> => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) {
-      return Promise.resolve(null);
-    }
+  const captureGPS = useCallback(async () => {
     setGpsLoading(true);
-    return new Promise((resolve) => {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const coords = {
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-            accuracy: pos.coords.accuracy,
-          };
-          setGps(coords);
-          setGpsLoading(false);
-          resolve(coords);
-        },
-        () => {
-          setGpsLoading(false);
-          resolve(null);
-        },
-        { enableHighAccuracy: true, timeout: 15000 }
-      );
-    });
-  };
+    setGpsError(null);
+    try {
+      if (Capacitor.isNativePlatform()) {
+        const currentPerm = await Geolocation.checkPermissions();
+        const grantedNow = currentPerm.location === "granted" || currentPerm.coarseLocation === "granted";
+        if (!grantedNow) {
+          const requested = await Geolocation.requestPermissions();
+          const grantedAfterRequest = requested.location === "granted" || requested.coarseLocation === "granted";
+          if (!grantedAfterRequest) {
+            throw new Error("Location permission denied");
+          }
+        }
+        const pos = await Geolocation.getCurrentPosition({
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 0,
+        });
+        setGps({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy ?? 0 });
+        return;
+      }
 
-  const handlePhotoUpload = async (file: File, targetFieldName?: string) => {
+      if (typeof navigator === "undefined" || !navigator.geolocation) {
+        throw new Error("Geolocation not available");
+      }
+
+      const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 0,
+        });
+      });
+      setGps({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy });
+    } catch (rawErr: any) {
+      setGps(null);
+      setGpsError(getGpsErrorMessage(rawErr));
+    } finally {
+      setGpsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const templateId = selectedTemplate?._id ? String(selectedTemplate._id) : null;
+    if (!templateId) {
+      autoGpsTemplateIdRef.current = null;
+      return;
+    }
+    if (!gpsFieldPresent) {
+      autoGpsTemplateIdRef.current = templateId;
+      return;
+    }
+    if (gps || gpsLoading) return;
+    if (autoGpsTemplateIdRef.current === templateId) return;
+
+    autoGpsTemplateIdRef.current = templateId;
+    void captureGPS();
+  }, [selectedTemplate?._id, gpsFieldPresent, gps, gpsLoading, captureGPS]);
+
+  const handlePhotoUpload = async (file: File) => {
     if (file.size > 10 * 1024 * 1024) {
       setError("Photo too large. Maximum allowed size is 10MB.");
       return;
@@ -422,36 +402,12 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
       const uploadUrl = await generateUploadUrl();
       const res = await fetch(uploadUrl, { method: "POST", headers: { "Content-Type": file.type }, body: file });
       const { storageId } = await res.json();
-      if (targetFieldName) {
-        setPhotoStorageByField((prev) => ({ ...prev, [targetFieldName]: storageId }));
-      } else {
-        setPhotoStorageIds((prev) => [...prev, storageId]);
-      }
+      setPhotoStorageIds((prev) => [...prev, storageId]);
     } catch {
       setError("Failed to upload photo. Please try again.");
     }
     setPhotoUploading(false);
   };
-
-  useEffect(() => {
-    if (isDefaultTemplate && !gps && !gpsLoading) {
-      void captureGPS();
-    }
-  }, [isDefaultTemplate, gps, gpsLoading]);
-
-  useEffect(() => {
-    if (!isDefaultTemplate) return;
-    const deviceLocalDate = getDeviceLocalDateValue();
-    setFieldValues((prev) => {
-      if (prev[defaultTemplateDateFieldName] === deviceLocalDate) {
-        return prev;
-      }
-      return {
-        ...prev,
-        [defaultTemplateDateFieldName]: deviceLocalDate,
-      };
-    });
-  }, [isDefaultTemplate, selectedTemplate?._id, defaultTemplateDateFieldName]);
 
   const handleDeleteEntry = async (entryId: string) => {
     if (!confirm("Delete this submitted entry?")) return;
@@ -647,62 +603,26 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
     setSubmitting(true);
     setError(null);
     try {
-      const workingFieldValues = { ...fieldValues };
-      const todayIso = getDeviceLocalDateValue();
-
-      if (isDefaultTemplate && !workingFieldValues[defaultTemplateDateFieldName]) {
-        workingFieldValues[defaultTemplateDateFieldName] = todayIso;
-      }
-
-      let gpsToUse = gps;
-      if (isDefaultTemplate && !gpsToUse) {
-        gpsToUse = await captureGPS();
-      }
-
-      if (isDefaultTemplate && !gpsToUse) {
-        throw new Error("Live GPS is required for this form. Please allow location and retry.");
-      }
-
-      const requiredFields = (selectedTemplate.fields || []).filter((f: any) => f.required && f.fieldType !== "photo");
-      for (const field of requiredFields) {
-        const val = String(workingFieldValues[field.name] || "").trim();
-        if (!val) {
-          throw new Error(`${field.name} is required`);
-        }
-      }
-
-      let finalPhotoStorageIds: Id<"_storage">[] | undefined;
-      if (isDefaultTemplate) {
-        const treeTagStorageId = photoStorageByField[DEFAULT_TREE_TAG_PHOTO_FIELD];
-        const coffeeStorageId =
-          photoStorageByField[DEFAULT_COFFEE_PHOTO_FIELD] ||
-          photoStorageByField[LEGACY_COFFEE_PHOTO_FIELD];
-        if (!treeTagStorageId || !coffeeStorageId) {
-          throw new Error("Tree Tag Pic and Coffee Tree Pic must be captured with camera.");
-        }
-        finalPhotoStorageIds = [
-          treeTagStorageId as Id<"_storage">,
-          coffeeStorageId as Id<"_storage">,
-        ];
-      } else {
-        finalPhotoStorageIds = photoStorageIds.length ? (photoStorageIds as Id<"_storage">[]) : undefined;
-      }
-
-      const fvArray = Object.entries(workingFieldValues).map(([fieldName, value]) => ({ fieldName, value }));
+      const fvArray = Object.entries(fieldValues).map(([fieldName, value]) => ({ fieldName, value }));
       await submitEntry({
         farmerId: userId,
         templateId: selectedTemplate._id,
         trackedUnitId: selectedUnitId ? selectedUnitId as Id<"farmTrackedUnits"> : undefined,
         fieldValues: fvArray,
-        photoStorageIds: finalPhotoStorageIds,
-        gpsLat: gpsToUse?.lat,
-        gpsLng: gpsToUse?.lng,
-        gpsAccuracy: gpsToUse?.accuracy,
+        photoStorageIds: photoStorageIds.length ? photoStorageIds as Id<"_storage">[] : undefined,
+        gpsLat: gps?.lat,
+        gpsLng: gps?.lng,
+        gpsAccuracy: gps?.accuracy,
         notes: notes || undefined,
       });
       const filled = fvArray.filter((fv) => fv.value.trim()).length;
       setSuccessMsg(`✅ Entry saved! You earned 🪙 ${filled} FarmCoin${filled !== 1 ? "s" : ""}!`);
-      resetForFreshEntry(false);
+      setFieldValues({});
+      setNotes("");
+      setGps(null);
+      setGpsError(null);
+      setPhotoStorageIds([]);
+      setSelectedUnitId("");
     } catch (e: any) {
       setError(e.message ?? "Failed to submit");
     }
@@ -723,14 +643,10 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
             {templates.map((tpl: any) => (
               <button key={tpl._id} onClick={() => setSelectedTemplate(tpl)}
                 style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.85rem 1rem", background: "#fff", borderRadius: 10, border: "1.5px solid #e8f5e9", cursor: "pointer", textAlign: "left", fontFamily: FONT }}>
-                <span style={{ fontSize: "1.7rem" }}>{isDefaultBioFarmTemplate(tpl) ? "🍃" : (tpl.emoji || "📋")}</span>
+                <span style={{ fontSize: "1.7rem" }}>{tpl.emoji || "📋"}</span>
                 <div>
-                  <div style={{ fontWeight: 600, fontSize: "0.88rem" }}>
-                    {getDisplayTemplateName(String(tpl.templateName || ""))}
-                  </div>
-                  <div style={{ fontSize: "0.72rem", color: "#888" }}>
-                    {tpl.fields?.length ?? 0} fields{isDefaultBioFarmTemplate(tpl) ? " · mandatory Bio Farm form" : ""}
-                  </div>
+                  <div style={{ fontWeight: 600, fontSize: "0.88rem" }}>{tpl.templateName}</div>
+                  <div style={{ fontSize: "0.72rem", color: "#888" }}>{tpl.fields?.length ?? 0} fields</div>
                 </div>
               </button>
             ))}
@@ -744,30 +660,9 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem" }}>
-        <button
-          type="button"
-          onClick={() => resetForFreshEntry(true)}
-          title="Clear current entry and start fresh"
-          style={{
-            width: 34,
-            height: 34,
-            borderRadius: 999,
-            border: "1px solid #d6d6d6",
-            background: "#f7f7f7",
-            fontSize: "1.2rem",
-            lineHeight: 1,
-            cursor: "pointer",
-            color: "#6b7280",
-          }}
-        >
-          ↻
-        </button>
-        <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 700 }}>
-          🍃 {getDisplayTemplateName(String(selectedTemplate.templateName || ""))}
-        </h2>
-      </div>
-      <div style={{ marginTop: "-0.55rem", marginBottom: "0.75rem", fontSize: "0.74rem", color: "#64748b" }}>
-        Refresh starts a fresh form capture and clears unsaved inputs.
+        <button onClick={() => { setSelectedTemplate(null); setSuccessMsg(null); }}
+          style={{ background: "none", border: "none", fontSize: "1rem", cursor: "pointer", color: BRAND }}>← Back</button>
+        <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 700 }}>{selectedTemplate.emoji} {selectedTemplate.templateName}</h2>
       </div>
 
       {successMsg && (
@@ -832,65 +727,63 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
                 <input ref={galleryInputRef} type="file" accept="image/*" style={{ display: "none" }}
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePhotoUpload(f); }} />
                 <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }}
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePhotoUpload(f, activePhotoFieldName || undefined); }} />
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePhotoUpload(f); }} />
                 <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (isDefaultTemplate) {
-                        setActivePhotoFieldName(field.name);
-                      } else {
-                        setActivePhotoFieldName(null);
-                      }
-                      cameraInputRef.current?.click();
-                    }}
-                    disabled={photoUploading}
+                  <button type="button" onClick={() => cameraInputRef.current?.click()} disabled={photoUploading}
                     style={{ padding: "0.5rem 0.8rem", background: "#f5f5f5", border: "1px solid #ddd", borderRadius: 8, cursor: "pointer", fontFamily: FONT, fontSize: "0.82rem" }}>
                     {photoUploading ? "Uploading…" : "📷 Camera"}
                   </button>
-                  {!isDefaultTemplate && (
-                    <button type="button" onClick={() => galleryInputRef.current?.click()} disabled={photoUploading}
-                      style={{ padding: "0.5rem 0.8rem", background: "#f5f5f5", border: "1px solid #ddd", borderRadius: 8, cursor: "pointer", fontFamily: FONT, fontSize: "0.82rem" }}>
-                      {photoUploading ? "Uploading…" : "🖼 Gallery"}
-                    </button>
-                  )}
-                  {isDefaultTemplate ? (
-                    <span style={{ fontSize: "0.75rem", color: photoStorageByField[field.name] ? BRAND : "#c62828", alignSelf: "center", fontWeight: 600 }}>
-                      {photoStorageByField[field.name] ? "Live photo captured" : "Camera capture required"}
-                    </span>
-                  ) : (
-                    <span style={{ fontSize: "0.75rem", color: photoStorageIds.length > 0 ? BRAND : "#666", alignSelf: "center" }}>
-                      {photoStorageIds.length > 0 ? `${photoStorageIds.length} photo(s) uploaded` : "No photo uploaded yet"}
-                    </span>
-                  )}
+                  <button type="button" onClick={() => galleryInputRef.current?.click()} disabled={photoUploading}
+                    style={{ padding: "0.5rem 0.8rem", background: "#f5f5f5", border: "1px solid #ddd", borderRadius: 8, cursor: "pointer", fontFamily: FONT, fontSize: "0.82rem" }}>
+                    {photoUploading ? "Uploading…" : "🖼 Gallery"}
+                  </button>
+                  <span style={{ fontSize: "0.75rem", color: photoStorageIds.length > 0 ? BRAND : "#666", alignSelf: "center" }}>
+                    {photoStorageIds.length > 0 ? `${photoStorageIds.length} photo(s) uploaded` : "No photo uploaded yet"}
+                  </span>
                 </div>
               </div>
             ) : field.fieldType === "gps" ? (
-              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                <button onClick={() => { void captureGPS(); }} disabled={gpsLoading}
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "0.45rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+                  <button onClick={() => void captureGPS()} disabled={gpsLoading}
                   style={{ padding: "0.5rem 1rem", background: gps ? BRAND_BG : "#f5f5f5", border: `1px solid ${gps ? "#a5d6a7" : "#ddd"}`, borderRadius: 8, cursor: "pointer", fontFamily: FONT, fontSize: "0.82rem", color: gps ? BRAND : "#333" }}>
-                  {gpsLoading ? "Locating…" : gps ? `📍 ${gps.lat.toFixed(4)}, ${gps.lng.toFixed(4)}` : "📍 Capture GPS"}
-                </button>
+                    {gpsLoading ? "Locating…" : gps ? `📍 ${gps.lat.toFixed(4)}, ${gps.lng.toFixed(4)}` : "📍 Capture GPS"}
+                  </button>
+                  {!gps && (
+                    <button
+                      type="button"
+                      onClick={() => setGpsError("Continuing without GPS for this submission.")}
+                      style={{ padding: "0.45rem 0.75rem", background: "#fff8e1", border: "1px solid #f0c36d", borderRadius: 8, cursor: "pointer", fontFamily: FONT, fontSize: "0.78rem", color: "#8a4b08" }}
+                    >
+                      Continue without GPS
+                    </button>
+                  )}
+                </div>
+                {gpsError && (
+                  <div style={{ color: "#a15c00", fontSize: "0.76rem" }}>
+                    ⚠️ {gpsError}
+                  </div>
+                )}
               </div>
             ) : (
               <input
                 type={field.fieldType === "number" ? "number" : field.fieldType === "date" ? "date" : "text"}
                 value={fieldValues[field.name] ?? ""}
                 onChange={(e) => setFieldValues((fv) => ({ ...fv, [field.name]: e.target.value }))}
-                readOnly={isDefaultTemplate && isObservationDateFieldName(String(field.name || ""))}
                 style={{ width: "100%", padding: "0.5rem 0.75rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.88rem", boxSizing: "border-box" }}
               />
-            )}
-            {isDefaultTemplate && isObservationDateFieldName(String(field.name || "")) && (
-              <div style={{ marginTop: "0.3rem", fontSize: "0.72rem", color: "#64748b" }}>
-                Auto-filled from this device&apos;s current date.
-              </div>
             )}
           </div>
         ))}
 
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Additional notes (optional)…"
           style={{ width: "100%", padding: "0.5rem 0.75rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.85rem", minHeight: 60, resize: "vertical", boxSizing: "border-box", marginBottom: "1rem" }} />
+
+        {gpsFieldPresent && !gps && (
+          <div style={{ marginBottom: "0.75rem", background: "#fff8e1", border: "1px solid #f0c36d", borderRadius: 8, padding: "0.55rem 0.7rem", color: "#8a4b08", fontSize: "0.78rem" }}>
+            GPS is not captured yet. You can retry capture, or submit now and continue without GPS.
+          </div>
+        )}
 
         {error && <p style={{ color: "#c62828", fontSize: "0.82rem", marginBottom: "0.75rem" }}>⚠️ {error}</p>}
 
@@ -1053,13 +946,7 @@ function InsightsTab({ userId }: { userId: Id<"users"> }) {
           { label: "Entries this month", value: insights.totalEntriesThisMonth, emoji: "📝" },
           { label: "All-time entries", value: insights.totalEntriesAllTime, emoji: "📊" },
           { label: "Active units", value: `${activeUnits} / ${totalUnits}`, emoji: "🌳" },
-          {
-            label: "Top template",
-            value: insights.topTemplateName
-              ? `${insights.topTemplateEmoji ?? "📋"} ${getDisplayTemplateName(String(insights.topTemplateName || ""))}`
-              : "—",
-            emoji: null,
-          },
+          { label: "Top template", value: insights.topTemplateName ? `${insights.topTemplateEmoji ?? "📋"} ${insights.topTemplateName}` : "—", emoji: null },
         ].map((card) => (
           <div key={card.label} style={{ background: "#fff", borderRadius: 12, padding: "0.85rem 1rem", boxShadow: "0 2px 6px rgba(0,0,0,0.07)" }}>
             <div style={{ fontSize: "0.72rem", color: "#888", marginBottom: "0.25rem" }}>{card.label}</div>
@@ -1101,9 +988,7 @@ function InsightsTab({ userId }: { userId: Id<"users"> }) {
           <div style={{ fontWeight: 700, fontSize: "0.9rem", marginBottom: "0.75rem" }}>🕐 Recent Entries</div>
           {insights.recentEntries.map((e: any) => (
             <div key={e._id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.45rem 0", borderBottom: "1px solid #f0f0f0" }}>
-              <span style={{ fontSize: "0.85rem" }}>
-                {e.templateEmoji ?? "📋"} {getDisplayTemplateName(String(e.templateName || ""))}
-              </span>
+              <span style={{ fontSize: "0.85rem" }}>{e.templateEmoji ?? "📋"} {e.templateName}</span>
               <span style={{ fontSize: "0.75rem", color: "#888" }}>{new Date(e.submittedAt).toLocaleDateString("en-UG")}</span>
             </div>
           ))}
@@ -1419,31 +1304,12 @@ function ComingSoonCard({ emoji, label, phase }: { emoji: string; label: string;
 export default function FarmToolboxPage() {
   const { user, status: authStatus } = useStoredUser();
   const userId = (user?.userId as Id<"users"> | undefined) || null;
-  const [activeTab, setActiveTab] = useState<Tab>("log");
+  const [activeTab, setActiveTab] = useState<Tab>("templates");
   const [selectedTemplate, setSelectedTemplate] = useState<any | null>(null);
-  const ensureDefaultTemplate = useOfflineMutation<any>((api as any).farmToolbox.ensureDefaultBioFarmCoffeeTreeTagTemplate);
-  const templates = useOfflineQuery(
-    (api as any).farmToolbox.listTemplates,
-    userId ? { farmerId: userId } : "skip",
-    userId ? `toolbox_templates_${userId}` : undefined
-  ) as any[] | undefined;
-
-  useEffect(() => {
-    if (!userId) return;
-    void ensureDefaultTemplate({ requestingUserId: userId });
-  }, [userId, ensureDefaultTemplate]);
-
-  useEffect(() => {
-    if (!userId || !templates || selectedTemplate || activeTab !== "log") return;
-    const defaultTemplate = templates.find((tpl: any) => isDefaultBioFarmTemplate(tpl));
-    if (defaultTemplate) {
-      setSelectedTemplate(defaultTemplate);
-    }
-  }, [userId, templates, selectedTemplate, activeTab]);
 
   const tabs: { id: Tab; emoji: string; label: string; phase?: string }[] = [
-    { id: "templates", emoji: "📋", label: "Create Form Template" },
-    { id: "log",       emoji: "✏️",  label: "View Form" },
+    { id: "templates", emoji: "📋", label: "Templates" },
+    { id: "log",       emoji: "✏️",  label: "Log Entry" },
     { id: "units",     emoji: "🌳",  label: "My Units" },
     { id: "insights",  emoji: "📊",  label: "Insights",   phase: "Phase 4" },
     { id: "supply",    emoji: "📦",  label: "Supplies",   phase: "Phase 5a" },
@@ -1470,7 +1336,7 @@ export default function FarmToolboxPage() {
       <div style={{ display: "flex", overflowX: "auto", background: "#fff", borderBottom: "1px solid #e0e0e0", padding: "0 0.25rem" }}>
         {tabs.map((t) => (
           <button key={t.id} onClick={() => { setActiveTab(t.id); if (t.id !== "log") setSelectedTemplate(null); }}
-            style={{ flexShrink: 0, padding: "0.7rem 0.85rem", border: "none", borderBottom: activeTab === t.id ? `3px solid ${BRAND}` : "3px solid transparent", background: t.id === "log" ? "#f1f8e9" : "transparent", cursor: "pointer", fontFamily: FONT, fontSize: "0.78rem", fontWeight: activeTab === t.id ? 700 : 400, color: activeTab === t.id ? BRAND : "#666", whiteSpace: "nowrap" }}>
+            style={{ flexShrink: 0, padding: "0.7rem 0.85rem", border: "none", borderBottom: activeTab === t.id ? `3px solid ${BRAND}` : "3px solid transparent", background: "transparent", cursor: "pointer", fontFamily: FONT, fontSize: "0.78rem", fontWeight: activeTab === t.id ? 700 : 400, color: activeTab === t.id ? BRAND : "#666", whiteSpace: "nowrap" }}>
             {t.emoji} {t.label}
           </button>
         ))}

@@ -9,6 +9,11 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { formatUgandaDate, formatUgandaTimeOnly, formatUgandaDateTime, getUgandaTime } from "./timeUtils";
 import { savePdfFromJsPDF } from "./pdfDownload";
+import {
+  isCommunityDetailsGpsRow,
+  isCommunityResponseGpsRow,
+  isFarmToolboxGpsField,
+} from "./pdfGpsUtils";
 
 export interface UTIDReportData {
   utid: string;
@@ -469,7 +474,7 @@ export async function exportSubmissionsToPDF(
     // Green header bar
     addReportHeader(
       doc,
-      "Farm Toolbox Submission",
+      "Traceability Report",
       `${entry.templateDetails?.templateName || "Unknown Template"}  |  ${submittedDate}`
     );
 
@@ -506,10 +511,22 @@ export async function exportSubmissionsToPDF(
 
     doc.setFontSize(8.5);
     for (const [label, value] of metaLines) {
+      const isGpsRow = isFarmToolboxGpsField(label);
+      if (isGpsRow) {
+        // Emphasize captured GPS row for fast visual scanning.
+        doc.setFillColor(255, 246, 179);
+        doc.rect(margin, y - 3.4, contentWidth, 4.8, "F");
+      }
       doc.setFont(undefined, "bold");
       doc.text(label, labelX, y);
       doc.setFont(undefined, "normal");
+      if (isGpsRow) {
+        doc.setTextColor(34, 100, 55);
+      }
       doc.text(value, valueX, y, { maxWidth: contentWidth - 48 });
+      if (isGpsRow) {
+        doc.setTextColor(30, 30, 30);
+      }
       y += lineH;
     }
 
@@ -619,7 +636,7 @@ export async function exportSubmissionsToPDF(
   }
 
   // ── BATCH: original multi-page layout ───────────────────────────────
-  addReportHeader(doc, "Farm Toolbox Submissions", "Readable export report");
+  addReportHeader(doc, "Traceability Report", "Readable export report");
   await addWatermark(doc, logoBase64);
   let y = 38;
   doc.setFontSize(12);
@@ -669,6 +686,19 @@ export async function exportSubmissionsToPDF(
       columnStyles: {
         0: { cellWidth: 48, fontStyle: "bold", fillColor: [247, 250, 248] },
         1: { cellWidth: contentWidth - 48 },
+      },
+      didParseCell: (data: any) => {
+        if (data.section !== "body") return;
+        const row = detailsRows[data.row.index];
+        if (!row) return;
+        const isGpsRow = isFarmToolboxGpsField(row[0]);
+        if (!isGpsRow) return;
+        if (data.column.index === 1) {
+          data.cell.styles.fillColor = [255, 246, 179];
+          data.cell.styles.textColor = [34, 100, 55];
+        } else if (data.column.index === 0) {
+          data.cell.styles.fillColor = [255, 246, 179];
+        }
       },
     });
 
@@ -757,7 +787,7 @@ export async function exportFormSubmissionsToPDF(
   const margin = 10;
   const contentWidth = pageWidth - margin * 2;
 
-  addReportHeader(doc, "Community Form Submissions", "Readable export report");
+  addReportHeader(doc, "Traceability Report", "Readable export report");
   let y = 38;
   doc.setFontSize(12);
   doc.text(`Total Submissions: ${submissions.length}`, margin, y);
@@ -804,6 +834,19 @@ export async function exportFormSubmissionsToPDF(
         0: { cellWidth: 48, fontStyle: "bold", fillColor: [247, 250, 248] },
         1: { cellWidth: contentWidth - 48 },
       },
+      didParseCell: (data: any) => {
+        if (data.section !== "body") return;
+        const row = detailsRows[data.row.index];
+        if (!row) return;
+        const isGpsRow = isCommunityDetailsGpsRow(String(row[0] || ""), String(row[1] || ""));
+        if (!isGpsRow) return;
+        if (data.column.index === 1) {
+          data.cell.styles.fillColor = [255, 246, 179];
+          data.cell.styles.textColor = [34, 100, 55];
+        } else if (data.column.index === 0) {
+          data.cell.styles.fillColor = [255, 246, 179];
+        }
+      },
     });
 
     y = autoTableEndY(doc) + 4;
@@ -827,6 +870,24 @@ export async function exportFormSubmissionsToPDF(
       columnStyles: {
         0: { cellWidth: 56, fontStyle: "bold" },
         1: { cellWidth: contentWidth - 56 },
+      },
+      didParseCell: (data: any) => {
+        if (data.section !== "body") return;
+        const row = (submission.values || [])[data.row.index];
+        const label = String(responseRows[data.row.index]?.[0] || "").toLowerCase();
+        const response = String(responseRows[data.row.index]?.[1] || "");
+        const isGpsRow = isCommunityResponseGpsRow({
+          fieldType: String(row?.fieldType || ""),
+          label,
+          response,
+        });
+        if (!isGpsRow) return;
+        if (data.column.index === 1) {
+          data.cell.styles.fillColor = [255, 246, 179];
+          data.cell.styles.textColor = [34, 100, 55];
+        } else if (data.column.index === 0) {
+          data.cell.styles.fillColor = [255, 246, 179];
+        }
       },
     });
 

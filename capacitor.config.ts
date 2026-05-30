@@ -11,6 +11,12 @@ const config: CapacitorConfig = {
   android: {
     allowMixedContent: false,
     captureInput: true
+  },
+  plugins: {
+    Geolocation: {
+      permissions: ["location", "coarseLocation"],
+      enableHighAccuracy: true,
+    },
   }
 };
 

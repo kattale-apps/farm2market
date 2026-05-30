@@ -21,6 +21,34 @@ const Geolocation = registerPlugin<any>("Geolocation");
 
 type Tab = "templates" | "log" | "units" | "insights" | "supply" | "ledger";
 
+const BIOFARM_TEMPLATE_NAME = "Bio Farm Coffee Tag";
+const LEGACY_BIOFARM_TEMPLATE_NAME = "Bio Farm Coffee Tree Tag Form";
+const LEGACY_DEFAULT_BIOFARM_TEMPLATE_NAME = "Default Bio Farm Coffee Tree Tag Form";
+
+function isBioFarmTemplateName(templateName: string) {
+  return (
+    templateName === BIOFARM_TEMPLATE_NAME ||
+    templateName === LEGACY_BIOFARM_TEMPLATE_NAME ||
+    templateName === LEGACY_DEFAULT_BIOFARM_TEMPLATE_NAME
+  );
+}
+
+function isDefaultBioFarmTemplate(tpl: any | null) {
+  return !!tpl && tpl.ownerType === "system" && isBioFarmTemplateName(String(tpl.templateName || ""));
+}
+
+function getDisplayTemplateName(templateName: string) {
+  return isBioFarmTemplateName(templateName) ? BIOFARM_TEMPLATE_NAME : templateName;
+}
+
+function getDeviceLocalDateValue() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 const STATUS_COLORS: Record<string, string> = {
   active: "#2e7d32", sold: "#1565c0", deceased: "#c62828", harvested: "#6a1e00",
 };
@@ -59,9 +87,9 @@ function TemplatesTab({ userId, onSelectTemplate }: { userId: Id<"users">; onSel
             {templates.map((tpl: any) => (
               <div key={tpl._id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.85rem 1rem", background: "#f9fafb", borderRadius: 10, border: "1px solid #e8f5e9" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
-                  <span style={{ fontSize: "1.7rem" }}>{tpl.emoji || "📋"}</span>
+                  <span style={{ fontSize: "1.7rem" }}>{isDefaultBioFarmTemplate(tpl) ? "🍃" : (tpl.emoji || "📋")}</span>
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: "0.88rem" }}>{tpl.templateName}</div>
+                    <div style={{ fontWeight: 600, fontSize: "0.88rem" }}>{getDisplayTemplateName(String(tpl.templateName || ""))}</div>
                     <div style={{ fontSize: "0.72rem", color: "#888" }}>
                       {tpl.category} · {tpl.fields?.length ?? 0} fields · <span style={{ color: BRAND }}>{tpl.ownerType}</span>
                     </div>
@@ -271,7 +299,20 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
   const [singleExportingId, setSingleExportingId] = useState<string | null>(null);
   const [batchExporting, setBatchExporting] = useState(false);
   const autoGpsTemplateIdRef = useRef<string | null>(null);
+  const isDefaultTemplate = isDefaultBioFarmTemplate(selectedTemplate);
   const gpsFieldPresent = !!(selectedTemplate?.fields ?? []).some((field: any) => field.fieldType === "gps");
+
+  const getAutoDateFieldValues = useCallback((template: any | null) => {
+    if (!template?.fields?.length) return {} as Record<string, string>;
+    const today = getDeviceLocalDateValue();
+    const values: Record<string, string> = {};
+    for (const field of template.fields) {
+      if (field?.fieldType === "date" && field?.name) {
+        values[String(field.name)] = today;
+      }
+    }
+    return values;
+  }, []);
 
   const getGpsErrorMessage = (raw: any): string => {
     const code = typeof raw?.code === "number" ? raw.code : undefined;
@@ -391,6 +432,24 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
     autoGpsTemplateIdRef.current = templateId;
     void captureGPS();
   }, [selectedTemplate?._id, gpsFieldPresent, gps, gpsLoading, captureGPS]);
+
+  useEffect(() => {
+    if (!selectedTemplate) return;
+    const autoDateValues = getAutoDateFieldValues(selectedTemplate);
+    if (Object.keys(autoDateValues).length === 0) return;
+
+    setFieldValues((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const [fieldName, dateValue] of Object.entries(autoDateValues)) {
+        if (!String(next[fieldName] ?? "").trim()) {
+          next[fieldName] = dateValue;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [selectedTemplate, getAutoDateFieldValues]);
 
   const handlePhotoUpload = async (file: File) => {
     if (file.size > 10 * 1024 * 1024) {
@@ -603,7 +662,19 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
     setSubmitting(true);
     setError(null);
     try {
-      const fvArray = Object.entries(fieldValues).map(([fieldName, value]) => ({ fieldName, value }));
+      if (isDefaultTemplate && photoStorageIds.length < 2) {
+        throw new Error("Capture at least 2 photos (Tree Tag Pic and Coffee Tree Pic) before submitting.");
+      }
+
+      const normalizedFieldValues = { ...fieldValues };
+      const autoDateValues = getAutoDateFieldValues(selectedTemplate);
+      for (const [fieldName, dateValue] of Object.entries(autoDateValues)) {
+        if (!String(normalizedFieldValues[fieldName] ?? "").trim()) {
+          normalizedFieldValues[fieldName] = dateValue;
+        }
+      }
+
+      const fvArray = Object.entries(normalizedFieldValues).map(([fieldName, value]) => ({ fieldName, value }));
       await submitEntry({
         farmerId: userId,
         templateId: selectedTemplate._id,
@@ -617,7 +688,7 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
       });
       const filled = fvArray.filter((fv) => fv.value.trim()).length;
       setSuccessMsg(`✅ Entry saved! You earned 🪙 ${filled} FarmCoin${filled !== 1 ? "s" : ""}!`);
-      setFieldValues({});
+      setFieldValues(getAutoDateFieldValues(selectedTemplate));
       setNotes("");
       setGps(null);
       setGpsError(null);
@@ -643,10 +714,12 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
             {templates.map((tpl: any) => (
               <button key={tpl._id} onClick={() => setSelectedTemplate(tpl)}
                 style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.85rem 1rem", background: "#fff", borderRadius: 10, border: "1.5px solid #e8f5e9", cursor: "pointer", textAlign: "left", fontFamily: FONT }}>
-                <span style={{ fontSize: "1.7rem" }}>{tpl.emoji || "📋"}</span>
+                <span style={{ fontSize: "1.7rem" }}>{isDefaultBioFarmTemplate(tpl) ? "🍃" : (tpl.emoji || "📋")}</span>
                 <div>
-                  <div style={{ fontWeight: 600, fontSize: "0.88rem" }}>{tpl.templateName}</div>
-                  <div style={{ fontSize: "0.72rem", color: "#888" }}>{tpl.fields?.length ?? 0} fields</div>
+                  <div style={{ fontWeight: 600, fontSize: "0.88rem" }}>{getDisplayTemplateName(String(tpl.templateName || ""))}</div>
+                  <div style={{ fontSize: "0.72rem", color: "#888" }}>
+                    {tpl.fields?.length ?? 0} fields{isDefaultBioFarmTemplate(tpl) ? " · mandatory Bio Farm form" : ""}
+                  </div>
                 </div>
               </button>
             ))}
@@ -662,7 +735,9 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem" }}>
         <button onClick={() => { setSelectedTemplate(null); setSuccessMsg(null); }}
           style={{ background: "none", border: "none", fontSize: "1rem", cursor: "pointer", color: BRAND }}>← Back</button>
-        <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 700 }}>{selectedTemplate.emoji} {selectedTemplate.templateName}</h2>
+        <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 700 }}>
+          {isDefaultTemplate ? "🍃" : (selectedTemplate.emoji || "📋")} {getDisplayTemplateName(String(selectedTemplate.templateName || ""))}
+        </h2>
       </div>
 
       {successMsg && (
@@ -749,7 +824,7 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
                   style={{ padding: "0.5rem 1rem", background: gps ? BRAND_BG : "#f5f5f5", border: `1px solid ${gps ? "#a5d6a7" : "#ddd"}`, borderRadius: 8, cursor: "pointer", fontFamily: FONT, fontSize: "0.82rem", color: gps ? BRAND : "#333" }}>
                     {gpsLoading ? "Locating…" : gps ? `📍 ${gps.lat.toFixed(4)}, ${gps.lng.toFixed(4)}` : "📍 Capture GPS"}
                   </button>
-                  {!gps && (
+                  {!gps && !isDefaultTemplate && (
                     <button
                       type="button"
                       onClick={() => setGpsError("Continuing without GPS for this submission.")}
@@ -1304,8 +1379,27 @@ function ComingSoonCard({ emoji, label, phase }: { emoji: string; label: string;
 export default function FarmToolboxPage() {
   const { user, status: authStatus } = useStoredUser();
   const userId = (user?.userId as Id<"users"> | undefined) || null;
-  const [activeTab, setActiveTab] = useState<Tab>("templates");
+  const [activeTab, setActiveTab] = useState<Tab>("log");
   const [selectedTemplate, setSelectedTemplate] = useState<any | null>(null);
+  const ensureDefaultTemplate = useOfflineMutation<any>((api as any).farmToolbox.ensureDefaultBioFarmCoffeeTreeTagTemplate);
+  const templates = useOfflineQuery(
+    (api as any).farmToolbox.listTemplates,
+    userId ? { farmerId: userId } : "skip",
+    userId ? `toolbox_templates_${userId}` : undefined
+  ) as any[] | undefined;
+
+  useEffect(() => {
+    if (!userId) return;
+    void ensureDefaultTemplate({ requestingUserId: userId });
+  }, [userId, ensureDefaultTemplate]);
+
+  useEffect(() => {
+    if (!userId || !templates || selectedTemplate || activeTab !== "log") return;
+    const defaultTemplate = templates.find((tpl: any) => isDefaultBioFarmTemplate(tpl));
+    if (defaultTemplate) {
+      setSelectedTemplate(defaultTemplate);
+    }
+  }, [userId, templates, selectedTemplate, activeTab]);
 
   const tabs: { id: Tab; emoji: string; label: string; phase?: string }[] = [
     { id: "templates", emoji: "📋", label: "Templates" },

@@ -616,9 +616,6 @@ export const submitEntry = mutation({
       if (!args.photoStorageIds || args.photoStorageIds.length < 2) {
         throw new Error("Tree Tag Pic and Coffee Tree Pic are required");
       }
-      if (args.gpsLat === undefined || args.gpsLng === undefined) {
-        throw new Error("Live GPS capture is required before submitting this form");
-      }
 
       const dateFieldIndex = finalFieldValues.findIndex((fv) =>
         fv.fieldName === DEFAULT_OBSERVATION_DATE_FIELD ||
@@ -646,7 +643,10 @@ export const submitEntry = mutation({
         });
       }
 
-      const gpsValue = `${Number(args.gpsLat).toFixed(6)}, ${Number(args.gpsLng).toFixed(6)}`;
+      const hasGps = args.gpsLat !== undefined && args.gpsLng !== undefined;
+      const gpsValue = hasGps
+        ? `${Number(args.gpsLat).toFixed(6)}, ${Number(args.gpsLng).toFixed(6)}`
+        : "GPS unavailable";
       if (gpsFieldIndex >= 0) {
         finalFieldValues[gpsFieldIndex] = {
           ...finalFieldValues[gpsFieldIndex],

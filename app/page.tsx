@@ -178,7 +178,7 @@ export default function Home() {
             letterSpacing: "0.1em",
             textTransform: "uppercase"
           }}>
-            Farm. Trade. Grow.
+            Farm. Trace. Grow.
           </p>
           <div style={{
             marginTop: "1rem",

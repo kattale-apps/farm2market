@@ -40,6 +40,7 @@ function LoginPageInner() {
   const [pendingCommunitySlug, setPendingCommunitySlug] = useState<string | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
+  const isMarketPricesLocked = true;
   
   const loginWithSession = useMutation((api as any).auth.loginWithSession);
   const signupWithSession = useMutation((api as any).auth.signupWithSession);
@@ -80,7 +81,7 @@ function LoginPageInner() {
   useEffect(() => {
     if (searchParams.get("intent") === "buy") {
       setIsSignup(true);
-      setRole("buyer");
+      setRole("farmer");
     }
   }, [searchParams]);
 
@@ -236,16 +237,7 @@ function LoginPageInner() {
           letterSpacing: "0.1em",
           textTransform: "uppercase"
         }}>
-          Farm. Trade. Grow.
-        </p>
-
-        <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem", borderBottom: "1px solid #e0e0e0" }}>
-          <button
-            type="button"
-            onClick={() => {
-              setIsSignup(false);
-              setError(null);
-            }}
+            Farm. Trace. Grow.
             style={{
               padding: "0.5rem 1rem",
               background: "transparent",
@@ -416,11 +408,6 @@ function LoginPageInner() {
                 }}
               >
                 <option value="farmer">Farmer</option>
-                <option value="trader">Trader</option>
-                <option value="buyer">Buyer</option>
-                <option value="vendor">Vendor</option>
-                <option value="transporter">Transporter</option>
-                <option value="store">Store</option>
               </select>
             </div>
           )}
@@ -617,12 +604,58 @@ function LoginPageInner() {
 
       {/* Mobile: price panel below login card */}
       <div className="f2m-panel-mobile">
-        <MarketPricePanel mobileMode />
+        {false && <MarketPricePanel mobileMode />}
+        <div
+          style={{
+            background: "#fff",
+            borderRadius: "12px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+            padding: "1.25rem",
+            width: "100%",
+            border: "1px solid #dbe9db"
+          }}
+          aria-label="Live market prices (locked)"
+        >
+          <div style={{ marginBottom: "0.75rem" }}>
+            <p style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "#2c2c2c" }}>
+              🌿 Live Market Prices
+            </p>
+            <p style={{ margin: 0, fontSize: "0.9rem", color: "#666" }}>
+              This feature is temporarily locked.
+            </p>
+          </div>
+          <p style={{ margin: 0, color: "#555", lineHeight: "1.6" }}>
+            Market prices will return soon. Sign in as a farmer and check back later for live updates.
+          </p>
+        </div>
       </div>
 
       {/* Desktop: price panel to the right */}
       <div className="f2m-panel-desktop">
-        <MarketPricePanel />
+        {false && <MarketPricePanel />}
+        <div
+          style={{
+            background: "#fff",
+            borderRadius: "12px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+            padding: "1.5rem",
+            width: "100%",
+            border: "1px solid #dbe9db"
+          }}
+          aria-label="Live market prices (locked)"
+        >
+          <div style={{ marginBottom: "0.75rem" }}>
+            <p style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700, color: "#2c2c2c" }}>
+              🌿 Live Market Prices
+            </p>
+            <p style={{ margin: 0, fontSize: "0.9rem", color: "#666" }}>
+              This feature is temporarily locked.
+            </p>
+          </div>
+          <p style={{ margin: 0, color: "#555", lineHeight: "1.6" }}>
+            Market prices will return soon. Sign in as a farmer and check back later for live updates.
+          </p>
+        </div>
       </div>
     </main>
     </>

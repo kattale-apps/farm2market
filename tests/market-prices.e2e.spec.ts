@@ -11,52 +11,33 @@ import { test, expect } from "@playwright/test";
 const BASE_URL = "http://localhost:3000";
 
 test.describe("Market Prices Panel — Login Page", () => {
-  test("01 - Login page loads and shows price panel section", async ({ page }) => {
+  test("01 - Login page loads and shows the locked price panel placeholder", async ({ page }) => {
     await page.goto(`${BASE_URL}/login`);
 
     // At desktop viewport the desktop panel is rendered (mobile is display:none)
-    const panel = page.locator(".f2m-panel-desktop [aria-label='Live market prices']");
+    const panel = page.locator(".f2m-panel-desktop [aria-label='Live market prices (locked)']");
     await expect(panel).toBeVisible({ timeout: 10000 });
+    await expect(panel).toContainText("This feature is temporarily locked");
   });
 
-  test("02 - Buy button navigates to login with intent=buy param", async ({ page }) => {
+  test("02 - Locked market price panel hides buy actions on login page", async ({ page }) => {
     await page.goto(`${BASE_URL}/login`);
 
-    // Scope to the visible desktop panel
     const desktopPanel = page.locator(".f2m-panel-desktop");
     await expect(desktopPanel).toBeVisible({ timeout: 10000 });
 
-    const buyButton = desktopPanel.locator("button[title='Buy — sign in as buyer']").first();
-    const comingSoon = desktopPanel.locator("text=Market prices coming soon");
-
-    // Wait up to 12s for either real price cards or coming-soon state
-    let hasBuyButton = false;
-    try {
-      await buyButton.waitFor({ timeout: 12000 });
-      hasBuyButton = true;
-    } catch {
-      hasBuyButton = false;
-    }
-
-    if (hasBuyButton) {
-      await buyButton.click();
-      await expect(page).toHaveURL(/intent=buy/, { timeout: 8000 });
-    } else {
-      // No snapshot published yet — coming-soon state is valid
-      await expect(comingSoon).toBeVisible({ timeout: 5000 });
-    }
+    const buyButtons = desktopPanel.locator("button[title='Buy — sign in as buyer']");
+    await expect(buyButtons).toHaveCount(0);
   });
 
-  test("03 - Price panel cards do NOT contain vendor alias or stall number", async ({ page }) => {
+  test("03 - Locked price panel does not expose vendor or stall identifiers", async ({ page }) => {
     await page.goto(`${BASE_URL}/login`);
 
-    // Scope to the visible desktop panel
-    const panel = page.locator(".f2m-panel-desktop [aria-label='Live market prices']");
+    const panel = page.locator(".f2m-panel-desktop [aria-label='Live market prices (locked)']");
     await expect(panel).toBeVisible({ timeout: 10000 });
 
     const panelText = await panel.innerText();
 
-    // These are internal vendor identifiers that must NOT appear on the public panel
     expect(panelText).not.toMatch(/stall\s*#?\d+/i);
     expect(panelText).not.toMatch(/alias:/i);
     expect(panelText).not.toMatch(/seller alias/i);
@@ -76,88 +57,20 @@ test.describe("Market Prices Panel — Login Page", () => {
   });
 });
 
-test.describe("Market Prices Panel — Market Card Structure", () => {
-  test("06 - When price data exists, panel shows at least one market card with a market name header", async ({ page }) => {
+test.describe("Market Prices Panel — Locked State", () => {
+  test("06 - Locked placeholder is visible instead of live market cards", async ({ page }) => {
     await page.goto(`${BASE_URL}/login`);
 
-    const desktopPanel = page.locator(".f2m-panel-desktop");
+    const desktopPanel = page.locator(".f2m-panel-desktop [aria-label='Live market prices (locked)']");
     await expect(desktopPanel).toBeVisible({ timeout: 10000 });
-
-    const comingSoon = desktopPanel.locator("text=Market prices coming soon");
-    const buyButton = desktopPanel.locator("button[title='Buy — sign in as buyer']").first();
-
-    let hasData = false;
-    try {
-      await buyButton.waitFor({ timeout: 12000 });
-      hasData = true;
-    } catch {
-      hasData = false;
-    }
-
-    if (hasData) {
-      // Each market card wraps its header and items — the first Buy button should be
-      // a sibling/descendant of a card that also contains a market name (emoji + text).
-      // We verify the panel contains at least one item row with a Buy button.
-      const firstBuy = desktopPanel.locator("button[title='Buy — sign in as buyer']").first();
-      await expect(firstBuy).toBeVisible();
-      // Buy button label must be text, not the old cart emoji
-      await expect(firstBuy).toHaveText("Buy");
-    } else {
-      await expect(comingSoon).toBeVisible({ timeout: 5000 });
-    }
+    await expect(desktopPanel).toContainText("This feature is temporarily locked");
   });
 
-  test("07 - When price data exists, item rows contain a price in UGX format", async ({ page }) => {
+  test("07 - Locked panel does not expose buy buttons", async ({ page }) => {
     await page.goto(`${BASE_URL}/login`);
 
     const desktopPanel = page.locator(".f2m-panel-desktop");
-    await expect(desktopPanel).toBeVisible({ timeout: 10000 });
-
-    const buyButton = desktopPanel.locator("button[title='Buy — sign in as buyer']").first();
-    const comingSoon = desktopPanel.locator("text=Market prices coming soon");
-
-    let hasData = false;
-    try {
-      await buyButton.waitFor({ timeout: 12000 });
-      hasData = true;
-    } catch {
-      hasData = false;
-    }
-
-    if (hasData) {
-      const panelText = await desktopPanel.innerText();
-      // At least one row must show a UGX price with a unit separator
-      expect(panelText).toMatch(/UGX\s[\d,]+\/\w+/i);
-    } else {
-      await expect(comingSoon).toBeVisible({ timeout: 5000 });
-    }
-  });
-
-  test("08 - Header shows market count and post count when data is present", async ({ page }) => {
-    await page.goto(`${BASE_URL}/login`);
-
-    const desktopPanel = page.locator(".f2m-panel-desktop");
-    await expect(desktopPanel).toBeVisible({ timeout: 10000 });
-
-    const buyButton = desktopPanel.locator("button[title='Buy — sign in as buyer']").first();
-    const comingSoon = desktopPanel.locator("text=Market prices coming soon");
-
-    let hasData = false;
-    try {
-      await buyButton.waitFor({ timeout: 12000 });
-      hasData = true;
-    } catch {
-      hasData = false;
-    }
-
-    if (hasData) {
-      const panelText = await desktopPanel.innerText();
-      // Panel header should show "N market(s) · N post(s)"
-      expect(panelText).toMatch(/\d+\s+market/i);
-      expect(panelText).toMatch(/\d+\s+post/i);
-    } else {
-      await expect(comingSoon).toBeVisible({ timeout: 5000 });
-    }
+    await expect(desktopPanel.locator("button[title='Buy — sign in as buyer']")).toHaveCount(0);
   });
 });
 

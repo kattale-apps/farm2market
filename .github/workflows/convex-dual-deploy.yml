@@ -1,0 +1,60 @@
+name: Convex Dual Deploy
+
+on:
+  push:
+    branches: [ develop, main ]
+  workflow_dispatch:
+
+jobs:
+  convex-dev:
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    env:
+      CONVEX_DEPLOYMENT: ${{ secrets.CONVEX_DEPLOYMENT }}
+      CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+      CONVEX_URL: ${{ secrets.CONVEX_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Convex CLI version
+        run: npx convex --version
+
+      - name: Deploy to Convex (dev)
+        run: |
+          echo "Deploying to Convex dev target: $CONVEX_DEPLOYMENT"
+          npx convex dev --once --typecheck=disable
+
+  convex-prod:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY_PROD }}
+      CONVEX_URL: ${{ secrets.CONVEX_URL_PROD }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Convex CLI version
+        run: npx convex --version
+
+      - name: Deploy to Convex (prod)
+        run: |
+          echo "Deploying to Convex production"
+          npx convex deploy --yes --typecheck=disable

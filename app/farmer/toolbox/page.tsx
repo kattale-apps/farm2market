@@ -1,14 +1,14 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useConvex, useMutation } from "convex/react";
-import { Capacitor, registerPlugin } from "@capacitor/core";
+import { useConvex, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useOfflineQuery } from "@/app/hooks/useOfflineQuery";
 import { useOfflineMutation } from "@/app/hooks/useOfflineMutation";
 import Link from "next/link";
 import { exportSubmissionsToPDF } from "@/app/utils/exportUtils";
+import { getCurrentLocation } from "@/app/utils/gps";
 import SubmissionPhotoGallery from "@/app/components/SubmissionPhotoGallery";
 import { useStoredUser } from "@/app/hooks/useStoredUser";
 
@@ -16,8 +16,6 @@ const BRAND = "#2e7d32";
 const BRAND_BG = "#e8f5e9";
 const GOLD = "#f9a825";
 const FONT = '"Montserrat", sans-serif';
-
-const Geolocation = registerPlugin<any>("Geolocation");
 
 type Tab = "templates" | "log" | "units" | "insights" | "supply" | "ledger";
 
@@ -48,6 +46,16 @@ function getDeviceLocalDateValue() {
   const day = String(now.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
+
+type FarmAddress = {
+  streetAddress?: string;
+  village?: string;
+  parish?: string;
+  subcounty?: string;
+  district?: string;
+  county?: string;
+  region?: string;
+};
 
 const STATUS_COLORS: Record<string, string> = {
   active: "#2e7d32", sold: "#1565c0", deceased: "#c62828", harvested: "#6a1e00",
@@ -294,6 +302,55 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
   const [photoUploading, setPhotoUploading] = useState(false);
   const [deletingEntryId, setDeletingEntryId] = useState<string | null>(null);
   const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
+  const farmerProfile = useQuery((api as any).farmerProfile.getFarmerProfile, { farmerId: userId });
+  const [farmAddress, setFarmAddress] = useState<FarmAddress>({
+    streetAddress: "",
+    village: "",
+    parish: "",
+    subcounty: "",
+    district: "",
+    county: "",
+    region: "",
+  });
+  const [farmAddressLoaded, setFarmAddressLoaded] = useState(false);
+
+  const addressStorageKey = `farm_toolbox_address_${userId}`;
+
+  useEffect(() => {
+    if (!userId || farmAddressLoaded) return;
+    let initialAddress: FarmAddress = {};
+
+    if (typeof window !== "undefined") {
+      const raw = localStorage.getItem(addressStorageKey);
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === "object") {
+            initialAddress = parsed;
+          }
+        } catch {}
+      }
+    }
+
+    if (Object.keys(initialAddress).length > 0) {
+      setFarmAddress(initialAddress);
+      setFarmAddressLoaded(true);
+      return;
+    }
+
+    if (farmerProfile) {
+      setFarmAddress({
+        streetAddress: "",
+        village: farmerProfile.village || "",
+        parish: farmerProfile.parishName || "",
+        subcounty: farmerProfile.subcountyName || "",
+        district: farmerProfile.districtName || "",
+        county: farmerProfile.county || "",
+        region: farmerProfile.region || "",
+      });
+      setFarmAddressLoaded(true);
+    }
+  }, [userId, farmerProfile, farmAddressLoaded, addressStorageKey]);
   const [showBatchOptions, setShowBatchOptions] = useState(false);
   const [selectedEntryIds, setSelectedEntryIds] = useState<Set<string>>(new Set());
   const [singleExportingId, setSingleExportingId] = useState<string | null>(null);
@@ -328,6 +385,10 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
       return "GPS request timed out. Check signal/network and retry.";
     }
     return "Unable to capture GPS right now. You can retry or continue without GPS.";
+  };
+
+  const updateFarmAddressField = (field: keyof FarmAddress, value: string) => {
+    setFarmAddress((prev) => ({ ...prev, [field]: value }));
   };
 
   const toggleSelectedEntry = (entryId: string, selected: boolean) => {
@@ -377,37 +438,11 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
     setGpsLoading(true);
     setGpsError(null);
     try {
-      if (Capacitor.isNativePlatform()) {
-        const currentPerm = await Geolocation.checkPermissions();
-        const grantedNow = currentPerm.location === "granted" || currentPerm.coarseLocation === "granted";
-        if (!grantedNow) {
-          const requested = await Geolocation.requestPermissions();
-          const grantedAfterRequest = requested.location === "granted" || requested.coarseLocation === "granted";
-          if (!grantedAfterRequest) {
-            throw new Error("Location permission denied");
-          }
-        }
-        const pos = await Geolocation.getCurrentPosition({
-          enableHighAccuracy: true,
-          timeout: 15000,
-          maximumAge: 0,
-        });
-        setGps({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy ?? 0 });
-        return;
-      }
-
-      if (typeof navigator === "undefined" || !navigator.geolocation) {
+      const position = await getCurrentLocation();
+      if (!position) {
         throw new Error("Geolocation not available");
       }
-
-      const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 15000,
-          maximumAge: 0,
-        });
-      });
-      setGps({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy });
+      setGps({ lat: position.latitude, lng: position.longitude, accuracy: position.accuracy });
     } catch (rawErr: any) {
       setGps(null);
       setGpsError(getGpsErrorMessage(rawErr));
@@ -422,16 +457,12 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
       autoGpsTemplateIdRef.current = null;
       return;
     }
-    if (!gpsFieldPresent) {
-      autoGpsTemplateIdRef.current = templateId;
-      return;
-    }
     if (gps || gpsLoading) return;
     if (autoGpsTemplateIdRef.current === templateId) return;
 
     autoGpsTemplateIdRef.current = templateId;
     void captureGPS();
-  }, [selectedTemplate?._id, gpsFieldPresent, gps, gpsLoading, captureGPS]);
+  }, [selectedTemplate?._id, gps, gpsLoading, captureGPS]);
 
   useEffect(() => {
     if (!selectedTemplate) return;
@@ -684,8 +715,12 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
         gpsLat: gps?.lat,
         gpsLng: gps?.lng,
         gpsAccuracy: gps?.accuracy,
+        farmAddress: farmAddress,
         notes: notes || undefined,
       });
+      if (typeof window !== "undefined") {
+        localStorage.setItem(addressStorageKey, JSON.stringify(farmAddress));
+      }
       const filled = fvArray.filter((fv) => fv.value.trim()).length;
       setSuccessMsg(`✅ Entry saved! You earned 🪙 ${filled} FarmCoin${filled !== 1 ? "s" : ""}!`);
       setFieldValues(getAutoDateFieldValues(selectedTemplate));
@@ -760,6 +795,31 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
             </select>
           </div>
         )}
+
+        <div style={{ marginBottom: "1rem", padding: "1rem", borderRadius: 12, background: "#f4f8f5", border: "1px solid #dcedc8" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", marginBottom: "0.75rem" }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: "0.95rem" }}>Farm Physical Address</div>
+              <div style={{ fontSize: "0.82rem", color: "#555" }}>Preloaded from your profile and saved for future submissions.</div>
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+            <input value={farmAddress.streetAddress ?? ""} onChange={(e) => updateFarmAddressField("streetAddress", e.target.value)} placeholder="Street address"
+              style={{ width: "100%", padding: "0.55rem 0.75rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.88rem" }} />
+            <input value={farmAddress.village ?? ""} onChange={(e) => updateFarmAddressField("village", e.target.value)} placeholder="Village"
+              style={{ width: "100%", padding: "0.55rem 0.75rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.88rem" }} />
+            <input value={farmAddress.parish ?? ""} onChange={(e) => updateFarmAddressField("parish", e.target.value)} placeholder="Parish"
+              style={{ width: "100%", padding: "0.55rem 0.75rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.88rem" }} />
+            <input value={farmAddress.subcounty ?? ""} onChange={(e) => updateFarmAddressField("subcounty", e.target.value)} placeholder="Subcounty"
+              style={{ width: "100%", padding: "0.55rem 0.75rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.88rem" }} />
+            <input value={farmAddress.district ?? ""} onChange={(e) => updateFarmAddressField("district", e.target.value)} placeholder="District"
+              style={{ width: "100%", padding: "0.55rem 0.75rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.88rem" }} />
+            <input value={farmAddress.county ?? ""} onChange={(e) => updateFarmAddressField("county", e.target.value)} placeholder="County"
+              style={{ width: "100%", padding: "0.55rem 0.75rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.88rem" }} />
+            <input value={farmAddress.region ?? ""} onChange={(e) => updateFarmAddressField("region", e.target.value)} placeholder="Region"
+              style={{ gridColumn: "span 2", width: "100%", padding: "0.55rem 0.75rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.88rem" }} />
+          </div>
+        </div>
 
         {/* Field inputs */}
         {(selectedTemplate.fields ?? []).map((field: any) => (
@@ -853,12 +913,6 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
 
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Additional notes (optional)…"
           style={{ width: "100%", padding: "0.5rem 0.75rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.85rem", minHeight: 60, resize: "vertical", boxSizing: "border-box", marginBottom: "1rem" }} />
-
-        {gpsFieldPresent && !gps && (
-          <div style={{ marginBottom: "0.75rem", background: "#fff8e1", border: "1px solid #f0c36d", borderRadius: 8, padding: "0.55rem 0.7rem", color: "#8a4b08", fontSize: "0.78rem" }}>
-            GPS is not captured yet. You can retry capture, or submit now and continue without GPS.
-          </div>
-        )}
 
         {error && <p style={{ color: "#c62828", fontSize: "0.82rem", marginBottom: "0.75rem" }}>⚠️ {error}</p>}
 

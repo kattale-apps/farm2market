@@ -587,6 +587,15 @@ export const submitEntry = mutation({
     gpsLat: v.optional(v.number()),
     gpsLng: v.optional(v.number()),
     gpsAccuracy: v.optional(v.number()),
+    farmAddress: v.optional(v.object({
+      streetAddress: v.optional(v.string()),
+      village: v.optional(v.string()),
+      parish: v.optional(v.string()),
+      subcounty: v.optional(v.string()),
+      district: v.optional(v.string()),
+      county: v.optional(v.string()),
+      region: v.optional(v.string()),
+    })),
     notes: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<Id<"farmTrackerEntries">> => {
@@ -690,6 +699,7 @@ export const submitEntry = mutation({
       gpsLat: args.gpsLat,
       gpsLng: args.gpsLng,
       gpsAccuracy: args.gpsAccuracy,
+      farmAddress: args.farmAddress,
       fieldCount,
       farmcoinRewarded: false,
       syncStatus: "synced",

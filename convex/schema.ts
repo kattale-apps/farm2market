@@ -1945,6 +1945,15 @@ export default defineSchema({
     gpsLat: v.optional(v.number()),
     gpsLng: v.optional(v.number()),
     gpsAccuracy: v.optional(v.number()),
+    farmAddress: v.optional(v.object({
+      streetAddress: v.optional(v.string()),
+      village: v.optional(v.string()),
+      parish: v.optional(v.string()),
+      subcounty: v.optional(v.string()),
+      district: v.optional(v.string()),
+      county: v.optional(v.string()),
+      region: v.optional(v.string()),
+    })),
     fieldCount: v.optional(v.number()), // populated fields for FarmCoin calc
     farmcoinRewarded: v.optional(v.boolean()),
     syncStatus: v.optional(v.union(v.literal("pending"), v.literal("synced"))),

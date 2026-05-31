@@ -127,6 +127,22 @@ export function exportToPDF(
 /**
  * Format UTID data for export
  */
+function formatFarmAddress(address: any): string {
+  if (!address || typeof address !== "object") return "";
+
+  const parts = [
+    address.streetAddress,
+    address.village,
+    address.parish,
+    address.subcounty,
+    address.district,
+    address.county,
+    address.region,
+  ].filter(Boolean).map((part: any) => String(part).trim()).filter(Boolean);
+
+  return parts.join(", ");
+}
+
 export function formatUTIDDataForExport(utids: any[]): UTIDReportData[] {
   return utids.map((utid) => ({
     utid: utid.utid || utid.purchaseUtid || utid.listingUtid || utid.lockUtid || "N/A",
@@ -484,6 +500,7 @@ export async function exportSubmissionsToPDF(
       ["Submitted", submittedDate],
       ["User",      userAlias || "N/A"],
       ["Unit",      entry.unitDetails?.name || entry.unitDetails?.unitType || "N/A"],
+      ["Farm address", formatFarmAddress(entry.farmAddress) || "N/A"],
       ["GPS",       entry.gpsLat && entry.gpsLng
                       ? `${Number(entry.gpsLat).toFixed(5)}, ${Number(entry.gpsLng).toFixed(5)}`
                       : "N/A"],
@@ -666,6 +683,7 @@ export async function exportSubmissionsToPDF(
       ["Template", entry.templateDetails?.templateName || "Unknown Template"],
       ["Submitted", submittedDate],
       ["Unit", entry.unitDetails?.name || entry.unitDetails?.unitType || "N/A"],
+      ["Farm address", formatFarmAddress(entry.farmAddress) || "N/A"],
       [
         "GPS",
         entry.gpsLat && entry.gpsLng

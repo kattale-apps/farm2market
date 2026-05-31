@@ -237,7 +237,16 @@ function LoginPageInner() {
           letterSpacing: "0.1em",
           textTransform: "uppercase"
         }}>
-            Farm. Trace. Grow.
+          Farm. Trace. Grow.
+        </p>
+
+        <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem", borderBottom: "1px solid #e0e0e0" }}>
+          <button
+            type="button"
+            onClick={() => {
+              setIsSignup(false);
+              setError(null);
+            }}
             style={{
               padding: "0.5rem 1rem",
               background: "transparent",

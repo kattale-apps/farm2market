@@ -707,6 +707,8 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
       // Ensure street/plot are not sent with the submission
       delete submissionAddress.streetAddress;
       delete submissionAddress.plot;
+      // Also omit region from submissions per UX request
+      delete submissionAddress.region;
 
       await submitEntry({
         farmerId: userId,
@@ -817,8 +819,7 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
               style={{ width: "100%", padding: "0.55rem 0.75rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.88rem" }} />
             <input value={farmAddress.county ?? ""} onChange={(e) => updateFarmAddressField("county", e.target.value)} placeholder="County"
               style={{ width: "100%", padding: "0.55rem 0.75rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.88rem" }} />
-            <input value={farmAddress.region ?? ""} onChange={(e) => updateFarmAddressField("region", e.target.value)} placeholder="Region"
-              style={{ gridColumn: "span 2", width: "100%", padding: "0.55rem 0.75rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.88rem" }} />
+            {/* Region removed from form as per UX update */}
           </div>
         </div>
 
@@ -827,7 +828,7 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
           <div key={field.name} style={{ marginBottom: "0.85rem" }}>
             <label style={{ fontSize: "0.8rem", fontWeight: 600, marginBottom: "0.3rem", display: "block" }}>
               {field.emoji} {field.name} {field.unit ? <span style={{ color: "#999", fontWeight: 400 }}>({field.unit})</span> : null}
-              {field.required && <span style={{ color: "#c62828" }}> *</span>}
+              {field.required && field.fieldType !== "gps" && <span style={{ color: "#c62828" }}> *</span>}
             </label>
             {field.fieldType === "yesno" ? (
               <div style={{ display: "flex", gap: "0.5rem" }}>

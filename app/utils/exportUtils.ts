@@ -131,7 +131,6 @@ function formatFarmAddress(address: any): string {
   if (!address || typeof address !== "object") return "";
 
   const parts = [
-    address.streetAddress,
     address.village,
     address.parish,
     address.subcounty,

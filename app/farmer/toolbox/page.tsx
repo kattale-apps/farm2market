@@ -48,7 +48,6 @@ function getDeviceLocalDateValue() {
 }
 
 type FarmAddress = {
-  streetAddress?: string;
   village?: string;
   parish?: string;
   subcounty?: string;
@@ -304,7 +303,6 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
   const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
   const farmerProfile = useQuery((api as any).farmerProfile.getFarmerProfile, { farmerId: userId });
   const [farmAddress, setFarmAddress] = useState<FarmAddress>({
-    streetAddress: "",
     village: "",
     parish: "",
     subcounty: "",
@@ -340,7 +338,6 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
 
     if (farmerProfile) {
       setFarmAddress({
-        streetAddress: "",
         village: farmerProfile.village || "",
         parish: farmerProfile.parishName || "",
         subcounty: farmerProfile.subcountyName || "",
@@ -706,6 +703,11 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
       }
 
       const fvArray = Object.entries(normalizedFieldValues).map(([fieldName, value]) => ({ fieldName, value }));
+      const submissionAddress = { ...farmAddress } as any;
+      // Ensure street/plot are not sent with the submission
+      delete submissionAddress.streetAddress;
+      delete submissionAddress.plot;
+
       await submitEntry({
         farmerId: userId,
         templateId: selectedTemplate._id,
@@ -715,11 +717,12 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
         gpsLat: gps?.lat,
         gpsLng: gps?.lng,
         gpsAccuracy: gps?.accuracy,
-        farmAddress: farmAddress,
+        farmAddress: submissionAddress,
         notes: notes || undefined,
       });
       if (typeof window !== "undefined") {
-        localStorage.setItem(addressStorageKey, JSON.stringify(farmAddress));
+        // Persist only the allowed address fields locally (omit street/plot)
+        localStorage.setItem(addressStorageKey, JSON.stringify(submissionAddress));
       }
       const filled = fvArray.filter((fv) => fv.value.trim()).length;
       setSuccessMsg(`✅ Entry saved! You earned 🪙 ${filled} FarmCoin${filled !== 1 ? "s" : ""}!`);
@@ -804,8 +807,6 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
             </div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
-            <input value={farmAddress.streetAddress ?? ""} onChange={(e) => updateFarmAddressField("streetAddress", e.target.value)} placeholder="Street address"
-              style={{ width: "100%", padding: "0.55rem 0.75rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.88rem" }} />
             <input value={farmAddress.village ?? ""} onChange={(e) => updateFarmAddressField("village", e.target.value)} placeholder="Village"
               style={{ width: "100%", padding: "0.55rem 0.75rem", border: "1px solid #ddd", borderRadius: 8, fontFamily: FONT, fontSize: "0.88rem" }} />
             <input value={farmAddress.parish ?? ""} onChange={(e) => updateFarmAddressField("parish", e.target.value)} placeholder="Parish"

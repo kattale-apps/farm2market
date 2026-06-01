@@ -127,9 +127,19 @@ function LoginPageInner() {
           router.push("/");
         }
       } else {
-        try {
-          const result = await loginWithSession(authArgs);
-          const { sessionToken, ...user } = result;
+        const loginResult = await loginWithSession(authArgs).catch((err: any) => {
+          const message = typeof err === "string" ? err : err?.message || "Login failed";
+          if (message === "Invalid email/phone or password") {
+            setIsSignup(true);
+            setError("No account found. Confirm your password to create one.");
+          } else {
+            setError(message);
+          }
+          return null;
+        });
+
+        if (loginResult) {
+          const { sessionToken, ...user } = loginResult;
           await saveAuth(user, sessionToken);
           saveLastCredential(identifier);
 
@@ -137,14 +147,6 @@ function LoginPageInner() {
             router.push(`/join/community/${pendingCommunitySlug}?from_signup=1`);
           } else {
             router.push("/");
-          }
-        } catch (err: any) {
-          const message = err?.message || "Login failed";
-          if (message === "Invalid email/phone or password") {
-            setIsSignup(true);
-            setError("No account found. Confirm your password to create one.");
-          } else {
-            setError(message);
           }
         }
       }

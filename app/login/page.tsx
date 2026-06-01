@@ -129,12 +129,7 @@ function LoginPageInner() {
       } else {
         const loginResult = await loginWithSession(authArgs).catch((err: any) => {
           const message = typeof err === "string" ? err : err?.message || "Login failed";
-          if (message === "Invalid email/phone or password") {
-            setIsSignup(true);
-            setError("No account found. Confirm your password to create one.");
-          } else {
-            setError(message);
-          }
+          setError(message);
           return null;
         });
 
@@ -152,8 +147,12 @@ function LoginPageInner() {
       }
     } catch (err: any) {
       console.error("Auth error:", err);
-      const errorMessage = err.message || (isSignup ? "Signup failed" : "Login failed");
-      setError(errorMessage);
+      const message = typeof err === "string" ? err : err?.message || (isSignup ? "Signup failed" : "Login failed");
+      if (!isSignup && message === "Invalid email/phone or password") {
+        setError("Invalid email or password. Please try again or switch to Create Account.");
+      } else {
+        setError(message);
+      }
     } finally {
       setLoading(false);
     }
@@ -220,16 +219,20 @@ function LoginPageInner() {
 
         <div style={{ marginBottom: "1.25rem" }}>
           <p style={{ margin: 0, color: "#333", fontSize: "1rem", fontWeight: 600 }}>
-            Login or create an account in one step.
+            {isSignup ? "Create your Farm2Market account." : "Sign in to Farm2Market."}
           </p>
           <p style={{ margin: "0.5rem 0 0", color: "#666", fontSize: "0.9rem", lineHeight: "1.5" }}>
-            Enter your email or phone number and password. If we don’t find an account, you’ll be guided to confirm your password and create it.
+            {isSignup
+              ? "Enter your details to create a new account."
+              : "Enter your email or phone number and password to sign in."}
           </p>
         </div>
 
         <form onSubmit={handleSubmit}>
           <p style={{ marginBottom: "1rem", color: "#666", fontSize: "0.9rem", lineHeight: "1.5" }}>
-            Enter your email or phone number. We’ll detect the right path for you.
+            {isSignup
+              ? "Provide a valid email or phone number and choose a password."
+              : "Provide your registered email or phone number and password."}
           </p>
 
           {/* Login uses a single auto-detected identifier for both login and signup */}
@@ -373,9 +376,43 @@ function LoginPageInner() {
               cursor: loading ? "not-allowed" : "pointer"
             }}
           >
-            {loading ? (isSignup ? "Creating account..." : "Logging in...") : (isSignup ? "Create Account" : "Login")}
+            {loading ? (isSignup ? "Creating account..." : "Signing in...") : (isSignup ? "Create Account" : "Sign In")}
           </button>
         </form>
+
+        <div style={{ marginTop: "1rem", textAlign: "center" }}>
+          {!isSignup ? (
+            <button
+              type="button"
+              onClick={() => setIsSignup(true)}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "#1976d2",
+                cursor: "pointer",
+                fontSize: "0.9rem",
+                textDecoration: "underline"
+              }}
+            >
+              Don’t have an account? Create one.
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setIsSignup(false)}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "#1976d2",
+                cursor: "pointer",
+                fontSize: "0.9rem",
+                textDecoration: "underline"
+              }}
+            >
+              Already have an account? Sign in.
+            </button>
+          )}
+        </div>
 
         {!isSignup && (
           <div style={{ marginTop: "1rem", textAlign: "center" }}>

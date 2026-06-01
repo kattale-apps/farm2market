@@ -27,12 +27,8 @@ export default function LoginPage() {
 function LoginPageInner() {
   const [isSignup, setIsSignup] = useState(false);
   const [loginIdentifier, setLoginIdentifier] = useState("");
-  const [email, setEmail] = useState("");
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [usePhone, setUsePhone] = useState(false); // Toggle between email and phone
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [role, setRole] = useState<"farmer" | "trader" | "buyer" | "vendor" | "transporter" | "store">("farmer");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -41,6 +37,7 @@ function LoginPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isMarketPricesLocked = true;
+  const role: "farmer" = "farmer";
   
   const loginWithSession = useMutation((api as any).auth.loginWithSession);
   const signupWithSession = useMutation((api as any).auth.signupWithSession);
@@ -50,12 +47,6 @@ function LoginPageInner() {
     const lastCred = getLastCredential();
     if (lastCred) {
       setLoginIdentifier(lastCred);
-      if (lastCred.includes("@")) {
-        setEmail(lastCred);
-      } else {
-        setPhoneNumber(lastCred);
-        setUsePhone(true);
-      }
     }
   }, []);
 
@@ -77,11 +68,10 @@ function LoginPageInner() {
     }
   }, [searchParams]);
 
-  // Handle buy intent from market price panel — pre-select buyer signup
+  // Handle buy intent from market price panel — pre-select signup mode
   useEffect(() => {
     if (searchParams.get("intent") === "buy") {
       setIsSignup(true);
-      setRole("farmer");
     }
   }, [searchParams]);
 
@@ -91,27 +81,26 @@ function LoginPageInner() {
     setLoading(true);
 
     try {
-      // Validate password for both login and signup flows
+      const identifier = loginIdentifier.trim();
+      if (!identifier) {
+        setError("Email or phone number is required");
+        setLoading(false);
+        return;
+      }
       if (!password.trim()) {
         setError("Password is required");
         setLoading(false);
         return;
       }
 
-      if (isSignup) {
-        // Validate signup credential based on selected mode
-        if (!usePhone && !email.trim()) {
-          setError("Email is required");
-          setLoading(false);
-          return;
-        }
-        if (usePhone && !phoneNumber.trim()) {
-          setError("Phone number is required");
-          setLoading(false);
-          return;
-        }
+      const identifierLooksLikeEmail = identifier.includes("@");
+      const authArgs = {
+        email: identifierLooksLikeEmail ? identifier : undefined,
+        phoneNumber: identifierLooksLikeEmail ? undefined : identifier,
+        password: password.trim(),
+      };
 
-        // Signup validation
+      if (isSignup) {
         if (password.length < 6) {
           setError("Password must be at least 6 characters long");
           setLoading(false);
@@ -123,53 +112,40 @@ function LoginPageInner() {
           return;
         }
 
-        // Signup with session
         const result = await signupWithSession({
-          email: usePhone ? undefined : email.trim(),
-          phoneNumber: usePhone ? phoneNumber.trim() : undefined,
-          password: password.trim(),
-          role: role,
+          ...authArgs,
+          role,
         });
 
-        // Persist to all storage layers (localStorage + native Preferences)
         const { sessionToken, ...user } = result;
         await saveAuth(user, sessionToken);
-        saveLastCredential(usePhone ? phoneNumber.trim() : email.trim());
+        saveLastCredential(identifier);
 
-        // Redirect: if pending community join, go back to join page; otherwise go home
         if (pendingCommunitySlug) {
           router.push(`/join/community/${pendingCommunitySlug}?from_signup=1`);
         } else {
           router.push("/");
         }
       } else {
-        // Single login identifier auto-detects email vs phone
-        const identifier = loginIdentifier.trim();
-        if (!identifier) {
-          setError("Email or phone number is required");
-          setLoading(false);
-          return;
-        }
+        try {
+          const result = await loginWithSession(authArgs);
+          const { sessionToken, ...user } = result;
+          await saveAuth(user, sessionToken);
+          saveLastCredential(identifier);
 
-        const identifierLooksLikeEmail = identifier.includes("@");
-
-        // Login with session
-        const result = await loginWithSession({
-          email: identifierLooksLikeEmail ? identifier : undefined,
-          phoneNumber: identifierLooksLikeEmail ? undefined : identifier,
-          password: password.trim(),
-        });
-
-        // Persist to all storage layers (localStorage + native Preferences)
-        const { sessionToken, ...user } = result;
-        await saveAuth(user, sessionToken);
-        saveLastCredential(identifier);
-
-        // Redirect: if pending community join, go back to join page; otherwise go home
-        if (pendingCommunitySlug) {
-          router.push(`/join/community/${pendingCommunitySlug}?from_signup=1`);
-        } else {
-          router.push("/");
+          if (pendingCommunitySlug) {
+            router.push(`/join/community/${pendingCommunitySlug}?from_signup=1`);
+          } else {
+            router.push("/");
+          }
+        } catch (err: any) {
+          const message = err?.message || "Login failed";
+          if (message === "Invalid email/phone or password") {
+            setIsSignup(true);
+            setError("No account found. Confirm your password to create one.");
+          } else {
+            setError(message);
+          }
         }
       }
     } catch (err: any) {
@@ -240,186 +216,40 @@ function LoginPageInner() {
           Farm. Trace. Grow.
         </p>
 
-        <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem", borderBottom: "1px solid #e0e0e0" }}>
-          <button
-            type="button"
-            onClick={() => {
-              setIsSignup(false);
-              setError(null);
-            }}
-            style={{
-              padding: "0.5rem 1rem",
-              background: "transparent",
-              border: "none",
-              borderBottom: isSignup ? "none" : "2px solid #1976d2",
-              color: isSignup ? "#666" : "#1976d2",
-              cursor: "pointer",
-              fontSize: "0.9rem",
-              fontWeight: isSignup ? "400" : "600"
-            }}
-          >
-            Login
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setIsSignup(true);
-              setError(null);
-            }}
-            style={{
-              padding: "0.5rem 1rem",
-              background: "transparent",
-              border: "none",
-              borderBottom: isSignup ? "2px solid #1976d2" : "none",
-              color: isSignup ? "#1976d2" : "#666",
-              cursor: "pointer",
-              fontSize: "0.9rem",
-              fontWeight: isSignup ? "600" : "400"
-            }}
-          >
-            Sign Up
-          </button>
+        <div style={{ marginBottom: "1.25rem" }}>
+          <p style={{ margin: 0, color: "#333", fontSize: "1rem", fontWeight: 600 }}>
+            Login or create an account in one step.
+          </p>
+          <p style={{ margin: "0.5rem 0 0", color: "#666", fontSize: "0.9rem", lineHeight: "1.5" }}>
+            Enter your email or phone number and password. If we don’t find an account, you’ll be guided to confirm your password and create it.
+          </p>
         </div>
 
         <form onSubmit={handleSubmit}>
-          {isSignup && (
-            <>
-              {/* Toggle between email and phone for signup */}
-              <div style={{ marginBottom: "1rem", display: "flex", gap: "0.5rem" }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setUsePhone(false);
-                    setError(null);
-                  }}
-                  style={{
-                    flex: 1,
-                    padding: "0.5rem",
-                    background: !usePhone ? "#e3f2fd" : "transparent",
-                    border: "1px solid",
-                    borderColor: !usePhone ? "#1976d2" : "#ddd",
-                    borderRadius: "6px",
-                    color: !usePhone ? "#1976d2" : "#666",
-                    cursor: "pointer",
-                    fontSize: "0.9rem",
-                    fontWeight: !usePhone ? "600" : "400"
-                  }}
-                >
-                  Email
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setUsePhone(true);
-                    setError(null);
-                  }}
-                  style={{
-                    flex: 1,
-                    padding: "0.5rem",
-                    background: usePhone ? "#e3f2fd" : "transparent",
-                    border: "1px solid",
-                    borderColor: usePhone ? "#1976d2" : "#ddd",
-                    borderRadius: "6px",
-                    color: usePhone ? "#1976d2" : "#666",
-                    cursor: "pointer",
-                    fontSize: "0.9rem",
-                    fontWeight: usePhone ? "600" : "400"
-                  }}
-                >
-                  Phone
-                </button>
-              </div>
-            </>
-          )}
+          <p style={{ marginBottom: "1rem", color: "#666", fontSize: "0.9rem", lineHeight: "1.5" }}>
+            Enter your email or phone number. We’ll detect the right path for you.
+          </p>
 
-          {/* Login uses a single auto-detected identifier; signup keeps explicit mode */}
-          {!isSignup ? (
-            <div style={{ marginBottom: "1rem" }}>
-              <label style={{ display: "block", marginBottom: "0.5rem", color: "#333", fontWeight: "500" }}>
-                Email or Phone Number
-              </label>
-              <input
-                type="text"
-                value={loginIdentifier}
-                onChange={(e) => setLoginIdentifier(e.target.value)}
-                required={!isSignup}
-                style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  border: "1px solid #ddd",
-                  borderRadius: "6px",
-                  fontSize: "1rem"
-                }}
-                placeholder="your@email.com or +256 7XX XXX XXX"
-              />
-            </div>
-          ) : !usePhone ? (
-            <div style={{ marginBottom: "1rem" }}>
-              <label style={{ display: "block", marginBottom: "0.5rem", color: "#333", fontWeight: "500" }}>
-                Email
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required={!usePhone}
-                style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  border: "1px solid #ddd",
-                  borderRadius: "6px",
-                  fontSize: "1rem"
-                }}
-                placeholder="your@email.com"
-              />
-            </div>
-          ) : (
-            <div style={{ marginBottom: "1rem" }}>
-              <label style={{ display: "block", marginBottom: "0.5rem", color: "#333", fontWeight: "500" }}>
-                Phone Number
-              </label>
-              <input
-                type="tel"
-                value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
-                required={usePhone}
-                style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  border: "1px solid #ddd",
-                  borderRadius: "6px",
-                  fontSize: "1rem"
-                }}
-                placeholder="+256 7XX XXX XXX or 07XX XXX XXX"
-              />
-              <p style={{ marginTop: "0.5rem", fontSize: "0.85rem", color: "#666" }}>
-                Enter your phone number with country code (+256) or local format (07XX)
-              </p>
-            </div>
-          )}
-
-          {isSignup && (
-            <div style={{ marginBottom: "1rem" }}>
-              <label style={{ display: "block", marginBottom: "0.5rem", color: "#333", fontWeight: "500" }}>
-                I am a
-              </label>
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value as "farmer" | "trader" | "buyer" | "vendor" | "transporter" | "store")}
-                required
-                style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  border: "1px solid #ddd",
-                  borderRadius: "6px",
-                  fontSize: "1rem",
-                  background: "#fff"
-                }}
-              >
-                <option value="farmer">Farmer</option>
-              </select>
-            </div>
-          )}
+          {/* Login uses a single auto-detected identifier for both login and signup */}
+          <div style={{ marginBottom: "1.5rem" }}>
+            <label style={{ display: "block", marginBottom: "0.5rem", color: "#333", fontWeight: "500" }}>
+              Email or Phone Number
+            </label>
+            <input
+              type="text"
+              value={loginIdentifier}
+              onChange={(e) => setLoginIdentifier(e.target.value)}
+              required
+              style={{
+                width: "100%",
+                padding: "0.75rem",
+                border: "1px solid #ddd",
+                borderRadius: "6px",
+                fontSize: "1rem"
+              }}
+              placeholder="your@email.com or +256 7XX XXX XXX"
+            />
+          </div>
 
           <div style={{ marginBottom: isSignup ? "1rem" : "1.5rem" }}>
             <label style={{ display: "block", marginBottom: "0.5rem", color: "#333", fontWeight: "500" }}>

@@ -27,6 +27,18 @@ export function getEffectivePaymentAmount(
   return null;
 }
 
+export function getPaymentEntryConfig(form: ExtensionWorkFormConfig | null | undefined) {
+  const requiresPayment = Boolean(form?.formPurpose === "extension_work" && form?.paymentEnabled);
+  const canEditAmount = requiresPayment && Boolean(form?.paymentAmountEditable);
+  const showAmountInput = requiresPayment && (canEditAmount || typeof form?.paymentAmount === "number");
+
+  return {
+    requiresPayment,
+    canEditAmount,
+    showAmountInput,
+  };
+}
+
 export function getPaymentStatusLabel(status?: string | null): string {
   if (!status) return "Pending";
 

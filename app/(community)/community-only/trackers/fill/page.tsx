@@ -15,7 +15,7 @@ import { useOfflineMutation } from "@/app/hooks/useOfflineMutation";
 import { useFormDraftPersistence, clearFormDraft } from "@/app/hooks/useFormDraftPersistence";
 import { FarmCoinReward, FarmCoinVideoPreloader } from "@/app/components/FarmCoinAnimation";
 import { useStoredUser } from "@/app/hooks/useStoredUser";
-import { getEffectivePaymentAmount } from "@/utils/extensionWorkForm";
+import { getEffectivePaymentAmount, getPaymentEntryConfig } from "@/utils/extensionWorkForm";
 
 const BRAND = "#2e7d32";
 const BRAND_LIGHT = "#43a047";
@@ -545,8 +545,9 @@ export default function TrackerFillPage() {
   const filledFields = editableFields.filter((f: any) => fieldValues[String(f._id)]?.trim()).length;
   const progressPercent = totalFields > 0 ? (filledFields / totalFields) * 100 : 0;
   const currentField = editableFields[currentFieldIndex];
-  const requiresPayment = Boolean(formDetails?.formPurpose === "extension_work" && formDetails?.paymentEnabled);
-  const paymentAmount = getEffectivePaymentAmount(formDetails, formDetails?.paymentAmountEditable ? customPaymentAmount : undefined);
+  const paymentEntryConfig = getPaymentEntryConfig(formDetails);
+  const requiresPayment = paymentEntryConfig.requiresPayment;
+  const paymentAmount = getEffectivePaymentAmount(formDetails, paymentEntryConfig.canEditAmount ? customPaymentAmount : undefined);
   const paymentLabel = paymentAmount ? `UGX ${paymentAmount}` : formDetails?.paymentAmount ? `UGX ${formDetails.paymentAmount}` : "Payment required";
 
   return (
@@ -607,13 +608,14 @@ export default function TrackerFillPage() {
               <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#ef6c00" }}>💳 Payment required</div>
               <div style={{ fontSize: "0.8rem", color: "#6d4c41" }}>{paymentLabel}</div>
             </div>
-            {formDetails?.paymentAmountEditable && (
+            {paymentEntryConfig.showAmountInput && (
               <input
                 type="number"
-                value={customPaymentAmount}
+                value={customPaymentAmount || String(formDetails?.paymentAmount || "")}
                 onChange={(e) => setCustomPaymentAmount(e.target.value)}
                 placeholder="Enter amount"
-                style={{ padding: "0.45rem 0.6rem", borderRadius: 8, border: "1px solid #ccc", minWidth: 120 }}
+                readOnly={!paymentEntryConfig.canEditAmount}
+                style={{ padding: "0.45rem 0.6rem", borderRadius: 8, border: "1px solid #ccc", minWidth: 120, background: paymentEntryConfig.canEditAmount ? "#fff" : "#f5f5f5" }}
               />
             )}
             <button

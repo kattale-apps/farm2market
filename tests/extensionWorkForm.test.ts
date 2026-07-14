@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getEffectivePaymentAmount, getPaymentStatusLabel } from "../utils/extensionWorkForm";
+import { getEffectivePaymentAmount, getPaymentStatusLabel, getPaymentEntryConfig } from "../utils/extensionWorkForm";
 
 test("returns a fixed payment amount when configured", () => {
   const amount = getEffectivePaymentAmount({ paymentEnabled: true, paymentAmount: 5000, paymentAmountEditable: false }, undefined);
@@ -15,6 +15,13 @@ test("uses the worker-entered amount when editing is allowed", () => {
 test("returns null when payment is disabled", () => {
   const amount = getEffectivePaymentAmount({ paymentEnabled: false, paymentAmount: 5000, paymentAmountEditable: false }, undefined);
   assert.equal(amount, null);
+});
+
+test("exposes an editable amount input for extension work forms when the admin allows it", () => {
+  const config = getPaymentEntryConfig({ paymentEnabled: true, paymentAmount: 5000, paymentAmountEditable: true, formPurpose: "extension_work" });
+  assert.equal(config.requiresPayment, true);
+  assert.equal(config.showAmountInput, true);
+  assert.equal(config.canEditAmount, true);
 });
 
 test("maps payment status values to simple labels", () => {

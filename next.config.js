@@ -19,6 +19,13 @@ const nextConfig = {
       },
     ],
   },
+  webpack: (config) => {
+    config.module.rules.push({
+      test: /convex\/_generated\/.*\.js$/,
+      type: 'javascript/auto',
+    });
+    return config;
+  },
 }
 
 module.exports = withPWA(nextConfig)

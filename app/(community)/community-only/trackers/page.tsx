@@ -232,7 +232,8 @@ export default function TrackersHubPage() {
                   fontSize: "1.3rem",
                   flexShrink: 0,
                 }}>
-                  {form.category === "revenue" ? "💰" :
+                  {form.formPurpose === "extension_work" ? "💳" :
+                   form.category === "revenue" ? "💰" :
                    form.category === "expense" ? "💸" :
                    form.category === "inventory" ? "📦" :
                    form.category === "profit_loss" ? "📈" :
@@ -246,7 +247,7 @@ export default function TrackersHubPage() {
                     letterSpacing: "0.08em",
                     color: CATEGORY_COLORS[form.category] || "#666",
                   }}>
-                    {CATEGORY_LABELS[form.category] || "Custom"}
+                    {form.formPurpose === "extension_work" ? "Extension Work" : (CATEGORY_LABELS[form.category] || "Custom")}
                   </span>
                   <h3 style={{ margin: "0.15rem 0 0 0", fontSize: "0.95rem", fontWeight: 600, color: "#1a1a1a" }}>
                     {form.name}

@@ -450,7 +450,10 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
   const [builderName, setBuilderName] = useState("");
   const [builderDescription, setBuilderDescription] = useState("");
   const [builderCategory, setBuilderCategory] = useState("custom");
-  const [builderPurpose, setBuilderPurpose] = useState<"tracker" | "profile">("tracker");
+  const [builderPurpose, setBuilderPurpose] = useState<"tracker" | "profile" | "extension_work">("tracker");
+  const [builderPaymentEnabled, setBuilderPaymentEnabled] = useState(false);
+  const [builderPaymentAmount, setBuilderPaymentAmount] = useState("5000");
+  const [builderPaymentEditable, setBuilderPaymentEditable] = useState(false);
   const [builderFields, setBuilderFields] = useState<any[]>([
     { fieldType: "text", label: "", required: true, helpText: "", placeholder: "", options: [] },
   ]);
@@ -495,6 +498,9 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
         description: builderDescription || undefined,
         category: builderCategory,
         formPurpose: builderPurpose,
+        paymentEnabled: builderPurpose === "extension_work" ? builderPaymentEnabled : false,
+        paymentAmount: builderPurpose === "extension_work" && builderPaymentEnabled ? Number(builderPaymentAmount) || 0 : undefined,
+        paymentAmountEditable: builderPurpose === "extension_work" ? builderPaymentEditable : false,
       });
       for (const f of validFields) {
         await addFormField({
@@ -513,6 +519,9 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
       setBuilderDescription("");
       setBuilderCategory("custom");
       setBuilderPurpose("tracker");
+      setBuilderPaymentEnabled(false);
+      setBuilderPaymentAmount("5000");
+      setBuilderPaymentEditable(false);
       setBuilderFields([{ fieldType: "text", label: "", required: true, helpText: "", placeholder: "", options: [] }]);
       setTimeout(() => setMsg(null), 4000);
     } catch (e: any) {
@@ -667,34 +676,67 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
             {/* Form Purpose Toggle */}
             <div style={{ marginBottom: "1rem" }}>
               <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#333", display: "block", marginBottom: "0.3rem" }}>Form Purpose</label>
-              <div style={{ display: "flex", gap: "0.5rem" }}>
-                {(["tracker", "profile"] as const).map((purpose) => (
+              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                {(["tracker", "profile", "extension_work"] as const).map((purpose) => (
                   <button
                     key={purpose}
                     onClick={() => setBuilderPurpose(purpose)}
                     style={{
-                      flex: 1,
+                      flex: "1 1 140px",
                       padding: "0.5rem",
                       borderRadius: "8px",
-                      border: `2px solid ${builderPurpose === purpose ? (purpose === "tracker" ? "#1976d2" : "#2e7d32") : "#ddd"}`,
-                      background: builderPurpose === purpose ? (purpose === "tracker" ? "#e3f2fd" : "#e8f5e9") : "#fff",
-                      color: builderPurpose === purpose ? (purpose === "tracker" ? "#1565c0" : "#2e7d32") : "#666",
+                      border: `2px solid ${builderPurpose === purpose ? (purpose === "tracker" ? "#1976d2" : purpose === "profile" ? "#2e7d32" : "#ef6c00") : "#ddd"}`,
+                      background: builderPurpose === purpose ? (purpose === "tracker" ? "#e3f2fd" : purpose === "profile" ? "#e8f5e9" : "#fff3e0") : "#fff",
+                      color: builderPurpose === purpose ? (purpose === "tracker" ? "#1565c0" : purpose === "profile" ? "#2e7d32" : "#ef6c00") : "#666",
                       fontSize: "0.82rem",
                       fontWeight: 600,
                       cursor: "pointer",
                       transition: "all 0.2s",
                     }}
                   >
-                    {purpose === "tracker" ? "📊 Tracker Form" : "👤 Profile Form"}
+                    {purpose === "tracker" ? "📊 Tracker Form" : purpose === "profile" ? "👤 Profile Form" : "🧑‍🌾 Extension Work"}
                   </button>
                 ))}
               </div>
               <p style={{ fontSize: "0.72rem", color: "#888", margin: "0.25rem 0 0 0" }}>
                 {builderPurpose === "tracker"
                   ? "Tracker forms appear in the Trackers tab for data entry"
-                  : "Profile forms appear in the community Profile tab for member info"}
+                  : builderPurpose === "profile"
+                    ? "Profile forms appear in the community Profile tab for member info"
+                    : "Extension work forms can collect a payment before the member submits the form"}
               </p>
             </div>
+            {builderPurpose === "extension_work" && (
+              <div style={{ marginBottom: "1rem", padding: "0.8rem", borderRadius: "8px", border: "1px solid #ffe0b2", background: "#fff8e1" }}>
+                <label style={{ fontSize: "0.8rem", fontWeight: 700, color: "#ef6c00", display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                  💳 Payment Gate
+                </label>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.5rem", flexWrap: "wrap" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.8rem", color: "#333" }}>
+                    <input type="checkbox" checked={builderPaymentEnabled} onChange={(e) => setBuilderPaymentEnabled(e.target.checked)} />
+                    Require payment before submission
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.8rem", color: "#333" }}>
+                    <input type="checkbox" checked={builderPaymentEditable} onChange={(e) => setBuilderPaymentEditable(e.target.checked)} />
+                    Let worker edit amount
+                  </label>
+                </div>
+                {builderPaymentEnabled && (
+                  <div style={{ marginTop: "0.6rem", display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "0.5rem" }}>
+                    <div>
+                      <label style={{ fontSize: "0.78rem", fontWeight: 600, color: "#333" }}>Amount (UGX)</label>
+                      <input
+                        type="number"
+                        value={builderPaymentAmount}
+                        onChange={(e) => setBuilderPaymentAmount(e.target.value)}
+                        placeholder="5000"
+                        style={{ width: "100%", padding: "0.45rem", borderRadius: "6px", border: "1px solid #ccc", fontSize: "0.82rem", marginTop: "0.25rem" }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             <div style={{ marginBottom: "1rem" }}>
               <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#333" }}>Description</label>
               <input
@@ -837,6 +879,14 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
                           👤 Profile
                         </span>
                       )}
+                      {form.formPurpose === "extension_work" && (
+                        <span style={{
+                          padding: "0.1rem 0.4rem", borderRadius: "999px", fontSize: "0.68rem",
+                          fontWeight: 600, background: "#ef6c00", color: "#fff",
+                        }}>
+                          💳 Extension Work
+                        </span>
+                      )}
                       {form.category && (
                         <span style={{
                           padding: "0.1rem 0.4rem", borderRadius: "999px", fontSize: "0.68rem",
@@ -955,6 +1005,13 @@ function FormDetailView({ formId, formName, isActive, onToggleActive, onDelete }
         <p style={{ color: "#999", fontSize: "0.8rem", marginBottom: "1rem" }}>No fields defined.</p>
       )}
 
+      {formDetails?.paymentEnabled && (
+        <div style={{ marginBottom: "0.75rem", padding: "0.6rem 0.75rem", borderRadius: "8px", background: "#fff8e1", border: "1px solid #ffe0b2", fontSize: "0.82rem", color: "#8d6e63" }}>
+          <strong>Payment gate:</strong> {formDetails.paymentAmount ? `UGX ${formDetails.paymentAmount}` : "Payment enabled"}
+          {formDetails.paymentAmountEditable ? " (editable by worker)" : ""}
+        </div>
+      )}
+
       {/* Responses count */}
       <div style={{ fontSize: "0.85rem", color: "#555", marginBottom: "0.75rem" }}>
         <strong>Responses:</strong> {responses === undefined ? "..." : Array.isArray(responses) ? responses.length : 0}
@@ -1071,8 +1128,10 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
 
   const trackerForms = (forms ?? []).filter((f: any) => f.formPurpose === "tracker" || !f.formPurpose);
   const profileForms = (forms ?? []).filter((f: any) => f.formPurpose === "profile");
+  const extensionWorkForms = (forms ?? []).filter((f: any) => f.formPurpose === "extension_work");
   const selectedForm = (forms ?? []).find((f: any) => String(f._id) === selectedFormId);
   const isProfile = selectedForm?.formPurpose === "profile";
+  const isExtensionWork = selectedForm?.formPurpose === "extension_work";
 
   const fields: any[] = formResponses?.fields ?? [];
   const responses: any[] = formResponses?.responses ?? [];
@@ -1611,6 +1670,11 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
               {profileForms.length > 0 && (
                 <optgroup label="👤 Profile Forms">
                   {profileForms.map((f: any) => <option key={f._id} value={f._id}>{f.name} ({f.responseCount ?? 0} responses)</option>)}
+                </optgroup>
+              )}
+              {extensionWorkForms.length > 0 && (
+                <optgroup label="💳 Extension Work Forms">
+                  {extensionWorkForms.map((f: any) => <option key={f._id} value={f._id}>{f.name} ({f.responseCount ?? 0} responses)</option>)}
                 </optgroup>
               )}
             </select>

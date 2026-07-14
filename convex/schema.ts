@@ -1447,7 +1447,10 @@ export default defineSchema({
     isActive: v.boolean(),
     responseCount: v.number(),
     category: v.optional(v.string()),
-    formPurpose: v.optional(v.union(v.literal("tracker"), v.literal("profile"))),
+    formPurpose: v.optional(v.union(v.literal("tracker"), v.literal("profile"), v.literal("extension_work"))),
+    paymentEnabled: v.optional(v.boolean()),
+    paymentAmount: v.optional(v.number()),
+    paymentAmountEditable: v.optional(v.boolean()),
     qrEnabled: v.optional(v.boolean()),
     qrSlug: v.optional(v.string()),
     qrCreatedAt: v.optional(v.number()),
@@ -1489,6 +1492,10 @@ export default defineSchema({
     memberId: v.id("users"),
     planId: v.optional(v.id("fertilizerPlans")), // Optional link to Bio Farm fertilizer plan
     plannedSprayDate: v.optional(v.string()), // Optional planned spray date (ISO) for compliance checks
+    trackedUnitId: v.optional(v.id("farmTrackedUnits")),
+    paymentStatus: v.optional(v.string()),
+    paymentReference: v.optional(v.string()),
+    paymentAmount: v.optional(v.number()),
     status: v.optional(v.string()), // "DRAFT" | "SUBMITTED" — defaults to SUBMITTED for backward compat
     createdAt: v.number(),
     updatedAt: v.number(),

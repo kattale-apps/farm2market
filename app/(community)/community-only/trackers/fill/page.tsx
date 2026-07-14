@@ -3,6 +3,7 @@
 export const dynamic = "force-dynamic";
 
 import { api } from "@/convex/_generated/api";
+import { useAction } from "convex/react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Id } from "@/convex/_generated/dataModel";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -14,6 +15,7 @@ import { useOfflineMutation } from "@/app/hooks/useOfflineMutation";
 import { useFormDraftPersistence, clearFormDraft } from "@/app/hooks/useFormDraftPersistence";
 import { FarmCoinReward, FarmCoinVideoPreloader } from "@/app/components/FarmCoinAnimation";
 import { useStoredUser } from "@/app/hooks/useStoredUser";
+import { getEffectivePaymentAmount } from "@/utils/extensionWorkForm";
 
 const BRAND = "#2e7d32";
 const BRAND_LIGHT = "#43a047";
@@ -237,6 +239,7 @@ export default function TrackerFillPage() {
   const planId = searchParams.get("planId") as Id<"fertilizerPlans"> | null;
   const plannedSprayDate = searchParams.get("plannedSprayDate");
   const trackedUnitIdParam = searchParams.get("trackedUnitId") as Id<"farmTrackedUnits"> | null;
+  const paymentStatus = searchParams.get("paymentStatus");
   const { user, status: authStatus } = useStoredUser();
   const userId = (user?.userId as Id<"users"> | undefined) || null;
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
@@ -249,6 +252,8 @@ export default function TrackerFillPage() {
   const [seeAllFields, setSeeAllFields] = useState(false);
   const [showCoinAnimation, setShowCoinAnimation] = useState(false);
   const [coinsEarned, setCoinsEarned] = useState(0);
+  const [paymentProcessing, setPaymentProcessing] = useState(false);
+  const [customPaymentAmount, setCustomPaymentAmount] = useState("");
   const [selectedTrackedUnitId, setSelectedTrackedUnitId] = useState<Id<"farmTrackedUnits"> | null>(trackedUnitIdParam);
 
   const formDetails = useOfflineQuery((api as any).forms.getFormDetails, formId ? { formId } : "skip") as any;
@@ -271,6 +276,7 @@ export default function TrackerFillPage() {
   const saveDraft = useOfflineMutation((api as any).forms.saveDraftResponse);
   const submitDraft = useOfflineMutation((api as any).forms.submitDraft);
   const submitFormResponse = useOfflineMutation((api as any).forms.submitFormResponse);
+  const initiateExtensionWorkPayment = useAction((api as any).pesapal.initiateExtensionWorkPayment);
 
   // Persist form drafts to IndexedDB for offline access
   useFormDraftPersistence(
@@ -298,6 +304,14 @@ export default function TrackerFillPage() {
       setDraftLoaded(true);
     }
   }, [existingDraft, draftLoaded]);
+
+  useEffect(() => {
+    if (paymentStatus === "success") {
+      setMessage({ type: "success", text: "Payment completed. You can now submit the form." });
+    } else if (paymentStatus === "cancelled") {
+      setMessage({ type: "error", text: "Payment was cancelled. You can try again when ready." });
+    }
+  }, [paymentStatus]);
 
   const autoSave = () => {
     if (!formId || !communityId || !userId || Object.keys(fieldValues).length === 0) return;
@@ -357,8 +371,51 @@ export default function TrackerFillPage() {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [fieldValues, selectedTrackedUnitId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const handlePayNow = async () => {
+    if (!formId || !communityId || !userId || !formDetails?.paymentEnabled || !formDetails?.formPurpose || formDetails.formPurpose !== "extension_work") return;
+
+    const amount = getEffectivePaymentAmount(formDetails, formDetails.paymentAmountEditable ? customPaymentAmount : undefined);
+    if (!amount || amount <= 0) {
+      setMessage({ type: "error", text: "Enter a valid amount before paying." });
+      return;
+    }
+
+    setPaymentProcessing(true);
+    setMessage(null);
+    try {
+      const origin = typeof window !== "undefined" ? window.location.origin : "";
+      const returnTo = `${origin}/community-only/trackers/fill?communityId=${communityId}&formId=${formId}`;
+      const callbackUrl = `${origin}/payment/callback?returnTo=${encodeURIComponent(returnTo)}`;
+      const cancelUrl = `${returnTo}&paymentStatus=cancelled`;
+      const result = await initiateExtensionWorkPayment({
+        userId,
+        amount,
+        currency: "UGX",
+        callbackUrl,
+        cancelUrl,
+        description: formDetails?.name || "Extension work form",
+      });
+      if ((result as any)?.redirectUrl) {
+        window.location.href = (result as any).redirectUrl;
+      } else {
+        throw new Error("No payment link was returned.");
+      }
+    } catch (e: any) {
+      setMessage({ type: "error", text: e.message || "Unable to start payment." });
+      setPaymentProcessing(false);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!formId || !communityId || !userId) return;
+
+    const requiresPayment = Boolean(formDetails?.formPurpose === "extension_work" && formDetails?.paymentEnabled);
+    const paymentAmount = getEffectivePaymentAmount(formDetails, formDetails?.paymentAmountEditable ? customPaymentAmount : undefined);
+    if (requiresPayment && paymentStatus !== "success") {
+      setMessage({ type: "error", text: "Complete the payment first, then submit the form." });
+      return;
+    }
+
     setSubmitting(true);
     try {
       let responseId: Id<"formResponses"> | undefined;
@@ -413,6 +470,9 @@ export default function TrackerFillPage() {
           plannedSprayDate: plannedSprayDate || undefined,
           trackedUnitId: selectedTrackedUnitId || undefined,
           fieldValues: fvArray,
+          paymentStatus: requiresPayment ? "paid" : undefined,
+          paymentReference: requiresPayment ? `pesapal:${Date.now()}` : undefined,
+          paymentAmount: requiresPayment ? paymentAmount ?? undefined : undefined,
         });
         // If offline-queued, show optimistic coin animation
         if (result && (result as any).queued) {
@@ -485,6 +545,9 @@ export default function TrackerFillPage() {
   const filledFields = editableFields.filter((f: any) => fieldValues[String(f._id)]?.trim()).length;
   const progressPercent = totalFields > 0 ? (filledFields / totalFields) * 100 : 0;
   const currentField = editableFields[currentFieldIndex];
+  const requiresPayment = Boolean(formDetails?.formPurpose === "extension_work" && formDetails?.paymentEnabled);
+  const paymentAmount = getEffectivePaymentAmount(formDetails, formDetails?.paymentAmountEditable ? customPaymentAmount : undefined);
+  const paymentLabel = paymentAmount ? `UGX ${paymentAmount}` : formDetails?.paymentAmount ? `UGX ${formDetails.paymentAmount}` : "Payment required";
 
   return (
     <div style={{ fontFamily: FONT, paddingBottom: "5rem", minHeight: "100vh", background: "#f5f5f5" }}>
@@ -534,6 +597,33 @@ export default function TrackerFillPage() {
       {message && (
         <div style={{ margin: "0.5rem 1rem", padding: "0.6rem 0.75rem", borderRadius: 10, background: message.type === "success" ? BRAND_BG : "#ffebee", color: message.type === "success" ? BRAND : "#c62828", fontSize: "0.9rem", fontWeight: 600 }}>
           {message.text}
+        </div>
+      )}
+
+      {requiresPayment && (
+        <div style={{ margin: "0.5rem 1rem 0.75rem", padding: "0.8rem 0.9rem", borderRadius: 12, border: "1px solid #ffe0b2", background: "#fff8e1" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
+            <div>
+              <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#ef6c00" }}>💳 Payment required</div>
+              <div style={{ fontSize: "0.8rem", color: "#6d4c41" }}>{paymentLabel}</div>
+            </div>
+            {formDetails?.paymentAmountEditable && (
+              <input
+                type="number"
+                value={customPaymentAmount}
+                onChange={(e) => setCustomPaymentAmount(e.target.value)}
+                placeholder="Enter amount"
+                style={{ padding: "0.45rem 0.6rem", borderRadius: 8, border: "1px solid #ccc", minWidth: 120 }}
+              />
+            )}
+            <button
+              onClick={handlePayNow}
+              disabled={paymentProcessing}
+              style={{ padding: "0.55rem 0.8rem", borderRadius: 8, border: "none", background: paymentProcessing ? "#bbb" : "#ef6c00", color: "#fff", fontWeight: 700, cursor: paymentProcessing ? "not-allowed" : "pointer" }}
+            >
+              {paymentProcessing ? "Processing..." : "Pay with Pesapal"}
+            </button>
+          </div>
         </div>
       )}
 

@@ -689,6 +689,106 @@ export const handlePesapalWebhook = action({
 });
 
 /**
+ * Generic Pesapal initiation used for extension work form payments.
+ */
+export const initiateExtensionWorkPayment = action({
+  args: {
+    userId: v.id("users"),
+    amount: v.number(),
+    currency: v.optional(v.string()),
+    callbackUrl: v.string(),
+    cancelUrl: v.string(),
+    description: v.optional(v.string()),
+  },
+  handler: async (ctx, args): Promise<{ transactionId: any; orderTrackingId: string; redirectUrl: string }> => {
+    const { token }: { token: string; expiresIn: number } = await ctx.runAction(internal.pesapal.getPesapalAccessToken, {});
+
+    const user: { id: any; email: string | undefined; role: string; alias: string } | null = await ctx.runQuery(api.pesapal.getUserDetails, { userId: args.userId });
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    if (!user.email) {
+      throw new Error("Email address is required for payment processing. Please add an email to your account.");
+    }
+
+    const orderTrackingId = `F2M-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    const billingAddress: any = {
+      email_address: user.email,
+      country_code: "UG",
+      first_name: user.alias || "User",
+    };
+
+    const paymentRequest: any = {
+      id: orderTrackingId,
+      currency: args.currency || "UGX",
+      amount: args.amount,
+      description: args.description || "Extension work form payment",
+      callback_url: args.callbackUrl,
+      cancellation_url: args.cancelUrl,
+      billing_address: billingAddress,
+    };
+
+    if (PESAPAL_NOTIFICATION_ID && PESAPAL_NOTIFICATION_ID.trim() !== "") {
+      paymentRequest.notification_id = PESAPAL_NOTIFICATION_ID.trim();
+    }
+
+    if (!token || typeof token !== "string" || token.trim() === "") {
+      throw new Error("Invalid access token received from Pesapal authentication");
+    }
+
+    const response: Response = await fetch(`${PESAPAL_BASE_URL}/api/Transactions/SubmitOrderRequest`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Authorization": `Bearer ${token}`,
+      },
+      body: JSON.stringify(paymentRequest),
+    });
+
+    const responseText = await response.text();
+
+    if (!response.ok) {
+      let errorMessage = `Pesapal payment initiation failed: ${response.status}`;
+      try {
+        const errorData = JSON.parse(responseText);
+        if (errorData.error) {
+          const errorCode = errorData.error.code || "";
+          errorMessage += errorCode ? ` - ${errorCode}` : "";
+          errorMessage += errorData.error.message ? ` - ${errorData.error.message}` : "";
+        } else if (errorData.message) {
+          errorMessage += ` - ${errorData.message}`;
+        } else {
+          errorMessage += ` - ${responseText}`;
+        }
+      } catch {
+        errorMessage += ` - ${responseText}`;
+      }
+      throw new Error(errorMessage);
+    }
+
+    let redirectUrl = "";
+    try {
+      const data = JSON.parse(responseText);
+      redirectUrl = data.redirectUrl || data.redirect_url || data.response?.redirect_url || "";
+    } catch {
+      redirectUrl = responseText;
+    }
+
+    if (!redirectUrl) {
+      throw new Error("Pesapal did not return a redirect URL.");
+    }
+
+    return {
+      transactionId: orderTrackingId,
+      orderTrackingId,
+      redirectUrl,
+    };
+  },
+});
+
+/**
  * Wrapper action for trader deposits via Pesapal
  */
 export const initiateTraderDeposit = action({

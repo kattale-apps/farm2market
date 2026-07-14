@@ -176,7 +176,10 @@ export const createForm = mutation({
     name: v.string(),
     description: v.optional(v.string()),
     category: v.optional(v.string()),
-    formPurpose: v.optional(v.union(v.literal("tracker"), v.literal("profile"))),
+    formPurpose: v.optional(v.union(v.literal("tracker"), v.literal("profile"), v.literal("extension_work"))),
+    paymentEnabled: v.optional(v.boolean()),
+    paymentAmount: v.optional(v.number()),
+    paymentAmountEditable: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     // Verify admin is authorized for this community
@@ -208,6 +211,9 @@ export const createForm = mutation({
       responseCount: 0,
       category: args.category,
       formPurpose: args.formPurpose || "tracker",
+      paymentEnabled: args.paymentEnabled || false,
+      paymentAmount: args.paymentAmount,
+      paymentAmountEditable: args.paymentAmountEditable || false,
       qrEnabled: true,
       qrSlug: "pending",
       qrCreatedAt: now,
@@ -474,6 +480,9 @@ export const submitFormResponse = mutation({
       fieldId: v.id("formFields"),
       value: v.string(),
     })),
+    paymentStatus: v.optional(v.string()),
+    paymentReference: v.optional(v.string()),
+    paymentAmount: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const form = await ctx.db.get(args.formId);
@@ -502,6 +511,9 @@ export const submitFormResponse = mutation({
       planId: args.planId,
       plannedSprayDate: args.plannedSprayDate,
       trackedUnitId: args.trackedUnitId,
+      paymentStatus: args.paymentStatus,
+      paymentReference: args.paymentReference,
+      paymentAmount: args.paymentAmount,
       createdAt: getUgandaTime(),
       updatedAt: getUgandaTime(),
     });

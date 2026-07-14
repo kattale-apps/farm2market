@@ -9,6 +9,7 @@ function PaymentCallbackContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const orderTrackingId = searchParams.get("OrderTrackingId");
+  const returnTo = searchParams.get("returnTo");
   const verifyPayment = useAction(api.pesapal.verifyPesapalPayment);
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [message, setMessage] = useState<string>("");
@@ -24,12 +25,11 @@ function PaymentCallbackContent() {
       try {
         const result = await verifyPayment({ orderTrackingId });
         setStatus("success");
-        setMessage(`Payment ${result.status}. Redirecting to dashboard...`);
+        setMessage(`Payment ${result.status}. Redirecting you back...`);
         
-        // Redirect to dashboard after 3 seconds
         setTimeout(() => {
-          router.push("/");
-        }, 3000);
+          router.push(returnTo || "/");
+        }, 2000);
       } catch (error: any) {
         setStatus("error");
         setMessage(`Payment verification failed: ${error.message}`);

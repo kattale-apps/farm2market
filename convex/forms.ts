@@ -202,6 +202,7 @@ export const createForm = mutation({
     }
 
     const now = getUgandaTime();
+    const normalizedPaymentEnabled = Boolean(args.paymentEnabled || args.paymentAmountEditable);
     const formId = await ctx.db.insert("communityForms", {
       communityId: args.communityId,
       adminId: args.adminId,
@@ -211,7 +212,7 @@ export const createForm = mutation({
       responseCount: 0,
       category: args.category,
       formPurpose: args.formPurpose || "tracker",
-      paymentEnabled: args.paymentEnabled || false,
+      paymentEnabled: normalizedPaymentEnabled,
       paymentAmount: args.paymentAmount,
       paymentAmountEditable: args.paymentAmountEditable || false,
       qrEnabled: true,

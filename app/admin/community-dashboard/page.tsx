@@ -491,6 +491,7 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
       return;
     }
     try {
+      const normalizedPaymentEnabled = builderPurpose === "extension_work" ? builderPaymentEnabled || builderPaymentEditable : false;
       const result = await createForm({
         communityId,
         adminId: userId,
@@ -498,8 +499,8 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
         description: builderDescription || undefined,
         category: builderCategory,
         formPurpose: builderPurpose,
-        paymentEnabled: builderPurpose === "extension_work" ? builderPaymentEnabled : false,
-        paymentAmount: builderPurpose === "extension_work" && builderPaymentEnabled ? Number(builderPaymentAmount) || 0 : undefined,
+        paymentEnabled: normalizedPaymentEnabled,
+        paymentAmount: builderPurpose === "extension_work" && normalizedPaymentEnabled ? Number(builderPaymentAmount) || 0 : undefined,
         paymentAmountEditable: builderPurpose === "extension_work" ? builderPaymentEditable : false,
       });
       for (const f of validFields) {
@@ -717,7 +718,17 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
                     Require payment before submission
                   </label>
                   <label style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.8rem", color: "#333" }}>
-                    <input type="checkbox" checked={builderPaymentEditable} onChange={(e) => setBuilderPaymentEditable(e.target.checked)} />
+                    <input
+                      type="checkbox"
+                      checked={builderPaymentEditable}
+                      onChange={(e) => {
+                        const nextValue = e.target.checked;
+                        setBuilderPaymentEditable(nextValue);
+                        if (nextValue) {
+                          setBuilderPaymentEnabled(true);
+                        }
+                      }}
+                    />
                     Let worker edit amount
                   </label>
                 </div>

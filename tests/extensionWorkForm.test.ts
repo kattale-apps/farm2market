@@ -24,6 +24,13 @@ test("exposes an editable amount input for extension work forms when the admin a
   assert.equal(config.canEditAmount, true);
 });
 
+test("treats editable payment amount as a payment-gated extension work form", () => {
+  const config = getPaymentEntryConfig({ paymentEnabled: false, paymentAmount: 5000, paymentAmountEditable: true, formPurpose: "extension_work" });
+  assert.equal(config.requiresPayment, true);
+  assert.equal(config.showAmountInput, true);
+  assert.equal(config.canEditAmount, true);
+});
+
 test("maps payment status values to simple labels", () => {
   assert.equal(getPaymentStatusLabel("paid"), "Paid");
   assert.equal(getPaymentStatusLabel("failed"), "Failed");

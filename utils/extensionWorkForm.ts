@@ -9,7 +9,11 @@ export function getEffectivePaymentAmount(
   form: ExtensionWorkFormConfig | null | undefined,
   enteredAmount?: string | number | null,
 ): number | null {
-  if (!form?.paymentEnabled) return null;
+  const isExtensionWorkPaymentGate = Boolean(
+    form?.formPurpose === "extension_work" && form?.paymentAmountEditable,
+  );
+
+  if (!form?.paymentEnabled && !isExtensionWorkPaymentGate) return null;
 
   if (typeof enteredAmount === "number") {
     return enteredAmount;
@@ -28,7 +32,12 @@ export function getEffectivePaymentAmount(
 }
 
 export function getPaymentEntryConfig(form: ExtensionWorkFormConfig | null | undefined) {
-  const requiresPayment = Boolean(form?.formPurpose === "extension_work" && form?.paymentEnabled);
+  const isExtensionWorkPaymentGate = Boolean(
+    form?.formPurpose === "extension_work" && form?.paymentAmountEditable,
+  );
+  const requiresPayment = Boolean(
+    form?.formPurpose === "extension_work" && (form?.paymentEnabled || isExtensionWorkPaymentGate),
+  );
   const canEditAmount = requiresPayment && Boolean(form?.paymentAmountEditable);
   const showAmountInput = requiresPayment && (canEditAmount || typeof form?.paymentAmount === "number");
 

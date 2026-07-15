@@ -4,7 +4,8 @@ import React, { useRef, useState, useCallback } from "react";
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
-import { validateImageFile, getGPSLocation } from "../utils/imageValidation";
+import { validateImageFile } from "../utils/imageValidation";
+import { getCurrentLocation } from "../utils/gps";
 
 interface Props {
   formId: Id<"agroFreshUGFarmValidations">;
@@ -55,7 +56,7 @@ export function CameraCapture({ formId, field, onUploadComplete }: Props) {
       let longitude: number | null = null;
       let accuracy: number | null = null;
       try {
-        const gpsData = await getGPSLocation();
+        const gpsData = await getCurrentLocation();
         if (gpsData) {
           latitude = gpsData.latitude;
           longitude = gpsData.longitude;
@@ -153,7 +154,7 @@ export function CameraCapture({ formId, field, onUploadComplete }: Props) {
         let longitude: number | null = null;
         let accuracy: number | null = null;
         try {
-          const gpsData = await getGPSLocation();
+          const gpsData = await getCurrentLocation();
           if (gpsData) {
             latitude = gpsData.latitude;
             longitude = gpsData.longitude;

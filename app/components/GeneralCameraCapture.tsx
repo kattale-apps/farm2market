@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useRef, useState, useCallback } from "react";
-import { validateImageFile, fileToBase64DataUrl, getGPSLocation } from "../utils/imageValidation";
+import { validateImageFile, fileToBase64DataUrl } from "../utils/imageValidation";
+import { getCurrentLocation } from "../utils/gps";
 
 interface GeneralCameraCaptureProps {
   onCapture: (jsonValue: string) => void;
@@ -65,7 +66,7 @@ export function GeneralCameraCapture({ onCapture }: GeneralCameraCaptureProps) {
       let longitude: number | null = null;
       let accuracy: number | null = null;
       try {
-        const gpsData = await getGPSLocation();
+        const gpsData = await getCurrentLocation();
         if (gpsData) {
           latitude = gpsData.latitude;
           longitude = gpsData.longitude;
@@ -114,15 +115,12 @@ export function GeneralCameraCapture({ onCapture }: GeneralCameraCaptureProps) {
       let longitude: number | null = null;
       let accuracy: number | null = null;
       try {
-        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, {
-            enableHighAccuracy: true,
-            timeout: 10000,
-          });
-        });
-        latitude = position.coords.latitude;
-        longitude = position.coords.longitude;
-        accuracy = position.coords.accuracy;
+        const gpsData = await getCurrentLocation();
+        if (gpsData) {
+          latitude = gpsData.latitude;
+          longitude = gpsData.longitude;
+          accuracy = gpsData.accuracy;
+        }
       } catch {
         // GPS unavailable — continue without it
       }

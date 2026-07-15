@@ -760,8 +760,9 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(280px, 1fr))", gap: "1rem" }}>
           {memberCommunities.map((c: any) => {
             const logo = resolveCommunityLogo(c);
+            const communityId = String((c as any).id ?? (c as any)._id ?? "").trim();
             return (
-              <div key={c.id} style={{
+              <div key={communityId || c.name} style={{
                   borderRadius: "14px",
                   overflow: "hidden",
                   border: "1px solid #c8e6c9",
@@ -837,7 +838,10 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
                   </div>
                   <div style={{ padding: "0 1.25rem 1rem" }}>
                     <button
-                      onClick={() => router.push(`/community-only/noticeboard?communityId=${c.id}`)}
+                      onClick={() => {
+                        if (!communityId) return;
+                        router.push(`/community-only/noticeboard?communityId=${communityId}`);
+                      }}
                       style={{
                         width: "100%",
                         padding: "0.7rem 1rem",

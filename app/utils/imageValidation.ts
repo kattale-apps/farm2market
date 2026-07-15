@@ -60,38 +60,3 @@ export function fileToBase64DataUrl(file: File): Promise<string> {
   });
 }
 
-/**
- * Get GPS location with fallback for error handling
- * @returns Promise resolving to coordinates or null if unavailable
- */
-export function getGPSLocation(): Promise<{
-  latitude: number;
-  longitude: number;
-  accuracy: number;
-} | null> {
-  return new Promise((resolve) => {
-    if (!navigator.geolocation) {
-      resolve(null);
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        resolve({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracy: position.coords.accuracy,
-        });
-      },
-      (error) => {
-        // Silently fail - location is optional for gallery uploads
-        console.debug("GPS location unavailable:", error.message);
-        resolve(null);
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-      }
-    );
-  });
-}

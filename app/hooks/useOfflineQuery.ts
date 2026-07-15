@@ -6,6 +6,21 @@ import { useNetwork } from "../context/NetworkContext";
 import { offlineDb } from "../lib/offlineDb";
 import type { FunctionReference } from "convex/server";
 
+function normalizeActiveCommunitiesResult<T>(data: T, fnName: string): T {
+  if (!fnName.includes("getActiveCommunities")) return data;
+  if (!Array.isArray(data)) return data;
+
+  let changed = false;
+  const normalized = data.map((item: any) => {
+    if (!item || typeof item !== "object") return item;
+    if (item.id !== undefined || item._id === undefined) return item;
+    changed = true;
+    return { ...item, id: item._id };
+  });
+
+  return (changed ? normalized : data) as T;
+}
+
 /**
  * Drop-in replacement for Convex `useQuery` that caches results in IndexedDB
  * and serves cached data when offline.
@@ -52,7 +67,7 @@ export function useOfflineQuery<Query extends FunctionReference<"query">>(
       .get(effectiveKey)
       .then((entry) => {
         if (!cancelled && entry && entry.data != null) {
-          setCachedData(entry.data as T);
+          setCachedData(normalizeActiveCommunitiesResult(entry.data as T, fnName));
           cachedDataLoadedRef.current = true;
         }
       })
@@ -62,26 +77,28 @@ export function useOfflineQuery<Query extends FunctionReference<"query">>(
     return () => {
       cancelled = true;
     };
-  }, [effectiveKey]);
+  }, [effectiveKey, fnName]);
 
   // When we get live data, write it to cache
   useEffect(() => {
     if (liveData !== undefined && effectiveKey) {
+      const normalizedLiveData = normalizeActiveCommunitiesResult(liveData, fnName);
       offlineDb.queryCache
         .put({
           key: effectiveKey,
-          data: liveData,
+          data: normalizedLiveData,
           cachedAt: Date.now(),
         })
         .catch(() => {
           // Silently fail cache write
         });
     }
-  }, [liveData, effectiveKey]);
+  }, [liveData, effectiveKey, fnName]);
 
   // If we have live data, always prefer it (coerce null → undefined for consistency)
   if (liveData !== undefined) {
-    return liveData ?? undefined;
+    const normalizedLiveData = normalizeActiveCommunitiesResult(liveData, fnName);
+    return normalizedLiveData ?? undefined;
   }
 
   // Offline or still loading — return cached data

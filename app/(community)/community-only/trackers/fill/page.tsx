@@ -15,6 +15,7 @@ import { useOfflineMutation } from "@/app/hooks/useOfflineMutation";
 import { useFormDraftPersistence, clearFormDraft } from "@/app/hooks/useFormDraftPersistence";
 import { FarmCoinReward, FarmCoinVideoPreloader } from "@/app/components/FarmCoinAnimation";
 import { useStoredUser } from "@/app/hooks/useStoredUser";
+import { getCurrentLocation } from "@/app/utils/gps";
 import { getEffectivePaymentAmount, getPaymentEntryConfig } from "@/utils/extensionWorkForm";
 
 const BRAND = "#2e7d32";
@@ -39,28 +40,25 @@ function GpsFieldInput({
   const [capturing, setCapturing] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
 
-  const captureGps = useCallback(() => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) {
-      setGpsError("Geolocation not available on this device.");
-      return;
-    }
-
+  const captureGps = useCallback(async () => {
     setCapturing(true);
     setGpsError(null);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const lat = position.coords.latitude.toFixed(6);
-        const lng = position.coords.longitude.toFixed(6);
-        const accuracy = Math.round(position.coords.accuracy);
-        onChange(`${lat}, ${lng} (±${accuracy}m)`);
-        setCapturing(false);
-      },
-      (err) => {
-        setGpsError(err.message || "Unable to read GPS location.");
-        setCapturing(false);
-      },
-      { enableHighAccuracy: true, timeout: 15000 }
-    );
+    try {
+      const position = await getCurrentLocation();
+      if (!position) {
+        setGpsError("Geolocation not available on this device.");
+        return;
+      }
+
+      const lat = position.latitude.toFixed(6);
+      const lng = position.longitude.toFixed(6);
+      const accuracy = Math.round(position.accuracy ?? 0);
+      onChange(`${lat}, ${lng} (±${accuracy}m)`);
+    } catch (err: any) {
+      setGpsError(err?.message || "Unable to read GPS location.");
+    } finally {
+      setCapturing(false);
+    }
   }, [onChange]);
 
   useEffect(() => {

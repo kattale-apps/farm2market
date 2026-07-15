@@ -34,7 +34,8 @@ async function getPrefs() {
       /* webpackIgnore: true */ "@capacitor/preferences"
     );
     return Preferences;
-  } catch {
+  } catch (error) {
+    console.warn("[authStorage] Native Preferences plugin unavailable; falling back to localStorage");
     return null;
   }
 }
@@ -80,14 +81,17 @@ export async function getStoredUser(): Promise<StoredUser | null> {
         }
         return parsed;
       }
-    } catch { /* ignore parse errors */ }
+    } catch (error) {
+      console.warn("[authStorage] Failed to read/parse native stored user; falling back to localStorage");
+    }
   }
 
   const raw = localStorage.getItem(KEY_USER);
   if (!raw) return null;
   try {
     return JSON.parse(raw) as StoredUser;
-  } catch {
+  } catch (error) {
+    console.warn("[authStorage] Failed to parse local stored user; returning unauthenticated state");
     return null;
   }
 }

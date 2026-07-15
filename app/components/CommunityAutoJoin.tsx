@@ -12,6 +12,8 @@ import {
 } from '../utils/communityNativeBridge';
 import { getStoredUser } from '../utils/authStorage';
 
+const AUTO_JOIN_ENABLED_SLUGS = new Set(['kakira', 'kyagalanyi']);
+
 /**
  * CommunityAutoJoin Component
  * 
@@ -34,7 +36,7 @@ import { getStoredUser } from '../utils/authStorage';
  *   </Providers>
  */
 export function CommunityAutoJoin() {
-  const joinCommunity = useMutation(api.communities.joinCommunity);
+  const joinCommunityByQr = useMutation(api.communities.joinCommunityByQr);
   const hasAttempted = useRef(false);
 
   useEffect(() => {
@@ -50,10 +52,15 @@ export function CommunityAutoJoin() {
           return;
         }
 
-        // Check if community is preconfigured
+        // Check if community is configured for this APK
         const communitySlug = await getCommunityIdFromNative();
         if (!communitySlug) {
           console.log('[CommunityAutoJoin] No community configured, skipping');
+          return;
+        }
+
+        if (!AUTO_JOIN_ENABLED_SLUGS.has(communitySlug)) {
+          console.log(`[CommunityAutoJoin] Slug ${communitySlug} not enabled for rollout, skipping`);
           return;
         }
 
@@ -80,28 +87,15 @@ export function CommunityAutoJoin() {
           return;
         }
 
-        console.log(`[CommunityAutoJoin] Attempting to join community: ${communitySlug}`);
+        console.log(`[CommunityAutoJoin] Attempting join for slug=${communitySlug}`);
 
-        // NOTE: This assumes you have a joinCommunityBySlug mutation
-        // If you only have joinCommunity with ID, you'll need to:
-        // 1. Query for community by slug first
-        // 2. Then call joinCommunity with the ID
-        // 
-        // For now, we'll call the existing joinCommunity and assume
-        // the backend can handle slug OR you need to implement the lookup
-        
-        // TODO: Replace this with your actual implementation
-        // Option 1: If you have joinCommunityBySlug:
-        // await joinCommunityBySlug({ userId: userId as Id<"users">, communitySlug });
-        
-        // Option 2: If you need to look up community first:
-        // const community = await getCommunityBySlug(communitySlug);
-        // if (community) {
-        //   await joinCommunity({ userId: userId as Id<"users">, communityId: community._id });
-        // }
-
-        // For demonstration, we'll log what would happen
-        console.log(`[CommunityAutoJoin] Would join community ${communitySlug} for user ${userId}`);
+        const result = await joinCommunityByQr({
+          slug: communitySlug,
+          userId: userId as Id<'users'>,
+        });
+        console.log(
+          `[CommunityAutoJoin] Join completed for slug=${communitySlug}; alreadyMember=${Boolean(result?.alreadyMember)}`,
+        );
         
         // Mark as complete to prevent re-joining
         await markAutoJoinComplete();
@@ -114,72 +108,8 @@ export function CommunityAutoJoin() {
     }
 
     handleAutoJoin();
-  }, [joinCommunity]);
+  }, [joinCommunityByQr]);
 
   // This is a logic-only component with no UI
-  return null;
-}
-
-/**
- * Example implementation with full community lookup
- * 
- * This version queries for the community by slug first, then joins
- */
-export function CommunityAutoJoinWithLookup() {
-  const joinCommunity = useMutation(api.communities.joinCommunity);
-  const hasAttempted = useRef(false);
-
-  useEffect(() => {
-    if (hasAttempted.current) return;
-    hasAttempted.current = true;
-
-    async function handleAutoJoin() {
-      try {
-        if (!isNativePlatform()) return;
-
-        const communitySlug = await getCommunityIdFromNative();
-        if (!communitySlug || await hasAutoJoinedFromNative()) return;
-
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
-        const storedUser = await getStoredUser();
-        if (!storedUser) return;
-
-        const userId = storedUser.userId;
-        if (!userId) return;
-
-        // Fetch community by slug via Convex query
-        // NOTE: You need to create this query in your convex/communities.ts
-        // export const getCommunityBySlug = query({
-        //   args: { slug: v.string() },
-        //   handler: async (ctx, { slug }) => {
-        //     return await ctx.db
-        //       .query("communities")
-        //       .filter((q) => q.eq(q.field("slug"), slug))
-        //       .first();
-        //   },
-        // });
-        
-        // const community = await convex.query(api.communities.getCommunityBySlug, { 
-        //   slug: communitySlug 
-        // });
-        
-        // if (community) {
-        //   await joinCommunity({ 
-        //     userId: userId as Id<"users">, 
-        //     communityId: community._id 
-        //   });
-        //   await markAutoJoinComplete();
-        //   console.log('[CommunityAutoJoin] Successfully joined:', community.name);
-        // }
-
-      } catch (error) {
-        console.error('[CommunityAutoJoin] Error:', error);
-      }
-    }
-
-    handleAutoJoin();
-  }, [joinCommunity]);
-
   return null;
 }

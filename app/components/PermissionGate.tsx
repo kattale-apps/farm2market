@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Capacitor } from "@capacitor/core";
 
 const PERMISSIONS_KEY = "app_permissions_v1";
 
@@ -11,7 +12,8 @@ type PermState = "unknown" | "granted" | "denied" | "dismissed";
  *
  * Shown once per device on first load after install/deploy.
  * State stored in localStorage so already-installed apps see it on next open.
- * Requests BOTH camera and GPS in a single user interaction to satisfy browser rules.
+ * On web: requests camera + GPS together in one interaction.
+ * On native: records this gate as acknowledged and defers permissions to first-use features.
  */
 export function PermissionGate() {
   const [show, setShow] = useState(false);
@@ -39,6 +41,20 @@ export function PermissionGate() {
     setRequesting(true);
     let camOk: PermState = "unknown";
     let gpsOk: PermState = "unknown";
+
+    if (Capacitor.isNativePlatform()) {
+      camOk = "dismissed";
+      gpsOk = "dismissed";
+      setCameraState(camOk);
+      setGpsState(gpsOk);
+      setStep("result");
+      setRequesting(false);
+      localStorage.setItem(
+        PERMISSIONS_KEY,
+        JSON.stringify({ mode: "native_deferred", camera: camOk, gps: gpsOk, acknowledgedAt: Date.now() })
+      );
+      return;
+    }
 
     // 1. Camera
     try {

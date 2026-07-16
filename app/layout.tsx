@@ -4,7 +4,6 @@ import { Providers } from "./providers";
 
 export const dynamic = "force-dynamic";
 import { Analytics } from "@vercel/analytics/next";
-import { PermissionGate } from "./components/PermissionGate";
 
 export const metadata: Metadata = {
   title: "Farm2Market Uganda",
@@ -40,7 +39,6 @@ export default function RootLayout({
       <body>
         <Providers>
           {children}
-          <PermissionGate />
         </Providers>
         <Analytics />
       </body>

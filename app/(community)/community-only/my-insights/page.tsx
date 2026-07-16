@@ -79,14 +79,20 @@ function MyInsightsPage() {
     userId && communityId ? { memberId: userId, communityId } : "skip"
   ) as any;
 
+  const communityInfo = useOfflineQuery(
+    (api as any).communities.getCommunityInfo,
+    communityId ? { communityId } : "skip"
+  ) as any;
+  const showFertilizerPlanner = communityInfo?.showFertilizerPlanner === true;
+
   const fertilizerPlans = useOfflineQuery(
     (api as any).fertilizerPlanner.getFarmerPlans,
-    userId && communityId === BIOFARM_COMMUNITY_ID ? { farmerId: userId, communityId } : "skip"
+    userId && communityId === BIOFARM_COMMUNITY_ID && showFertilizerPlanner ? { farmerId: userId, communityId } : "skip"
   ) as any[] | undefined;
 
   const fertilizerInsights = useOfflineQuery(
     (api as any).fertilizerPlanner.getFertilizerInsightsData,
-    userId && communityId === BIOFARM_COMMUNITY_ID ? { farmerId: userId, communityId } : "skip"
+    userId && communityId === BIOFARM_COMMUNITY_ID && showFertilizerPlanner ? { farmerId: userId, communityId } : "skip"
   ) as any;
 
   const safeInsights = Array.isArray(insights) ? insights : [];
@@ -217,7 +223,7 @@ function MyInsightsPage() {
 
       {/* Content */}
       <div style={{ padding: "1rem" }}>
-        {communityId === BIOFARM_COMMUNITY_ID && (
+        {communityId === BIOFARM_COMMUNITY_ID && showFertilizerPlanner && (
           <div style={{ marginBottom: "1rem", display: "grid", gap: "0.75rem" }}>
             <div style={{ background: "#fff", border: "1px solid #d9ecd9", borderRadius: 12, padding: "0.85rem" }}>
               <h2 style={{ margin: 0, fontSize: "1rem", color: "#1b5e20" }}>🌱 Fertilizer Planner</h2>
@@ -316,6 +322,12 @@ function MyInsightsPage() {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {communityId === BIOFARM_COMMUNITY_ID && communityInfo !== undefined && !showFertilizerPlanner && (
+          <div style={{ background: "#fff", border: "1px dashed #cfd8dc", borderRadius: 12, padding: "0.85rem", color: "#607d8b" }}>
+            Fertilizer Planner is hidden by your community admin.
           </div>
         )}
 

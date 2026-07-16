@@ -1902,6 +1902,7 @@ export default function CommunityDashboardPage() {
   const importCommunityMembersFromExcel = useMutation(api.communityImports.importCommunityMembersFromExcel);
   const activateImportedCommunityMember = useMutation(api.communityImports.activateImportedCommunityMember);
   const toggleCommunityMemberCountVisibility = useMutation(api.communities.toggleCommunityMemberCountVisibility);
+  const toggleCommunityFertilizerPlannerVisibility = useMutation(api.communities.toggleCommunityFertilizerPlannerVisibility);
   const [togglingMemberCountByCommunity, setTogglingMemberCountByCommunity] = useState<Record<string, boolean>>({});
 
   const [pendingPage, setPendingPage] = useState(1);
@@ -2179,6 +2180,40 @@ export default function CommunityDashboardPage() {
       setMessage({
         type: "error",
         text: error?.message || "Failed to update member count visibility",
+      });
+    } finally {
+      setTogglingMemberCountByCommunity((prev) => ({
+        ...prev,
+        [String(communityId)]: false,
+      }));
+    }
+  };
+
+  const handleToggleFertilizerPlannerVisibility = async (communityId: Id<"communities">, nextValue: boolean) => {
+    if (!userId) return;
+
+    setTogglingMemberCountByCommunity((prev) => ({
+      ...prev,
+      [String(communityId)]: true,
+    }));
+    setMessage(null);
+
+    try {
+      await toggleCommunityFertilizerPlannerVisibility({
+        adminId: userId,
+        communityId,
+        showFertilizerPlanner: nextValue,
+      });
+      setMessage({
+        type: "success",
+        text: nextValue
+          ? "Fertilizer planner is now visible to users in this community"
+          : "Fertilizer planner is now hidden from users in this community",
+      });
+    } catch (error: any) {
+      setMessage({
+        type: "error",
+        text: error?.message || "Failed to update fertilizer planner visibility",
       });
     } finally {
       setTogglingMemberCountByCommunity((prev) => ({
@@ -2609,6 +2644,29 @@ export default function CommunityDashboardPage() {
                         }}
                         style={{ width: "16px", height: "16px", cursor: "pointer" }}
                       />
+                        {communityId === BIOFARM_COMMUNITY_ID && (
+                          <label
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.5rem",
+                              fontSize: "0.85rem",
+                              color: "#374151",
+                              fontWeight: 600,
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={community.showFertilizerPlanner === true}
+                              disabled={!!togglingMemberCountByCommunity[String(communityId)]}
+                              onChange={(e) => {
+                                handleToggleFertilizerPlannerVisibility(communityId as Id<"communities">, e.target.checked);
+                              }}
+                              style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                            />
+                            Show fertilizer planner to users
+                          </label>
+                        )}
                       Show member count to users
                     </label>
                     {togglingMemberCountByCommunity[String(communityId)] && (

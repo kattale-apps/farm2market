@@ -6,8 +6,10 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Id } from "@/convex/_generated/dataModel";
+import { api } from "@/convex/_generated/api";
 import CommunityTabBar from "@/app/components/CommunityTabBar";
 import { FertilizerPlansView } from "@/app/components/biofarm/FertilizerPlansView";
+import { useOfflineQuery } from "@/app/hooks/useOfflineQuery";
 import { useStoredUser } from "@/app/hooks/useStoredUser";
 
 const FONT = '"Montserrat", sans-serif';
@@ -18,6 +20,12 @@ export default function FertilizerPlannerPage() {
   const communityId = searchParams.get("communityId") as Id<"communities"> | null;
   const { user, status: authStatus } = useStoredUser();
   const userId = (user?.userId as Id<"users"> | undefined) || null;
+  const communityInfo = useOfflineQuery(
+    (api as any).communities.getCommunityInfo,
+    communityId ? { communityId } : "skip"
+  ) as any;
+  const plannerAccessLoaded = communityInfo !== undefined;
+  const plannerVisible = communityInfo?.showFertilizerPlanner === true;
 
   if (!communityId) {
     return (
@@ -52,6 +60,25 @@ export default function FertilizerPlannerPage() {
       <div style={{ padding: "2rem", fontFamily: FONT, textAlign: "center" }}>
         <p>Your session expired. Please log in again.</p>
         <Link href="/login" style={{ color: "#2e7d32" }}>Go to Login</Link>
+      </div>
+    );
+  }
+
+  if (!plannerAccessLoaded) {
+    return (
+      <div style={{ padding: "2rem", fontFamily: FONT, textAlign: "center" }}>
+        <p>Loading fertilizer planner...</p>
+      </div>
+    );
+  }
+
+  if (!plannerVisible) {
+    return (
+      <div style={{ padding: "2rem", fontFamily: FONT, textAlign: "center" }}>
+        <p>Fertilizer Planner is currently hidden by your community admin.</p>
+        <Link href={`/community-only/trackers?communityId=${communityId}`} style={{ color: "#2e7d32" }}>
+          Back to Trackers
+        </Link>
       </div>
     );
   }

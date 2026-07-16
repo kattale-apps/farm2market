@@ -132,7 +132,7 @@ export function FertilizerPlanOutput({
             📊 Expected Harvest with Bio Farm
           </p>
           <p style={{ margin: "0.35rem 0 0", fontSize: "1rem", fontWeight: 800, color: "#2e7d32" }}>
-            {projection.projectedYieldTons.toFixed(2)} tons
+            {typeof projection.projectedYieldTons === "number" ? `${projection.projectedYieldTons.toFixed(2)} tons` : "Not available"}
           </p>
         </div>
       )}

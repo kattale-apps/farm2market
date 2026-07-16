@@ -239,6 +239,7 @@ export const getCommunityInfo = query({
     return {
       name: community.name,
       logoUrl,
+      showFertilizerPlanner: (community as any).showFertilizerPlanner,
     };
   },
 });
@@ -484,6 +485,7 @@ export const getActiveCommunities = query({
           isGlobal: c.isGlobal,
           geoLocked: c.geoLocked,
           showMemberCount: (c as any).showMemberCount,
+          showFertilizerPlanner: (c as any).showFertilizerPlanner,
           isMember,
           memberCount: memberships.length,
           roleBreakdown,
@@ -780,6 +782,62 @@ export const toggleCommunityMemberCountVisibility = mutation({
       success: true,
       communityId: args.communityId,
       showMemberCount: args.showMemberCount,
+    };
+  },
+});
+
+/**
+ * Toggle whether the Bio Farm fertilizer planner is visible to farmers.
+ * Super admins can toggle any community. Junior community admins can toggle only assigned communities.
+ */
+export const toggleCommunityFertilizerPlannerVisibility = mutation({
+  args: {
+    adminId: v.id("users"),
+    communityId: v.id("communities"),
+    showFertilizerPlanner: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    const admin = await ctx.db.get(args.adminId);
+    if (!admin || admin.role !== "admin") {
+      throw new Error("Not authorized");
+    }
+
+    const community = await ctx.db.get(args.communityId);
+    if (!community) {
+      throw new Error("Community not found");
+    }
+
+    const superAdmin = isSuperAdmin(admin);
+    if (!superAdmin) {
+      if (!isCommunityAdmin(admin)) {
+        throw new Error("Only community admins can update this setting");
+      }
+
+      const assigned = (admin as any).assignedCommunityIds || [];
+      const normalizeAssignedId = (value: any) => {
+        if (!value) return "";
+        if (typeof value === "string") return value;
+        if (typeof value === "object") {
+          return String((value as any)._id ?? (value as any).id ?? value);
+        }
+        return String(value);
+      };
+      const assignedSet = new Set(assigned.map(normalizeAssignedId).filter(Boolean));
+      const isAssigned = assignedSet.has(String(args.communityId)) || community.communityAdminId === args.adminId;
+
+      if (!isAssigned) {
+        throw new Error("Not assigned to this community");
+      }
+    }
+
+    await ctx.db.patch(args.communityId, {
+      showFertilizerPlanner: args.showFertilizerPlanner,
+    });
+
+    return {
+      success: true,
+      communityId: args.communityId,
+      showFertilizerPlanner: args.showFertilizerPlanner,
     };
   },
 });

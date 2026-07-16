@@ -96,10 +96,15 @@ export default function TrackersHubPage() {
     (api as any).forms.getCommunityForms,
     communityId ? { communityId } : "skip"
   ) as any;
+  const communityInfo = useOfflineQuery(
+    (api as any).communities.getCommunityInfo,
+    communityId ? { communityId } : "skip"
+  ) as any;
 
   const forms = Array.isArray(formsRaw) ? formsRaw : formsRaw === undefined ? undefined : null;
   const activeForms = (Array.isArray(forms) ? forms : []).filter((f: any) => f.isActive);
   const isBioFarm = communityId === BIOFARM_COMMUNITY_ID;
+  const showFertilizerPlanner = communityInfo?.showFertilizerPlanner === true;
 
   if (!communityId) {
     return (
@@ -160,7 +165,7 @@ export default function TrackersHubPage() {
         )}
 
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-          {isBioFarm && (
+          {isBioFarm && showFertilizerPlanner && (
             <Link
               href={`/community-only/trackers/fertilizer?communityId=${communityId}`}
               style={{ textDecoration: "none", color: "inherit" }}
@@ -207,6 +212,18 @@ export default function TrackersHubPage() {
                 </div>
               </div>
             </Link>
+          )}
+          {isBioFarm && communityInfo !== undefined && !showFertilizerPlanner && (
+            <div style={{
+              padding: "1rem",
+              borderRadius: 12,
+              background: "#fff",
+              border: "1px dashed #cfd8dc",
+              color: "#607d8b",
+              fontSize: "0.82rem",
+            }}>
+              Fertilizer Planner is currently hidden by your community admin.
+            </div>
           )}
 
           {activeForms.map((form: any) => (

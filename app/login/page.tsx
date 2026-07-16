@@ -4,7 +4,6 @@ import { useState, useEffect, Suspense } from "react";
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { useRouter, useSearchParams } from "next/navigation";
-import MarketPricePanel from "../components/MarketPricePanel";
 import { saveAuth, getLastCredential, saveLastCredential } from "../utils/authStorage";
 
 type IdentifierMode = "phone" | "email";
@@ -302,7 +301,7 @@ function LoginPageInner() {
                     }}
                     title={entry.signupEnabled ? "Enabled for signup" : "Signup currently disabled"}
                   >
-                    {entry.label}{!entry.signupEnabled ? " (login only)" : ""}
+                    {entry.label}
                   </button>
                 );
               })}
@@ -588,62 +587,6 @@ function LoginPageInner() {
           </p>
         </div>
 
-      </div>
-
-      {/* Mobile: price panel below login card */}
-      <div className="f2m-panel-mobile">
-        {false && <MarketPricePanel mobileMode />}
-        <div
-          style={{
-            background: "#fff",
-            borderRadius: "12px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-            padding: "1.25rem",
-            width: "100%",
-            border: "1px solid #dbe9db"
-          }}
-          aria-label="Live market prices (locked)"
-        >
-          <div style={{ marginBottom: "0.75rem" }}>
-            <p style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "#2c2c2c" }}>
-              🌿 Live Market Prices
-            </p>
-            <p style={{ margin: 0, fontSize: "0.9rem", color: "#666" }}>
-              This feature is temporarily locked.
-            </p>
-          </div>
-          <p style={{ margin: 0, color: "#555", lineHeight: "1.6" }}>
-            Market prices will return soon. Log in as a farmer and check back later for live updates.
-          </p>
-        </div>
-      </div>
-
-      {/* Desktop: price panel to the right */}
-      <div className="f2m-panel-desktop">
-        {false && <MarketPricePanel />}
-        <div
-          style={{
-            background: "#fff",
-            borderRadius: "12px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-            padding: "1.5rem",
-            width: "100%",
-            border: "1px solid #dbe9db"
-          }}
-          aria-label="Live market prices (locked)"
-        >
-          <div style={{ marginBottom: "0.75rem" }}>
-            <p style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700, color: "#2c2c2c" }}>
-              🌿 Live Market Prices
-            </p>
-            <p style={{ margin: 0, fontSize: "0.9rem", color: "#666" }}>
-              This feature is temporarily locked.
-            </p>
-          </div>
-          <p style={{ margin: 0, color: "#555", lineHeight: "1.6" }}>
-            Market prices will return soon. Log in as a farmer and check back later for live updates.
-          </p>
-        </div>
       </div>
     </main>
     </>

@@ -7,6 +7,19 @@ import { useRouter, useSearchParams } from "next/navigation";
 import MarketPricePanel from "../components/MarketPricePanel";
 import { saveAuth, getLastCredential, saveLastCredential } from "../utils/authStorage";
 
+type IdentifierMode = "phone" | "email";
+type AuthStep = "login" | "confirmSignup";
+type SignupRole = "farmer" | "trader" | "buyer" | "vendor" | "transporter" | "store";
+
+const SIGNUP_ROLES: Array<{ value: SignupRole; label: string; signupEnabled: boolean }> = [
+  { value: "farmer", label: "Farmer", signupEnabled: true },
+  { value: "buyer", label: "Buyer", signupEnabled: false },
+  { value: "trader", label: "Trader", signupEnabled: false },
+  { value: "vendor", label: "Vendor", signupEnabled: false },
+  { value: "transporter", label: "Transporter", signupEnabled: false },
+  { value: "store", label: "Store", signupEnabled: false },
+];
+
 /**
  * Login Page
  * 
@@ -25,8 +38,11 @@ export default function LoginPage() {
 }
 
 function LoginPageInner() {
-  const [isSignup, setIsSignup] = useState(false);
-  const [loginIdentifier, setLoginIdentifier] = useState("");
+  const [authStep, setAuthStep] = useState<AuthStep>("login");
+  const [identifierMode, setIdentifierMode] = useState<IdentifierMode>("phone");
+  const [phoneIdentifier, setPhoneIdentifier] = useState("");
+  const [emailIdentifier, setEmailIdentifier] = useState("");
+  const [selectedRole, setSelectedRole] = useState<SignupRole>("farmer");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -36,17 +52,27 @@ function LoginPageInner() {
   const [pendingCommunitySlug, setPendingCommunitySlug] = useState<string | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const isMarketPricesLocked = true;
-  const role: "farmer" = "farmer";
   
   const loginWithSession = useMutation((api as any).auth.loginWithSession);
   const signupWithSession = useMutation((api as any).auth.signupWithSession);
+  const checkAccountExists = useMutation((api as any).auth.checkAccountExists);
+
+  const isFarmerSignupEnabled = selectedRole === "farmer";
+  const activeIdentifier = identifierMode === "phone"
+    ? phoneIdentifier.trim()
+    : emailIdentifier.trim();
 
   // Pre-fill last used credential on mount
   useEffect(() => {
     const lastCred = getLastCredential();
     if (lastCred) {
-      setLoginIdentifier(lastCred);
+      if (lastCred.includes("@")) {
+        setIdentifierMode("email");
+        setEmailIdentifier(lastCred);
+      } else {
+        setIdentifierMode("phone");
+        setPhoneIdentifier(lastCred);
+      }
     }
   }, []);
 
@@ -57,8 +83,6 @@ function LoginPageInner() {
       setPendingCommunitySlug(qrSlug);
       // Also persist in localStorage in case user refreshes
       localStorage.setItem("pending_community_join", qrSlug);
-      // Default to signup tab when coming from QR scan
-      setIsSignup(true);
     } else {
       // Check localStorage for pending join intent
       const stored = localStorage.getItem("pending_community_join");
@@ -68,12 +92,27 @@ function LoginPageInner() {
     }
   }, [searchParams]);
 
-  // Handle buy intent from market price panel — pre-select signup mode
+  // Handle role preselect from URL (used by market-intent entry points)
   useEffect(() => {
-    if (searchParams.get("intent") === "buy") {
-      setIsSignup(true);
+    const roleParam = searchParams.get("role");
+    if (!roleParam) return;
+    const normalized = roleParam.toLowerCase();
+    if (["farmer", "trader", "buyer", "vendor", "transporter", "store"].includes(normalized)) {
+      setSelectedRole(normalized as SignupRole);
     }
   }, [searchParams]);
+
+  const handleAuthSuccess = async (result: any) => {
+    const { sessionToken, ...user } = result;
+    await saveAuth(user, sessionToken);
+    saveLastCredential(activeIdentifier);
+
+    if (pendingCommunitySlug) {
+      router.push(`/join/community/${pendingCommunitySlug}?from_signup=1`);
+    } else {
+      router.push("/");
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,9 +120,8 @@ function LoginPageInner() {
     setLoading(true);
 
     try {
-      const identifier = loginIdentifier.trim();
-      if (!identifier) {
-        setError("Email or phone number is required");
+      if (!activeIdentifier) {
+        setError(identifierMode === "phone" ? "Phone number is required" : "Email is required");
         setLoading(false);
         return;
       }
@@ -93,14 +131,18 @@ function LoginPageInner() {
         return;
       }
 
-      const identifierLooksLikeEmail = identifier.includes("@");
       const authArgs = {
-        email: identifierLooksLikeEmail ? identifier : undefined,
-        phoneNumber: identifierLooksLikeEmail ? undefined : identifier,
+        email: identifierMode === "email" ? activeIdentifier : undefined,
+        phoneNumber: identifierMode === "phone" ? activeIdentifier : undefined,
         password: password.trim(),
       };
 
-      if (isSignup) {
+      if (authStep === "confirmSignup") {
+        if (!isFarmerSignupEnabled) {
+          setError("New account creation is currently enabled for Farmer only. Existing accounts can still sign in.");
+          setLoading(false);
+          return;
+        }
         if (password.length < 6) {
           setError("Password must be at least 6 characters long");
           setLoading(false);
@@ -112,47 +154,40 @@ function LoginPageInner() {
           return;
         }
 
-        const result = await signupWithSession({
+        const signupResult = await signupWithSession({
           ...authArgs,
-          role,
+          role: selectedRole,
         });
-
-        const { sessionToken, ...user } = result;
-        await saveAuth(user, sessionToken);
-        saveLastCredential(identifier);
-
-        if (pendingCommunitySlug) {
-          router.push(`/join/community/${pendingCommunitySlug}?from_signup=1`);
-        } else {
-          router.push("/");
-        }
+        await handleAuthSuccess(signupResult);
       } else {
-        const loginResult = await loginWithSession(authArgs).catch((err: any) => {
-          const message = typeof err === "string" ? err : err?.message || "Login failed";
-          setError(message);
-          return null;
-        });
+        try {
+          const loginResult = await loginWithSession(authArgs);
+          await handleAuthSuccess(loginResult);
+        } catch (loginErr: any) {
+          const message = typeof loginErr === "string" ? loginErr : loginErr?.message || "Login failed";
 
-        if (loginResult) {
-          const { sessionToken, ...user } = loginResult;
-          await saveAuth(user, sessionToken);
-          saveLastCredential(identifier);
+          if (message === "Invalid email/phone or password") {
+            const existsResult = await checkAccountExists({
+              email: identifierMode === "email" ? activeIdentifier : undefined,
+              phoneNumber: identifierMode === "phone" ? activeIdentifier : undefined,
+            });
 
-          if (pendingCommunitySlug) {
-            router.push(`/join/community/${pendingCommunitySlug}?from_signup=1`);
+            if (existsResult?.exists) {
+              setError("Invalid credentials. Please try again.");
+            } else {
+              setAuthStep("confirmSignup");
+              setConfirmPassword("");
+              setError("No account found. Confirm your password to create a new Farmer account.");
+            }
           } else {
-            router.push("/");
+            setError(message);
           }
         }
       }
     } catch (err: any) {
       console.error("Auth error:", err);
-      const message = typeof err === "string" ? err : err?.message || (isSignup ? "Signup failed" : "Login failed");
-      if (!isSignup && message === "Invalid email/phone or password") {
-        setError("Invalid email or password. Please try again or switch to Create Account.");
-      } else {
-        setError(message);
-      }
+      const message = typeof err === "string" ? err : err?.message || (authStep === "confirmSignup" ? "Signup failed" : "Login failed");
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -219,44 +254,122 @@ function LoginPageInner() {
 
         <div style={{ marginBottom: "1.25rem" }}>
           <p style={{ margin: 0, color: "#333", fontSize: "1rem", fontWeight: 600 }}>
-            {isSignup ? "Create your Farm2Market account." : "Sign in to Farm2Market."}
+            {authStep === "confirmSignup" ? "Confirm password to create your account." : "Sign in to Farm2Market."}
           </p>
           <p style={{ margin: "0.5rem 0 0", color: "#666", fontSize: "0.9rem", lineHeight: "1.5" }}>
-            {isSignup
-              ? "Enter your details to create a new account."
-              : "Enter your email or phone number and password to sign in."}
+            {authStep === "confirmSignup"
+              ? "We could not find an account with this identifier."
+              : "Use your phone number to sign in. Email is available if you prefer it."}
           </p>
         </div>
 
         <form onSubmit={handleSubmit}>
           <p style={{ marginBottom: "1rem", color: "#666", fontSize: "0.9rem", lineHeight: "1.5" }}>
-            {isSignup
-              ? "Provide a valid email or phone number and choose a password."
-              : "Provide your registered email or phone number and password."}
+            {authStep === "confirmSignup"
+              ? "Finish account creation by confirming your password."
+              : "If your account does not exist, we will seamlessly move you to account creation."}
           </p>
 
-          {/* Login uses a single auto-detected identifier for both login and signup */}
-          <div style={{ marginBottom: "1.5rem" }}>
+          <div style={{ marginBottom: "1rem" }}>
             <label style={{ display: "block", marginBottom: "0.5rem", color: "#333", fontWeight: "500" }}>
-              Email or Phone Number
+              Category
             </label>
-            <input
-              type="text"
-              value={loginIdentifier}
-              onChange={(e) => setLoginIdentifier(e.target.value)}
-              required
-              style={{
-                width: "100%",
-                padding: "0.75rem",
-                border: "1px solid #ddd",
-                borderRadius: "6px",
-                fontSize: "1rem"
-              }}
-              placeholder="your@email.com or +256 7XX XXX XXX"
-            />
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "0.5rem" }}>
+              {SIGNUP_ROLES.map((entry) => {
+                const isSelected = selectedRole === entry.value;
+                return (
+                  <button
+                    key={entry.value}
+                    type="button"
+                    disabled={!entry.signupEnabled}
+                    onClick={() => setSelectedRole(entry.value)}
+                    style={{
+                      padding: "0.55rem 0.65rem",
+                      borderRadius: "8px",
+                      border: `1px solid ${isSelected ? "#1976d2" : "#ddd"}`,
+                      background: !entry.signupEnabled
+                        ? (isSelected ? "#fff8e1" : "#f5f5f5")
+                        : (isSelected ? "#e3f2fd" : "#fff"),
+                      color: !entry.signupEnabled
+                        ? (isSelected ? "#ef6c00" : "#777")
+                        : (isSelected ? "#1976d2" : "#333"),
+                      fontWeight: isSelected ? 700 : 500,
+                      fontSize: "0.85rem",
+                      cursor: !entry.signupEnabled ? "not-allowed" : "pointer",
+                      opacity: !entry.signupEnabled && !isSelected ? 0.85 : 1,
+                    }}
+                    title={entry.signupEnabled ? "Enabled for signup" : "Signup currently disabled"}
+                  >
+                    {entry.label}{!entry.signupEnabled ? " (login only)" : ""}
+                  </button>
+                );
+              })}
+            </div>
+            <p style={{ marginTop: "0.5rem", marginBottom: 0, fontSize: "0.82rem", color: "#666" }}>
+              Category is always visible and is used only when creating a new account.
+            </p>
+            {!isFarmerSignupEnabled && (
+              <p style={{ marginTop: "0.35rem", marginBottom: 0, fontSize: "0.82rem", color: "#ef6c00", fontWeight: 600 }}>
+                New account creation is currently enabled for Farmer only. Existing accounts can still sign in.
+              </p>
+            )}
           </div>
 
-          <div style={{ marginBottom: isSignup ? "1rem" : "1.5rem" }}>
+          <div style={{ marginBottom: "1rem" }}>
+            <label style={{ display: "block", marginBottom: "0.5rem", color: "#333", fontWeight: "500" }}>
+              {identifierMode === "phone" ? "Phone Number" : "Email Address"}
+            </label>
+            {identifierMode === "phone" ? (
+              <input
+                type="tel"
+                value={phoneIdentifier}
+                onChange={(e) => setPhoneIdentifier(e.target.value)}
+                required
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  border: "1px solid #ddd",
+                  borderRadius: "6px",
+                  fontSize: "1rem"
+                }}
+                placeholder="07XX XXX XXX or +256 7XX XXX XXX"
+              />
+            ) : (
+              <input
+                type="email"
+                value={emailIdentifier}
+                onChange={(e) => setEmailIdentifier(e.target.value)}
+                required
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  border: "1px solid #ddd",
+                  borderRadius: "6px",
+                  fontSize: "1rem"
+                }}
+                placeholder="your@email.com"
+              />
+            )}
+            <div style={{ marginTop: "0.5rem" }}>
+              <button
+                type="button"
+                onClick={() => setIdentifierMode(identifierMode === "phone" ? "email" : "phone")}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "#1976d2",
+                  cursor: "pointer",
+                  fontSize: "0.85rem",
+                  textDecoration: "underline",
+                  padding: 0,
+                }}
+              >
+                {identifierMode === "phone" ? "Use email instead" : "Use phone instead"}
+              </button>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: authStep === "confirmSignup" ? "1rem" : "1.5rem" }}>
             <label style={{ display: "block", marginBottom: "0.5rem", color: "#333", fontWeight: "500" }}>
               Password
             </label>
@@ -274,8 +387,8 @@ function LoginPageInner() {
                   borderRadius: "6px",
                   fontSize: "1rem"
                 }}
-                placeholder={isSignup ? "Create a password (min. 6 characters)" : "Enter your password"}
-                minLength={isSignup ? 6 : undefined}
+                placeholder={authStep === "confirmSignup" ? "Create a password (min. 6 characters)" : "Enter your password"}
+                minLength={authStep === "confirmSignup" ? 6 : undefined}
               />
               <button
                 type="button"
@@ -297,14 +410,14 @@ function LoginPageInner() {
                 {showPassword ? "👁️" : "👁️‍🗨️"}
               </button>
             </div>
-            {isSignup && (
+            {authStep === "confirmSignup" && (
               <p style={{ marginTop: "0.5rem", fontSize: "0.85rem", color: "#666" }}>
                 Password must be at least 6 characters long
               </p>
             )}
           </div>
 
-          {isSignup && (
+          {authStep === "confirmSignup" && (
             <div style={{ marginBottom: "1.5rem" }}>
               <label style={{ display: "block", marginBottom: "0.5rem", color: "#333", fontWeight: "500" }}>
                 Confirm Password
@@ -376,15 +489,21 @@ function LoginPageInner() {
               cursor: loading ? "not-allowed" : "pointer"
             }}
           >
-            {loading ? (isSignup ? "Creating account..." : "Signing in...") : (isSignup ? "Create Account" : "Sign In")}
+            {loading
+              ? (authStep === "confirmSignup" ? "Creating account..." : "Signing in...")
+              : (authStep === "confirmSignup" ? "Create Farmer Account" : "Sign In")}
           </button>
         </form>
 
         <div style={{ marginTop: "1rem", textAlign: "center" }}>
-          {!isSignup ? (
+          {authStep === "confirmSignup" ? (
             <button
               type="button"
-              onClick={() => setIsSignup(true)}
+              onClick={() => {
+                setAuthStep("login");
+                setConfirmPassword("");
+                setError(null);
+              }}
               style={{
                 background: "transparent",
                 border: "none",
@@ -394,27 +513,16 @@ function LoginPageInner() {
                 textDecoration: "underline"
               }}
             >
-              Don’t have an account? Create one.
+              Back to sign in
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={() => setIsSignup(false)}
-              style={{
-                background: "transparent",
-                border: "none",
-                color: "#1976d2",
-                cursor: "pointer",
-                fontSize: "0.9rem",
-                textDecoration: "underline"
-              }}
-            >
-              Already have an account? Sign in.
-            </button>
+            <p style={{ margin: 0, color: "#666", fontSize: "0.9rem" }}>
+              No account yet? We will automatically prompt account creation when needed.
+            </p>
           )}
         </div>
 
-        {!isSignup && (
+        {authStep === "login" && (
           <div style={{ marginTop: "1rem", textAlign: "center" }}>
             <a
               href="#"

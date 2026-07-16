@@ -834,6 +834,42 @@ function generateSessionToken(): string {
 const SESSION_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 
 /**
+ * Lightweight account existence check for adaptive auth UX.
+ * Used after failed login attempts to decide whether to prompt signup confirmation.
+ */
+export const checkAccountExists = mutation({
+  args: {
+    email: v.optional(v.string()),
+    phoneNumber: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    if (!args.email && !args.phoneNumber) {
+      throw new Error("Either email or phone number is required");
+    }
+
+    let user = null;
+
+    if (args.email) {
+      const normalizedEmail = args.email.trim().toLowerCase();
+      user = await ctx.db
+        .query("users")
+        .withIndex("by_email", (q) => q.eq("email", normalizedEmail))
+        .first();
+    }
+
+    if (!user && args.phoneNumber) {
+      const normalizedPhone = normalizePhoneNumber(args.phoneNumber);
+      user = await ctx.db
+        .query("users")
+        .withIndex("by_phone", (q) => q.eq("phoneNumber", normalizedPhone))
+        .first();
+    }
+
+    return { exists: !!user };
+  },
+});
+
+/**
  * Login and create a durable server-side session.
  * Returns sessionToken so the client can persist it across WebView clears.
  */

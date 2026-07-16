@@ -260,7 +260,7 @@ function LoginPageInner() {
           <p style={{ margin: "0.5rem 0 0", color: "#666", fontSize: "0.9rem", lineHeight: "1.5" }}>
             {authStep === "confirmSignup"
               ? "We could not find an account with this identifier."
-              : "Use your phone number to log in. Email is available if you prefer it."}
+              : ""}
           </p>
         </div>
 
@@ -268,7 +268,7 @@ function LoginPageInner() {
           <p style={{ marginBottom: "1rem", color: "#666", fontSize: "0.9rem", lineHeight: "1.5" }}>
             {authStep === "confirmSignup"
               ? "Finish account creation by confirming your password."
-              : "If your account does not exist, we will seamlessly move you to account creation."}
+              : ""}
           </p>
 
           <div style={{ marginBottom: "1rem" }}>
@@ -306,9 +306,6 @@ function LoginPageInner() {
                 );
               })}
             </div>
-            <p style={{ marginTop: "0.5rem", marginBottom: 0, fontSize: "0.82rem", color: "#666" }}>
-              Category is always visible and is used only when creating a new account.
-            </p>
             {!isFarmerSignupEnabled && (
               <p style={{ marginTop: "0.35rem", marginBottom: 0, fontSize: "0.82rem", color: "#ef6c00", fontWeight: 600 }}>
                   New account creation is currently enabled for Farmer only. Existing accounts can still log in.
@@ -517,9 +514,7 @@ function LoginPageInner() {
               Back to log in
             </button>
           ) : (
-            <p style={{ margin: 0, color: "#666", fontSize: "0.9rem" }}>
-              No account yet? We will automatically prompt account creation when needed.
-            </p>
+            <></>
           )}
         </div>
 

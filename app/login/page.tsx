@@ -139,7 +139,7 @@ function LoginPageInner() {
 
       if (authStep === "confirmSignup") {
         if (!isFarmerSignupEnabled) {
-          setError("New account creation is currently enabled for Farmer only. Existing accounts can still sign in.");
+          setError("New account creation is currently enabled for Farmer only. Existing accounts can still log in.");
           setLoading(false);
           return;
         }
@@ -165,8 +165,10 @@ function LoginPageInner() {
           await handleAuthSuccess(loginResult);
         } catch (loginErr: any) {
           const message = typeof loginErr === "string" ? loginErr : loginErr?.message || "Login failed";
+          const normalizedMessage = message.toLowerCase();
+          const isInvalidCredentials = normalizedMessage.includes("invalid email/phone or password");
 
-          if (message === "Invalid email/phone or password") {
+          if (isInvalidCredentials) {
             const existsResult = await checkAccountExists({
               email: identifierMode === "email" ? activeIdentifier : undefined,
               phoneNumber: identifierMode === "phone" ? activeIdentifier : undefined,
@@ -254,12 +256,12 @@ function LoginPageInner() {
 
         <div style={{ marginBottom: "1.25rem" }}>
           <p style={{ margin: 0, color: "#333", fontSize: "1rem", fontWeight: 600 }}>
-            {authStep === "confirmSignup" ? "Confirm password to create your account." : "Sign in to Farm2Market."}
+            {authStep === "confirmSignup" ? "Confirm password to create your account." : "Log in to Farm2Market."}
           </p>
           <p style={{ margin: "0.5rem 0 0", color: "#666", fontSize: "0.9rem", lineHeight: "1.5" }}>
             {authStep === "confirmSignup"
               ? "We could not find an account with this identifier."
-              : "Use your phone number to sign in. Email is available if you prefer it."}
+              : "Use your phone number to log in. Email is available if you prefer it."}
           </p>
         </div>
 
@@ -310,7 +312,7 @@ function LoginPageInner() {
             </p>
             {!isFarmerSignupEnabled && (
               <p style={{ marginTop: "0.35rem", marginBottom: 0, fontSize: "0.82rem", color: "#ef6c00", fontWeight: 600 }}>
-                New account creation is currently enabled for Farmer only. Existing accounts can still sign in.
+                  New account creation is currently enabled for Farmer only. Existing accounts can still log in.
               </p>
             )}
           </div>
@@ -490,8 +492,8 @@ function LoginPageInner() {
             }}
           >
             {loading
-              ? (authStep === "confirmSignup" ? "Creating account..." : "Signing in...")
-              : (authStep === "confirmSignup" ? "Create Farmer Account" : "Sign In")}
+              ? (authStep === "confirmSignup" ? "Creating account..." : "Logging in...")
+              : (authStep === "confirmSignup" ? "Create Farmer Account" : "Log in")}
           </button>
         </form>
 
@@ -513,7 +515,7 @@ function LoginPageInner() {
                 textDecoration: "underline"
               }}
             >
-              Back to sign in
+              Back to log in
             </button>
           ) : (
             <p style={{ margin: 0, color: "#666", fontSize: "0.9rem" }}>
@@ -611,7 +613,7 @@ function LoginPageInner() {
             </p>
           </div>
           <p style={{ margin: 0, color: "#555", lineHeight: "1.6" }}>
-            Market prices will return soon. Sign in as a farmer and check back later for live updates.
+            Market prices will return soon. Log in as a farmer and check back later for live updates.
           </p>
         </div>
       </div>
@@ -639,7 +641,7 @@ function LoginPageInner() {
             </p>
           </div>
           <p style={{ margin: 0, color: "#555", lineHeight: "1.6" }}>
-            Market prices will return soon. Sign in as a farmer and check back later for live updates.
+            Market prices will return soon. Log in as a farmer and check back later for live updates.
           </p>
         </div>
       </div>

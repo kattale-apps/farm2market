@@ -1,0 +1,20 @@
+graph LR
+  UI[User Devices (PWA / Dashboard)]
+  API[Backend API]
+  AUTH[Convex Auth]
+  DB[Convex (Convex DB)]
+  FS[Convex storage / S3]
+  PAY[Payment Provider: Pesapal]
+  SMS[Notifications: Convex functions]
+  REPORTS[Reporting / Exports]
+
+  UI -->|Farmer Data / API Request (HTTPS, JWT)| API
+  UI -->|Login Request| AUTH
+  AUTH -->|Token| UI
+  API -->|Verify Token| AUTH
+  API -->|Convex mutation: write Farmer Record / Transaction| DB
+  API -->|Upload Photo (signed URL)| FS
+  PAY -->|Pesapal Payment Confirmation (Webhook) -> Next.js route / API| API
+  API -->|Trigger notification via Convex functions| SMS
+  DB -->|Event Stream / Audit Rows| REPORTS
+  API -->|Generate CSV/PDF (Report Export)| REPORTS

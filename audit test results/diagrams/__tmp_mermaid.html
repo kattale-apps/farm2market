@@ -1,0 +1,21 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script><style>body{margin:0;padding:20px;background:#fff}</style></head><body><div class="mermaid">graph LR
+  UI[User Devices (PWA / Dashboard)]
+  API[Backend API]
+  AUTH[Convex Auth]
+  DB[Convex (Convex DB)]
+  FS[Convex storage / S3]
+  PAY[Payment Provider: Pesapal]
+  SMS[Notifications: Convex functions]
+  REPORTS[Reporting / Exports]
+
+  UI -->|Farmer Data / API Request (HTTPS, JWT)| API
+  UI -->|Login Request| AUTH
+  AUTH -->|Token| UI
+  API -->|Verify Token| AUTH
+  API -->|Convex mutation: write Farmer Record / Transaction| DB
+  API -->|Upload Photo (signed URL)| FS
+  PAY -->|Pesapal Payment Confirmation (Webhook) -> Next.js route / API| API
+  API -->|Trigger notification via Convex functions| SMS
+  DB -->|Event Stream / Audit Rows| REPORTS
+  API -->|Generate CSV/PDF (Report Export)| REPORTS
+</div><script>mermaid.initialize({startOnLoad:true});</script></body></html>

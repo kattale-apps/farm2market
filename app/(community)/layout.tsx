@@ -59,11 +59,31 @@ function CommunityHeader() {
       {communityInfo && (
         <div style={{ display: "flex", alignItems: "center", gap: 8, overflow: "hidden" }}>
           {communityLogo && (
-            <img
-              src={communityLogo}
-              alt=""
-              style={{ width: 24, height: 24, borderRadius: 6, objectFit: "cover", flexShrink: 0 }}
-            />
+            <span
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: "50%",
+                background: "#fff",
+                border: "1px solid #d1d5db",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 2,
+                flexShrink: 0,
+              }}
+            >
+              <img
+                src={communityLogo}
+                alt=""
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  borderRadius: "50%",
+                  objectFit: "contain",
+                }}
+              />
+            </span>
           )}
           <span style={{ fontWeight: 600, fontSize: 14, color: "#1a1a1a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {communityInfo.name}

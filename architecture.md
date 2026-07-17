@@ -31,6 +31,8 @@
 - Collects user input and sends to backend
 - Displays data received from backend
 - Handles client-side routing and navigation
+- Supports PWA installability and offline-capable web behavior via `next-pwa`
+- Can be packaged for Android using Capacitor as a mobile wrapper
 - **Does NOT** enforce business rules or authorization
 - **Does NOT** store sensitive data
 - **Does NOT** make autonomous decisions
@@ -49,6 +51,7 @@
 **Deployment Infrastructure**:
 - **Vercel**: Hosts frontend, routes requests, manages environment variables
 - **Convex**: Hosts backend, manages database, executes functions, provides real-time subscriptions
+- **Capacitor Android wrapper**: Packages the same Next.js web build into an Android app shell; runtime still depends on the web build and Convex backend
 - **BLOCKED**: Backup and restore procedures are UNKNOWN (Convex managed, but operator access is UNKNOWN)
 
 ---
@@ -219,10 +222,10 @@
 ### Current State
 
 **Authentication**:
-- **Pilot Mode**: Shared password (`Farm2Market2024`) for all users
-- **Role Assignment**: Inferred from email prefix (admin*, farmer*, trader*, buyer*)
-- **BLOCKED FOR PRODUCTION**: Role inference from email prefix is BLOCKED FOR PRODUCTION
-- **BLOCKED**: Production authentication is NOT IMPLEMENTED
+- Authentication module implementation exists in `convex/authentication` and supports stateful sessions, session validation, logout, and password reset flows
+- Current pilot environment still uses shared pilot access controls; secure production authentication activation is pending
+- **Role Assignment**: Authentication does not infer roles from email prefixes; explicit user role assignment is required from User Management
+- **BLOCKED FOR PRODUCTION**: Production authentication activation, secure password hashing integration, and password reset email delivery are not yet fully enabled
 
 **Authorization**:
 - **Server-Side Enforcement**: All authorization is enforced in Convex backend

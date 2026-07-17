@@ -1,0 +1,25 @@
+graph LR
+  U[Farmer / Agent (Mobile PWA)]
+  A[Admin (Web Dashboard)]
+  FE[Frontend: React / Next.js]
+  API[Backend/API: Node.js / Convex]
+  AUTH[Auth Service: Convex Auth]
+  DB[Database: Convex (Convex DB)]
+  FS[File Storage: Convex storage / S3]
+  SMS[Notifications: Convex functions]
+  PAY[Payment Provider: Pesapal]
+  GOV[Gov APIs (NIRA / URA)]
+  ANALYTICS[Analytics / Logs]
+
+  U -->|HTTPS Login Request / API Request / Farmer Data| FE
+  A -->|HTTPS Login Request / Admin API Request / Reports| FE
+  FE -->|HTTPS API Request (Authorization: Bearer JWT)| API
+  FE -->|Auth Redirect / Token Exchange| AUTH
+  API -->|Verify Token| AUTH
+  API -->|Convex Queries / Farmer Records / Transactions| DB
+  API -->|Upload / Retrieve Media (signed URLs)| FS
+  API -->|Trigger Notification via Convex functions| SMS
+  API -->|Pesapal Payment Confirmation (Webhook)| PAY
+  API -->|Gov Data Exchange / Report Export| GOV
+  API -->|Push Reports / Audit Events| ANALYTICS
+  DB -->|Audit Logs / Backups| ANALYTICS

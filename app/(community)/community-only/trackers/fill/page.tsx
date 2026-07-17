@@ -404,6 +404,35 @@ export default function TrackerFillPage() {
     }
   };
 
+  const handleResetForm = async () => {
+    if (!formId || !communityId || !userId) return;
+
+    const confirmed = window.confirm("Reset this form? This will clear all entered values.");
+    if (!confirmed) return;
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    setFieldValues({});
+    setCurrentFieldIndex(0);
+    setCustomPaymentAmount("");
+    setSelectedTrackedUnitId(trackedUnitIdParam);
+    setMessage({ type: "success", text: "Form reset." });
+
+    try {
+      await saveDraft({
+        formId,
+        communityId,
+        memberId: userId,
+        planId: planId || undefined,
+        plannedSprayDate: plannedSprayDate || undefined,
+        trackedUnitId: trackedUnitIdParam || undefined,
+        fieldValues: [],
+      });
+    } catch {}
+
+    await clearFormDraft(String(userId), "tracker", String(formId));
+  };
+
   const handleSubmit = async () => {
     if (!formId || !communityId || !userId) return;
 
@@ -583,8 +612,21 @@ export default function TrackerFillPage() {
 
       {/* View Toggle */}
       {totalFields > 1 && (
-        <div style={{ padding: "8px 16px", display: "flex", justifyContent: "flex-end" }}>
+        <div style={{ padding: "8px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+          {formDetails?.formPurpose === "extension_work" ? (
+            <button
+              type="button"
+              onClick={handleResetForm}
+              disabled={submitting || paymentProcessing}
+              style={{ background: "none", border: "1px solid #c62828", color: "#c62828", borderRadius: 8, padding: "6px 14px", fontSize: "0.78rem", fontWeight: 600, cursor: submitting || paymentProcessing ? "not-allowed" : "pointer", opacity: submitting || paymentProcessing ? 0.6 : 1, fontFamily: FONT }}
+            >
+              ↺ Reset form
+            </button>
+          ) : (
+            <span />
+          )}
           <button
+            type="button"
             onClick={() => setSeeAllFields(!seeAllFields)}
             style={{ background: "none", border: `1px solid ${BRAND}`, color: BRAND, borderRadius: 8, padding: "6px 14px", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", fontFamily: FONT }}
           >

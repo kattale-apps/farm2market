@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
+import { resolveCommunityLogo } from "../lib/communityLogos";
 
 function CommunityHeader() {
   const searchParams = useSearchParams();
@@ -14,6 +15,12 @@ function CommunityHeader() {
     api.communities.getCommunityInfo,
     communityId ? { communityId: communityId as Id<"communities"> } : "skip"
   );
+  const communityLogo = communityInfo
+    ? resolveCommunityLogo({
+        name: communityInfo.name,
+        logoPath: communityInfo.logoUrl || undefined,
+      })
+    : undefined;
 
   return (
     <div
@@ -51,9 +58,9 @@ function CommunityHeader() {
       </Link>
       {communityInfo && (
         <div style={{ display: "flex", alignItems: "center", gap: 8, overflow: "hidden" }}>
-          {communityInfo.logoUrl && (
+          {communityLogo && (
             <img
-              src={communityInfo.logoUrl}
+              src={communityLogo}
               alt=""
               style={{ width: 24, height: 24, borderRadius: 6, objectFit: "cover", flexShrink: 0 }}
             />
@@ -80,3 +87,6 @@ export default function CommunityLayout({ children }: { children: ReactNode }) {
     </div>
   );
 }
+
+
+

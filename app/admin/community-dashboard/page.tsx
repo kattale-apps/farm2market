@@ -162,8 +162,12 @@ function MessagesTab({ communityId, userId }: { communityId: Id<"communities">; 
   const members = useQuery(api.messages.getCommunityMembersForMessaging, { communityId });
   const sendText = useMutation(api.messages.sendTextMessage);
   const sendTargeted = useMutation(api.messages.sendTargetedCommunityMessage);
+  const deleteMessage = useMutation(api.messages.deleteCommunityMessage);
+  const bulkDeleteMessages = useMutation(api.messages.bulkDeleteCommunityMessages);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
+  const [clearingAll, setClearingAll] = useState(false);
   const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [targetType, setTargetType] = useState<"all" | "individual" | "role" | "superadmin">("all");
   const [selectedMembers, setSelectedMembers] = useState<Id<"users">[]>([]);
@@ -215,6 +219,44 @@ function MessagesTab({ communityId, userId }: { communityId: Id<"communities">; 
       setMsg({ type: "error", text: e?.message || "Failed to send" });
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleDeleteMessage = async (messageId: Id<"communityMessages">) => {
+    if (!window.confirm("Delete this message from the community feed?")) return;
+
+    setDeletingMessageId(String(messageId));
+    setMsg(null);
+    try {
+      await deleteMessage({
+        adminId: userId,
+        communityId,
+        messageId,
+      });
+      setMsg({ type: "success", text: "Message deleted" });
+    } catch (e: any) {
+      setMsg({ type: "error", text: e?.message || "Failed to delete message" });
+    } finally {
+      setDeletingMessageId(null);
+    }
+  };
+
+  const handleDeleteAllMessages = async () => {
+    if (!window.confirm("Delete all messages in this community feed? This cannot be undone.")) return;
+
+    setClearingAll(true);
+    setMsg(null);
+    try {
+      const result = await bulkDeleteMessages({
+        adminId: userId,
+        communityId,
+        deleteAll: true,
+      });
+      setMsg({ type: "success", text: `Deleted ${result.deletedCount} message${result.deletedCount === 1 ? "" : "s"}` });
+    } catch (e: any) {
+      setMsg({ type: "error", text: e?.message || "Failed to delete messages" });
+    } finally {
+      setClearingAll(false);
     }
   };
 
@@ -351,6 +393,40 @@ function MessagesTab({ communityId, userId }: { communityId: Id<"communities">; 
         borderRadius: "10px",
         border: "1px solid #e5e7eb",
       }}>
+        <div style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: "0.75rem",
+          padding: "0.5rem 0.75rem",
+          borderBottom: "1px solid #e5e7eb",
+          background: "#ffffffcc",
+          backdropFilter: "blur(6px)",
+          position: "sticky",
+          top: 0,
+          zIndex: 1,
+        }}>
+          <div>
+            <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#334155" }}>Community feed</div>
+            <div style={{ fontSize: "0.72rem", color: "#64748b" }}>Delete single messages or clear the full thread.</div>
+          </div>
+          <button
+            onClick={handleDeleteAllMessages}
+            disabled={clearingAll || !Array.isArray(messages) || messages.length === 0}
+            style={{
+              padding: "0.45rem 0.75rem",
+              borderRadius: "999px",
+              border: "1px solid #fecaca",
+              background: clearingAll || !Array.isArray(messages) || messages.length === 0 ? "#fee2e2" : "#fff1f2",
+              color: "#b91c1c",
+              fontSize: "0.75rem",
+              fontWeight: 700,
+              cursor: clearingAll || !Array.isArray(messages) || messages.length === 0 ? "not-allowed" : "pointer",
+            }}
+          >
+            {clearingAll ? "Deleting..." : "Delete all"}
+          </button>
+        </div>
         {messages === undefined ? (
           <p style={{ color: "#999", textAlign: "center", padding: "1rem" }}>Loading messages…</p>
         ) : !Array.isArray(messages) || messages.length === 0 ? (
@@ -376,9 +452,28 @@ function MessagesTab({ communityId, userId }: { communityId: Id<"communities">; 
                     border: isMine ? "none" : "1px solid #e0e0e0",
                     fontSize: "0.88rem",
                   }}>
-                    <p style={{ margin: "0 0 0.2rem 0", fontSize: "0.72rem", opacity: 0.8, fontWeight: 600 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", alignItems: "flex-start", marginBottom: "0.3rem" }}>
+                      <p style={{ margin: 0, fontSize: "0.72rem", opacity: 0.8, fontWeight: 600 }}>
                       From: {getSenderName(m)}
-                    </p>
+                      </p>
+                      <button
+                        onClick={() => handleDeleteMessage(m._id)}
+                        disabled={deletingMessageId === String(m._id)}
+                        style={{
+                          border: "none",
+                          background: "transparent",
+                          color: isMine ? "#dcfce7" : "#b91c1c",
+                          fontSize: "0.72rem",
+                          fontWeight: 700,
+                          cursor: deletingMessageId === String(m._id) ? "not-allowed" : "pointer",
+                          padding: 0,
+                          whiteSpace: "nowrap",
+                        }}
+                        title="Delete message"
+                      >
+                        {deletingMessageId === String(m._id) ? "Deleting..." : "Delete"}
+                      </button>
+                    </div>
                     {m.text && <p style={{ margin: 0 }}>{m.text}</p>}
                     {m.imageStorageId && <span style={{ fontSize: "0.8rem" }}>📸 Image</span>}
                     <div style={{
@@ -387,7 +482,7 @@ function MessagesTab({ communityId, userId }: { communityId: Id<"communities">; 
                       opacity: 0.7,
                       textAlign: "right",
                     }}>
-                      {m.createdAt ? new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
+                      {m.createdAt ? new Date(m.createdAt).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
                     </div>
                   </div>
                 </div>

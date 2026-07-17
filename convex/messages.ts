@@ -19,6 +19,69 @@ function isSuperAdmin(user: { adminLevel?: "super" | "junior" }): boolean {
   return user.adminLevel === "super" || user.adminLevel === undefined;
 }
 
+async function getCommunityViewerAccess(ctx: any, communityId: Id<"communities">, viewerId: Id<"users">) {
+  const viewer = await ctx.db.get(viewerId);
+  if (!viewer) {
+    throw new Error("User not found");
+  }
+
+  const community = await ctx.db.get(communityId);
+  if (!community) {
+    throw new Error("Community not found");
+  }
+
+  const viewerIsSuperAdmin = viewer.role === "admin" && isSuperAdmin(viewer as any);
+  const viewerAssigned: string[] = ((viewer as any).assignedCommunityIds || []).map((id: any) => String(id));
+  const viewerIsCommunityAdmin =
+    viewer.role === "admin" &&
+    ((community as any).communityAdminId === viewer._id || viewerAssigned.includes(String(communityId)));
+
+  const membership = await ctx.db
+    .query("communityMemberships")
+    .withIndex("by_community_user", (q: any) =>
+      q.eq("communityId", communityId).eq("userId", viewerId)
+    )
+    .first();
+
+  const approvedMember = await ctx.db
+    .query("communityMembers")
+    .withIndex("by_community_farmer", (q: any) =>
+      q.eq("communityId", communityId).eq("farmerId", viewerId)
+    )
+    .first();
+
+  const viewerIsMember = !!membership || approvedMember?.status === "APPROVED";
+
+  return {
+    viewer,
+    community,
+    viewerIsSuperAdmin,
+    viewerIsCommunityAdmin,
+    viewerIsMember,
+  };
+}
+
+async function requireCommunityModerator(ctx: any, communityId: Id<"communities">, adminId: Id<"users">) {
+  const access = await getCommunityViewerAccess(ctx, communityId, adminId);
+
+  if (!access.viewerIsSuperAdmin && !access.viewerIsCommunityAdmin) {
+    throw new Error("Only community admins can delete messages");
+  }
+
+  return access;
+}
+
+async function deleteMessageTargetByMessageId(ctx: any, messageId: Id<"communityMessages">) {
+  const existingTarget = await ctx.db
+    .query("messageTargets")
+    .withIndex("by_message", (q: any) => q.eq("messageId", messageId))
+    .first();
+
+  if (existingTarget) {
+    await ctx.db.delete(existingTarget._id);
+  }
+}
+
 const SUPPORT_THREAD = "SUPPORT";
 
 /**
@@ -733,37 +796,12 @@ export const getCommunityMessages = query({
     }
 
     const viewerId = args.userId;
-    const viewer = await ctx.db.get(viewerId);
-    if (!viewer) {
-      throw new Error("User not found");
-    }
-
-    const community = await ctx.db.get(args.communityId);
-    if (!community) {
-      throw new Error("Community not found");
-    }
-
-    const viewerIsSuperAdmin = viewer.role === "admin" && isSuperAdmin(viewer as any);
-    const viewerAssigned: string[] = ((viewer as any).assignedCommunityIds || []).map((id: any) => String(id));
-    const viewerIsCommunityAdmin =
-      viewer.role === "admin" &&
-      ((community as any).communityAdminId === viewer._id || viewerAssigned.includes(String(args.communityId)));
-
-    const membership = await ctx.db
-      .query("communityMemberships")
-      .withIndex("by_community_user", (q) =>
-        q.eq("communityId", args.communityId).eq("userId", viewerId)
-      )
-      .first();
-
-    const approvedMember = await ctx.db
-      .query("communityMembers")
-      .withIndex("by_community_farmer", (q) =>
-        q.eq("communityId", args.communityId).eq("farmerId", viewerId)
-      )
-      .first();
-
-    const viewerIsMember = !!membership || (approvedMember?.status === "APPROVED");
+    const {
+      viewer,
+      viewerIsSuperAdmin,
+      viewerIsCommunityAdmin,
+      viewerIsMember,
+    } = await getCommunityViewerAccess(ctx, args.communityId, viewerId);
 
     if (!viewerIsSuperAdmin && !viewerIsCommunityAdmin && !viewerIsMember) {
       throw new Error("Not authorized to view community messages");
@@ -777,6 +815,15 @@ export const getCommunityMessages = query({
     const targetByMessageId = new Map<string, any>();
     for (const t of targets) {
       targetByMessageId.set(String(t.messageId), t);
+    }
+
+    const senderIds = Array.from(new Set(visibleMessageUserIds(scopedMessages)));
+    const userAliasMap = new Map<string, string>();
+    for (const senderId of senderIds) {
+      const sender = await ctx.db.get(senderId);
+      if (sender) {
+        userAliasMap.set(String(sender._id), sender.alias || "Unknown");
+      }
     }
 
     const visible = scopedMessages.filter((m) => {
@@ -800,9 +847,19 @@ export const getCommunityMessages = query({
 
     return visible
       .sort((a, b) => b.createdAt - a.createdAt)
-      .slice(0, args.limit ?? 100);
+      .slice(0, args.limit ?? 100)
+      .map((message) => ({
+        ...message,
+        userAlias: userAliasMap.get(String(message.userId)) || "Unknown",
+        isViewerAdmin: viewerIsSuperAdmin || viewerIsCommunityAdmin,
+        isSender: String(message.userId) === String(viewer._id),
+      }));
   },
 });
+
+function visibleMessageUserIds(messages: Array<{ userId: Id<"users"> }>) {
+  return messages.map((message) => message.userId);
+}
 
 /**
  * Get community members with role info for targeted messaging
@@ -909,5 +966,81 @@ export const sendTargetedCommunityMessage = mutation({
       replyToPostId: args.replyToPostId,
       createdAt,
     };
+  },
+});
+
+export const deleteCommunityMessage = mutation({
+  args: {
+    adminId: v.id("users"),
+    communityId: v.id("communities"),
+    messageId: v.id("communityMessages"),
+  },
+  handler: async (ctx, args) => {
+    await requireCommunityModerator(ctx, args.communityId, args.adminId);
+
+    const message = await ctx.db.get(args.messageId);
+    if (!message || String(message.communityId) !== String(args.communityId)) {
+      throw new Error("Message not found");
+    }
+
+    await deleteMessageTargetByMessageId(ctx, args.messageId);
+    await ctx.db.delete(args.messageId);
+
+    await ctx.db.insert("adminActions", {
+      adminId: args.adminId,
+      action: "delete_community_message",
+      targetCommunityId: args.communityId,
+      details: `Deleted community message ${args.messageId}`,
+      timestamp: getUgandaTime(),
+    });
+
+    return { success: true };
+  },
+});
+
+export const bulkDeleteCommunityMessages = mutation({
+  args: {
+    adminId: v.id("users"),
+    communityId: v.id("communities"),
+    messageIds: v.optional(v.array(v.id("communityMessages"))),
+    dayStart: v.optional(v.number()),
+    dayEnd: v.optional(v.number()),
+    deleteAll: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    await requireCommunityModerator(ctx, args.communityId, args.adminId);
+
+    const allMessages = await ctx.db
+      .query("communityMessages")
+      .withIndex("by_community", (q) => q.eq("communityId", args.communityId))
+      .collect();
+
+    let messagesToDelete = allMessages;
+
+    if (Array.isArray(args.messageIds) && args.messageIds.length > 0) {
+      const allowedIds = new Set(args.messageIds.map((id) => String(id)));
+      messagesToDelete = allMessages.filter((message) => allowedIds.has(String(message._id)));
+    } else if (typeof args.dayStart === "number" && typeof args.dayEnd === "number") {
+      messagesToDelete = allMessages.filter(
+        (message) => message.createdAt >= args.dayStart! && message.createdAt < args.dayEnd!
+      );
+    } else if (!args.deleteAll) {
+      throw new Error("Select messages, a date range, or choose delete all");
+    }
+
+    for (const message of messagesToDelete) {
+      await deleteMessageTargetByMessageId(ctx, message._id);
+      await ctx.db.delete(message._id);
+    }
+
+    await ctx.db.insert("adminActions", {
+      adminId: args.adminId,
+      action: "bulk_delete_community_messages",
+      targetCommunityId: args.communityId,
+      details: `Deleted ${messagesToDelete.length} community messages`,
+      timestamp: getUgandaTime(),
+    });
+
+    return { success: true, deletedCount: messagesToDelete.length };
   },
 });

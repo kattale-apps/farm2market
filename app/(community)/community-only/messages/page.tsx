@@ -11,6 +11,64 @@ import CommunityTabBar from "@/app/components/CommunityTabBar";
 import { useOfflineQuery } from "@/app/hooks/useOfflineQuery";
 import { useStoredUser } from "@/app/hooks/useStoredUser";
 
+const COMMUNITY_TAB_BAR_HEIGHT = 84;
+const MESSAGE_COMPOSER_OFFSET = 104;
+
+function formatMessageDayLabel(timestamp: number) {
+  const messageDate = new Date(timestamp);
+  const today = new Date();
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  const startOfMessageDay = new Date(
+    messageDate.getFullYear(),
+    messageDate.getMonth(),
+    messageDate.getDate(),
+  ).getTime();
+  const diffDays = Math.round((startOfToday - startOfMessageDay) / 86400000);
+
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+
+  return messageDate.toLocaleDateString([], {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: messageDate.getFullYear() === today.getFullYear() ? undefined : "numeric",
+  });
+}
+
+function formatMessageTimestamp(timestamp: number) {
+  return new Date(timestamp).toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function groupMessagesByDay(messages: any[]) {
+  const chronological = [...messages].sort((left, right) => left.createdAt - right.createdAt);
+  const groups: Array<{ key: string; label: string; messages: any[] }> = [];
+
+  for (const message of chronological) {
+    const messageDate = new Date(message.createdAt);
+    const key = `${messageDate.getFullYear()}-${messageDate.getMonth()}-${messageDate.getDate()}`;
+    const currentGroup = groups[groups.length - 1];
+
+    if (!currentGroup || currentGroup.key !== key) {
+      groups.push({
+        key,
+        label: formatMessageDayLabel(message.createdAt),
+        messages: [message],
+      });
+      continue;
+    }
+
+    currentGroup.messages.push(message);
+  }
+
+  return groups;
+}
+
 function Skeleton({ className = "" }: { className?: string } = {}) {
   return <div className={`h-4 bg-gray-200 rounded animate-pulse ${className}`} />;
 }
@@ -148,7 +206,13 @@ function MessageComposer({ communityId, userId, replyToMessage, onClearReply }: 
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg pb-safe">
+    <div
+      className="fixed left-0 right-0 bg-white border-t border-gray-200 shadow-[0_-16px_40px_rgba(15,23,42,0.12)]"
+      style={{
+        bottom: `calc(${COMMUNITY_TAB_BAR_HEIGHT}px + env(safe-area-inset-bottom, 0px))`,
+        zIndex: 1100,
+      }}
+    >
       {/* Image Preview Section */}
       {selectedImage && (
         <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
@@ -178,7 +242,7 @@ function MessageComposer({ communityId, userId, replyToMessage, onClearReply }: 
       )}
 
       {/* Composer Section */}
-      <form onSubmit={handleSubmit} className="p-3">
+      <form onSubmit={handleSubmit} className="p-3 pb-4">
         {replyToMessage && (
           <div className="mb-2 p-2 rounded-lg bg-blue-50 border border-blue-100 text-xs text-blue-800 flex items-center justify-between">
             <div>
@@ -294,6 +358,7 @@ function MessagesList({ communityId, userId, onReply }: { communityId: Id<"commu
   const unlikePostMutation = useMutation(api.messages.unlikeNoticeboardPost);
   const dislikePostMutation = useMutation(api.messages.dislikeNoticeboardPost);
   const undislikePostMutation = useMutation(api.messages.undislikeNoticeboardPost);
+  const groupedMessages = messages ? groupMessagesByDay(messages) : [];
 
   // Auto-scroll to latest message
   useEffect(() => {
@@ -411,82 +476,114 @@ function MessagesList({ communityId, userId, onReply }: { communityId: Id<"commu
   }
 
   return (
-    <div className="space-y-2">
-      {messages.map((message) => {
-        const engagement = engagementState[message._id] || { liked: false, disliked: false, likeCount: 0, dislikeCount: 0 };
-        const isAnimating = animatingId === message._id;
-
-        return (
-          <div key={message._id} className="flex justify-start">
-            <div className="flex flex-col gap-1">
-              <div className="rounded-2xl rounded-tl-none px-4 py-2 max-w-xs break-words" style={{ background: "#fff", border: "1px solid #e0e0e0", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>
-                <p className="text-xs text-gray-500 mb-1">From: <strong>{message.userAlias || message.userId || 'Unknown'}</strong></p>
-                {message.text && (
-                  <p className="text-gray-800 text-sm">{message.text}</p>
-                )}
-                {message.imageStorageId && (
-                  <div className="mt-2 text-sm text-gray-600">
-                    📸 Image attached
-                  </div>
-                )}
-                <div className="text-xs text-gray-500 mt-1">
-                  {new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </div>
-                <button
-                  onClick={() => onReply(message)}
-                  className="mt-1 text-xs font-medium text-blue-600 hover:text-blue-800"
-                  style={{ background: 'transparent', border: 'none', padding: 0 }}
-                >
-                  ↩ Reply
-                </button>
-              </div>
-
-              {/* Like/Dislike Buttons */}
-              <div className="flex items-center gap-3 px-2 py-1">
-                <button
-                  onClick={() => handleLikeClick(message._id)}
-                  className={`flex items-center gap-1 px-3 py-2 rounded-full transition-all min-h-[44px] ${
-                    isAnimating ? 'scale-90' : 'scale-100'
-                  } ${
-                    engagement.liked
-                      ? 'bg-blue-100 text-blue-600'
-                      : 'text-gray-500 hover:bg-gray-100'
-                  }`}
-                  style={{
-                    transitionProperty: 'transform',
-                    transitionDuration: '150ms',
-                  }}
-                >
-                  <span>👍</span>
-                  {engagement.likeCount > 0 && (
-                    <span className="text-xs font-medium">{engagement.likeCount}</span>
-                  )}
-                </button>
-
-                <button
-                  onClick={() => handleDislikeClick(message._id)}
-                  className={`flex items-center gap-1 px-3 py-2 rounded-full transition-all min-h-[44px] ${
-                    isAnimating ? 'scale-90' : 'scale-100'
-                  } ${
-                    engagement.disliked
-                      ? 'bg-red-100 text-red-600'
-                      : 'text-gray-500 hover:bg-gray-100'
-                  }`}
-                  style={{
-                    transitionProperty: 'transform',
-                    transitionDuration: '150ms',
-                  }}
-                >
-                  <span>👎</span>
-                  {engagement.dislikeCount > 0 && (
-                    <span className="text-xs font-medium">{engagement.dislikeCount}</span>
-                  )}
-                </button>
-              </div>
-            </div>
+    <div className="space-y-6">
+      {groupedMessages.map((group) => (
+        <section key={group.key} className="space-y-3">
+          <div className="sticky top-0 z-10 flex justify-center py-1">
+            <span
+              className="rounded-full border border-emerald-200 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-800"
+              style={{ background: "rgba(240, 253, 244, 0.95)", backdropFilter: "blur(8px)" }}
+            >
+              {group.label}
+            </span>
           </div>
-        );
-      })}
+
+          <div className="space-y-4">
+            {group.messages.map((message) => {
+              const engagement = engagementState[message._id] || { liked: false, disliked: false, likeCount: 0, dislikeCount: 0 };
+              const isAnimating = animatingId === message._id;
+
+              return (
+                <article key={message._id} className="flex justify-start">
+                  <div className="w-full max-w-sm space-y-2">
+                    <div
+                      className="rounded-[22px] rounded-tl-md border border-slate-200 px-4 py-3 break-words"
+                      style={{
+                        background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
+                        boxShadow: "0 10px 24px rgba(15, 23, 42, 0.08)",
+                      }}
+                    >
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                          From {message.userAlias || message.userId || "Unknown"}
+                        </p>
+                        <span className="text-[11px] text-slate-400">
+                          {formatMessageTimestamp(message.createdAt)}
+                        </span>
+                      </div>
+
+                      {message.text && (
+                        <p className="text-sm leading-6 text-slate-800">{message.text}</p>
+                      )}
+
+                      {message.imageStorageId && (
+                        <div className="mt-3 inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
+                          📸 Image attached
+                        </div>
+                      )}
+
+                      <div className="mt-3 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                        <span className="text-[11px] uppercase tracking-[0.14em] text-slate-400">
+                          {new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                        <button
+                          onClick={() => onReply(message)}
+                          className="text-xs font-semibold text-blue-600 hover:text-blue-800"
+                          style={{ background: "transparent", border: "none", padding: 0 }}
+                        >
+                          ↩ Reply
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 px-1">
+                      <button
+                        onClick={() => handleLikeClick(message._id)}
+                        className={`flex items-center gap-1 px-3 py-2 rounded-full transition-all min-h-[44px] ${
+                          isAnimating ? "scale-90" : "scale-100"
+                        } ${
+                          engagement.liked
+                            ? "bg-blue-100 text-blue-600"
+                            : "text-gray-500 hover:bg-gray-100"
+                        }`}
+                        style={{
+                          transitionProperty: "transform",
+                          transitionDuration: "150ms",
+                        }}
+                      >
+                        <span>👍</span>
+                        {engagement.likeCount > 0 && (
+                          <span className="text-xs font-medium">{engagement.likeCount}</span>
+                        )}
+                      </button>
+
+                      <button
+                        onClick={() => handleDislikeClick(message._id)}
+                        className={`flex items-center gap-1 px-3 py-2 rounded-full transition-all min-h-[44px] ${
+                          isAnimating ? "scale-90" : "scale-100"
+                        } ${
+                          engagement.disliked
+                            ? "bg-red-100 text-red-600"
+                            : "text-gray-500 hover:bg-gray-100"
+                        }`}
+                        style={{
+                          transitionProperty: "transform",
+                          transitionDuration: "150ms",
+                        }}
+                      >
+                        <span>👎</span>
+                        {engagement.dislikeCount > 0 && (
+                          <span className="text-xs font-medium">{engagement.dislikeCount}</span>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      ))}
       <div ref={messagesEndRef} />
     </div>
   );
@@ -536,7 +633,7 @@ export default function CommunityMessagingPage() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-white">
+    <div className="flex h-[100dvh] flex-col overflow-hidden bg-[#f6f8f7]">
       <div style={{
         background: "linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%)",
         padding: "1.25rem 1rem",
@@ -547,13 +644,16 @@ export default function CommunityMessagingPage() {
         </h1>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div
+        className="flex-1 overflow-y-auto px-4 pb-6 pt-4"
+        style={{
+          paddingBottom: `calc(${MESSAGE_COMPOSER_OFFSET + COMMUNITY_TAB_BAR_HEIGHT}px + env(safe-area-inset-bottom, 0px))`,
+        }}
+      >
         <MessagesList communityId={communityId} userId={userId} onReply={setReplyToMessage} />
       </div>
 
-      <div className="pb-safe">
-        <MessageComposer communityId={communityId} userId={userId} replyToMessage={replyToMessage} onClearReply={() => setReplyToMessage(null)} />
-      </div>
+      <MessageComposer communityId={communityId} userId={userId} replyToMessage={replyToMessage} onClearReply={() => setReplyToMessage(null)} />
       <CommunityTabBar />
     </div>
   );

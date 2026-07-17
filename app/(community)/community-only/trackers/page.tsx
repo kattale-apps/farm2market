@@ -213,19 +213,6 @@ export default function TrackersHubPage() {
               </div>
             </Link>
           )}
-          {isBioFarm && communityInfo !== undefined && !showFertilizerPlanner && (
-            <div style={{
-              padding: "1rem",
-              borderRadius: 12,
-              background: "#fff",
-              border: "1px dashed #cfd8dc",
-              color: "#607d8b",
-              fontSize: "0.82rem",
-            }}>
-              Fertilizer Planner is currently hidden by your community admin.
-            </div>
-          )}
-
           {activeForms.map((form: any) => (
             <div
               key={form._id}

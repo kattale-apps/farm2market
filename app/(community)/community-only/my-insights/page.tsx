@@ -325,12 +325,6 @@ function MyInsightsPage() {
           </div>
         )}
 
-        {communityId === BIOFARM_COMMUNITY_ID && communityInfo !== undefined && !showFertilizerPlanner && (
-          <div style={{ background: "#fff", border: "1px dashed #cfd8dc", borderRadius: 12, padding: "0.85rem", color: "#607d8b" }}>
-            Fertilizer Planner is hidden by your community admin.
-          </div>
-        )}
-
         {!safeInsights.length && !insights && (
           <div style={{ textAlign: "center", padding: "2rem", color: "#888", background: "#fff", borderRadius: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}>
             <p style={{ fontSize: "clamp(0.95rem, 2.5vw, 1.05rem)" }}>Loading insights...</p>

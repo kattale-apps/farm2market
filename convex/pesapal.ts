@@ -34,6 +34,7 @@ const PESAPAL_NOTIFICATION_ID = process.env.PESAPAL_NOTIFICATION_ID;
 // In production, these MUST be set as environment variables
 const FALLBACK_CONSUMER_KEY = PESAPAL_ENV !== "production" ? "1DDecquMxaWUxGjWg+g3SQSkgRRmV3hs" : undefined;
 const FALLBACK_CONSUMER_SECRET = PESAPAL_ENV !== "production" ? "WpmXyvPsYE872GO7WY/wjpoSrm8=" : undefined;
+const FALLBACK_BILLING_EMAIL = "kattaleglobal@gmail.com";
 
 const ACTUAL_CONSUMER_KEY = PESAPAL_CONSUMER_KEY || FALLBACK_CONSUMER_KEY;
 const ACTUAL_CONSUMER_SECRET = PESAPAL_CONSUMER_SECRET || FALLBACK_CONSUMER_SECRET;
@@ -142,11 +143,6 @@ export const initiatePesapalPayment = action({
       throw new Error(`User role mismatch. Expected ${args.userRole}, got ${user.role}`);
     }
 
-    // Pesapal requires an email address for payment processing
-    if (!user.email) {
-      throw new Error("Email address is required for payment processing. Please add an email to your account.");
-    }
-
     // Generate unique order tracking ID
     const orderTrackingId = `F2M-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
@@ -155,7 +151,7 @@ export const initiatePesapalPayment = action({
     // If IPN webhooks are needed in the future, register an IPN URL first and use its ID here
     // Build billing address, only including non-empty fields
     const billingAddress: any = {
-      email_address: user.email,
+      email_address: user.email || FALLBACK_BILLING_EMAIL,
       country_code: "UG",
       first_name: user.alias || "User",
     };
@@ -708,13 +704,9 @@ export const initiateExtensionWorkPayment = action({
       throw new Error("User not found");
     }
 
-    if (!user.email) {
-      throw new Error("Email address is required for payment processing. Please add an email to your account.");
-    }
-
     const orderTrackingId = `F2M-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     const billingAddress: any = {
-      email_address: user.email,
+      email_address: user.email || FALLBACK_BILLING_EMAIL,
       country_code: "UG",
       first_name: user.alias || "User",
     };

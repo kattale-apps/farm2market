@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Id } from "@/convex/_generated/dataModel";
 import { api } from "@/convex/_generated/api";
@@ -17,6 +18,7 @@ const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
 
 export default function FertilizerPlannerPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const communityId = searchParams.get("communityId") as Id<"communities"> | null;
   const { user, status: authStatus } = useStoredUser();
   const userId = (user?.userId as Id<"users"> | undefined) || null;
@@ -26,6 +28,12 @@ export default function FertilizerPlannerPage() {
   ) as any;
   const plannerAccessLoaded = communityInfo !== undefined;
   const plannerVisible = communityInfo?.showFertilizerPlanner === true;
+
+  useEffect(() => {
+    if (plannerAccessLoaded && !plannerVisible && communityId) {
+      router.replace(`/community-only/trackers?communityId=${communityId}`);
+    }
+  }, [communityId, plannerAccessLoaded, plannerVisible, router]);
 
   if (!communityId) {
     return (
@@ -73,14 +81,7 @@ export default function FertilizerPlannerPage() {
   }
 
   if (!plannerVisible) {
-    return (
-      <div style={{ padding: "2rem", fontFamily: FONT, textAlign: "center" }}>
-        <p>Fertilizer Planner is currently hidden by your community admin.</p>
-        <Link href={`/community-only/trackers?communityId=${communityId}`} style={{ color: "#2e7d32" }}>
-          Back to Trackers
-        </Link>
-      </div>
-    );
+    return null;
   }
 
   return (

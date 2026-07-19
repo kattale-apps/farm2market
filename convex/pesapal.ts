@@ -39,6 +39,24 @@ const FALLBACK_BILLING_EMAIL = "kattaleglobal@gmail.com";
 const ACTUAL_CONSUMER_KEY = PESAPAL_CONSUMER_KEY || FALLBACK_CONSUMER_KEY;
 const ACTUAL_CONSUMER_SECRET = PESAPAL_CONSUMER_SECRET || FALLBACK_CONSUMER_SECRET;
 
+function extractIdFromUrl(urlValue: string | undefined, key: string): string | null {
+  if (!urlValue || typeof urlValue !== "string") return null;
+
+  try {
+    const parsed = new URL(urlValue);
+    const direct = parsed.searchParams.get(key);
+    if (direct) return direct;
+
+    const returnTo = parsed.searchParams.get("returnTo");
+    if (!returnTo) return null;
+
+    const nested = new URL(returnTo);
+    return nested.searchParams.get(key);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Get Pesapal access token
  * This is a Convex action because it needs to make external HTTP requests
@@ -404,6 +422,65 @@ export const createPaymentTransaction = internalMutation({
 });
 
 /**
+ * Create extension-work payment intent.
+ */
+export const createExtensionWorkPaymentIntent = internalMutation({
+  args: {
+    orderTrackingId: v.string(),
+    memberId: v.id("users"),
+    communityId: v.id("communities"),
+    formId: v.id("communityForms"),
+    amount: v.number(),
+    currency: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const now = getUgandaTime();
+    return await ctx.db.insert("extensionWorkPaymentIntents" as any, {
+      orderTrackingId: args.orderTrackingId,
+      memberId: args.memberId,
+      communityId: args.communityId,
+      formId: args.formId,
+      amount: args.amount,
+      currency: args.currency,
+      status: "pending",
+      createdAt: now,
+      updatedAt: now,
+    } as any);
+  },
+});
+
+/**
+ * Update extension-work payment intent status from Pesapal verification.
+ */
+export const markExtensionWorkPaymentIntent = internalMutation({
+  args: {
+    orderTrackingId: v.string(),
+    status: v.union(v.literal("paid"), v.literal("failed"), v.literal("cancelled"), v.literal("pending")),
+    paymentReference: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const intent = await ctx.db
+      .query("extensionWorkPaymentIntents" as any)
+      .withIndex("by_order_tracking" as any, (q: any) => q.eq("orderTrackingId", args.orderTrackingId))
+      .first();
+
+    if (!intent) {
+      return { updated: false };
+    }
+
+    const now = getUgandaTime();
+    await ctx.db.patch(intent._id, {
+      status: args.status,
+      paymentReference: args.paymentReference,
+      verifiedAt: args.status === "paid" ? now : (intent as any).verifiedAt,
+      updatedAt: now,
+    } as any);
+
+    return { updated: true };
+  },
+});
+
+/**
  * Verify payment status from Pesapal
  * Called after user returns from Pesapal payment page
  */
@@ -451,6 +528,15 @@ export const verifyPesapalPayment = action({
     }
 
     const paymentStatus: any = await response.json();
+    const pesapalStatus = (paymentStatus.payment_status_description || paymentStatus.status || "").toLowerCase();
+    const isCompleted = pesapalStatus.includes("completed") || paymentStatus.payment_status_code === "1";
+    const normalizedStatus = isCompleted
+      ? "paid"
+      : pesapalStatus.includes("failed")
+        ? "failed"
+        : pesapalStatus.includes("cancel")
+          ? "cancelled"
+          : "pending";
 
     // Update payment transaction and complete wallet deposit
     await ctx.runMutation(internal.pesapal.completePaymentTransaction, {
@@ -458,10 +544,14 @@ export const verifyPesapalPayment = action({
       paymentStatus: paymentStatus,
     });
 
+    // Update extension-work intent if this order belongs to one.
+    await ctx.runMutation(internal.pesapal.markExtensionWorkPaymentIntent, {
+      orderTrackingId: args.orderTrackingId,
+      status: normalizedStatus as any,
+      paymentReference: paymentStatus.payment_reference || undefined,
+    });
+
     // If this payment corresponds to a price-sheet download purchase, confirm it
-    const pesapalStatus = paymentStatus.payment_status_description || paymentStatus.status || "";
-    const isCompleted = pesapalStatus.toLowerCase().includes("completed") ||
-                        paymentStatus.payment_status_code === "1";
     if (isCompleted) {
       try {
         await ctx.runMutation(internal.marketPrices.confirmDownloadPurchasePesapal, {
@@ -496,7 +586,7 @@ export const completePaymentTransaction = internalMutation({
       .first();
 
     if (!transaction) {
-      throw new Error(`Payment transaction not found: ${args.orderTrackingId}`);
+      return { notFound: true };
     }
 
     // Check if already completed
@@ -690,6 +780,8 @@ export const handlePesapalWebhook = action({
 export const initiateExtensionWorkPayment = action({
   args: {
     userId: v.id("users"),
+    communityId: v.optional(v.id("communities")),
+    formId: v.optional(v.id("communityForms")),
     amount: v.number(),
     currency: v.optional(v.string()),
     callbackUrl: v.string(),
@@ -697,6 +789,19 @@ export const initiateExtensionWorkPayment = action({
     description: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<{ transactionId: any; orderTrackingId: string; redirectUrl: string }> => {
+    const resolvedCommunityId =
+      args.communityId ||
+      (extractIdFromUrl(args.cancelUrl, "communityId") as any) ||
+      (extractIdFromUrl(args.callbackUrl, "communityId") as any);
+    const resolvedFormId =
+      args.formId ||
+      (extractIdFromUrl(args.cancelUrl, "formId") as any) ||
+      (extractIdFromUrl(args.callbackUrl, "formId") as any);
+
+    if (!resolvedCommunityId || !resolvedFormId) {
+      throw new Error("Missing required payment context. Open the form from Community Trackers and try again.");
+    }
+
     const { token }: { token: string; expiresIn: number } = await ctx.runAction(internal.pesapal.getPesapalAccessToken, {});
 
     const user: { id: any; email: string | undefined; role: string; alias: string } | null = await ctx.runQuery(api.pesapal.getUserDetails, { userId: args.userId });
@@ -772,8 +877,17 @@ export const initiateExtensionWorkPayment = action({
       throw new Error("Pesapal did not return a redirect URL.");
     }
 
+    const intentId = await ctx.runMutation(internal.pesapal.createExtensionWorkPaymentIntent, {
+      orderTrackingId,
+      memberId: args.userId,
+      communityId: resolvedCommunityId,
+      formId: resolvedFormId,
+      amount: args.amount,
+      currency: args.currency || "UGX",
+    });
+
     return {
-      transactionId: orderTrackingId,
+      transactionId: intentId,
       orderTrackingId,
       redirectUrl,
     };

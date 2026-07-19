@@ -238,6 +238,7 @@ export default function TrackerFillPage() {
   const plannedSprayDate = searchParams.get("plannedSprayDate");
   const trackedUnitIdParam = searchParams.get("trackedUnitId") as Id<"farmTrackedUnits"> | null;
   const paymentStatus = searchParams.get("paymentStatus");
+  const paymentOrderTrackingId = searchParams.get("paymentOrderTrackingId");
   const { user, status: authStatus } = useStoredUser();
   const userId = (user?.userId as Id<"users"> | undefined) || null;
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
@@ -246,6 +247,7 @@ export default function TrackerFillPage() {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [draftLoaded, setDraftLoaded] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const submitKeyRef = useRef<string | null>(null);
   const [currentFieldIndex, setCurrentFieldIndex] = useState(0);
   const [seeAllFields, setSeeAllFields] = useState(false);
   const [showCoinAnimation, setShowCoinAnimation] = useState(false);
@@ -370,7 +372,19 @@ export default function TrackerFillPage() {
   }, [fieldValues, selectedTrackedUnitId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handlePayNow = async () => {
-    if (!formId || !communityId || !userId || !formDetails?.paymentEnabled || !formDetails?.formPurpose || formDetails.formPurpose !== "extension_work") return;
+    if (!userId || !formDetails?.paymentEnabled || !formDetails?.formPurpose || formDetails.formPurpose !== "extension_work") return;
+
+    const resolvedCommunityId =
+      communityId ||
+      ((typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("communityId") : null) as Id<"communities"> | null);
+    const resolvedFormId =
+      formId ||
+      ((typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("formId") : null) as Id<"communityForms"> | null);
+
+    if (!resolvedCommunityId || !resolvedFormId) {
+      setMessage({ type: "error", text: "Missing form payment context. Re-open the form from Community Trackers and try again." });
+      return;
+    }
 
     const amount = getEffectivePaymentAmount(formDetails, formDetails.paymentAmountEditable ? customPaymentAmount : undefined);
     if (!amount || amount <= 0) {
@@ -382,11 +396,13 @@ export default function TrackerFillPage() {
     setMessage(null);
     try {
       const origin = typeof window !== "undefined" ? window.location.origin : "";
-      const returnTo = `${origin}/community-only/trackers/fill?communityId=${communityId}&formId=${formId}`;
+      const returnTo = `${origin}/community-only/trackers/fill?communityId=${resolvedCommunityId}&formId=${resolvedFormId}`;
       const callbackUrl = `${origin}/payment/callback?returnTo=${encodeURIComponent(returnTo)}`;
       const cancelUrl = `${returnTo}&paymentStatus=cancelled`;
       const result = await initiateExtensionWorkPayment({
         userId,
+        communityId: resolvedCommunityId,
+        formId: resolvedFormId,
         amount,
         currency: "UGX",
         callbackUrl,
@@ -436,11 +452,18 @@ export default function TrackerFillPage() {
   const handleSubmit = async () => {
     if (!formId || !communityId || !userId) return;
 
-    const requiresPayment = Boolean(formDetails?.formPurpose === "extension_work" && formDetails?.paymentEnabled);
+    const requiresPayment = Boolean(
+      formDetails?.formPurpose === "extension_work" &&
+      (formDetails?.paymentEnabled || formDetails?.paymentAmountEditable)
+    );
     const paymentAmount = getEffectivePaymentAmount(formDetails, formDetails?.paymentAmountEditable ? customPaymentAmount : undefined);
-    if (requiresPayment && paymentStatus !== "success") {
-      setMessage({ type: "error", text: "Complete the payment first, then submit the form." });
+    if (requiresPayment && !paymentOrderTrackingId) {
+      setMessage({ type: "error", text: "Complete and verify payment first, then submit the form." });
       return;
+    }
+
+    if (!submitKeyRef.current) {
+      submitKeyRef.current = `trk-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     }
 
     setSubmitting(true);
@@ -464,9 +487,12 @@ export default function TrackerFillPage() {
         const submitResult = await submitDraft({
           responseId: existingDraft._id,
           memberId: userId,
+          communityId,
+          formId,
           planId: planId || undefined,
           plannedSprayDate: plannedSprayDate || undefined,
           trackedUnitId: selectedTrackedUnitId || undefined,
+          paymentOrderTrackingId: paymentOrderTrackingId || undefined,
         });
         responseId = existingDraft._id;
         serverCoins = (submitResult as any)?.coinsEarned ?? 0;
@@ -498,8 +524,10 @@ export default function TrackerFillPage() {
           trackedUnitId: selectedTrackedUnitId || undefined,
           fieldValues: fvArray,
           paymentStatus: requiresPayment ? "paid" : undefined,
-          paymentReference: requiresPayment ? `pesapal:${Date.now()}` : undefined,
+          paymentReference: requiresPayment ? paymentOrderTrackingId || undefined : undefined,
           paymentAmount: requiresPayment ? paymentAmount ?? undefined : undefined,
+          paymentOrderTrackingId: requiresPayment ? paymentOrderTrackingId || undefined : undefined,
+          clientSubmissionKey: submitKeyRef.current,
         });
         // If offline-queued, show optimistic coin animation
         if (result && (result as any).queued) {
@@ -525,10 +553,12 @@ export default function TrackerFillPage() {
         setCoinsEarned(serverCoins);
         setShowCoinAnimation(true);
         setSubmitting(false);
+        submitKeyRef.current = null;
         return;
       }
       setMessage({ type: "success", text: "Submitted successfully!" });
       setTimeout(() => router.push(`/community-only/trackers/view?communityId=${communityId}`), 1500);
+      submitKeyRef.current = null;
     } catch (e: any) {
       setMessage({ type: "error", text: e.message });
     }
@@ -660,7 +690,7 @@ export default function TrackerFillPage() {
             )}
             <button
               onClick={handlePayNow}
-              disabled={paymentProcessing}
+              disabled={paymentProcessing || !communityId || !formId || !userId}
               style={{ padding: "0.55rem 0.8rem", borderRadius: 8, border: "none", background: paymentProcessing ? "#bbb" : "#ef6c00", color: "#fff", fontWeight: 700, cursor: paymentProcessing ? "not-allowed" : "pointer" }}
             >
               {paymentProcessing ? "Processing..." : "Pay with Pesapal"}

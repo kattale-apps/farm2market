@@ -12,7 +12,6 @@ import { useOfflineQuery } from "@/app/hooks/useOfflineQuery";
 import { useStoredUser } from "@/app/hooks/useStoredUser";
 
 const COMMUNITY_TAB_BAR_HEIGHT = 84;
-const MESSAGE_COMPOSER_OFFSET = 104;
 
 function formatMessageDayLabel(timestamp: number) {
   const messageDate = new Date(timestamp);
@@ -46,10 +45,10 @@ function formatMessageTimestamp(timestamp: number) {
 }
 
 function groupMessagesByDay(messages: any[]) {
-  const chronological = [...messages].sort((left, right) => left.createdAt - right.createdAt);
+  const newestFirst = [...messages].sort((left, right) => right.createdAt - left.createdAt);
   const groups: Array<{ key: string; label: string; messages: any[] }> = [];
 
-  for (const message of chronological) {
+  for (const message of newestFirst) {
     const messageDate = new Date(message.createdAt);
     const key = `${messageDate.getFullYear()}-${messageDate.getMonth()}-${messageDate.getDate()}`;
     const currentGroup = groups[groups.length - 1];
@@ -207,11 +206,8 @@ function MessageComposer({ communityId, userId, replyToMessage, onClearReply }: 
 
   return (
     <div
-      className="fixed left-0 right-0 bg-white border-t border-gray-200 shadow-[0_-16px_40px_rgba(15,23,42,0.12)]"
-      style={{
-        bottom: `calc(${COMMUNITY_TAB_BAR_HEIGHT}px + env(safe-area-inset-bottom, 0px))`,
-        zIndex: 1100,
-      }}
+      className="rounded-2xl border border-emerald-100 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.12)]"
+      style={{ zIndex: 2 }}
     >
       {/* Image Preview Section */}
       {selectedImage && (
@@ -346,7 +342,6 @@ function MessagesList({ communityId, userId, onReply }: { communityId: Id<"commu
     communityId,
     userId: userId || undefined,
   }) as any[] | undefined;
-  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Optimistic state for engagement
   const [engagementState, setEngagementState] = useState<
@@ -359,11 +354,6 @@ function MessagesList({ communityId, userId, onReply }: { communityId: Id<"commu
   const dislikePostMutation = useMutation(api.messages.dislikeNoticeboardPost);
   const undislikePostMutation = useMutation(api.messages.undislikeNoticeboardPost);
   const groupedMessages = messages ? groupMessagesByDay(messages) : [];
-
-  // Auto-scroll to latest message
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
 
   const handleLikeClick = async (messageId: string) => {
     if (!userId) return;
@@ -584,7 +574,6 @@ function MessagesList({ communityId, userId, onReply }: { communityId: Id<"commu
           </div>
         </section>
       ))}
-      <div ref={messagesEndRef} />
     </div>
   );
 }
@@ -644,16 +633,19 @@ export default function CommunityMessagingPage() {
         </h1>
       </div>
 
+      <div className="px-4 pb-2 pt-3 bg-[#f6f8f7]">
+        <MessageComposer communityId={communityId} userId={userId} replyToMessage={replyToMessage} onClearReply={() => setReplyToMessage(null)} />
+      </div>
+
       <div
-        className="flex-1 overflow-y-auto px-4 pb-6 pt-4"
+        className="flex-1 overflow-y-auto px-4 pt-2"
         style={{
-          paddingBottom: `calc(${MESSAGE_COMPOSER_OFFSET + COMMUNITY_TAB_BAR_HEIGHT}px + env(safe-area-inset-bottom, 0px))`,
+          paddingBottom: `calc(${COMMUNITY_TAB_BAR_HEIGHT}px + env(safe-area-inset-bottom, 0px) + 14px)`,
         }}
       >
         <MessagesList communityId={communityId} userId={userId} onReply={setReplyToMessage} />
       </div>
 
-      <MessageComposer communityId={communityId} userId={userId} replyToMessage={replyToMessage} onClearReply={() => setReplyToMessage(null)} />
       <CommunityTabBar />
     </div>
   );

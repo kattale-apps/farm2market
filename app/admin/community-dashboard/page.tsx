@@ -1347,14 +1347,29 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
         const barData = responses.map((r: any) => {
           const v = (r.values || []).find((rv: any) => String(rv.fieldId) === String(field._id));
           const num = parseFloat(v?.value ?? "0");
-          return { name: r.member?.alias || "?", value: isNaN(num) ? 0 : num };
+          return {
+            name: isExtensionWork ? (r.member?.phoneNumber || r.member?.alias || "?") : (r.member?.alias || "?"),
+            value: isNaN(num) ? 0 : num,
+          };
         }).filter((d: any) => d.value !== 0);
         return { field, type: "number" as const, barData, avg: Math.round(avg * 100) / 100, min, max, count: nums.length };
       }
       if (field.fieldType === "select" || field.fieldType === "checkbox") {
-        const freq: Record<string, number> = {};
-        vals.forEach((v: string) => { freq[v] = (freq[v] || 0) + 1; });
-        const pieData = Object.entries(freq).map(([name, value]) => ({ name, value }));
+        const normalizedFreq = new Map<string, { label: string; count: number }>();
+        vals.forEach((v: string) => {
+          const label = String(v).trim();
+          const key = label.toLowerCase();
+          if (!key) return;
+          const existing = normalizedFreq.get(key);
+          if (existing) {
+            existing.count += 1;
+            return;
+          }
+          normalizedFreq.set(key, { label, count: 1 });
+        });
+        const pieData = Array.from(normalizedFreq.values())
+          .sort((a, b) => b.count - a.count)
+          .map(({ label, count }) => ({ name: label, value: count }));
         return { field, type: "pie" as const, pieData, count: vals.length };
       }
       if (field.fieldType === "date") {
@@ -1368,12 +1383,25 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
       if (field.fieldType === "camera") {
         return { field, type: "camera" as const, count: vals.length };
       }
-      const freq: Record<string, number> = {};
-      vals.forEach((v: string) => { freq[v] = (freq[v] || 0) + 1; });
-      const barData = Object.entries(freq).sort(([,a],[,b]) => b - a).slice(0, 10).map(([name, value]) => ({ name: name.length > 20 ? name.slice(0,18)+"…" : name, value }));
+      const normalizedFreq = new Map<string, { label: string; count: number }>();
+      vals.forEach((v: string) => {
+        const label = String(v).trim();
+        const key = label.toLowerCase();
+        if (!key) return;
+        const existing = normalizedFreq.get(key);
+        if (existing) {
+          existing.count += 1;
+          return;
+        }
+        normalizedFreq.set(key, { label, count: 1 });
+      });
+      const barData = Array.from(normalizedFreq.values())
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10)
+        .map(({ label, count }) => ({ name: label.length > 20 ? label.slice(0, 18) + "…" : label, value: count }));
       return { field, type: "text" as const, barData, count: vals.length };
     });
-  }, [fields, responses]);
+  }, [fields, responses, isExtensionWork]);
 
   // ── Export: PNG charts ──
   const handleExportPNG = useCallback(() => {
@@ -1399,12 +1427,17 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
   const handleExportExcel = useCallback(() => {
     if (!responses.length || !fields.length) return;
     const rows = responses.map((r: any) => {
-      const row: Record<string, string> = {
-        "Member": r.member?.alias || "Unknown",
-        "Email": r.member?.email || "—",
-        "Phone": r.member?.phoneNumber || "—",
-        "Submitted": new Date(r.createdAt).toLocaleString(),
-      };
+      const row: Record<string, string> = isExtensionWork
+        ? {
+            "Extension Worker": r.member?.phoneNumber || "—",
+            "Submitted": new Date(r.createdAt).toLocaleString(),
+          }
+        : {
+            "Member": r.member?.alias || "Unknown",
+            "Email": r.member?.email || "—",
+            "Phone": r.member?.phoneNumber || "—",
+            "Submitted": new Date(r.createdAt).toLocaleString(),
+          };
       fields.forEach((f: any) => {
         const v = (r.values || []).find((rv: any) => String(rv.fieldId) === String(f._id));
         let val = v?.value ?? "";
@@ -1420,7 +1453,7 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
     XLSX.utils.book_append_sheet(wb, ws, "Responses");
     const summary = [
       { Metric: "Form", Value: selectedForm?.name || "" },
-      { Metric: "Type", Value: isProfile ? "Profile" : "Tracker" },
+      { Metric: "Type", Value: isProfile ? "Profile" : isExtensionWork ? "Extension Work" : "Tracker" },
       { Metric: "Total Responses", Value: String(responses.length) },
       { Metric: "Fields", Value: String(fields.length) },
       { Metric: "Exported", Value: new Date().toLocaleString() },
@@ -1428,7 +1461,7 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
     const ss = XLSX.utils.json_to_sheet(summary);
     XLSX.utils.book_append_sheet(wb, ss, "Summary");
     XLSX.writeFile(wb, `${selectedForm?.name || "form"}-responses.xlsx`);
-  }, [responses, fields, selectedForm, isProfile]);
+  }, [responses, fields, selectedForm, isProfile, isExtensionWork]);
 
   // ── Export: PDF (form responses) ──
   const handleExportPDF = useCallback(() => {
@@ -1438,7 +1471,7 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
     doc.setFontSize(16);
     doc.text(selectedForm?.name || "Form Report", pw / 2, 18, { align: "center" });
     doc.setFontSize(10);
-    doc.text(`Type: ${isProfile ? "Profile Form" : "Tracker Form"} | Responses: ${responses.length} | Exported: ${new Date().toLocaleString()}`, pw / 2, 26, { align: "center" });
+    doc.text(`Type: ${isProfile ? "Profile Form" : isExtensionWork ? "Extension Work Form" : "Tracker Form"} | Responses: ${responses.length} | Exported: ${new Date().toLocaleString()}`, pw / 2, 26, { align: "center" });
     const summaryRows = fieldAggregations.map((agg: any) => {
       if (agg.type === "number") return [agg.field.label, "Number", `Avg: ${agg.avg}, Min: ${agg.min}, Max: ${agg.max} (${agg.count} values)`];
       if (agg.type === "pie") return [agg.field.label, agg.field.fieldType, agg.pieData.map((d: any) => `${d.name}: ${d.value}`).join(", ")];
@@ -1447,9 +1480,9 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
       return [agg.field.label, agg.field.fieldType, (agg.barData || []).map((d: any) => `${d.name}: ${d.value}`).join(", ")];
     });
     autoTable(doc, { head: [["Field", "Type", "Summary"]], body: summaryRows, startY: 34, styles: { fontSize: 8 }, headStyles: { fillColor: [46, 125, 50] } });
-    const headers = ["Member", ...fields.map((f: any) => f.label)];
+    const headers = [isExtensionWork ? "Extension Worker" : "Member", ...fields.map((f: any) => f.label)];
     const body = responses.map((r: any) => {
-      const memberName = r.member?.alias || "Unknown";
+      const memberName = isExtensionWork ? (r.member?.phoneNumber || "—") : (r.member?.alias || "Unknown");
       const vals = fields.map((f: any) => {
         const v = (r.values || []).find((rv: any) => String(rv.fieldId) === String(f._id));
         let val = v?.value ?? "";
@@ -1460,7 +1493,7 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
     });
     autoTable(doc, { head: [headers], body, startY: (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 10 : 80, styles: { fontSize: 7 }, headStyles: { fillColor: [21, 101, 192] }, alternateRowStyles: { fillColor: [245, 245, 245] } });
     doc.save(`${selectedForm?.name || "form"}-report.pdf`);
-  }, [responses, fields, selectedForm, isProfile, fieldAggregations]);
+  }, [responses, fields, selectedForm, isProfile, isExtensionWork, fieldAggregations]);
 
   // ── Export: Members Excel ──
   const handleExportMembersExcel = useCallback(() => {

@@ -12,7 +12,8 @@ type NestedValue<T, P extends string> = P extends `${infer K}.${infer R}`
     : never;
 
 function resolveMutationFn(path: string): any {
-  const parts = path.split(".");
+  const normalizedPath = path.includes(":") ? path.replace(":", ".") : path;
+  const parts = normalizedPath.split(".");
   let ref: any = api;
   for (const p of parts) {
     ref = ref?.[p];

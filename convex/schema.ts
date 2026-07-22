@@ -1435,6 +1435,35 @@ export default defineSchema({
     .index("by_pesapal_tracking", ["pesapalTrackingId"]),
 
   /**
+   * Extension Work Payment Intents
+   * - Tracks payment authorization for extension-work form submissions
+   * - One successful payment can only be consumed once by a form response
+   */
+  extensionWorkPaymentIntents: defineTable({
+    orderTrackingId: v.string(),
+    memberId: v.id("users"),
+    communityId: v.id("communities"),
+    formId: v.id("communityForms"),
+    amount: v.number(),
+    currency: v.string(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("paid"),
+      v.literal("failed"),
+      v.literal("cancelled")
+    ),
+    paymentReference: v.optional(v.string()),
+    verifiedAt: v.optional(v.number()),
+    consumedAt: v.optional(v.number()),
+    consumedByResponseId: v.optional(v.id("formResponses")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_order_tracking", ["orderTrackingId"])
+    .index("by_member_form", ["memberId", "formId"])
+    .index("by_member_form_status", ["memberId", "formId", "status"]),
+
+  /**
    * Community Forms - custom forms created by community admins
    * - Each community can have multiple forms
    * - Members fill out forms to submit data
@@ -1446,6 +1475,8 @@ export default defineSchema({
     name: v.string(),
     description: v.optional(v.string()),
     isActive: v.boolean(),
+    isDeleted: v.optional(v.boolean()),
+    deletedAt: v.optional(v.number()),
     responseCount: v.number(),
     category: v.optional(v.string()),
     formPurpose: v.optional(v.union(v.literal("tracker"), v.literal("profile"), v.literal("extension_work"))),
@@ -1497,6 +1528,7 @@ export default defineSchema({
     paymentStatus: v.optional(v.string()),
     paymentReference: v.optional(v.string()),
     paymentAmount: v.optional(v.number()),
+    clientSubmissionKey: v.optional(v.string()),
     status: v.optional(v.string()), // "DRAFT" | "SUBMITTED" — defaults to SUBMITTED for backward compat
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -1504,7 +1536,8 @@ export default defineSchema({
     .index("by_form", ["formId"])
     .index("by_community", ["communityId"])
     .index("by_member", ["memberId"])
-    .index("by_form_member", ["formId", "memberId"]),
+    .index("by_form_member", ["formId", "memberId"])
+    .index("by_member_form_submission_key", ["memberId", "formId", "clientSubmissionKey"]),
 
   /**
    * Form Response Values - individual field responses

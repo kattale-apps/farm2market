@@ -28,7 +28,17 @@ function PaymentCallbackContent() {
         setMessage(`Payment ${result.status}. Redirecting you back...`);
         
         setTimeout(() => {
-          router.push(returnTo || "/");
+          const statusParam = String(result.status || "unknown").toLowerCase();
+          if (returnTo) {
+            const sep = returnTo.includes("?") ? "&" : "?";
+            router.push(
+              `${returnTo}${sep}paymentOrderTrackingId=${encodeURIComponent(orderTrackingId)}&paymentStatus=${encodeURIComponent(statusParam)}`
+            );
+            return;
+          }
+          router.push(
+            `/?paymentOrderTrackingId=${encodeURIComponent(orderTrackingId)}&paymentStatus=${encodeURIComponent(statusParam)}`
+          );
         }, 2000);
       } catch (error: any) {
         setStatus("error");
@@ -37,7 +47,7 @@ function PaymentCallbackContent() {
     };
 
     verify();
-  }, [orderTrackingId, verifyPayment, router]);
+  }, [orderTrackingId, returnTo, verifyPayment, router]);
 
   return (
     <div style={{

@@ -3,7 +3,7 @@
 export const dynamic = "force-dynamic";
 
 import { api } from "@/convex/_generated/api";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Id } from "@/convex/_generated/dataModel";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -13,6 +13,7 @@ import { useConvex } from "convex/react";
 import { exportFormSubmissionsToPDF } from "@/app/utils/exportUtils";
 import SubmissionPhotoGallery from "@/app/components/SubmissionPhotoGallery";
 import { useStoredUser } from "@/app/hooks/useStoredUser";
+import { offlineDb } from "@/app/lib/offlineDb";
 
 const BRAND = "#2e7d32";
 const FONT = '"Montserrat", sans-serif';
@@ -37,6 +38,7 @@ export default function TrackerViewPage() {
   const [selectedSubmissionIds, setSelectedSubmissionIds] = useState<Set<string>>(new Set());
   const [singleExportingId, setSingleExportingId] = useState<string | null>(null);
   const [batchExporting, setBatchExporting] = useState(false);
+  const [localQueuedSubmissions, setLocalQueuedSubmissions] = useState<any[]>([]);
   const convex = useConvex();
 
   const submissions = useOfflineQuery(
@@ -47,6 +49,70 @@ export default function TrackerViewPage() {
   ) as any;
 
   const selectedFormName = submissions?.[0]?.formName || "My Submissions";
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadQueued = async () => {
+      if (!userId || !communityId) {
+        if (!cancelled) setLocalQueuedSubmissions([]);
+        return;
+      }
+
+      const rows = await offlineDb.pendingMutations
+        .where("status")
+        .anyOf("pending", "failed")
+        .toArray();
+
+      const queued = rows
+        .filter((row: any) => {
+          const path = String(row.mutationPath || "");
+          const isTargetMutation =
+            path.includes("forms.submitFormResponse") ||
+            path.includes("forms:submitFormResponse") ||
+            path.includes("forms.submitDraft") ||
+            path.includes("forms:submitDraft");
+          if (!isTargetMutation) return false;
+
+          const args = row.args || {};
+          if (String(args.memberId || "") !== String(userId)) return false;
+          if (String(args.communityId || "") !== String(communityId)) return false;
+          if (formId && String(args.formId || "") !== String(formId)) return false;
+          return true;
+        })
+        .map((row: any) => ({
+          _id: `queued-${row.id}`,
+          formName: "Submission pending sync",
+          category: "custom",
+          createdAt: row.timestamp || Date.now(),
+          values: [],
+          localSyncStatus: row.status,
+          localError: row.errorMsg,
+        }));
+
+      if (!cancelled) setLocalQueuedSubmissions(queued);
+    };
+
+    loadQueued().catch(() => {
+      if (!cancelled) setLocalQueuedSubmissions([]);
+    });
+
+    const interval = setInterval(() => {
+      loadQueued().catch(() => {
+        if (!cancelled) setLocalQueuedSubmissions([]);
+      });
+    }, 5000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [userId, communityId, formId]);
+
+  const combinedSubmissions = [
+    ...(submissions || []),
+    ...localQueuedSubmissions,
+  ].sort((a: any, b: any) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
 
   const toggleSelectedSubmission = (submissionId: string, selected: boolean) => {
     setSelectedSubmissionIds((prev) => {
@@ -143,7 +209,7 @@ export default function TrackerViewPage() {
       <div style={{ padding: "1rem" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
           <div style={{ fontSize: "0.82rem", color: "#555", fontWeight: 600 }}>
-            {submissions?.length ? `${submissions.length} submission(s)` : ""}
+            {combinedSubmissions.length ? `${combinedSubmissions.length} submission(s)` : ""}
           </div>
           <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
             <button
@@ -189,7 +255,7 @@ export default function TrackerViewPage() {
           <div style={{ textAlign: "center", padding: "2rem", color: "#888" }}>Loading...</div>
         )}
 
-        {submissions && submissions.length === 0 && (
+        {submissions && combinedSubmissions.length === 0 && (
           <div style={{ textAlign: "center", padding: "2rem", color: "#888" }}>
             <p style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>📋</p>
             <p style={{ fontSize: "0.95rem" }}>No submissions yet.</p>
@@ -203,9 +269,10 @@ export default function TrackerViewPage() {
         )}
 
         <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-          {submissions && submissions.map((sub: any) => {
+          {submissions && combinedSubmissions.map((sub: any) => {
             const isExpanded = expandedId === String(sub._id);
             const isSelected = selectedSubmissionIds.has(String(sub._id));
+            const isLocalQueued = Boolean(sub.localSyncStatus);
             const photoValues = (sub.values || []).filter((v: any) => v.fieldType === "camera" && v.photoUrl);
             return (
               <div key={sub._id} style={{
@@ -239,6 +306,30 @@ export default function TrackerViewPage() {
                   </span>
                 </div>
 
+                {sub.localSyncStatus && (
+                  <div style={{ marginTop: "0.35rem" }}>
+                    <span
+                      style={{
+                        display: "inline-block",
+                        padding: "0.18rem 0.45rem",
+                        borderRadius: 999,
+                        fontSize: "0.68rem",
+                        fontWeight: 700,
+                        background: sub.localSyncStatus === "failed" ? "#ffebee" : "#fff8e1",
+                        color: sub.localSyncStatus === "failed" ? "#c62828" : "#ef6c00",
+                        border: `1px solid ${sub.localSyncStatus === "failed" ? "#ffcdd2" : "#ffe0b2"}`,
+                      }}
+                    >
+                      {sub.localSyncStatus === "failed" ? "Sync failed" : "Pending sync"}
+                    </span>
+                    {sub.localError && (
+                      <p style={{ margin: "0.25rem 0 0", fontSize: "0.72rem", color: "#c62828" }}>
+                        {sub.localError}
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 <button
                   onClick={() => setExpandedId(isExpanded ? null : String(sub._id))}
                   style={{
@@ -261,6 +352,7 @@ export default function TrackerViewPage() {
                     <label style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.72rem", color: "#555" }}>
                       <input
                         type="checkbox"
+                        disabled={isLocalQueued}
                         checked={isSelected}
                         onChange={(e) => toggleSelectedSubmission(String(sub._id), e.target.checked)}
                       />
@@ -270,7 +362,7 @@ export default function TrackerViewPage() {
                   <button
                     type="button"
                     onClick={() => handleSingleExport(sub._id)}
-                    disabled={singleExportingId === String(sub._id)}
+                    disabled={isLocalQueued || singleExportingId === String(sub._id)}
                     style={{
                       border: "1px solid #b7e1bc",
                       background: "#eef7ee",

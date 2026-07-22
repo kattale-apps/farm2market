@@ -80,6 +80,52 @@ async function assertBioFarmMemberEligibility(
   return true;
 }
 
+async function requirePaidExtensionWorkIntent(
+  ctx: any,
+  args: {
+    orderTrackingId: string;
+    memberId: Id<"users">;
+    communityId: Id<"communities">;
+    formId: Id<"communityForms">;
+    paymentAmount?: number;
+  }
+) {
+  const intent = await ctx.db
+    .query("extensionWorkPaymentIntents" as any)
+    .withIndex("by_order_tracking" as any, (q: any) => q.eq("orderTrackingId", args.orderTrackingId))
+    .first();
+
+  if (!intent) {
+    throw new Error("Payment verification record was not found. Complete payment before submitting.");
+  }
+
+  if (
+    String((intent as any).memberId) !== String(args.memberId) ||
+    String((intent as any).communityId) !== String(args.communityId) ||
+    String((intent as any).formId) !== String(args.formId)
+  ) {
+    throw new Error("Payment does not match this form submission context.");
+  }
+
+  if ((intent as any).status !== "paid") {
+    throw new Error("Payment is not completed. Please complete payment before submitting.");
+  }
+
+  if ((intent as any).consumedAt || (intent as any).consumedByResponseId) {
+    throw new Error("This payment has already been used for a submission.");
+  }
+
+  if (
+    typeof args.paymentAmount === "number" &&
+    typeof (intent as any).amount === "number" &&
+    Math.abs((intent as any).amount - args.paymentAmount) > 0.01
+  ) {
+    throw new Error("Payment amount does not match this submission.");
+  }
+
+  return intent;
+}
+
 async function enrichResponsesForAdmin(ctx: any, responses: any[]) {
   if (!responses.length) return [];
 
@@ -269,7 +315,7 @@ export const updateForm = mutation({
 });
 
 /**
- * Delete form and all related data
+ * Archive form while preserving all related submission data
  */
 export const deleteForm = mutation({
   args: {
@@ -281,33 +327,13 @@ export const deleteForm = mutation({
       throw new Error("Form not found");
     }
 
-    // Delete all fields
-    const fields = await ctx.db
-      .query("formFields")
-      .withIndex("by_form", (q) => q.eq("formId", args.formId))
-      .collect();
-    for (const field of fields) {
-      await ctx.db.delete(field._id);
-    }
-
-    // Delete all responses and values
-    const responses = await ctx.db
-      .query("formResponses")
-      .withIndex("by_form", (q) => q.eq("formId", args.formId))
-      .collect();
-    for (const response of responses) {
-      const values = await ctx.db
-        .query("formResponseValues")
-        .withIndex("by_response", (q) => q.eq("responseId", response._id))
-        .collect();
-      for (const value of values) {
-        await ctx.db.delete(value._id);
-      }
-      await ctx.db.delete(response._id);
-    }
-
-    // Delete form
-    await ctx.db.delete(args.formId);
+    // Soft-archive only: keep fields/responses/values for farmer history and records.
+    await ctx.db.patch(args.formId, {
+      isDeleted: true,
+      deletedAt: getUgandaTime(),
+      isActive: false,
+      updatedAt: getUgandaTime(),
+    } as any);
     return { success: true };
   },
 });
@@ -484,6 +510,8 @@ export const submitFormResponse = mutation({
     paymentStatus: v.optional(v.string()),
     paymentReference: v.optional(v.string()),
     paymentAmount: v.optional(v.number()),
+    paymentOrderTrackingId: v.optional(v.string()),
+    clientSubmissionKey: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const form = await ctx.db.get(args.formId);
@@ -493,6 +521,39 @@ export const submitFormResponse = mutation({
 
     if (!(form as any).isActive) {
       throw new Error("This form is no longer accepting submissions");
+    }
+
+    if (args.clientSubmissionKey) {
+      const existing = await ctx.db
+        .query("formResponses")
+        .withIndex("by_member_form_submission_key", (q: any) =>
+          q
+            .eq("memberId", args.memberId)
+            .eq("formId", args.formId)
+            .eq("clientSubmissionKey", args.clientSubmissionKey)
+        )
+        .first();
+      if (existing && (existing as any).status !== "DRAFT") {
+        return { _id: existing._id, coinsEarned: 0, deduped: true };
+      }
+    }
+
+    const requiresPayment =
+      (form as any).formPurpose === "extension_work" &&
+      Boolean((form as any).paymentEnabled || (form as any).paymentAmountEditable);
+
+    let paymentIntent: any = null;
+    if (requiresPayment) {
+      if (!args.paymentOrderTrackingId) {
+        throw new Error("Complete payment before submitting this extension work form.");
+      }
+      paymentIntent = await requirePaidExtensionWorkIntent(ctx, {
+        orderTrackingId: args.paymentOrderTrackingId,
+        memberId: args.memberId,
+        communityId: args.communityId,
+        formId: args.formId,
+        paymentAmount: args.paymentAmount,
+      });
     }
 
     // Create response
@@ -512,12 +573,24 @@ export const submitFormResponse = mutation({
       planId: args.planId,
       plannedSprayDate: args.plannedSprayDate,
       trackedUnitId: args.trackedUnitId,
-      paymentStatus: args.paymentStatus,
-      paymentReference: args.paymentReference,
-      paymentAmount: args.paymentAmount,
+      paymentStatus: requiresPayment ? "paid" : args.paymentStatus,
+      paymentReference: requiresPayment
+        ? ((paymentIntent as any).paymentReference || args.paymentOrderTrackingId)
+        : args.paymentReference,
+      paymentAmount: requiresPayment ? (paymentIntent as any).amount : args.paymentAmount,
+      clientSubmissionKey: args.clientSubmissionKey,
+      status: "SUBMITTED",
       createdAt: getUgandaTime(),
       updatedAt: getUgandaTime(),
     });
+
+    if (requiresPayment && paymentIntent) {
+      await ctx.db.patch((paymentIntent as any)._id, {
+        consumedAt: getUgandaTime(),
+        consumedByResponseId: responseId,
+        updatedAt: getUgandaTime(),
+      } as any);
+    }
 
     // Store field values
     for (const fv of args.fieldValues) {
@@ -600,16 +673,28 @@ export const getFormResponses = query({
     trackedUnitId: v.optional(v.id("farmTrackedUnits")),
   },
   handler: async (ctx, args) => {
+    const form = await ctx.db.get(args.formId);
     const allResponses = await ctx.db
       .query("formResponses")
       .withIndex("by_form", (q) => q.eq("formId", args.formId))
       .order("desc")
       .collect();
-    const responses = args.trackedUnitId
+    let responses = args.trackedUnitId
       ? allResponses.filter((r: any) => String((r as any).trackedUnitId || "") === String(args.trackedUnitId))
       : allResponses;
 
-    const form = await ctx.db.get(args.formId);
+    responses = responses.filter((r: any) => (r as any).status !== "DRAFT");
+
+    const requiresPaidExtensionFilter =
+      (form as any)?.formPurpose === "extension_work" &&
+      Boolean((form as any)?.paymentEnabled);
+
+    if (requiresPaidExtensionFilter) {
+      responses = responses.filter(
+        (r: any) => String((r as any).paymentStatus || "").toLowerCase() === "paid"
+      );
+    }
+
     const fields = await ctx.db
       .query("formFields")
       .withIndex("by_form", (q) => q.eq("formId", args.formId))
@@ -915,20 +1000,55 @@ export const submitDraft = mutation({
   args: {
     responseId: v.id("formResponses"),
     memberId: v.id("users"),
+    communityId: v.optional(v.id("communities")),
+    formId: v.optional(v.id("communityForms")),
     planId: v.optional(v.id("fertilizerPlans")),
     plannedSprayDate: v.optional(v.string()),
     trackedUnitId: v.optional(v.id("farmTrackedUnits")),
+    paymentOrderTrackingId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const response = await ctx.db.get(args.responseId);
     if (!response) throw new Error("Response not found");
     if (response.memberId !== args.memberId) throw new Error("Not authorized");
+    if (args.communityId && String(response.communityId) !== String(args.communityId)) {
+      throw new Error("Submission context mismatch (community)");
+    }
+    if (args.formId && String(response.formId) !== String(args.formId)) {
+      throw new Error("Submission context mismatch (form)");
+    }
+    if ((response as any).status === "SUBMITTED") {
+      return { success: true, coinsEarned: 0, alreadySubmitted: true };
+    }
         if (args.trackedUnitId) {
           const unit = await ctx.db.get(args.trackedUnitId);
           if (!unit || unit.farmerId !== args.memberId) {
             throw new Error("Tracked unit not found or not owned by this member");
           }
         }
+    const form = await ctx.db.get(response.formId);
+    if (!form || !(form as any).isActive || !!(form as any).isDeleted) {
+      throw new Error("This form is no longer accepting submissions");
+    }
+    const requiresPayment =
+      (form as any).formPurpose === "extension_work" &&
+      Boolean((form as any).paymentEnabled || (form as any).paymentAmountEditable);
+
+    let paymentIntent: any = null;
+    if (requiresPayment) {
+      const trackingId = args.paymentOrderTrackingId || (response as any).paymentReference;
+      if (!trackingId) {
+        throw new Error("Complete payment before submitting this extension work form.");
+      }
+      paymentIntent = await requirePaidExtensionWorkIntent(ctx, {
+        orderTrackingId: trackingId,
+        memberId: args.memberId,
+        communityId: response.communityId,
+        formId: response.formId,
+        paymentAmount: (response as any).paymentAmount,
+      });
+    }
+
     const updates: any = {
       status: "SUBMITTED",
       updatedAt: getUgandaTime(),
@@ -936,11 +1056,23 @@ export const submitDraft = mutation({
     if (args.planId !== undefined) updates.planId = args.planId;
     if (args.plannedSprayDate !== undefined) updates.plannedSprayDate = args.plannedSprayDate;
     if (args.trackedUnitId !== undefined) updates.trackedUnitId = args.trackedUnitId;
+    if (requiresPayment && paymentIntent) {
+      updates.paymentStatus = "paid";
+      updates.paymentReference = (paymentIntent as any).paymentReference || args.paymentOrderTrackingId;
+      updates.paymentAmount = (paymentIntent as any).amount;
+    }
 
     await ctx.db.patch(args.responseId, updates);
 
+    if (requiresPayment && paymentIntent) {
+      await ctx.db.patch((paymentIntent as any)._id, {
+        consumedAt: getUgandaTime(),
+        consumedByResponseId: args.responseId,
+        updatedAt: getUgandaTime(),
+      } as any);
+    }
+
     // Increment response count on form
-    const form = await ctx.db.get(response.formId);
     if (form) {
       await ctx.db.patch(response.formId, {
         responseCount: ((form as any).responseCount || 0) + 1,

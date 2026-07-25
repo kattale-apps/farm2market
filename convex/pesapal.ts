@@ -539,6 +539,32 @@ export const listUnconsumedPaidExtensionWorkIntents = internalQuery({
 });
 
 /**
+ * Internal helper: list unconsumed extension-work intents across statuses.
+ */
+export const listUnconsumedExtensionWorkIntents = internalQuery({
+  args: {
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const max = Math.max(1, Math.min(args.limit ?? 200, 500));
+    const intents = await ctx.db.query("extensionWorkPaymentIntents" as any).collect();
+
+    return intents
+      .filter((intent: any) => !intent?.consumedAt && !intent?.consumedByResponseId)
+      .sort((a: any, b: any) => Number((a as any).createdAt || 0) - Number((b as any).createdAt || 0))
+      .slice(0, max)
+      .map((intent: any) => ({
+        _id: intent._id,
+        orderTrackingId: intent.orderTrackingId,
+        memberId: intent.memberId,
+        communityId: intent.communityId,
+        formId: intent.formId,
+        status: intent.status,
+      }));
+  },
+});
+
+/**
  * Verify payment status from Pesapal
  * Called after user returns from Pesapal payment page
  */
@@ -744,6 +770,61 @@ export const reconcilePaidExtensionWorkSubmissions = action({
       scanned: intents.length,
       reconciled,
       skippedNoDraft,
+      failed,
+      failures,
+    };
+  },
+});
+
+/**
+ * Verify legacy/pending unconsumed extension-work payment intents against Pesapal,
+ * then auto-finalize submissions where payment is confirmed.
+ */
+export const reconcilePendingExtensionWorkPayments = action({
+  args: {
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args): Promise<{
+    scanned: number;
+    verified: number;
+    paidAfterVerify: number;
+    failed: number;
+    failures: Array<{ orderTrackingId: string; reason: string }>;
+  }> => {
+    const intents = await ctx.runQuery(internal.pesapal.listUnconsumedExtensionWorkIntents, {
+      limit: args.limit,
+    });
+
+    let verified = 0;
+    let paidAfterVerify = 0;
+    let failed = 0;
+    const failures: Array<{ orderTrackingId: string; reason: string }> = [];
+
+    for (const intent of intents as any[]) {
+      if (!intent?.orderTrackingId) continue;
+      try {
+        const verification = await ctx.runAction(api.pesapal.verifyPesapalPayment, {
+          orderTrackingId: String(intent.orderTrackingId),
+        });
+        verified += 1;
+
+        const normalized = String((verification as any)?.status || "").toLowerCase();
+        if (normalized.includes("completed") || normalized === "paid") {
+          paidAfterVerify += 1;
+        }
+      } catch (error: any) {
+        failed += 1;
+        failures.push({
+          orderTrackingId: String(intent.orderTrackingId || "unknown"),
+          reason: String(error?.message || "verify failed"),
+        });
+      }
+    }
+
+    return {
+      scanned: intents.length,
+      verified,
+      paidAfterVerify,
       failed,
       failures,
     };

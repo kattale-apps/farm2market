@@ -1,5 +1,5 @@
 ﻿import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalQuery, mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { generateUTID, getUgandaTime } from "./utils";
 
@@ -990,6 +990,36 @@ export const getDraftResponse = query({
       .collect();
 
     return { ...draft, values };
+  },
+});
+
+/**
+ * Internal helper: latest draft for a member+form+community regardless of context fields.
+ * Used by payment verification reconciliation flows.
+ */
+export const getLatestDraftResponseForMemberFormCommunity = internalQuery({
+  args: {
+    formId: v.id("communityForms"),
+    communityId: v.id("communities"),
+    memberId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const rows = await ctx.db
+      .query("formResponses")
+      .withIndex("by_form_member", (q) =>
+        q.eq("formId", args.formId).eq("memberId", args.memberId)
+      )
+      .collect();
+
+    const drafts = rows
+      .filter(
+        (r: any) =>
+          String(r.communityId) === String(args.communityId) &&
+          (r as any).status === "DRAFT"
+      )
+      .sort((a: any, b: any) => Number((b as any).updatedAt || 0) - Number((a as any).updatedAt || 0));
+
+    return drafts[0] || null;
   },
 });
 

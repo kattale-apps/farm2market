@@ -508,6 +508,37 @@ export const getExtensionWorkPaymentIntentByOrderTrackingId = internalQuery({
 });
 
 /**
+ * Internal helper: list paid extension-work intents that have not yet been consumed
+ * by a submitted form response.
+ */
+export const listUnconsumedPaidExtensionWorkIntents = internalQuery({
+  args: {
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const max = Math.max(1, Math.min(args.limit ?? 200, 500));
+    const intents = await ctx.db.query("extensionWorkPaymentIntents" as any).collect();
+
+    return intents
+      .filter(
+        (intent: any) =>
+          intent?.status === "paid" &&
+          !intent?.consumedAt &&
+          !intent?.consumedByResponseId
+      )
+      .sort((a: any, b: any) => Number((a as any).createdAt || 0) - Number((b as any).createdAt || 0))
+      .slice(0, max)
+      .map((intent: any) => ({
+        _id: intent._id,
+        orderTrackingId: intent.orderTrackingId,
+        memberId: intent.memberId,
+        communityId: intent.communityId,
+        formId: intent.formId,
+      }));
+  },
+});
+
+/**
  * Verify payment status from Pesapal
  * Called after user returns from Pesapal payment page
  */
@@ -603,6 +634,36 @@ export const verifyPesapalPayment = action({
       { orderTrackingId: args.orderTrackingId }
     );
 
+    // Auto-finalize extension-work form submissions after paid verification.
+    // This closes the gap where payment succeeds but the user does not tap submit again.
+    if (normalizedStatus === "paid" && extensionWorkContext) {
+      try {
+        const draft = await ctx.runQuery(
+          internal.forms.getLatestDraftResponseForMemberFormCommunity,
+          {
+            formId: extensionWorkContext.formId as Id<"communityForms">,
+            communityId: extensionWorkContext.communityId as Id<"communities">,
+            memberId: extensionWorkContext.memberId as Id<"users">,
+          }
+        );
+
+        if (draft?._id) {
+          await ctx.runMutation(api.forms.submitDraft, {
+            responseId: draft._id,
+            memberId: extensionWorkContext.memberId as Id<"users">,
+            communityId: extensionWorkContext.communityId as Id<"communities">,
+            formId: extensionWorkContext.formId as Id<"communityForms">,
+            planId: (draft as any).planId || undefined,
+            plannedSprayDate: (draft as any).plannedSprayDate || undefined,
+            trackedUnitId: (draft as any).trackedUnitId || undefined,
+            paymentOrderTrackingId: args.orderTrackingId,
+          } as any);
+        }
+      } catch {
+        // Best-effort reconciliation; verification should not fail if submit cannot be finalized here.
+      }
+    }
+
     return {
       status: paymentStatus.payment_status_description || paymentStatus.status || "unknown",
       orderTrackingId: args.orderTrackingId,
@@ -614,6 +675,77 @@ export const verifyPesapalPayment = action({
             status: extensionWorkContext.status,
           }
         : undefined,
+    };
+  },
+});
+
+/**
+ * Reconcile past paid extension-work intents that were not consumed into
+ * submitted form responses. Safe to run multiple times.
+ */
+export const reconcilePaidExtensionWorkSubmissions = action({
+  args: {
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args): Promise<{
+    scanned: number;
+    reconciled: number;
+    skippedNoDraft: number;
+    failed: number;
+    failures: Array<{ orderTrackingId: string; reason: string }>;
+  }> => {
+    const intents = await ctx.runQuery(internal.pesapal.listUnconsumedPaidExtensionWorkIntents, {
+      limit: args.limit,
+    });
+
+    let reconciled = 0;
+    let skippedNoDraft = 0;
+    let failed = 0;
+    const failures: Array<{ orderTrackingId: string; reason: string }> = [];
+
+    for (const intent of intents as any[]) {
+      try {
+        const draft = await ctx.runQuery(
+          internal.forms.getLatestDraftResponseForMemberFormCommunity,
+          {
+            formId: intent.formId as Id<"communityForms">,
+            communityId: intent.communityId as Id<"communities">,
+            memberId: intent.memberId as Id<"users">,
+          }
+        );
+
+        if (!draft?._id) {
+          skippedNoDraft += 1;
+          continue;
+        }
+
+        await ctx.runMutation(api.forms.submitDraft, {
+          responseId: draft._id,
+          memberId: intent.memberId as Id<"users">,
+          communityId: intent.communityId as Id<"communities">,
+          formId: intent.formId as Id<"communityForms">,
+          planId: (draft as any).planId || undefined,
+          plannedSprayDate: (draft as any).plannedSprayDate || undefined,
+          trackedUnitId: (draft as any).trackedUnitId || undefined,
+          paymentOrderTrackingId: intent.orderTrackingId,
+        } as any);
+
+        reconciled += 1;
+      } catch (error: any) {
+        failed += 1;
+        failures.push({
+          orderTrackingId: String(intent.orderTrackingId || "unknown"),
+          reason: String(error?.message || "reconcile failed"),
+        });
+      }
+    }
+
+    return {
+      scanned: intents.length,
+      reconciled,
+      skippedNoDraft,
+      failed,
+      failures,
     };
   },
 });

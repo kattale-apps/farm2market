@@ -306,10 +306,15 @@ export default function TrackerFillPage() {
   }, [existingDraft, draftLoaded]);
 
   useEffect(() => {
-    if (paymentStatus === "success") {
+    const normalizedPaymentStatus = String(paymentStatus || "").toLowerCase();
+    if (
+      normalizedPaymentStatus === "success" ||
+      normalizedPaymentStatus === "completed" ||
+      normalizedPaymentStatus === "paid"
+    ) {
       setMessage({ type: "success", text: "Payment completed. You can now submit the form." });
-    } else if (paymentStatus === "cancelled") {
-      setMessage({ type: "error", text: "Payment was cancelled. You can try again when ready." });
+    } else if (normalizedPaymentStatus === "cancelled" || normalizedPaymentStatus === "failed") {
+      setMessage({ type: "error", text: "Payment was not completed. You can try again when ready." });
     }
   }, [paymentStatus]);
 

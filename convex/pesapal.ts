@@ -481,6 +481,33 @@ export const markExtensionWorkPaymentIntent = internalMutation({
 });
 
 /**
+ * Fetch extension-work payment intent context by order tracking ID.
+ * Used by callback flows to reconstruct form return paths.
+ */
+export const getExtensionWorkPaymentIntentByOrderTrackingId = internalQuery({
+  args: {
+    orderTrackingId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const intent = await ctx.db
+      .query("extensionWorkPaymentIntents" as any)
+      .withIndex("by_order_tracking" as any, (q: any) => q.eq("orderTrackingId", args.orderTrackingId))
+      .first();
+
+    if (!intent) {
+      return null;
+    }
+
+    return {
+      memberId: (intent as any).memberId,
+      communityId: (intent as any).communityId,
+      formId: (intent as any).formId,
+      status: (intent as any).status,
+    };
+  },
+});
+
+/**
  * Verify payment status from Pesapal
  * Called after user returns from Pesapal payment page
  */
@@ -488,7 +515,16 @@ export const verifyPesapalPayment = action({
   args: {
     orderTrackingId: v.string(),
   },
-  handler: async (ctx, args): Promise<{ status: string; orderTrackingId: string }> => {
+  handler: async (ctx, args): Promise<{
+    status: string;
+    orderTrackingId: string;
+    extensionWorkContext?: {
+      communityId: Id<"communities">;
+      formId: Id<"communityForms">;
+      memberId: Id<"users">;
+      status: "pending" | "paid" | "failed" | "cancelled";
+    };
+  }> => {
     // Get access token
     const { token }: { token: string; expiresIn: number } = await ctx.runAction(internal.pesapal.getPesapalAccessToken, {});
 
@@ -562,9 +598,22 @@ export const verifyPesapalPayment = action({
       }
     }
 
+    const extensionWorkContext = await ctx.runQuery(
+      internal.pesapal.getExtensionWorkPaymentIntentByOrderTrackingId,
+      { orderTrackingId: args.orderTrackingId }
+    );
+
     return {
       status: paymentStatus.payment_status_description || paymentStatus.status || "unknown",
       orderTrackingId: args.orderTrackingId,
+      extensionWorkContext: extensionWorkContext
+        ? {
+            communityId: extensionWorkContext.communityId as Id<"communities">,
+            formId: extensionWorkContext.formId as Id<"communityForms">,
+            memberId: extensionWorkContext.memberId as Id<"users">,
+            status: extensionWorkContext.status,
+          }
+        : undefined,
     };
   },
 });

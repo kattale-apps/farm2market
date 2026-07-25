@@ -8,7 +8,10 @@ import { useEffect, useState, Suspense } from "react";
 function PaymentCallbackContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const orderTrackingId = searchParams.get("OrderTrackingId");
+  const orderTrackingId =
+    searchParams.get("OrderTrackingId") ||
+    searchParams.get("orderTrackingId") ||
+    searchParams.get("order_tracking_id");
   const returnTo = searchParams.get("returnTo");
   const verifyPayment = useAction(api.pesapal.verifyPesapalPayment);
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
@@ -36,6 +39,18 @@ function PaymentCallbackContent() {
             );
             return;
           }
+
+          const ctx = (result as any)?.extensionWorkContext;
+          if (ctx?.communityId && ctx?.formId) {
+            const extensionReturnTo =
+              `/community-only/trackers/fill?communityId=${encodeURIComponent(String(ctx.communityId))}` +
+              `&formId=${encodeURIComponent(String(ctx.formId))}`;
+            router.push(
+              `${extensionReturnTo}&paymentOrderTrackingId=${encodeURIComponent(orderTrackingId)}&paymentStatus=${encodeURIComponent(statusParam)}`
+            );
+            return;
+          }
+
           router.push(
             `/?paymentOrderTrackingId=${encodeURIComponent(orderTrackingId)}&paymentStatus=${encodeURIComponent(statusParam)}`
           );

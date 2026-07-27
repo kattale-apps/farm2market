@@ -532,11 +532,15 @@ function MessagesTab({ communityId, userId }: { communityId: Id<"communities">; 
 /* ── Forms & Templates tab (per community) ── */
 function FormsTab({ communityId, userId }: { communityId: Id<"communities">; userId: Id<"users"> }) {
   const forms = useQuery((api as any).forms.getCommunityForms, { communityId });
+  const archivedForms = useQuery((api as any).forms.getArchivedCommunityForms, { communityId });
   const templates = useQuery((api as any).forms.getTrackerTemplates, {});
   const seedTemplates = useMutation((api as any).forms.seedTrackerTemplates);
   const createTrackerFromTemplate = useMutation((api as any).forms.createTrackerFromTemplate);
   const createForm = useMutation((api as any).forms.createForm);
   const addFormField = useMutation((api as any).forms.addFormField);
+  const archiveForm = useMutation((api as any).forms.archiveForm);
+  const restoreForm = useMutation((api as any).forms.restoreForm);
+  const hardDeleteForm = useMutation((api as any).forms.hardDeleteForm);
   const deleteForm = useMutation((api as any).forms.deleteForm);
   const updateForm = useMutation((api as any).forms.updateForm);
 
@@ -1030,10 +1034,10 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
                         }
                       }}
                       onDelete={async () => {
-                        if (confirm("Delete this form and all its data?")) {
+                        if (confirm("Archive this form? Responses will be preserved in the archive.")) {
                           try {
-                            await deleteForm({ formId: form._id });
-                            setMsg({ type: "success", text: "Form deleted" });
+                            await archiveForm({ formId: form._id, adminId: userId });
+                            setMsg({ type: "success", text: "Form archived" });
                           } catch (e: any) {
                             setMsg({ type: "error", text: e.message });
                           }
@@ -1044,6 +1048,88 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* Archived Forms Section */}
+        {archivedForms !== undefined && archivedForms.length > 0 && (
+          <div style={{ marginTop: "2rem", paddingTop: "1.5rem", borderTop: "2px solid #f0f0f0" }}>
+            <h4 style={{ margin: "0 0 1rem 0", fontSize: "1rem", fontWeight: 700, color: "#c62828" }}>
+              🗂️ Archived Forms ({archivedForms.length})
+            </h4>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+              {archivedForms.map((form: any) => (
+                <div key={form._id} style={{
+                  borderRadius: "10px", border: "1px solid #e0e0e0", background: "#fafafa", overflow: "hidden", opacity: 0.85,
+                }}>
+                  <div
+                    style={{
+                      padding: "0.85rem 1rem", display: "flex", justifyContent: "space-between",
+                      alignItems: "center", background: "#fff5f5",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                      <span style={{
+                        padding: "0.1rem 0.4rem", borderRadius: "999px", fontSize: "0.68rem",
+                        fontWeight: 600, background: "#e0e0e0", color: "#666",
+                      }}>
+                        🗑️ Archived
+                      </span>
+                      <strong style={{ fontSize: "0.9rem", color: "#666" }}>{form.name}</strong>
+                      <span style={{ fontSize: "0.78rem", color: "#888" }}>
+                        {form.responseCount || 0} responses
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", gap: "0.4rem" }}>
+                      <button
+                        onClick={async () => {
+                          if (confirm(`Restore "${form.name}"? It will be restored as inactive.`)) {
+                            try {
+                              await restoreForm({ formId: form._id, adminId: userId, restoreActive: false });
+                              setMsg({ type: "success", text: "Form restored (inactive)" });
+                            } catch (e: any) {
+                              setMsg({ type: "error", text: e.message });
+                            }
+                          }
+                        }}
+                        style={{
+                          padding: "0.35rem 0.6rem", borderRadius: "4px", border: "1px solid #4caf50",
+                          background: "#e8f5e9", color: "#2e7d32",
+                          fontSize: "0.75rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
+                        }}
+                      >
+                        Restore
+                      </button>
+                      <button
+                        onClick={async () => {
+                          const deleteConfirmText = prompt(
+                            `Permanently delete "${form.name}" and ${form.responseCount || 0} responses? This cannot be undone.\\n\\nType DELETE to confirm:`,
+                            ""
+                          );
+                          if (deleteConfirmText === "DELETE") {
+                            try {
+                              const result = await hardDeleteForm({ formId: form._id, adminId: userId });
+                              setMsg({ type: "success", text: `Permanently deleted. ${(result as any).message}` });
+                            } catch (e: any) {
+                              setMsg({ type: "error", text: e.message });
+                            }
+                          } else if (deleteConfirmText !== null) {
+                            setMsg({ type: "error", text: "Confirmation text did not match. Deletion cancelled." });
+                          }
+                        }}
+                        style={{
+                          padding: "0.35rem 0.6rem", borderRadius: "4px", border: "1px solid #c62828",
+                          background: "#ffebee", color: "#c62828",
+                          fontSize: "0.75rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
+                        }}
+                      >
+                        🗑️ Delete Permanently
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -1143,7 +1229,7 @@ function FormDetailView({ formId, formName, isActive, onToggleActive, onDelete }
             fontSize: "0.8rem", fontWeight: 600, cursor: "pointer",
           }}
         >
-          Delete
+          Archive
         </button>
       </div>
     </div>

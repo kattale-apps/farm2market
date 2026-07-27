@@ -1461,7 +1461,8 @@ export default defineSchema({
   })
     .index("by_order_tracking", ["orderTrackingId"])
     .index("by_member_form", ["memberId", "formId"])
-    .index("by_member_form_status", ["memberId", "formId", "status"]),
+    .index("by_member_form_status", ["memberId", "formId", "status"])
+    .index("by_form", ["formId"]),
 
   /**
    * Community Forms - custom forms created by community admins
@@ -1491,7 +1492,8 @@ export default defineSchema({
   })
     .index("by_community", ["communityId"])
     .index("by_admin", ["adminId"])
-    .index("by_active", ["isActive"]),
+    .index("by_active", ["isActive"])
+    .index("by_community_isdeleted", ["communityId", "isDeleted"]),
 
   /**
    * Form Fields - individual fields within a form

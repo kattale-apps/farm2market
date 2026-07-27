@@ -315,7 +315,203 @@ export const updateForm = mutation({
 });
 
 /**
- * Archive form while preserving all related submission data
+ * Archive form (soft-delete) while preserving all related submission data.
+ * Requires community admin authorization.
+ */
+export const archiveForm = mutation({
+  args: {
+    formId: v.id("communityForms"),
+    adminId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const form = await ctx.db.get(args.formId);
+    if (!form) {
+      throw new Error("Form not found");
+    }
+
+    // Verify admin is authorized for this community
+    const community = await ctx.db.get((form as any).communityId);
+    if (!community) {
+      throw new Error("Community not found");
+    }
+
+    const isDirectAdmin = (community as any).communityAdminId === args.adminId;
+    let isAssignedAdmin = false;
+    if (!isDirectAdmin) {
+      const adminUser = await ctx.db.get(args.adminId);
+      if (adminUser && adminUser.role === "admin") {
+        const assigned: string[] = (adminUser as any).assignedCommunityIds || [];
+        isAssignedAdmin = assigned.includes(String((form as any).communityId));
+      }
+    }
+    if (!isDirectAdmin && !isAssignedAdmin) {
+      throw new Error("Not authorized to archive forms for this community");
+    }
+
+    // Soft-archive: keep fields/responses/values for farmer history and records.
+    await ctx.db.patch(args.formId, {
+      isDeleted: true,
+      deletedAt: getUgandaTime(),
+      isActive: false,
+      updatedAt: getUgandaTime(),
+    } as any);
+    return { success: true };
+  },
+});
+
+/**
+ * Restore archived form. Clears deletion flags but restores as inactive by default.
+ * Requires community admin authorization.
+ */
+export const restoreForm = mutation({
+  args: {
+    formId: v.id("communityForms"),
+    adminId: v.id("users"),
+    restoreActive: v.optional(v.boolean()), // default false: restore as inactive
+  },
+  handler: async (ctx, args) => {
+    const form = await ctx.db.get(args.formId);
+    if (!form) {
+      throw new Error("Form not found");
+    }
+
+    if (!(form as any).isDeleted) {
+      throw new Error("Form is not archived");
+    }
+
+    // Verify admin is authorized for this community
+    const community = await ctx.db.get((form as any).communityId);
+    if (!community) {
+      throw new Error("Community not found");
+    }
+
+    const isDirectAdmin = (community as any).communityAdminId === args.adminId;
+    let isAssignedAdmin = false;
+    if (!isDirectAdmin) {
+      const adminUser = await ctx.db.get(args.adminId);
+      if (adminUser && adminUser.role === "admin") {
+        const assigned: string[] = (adminUser as any).assignedCommunityIds || [];
+        isAssignedAdmin = assigned.includes(String((form as any).communityId));
+      }
+    }
+    if (!isDirectAdmin && !isAssignedAdmin) {
+      throw new Error("Not authorized to restore forms for this community");
+    }
+
+    // Restore: clear deletion flags, optionally restore as active
+    await ctx.db.patch(args.formId, {
+      isDeleted: false,
+      deletedAt: undefined,
+      isActive: args.restoreActive ?? false,
+      updatedAt: getUgandaTime(),
+    } as any);
+    return { success: true };
+  },
+});
+
+/**
+ * Hard delete an archived form and all related data (cascade).
+ * Only allowed for archived forms. Requires community admin authorization.
+ * Returns deletion counts for confirmation.
+ */
+export const hardDeleteForm = mutation({
+  args: {
+    formId: v.id("communityForms"),
+    adminId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const form = await ctx.db.get(args.formId);
+    if (!form) {
+      throw new Error("Form not found");
+    }
+
+    if (!(form as any).isDeleted) {
+      throw new Error("Only archived forms can be permanently deleted");
+    }
+
+    // Verify admin is authorized for this community
+    const community = await ctx.db.get((form as any).communityId);
+    if (!community) {
+      throw new Error("Community not found");
+    }
+
+    const isDirectAdmin = (community as any).communityAdminId === args.adminId;
+    let isAssignedAdmin = false;
+    if (!isDirectAdmin) {
+      const adminUser = await ctx.db.get(args.adminId);
+      if (adminUser && adminUser.role === "admin") {
+        const assigned: string[] = (adminUser as any).assignedCommunityIds || [];
+        isAssignedAdmin = assigned.includes(String((form as any).communityId));
+      }
+    }
+    if (!isDirectAdmin && !isAssignedAdmin) {
+      throw new Error("Not authorized to delete forms for this community");
+    }
+
+    let deletedCounts = {
+      fields: 0,
+      responses: 0,
+      responseValues: 0,
+      paymentIntents: 0,
+    };
+
+    // 1. Delete all form response values
+    const responses = await ctx.db
+      .query("formResponses")
+      .withIndex("by_form", (q) => q.eq("formId", args.formId))
+      .collect();
+
+    for (const response of responses) {
+      const values = await ctx.db
+        .query("formResponseValues")
+        .withIndex("by_response", (q) => q.eq("responseId", response._id))
+        .collect();
+      for (const value of values) {
+        await ctx.db.delete(value._id);
+        deletedCounts.responseValues++;
+      }
+    }
+
+    // 2. Delete all form responses
+    for (const response of responses) {
+      await ctx.db.delete(response._id);
+      deletedCounts.responses++;
+    }
+
+    // 3. Delete all form fields
+    const fields = await ctx.db
+      .query("formFields")
+      .withIndex("by_form", (q) => q.eq("formId", args.formId))
+      .collect();
+    for (const field of fields) {
+      await ctx.db.delete(field._id);
+      deletedCounts.fields++;
+    }
+
+    // 4. Delete all extension work payment intents tied to this form
+    const paymentIntents = await ctx.db
+      .query("extensionWorkPaymentIntents" as any)
+      .withIndex("by_form", (q: any) => q.eq("formId", args.formId))
+      .collect();
+    for (const intent of paymentIntents) {
+      await ctx.db.delete(intent._id);
+      deletedCounts.paymentIntents++;
+    }
+
+    // 5. Delete the form itself
+    await ctx.db.delete(args.formId);
+
+    return {
+      success: true,
+      deleted: deletedCounts,
+      message: `Permanently deleted form and ${deletedCounts.fields} fields, ${deletedCounts.responses} responses, ${deletedCounts.responseValues} response values, and ${deletedCounts.paymentIntents} payment intents.`,
+    };
+  },
+});
+
+/**
+ * Legacy: Archive form (backward compatible wrapper for deleteForm).
+ * New code should use archiveForm directly.
  */
 export const deleteForm = mutation({
   args: {
@@ -328,6 +524,7 @@ export const deleteForm = mutation({
     }
 
     // Soft-archive only: keep fields/responses/values for farmer history and records.
+    // Note: No authorization check here for backward compatibility, but archiveForm is preferred.
     await ctx.db.patch(args.formId, {
       isDeleted: true,
       deletedAt: getUgandaTime(),
@@ -449,6 +646,9 @@ export const removeFormField = mutation({
 /**
  * Get all forms for a community
  */
+/**
+ * Get active (non-archived) forms for a community
+ */
 export const getCommunityForms = query({
   args: {
     communityId: v.id("communities"),
@@ -457,6 +657,24 @@ export const getCommunityForms = query({
     const forms = await ctx.db
       .query("communityForms")
       .withIndex("by_community", (q) => q.eq("communityId", args.communityId))
+      .order("desc")
+      .collect();
+
+    return forms.filter((f: any) => !f.isDeleted);
+  },
+});
+
+/**
+ * Get archived (soft-deleted) forms for a community
+ */
+export const getArchivedCommunityForms = query({
+  args: {
+    communityId: v.id("communities"),
+  },
+  handler: async (ctx, args) => {
+    const forms = await ctx.db
+      .query("communityForms")
+      .withIndex("by_community_isdeleted", (q) => q.eq("communityId", args.communityId).eq("isDeleted", true))
       .order("desc")
       .collect();
 
@@ -1751,8 +1969,11 @@ export const getPerformanceInsights = query({
       .withIndex("by_community", (q) => q.eq("communityId", args.communityId))
       .collect();
 
+    // Exclude archived forms
+    const activeForms = forms.filter((f: any) => !f.isDeleted);
+
     const insights: any[] = [];
-    for (const form of forms) {
+    for (const form of activeForms) {
       const fields = await ctx.db
         .query("formFields")
         .withIndex("by_form", (q) => q.eq("formId", form._id))

@@ -35,7 +35,7 @@ export default function CommunitiesPage() {
     isGlobal: false,
     geoLocked: false,
     regionKey: "",
-    communityType: "farmer" as "farmer" | "trader" | "buyer",
+    communityType: "farmer" as "farmer" | "trader" | "buyer" | "vendor",
     assignAdminId: "",
     // QR & monetisation
     qrSlug: "",
@@ -420,7 +420,7 @@ export default function CommunitiesPage() {
                   </label>
                   <select
                     value={formData.communityType}
-                    onChange={(e) => setFormData({ ...formData, communityType: e.target.value as "farmer" | "trader" | "buyer" })}
+                    onChange={(e) => setFormData({ ...formData, communityType: e.target.value as "farmer" | "trader" | "buyer" | "vendor" })}
                     style={{
                       width: "100%", padding: "0.6rem", border: "1px solid #ccc",
                       borderRadius: "6px", fontSize: "0.9rem", boxSizing: "border-box",
@@ -429,6 +429,7 @@ export default function CommunitiesPage() {
                     <option value="farmer">Farmer</option>
                     <option value="trader">Trader</option>
                     <option value="buyer">Buyer</option>
+                    <option value="vendor">Vendor</option>
                   </select>
                 </div>
 

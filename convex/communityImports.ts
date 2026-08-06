@@ -14,6 +14,7 @@ import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { BCU_PRESET_PASSWORD } from "./constants";
 import { getUgandaTime } from "./utils";
+import { getCommunityDefaultRole } from "./communities";
 
 const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
 
@@ -78,11 +79,11 @@ function isValidEmail(email: string): boolean {
 }
 
 /**
- * Generate email from phone number in format: farmer_[phone]@bcu.com
+ * Generate email from phone number in format: [role]_[phone]@bcu.com
  */
-function generateEmailFromPhone(phone: string): string {
+function generateEmailFromPhone(phone: string, role = "farmer"): string {
   const normalized = normalizePhoneNumber(phone);
-  return `farmer_${normalized}@bcu.com`;
+  return `${role}_${normalized}@bcu.com`;
 }
 
 /**
@@ -132,6 +133,7 @@ export const importCommunityMembersFromExcel = mutation({
     if (!community) {
       throw new Error("Community not found");
     }
+    const communityDefaultRole = getCommunityDefaultRole((community as any).communityType);
 
     // Validate and import rows
     const results: any[] = [];
@@ -182,7 +184,7 @@ export const importCommunityMembersFromExcel = mutation({
 
         // Use provided email or generate from phone
         if (!finalEmail) {
-          finalEmail = generateEmailFromPhone(row.phoneNumber);
+          finalEmail = generateEmailFromPhone(row.phoneNumber, communityDefaultRole);
         }
 
         // Extract standard fields and store remaining as additional data
@@ -330,10 +332,12 @@ export const activateImportedCommunityMember = mutation({
 
     // Create user account
     const passwordHash = simpleHash(BCU_PRESET_PASSWORD);
+    const community = await ctx.db.get(importedMember.communityId);
+    const role = getCommunityDefaultRole((community as any)?.communityType);
     const userId = await ctx.db.insert("users", {
       email: importedMember.email,
-      role: "farmer",
-      alias: `farmer_${importedMember.phoneNumber}`,
+      role,
+      alias: `${role}_${importedMember.phoneNumber}`,
       state: "active",
       createdAt: getUgandaTime(),
       lastActiveAt: getUgandaTime(),
@@ -356,7 +360,9 @@ export const activateImportedCommunityMember = mutation({
       communityRole: importedMember.communityRole || null,
     });
 
-    await ensureBioFarmMembershipForFarmer(ctx, userId);
+    if (role === "farmer") {
+      await ensureBioFarmMembershipForFarmer(ctx, userId);
+    }
 
     return {
       success: true,

@@ -6,6 +6,19 @@ import { Id } from "./_generated/dataModel";
 
 const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
 
+export type CommunityRole = "farmer" | "trader" | "buyer" | "vendor" | "transporter" | "store";
+
+export function getCommunityDefaultRole(communityType?: string | null): CommunityRole {
+  if (communityType === "trader" || communityType === "buyer" || communityType === "vendor" || communityType === "transporter" || communityType === "store") {
+    return communityType;
+  }
+  return "farmer";
+}
+
+function isVendorOnlyCommunity(communityType?: string | null): boolean {
+  return communityType === "vendor";
+}
+
 async function ensureBioFarmMembershipForFarmer(ctx: any, userId: Id<"users">) {
   const user = await ctx.db.get(userId);
   if (!user || user.role !== "farmer") return;
@@ -373,6 +386,10 @@ export const getActiveCommunities = query({
 
     // Filter communities user can see
     const accessibleCommunities = communities.filter((c) => {
+      if (!isAdmin && isVendorOnlyCommunity((c as any).communityType) && userRecord?.role !== "vendor") {
+        return false;
+      }
+
       if (!isAdmin) {
         // Non-admins see based on global/geo-locking
         if (c.isGlobal) return true;
@@ -893,6 +910,9 @@ export const joinCommunityByQr = mutation({
       if (!user) {
         throw new Error("User not found");
       }
+      if (isVendorOnlyCommunity((community as any).communityType) && user.role !== "vendor") {
+        throw new Error("Only vendors can join this community");
+      }
     } else {
       // Need to create or find user
       if (!args.email && !args.phoneNumber) {
@@ -929,8 +949,10 @@ export const joinCommunityByQr = mutation({
         const normalizedEmail = args.email ? args.email.trim().toLowerCase() : undefined;
         const normalizedPhone = args.phoneNumber ? normalizePhoneNumber(args.phoneNumber) : undefined;
 
+        const defaultRole = getCommunityDefaultRole((community as any).communityType);
+
         // Generate alias
-        const alias = generateAlias("farmer");
+        const alias = generateAlias(defaultRole);
 
         // Hash password (using simple hash for now - in production should use bcrypt)
         const passwordHash = simpleHash(args.password.trim());
@@ -938,7 +960,7 @@ export const joinCommunityByQr = mutation({
         userId = await ctx.db.insert("users", {
           email: normalizedEmail,
           phoneNumber: normalizedPhone,
-          role: "farmer",
+          role: defaultRole,
           alias,
           state: "active",
           createdAt: getUgandaTime(),
@@ -955,7 +977,9 @@ export const joinCommunityByQr = mutation({
       throw new Error("Failed to get user after creation");
     }
 
-    await ensureBioFarmMembershipForFarmer(ctx, userId);
+    if (user.role === "farmer") {
+      await ensureBioFarmMembershipForFarmer(ctx, userId);
+    }
 
 // Update onboardedViaCommunityId if not already set (analytics only — no accountScope restriction)
       if (!user.onboardedViaCommunityId) {
@@ -1326,6 +1350,10 @@ export const joinCommunity = mutation({
     const allowedRoles = ["farmer", "trader", "buyer", "vendor", "transporter", "store"];
     if (!allowedRoles.includes(user.role)) {
       throw new Error("Only non-admin users can join communities");
+    }
+
+    if (isVendorOnlyCommunity((community as any).communityType) && user.role !== "vendor") {
+      throw new Error("Only vendors can join this community");
     }
 
     // Verify community exists

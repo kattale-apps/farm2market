@@ -123,7 +123,7 @@ export default function FarmerCommunitiesPage() {
     setLoadingAction(`join-${community.id}`);
     setMessage(null);
     try {
-      if (isAgroFreshCommunity(community)) {
+      if (userRole === "farmer" && isAgroFreshCommunity(community)) {
         const latestDraftId = getLatestDraftId();
         if (latestDraftId) {
           router.push(`/farm-validation/${latestDraftId}`);

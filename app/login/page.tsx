@@ -12,9 +12,9 @@ type SignupRole = "farmer" | "trader" | "buyer" | "vendor" | "transporter" | "st
 
 const SIGNUP_ROLES: Array<{ value: SignupRole; label: string; signupEnabled: boolean }> = [
   { value: "farmer", label: "Farmer", signupEnabled: true },
-  { value: "buyer", label: "Buyer", signupEnabled: false },
+  { value: "vendor", label: "Vendor", signupEnabled: true },
   { value: "trader", label: "Trader", signupEnabled: false },
-  { value: "vendor", label: "Vendor", signupEnabled: false },
+  { value: "buyer", label: "Buyer", signupEnabled: false },
   { value: "transporter", label: "Transporter", signupEnabled: false },
   { value: "store", label: "Store", signupEnabled: false },
 ];
@@ -56,7 +56,7 @@ function LoginPageInner() {
   const signupWithSession = useMutation((api as any).auth.signupWithSession);
   const checkAccountExists = useMutation((api as any).auth.checkAccountExists);
 
-  const isFarmerSignupEnabled = selectedRole === "farmer";
+  const isFarmerSignupEnabled = selectedRole === "farmer" || selectedRole === "vendor";
   const activeIdentifier = identifierMode === "phone"
     ? phoneIdentifier.trim()
     : emailIdentifier.trim();
@@ -138,7 +138,7 @@ function LoginPageInner() {
 
       if (authStep === "confirmSignup") {
         if (!isFarmerSignupEnabled) {
-          setError("New account creation is currently enabled for Farmer only. Existing accounts can still log in.");
+          setError("New account creation is currently enabled for Farmer and Vendor only. Existing accounts can still log in.");
           setLoading(false);
           return;
         }
@@ -308,7 +308,7 @@ function LoginPageInner() {
             </div>
             {!isFarmerSignupEnabled && (
               <p style={{ marginTop: "0.35rem", marginBottom: 0, fontSize: "0.82rem", color: "#ef6c00", fontWeight: 600 }}>
-                  New account creation is currently enabled for Farmer only. Existing accounts can still log in.
+                  New account creation is currently enabled for Farmer and Vendor only. Existing accounts can still log in.
               </p>
             )}
           </div>
@@ -489,7 +489,7 @@ function LoginPageInner() {
           >
             {loading
               ? (authStep === "confirmSignup" ? "Creating account..." : "Logging in...")
-              : (authStep === "confirmSignup" ? "Create Farmer Account" : "Log in")}
+              : (authStep === "confirmSignup" ? "Create Account" : "Log in")}
           </button>
         </form>
 

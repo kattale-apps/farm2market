@@ -13,9 +13,25 @@ import { useStoredUser } from "@/app/hooks/useStoredUser";
 type CommunityFormData = {
   name: string;
   slug: string;
+                    {/* Community Type */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Community Type
+                      </label>
+                      <select
+                        value={formData.communityType}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, communityType: e.target.value as "farmer" | "vendor" }))}
+                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                      >
+                        <option value="farmer">Farmer</option>
+                        <option value="vendor">Vendor</option>
+                      </select>
+                      <p className="text-xs text-gray-500 mt-2">Vendor communities will default QR signups to the vendor role.</p>
+                    </div>
   organizationName: string;
   description: string;
   primaryColor: string;
+  communityType: "farmer" | "vendor";
   freeImageQuotaPerMonth: number;
   imagePostPrice: number;
   messageImagePrice: number;
@@ -38,6 +54,7 @@ export default function CreateCommunityPage() {
     organizationName: "",
     description: "",
     primaryColor: "#10b981",
+    communityType: "farmer",
     freeImageQuotaPerMonth: 5,
     imagePostPrice: 2000,
     messageImagePrice: 1000,
@@ -206,7 +223,8 @@ export default function CreateCommunityPage() {
         logoPath: logoStorageId || undefined,
         isGlobal: true,
         geoLocked: false,
-        communityType: "farmer",
+        communityType: formData.communityType,
+        ...(formData.assignedAdminId ? { assignAdminId: formData.assignedAdminId as Id<"users"> } : {}),
       });
 
       // 3. Save monetisation settings
@@ -329,6 +347,7 @@ export default function CreateCommunityPage() {
                     organizationName: "",
                     description: "",
                     primaryColor: "#10b981",
+                    communityType: "farmer",
                     freeImageQuotaPerMonth: 5,
                     imagePostPrice: 2000,
                     messageImagePrice: 1000,

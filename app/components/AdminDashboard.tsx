@@ -141,7 +141,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   const [memberStatusFilter, setMemberStatusFilter] = useState<
     "all" | "PENDING" | "APPROVED" | "REJECTED" | "REVOKED"
   >("all");
-  const [memberRoleFilter, setMemberRoleFilter] = useState<"all" | "farmer" | "trader" | "buyer">("all");
+  const [memberRoleFilter, setMemberRoleFilter] = useState<"all" | "farmer" | "trader" | "buyer" | "vendor">("all");
   const [membersPageSize, setMembersPageSize] = useState(20);
   const [membersPage, setMembersPage] = useState(1);
   const [selectedApplicationId, setSelectedApplicationId] = useState<
@@ -165,7 +165,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   }, []);
 
   const [notificationTarget, setNotificationTarget] = useState<"role" | "individual" | "community">("role");
-  const [notificationRole, setNotificationRole] = useState<"farmer" | "trader" | "buyer">("farmer");
+  const [notificationRole, setNotificationRole] = useState<"farmer" | "trader" | "buyer" | "vendor">("farmer");
   const [notificationUserId, setNotificationUserId] = useState<string>("");
   const [notificationCommunityId, setNotificationCommunityId] = useState<string>("");
   const [notificationTitle, setNotificationTitle] = useState("");
@@ -354,7 +354,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   );
 
   const membersList = useMemo(
-    () => (allUsers ?? []).filter((u) => u.role === "farmer" || u.role === "trader" || u.role === "buyer"),
+    () => (allUsers ?? []).filter((u) => u.role === "farmer" || u.role === "trader" || u.role === "buyer" || u.role === "vendor"),
     [allUsers]
   );
 
@@ -642,6 +642,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                 <option value="farmer">Farmers</option>
                 <option value="trader">Traders</option>
                 <option value="buyer">Buyers</option>
+                  <option value="vendor">Vendors</option>
               </select>
             )}
 
@@ -2154,6 +2155,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                           <option value="farmer">Farmers</option>
                           <option value="trader">Traders</option>
                           <option value="buyer">Buyers</option>
+                          <option value="vendor">Vendors</option>
                         </select>
                         <label style={{ fontWeight: 600 }}>Per page:</label>
                         <select

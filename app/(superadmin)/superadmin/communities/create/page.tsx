@@ -13,21 +13,6 @@ import { useStoredUser } from "@/app/hooks/useStoredUser";
 type CommunityFormData = {
   name: string;
   slug: string;
-                    {/* Community Type */}
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Community Type
-                      </label>
-                      <select
-                        value={formData.communityType}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, communityType: e.target.value as "farmer" | "vendor" }))}
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                      >
-                        <option value="farmer">Farmer</option>
-                        <option value="vendor">Vendor</option>
-                      </select>
-                      <p className="text-xs text-gray-500 mt-2">Vendor communities will default QR signups to the vendor role.</p>
-                    </div>
   organizationName: string;
   description: string;
   primaryColor: string;
@@ -579,6 +564,22 @@ export default function CreateCommunityPage() {
                         rows={3}
                         placeholder="Optional community description"
                       />
+                    </div>
+
+                    {/* Community Type */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Community Type
+                      </label>
+                      <select
+                        value={formData.communityType}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, communityType: e.target.value as "farmer" | "vendor" }))}
+                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                      >
+                        <option value="farmer">Farmer</option>
+                        <option value="vendor">Vendor</option>
+                      </select>
+                      <p className="text-xs text-gray-500 mt-2">Vendor communities will default QR signups to the vendor role.</p>
                     </div>
                   </div>
                 </div>

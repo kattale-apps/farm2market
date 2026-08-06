@@ -14,7 +14,7 @@ import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { BCU_PRESET_PASSWORD } from "./constants";
 import { getUgandaTime } from "./utils";
-import { getCommunityDefaultRole } from "./communities";
+import { getCommunityDefaultRole, ensureMandatoryRoleCommunityMembershipsForUser } from "./communities";
 
 const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
 
@@ -363,6 +363,7 @@ export const activateImportedCommunityMember = mutation({
     if (role === "farmer") {
       await ensureBioFarmMembershipForFarmer(ctx, userId);
     }
+    await ensureMandatoryRoleCommunityMembershipsForUser(ctx, userId, role);
 
     return {
       success: true,

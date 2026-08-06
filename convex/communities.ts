@@ -19,6 +19,64 @@ function isVendorOnlyCommunity(communityType?: string | null): boolean {
   return communityType === "vendor";
 }
 
+async function ensureCommunityMembership(
+  ctx: any,
+  communityId: Id<"communities">,
+  userId: Id<"users">
+) {
+  const existing = await ctx.db
+    .query("communityMemberships")
+    .withIndex("by_community_user", (q: any) =>
+      q.eq("communityId", communityId).eq("userId", userId)
+    )
+    .first();
+
+  if (!existing) {
+    await ctx.db.insert("communityMemberships", {
+      communityId,
+      userId,
+      joinedAt: getUgandaTime(),
+    });
+    return true;
+  }
+
+  return false;
+}
+
+async function backfillMandatoryRoleMembershipForCommunity(
+  ctx: any,
+  communityId: Id<"communities">,
+  role: CommunityRole
+) {
+  const users = await ctx.db
+    .query("users")
+    .withIndex("by_role", (q: any) => q.eq("role", role))
+    .collect();
+
+  let created = 0;
+  for (const user of users) {
+    const inserted = await ensureCommunityMembership(ctx, communityId, user._id);
+    if (inserted) {
+      created += 1;
+    }
+  }
+
+  return { created, scanned: users.length };
+}
+
+export async function ensureMandatoryRoleCommunityMembershipsForUser(
+  ctx: any,
+  userId: Id<"users">,
+  role: CommunityRole
+) {
+  const communities = await ctx.db.query("communities").collect();
+  for (const community of communities) {
+    if (!(community as any).autoJoinRoleMembers) continue;
+    if (getCommunityDefaultRole((community as any).communityType) !== role) continue;
+    await ensureCommunityMembership(ctx, community._id, userId);
+  }
+}
+
 async function ensureBioFarmMembershipForFarmer(ctx: any, userId: Id<"users">) {
   const user = await ctx.db.get(userId);
   if (!user || user.role !== "farmer") return;
@@ -499,6 +557,7 @@ export const getActiveCommunities = query({
           logoPath: resolvedLogo,
           communityAdminId: (c as any).communityAdminId,
           communityType: (c as any).communityType,
+          autoJoinRoleMembers: !!(c as any).autoJoinRoleMembers,
           isGlobal: c.isGlobal,
           geoLocked: c.geoLocked,
           showMemberCount: (c as any).showMemberCount,
@@ -902,6 +961,7 @@ export const joinCommunityByQr = mutation({
     // QR join is now allowed for ALL communities (qrEnabled gate removed)
 
     let userId: Id<"users"> | undefined;
+  let wasNewUser = false;
 
     if (args.userId) {
       // Existing user joining
@@ -968,6 +1028,7 @@ export const joinCommunityByQr = mutation({
           passwordHash,
           onboardedViaCommunityId: community._id,
         });
+        wasNewUser = true;
       }
     }
 
@@ -979,6 +1040,9 @@ export const joinCommunityByQr = mutation({
 
     if (user.role === "farmer") {
       await ensureBioFarmMembershipForFarmer(ctx, userId);
+    }
+    if (wasNewUser) {
+      await ensureMandatoryRoleCommunityMembershipsForUser(ctx, userId, user.role as CommunityRole);
     }
 
 // Update onboardedViaCommunityId if not already set (analytics only — no accountScope restriction)
@@ -1040,6 +1104,7 @@ export const createCommunity = mutation({
     subcountyIds: v.optional(v.array(v.id("subcounties"))),
     parishIds: v.optional(v.array(v.id("parishes"))),
     communityType: v.union(v.literal("farmer"), v.literal("trader"), v.literal("buyer"), v.literal("vendor"), v.literal("transporter"), v.literal("store")),
+    autoJoinRoleMembers: v.optional(v.boolean()),
     // assignAdminId is fully optional - community admins can be assigned later
     assignAdminId: v.optional(v.id("users")),
     // QR & monetisation fields (optional)
@@ -1162,6 +1227,7 @@ export const createCommunity = mutation({
       createdAt: getUgandaTime(),
       utid,
       communityType: args.communityType || "farmer",
+      autoJoinRoleMembers: args.autoJoinRoleMembers ?? false,
       // QR fields (only set if slug provided)
       ...(args.qrSlug ? {
         qrEnabled: true,
@@ -1178,6 +1244,14 @@ export const createCommunity = mutation({
       await ctx.db.patch(args.assignAdminId, {
         assignedCommunityIds: [...currentAssigned, communityId],
       });
+    }
+
+    if (args.autoJoinRoleMembers) {
+      await backfillMandatoryRoleMembershipForCommunity(
+        ctx,
+        communityId,
+        getCommunityDefaultRole(args.communityType)
+      );
     }
 
     // Create monetisation settings if provided
@@ -1217,6 +1291,7 @@ export const updateCommunity = mutation({
     logoPath: v.optional(v.string()),
     isGlobal: v.optional(v.boolean()),
     geoLocked: v.optional(v.boolean()),
+    autoJoinRoleMembers: v.optional(v.boolean()),
     regionKey: v.optional(v.string()),
     districtIds: v.optional(v.array(v.id("districts"))),
     subcountyIds: v.optional(v.array(v.id("subcounties"))),
@@ -1308,6 +1383,9 @@ export const updateCommunity = mutation({
     if (args.geoLocked !== undefined) {
       updates.geoLocked = args.geoLocked;
     }
+    if (args.autoJoinRoleMembers !== undefined) {
+      updates.autoJoinRoleMembers = args.autoJoinRoleMembers;
+    }
     if (resolvedDistrictIds !== undefined) {
       updates.districtIds = resolvedDistrictIds;
     }
@@ -1318,7 +1396,17 @@ export const updateCommunity = mutation({
       updates.parishIds = resolvedParishIds;
     }
 
+    const enableAutoJoin = args.autoJoinRoleMembers === true && !(community as any).autoJoinRoleMembers;
+
     await ctx.db.patch(args.communityId, updates);
+
+    if (enableAutoJoin) {
+      await backfillMandatoryRoleMembershipForCommunity(
+        ctx,
+        args.communityId,
+        getCommunityDefaultRole((community as any).communityType)
+      );
+    }
 
     const utid = generateUTID(adminUser.role);
     await ctx.db.insert("adminActions", {
@@ -1352,14 +1440,14 @@ export const joinCommunity = mutation({
       throw new Error("Only non-admin users can join communities");
     }
 
-    if (isVendorOnlyCommunity((community as any).communityType) && user.role !== "vendor") {
-      throw new Error("Only vendors can join this community");
-    }
-
     // Verify community exists
     const community = await ctx.db.get(args.communityId);
     if (!community) {
       throw new Error("Community not found");
+    }
+
+    if (isVendorOnlyCommunity((community as any).communityType) && user.role !== "vendor") {
+      throw new Error("Only vendors can join this community");
     }
 
     // Check if already a member

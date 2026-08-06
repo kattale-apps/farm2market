@@ -36,6 +36,7 @@ export default function CommunitiesPage() {
     geoLocked: false,
     regionKey: "",
     communityType: "farmer" as "farmer" | "trader" | "buyer" | "vendor",
+    autoJoinRoleMembers: false,
     assignAdminId: "",
     // QR & monetisation
     qrSlug: "",
@@ -51,6 +52,7 @@ export default function CommunitiesPage() {
     isGlobal: false,
     geoLocked: false,
     regionKey: "",
+    autoJoinRoleMembers: false,
   });
 
   // ✅ Queries
@@ -433,6 +435,21 @@ export default function CommunitiesPage() {
                   </select>
                 </div>
 
+                <div>
+                  <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontWeight: "600", color: "#333", cursor: "pointer" }}>
+                    <input
+                      type="checkbox"
+                      checked={formData.autoJoinRoleMembers}
+                      onChange={(e) => setFormData({ ...formData, autoJoinRoleMembers: e.target.checked })}
+                      style={{ cursor: "pointer" }}
+                    />
+                    Auto-join all users of selected community role
+                  </label>
+                  <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.85rem", color: "#666" }}>
+                    Enables mandatory membership for existing and future users of this role.
+                  </p>
+                </div>
+
                 {/* Global */}
                 <div>
                   <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontWeight: "600", color: "#333", cursor: "pointer" }}>
@@ -646,6 +663,7 @@ export default function CommunitiesPage() {
                         geoLocked: !formData.isGlobal,
                         regionKey: formData.regionKey || undefined,
                         communityType: formData.communityType,
+                        autoJoinRoleMembers: formData.autoJoinRoleMembers,
                         ...(validAdminId ? { assignAdminId: validAdminId } : {}),
                         // QR & monetisation (only if advanced enabled)
                         ...(showAdvanced ? {
@@ -660,7 +678,7 @@ export default function CommunitiesPage() {
                       setCreatedCommunityId(result.communityId as Id<"communities">);
                       setFormData({
                         name: "", description: "", isGlobal: false, geoLocked: false,
-                        regionKey: "", communityType: "farmer", assignAdminId: "",
+                        regionKey: "", communityType: "farmer", autoJoinRoleMembers: false, assignAdminId: "",
                         qrSlug: "", qrLogoUrl: "",
                         juniorAdminFreeMonthlyImageQuota: 2,
                         juniorAdminImagePrice: 5000,
@@ -696,7 +714,7 @@ export default function CommunitiesPage() {
                     setCreatedCommunityId(null);
                     setFormData({
                       name: "", description: "", isGlobal: false, geoLocked: false,
-                      regionKey: "", communityType: "farmer", assignAdminId: "",
+                      regionKey: "", communityType: "farmer", autoJoinRoleMembers: false, assignAdminId: "",
                       qrSlug: "", qrLogoUrl: "",
                       juniorAdminFreeMonthlyImageQuota: 2,
                       juniorAdminImagePrice: 5000,
@@ -797,6 +815,7 @@ export default function CommunitiesPage() {
                         isGlobal: community.isGlobal || false,
                         geoLocked: community.geoLocked || false,
                         regionKey: community.regionKey || "",
+                        autoJoinRoleMembers: !!community.autoJoinRoleMembers,
                       });
                       setFormData({
                         ...formData,
@@ -948,6 +967,18 @@ export default function CommunitiesPage() {
               />
             </div>
 
+            <div>
+              <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontWeight: "600", color: "#333", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={editData.autoJoinRoleMembers}
+                  onChange={(e) => setEditData({ ...editData, autoJoinRoleMembers: e.target.checked })}
+                  style={{ cursor: "pointer" }}
+                />
+                Auto-join all users of this community role
+              </label>
+            </div>
+
             {/* Show current assigned admin as read-only */}
             <div style={{ padding: "1rem", background: "#f5f5f5", border: "1px solid #e0e0e0", borderRadius: "6px" }}>
               <p style={{ margin: 0, fontSize: "0.9rem", color: "#555" }}>
@@ -982,11 +1013,12 @@ export default function CommunitiesPage() {
                       description: editData.description || community.description,
                       isGlobal: editData.isGlobal !== undefined ? editData.isGlobal : community.isGlobal,
                       geoLocked: editData.geoLocked !== undefined ? editData.geoLocked : community.geoLocked,
+                      autoJoinRoleMembers: !!editData.autoJoinRoleMembers,
                       regionKey: editData.regionKey || "",
                     });
                     setMessage({ type: "success", text: "Community updated successfully!" });
                     setEditingCommunityId(null);
-                    setEditData({ name: "", description: "", isGlobal: false, geoLocked: false, regionKey: "" });
+                    setEditData({ name: "", description: "", isGlobal: false, geoLocked: false, regionKey: "", autoJoinRoleMembers: false });
                   }
                 } catch (err: any) {
                   setMessage({ type: "error", text: err.message || "Failed to update community" });
@@ -1012,7 +1044,7 @@ export default function CommunitiesPage() {
             <button
               onClick={() => {
                 setEditingCommunityId(null);
-                setEditData({ name: "", description: "", isGlobal: false, geoLocked: false, regionKey: "" });
+                setEditData({ name: "", description: "", isGlobal: false, geoLocked: false, regionKey: "", autoJoinRoleMembers: false });
                 setMessage(null);
               }}
               style={{

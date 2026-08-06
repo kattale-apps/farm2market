@@ -855,6 +855,7 @@ export default defineSchema({
     createdAt: v.number(),
     utid: v.string(), // Admin action UTID
     communityType: v.optional(v.union(v.literal("farmer"), v.literal("trader"), v.literal("buyer"), v.literal("vendor"), v.literal("transporter"), v.literal("store"))), // Type of community (optional for backward-compatibility)
+    autoJoinRoleMembers: v.optional(v.boolean()), // SuperAdmin toggle: auto-join all users of the community's default role
     // QR code and community features
     qrEnabled: v.optional(v.boolean()), // Whether community has QR code feature enabled
     qrSlug: v.optional(v.string()), // Slug for community QR code (e.g., "biofarm-ug")

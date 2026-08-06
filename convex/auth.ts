@@ -15,6 +15,46 @@ import { getUgandaTime } from "./utils";
 
 const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
 
+type CommunityRole = "farmer" | "trader" | "buyer" | "vendor" | "transporter" | "store";
+
+function getCommunityDefaultRole(communityType?: string | null): CommunityRole {
+  if (communityType === "trader" || communityType === "buyer" || communityType === "vendor" || communityType === "transporter" || communityType === "store") {
+    return communityType;
+  }
+  return "farmer";
+}
+
+async function ensureMandatoryRoleCommunityMembershipsForUser(
+  ctx: any,
+  userId: Id<"users">,
+  role: string
+) {
+  if (!["farmer", "trader", "buyer", "vendor", "transporter", "store"].includes(role)) {
+    return;
+  }
+
+  const communities = await ctx.db.query("communities").collect();
+  for (const community of communities) {
+    if (!(community as any).autoJoinRoleMembers) continue;
+    if (getCommunityDefaultRole((community as any).communityType) !== role) continue;
+
+    const existing = await ctx.db
+      .query("communityMemberships")
+      .withIndex("by_community_user", (q: any) =>
+        q.eq("communityId", community._id).eq("userId", userId)
+      )
+      .first();
+
+    if (!existing) {
+      await ctx.db.insert("communityMemberships", {
+        communityId: community._id,
+        userId,
+        joinedAt: getUgandaTime(),
+      });
+    }
+  }
+}
+
 async function ensureBioFarmMembershipForFarmer(
   ctx: any,
   userId: Id<"users">,
@@ -275,6 +315,7 @@ export const createUser = mutation({
     const userId = await ctx.db.insert("users", userData);
 
     await ensureBioFarmMembershipForFarmer(ctx, userId, args.role);
+    await ensureMandatoryRoleCommunityMembershipsForUser(ctx, userId, args.role);
 
     return { userId, alias };
   },
@@ -386,6 +427,7 @@ export const signup = mutation({
     });
 
     await ensureBioFarmMembershipForFarmer(ctx, userId, args.role);
+    await ensureMandatoryRoleCommunityMembershipsForUser(ctx, userId, args.role);
 
     // Fetch the created user
     const user = await ctx.db.get(userId);
@@ -997,6 +1039,7 @@ export const signupWithSession = mutation({
     });
 
     await ensureBioFarmMembershipForFarmer(ctx, userId, args.role);
+    await ensureMandatoryRoleCommunityMembershipsForUser(ctx, userId, args.role);
 
     const sessionToken = generateSessionToken();
     await ctx.db.insert("sessions", {

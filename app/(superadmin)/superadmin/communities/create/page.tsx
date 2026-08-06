@@ -17,6 +17,7 @@ type CommunityFormData = {
   description: string;
   primaryColor: string;
   communityType: "farmer" | "vendor";
+  autoJoinRoleMembers: boolean;
   freeImageQuotaPerMonth: number;
   imagePostPrice: number;
   messageImagePrice: number;
@@ -40,6 +41,7 @@ export default function CreateCommunityPage() {
     description: "",
     primaryColor: "#10b981",
     communityType: "farmer",
+    autoJoinRoleMembers: false,
     freeImageQuotaPerMonth: 5,
     imagePostPrice: 2000,
     messageImagePrice: 1000,
@@ -209,6 +211,7 @@ export default function CreateCommunityPage() {
         isGlobal: true,
         geoLocked: false,
         communityType: formData.communityType,
+        autoJoinRoleMembers: formData.autoJoinRoleMembers,
         ...(formData.assignedAdminId ? { assignAdminId: formData.assignedAdminId as Id<"users"> } : {}),
       });
 
@@ -333,6 +336,7 @@ export default function CreateCommunityPage() {
                     description: "",
                     primaryColor: "#10b981",
                     communityType: "farmer",
+                    autoJoinRoleMembers: false,
                     freeImageQuotaPerMonth: 5,
                     imagePostPrice: 2000,
                     messageImagePrice: 1000,
@@ -580,6 +584,24 @@ export default function CreateCommunityPage() {
                         <option value="vendor">Vendor</option>
                       </select>
                       <p className="text-xs text-gray-500 mt-2">Vendor communities will default QR signups to the vendor role.</p>
+                    </div>
+
+                    {/* Mandatory Role Auto-Join */}
+                    <div>
+                      <label className="flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          checked={formData.autoJoinRoleMembers}
+                          onChange={(e) => setFormData((prev) => ({ ...prev, autoJoinRoleMembers: e.target.checked }))}
+                          className="mt-1"
+                        />
+                        <span className="text-sm text-gray-700">
+                          Auto-join all {formData.communityType} users to this community
+                          <span className="block text-xs text-gray-500 mt-1">
+                            When enabled, existing and newly created users of this role are automatically added.
+                          </span>
+                        </span>
+                      </label>
                     </div>
                   </div>
                 </div>

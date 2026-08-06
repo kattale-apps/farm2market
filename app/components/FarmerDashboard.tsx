@@ -1001,6 +1001,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
       </div>
 
       {/* Farmer quick links */}
+      {effectiveRole === "farmer" && (
       <div style={{
         display: "grid",
         gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
@@ -1127,6 +1128,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
           </Link>
         )}
       </div>
+      )}
 
       {communitiesSection}
 

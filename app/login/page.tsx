@@ -57,6 +57,7 @@ function LoginPageInner() {
   const checkAccountExists = useMutation((api as any).auth.checkAccountExists);
 
   const isFarmerSignupEnabled = selectedRole === "farmer" || selectedRole === "vendor";
+  const selectedRoleLabel = SIGNUP_ROLES.find((role) => role.value === selectedRole)?.label || "Account";
   const activeIdentifier = identifierMode === "phone"
     ? phoneIdentifier.trim()
     : emailIdentifier.trim();
@@ -178,7 +179,7 @@ function LoginPageInner() {
             } else {
               setAuthStep("confirmSignup");
               setConfirmPassword("");
-              setError("No account found. Confirm your password to create a new Farmer account.");
+              setError(`Confirm your password to create a new ${selectedRoleLabel} account.`);
             }
           } else {
             setError(message);
@@ -462,11 +463,11 @@ function LoginPageInner() {
           {error && (
             <div style={{
               padding: "0.75rem",
-              background: "#ffebee",
-              border: "1px solid #ef5350",
+              background: error.includes("Confirm your password to create a new") ? "#fff8e1" : "#ffebee",
+              border: error.includes("Confirm your password to create a new") ? "1px solid #f6bf26" : "1px solid #ef5350",
               borderRadius: "6px",
               marginBottom: "1rem",
-              color: "#c62828"
+              color: error.includes("Confirm your password to create a new") ? "#b26a00" : "#c62828"
             }}>
               {error}
             </div>

@@ -865,6 +865,7 @@ export default defineSchema({
     showMemberCount: v.optional(v.boolean()), // Controls whether non-admin users can see member counts
     showFertilizerPlanner: v.optional(v.boolean()), // Controls whether farmers can see the Bio Farm fertilizer planner
     farmNeedsEnabled: v.optional(v.boolean()), // Whether farm needs/requests feature is enabled for this community
+    crmEnabled: v.optional(v.boolean()), // Feature flag for enabling Community CRM module in this community
   })
     .index("by_active", ["isGlobal", "geoLocked"])
     .index("by_created_by", ["createdBy"]),
@@ -2240,4 +2241,189 @@ export default defineSchema({
   })
     .index("by_farmer", ["farmerId"])
     .index("by_farmer_type", ["farmerId", "type"]),
+
+  // ---------------------------------------------------------------
+  // Community CRM (additive module, isolated from existing forms)
+  // ---------------------------------------------------------------
+
+  crmForms: defineTable({
+    communityId: v.id("communities"),
+    createdByAdminId: v.id("users"),
+    name: v.string(),
+    description: v.optional(v.string()),
+    isActive: v.boolean(),
+    followUpOffsetDays: v.number(),
+    openingScriptEnabled: v.optional(v.boolean()),
+    openingScriptTemplate: v.optional(v.string()),
+    openingScriptVersion: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_community", ["communityId"])
+    .index("by_admin", ["createdByAdminId"])
+    .index("by_community_active", ["communityId", "isActive"]),
+
+  crmFormFields: defineTable({
+    crmFormId: v.id("crmForms"),
+    fieldType: v.string(),
+    label: v.string(),
+    required: v.boolean(),
+    helpText: v.optional(v.string()),
+    placeholder: v.optional(v.string()),
+    options: v.optional(v.array(v.string())),
+    presetKey: v.optional(v.string()),
+    order: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.optional(v.number()),
+  })
+    .index("by_form", ["crmFormId"]),
+
+  crmFormResponses: defineTable({
+    crmFormId: v.id("crmForms"),
+    communityId: v.id("communities"),
+    memberId: v.id("users"),
+    submittedByUserId: v.id("users"),
+    sourceEventType: v.union(
+      v.literal("biofarm_purchase"),
+      v.literal("manual_entry"),
+      v.literal("extension_capture")
+    ),
+    sourceEventId: v.optional(v.string()),
+    purchaseDate: v.optional(v.string()),
+    productName: v.optional(v.string()),
+    purchaseQuantity: v.optional(v.string()),
+    district: v.optional(v.string()),
+    subCounty: v.optional(v.string()),
+    autoNextCallAt: v.number(),
+    submittedAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_form", ["crmFormId"])
+    .index("by_community", ["communityId"])
+    .index("by_member", ["memberId"])
+    .index("by_community_submitted", ["communityId", "submittedAt"]),
+
+  crmFormResponseValues: defineTable({
+    crmResponseId: v.id("crmFormResponses"),
+    crmFieldId: v.id("crmFormFields"),
+    value: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.optional(v.number()),
+  })
+    .index("by_response", ["crmResponseId"])
+    .index("by_field", ["crmFieldId"]),
+
+  crmAgents: defineTable({
+    communityId: v.id("communities"),
+    agentUserId: v.id("users"),
+    createdByCommunityAdminId: v.id("users"),
+    displayName: v.optional(v.string()),
+    isActive: v.boolean(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_community", ["communityId"])
+    .index("by_agent_user", ["agentUserId"])
+    .index("by_community_agent", ["communityId", "agentUserId"]),
+
+  crmLeads: defineTable({
+    communityId: v.id("communities"),
+    memberId: v.id("users"),
+    sourceCrmResponseId: v.id("crmFormResponses"),
+    sourceCrmFormId: v.id("crmForms"),
+    assignedAgentId: v.optional(v.id("users")),
+    queueStatus: v.union(
+      v.literal("open"),
+      v.literal("in_progress"),
+      v.literal("called"),
+      v.literal("overdue"),
+      v.literal("closed")
+    ),
+    nextCallAt: v.number(),
+    lastCallAt: v.optional(v.number()),
+    lastOutcome: v.optional(
+      v.union(
+        v.literal("good_result"),
+        v.literal("problem"),
+        v.literal("wants_more"),
+        v.literal("no_answer")
+      )
+    ),
+    latestHealthScore: v.optional(v.number()),
+    latestHealthBand: v.optional(
+      v.union(v.literal("green"), v.literal("yellow"), v.literal("red"))
+    ),
+    priority: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_community_status_nextcall", ["communityId", "queueStatus", "nextCallAt"])
+    .index("by_assigned_nextcall", ["assignedAgentId", "nextCallAt"])
+    .index("by_member_community", ["communityId", "memberId"])
+    .index("by_source_response", ["sourceCrmResponseId"]),
+
+  crmCallLogs: defineTable({
+    leadId: v.id("crmLeads"),
+    communityId: v.id("communities"),
+    agentId: v.id("users"),
+    outcome: v.union(
+      v.literal("good_result"),
+      v.literal("problem"),
+      v.literal("wants_more"),
+      v.literal("no_answer")
+    ),
+    usageStatus: v.optional(v.union(v.literal("yes"), v.literal("partly"), v.literal("no"), v.literal("unknown"))),
+    resultRating: v.optional(v.union(v.literal("very_good"), v.literal("good"), v.literal("average"), v.literal("poor"), v.literal("very_poor"))),
+    issueType: v.optional(v.union(v.literal("none"), v.literal("application_problem"), v.literal("product_problem"), v.literal("packaging_problem"), v.literal("delivery_problem"), v.literal("technical_advice"), v.literal("other"))),
+    repurchaseIntent: v.optional(v.union(v.literal("yes"), v.literal("no"), v.literal("maybe"))),
+    notes: v.optional(v.string()),
+    callbackDaysOverride: v.optional(v.number()),
+    callbackDateOverride: v.optional(v.number()),
+    computedNextCallAt: v.optional(v.number()),
+    healthScore: v.optional(v.number()),
+    healthBand: v.optional(v.union(v.literal("green"), v.literal("yellow"), v.literal("red"))),
+    createdAt: v.number(),
+  })
+    .index("by_lead", ["leadId"])
+    .index("by_agent_created", ["agentId", "createdAt"])
+    .index("by_community_created", ["communityId", "createdAt"]),
+
+  crmTickets: defineTable({
+    leadId: v.id("crmLeads"),
+    communityId: v.id("communities"),
+    openedByAgentId: v.id("users"),
+    assignedAgronomistId: v.optional(v.id("users")),
+    title: v.string(),
+    details: v.optional(v.string()),
+    status: v.union(v.literal("open"), v.literal("in_progress"), v.literal("resolved")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_community_status", ["communityId", "status"])
+    .index("by_lead", ["leadId"]),
+
+  crmSalesOpportunities: defineTable({
+    leadId: v.id("crmLeads"),
+    communityId: v.id("communities"),
+    openedByAgentId: v.id("users"),
+    assignedSalesAgentId: v.optional(v.id("users")),
+    productName: v.optional(v.string()),
+    quantity: v.optional(v.string()),
+    expectedPurchaseMonth: v.optional(v.string()),
+    probability: v.optional(v.union(v.literal("low"), v.literal("medium"), v.literal("high"))),
+    nextActionAt: v.optional(v.number()),
+    stage: v.union(
+      v.literal("new"),
+      v.literal("follow_up"),
+      v.literal("order"),
+      v.literal("completed"),
+      v.literal("lost")
+    ),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_community_stage", ["communityId", "stage"])
+    .index("by_agent", ["openedByAgentId"])
+    .index("by_lead", ["leadId"]),
 });

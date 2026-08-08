@@ -69,6 +69,19 @@ export async function requireCrmSupervisorOrAgentAccess(
     throw new Error("Unauthorized");
   }
 
+  if (user.adminLevel !== "junior" || user.adminCategory !== "community_crm") {
+    throw new Error("Forbidden");
+  }
+
+  const assignedIds = Array.isArray(user.assignedCommunityIds)
+    ? user.assignedCommunityIds
+    : [];
+  const isAssignedToCommunity = assignedIds.some((id: any) => String(id) === String(communityId));
+
+  if (!isAssignedToCommunity) {
+    throw new Error("Forbidden");
+  }
+
   const crmAgent = await ctx.db
     .query("crmAgents")
     .withIndex("by_community_agent", (q: any) =>
@@ -88,6 +101,18 @@ export async function isCrmAgentInCommunity(
   agentId: Id<"users">,
   communityId: Id<"communities">
 ) {
+  const user = await ctx.db.get(agentId);
+  if (!user || user.role !== "admin" || user.adminLevel !== "junior" || user.adminCategory !== "community_crm") {
+    return false;
+  }
+
+  const assignedIds = Array.isArray(user.assignedCommunityIds)
+    ? user.assignedCommunityIds
+    : [];
+  if (!assignedIds.some((id: any) => String(id) === String(communityId))) {
+    return false;
+  }
+
   const row = await ctx.db
     .query("crmAgents")
     .withIndex("by_community_agent", (q: any) =>

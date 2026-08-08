@@ -18,12 +18,12 @@ type AnyUser = {
   phoneNumber?: string;
   role: "farmer" | "trader" | "buyer" | "admin" | "vendor" | "transporter" | "store";
   adminLevel?: "super" | "junior";
-  adminCategory?: "community" | "store" | "message" | "finance";
+  adminCategory?: "community" | "community_crm" | "store" | "message" | "finance";
   assignedCommunityIds?: Id<"communities">[];
 };
 
 type AdminLevel = "super" | "junior" | "";
-type AdminCategory = "community" | "store" | "message" | "finance" | "";
+type AdminCategory = "community" | "community_crm" | "store" | "message" | "finance" | "";
 
 type EditAdminState = {
   adminLevel: AdminLevel;
@@ -163,6 +163,18 @@ export default function AdminRoleManagementPage() {
       return;
     }
 
+    if (createData.adminCategory === "community_crm") {
+      if (!createData.email.trim().toLowerCase().endsWith(".crm")) {
+        setCreateMessage({ type: "error", text: "Community CRM admins must use an email ending in .crm" });
+        return;
+      }
+
+      if (createData.assignedCommunityIds.length !== 1) {
+        setCreateMessage({ type: "error", text: "Community CRM admins must be assigned to exactly one community" });
+        return;
+      }
+    }
+
     setIsCreating(true);
     try {
       await createUser({
@@ -170,6 +182,11 @@ export default function AdminRoleManagementPage() {
         role: "admin",
         adminLevel: "junior",
         adminCategory: createData.adminCategory || undefined,
+        assignedCommunityIds:
+          (createData.adminCategory === "community" || createData.adminCategory === "community_crm") &&
+          createData.assignedCommunityIds.length > 0
+            ? createData.assignedCommunityIds.map((id) => id as Id<"communities">)
+            : undefined,
         creatorAdminId: userId,
       });
 
@@ -404,6 +421,7 @@ export default function AdminRoleManagementPage() {
                   >
                     <option value="">Select category...</option>
                     <option value="community">Community Admin</option>
+                    <option value="community_crm">Community CRM</option>
                     <option value="store">Store Admin</option>
                     <option value="message">Message Admin</option>
                     <option value="finance">Finance Admin</option>
@@ -412,7 +430,7 @@ export default function AdminRoleManagementPage() {
               </div>
 
               {/* Communities - Only show for Community Admins */}
-              {createData.adminCategory === "community" && (
+              {(createData.adminCategory === "community" || createData.adminCategory === "community_crm") && (
                 <div style={{ marginBottom: "1.5rem" }}>
                   <label
                     style={{
@@ -423,8 +441,13 @@ export default function AdminRoleManagementPage() {
                       fontSize: "0.95rem",
                     }}
                   >
-                    Assign Communities (Optional)
+                    {createData.adminCategory === "community_crm" ? "Assign Community *" : "Assign Communities (Optional)"}
                   </label>
+                  {createData.adminCategory === "community_crm" && (
+                    <p style={{ marginTop: 0, marginBottom: "0.75rem", color: "#666", fontSize: "0.85rem" }}>
+                      Use a `.crm` email and assign exactly one community. This account is limited to the CRM agent workspace.
+                    </p>
+                  )}
                   {communities && communities.length > 0 ? (
                     <div style={{
                       display: "grid",
@@ -451,7 +474,9 @@ export default function AdminRoleManagementPage() {
                               ...createData,
                               assignedCommunityIds: isSelected
                                 ? assigned.filter((id) => id !== community.id.toString())
-                                : [...assigned, community.id.toString()],
+                                : createData.adminCategory === "community_crm"
+                                  ? [community.id.toString()]
+                                  : [...assigned, community.id.toString()],
                             });
                           }}
                           onMouseEnter={(e) => {
@@ -505,7 +530,7 @@ export default function AdminRoleManagementPage() {
                       fontSize: "0.85rem",
                       color: "#2e7d32",
                     }}>
-                      <strong>{createData.assignedCommunityIds.length}</strong> community/communities will be assigned
+                      <strong>{createData.assignedCommunityIds.length}</strong> {createData.adminCategory === "community_crm" ? "community assigned" : "community/communities will be assigned"}
                     </div>
                   )}
                 </div>
@@ -981,6 +1006,7 @@ export default function AdminRoleManagementPage() {
                   >
                     <option value="">None</option>
                     <option value="community">Community</option>
+                    <option value="community_crm">Community CRM</option>
                     <option value="store">Store</option>
                     <option value="message">Message</option>
                     <option value="finance">Finance</option>
@@ -989,7 +1015,7 @@ export default function AdminRoleManagementPage() {
               </div>
 
               {/* Assigned Communities */}
-              <div style={{ marginBottom: "1.5rem" }}>
+              <div style={{ marginBottom: "1.5rem", display: editData?.adminCategory === "community" || editData?.adminCategory === "community_crm" ? "block" : "none" }}>
                 <label
                   style={{
                     display: "block",
@@ -999,8 +1025,13 @@ export default function AdminRoleManagementPage() {
                     fontSize: "0.95rem",
                   }}
                 >
-                  Assign Communities
+                  {editData?.adminCategory === "community_crm" ? "Assign Community" : "Assign Communities"}
                 </label>
+                {editData?.adminCategory === "community_crm" && (
+                  <p style={{ marginTop: 0, marginBottom: "0.75rem", color: "#666", fontSize: "0.85rem" }}>
+                    Community CRM admins stay scoped to one community and only use the CRM agent workspace.
+                  </p>
+                )}
                 {communities && communities.length > 0 ? (
                   <div style={{
                     display: "grid",
@@ -1031,7 +1062,9 @@ export default function AdminRoleManagementPage() {
                             }),
                             assignedCommunityIds: isSelected
                               ? assigned.filter((id) => id !== community.id.toString())
-                              : [...assigned, community.id.toString()],
+                              : editData?.adminCategory === "community_crm"
+                                ? [community.id.toString()]
+                                : [...assigned, community.id.toString()],
                           });
                         }}
                         onMouseEnter={(e) => {
@@ -1085,7 +1118,7 @@ export default function AdminRoleManagementPage() {
                     fontSize: "0.85rem",
                     color: "#2e7d32",
                   }}>
-                    <strong>{editData.assignedCommunityIds.length}</strong> community/communities assigned
+                    <strong>{editData.assignedCommunityIds.length}</strong> {editData.adminCategory === "community_crm" ? "community assigned" : "community/communities assigned"}
                   </div>
                 )}
               </div>

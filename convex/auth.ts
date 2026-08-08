@@ -173,16 +173,18 @@ export const createUser = mutation({
       v.literal("store")
     ),
     adminLevel: v.optional(v.union(v.literal("super"), v.literal("junior"))),
-    adminCategory: v.optional(v.union(v.literal("store"), v.literal("message"), v.literal("community"), v.literal("finance"))),
+    adminCategory: v.optional(v.union(v.literal("store"), v.literal("message"), v.literal("community"), v.literal("community_crm"), v.literal("finance"))),
     allowedStorageLocationIds: v.optional(v.array(v.id("storageLocations"))),
     assignedCommunityIds: v.optional(v.array(v.id("communities"))),
     creatorAdminId: v.optional(v.id("users")), // Admin creating this user (for permission check)
   },
   handler: async (ctx, args) => {
+    const normalizedEmail = args.email.trim().toLowerCase();
+
     // Check if user already exists
     const existing = await ctx.db
       .query("users")
-      .withIndex("by_email", (q) => q.eq("email", args.email))
+      .withIndex("by_email", (q) => q.eq("email", normalizedEmail))
       .first();
 
     if (existing) {
@@ -247,6 +249,19 @@ export const createUser = mutation({
               }
             }
           }
+        } else if (args.adminCategory === "community_crm") {
+          if (!normalizedEmail.endsWith(".crm")) {
+            throw new Error("Community CRM admins must use an email ending in .crm");
+          }
+          if (!args.assignedCommunityIds || args.assignedCommunityIds.length !== 1) {
+            throw new Error("Community CRM admins must be assigned to exactly one community");
+          }
+          for (const communityId of args.assignedCommunityIds) {
+            const community = await ctx.db.get(communityId);
+            if (!community) {
+              throw new Error(`Community ${communityId} not found`);
+            }
+          }
         } else if (args.adminCategory === "finance" || args.adminCategory === "message") {
           // Finance and Message admins don't require any assignments
           // (No special validation needed)
@@ -286,7 +301,7 @@ export const createUser = mutation({
 
     // Prepare user data
     const userData: any = {
-      email: args.email,
+      email: normalizedEmail,
       role: args.role,
       alias,
       state: "active", // Initial state for new users
@@ -631,10 +646,37 @@ export const updateUserRoleAndAssignment = mutation({
   args: {
     userId: v.id("users"),
     adminLevel: v.optional(v.union(v.literal("super"), v.literal("junior"))),
-    adminCategory: v.optional(v.union(v.literal("store"), v.literal("message"), v.literal("community"), v.literal("finance"))),
+    adminCategory: v.optional(v.union(v.literal("store"), v.literal("message"), v.literal("community"), v.literal("community_crm"), v.literal("finance"))),
     assignedCommunityIds: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
+    const existingUser = await ctx.db.get(args.userId);
+    if (!existingUser || existingUser.role !== "admin") {
+      throw new Error("Admin user not found");
+    }
+
+    const nextAdminLevel = args.adminLevel ?? existingUser.adminLevel;
+    const nextAdminCategory = args.adminCategory ?? existingUser.adminCategory;
+    const nextAssignedCommunityIds = args.assignedCommunityIds ?? (existingUser.assignedCommunityIds ?? []);
+
+    if (nextAdminLevel === "junior" && nextAdminCategory === "community_crm") {
+      if (!existingUser.email || !existingUser.email.toLowerCase().endsWith(".crm")) {
+        throw new Error("Community CRM admins must use an email ending in .crm");
+      }
+      if (!Array.isArray(nextAssignedCommunityIds) || nextAssignedCommunityIds.length !== 1) {
+        throw new Error("Community CRM admins must be assigned to exactly one community");
+      }
+    }
+
+    if (nextAdminCategory === "community" || nextAdminCategory === "community_crm") {
+      for (const communityId of nextAssignedCommunityIds) {
+        const community = await ctx.db.get(communityId as any);
+        if (!community) {
+          throw new Error(`Community ${communityId} not found`);
+        }
+      }
+    }
+
     const updates: any = {};
     if (args.adminLevel !== undefined) updates.adminLevel = args.adminLevel;
     if (args.adminCategory !== undefined) updates.adminCategory = args.adminCategory;

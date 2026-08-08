@@ -18,6 +18,17 @@ export const assignCrmAgent = mutation({
       throw new Error("CRM agents must be admin users");
     }
 
+    if (user.adminLevel !== "junior" || user.adminCategory !== "community_crm") {
+      throw new Error("CRM agents must be Community CRM admins");
+    }
+
+    const assignedIds = Array.isArray(user.assignedCommunityIds)
+      ? user.assignedCommunityIds
+      : [];
+    if (!assignedIds.some((id: any) => String(id) === String(args.communityId))) {
+      throw new Error("CRM agent is not assigned to this community");
+    }
+
     const now = getUgandaTime();
     const existing = await ctx.db
       .query("crmAgents")
@@ -59,13 +70,26 @@ export const assignCrmAgentByEmail = mutation({
   handler: async (ctx, args) => {
     await requireCrmSupervisorAccess(ctx, args.supervisorId, args.communityId);
 
+    const normalizedEmail = args.agentEmail.trim().toLowerCase();
+
     const user = await ctx.db
       .query("users")
-      .withIndex("by_email", (q: any) => q.eq("email", args.agentEmail))
+      .withIndex("by_email", (q: any) => q.eq("email", normalizedEmail))
       .first();
 
     if (!user || user.role !== "admin") {
       throw new Error("No admin user found with this email");
+    }
+
+    if (user.adminLevel !== "junior" || user.adminCategory !== "community_crm") {
+      throw new Error("Only Community CRM admins can be assigned as CRM agents");
+    }
+
+    const assignedIds = Array.isArray(user.assignedCommunityIds)
+      ? user.assignedCommunityIds
+      : [];
+    if (!assignedIds.some((id: any) => String(id) === String(args.communityId))) {
+      throw new Error("CRM agent email is not assigned to this community");
     }
 
     const now = getUgandaTime();

@@ -429,7 +429,7 @@ export const getActiveCommunities = query({
     let userSubcountyId: Id<"subcounties"> | undefined;
     let userParishId: Id<"parishes"> | undefined;
     let isAdmin = false;
-    let userRecord: { role?: string; adminLevel?: "super" | "junior"; adminCategory?: "store" | "message" | "community" | "finance" } | null = null;
+    let userRecord: { role?: string; adminLevel?: "super" | "junior"; adminCategory?: "store" | "message" | "community" | "community_crm" | "finance"; assignedCommunityIds?: Id<"communities">[] } | null = null;
 
     if (args.userId) {
       const user = await ctx.db.get(args.userId);
@@ -479,6 +479,13 @@ export const getActiveCommunities = query({
         };
         const assignedSet = new Set(assignedIds.map(normalizeAssignedId).filter(Boolean));
         return assignedSet.has(String(c._id)) || c.communityAdminId === args.userId;
+      }
+
+      if (userRecord?.adminLevel === "junior" && userRecord?.adminCategory === "community_crm") {
+        const assignedIds = Array.isArray(userRecord.assignedCommunityIds)
+          ? userRecord.assignedCommunityIds
+          : [];
+        return assignedIds.some((id) => String(id) === String(c._id));
       }
       
       // Other junior admins see all

@@ -32,6 +32,11 @@ export default function Home() {
   const [isMobile, setIsMobile] = useState(false);
   const [showCommunityTooltip, setShowCommunityTooltip] = useState(false);
   const isSuperAdmin = user?.role === "admin" && user?.adminLevel !== "junior";
+  const isCrmCommunityAdmin =
+    user?.role === "admin" &&
+    user?.adminLevel === "junior" &&
+    user?.adminCategory === "community_crm";
+  const crmCommunityId = isCrmCommunityAdmin ? user?.assignedCommunityIds?.[0] : null;
   
   useEffect(() => {
     const checkMobile = () => {
@@ -256,10 +261,11 @@ export default function Home() {
             >
               Privacy Policy
             </a>
-            {(user?.role === "farmer" || user?.role === "trader" || user?.role === "buyer" || user?.role === "vendor" || user?.role === "transporter" || user?.role === "store" || isSuperAdmin || (user?.role === "admin" && user?.adminCategory === "community")) && (
+            {(user?.role === "farmer" || user?.role === "trader" || user?.role === "buyer" || user?.role === "vendor" || user?.role === "transporter" || user?.role === "store" || isSuperAdmin || (user?.role === "admin" && user?.adminCategory === "community") || isCrmCommunityAdmin) && (
               <a
                 href={
                   isSuperAdmin ? "/admin/communities" :
+                  isCrmCommunityAdmin && crmCommunityId ? `/community-only/crm-agent?communityId=${crmCommunityId}` :
                   user?.adminCategory === "community" ? "/admin/community-dashboard" :
                   "/farmer/communities"
                 }
@@ -286,7 +292,7 @@ export default function Home() {
                   e.currentTarget.style.background = "#ffffff";
                 }}
               >
-                {isSuperAdmin ? "Create a Community" : user?.adminCategory === "community" ? "Community Dashboard" : "Join A Community"}
+                {isSuperAdmin ? "Create a Community" : isCrmCommunityAdmin ? "CRM Agent Workspace" : user?.adminCategory === "community" ? "Community Dashboard" : "Join A Community"}
               </a>
             )}
           </div>
@@ -410,7 +416,16 @@ export default function Home() {
       <div style={{
         marginTop: "1rem"
       }}>
-        {user?.role === "admin" && user?.userId && <AdminDashboard userId={user.userId as Id<"users">} />}
+        {user?.role === "admin" && user?.userId && !isCrmCommunityAdmin && <AdminDashboard userId={user.userId as Id<"users">} />}
+        {isCrmCommunityAdmin && crmCommunityId && (
+          <div style={{ background: "#ffffff", borderRadius: "16px", padding: "1.25rem", boxShadow: "0 8px 24px rgba(0,0,0,0.08)" }}>
+            <h2 style={{ marginTop: 0, marginBottom: "0.5rem" }}>CRM Agent Workspace</h2>
+            <p style={{ marginTop: 0, color: "#555" }}>This account is limited to CRM follow-up work for its assigned community.</p>
+            <a href={`/community-only/crm-agent?communityId=${crmCommunityId}`} style={{ color: "#1565c0", fontWeight: 700, textDecoration: "none" }}>
+              Open CRM agent page →
+            </a>
+          </div>
+        )}
         {user?.role === "trader" && user?.userId && <TraderDashboardSafe userId={user.userId as Id<"users">} />}
         {user?.role === "farmer" && user?.userId && <FarmerDashboard userId={user.userId as Id<"users">} />}
         {user?.role === "buyer" && user?.userId && <BuyerDashboard userId={user.userId as Id<"users">} />}

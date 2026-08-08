@@ -15,12 +15,15 @@ const BRAND = "#156f44";
 
 export default function CrmAgentPage() {
   const searchParams = useSearchParams();
-  const communityId = searchParams.get("communityId") as Id<"communities"> | null;
+  const communityIdFromUrl = searchParams.get("communityId") as Id<"communities"> | null;
 
   const { user, status } = useStoredUser();
   const userId = (user?.userId as Id<"users"> | undefined) ?? null;
 
   const currentUser = useQuery(api.auth.getUser, userId ? { userId } : "skip");
+  const communityId =
+    communityIdFromUrl ||
+    (((currentUser as any)?.assignedCommunityIds?.[0] as Id<"communities"> | undefined) ?? null);
   const allCommunities = useQuery(
     api.communities.getActiveCommunities,
     userId ? { userId } : "skip"
@@ -155,8 +158,8 @@ export default function CrmAgentPage() {
       <div style={{ padding: "1.25rem", fontFamily: FONT }}>
         <h2 style={{ marginTop: 0 }}>CRM Agent</h2>
         <p>Community CRM is currently disabled for this community.</p>
-        <Link href={`/admin/community-dashboard`} style={{ color: BRAND, textDecoration: "none" }}>
-          &larr; Back to Community Dashboard
+        <Link href={currentUser?.adminCategory === "community_crm" ? "/" : `/admin/community-dashboard`} style={{ color: BRAND, textDecoration: "none" }}>
+          &larr; Back
         </Link>
       </div>
     );
@@ -165,8 +168,8 @@ export default function CrmAgentPage() {
   return (
     <div style={{ minHeight: "100vh", background: "#f5f8f6", fontFamily: FONT, paddingBottom: "5rem" }}>
       <div style={{ background: "linear-gradient(135deg, #1f7a3e 0%, #165c2f 100%)", color: "#fff", padding: "1rem" }}>
-        <Link href={`/admin/community-crm?communityId=${communityId}`} style={{ color: "#d1fae5", textDecoration: "none", fontSize: "0.85rem" }}>
-          &larr; Back to CRM Supervisor
+        <Link href={currentUser?.adminCategory === "community_crm" ? "/" : `/admin/community-crm?communityId=${communityId}`} style={{ color: "#d1fae5", textDecoration: "none", fontSize: "0.85rem" }}>
+          &larr; {currentUser?.adminCategory === "community_crm" ? "Back to Dashboard" : "Back to CRM Supervisor"}
         </Link>
         <h1 style={{ margin: "0.4rem 0 0 0", fontSize: "1.35rem" }}>Good Morning {greetingName}</h1>
         <p style={{ margin: "0.35rem 0 0 0", opacity: 0.9 }}>Your calls today: {callsToday}</p>

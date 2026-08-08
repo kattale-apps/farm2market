@@ -17,7 +17,7 @@ export function CreateAdminAccountForm({ adminId }: CreateAdminAccountFormProps)
   
   const [email, setEmail] = useState("");
   const [adminLevel, setAdminLevel] = useState<"super" | "junior">("junior");
-  const [adminCategory, setAdminCategory] = useState<"store" | "message" | "community">("store");
+  const [adminCategory, setAdminCategory] = useState<"store" | "message" | "community" | "community_crm">("store");
   const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([]);
   const [selectedCommunityIds, setSelectedCommunityIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -29,6 +29,16 @@ export function CreateAdminAccountForm({ adminId }: CreateAdminAccountFormProps)
     setMessage(null);
 
     try {
+      if (adminLevel === "junior" && adminCategory === "community_crm") {
+        if (!email.trim().toLowerCase().endsWith(".crm")) {
+          throw new Error("Community CRM admins must use an email ending in .crm");
+        }
+
+        if (selectedCommunityIds.length !== 1) {
+          throw new Error("Community CRM admins must be assigned to exactly one community");
+        }
+      }
+
       await createUser({
         email,
         role: "admin",
@@ -37,7 +47,7 @@ export function CreateAdminAccountForm({ adminId }: CreateAdminAccountFormProps)
         allowedStorageLocationIds: adminLevel === "junior" && adminCategory === "store" && selectedLocationIds.length > 0
           ? selectedLocationIds.map(id => id as Id<"storageLocations">) 
           : undefined,
-        assignedCommunityIds: adminLevel === "junior" && adminCategory === "community" && selectedCommunityIds.length > 0
+        assignedCommunityIds: adminLevel === "junior" && (adminCategory === "community" || adminCategory === "community_crm") && selectedCommunityIds.length > 0
           ? selectedCommunityIds.map(id => id as Id<"communities">)
           : undefined,
         creatorAdminId: adminId,
@@ -85,12 +95,13 @@ export function CreateAdminAccountForm({ adminId }: CreateAdminAccountFormProps)
             <label style={{ display: "block", marginBottom: "0.5rem" }}>Category:</label>
             <select 
               value={adminCategory} 
-              onChange={(e) => setAdminCategory(e.target.value as "store" | "message" | "community")}
+              onChange={(e) => setAdminCategory(e.target.value as "store" | "message" | "community" | "community_crm")}
               style={{ width: "100%", padding: "0.5rem" }}
             >
               <option value="store">Store Admin</option>
               <option value="message">Message Admin</option>
               <option value="community">Community Admin</option>
+              <option value="community_crm">Community CRM</option>
             </select>
           </div>
         )}
@@ -114,13 +125,18 @@ export function CreateAdminAccountForm({ adminId }: CreateAdminAccountFormProps)
           </div>
         )}
 
-        {adminLevel === "junior" && adminCategory === "community" && (
+        {adminLevel === "junior" && (adminCategory === "community" || adminCategory === "community_crm") && (
           <div>
-            <label style={{ display: "block", marginBottom: "0.5rem" }}>Assigned Communities (Optional):</label>
+            <label style={{ display: "block", marginBottom: "0.5rem" }}>
+              {adminCategory === "community_crm" ? "Assigned Community:" : "Assigned Communities (Optional):"}
+            </label>
             <select 
               multiple
               value={selectedCommunityIds}
-              onChange={(e) => setSelectedCommunityIds(Array.from(e.target.selectedOptions, option => option.value))}
+              onChange={(e) => {
+                const values = Array.from(e.target.selectedOptions, option => option.value);
+                setSelectedCommunityIds(adminCategory === "community_crm" ? values.slice(-1) : values);
+              }}
               style={{ width: "100%", padding: "0.5rem", minHeight: "100px" }}
             >
               {communities?.map((comm: any) => (
@@ -129,7 +145,11 @@ export function CreateAdminAccountForm({ adminId }: CreateAdminAccountFormProps)
                 </option>
               ))}
             </select>
-            <small style={{ color: "#666" }}>Hold Ctrl/Cmd to select multiple. Leave empty to assign later.</small>
+            <small style={{ color: "#666" }}>
+              {adminCategory === "community_crm"
+                ? "Select exactly one community. Use a .crm email for this account."
+                : "Hold Ctrl/Cmd to select multiple. Leave empty to assign later."}
+            </small>
           </div>
         )}
 

@@ -2546,8 +2546,14 @@ export default function CommunityDashboardPage() {
     );
   }
 
-  // Only community admins can access this page
-  if (resolvedRole !== "admin") {
+  // Only super admins and community admins can access this page
+  const isAllowedCommunityDashboardAdmin =
+    resolvedRole === "admin" &&
+    ((currentUser as any)?.adminLevel === "super" ||
+      (currentUser as any)?.adminLevel === undefined ||
+      resolvedAdminCategory === "community");
+
+  if (!isAllowedCommunityDashboardAdmin) {
     return (
       <div style={{
         padding: "2rem",
@@ -2559,7 +2565,7 @@ export default function CommunityDashboardPage() {
         marginBottom: "2rem",
       }}>
         <h2>Access Denied</h2>
-        <p>Only admins can access this page.</p>
+        <p>Only super admins and community admins can access this page.</p>
         <Link href="/" style={{
           color: "#1976d2",
           textDecoration: "none",

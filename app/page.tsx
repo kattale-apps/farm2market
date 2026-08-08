@@ -107,6 +107,21 @@ export default function Home() {
   );
 
   const memberCommunities = (communities || []).filter((c: any) => c.isMember);
+  const currentUser = useQuery(
+    api.auth.getUser,
+    user?.userId ? { userId: user.userId as Id<"users"> } : "skip"
+  );
+
+  const effectiveUser = currentUser ?? user;
+  const isEffectiveSuperAdmin =
+    effectiveUser?.role === "admin" && effectiveUser?.adminLevel !== "junior";
+  const isEffectiveCrmCommunityAdmin =
+    effectiveUser?.role === "admin" &&
+    effectiveUser?.adminLevel === "junior" &&
+    effectiveUser?.adminCategory === "community_crm";
+  const effectiveCrmCommunityId = isEffectiveCrmCommunityAdmin
+    ? effectiveUser?.assignedCommunityIds?.[0]
+    : null;
 
   // Redirect to onboarding if not completed
   useEffect(() => {
@@ -261,12 +276,12 @@ export default function Home() {
             >
               Privacy Policy
             </a>
-            {(user?.role === "farmer" || user?.role === "trader" || user?.role === "buyer" || user?.role === "vendor" || user?.role === "transporter" || user?.role === "store" || isSuperAdmin || (user?.role === "admin" && user?.adminCategory === "community") || isCrmCommunityAdmin) && (
+            {(effectiveUser?.role === "farmer" || effectiveUser?.role === "trader" || effectiveUser?.role === "buyer" || effectiveUser?.role === "vendor" || effectiveUser?.role === "transporter" || effectiveUser?.role === "store" || isEffectiveSuperAdmin || (effectiveUser?.role === "admin" && effectiveUser?.adminCategory === "community") || isEffectiveCrmCommunityAdmin) && (
               <a
                 href={
-                  isSuperAdmin ? "/admin/communities" :
-                  isCrmCommunityAdmin && crmCommunityId ? `/community-only/crm-agent?communityId=${crmCommunityId}` :
-                  user?.adminCategory === "community" ? "/admin/community-dashboard" :
+                  isEffectiveSuperAdmin ? "/admin/communities" :
+                  isEffectiveCrmCommunityAdmin && effectiveCrmCommunityId ? `/community-only/crm-agent?communityId=${effectiveCrmCommunityId}` :
+                  effectiveUser?.adminCategory === "community" ? "/admin/community-dashboard" :
                   "/farmer/communities"
                 }
                 style={{
@@ -292,7 +307,7 @@ export default function Home() {
                   e.currentTarget.style.background = "#ffffff";
                 }}
               >
-                {isSuperAdmin ? "Create a Community" : isCrmCommunityAdmin ? "CRM Agent Workspace" : user?.adminCategory === "community" ? "Community Dashboard" : "Join A Community"}
+                {isEffectiveSuperAdmin ? "Create a Community" : isEffectiveCrmCommunityAdmin ? "CRM Agent Workspace" : effectiveUser?.adminCategory === "community" ? "Community Dashboard" : "Join A Community"}
               </a>
             )}
           </div>
@@ -310,7 +325,7 @@ export default function Home() {
             marginBottom: "0",
             fontWeight: "500"
           }}>
-            Logged in as: <strong style={{ color: "#1a1a1a" }}>{user?.alias || "Unknown"}</strong>
+            Logged in as: <strong style={{ color: "#1a1a1a" }}>{effectiveUser?.alias || user?.alias || "Unknown"}</strong>
           </p>
           <p style={{ 
             color: "#555", 
@@ -318,9 +333,9 @@ export default function Home() {
             marginBottom: "0",
             textTransform: "capitalize"
           }}>
-            Role: {user?.role || "unknown"}
+            Role: {effectiveUser?.role || user?.role || "unknown"}
           </p>
-          {(user?.role === "farmer" || user?.role === "trader" || user?.role === "buyer" || user?.role === "vendor" || user?.role === "transporter" || user?.role === "store") && (
+          {(effectiveUser?.role === "farmer" || effectiveUser?.role === "trader" || effectiveUser?.role === "buyer" || effectiveUser?.role === "vendor" || effectiveUser?.role === "transporter" || effectiveUser?.role === "store") && (
             <div style={{ position: "relative", alignSelf: isMobile ? "flex-start" : "flex-end" }}>
               <button
                 type="button"
@@ -416,12 +431,12 @@ export default function Home() {
       <div style={{
         marginTop: "1rem"
       }}>
-        {user?.role === "admin" && user?.userId && !isCrmCommunityAdmin && <AdminDashboard userId={user.userId as Id<"users">} />}
-        {isCrmCommunityAdmin && crmCommunityId && (
+        {effectiveUser?.role === "admin" && user?.userId && !isEffectiveCrmCommunityAdmin && <AdminDashboard userId={user.userId as Id<"users">} />}
+        {isEffectiveCrmCommunityAdmin && effectiveCrmCommunityId && (
           <div style={{ background: "#ffffff", borderRadius: "16px", padding: "1.25rem", boxShadow: "0 8px 24px rgba(0,0,0,0.08)" }}>
             <h2 style={{ marginTop: 0, marginBottom: "0.5rem" }}>CRM Agent Workspace</h2>
             <p style={{ marginTop: 0, color: "#555" }}>This account is limited to CRM follow-up work for its assigned community.</p>
-            <a href={`/community-only/crm-agent?communityId=${crmCommunityId}`} style={{ color: "#1565c0", fontWeight: 700, textDecoration: "none" }}>
+            <a href={`/community-only/crm-agent?communityId=${effectiveCrmCommunityId}`} style={{ color: "#1565c0", fontWeight: 700, textDecoration: "none" }}>
               Open CRM agent page →
             </a>
           </div>

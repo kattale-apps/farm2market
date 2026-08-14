@@ -222,7 +222,7 @@ See `CURSOR_RULES.md` for complete rules and guidelines.
 - Backend: **Convex ONLY** (Supabase is FORBIDDEN - see `dormant/supabase/DO_NOT_USE.md`)
 - Production: Not activated (see `docs/architecture.md`)
 
-## ⚠️ Important: Supabase Is Forbidden!
+## ⚠️ Important: Supabase Is Forbidden
 
 **Supabase is NOT used in this project and MUST NOT be used.**
 

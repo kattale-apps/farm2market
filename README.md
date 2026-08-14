@@ -32,7 +32,7 @@ This repository is the canonical source of truth for the application. All system
 ## Project Structure
 
 ```
-my-app/
+farm2market/
 ├── app/                    # Next.js App Router
 │   ├── layout.tsx         # Root layout
 │   ├── page.tsx           # Home page

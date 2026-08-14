@@ -30,7 +30,7 @@ export default function CrmAgentPage() {
   );
 
   const crmEnabledForCommunity =
-    ((allCommunities || []).find((c: any) => String(c._id) === String(communityId || "")) as any)
+    ((allCommunities || []).find((c: any) => String(c.id) === String(communityId || "")) as any)
       ?.crmEnabled === true;
 
   const queue = useQuery(

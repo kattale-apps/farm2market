@@ -83,7 +83,7 @@ Both deployments run simultaneously with completely separate:
    - Pilot: `NEXT_PUBLIC_CONVEX_URL` (pilot Convex URL), `NEXT_PUBLIC_DEPLOYMENT_MODE=pilot`
    - Dev: `NEXT_PUBLIC_CONVEX_URL` (dev Convex URL), `NEXT_PUBLIC_DEPLOYMENT_MODE=dev`
 
-## Setup
+## Setup / Configuration
 
 ### Prerequisites
 - Node.js 18+ 

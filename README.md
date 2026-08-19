@@ -1,5 +1,7 @@
 # Farm2Market Uganda
 
+[![Convex Dual Deploy](https://github.com/kattale-apps/farm2market/actions/workflows/convex-dual-deploy.yml/badge.svg)](https://github.com/kattale-apps/farm2market/actions/workflows/convex-dual-deploy.yml)
+
 **Controlled, negotiation-driven agricultural trading platform with strict, non-negotiable rules.**
 
 <!-- Last deployment: 2024 - Pilot mode with shared password authentication -->

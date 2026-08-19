@@ -10,9 +10,9 @@ jobs:
     if: github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     env:
-      CONVEX_DEPLOYMENT: ${{ secrets.CONVEX_DEPLOYMENT }}
+      CONVEX_DEPLOYMENT: dev:adamant-armadillo-601
       CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
-      CONVEX_URL: ${{ secrets.CONVEX_URL }}
+      CONVEX_URL: https://adamant-armadillo-601.convex.cloud
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,6 +30,7 @@ jobs:
 
       - name: Deploy to Convex (dev)
         run: |
+          test -n "$CONVEX_DEPLOY_KEY" || { echo "Missing CONVEX_DEPLOY_KEY GitHub secret" >&2; exit 1; }
           echo "Deploying to Convex dev target: $CONVEX_DEPLOYMENT"
           npx convex dev --once --typecheck=disable
 

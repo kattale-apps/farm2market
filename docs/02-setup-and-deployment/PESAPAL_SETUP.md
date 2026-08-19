@@ -6,12 +6,12 @@ To use Pesapal payments, you must set the following environment variables in **C
 
 ### Required Variables
 
-| Variable Name | Description | Example | Required |
-|--------------|-------------|---------|----------|
-| `PESAPAL_CONSUMER_KEY` | Your Pesapal Consumer Key | `1DDecquMxaWUxGjWg+g3SQSkgRRmV3hs` | Yes |
-| `PESAPAL_CONSUMER_SECRET` | Your Pesapal Consumer Secret | `WpmXyvPsYE872GO7WY/wjpoSrm8=` | Yes |
-| `PESAPAL_ENV` | Environment: `sandbox` or `production` | `sandbox` | No (defaults to sandbox) |
-| `PESAPAL_NOTIFICATION_ID` | IPN Notification ID (if registered with Pesapal) | `abc123-def456-ghi789` | No (only if IPN is required) |
+| Variable Name             | Description                                      | Example                     | Required                     |
+| ------------------------- | ------------------------------------------------ | --------------------------- | ---------------------------- |
+| `PESAPAL_CONSUMER_KEY`    | Your Pesapal Consumer Key                        | `<set-in-convex-dashboard>` | Yes                          |
+| `PESAPAL_CONSUMER_SECRET` | Your Pesapal Consumer Secret                     | `<set-in-convex-dashboard>` | Yes                          |
+| `PESAPAL_ENV`             | Environment: `sandbox` or `production`           | `sandbox`                   | No (defaults to sandbox)     |
+| `PESAPAL_NOTIFICATION_ID` | IPN Notification ID (if registered with Pesapal) | `abc123-def456-ghi789`      | No (only if IPN is required) |
 
 ### How to Set in Convex Dashboard
 
@@ -26,11 +26,13 @@ To use Pesapal payments, you must set the following environment variables in **C
 ### Error: "Invalid Access Token"
 
 This error typically means:
+
 1. **Invalid Credentials**: The `PESAPAL_CONSUMER_KEY` or `PESAPAL_CONSUMER_SECRET` are incorrect
 2. **Wrong Environment**: Using production credentials with sandbox URL or vice versa
 3. **Expired Credentials**: Credentials may have been revoked or expired
 
 **Solution**:
+
 - Verify credentials in your Pesapal dashboard
 - Ensure `PESAPAL_ENV` matches your credentials (sandbox vs production)
 - Check that credentials are correctly set in Convex Dashboard
@@ -40,6 +42,7 @@ This error typically means:
 This means the environment variables are not set in Convex.
 
 **Solution**:
+
 - Set `PESAPAL_CONSUMER_KEY` and `PESAPAL_CONSUMER_SECRET` in Convex Dashboard
 - Ensure variables are set for the correct environment (development/production)
 
@@ -48,27 +51,28 @@ This means the environment variables are not set in Convex.
 This error indicates that Pesapal API v3 is expecting a `notification_id` (IPN URL ID) in the payment request.
 
 **Understanding IPN vs Callback URLs**:
+
 - **Callback URL**: Used for redirecting users back to your site after payment (we use this)
 - **IPN (Instant Payment Notification)**: Server-to-server webhook notifications (may be required by Pesapal v3)
 
 **Possible Solutions**:
 
 1. **Register an IPN URL with Pesapal** (Required for API v3):
-   
+
    **Step 1: Get Your Convex Webhook URL**
-   
+
    The webhook endpoint is already set up in `convex/http.ts`. After deploying Convex, you'll get a webhook URL like:
-   
+
    ```
    https://your-deployment-name.convex.site/pesapal/webhook
    ```
-   
+
    To find your Convex deployment URL:
    - Go to **Convex Dashboard** → Your Project
    - Check the deployment URL (usually shown in the dashboard)
    - Or check your `CONVEX_URL` environment variable
    - The webhook path is: `{your-convex-url}/pesapal/webhook`
-   
+
    **Step 2: Register IPN URL in Pesapal Dashboard**
    - Log into your Pesapal dashboard (sandbox or production)
    - Navigate to **Settings** → **IPN (Instant Payment Notification)**
@@ -80,14 +84,14 @@ This error indicates that Pesapal API v3 is expecting a `notification_id` (IPN U
    - **IMPORTANT**: After saving, Pesapal will show a `notification_id` - this is NOT the URL!
    - The `notification_id` will look like: `abc123-def456-ghi789` or `550e8400-e29b-41d4-a716-446655440000` (UUID format)
    - **DO NOT copy the URL** - copy the actual notification_id (alphanumeric string/UUID)
-   
+
    **Step 3: Add Notification ID to Convex (NOT Vercel)**
-   
+
    **IMPORTANT**: Add this to **Convex Dashboard**, NOT Vercel, because:
    - Payment requests are initiated in Convex actions
    - Convex functions run on Convex servers, not Vercel
    - The webhook endpoint on Vercel only forwards to Convex
-   
+
    Steps:
    - Go to **Convex Dashboard** → Your Project → **Settings** → **Environment Variables**
    - Click **Add Variable** (or edit existing if it's already there)
@@ -96,9 +100,9 @@ This error indicates that Pesapal API v3 is expecting a `notification_id` (IPN U
    - **IMPORTANT**: The value should be a UUID/alphanumeric string like `abc123-def456-ghi789`
    - **NOT** a URL like `https://farm2market-dev.vercel.app/api/pesapal/webhook`
    - Click **Save** (Convex will auto-redeploy)
-   
+
    **Common Mistake**: Setting the IPN URL as the notification_id value. The notification_id is a separate identifier that Pesapal provides after registering the URL.
-   
+
    **Do NOT add this to Vercel environment variables** - it won't work there!
 
 2. **Check if IPN is optional in sandbox**:
@@ -128,11 +132,13 @@ The code will automatically include `notification_id` in payment requests if thi
 ## Testing
 
 ### Sandbox Mode (Default)
+
 - Uses: `https://cybqa.pesapal.com/pesapalv3`
 - Set `PESAPAL_ENV=sandbox` (or leave unset)
 - Use sandbox credentials from Pesapal dashboard
 
 ### Production Mode
+
 - Uses: `https://pay.pesapal.com/v3`
 - Set `PESAPAL_ENV=production`
 - Use production credentials from Pesapal dashboard
@@ -140,16 +146,19 @@ The code will automatically include `notification_id` in payment requests if thi
 ## API Endpoints
 
 ### Authentication
+
 - **Sandbox**: `https://cybqa.pesapal.com/pesapalv3/api/Auth/RequestToken`
 - **Production**: `https://pay.pesapal.com/v3/api/Auth/RequestToken`
 
 ### Payment Submission
+
 - **Sandbox**: `https://cybqa.pesapal.com/pesapalv3/api/Transactions/SubmitOrderRequest`
 - **Production**: `https://pay.pesapal.com/v3/api/Transactions/SubmitOrderRequest`
 
 ## Support
 
 If issues persist:
+
 1. Check Pesapal API documentation: https://developer.pesapal.com/
 2. Verify credentials in Pesapal dashboard
 3. Contact Pesapal support for credential verification

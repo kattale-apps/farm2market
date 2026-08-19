@@ -37,7 +37,6 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     env:
-      CONVEX_DEPLOYMENT: ${{ secrets.CONVEX_DEPLOYMENT_PROD }}
       CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY_PROD }}
       CONVEX_URL: ${{ secrets.CONVEX_URL_PROD }}
     steps:
@@ -57,7 +56,6 @@ jobs:
 
       - name: Deploy to Convex (prod)
         run: |
-          test -n "$CONVEX_DEPLOYMENT" || { echo "Missing CONVEX_DEPLOYMENT_PROD GitHub secret" >&2; exit 1; }
           test -n "$CONVEX_DEPLOY_KEY" || { echo "Missing CONVEX_DEPLOY_KEY_PROD GitHub secret" >&2; exit 1; }
           echo "Deploying to Convex production"
           npx convex deploy --yes --typecheck=disable

@@ -32,6 +32,7 @@
     "@mermaid-js/mermaid-cli": "^11.15.0",
     "@types/bcrypt": "^6.0.0",
     "@vercel/analytics": "^1.6.1",
+    "@vercel/speed-insights": "^2.0.0",
     "bcrypt": "^6.0.0",
     "convex": "^1.11.0",
     "dexie": "^4.3.0",

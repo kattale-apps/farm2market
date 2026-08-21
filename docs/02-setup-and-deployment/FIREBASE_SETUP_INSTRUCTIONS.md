@@ -13,7 +13,7 @@
 ## Step 2: Add Android App to Firebase
 
 1. In your Firebase project dashboard, click the **Android icon** (or **Add app** → **Android**)
-2. Enter Android package name: `com.farm2market.uganda`
+2. Enter Android package name: `com.farm2marketuganda.app`
 3. Enter App nickname (optional): `Farm2Market Uganda`
 4. Enter Debug signing certificate SHA-1 (optional for now, can add later)
 5. Click **Register app**

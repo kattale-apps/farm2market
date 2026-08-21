@@ -70,9 +70,9 @@ All files have been created and modified to support community-specific APK build
 
 | Flavor | App ID | App Name | Community Slug |
 |--------|--------|----------|----------------|
-| defaultCommunity | com.farm2market.uganda | FarmCoin | "" (empty) |
-| kakira | com.farm2market.uganda.kakira | Kakira Farmers | kakira |
-| kyagalanyi | com.farm2market.uganda.kyagalanyi | Kyagalanyi Farmers | kyagalanyi |
+| defaultCommunity | com.farm2marketuganda.app | FarmCoin | "" (empty) |
+| kakira | com.farm2marketuganda.app.kakira | Kakira Farmers | kakira |
+| kyagalanyi | com.farm2marketuganda.app.kyagalanyi | Kyagalanyi Farmers | kyagalanyi |
 
 ## 🚀 Quick Start
 
@@ -92,9 +92,9 @@ cd android
 
 ```bash
 # Using ADB
-adb shell am start -a android.intent.action.VIEW -d "farm2market://community/kakira" com.farm2market.uganda.kakira
+adb shell am start -a android.intent.action.VIEW -d "farm2market://community/kakira" com.farm2marketuganda.app.kakira
 
-adb shell am start -a android.intent.action.VIEW -d "https://farm2market-dev.vercel.app/join/kyagalanyi" com.farm2market.uganda.kyagalanyi
+adb shell am start -a android.intent.action.VIEW -d "https://farm2market-dev.vercel.app/join/kyagalanyi" com.farm2marketuganda.app.kyagalanyi
 ```
 
 ### Integrate Auto-Join

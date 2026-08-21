@@ -45,9 +45,9 @@ try {
         }
         
         Write-Host "Flavor Details:" -ForegroundColor Cyan
-        Write-Host "  defaultCommunity: com.farm2market.uganda (FarmCoin)" -ForegroundColor White
-        Write-Host "  kakira: com.farm2market.uganda.kakira (Kakira Farmers)" -ForegroundColor White
-        Write-Host "  kyagalanyi: com.farm2market.uganda.kyagalanyi (Kyagalanyi Farmers)" -ForegroundColor White
+        Write-Host "  defaultCommunity: com.farm2marketuganda.app (FarmCoin)" -ForegroundColor White
+        Write-Host "  kakira: com.farm2marketuganda.app.kakira (Kakira Farmers)" -ForegroundColor White
+        Write-Host "  kyagalanyi: com.farm2marketuganda.app.kyagalanyi (Kyagalanyi Farmers)" -ForegroundColor White
         Write-Host ""
     } else {
         Write-Host ""

@@ -1,7 +1,7 @@
 import { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
-  appId: "com.farm2market.uganda",
+  appId: "com.farm2marketuganda.app",
   appName: "FarmCoin",
   webDir: "out", // Will be ignored when using server.url
   server: {

@@ -62,7 +62,7 @@ cd android
 
 Your app is configured to load from:
 - **Vercel URL**: `https://farm2market-dev.vercel.app`
-- **App ID**: `com.farm2market.uganda`
+- **App ID**: `com.farm2marketuganda.app`
 - **App Name**: `Farm2Market Uganda`
 
 To change the Vercel URL, edit `capacitor.config.ts`:

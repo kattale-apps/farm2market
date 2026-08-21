@@ -30,7 +30,7 @@ Push notifications have been integrated into the app to allow notifications to p
 1. Go to [Firebase Console](https://console.firebase.google.com/)
 2. Create a new project or select existing project
 3. Add Android app to the project:
-   - Package name: `com.farm2market.uganda`
+   - Package name: `com.farm2marketuganda.app`
    - Download `google-services.json`
    - Place it in `android/app/` directory
 

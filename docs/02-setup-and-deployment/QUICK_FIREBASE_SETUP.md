@@ -18,7 +18,7 @@
 
 ### Step 2: Add Android App
 1. In Firebase Console, click **Android icon** (or **Add app** → **Android**)
-2. Package name: `com.farm2market.uganda`
+2. Package name: `com.farm2marketuganda.app`
 3. App nickname: `Farm2Market Uganda` (optional)
 4. Click **Register app**
 

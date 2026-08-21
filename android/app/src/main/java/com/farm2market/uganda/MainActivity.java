@@ -1,4 +1,4 @@
-package com.farm2market.uganda;
+package com.farm2marketuganda.app;
 
 import android.content.Intent;
 import android.net.Uri;

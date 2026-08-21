@@ -35,9 +35,9 @@ The app supports three build flavors:
 
 | Flavor | App ID | App Name | Community Slug |
 |--------|--------|----------|----------------|
-| defaultCommunity | com.farm2market.uganda | FarmCoin | (empty) |
-| kakira | com.farm2market.uganda.kakira | Kakira Farmers | kakira |
-| kyagalanyi | com.farm2market.uganda.kyagalanyi | Kyagalanyi Farmers | kyagalanyi |
+| defaultCommunity | com.farm2marketuganda.app | FarmCoin | (empty) |
+| kakira | com.farm2marketuganda.app.kakira | Kakira Farmers | kakira |
+| kyagalanyi | com.farm2marketuganda.app.kyagalanyi | Kyagalanyi Farmers | kyagalanyi |
 
 ## Build Commands
 
@@ -161,10 +161,10 @@ async function handleCommunityJoin(communitySlug: string) {
 
 ```bash
 # Test farm2market:// scheme
-adb shell am start -a android.intent.action.VIEW -d "farm2market://community/kakira" com.farm2market.uganda
+adb shell am start -a android.intent.action.VIEW -d "farm2market://community/kakira" com.farm2marketuganda.app
 
 # Test HTTPS scheme
-adb shell am start -a android.intent.action.VIEW -d "https://farm2market-dev.vercel.app/join/kyagalanyi" com.farm2market.uganda
+adb shell am start -a android.intent.action.VIEW -d "https://farm2market-dev.vercel.app/join/kyagalanyi" com.farm2marketuganda.app
 ```
 
 ### QR Code Generation

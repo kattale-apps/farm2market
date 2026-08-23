@@ -39,9 +39,9 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 
-                        <!-- https://dev.farm2marketuganda.com/join/{communityId} -->
+                <!-- HTTPS host is selected per build type. -->
                 <data android:scheme="https"
-                            android:host="dev.farm2marketuganda.com"
+                            android:host="${deepLinkHost}"
                       android:pathPrefix="/join" />
             </intent-filter>
 

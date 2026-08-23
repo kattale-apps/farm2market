@@ -33,11 +33,11 @@ This implementation adds community-specific configuration with deep link auto-jo
 
 The app supports three build flavors:
 
-| Flavor | App ID | App Name | Community Slug |
-|--------|--------|----------|----------------|
-| defaultCommunity | com.farm2market.uganda | FarmCoin | (empty) |
-| kakira | com.farm2market.uganda.kakira | Kakira Farmers | kakira |
-| kyagalanyi | com.farm2market.uganda.kyagalanyi | Kyagalanyi Farmers | kyagalanyi |
+| Flavor           | App ID                               | App Name           | Community Slug |
+| ---------------- | ------------------------------------ | ------------------ | -------------- |
+| defaultCommunity | com.farm2marketuganda.app            | FarmCoin           | (empty)        |
+| kakira           | com.farm2marketuganda.app.kakira     | Kakira Farmers     | kakira         |
+| kyagalanyi       | com.farm2marketuganda.app.kyagalanyi | Kyagalanyi Farmers | kyagalanyi     |
 
 ## Build Commands
 
@@ -69,15 +69,15 @@ Output APKs will be in: `android/app/build/outputs/apk/`
 Add this to your app's initialization logic (e.g., in a layout or provider component):
 
 ```typescript
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useMutation } from 'convex/react';
-import { api } from '@/convex/_generated/api';
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import {
   getCommunityIdFromNative,
   hasAutoJoinedFromNative,
   markAutoJoinComplete,
-} from '@/app/utils/communityNativeBridge';
+} from "@/app/utils/communityNativeBridge";
 
 export function CommunityAutoJoin() {
   const router = useRouter();
@@ -94,21 +94,21 @@ export function CommunityAutoJoin() {
       if (hasJoined) return; // Already processed
 
       // Get current user from localStorage
-      const storedUser = localStorage.getItem('pilot_user');
+      const storedUser = localStorage.getItem("pilot_user");
       if (!storedUser) return; // Not logged in yet
 
       try {
         const { userId } = JSON.parse(storedUser);
-        
+
         // Join the community
         await joinCommunity({ userId, communitySlug });
-        
+
         // Mark as complete to prevent re-joining
         await markAutoJoinComplete();
-        
+
         console.log(`Auto-joined community: ${communitySlug}`);
       } catch (error) {
-        console.error('Failed to auto-join community:', error);
+        console.error("Failed to auto-join community:", error);
       }
     }
 
@@ -144,12 +144,12 @@ export default function RootLayout({ children }) {
 When a user manually selects a community, sync it to native storage:
 
 ```typescript
-import { setCommunityIdInNative } from '@/app/utils/communityNativeBridge';
+import { setCommunityIdInNative } from "@/app/utils/communityNativeBridge";
 
 async function handleCommunityJoin(communitySlug: string) {
   // Join via API
   await joinCommunity({ userId, communitySlug });
-  
+
   // Sync to native storage (no-op on web)
   await setCommunityIdInNative(communitySlug);
 }
@@ -161,10 +161,10 @@ async function handleCommunityJoin(communitySlug: string) {
 
 ```bash
 # Test farm2market:// scheme
-adb shell am start -a android.intent.action.VIEW -d "farm2market://community/kakira" com.farm2market.uganda
+adb shell am start -a android.intent.action.VIEW -d "farm2market://community/kakira" com.farm2marketuganda.app
 
 # Test HTTPS scheme
-adb shell am start -a android.intent.action.VIEW -d "https://farm2market-dev.vercel.app/join/kyagalanyi" com.farm2market.uganda
+adb shell am start -a android.intent.action.VIEW -d "https://farm2market-dev.vercel.app/join/kyagalanyi" com.farm2marketuganda.app
 ```
 
 ### QR Code Generation
@@ -201,11 +201,11 @@ export const joinCommunityBySlug = mutation({
       .query("communities")
       .filter((q) => q.eq(q.field("slug"), communitySlug))
       .first();
-    
+
     if (!community) {
       throw new Error(`Community not found: ${communitySlug}`);
     }
-    
+
     // Join the community (reuse existing logic)
     return await joinCommunity(ctx, { userId, communityId: community._id });
   },
@@ -215,11 +215,13 @@ export const joinCommunityBySlug = mutation({
 ## Files Created/Modified
 
 ### Created Files:
+
 1. `android/app/src/main/java/com/farm2market/uganda/CommunityConfigManager.kt`
 2. `android/app/src/main/java/com/farm2market/uganda/CommunityBridge.kt`
 3. `app/utils/communityNativeBridge.ts`
 
 ### Modified Files:
+
 1. `android/app/build.gradle` - Added product flavors
 2. `android/app/src/main/java/com/farm2market/uganda/MainActivity.java` - Added bridge registration and deep link handling
 3. `android/app/src/main/AndroidManifest.xml` - Added deep link intent filters

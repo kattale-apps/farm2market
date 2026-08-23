@@ -68,11 +68,11 @@ All files have been created and modified to support community-specific APK build
 
 ## 🎯 Build Flavors
 
-| Flavor | App ID | App Name | Community Slug |
-|--------|--------|----------|----------------|
-| defaultCommunity | com.farm2market.uganda | FarmCoin | "" (empty) |
-| kakira | com.farm2market.uganda.kakira | Kakira Farmers | kakira |
-| kyagalanyi | com.farm2market.uganda.kyagalanyi | Kyagalanyi Farmers | kyagalanyi |
+| Flavor           | App ID                               | App Name           | Community Slug |
+| ---------------- | ------------------------------------ | ------------------ | -------------- |
+| defaultCommunity | com.farm2marketuganda.app            | FarmCoin           | "" (empty)     |
+| kakira           | com.farm2marketuganda.app.kakira     | Kakira Farmers     | kakira         |
+| kyagalanyi       | com.farm2marketuganda.app.kyagalanyi | Kyagalanyi Farmers | kyagalanyi     |
 
 ## 🚀 Quick Start
 
@@ -92,9 +92,9 @@ cd android
 
 ```bash
 # Using ADB
-adb shell am start -a android.intent.action.VIEW -d "farm2market://community/kakira" com.farm2market.uganda.kakira
+adb shell am start -a android.intent.action.VIEW -d "farm2market://community/kakira" com.farm2marketuganda.app.kakira
 
-adb shell am start -a android.intent.action.VIEW -d "https://farm2market-dev.vercel.app/join/kyagalanyi" com.farm2market.uganda.kyagalanyi
+adb shell am start -a android.intent.action.VIEW -d "https://farm2market-dev.vercel.app/join/kyagalanyi" com.farm2marketuganda.app.kyagalanyi
 ```
 
 ### Integrate Auto-Join
@@ -161,12 +161,14 @@ android/app/src/main/AndroidManifest.xml (MODIFIED - added intent filters)
 ## 🔍 What Happens at Runtime
 
 ### Generic Build (defaultCommunity)
+
 1. `BuildConfig.DEFAULT_COMMUNITY_SLUG` = ""
 2. `getCommunityIdFromNative()` returns null
 3. Auto-join component does nothing
 4. App behaves normally
 
 ### Community Build (kakira/kyagalanyi)
+
 1. `BuildConfig.DEFAULT_COMMUNITY_SLUG` = "kakira" or "kyagalanyi"
 2. `getCommunityIdFromNative()` returns the slug
 3. On first launch after login, auto-join component:
@@ -175,6 +177,7 @@ android/app/src/main/AndroidManifest.xml (MODIFIED - added intent filters)
 4. Never auto-joins again (even if app reinstalled, unless data cleared)
 
 ### Deep Link Scenario
+
 1. User clicks `farm2market://community/kakira`
 2. MainActivity stores "kakira" in SharedPreferences
 3. Web layer detects stored community via `getCommunityIdFromNative()`
@@ -218,6 +221,7 @@ android/app/src/main/AndroidManifest.xml (MODIFIED - added intent filters)
 ## 🎉 Ready to Use
 
 The implementation is production-ready and follows Android best practices:
+
 - ✅ Clean architecture
 - ✅ Type safety
 - ✅ Error handling
@@ -229,6 +233,7 @@ The implementation is production-ready and follows Android best practices:
 ## 📞 Support
 
 For issues or questions:
+
 1. Check `COMMUNITY_APK_IMPLEMENTATION_GUIDE.md` for detailed integration steps
 2. Review `CommunityAutoJoin.tsx` comments for customization options
 3. Test with ADB commands before deploying

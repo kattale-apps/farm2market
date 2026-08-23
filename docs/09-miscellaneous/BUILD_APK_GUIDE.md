@@ -17,9 +17,11 @@
    - Install with default settings (includes Java JDK and Android SDK)
 
 2. **Open Project in Android Studio**
+
    ```bash
    npx cap open android
    ```
+
    Or manually: Open Android Studio → Open → Select `android` folder
 
 3. **Wait for Gradle Sync**
@@ -61,11 +63,13 @@ cd android
 ## 🔧 Configuration
 
 Your app is configured to load from:
+
 - **Vercel URL**: `https://farm2market-dev.vercel.app`
-- **App ID**: `com.farm2market.uganda`
+- **App ID**: `com.farm2marketuganda.app`
 - **App Name**: `Farm2Market Uganda`
 
 To change the Vercel URL, edit `capacitor.config.ts`:
+
 ```typescript
 server: {
   url: 'https://your-production-url.vercel.app',

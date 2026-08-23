@@ -1,12 +1,15 @@
 import { CapacitorConfig } from "@capacitor/cli";
 
+const serverUrl =
+  process.env.CAPACITOR_SERVER_URL ?? "https://dev.farm2marketuganda.com";
+
 const config: CapacitorConfig = {
-  appId: "com.farm2market.uganda",
+  appId: "com.farm2marketuganda.app",
   appName: "FarmCoin",
   webDir: "out", // Will be ignored when using server.url
   server: {
-    url: "https://farm2market-git-develop-kattale-apps.vercel.app", // Your Vercel deployment URL
-    cleartext: false, // HTTPS only
+    url: serverUrl,
+    cleartext: serverUrl.startsWith("http://"),
   },
   android: {
     allowMixedContent: false,

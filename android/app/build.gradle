@@ -1,13 +1,18 @@
 apply plugin: 'com.android.application'
+apply plugin: 'org.jetbrains.kotlin.android'
 
 android {
-    namespace = "com.farm2market.uganda"
+    namespace = "com.farm2marketuganda.app"
     compileSdk = rootProject.ext.compileSdkVersion
+    buildFeatures {
+        buildConfig = true
+    }
     defaultConfig {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
+        manifestPlaceholders.deepLinkHost = "dev.farm2marketuganda.com"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -50,8 +55,8 @@ android {
     
     signingConfigs {
         release {
-            if (keystorePropertiesFile.exists()) {
-                storeFile file(keystoreProperties['storeFile'])
+            if (keystorePropertiesFile.exists() && keystoreProperties['storeFile']) {
+                storeFile rootProject.file(keystoreProperties['storeFile'])
                 storePassword keystoreProperties['storePassword']
                 keyAlias keystoreProperties['keyAlias']
                 keyPassword keystoreProperties['keyPassword']
@@ -61,7 +66,10 @@ android {
     
     buildTypes {
         release {
-            signingConfig signingConfigs.release
+            manifestPlaceholders.deepLinkHost = "www.farm2marketuganda.com"
+            if (keystorePropertiesFile.exists() && keystoreProperties['storeFile']) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

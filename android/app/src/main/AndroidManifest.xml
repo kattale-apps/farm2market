@@ -39,9 +39,9 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 
-                <!-- https://farm2market-dev.vercel.app/join/{communityId} -->
+                <!-- HTTPS host is selected per build type. -->
                 <data android:scheme="https"
-                      android:host="farm2market-dev.vercel.app"
+                            android:host="${deepLinkHost}"
                       android:pathPrefix="/join" />
             </intent-filter>
 

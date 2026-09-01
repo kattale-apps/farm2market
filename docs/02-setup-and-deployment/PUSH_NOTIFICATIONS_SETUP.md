@@ -11,6 +11,7 @@ Push notifications have been integrated into the app to allow notifications to p
 ## Current Status
 
 ✅ **Completed:**
+
 - Capacitor Push Notifications plugin installed
 - Android permissions configured
 - Device token registration system
@@ -19,6 +20,7 @@ Push notifications have been integrated into the app to allow notifications to p
 - Integration with notification system
 
 ⚠️ **Pending (Required for Production):**
+
 - Firebase project setup
 - FCM server key configuration
 - Actual FCM API integration
@@ -30,7 +32,7 @@ Push notifications have been integrated into the app to allow notifications to p
 1. Go to [Firebase Console](https://console.firebase.google.com/)
 2. Create a new project or select existing project
 3. Add Android app to the project:
-   - Package name: `com.farm2market.uganda`
+   - Package name: `com.farm2marketuganda.app`
    - Download `google-services.json`
    - Place it in `android/app/` directory
 
@@ -53,11 +55,13 @@ Push notifications have been integrated into the app to allow notifications to p
 ### 4. Build and Test
 
 1. Sync Capacitor:
+
    ```bash
    npx cap sync android
    ```
 
 2. Rebuild the APK:
+
    ```bash
    cd android
    .\gradlew.bat assembleDebug

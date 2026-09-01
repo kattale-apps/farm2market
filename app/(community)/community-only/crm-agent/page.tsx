@@ -30,8 +30,10 @@ export default function CrmAgentPage() {
   );
 
   const crmEnabledForCommunity =
-    ((allCommunities || []).find((c: any) => String(c.id) === String(communityId || "")) as any)
-      ?.crmEnabled === true;
+    ((allCommunities || []).find((c: any) => {
+      const currentCommunityId = c?._id ?? c?.id;
+      return String(currentCommunityId ?? "") === String(communityId || "");
+    }) as any)?.crmEnabled === true;
 
   const queue = useQuery(
     (api as any).crmCalls.getCrmAgentQueue,
@@ -153,7 +155,9 @@ export default function CrmAgentPage() {
     );
   }
 
-  if (crmEnabledForCommunity !== true) {
+  const communitiesLoaded = allCommunities !== undefined;
+
+  if (communitiesLoaded && crmEnabledForCommunity !== true) {
     return (
       <div style={{ padding: "1.25rem", fontFamily: FONT }}>
         <h2 style={{ marginTop: 0 }}>CRM Agent</h2>

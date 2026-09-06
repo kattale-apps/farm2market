@@ -147,7 +147,9 @@ export const updateQrCode = mutation({
     qrCodeId: v.id("qrCodes"),
     destinationUrl: v.optional(v.string()),
     title: v.optional(v.string()),
-    campaignId: v.optional(v.id("campaigns")),
+    // null clears the campaign; undefined leaves it untouched (see below —
+    // undefined is otherwise indistinguishable from "not provided").
+    campaignId: v.optional(v.union(v.id("campaigns"), v.null())),
     stylePresetId: v.optional(v.string()),
     darkColor: v.optional(v.string()),
     lightColor: v.optional(v.string()),
@@ -202,7 +204,10 @@ export const updateQrCode = mutation({
     const patch: Record<string, unknown> = { updatedAt: Date.now() };
     for (const key of editableKeys) {
       const value = args[key];
-      if (value !== undefined) patch[key] = value;
+      if (value === undefined) continue;
+      // null is the "clear this field" sentinel (campaignId only, so far);
+      // patch it as undefined, which Convex treats as removing the field.
+      patch[key] = value === null ? undefined : value;
     }
 
     const nextLogoStorageId = args.logoStorageId ?? existing.logoStorageId;

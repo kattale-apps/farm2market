@@ -140,6 +140,20 @@ export default function CommunityCrmPage() {
       : "skip"
   );
 
+  const todaysSubmittedForms = useQuery(
+    (api as any).crmAnalytics.getTodaysSubmittedForms,
+    userId && selectedCommunityId && crmEnabledForSelected
+      ? { requesterId: userId, communityId: selectedCommunityId }
+      : "skip"
+  );
+
+  const followUpsDueDetails = useQuery(
+    (api as any).crmAnalytics.getFollowUpsDueDetails,
+    userId && selectedCommunityId && crmEnabledForSelected
+      ? { requesterId: userId, communityId: selectedCommunityId }
+      : "skip"
+  );
+
   const opportunityExportRows = useQuery(
     (api as any).crmAnalytics.getOpportunityExportRows,
     userId && selectedCommunityId && crmEnabledForSelected
@@ -177,10 +191,13 @@ export default function CommunityCrmPage() {
   );
 
   const createCrmForm = useMutation((api as any).crmForms.createCrmForm);
+  const updateCrmForm = useMutation((api as any).crmForms.updateCrmForm);
+  const deleteCrmForm = useMutation((api as any).crmForms.deleteCrmForm);
   const addCrmFormField = useMutation((api as any).crmForms.addCrmFormField);
   const removeCrmFormField = useMutation((api as any).crmForms.removeCrmFormField);
   const assignCrmAgentByEmail = useMutation((api as any).crmAgents.assignCrmAgentByEmail);
   const submitCrmIntake = useMutation((api as any).crmForms.submitCrmIntake);
+  const [formActionBusyId, setFormActionBusyId] = useState("");
 
   useEffect(() => {
     if (!communities || communities.length === 0) return;
@@ -331,6 +348,43 @@ export default function CommunityCrmPage() {
     setRemovingFieldId("");
   };
 
+  const handleToggleFormActive = async (form: any) => {
+    if (!userId) return;
+
+    setFormActionBusyId(String(form._id));
+    setMessage("");
+    try {
+      await updateCrmForm({
+        crmFormId: form._id,
+        adminId: userId,
+        isActive: !form.isActive,
+      });
+      setMessage(form.isActive ? "Form deactivated." : "Form activated.");
+    } catch (error: any) {
+      setMessage(error?.message || "Failed to update form");
+    }
+    setFormActionBusyId("");
+  };
+
+  const handleDeleteForm = async (form: any) => {
+    if (!userId) return;
+    if (!window.confirm(`Delete the form "${form.name}"? This cannot be undone.`)) return;
+
+    setFormActionBusyId(String(form._id));
+    setMessage("");
+    try {
+      await deleteCrmForm({
+        crmFormId: form._id,
+        adminId: userId,
+      });
+      if (selectedCrmFormId === form._id) setSelectedCrmFormId(null);
+      setMessage("Form deleted.");
+    } catch (error: any) {
+      setMessage(error?.message || "Failed to delete form");
+    }
+    setFormActionBusyId("");
+  };
+
   const filteredMembers = useMemo(() => {
     const term = memberSearch.trim().toLowerCase();
     const list = communityMembers || [];
@@ -424,7 +478,7 @@ export default function CommunityCrmPage() {
         community: selectedCommunity.name,
         agents: todayPerformance.agents,
         callsAttempted: todayPerformance.callsAttempted,
-        answered: todayPerformance.answered,
+        claimedLeads: todayPerformance.claimedToday,
         completedFollowUps: todayPerformance.completedFollowUps,
         salesOpportunities: todayPerformance.salesOpportunities,
         orders: todayPerformance.orders,
@@ -511,7 +565,7 @@ export default function CommunityCrmPage() {
 
       const summaryRows = [
         ["Today's Calls", String(todayPerformance?.callsAttempted ?? 0)],
-        ["Answered", String(todayPerformance?.answered ?? 0)],
+        ["Claimed Leads", String(todayPerformance?.claimedToday ?? 0)],
         ["Completed Follow-ups", String(todayPerformance?.completedFollowUps ?? 0)],
         ["Opportunities (Today)", String(todayPerformance?.salesOpportunities ?? 0)],
         ["Orders", String(todayPerformance?.orders ?? 0)],
@@ -597,11 +651,53 @@ export default function CommunityCrmPage() {
 
         <div style={{ marginTop: "1rem", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "0.75rem" }}>
           <MetricCard label="Today's Calls" value={todayPerformance?.callsAttempted} />
-          <MetricCard label="Answered" value={todayPerformance?.answered} />
+          <MetricCard label="Claimed Leads" value={todayPerformance?.claimedToday} />
           <MetricCard label="Follow-ups Due" value={crmHomeSummary?.followUpsDueToday} />
           <MetricCard label="Sales Opportunities" value={todayPerformance?.salesOpportunities} />
           <MetricCard label="Product Issues" value={todayPerformance?.productIssues} />
           <MetricCard label="Agents" value={todayPerformance?.agents} />
+        </div>
+
+        <div style={{ marginTop: "1rem", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "0.75rem" }}>
+          <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: "0.9rem" }}>
+            <h3 style={{ marginTop: 0 }}>Today&apos;s Submitted Forms</h3>
+            {!todaysSubmittedForms && <p style={{ color: "#777" }}>Loading...</p>}
+            {(todaysSubmittedForms || []).length === 0 && <p style={{ color: "#777" }}>No forms submitted today yet.</p>}
+            <div style={{ maxHeight: 260, overflowY: "auto" }}>
+              {(todaysSubmittedForms || []).map((row: any) => (
+                <div key={row.responseId} style={{ padding: "0.45rem 0", borderBottom: "1px solid #f0f0f0" }}>
+                  <div style={{ fontWeight: 700 }}>{row.clientName}</div>
+                  <div style={{ fontSize: "0.82rem", color: "#666" }}>
+                    {row.formName} | {row.phoneNumber} | {row.district}{row.subCounty ? `, ${row.subCounty}` : ""}
+                  </div>
+                  <div style={{ fontSize: "0.78rem", color: "#999" }}>{new Date(row.submittedAt).toLocaleString()}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: "0.9rem" }}>
+            <h3 style={{ marginTop: 0 }}>Follow-ups Due (Upcoming Calls &amp; Confirmed Visits)</h3>
+            {!followUpsDueDetails && <p style={{ color: "#777" }}>Loading...</p>}
+            {(followUpsDueDetails || []).length === 0 && <p style={{ color: "#777" }}>No follow-ups due.</p>}
+            <div style={{ maxHeight: 260, overflowY: "auto" }}>
+              {(followUpsDueDetails || []).map((row: any) => (
+                <div key={row.leadId} style={{ padding: "0.45rem 0", borderBottom: "1px solid #f0f0f0" }}>
+                  <div style={{ fontWeight: 700 }}>
+                    {row.clientName} {row.isOverdue && <span style={{ color: "#b91c1c", fontWeight: 700, fontSize: "0.78rem" }}>OVERDUE</span>}
+                  </div>
+                  <div style={{ fontSize: "0.82rem", color: "#666" }}>
+                    {row.formName} | {row.phoneNumber} | Next call: {new Date(row.nextCallAt).toLocaleDateString()}
+                  </div>
+                  {row.confirmedVisitAt && (
+                    <div style={{ fontSize: "0.78rem", color: "#1f7a3e", fontWeight: 600 }}>
+                      Confirmed visit: {new Date(row.confirmedVisitAt).toLocaleDateString()}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
         {!crmEnabledForSelected && selectedCommunityId && (
@@ -711,7 +807,7 @@ export default function CommunityCrmPage() {
             style={{ ...inputStyle, width: "100%", marginBottom: "0.65rem" }}
           >
             <option value="">Select a CRM form...</option>
-            {(crmForms || []).map((form: any) => (
+            {(crmForms || []).filter((form: any) => form.isActive).map((form: any) => (
               <option key={form._id} value={form._id}>{form.name}</option>
             ))}
           </select>
@@ -1027,9 +1123,29 @@ export default function CommunityCrmPage() {
             {(crmForms || []).length === 0 && <p style={{ color: "#777" }}>No CRM forms yet.</p>}
             {(crmForms || []).map((form: any) => (
               <div key={form._id} style={{ padding: "0.5rem 0", borderBottom: "1px solid #f0f0f0" }}>
-                <div style={{ fontWeight: 700 }}>{form.name}</div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem" }}>
+                  <div style={{ fontWeight: 700 }}>
+                    {form.name} {!form.isActive && <span style={{ color: "#b91c1c", fontSize: "0.75rem", fontWeight: 700 }}>(inactive)</span>}
+                  </div>
+                </div>
                 <div style={{ fontSize: "0.85rem", color: "#666" }}>
                   Follow-up +{form.followUpOffsetDays} day(s) | Script {form.openingScriptEnabled ? "on" : "off"}
+                </div>
+                <div style={{ marginTop: "0.35rem", display: "flex", gap: "0.4rem" }}>
+                  <button
+                    onClick={() => handleToggleFormActive(form)}
+                    disabled={formActionBusyId === String(form._id) || !crmEnabledForSelected}
+                    style={{ minHeight: 30, padding: "0.3rem 0.6rem", borderRadius: 7, border: "1px solid #d1d5db", background: "#fff", color: "#374151", fontWeight: 600, fontSize: "0.78rem", cursor: formActionBusyId === String(form._id) ? "not-allowed" : "pointer" }}
+                  >
+                    {formActionBusyId === String(form._id) ? "Working..." : form.isActive ? "Deactivate" : "Activate"}
+                  </button>
+                  <button
+                    onClick={() => handleDeleteForm(form)}
+                    disabled={formActionBusyId === String(form._id) || !crmEnabledForSelected}
+                    style={{ minHeight: 30, padding: "0.3rem 0.6rem", borderRadius: 7, border: "1px solid #fecaca", background: "#fff5f5", color: "#b91c1c", fontWeight: 600, fontSize: "0.78rem", cursor: formActionBusyId === String(form._id) ? "not-allowed" : "pointer" }}
+                  >
+                    Delete
+                  </button>
                 </div>
               </div>
             ))}

@@ -286,6 +286,50 @@ export const updateCrmForm = mutation({
   },
 });
 
+export const deleteCrmForm = mutation({
+  args: {
+    crmFormId: v.id("crmForms"),
+    adminId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const form = await ctx.db.get(args.crmFormId);
+    if (!form) throw new Error("CRM form not found");
+
+    await requireCrmSupervisorAccess(ctx, args.adminId, form.communityId);
+
+    const responses = await ctx.db
+      .query("crmFormResponses")
+      .withIndex("by_form", (q: any) => q.eq("crmFormId", args.crmFormId))
+      .first();
+
+    if (responses) {
+      throw new Error(
+        "This form already has submitted responses and cannot be deleted. Deactivate it instead to stop new submissions."
+      );
+    }
+
+    const fields = await ctx.db
+      .query("crmFormFields")
+      .withIndex("by_form", (q: any) => q.eq("crmFormId", args.crmFormId))
+      .collect();
+
+    for (const field of fields) {
+      const values = await ctx.db
+        .query("crmFormResponseValues")
+        .withIndex("by_field", (q: any) => q.eq("crmFieldId", field._id))
+        .collect();
+      for (const row of values) {
+        await ctx.db.delete(row._id);
+      }
+      await ctx.db.delete(field._id);
+    }
+
+    await ctx.db.delete(args.crmFormId);
+
+    return { success: true };
+  },
+});
+
 export const addCrmFormField = mutation({
   args: {
     crmFormId: v.id("crmForms"),

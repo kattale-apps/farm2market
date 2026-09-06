@@ -1,8 +1,13 @@
 apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
 
 android {
     namespace = "com.farm2marketuganda.app"
     compileSdk = rootProject.ext.compileSdkVersion
+
+    buildFeatures {
+        buildConfig true
+    }
     defaultConfig {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
@@ -16,9 +21,30 @@ android {
         }
     }
     
-    // Product flavors for community-specific APKs
-    flavorDimensions "community"
+    // Product flavors: community + deployment tier
+    flavorDimensions "community", "deployment"
     productFlavors {
+        // PRODUCTION: FarmCoin (www.farm2marketuganda.com)
+        productionFlavors {
+            dimension "deployment"
+            buildConfigField "String", "SERVER_URL", '"https://www.farm2marketuganda.com"'
+            buildConfigField "String", "CONVEX_URL", '"https://greedy-tortoise-911.convex.cloud"'
+            buildConfigField "String", "DEPLOYMENT_MODE", '"production"'
+            resValue "string", "app_name", "FarmCoin"
+        }
+
+        // DEVELOPMENT: F2M (farm2market-dev.vercel.app)
+        f2mFlavors {
+            dimension "deployment"
+            applicationIdSuffix ".f2m"
+            versionNameSuffix "-f2m"
+            buildConfigField "String", "SERVER_URL", '"https://farm2market-dev.vercel.app"'
+            buildConfigField "String", "CONVEX_URL", '"https://adamant-armadillo-601.convex.cloud"'
+            buildConfigField "String", "DEPLOYMENT_MODE", '"dev"'
+            resValue "string", "app_name", "F2M Dev App"
+        }
+        
+        // Community flavors
         defaultCommunity {
             dimension "community"
             buildConfigField "String", "DEFAULT_COMMUNITY_SLUG", '""'

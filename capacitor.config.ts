@@ -1,12 +1,17 @@
 import { CapacitorConfig } from "@capacitor/cli";
 
+// Default to production; native builds override via BuildConfig
+const SERVER_URL = typeof window !== 'undefined' 
+  ? (window as any).BuildConfig?.SERVER_URL ?? "https://www.farm2marketuganda.com"
+  : "https://www.farm2marketuganda.com";
+
 const config: CapacitorConfig = {
   appId: "com.farm2marketuganda.app",
   appName: "FarmCoin",
-  webDir: "out", // Will be ignored when using server.url
+  webDir: "out",
   server: {
-    url: "https://farm2market-git-develop-kattale-apps.vercel.app", // Your Vercel deployment URL
-    cleartext: false, // HTTPS only
+    url: SERVER_URL,
+    cleartext: false,
   },
   android: {
     allowMixedContent: false,

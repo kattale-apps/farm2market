@@ -33,13 +33,21 @@
                       android:host="community" />
             </intent-filter>
             
-            <!-- HTTPS deep link support -->
+            <!-- HTTPS deep link support for Production -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                
-                <!-- https://farm2market-dev.vercel.app/join/{communityId} -->
+                <data android:scheme="https"
+                      android:host="www.farm2marketuganda.com"
+                      android:pathPrefix="/join" />
+            </intent-filter>
+            
+            <!-- HTTPS deep link support for Development -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https"
                       android:host="farm2market-dev.vercel.app"
                       android:pathPrefix="/join" />

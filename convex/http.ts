@@ -104,4 +104,64 @@ http.route({
   }),
 });
 
+/**
+ * QR Platform — example external API surface (Phase 4 "integration-ready").
+ *
+ * These are thin wrappers around the same convex/qrPublic.ts functions the
+ * web app's /q/[code] route already calls — proof that QR resolution and
+ * form submission can be consumed by an external system (e.g. another app
+ * this platform later gets lifted into) without a separate API gateway.
+ * Add more routes the same way if/when a real integration needs them.
+ *
+ * URL: https://{your-deployment}.convex.site/api/qr/resolve/{code}
+ */
+http.route({
+  path: "/api/qr/resolve",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const code = new URL(request.url).searchParams.get("code");
+    if (!code) {
+      return new Response(JSON.stringify({ error: "Missing ?code=" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const result = await ctx.runMutation(api.qrPublic.resolveAndTrackScan, { code });
+    return new Response(JSON.stringify(result), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+});
+
+/**
+ * URL: https://{your-deployment}.convex.site/api/qr/submit
+ * Body: { formId, qrCodeId, values: [{ fieldId, value }] }
+ */
+http.route({
+  path: "/api/qr/submit",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const body = await request.json();
+      const result = await ctx.runMutation(api.qrForms.submitQrForm, {
+        formId: body.formId,
+        qrCodeId: body.qrCodeId,
+        values: body.values ?? [],
+        deviceCategory: body.deviceCategory,
+      });
+      return new Response(JSON.stringify(result), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error: any) {
+      return new Response(JSON.stringify({ error: error.message || "Submission failed" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }),
+});
+
 export default http;

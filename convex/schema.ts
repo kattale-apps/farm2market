@@ -100,6 +100,8 @@ export default defineSchema({
     onboardedViaCommunityId: v.optional(v.id("communities")), // The community through which user was onboarded (for community_only accounts)
     supplyChainRole: v.optional(v.string()), // Role in the supply chain (e.g., "producer", "aggregator", "processor")
     supplyChainRoleOther: v.optional(v.string()), // Custom supply chain role if not in standard list
+    // QR platform (Phase 1: schema only, unenforced — Phase 2 wires real permission checks)
+    qrPermissions: v.optional(v.array(v.string())), // e.g. "qr.create", "forms.edit", "analytics.view"
   })
     .index("by_userId", ["userId"])
     .index("by_email", ["email"])
@@ -2342,6 +2344,7 @@ export default defineSchema({
     sourceCrmResponseId: v.id("crmFormResponses"),
     sourceCrmFormId: v.id("crmForms"),
     assignedAgentId: v.optional(v.id("users")),
+    claimedAt: v.optional(v.number()), // Set automatically when an agent claims this lead
     queueStatus: v.union(
       v.literal("open"),
       v.literal("in_progress"),
@@ -2435,4 +2438,155 @@ export default defineSchema({
     .index("by_community_stage", ["communityId", "stage"])
     .index("by_agent", ["openedByAgentId"])
     .index("by_lead", ["leadId"]),
+
+  /**
+   * QR Management Platform (Phase 1)
+   * - Self-contained module: no coupling to communities/CRM, so it can be
+   *   lifted into another app later.
+   * - A QR code always encodes a stable /q/[code] URL, never the destination
+   *   directly, so the destination can change without reprinting the QR.
+   */
+  campaigns: defineTable({
+    name: v.string(),
+    description: v.optional(v.string()),
+    isActive: v.optional(v.boolean()),
+    isDeleted: v.optional(v.boolean()),
+    startDate: v.optional(v.string()), // ISO date
+    endDate: v.optional(v.string()), // ISO date
+    createdBy: v.id("users"),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_createdBy", ["createdBy"]),
+
+  qrCodes: defineTable({
+    code: v.string(), // short public slug used in /q/[code]; unique via by_code index
+    destinationUrl: v.string(), // the changeable redirect target
+    title: v.optional(v.string()), // internal admin label, never shown publicly
+    campaignId: v.optional(v.id("campaigns")),
+    formId: v.optional(v.id("qrForms")),
+    createdBy: v.id("users"),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    isActive: v.boolean(),
+    isDeleted: v.optional(v.boolean()),
+    deletedAt: v.optional(v.number()),
+    // Visual style — color/logo/frame presets only (Phase 1 decision; the
+    // qrcode library doesn't support true dot/corner-shape rendering).
+    stylePresetId: v.optional(v.string()),
+    darkColor: v.optional(v.string()),
+    lightColor: v.optional(v.string()),
+    logoStorageId: v.optional(v.id("_storage")),
+    errorCorrectionLevel: v.optional(v.string()), // "L" | "M" | "Q" | "H"; forced to "H" server-side when a logo is set
+    // Optional public landing page (1:1, so kept as flat fields rather than a join table)
+    landingEnabled: v.optional(v.boolean()),
+    landingLogoStorageId: v.optional(v.id("_storage")),
+    landingHeroImageStorageId: v.optional(v.id("_storage")),
+    landingHeading: v.optional(v.string()),
+    landingDescription: v.optional(v.string()),
+    landingButtons: v.optional(v.array(v.object({ label: v.string(), url: v.string() }))),
+    landingSocialLinks: v.optional(v.array(v.object({ platform: v.string(), url: v.string() }))),
+    landingBackgroundColor: v.optional(v.string()), // Phase 4: additional landing-page feature
+    // Phase 4: optional scheduling window (events/time-boxed campaigns). When
+    // set, the QR resolves as inactive outside this window without the admin
+    // needing to flip isActive by hand.
+    activeFrom: v.optional(v.number()),
+    activeUntil: v.optional(v.number()),
+  })
+    .index("by_code", ["code"])
+    .index("by_createdBy", ["createdBy"])
+    .index("by_campaignId", ["campaignId"]),
+
+  qrScanEvents: defineTable({
+    qrCodeId: v.id("qrCodes"),
+    campaignId: v.optional(v.id("campaigns")), // denormalized for cheap Phase 3 filtering
+    createdAt: v.number(),
+    deviceCategory: v.optional(v.string()), // "mobile" | "tablet" | "desktop" | "other"
+    browser: v.optional(v.string()),
+    os: v.optional(v.string()),
+    referrer: v.optional(v.string()),
+    ipHash: v.optional(v.string()), // salted hash only, never raw IP
+  })
+    .index("by_qrCode_createdAt", ["qrCodeId", "createdAt"])
+    .index("by_campaign_createdAt", ["campaignId", "createdAt"])
+    .index("by_createdAt", ["createdAt"]),
+
+  qrRedirectEvents: defineTable({
+    qrCodeId: v.id("qrCodes"),
+    campaignId: v.optional(v.id("campaigns")),
+    scanEventId: v.optional(v.id("qrScanEvents")),
+    destinationUrl: v.string(), // snapshot at redirect time, so history stays accurate after later destination changes
+    createdAt: v.number(),
+    deviceCategory: v.optional(v.string()),
+    browser: v.optional(v.string()),
+    os: v.optional(v.string()),
+    referrer: v.optional(v.string()),
+  })
+    .index("by_qrCode_createdAt", ["qrCodeId", "createdAt"])
+    .index("by_campaign_createdAt", ["campaignId", "createdAt"])
+    .index("by_createdAt", ["createdAt"]),
+
+  qrForms: defineTable({
+    qrCodeId: v.id("qrCodes"),
+    title: v.string(),
+    createdBy: v.id("users"),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    isActive: v.boolean(),
+  })
+    .index("by_qrCode", ["qrCodeId"]),
+
+  qrFormFields: defineTable({
+    formId: v.id("qrForms"),
+    fieldType: v.union(
+      v.literal("text"),
+      v.literal("email"),
+      v.literal("phone"),
+      v.literal("number"),
+      v.literal("textarea"),
+      v.literal("select"),
+      v.literal("radio"),
+      v.literal("checkbox"),
+      v.literal("date")
+    ),
+    label: v.string(),
+    required: v.boolean(),
+    helpText: v.optional(v.string()),
+    options: v.optional(v.array(v.string())), // for select/radio/checkbox
+    order: v.number(),
+  })
+    .index("by_form", ["formId"]),
+
+  qrFormSubmissions: defineTable({
+    formId: v.id("qrForms"),
+    qrCodeId: v.id("qrCodes"),
+    createdAt: v.number(),
+    deviceCategory: v.optional(v.string()),
+  })
+    .index("by_form", ["formId"])
+    .index("by_qrCode_createdAt", ["qrCodeId", "createdAt"])
+    .index("by_createdAt", ["createdAt"]),
+
+  qrFormSubmissionValues: defineTable({
+    submissionId: v.id("qrFormSubmissions"),
+    fieldId: v.id("qrFormFields"),
+    value: v.string(),
+  })
+    .index("by_submission", ["submissionId"])
+    .index("by_field", ["fieldId"]),
+
+  /**
+   * QR Management Platform (Phase 2)
+   */
+  brandingSettings: defineTable({
+    // Single global settings row for this platform (a future multi-tenant
+    // lift would key this by an orgId — not needed yet, per "don't build a
+    // generic enterprise platform prematurely").
+    orgName: v.optional(v.string()),
+    logoStorageId: v.optional(v.id("_storage")),
+    primaryColor: v.optional(v.string()),
+    secondaryColor: v.optional(v.string()),
+    updatedBy: v.id("users"),
+    updatedAt: v.number(),
+  }),
 });

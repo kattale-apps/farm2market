@@ -38,9 +38,7 @@ export default function LoginPage() {
 
 function LoginPageInner() {
   const [authStep, setAuthStep] = useState<AuthStep>("login");
-  const [identifierMode, setIdentifierMode] = useState<IdentifierMode>("phone");
-  const [phoneIdentifier, setPhoneIdentifier] = useState("");
-  const [emailIdentifier, setEmailIdentifier] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [selectedRole, setSelectedRole] = useState<SignupRole>("farmer");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -58,21 +56,15 @@ function LoginPageInner() {
 
   const isFarmerSignupEnabled = selectedRole === "farmer" || selectedRole === "vendor";
   const selectedRoleLabel = SIGNUP_ROLES.find((role) => role.value === selectedRole)?.label || "Account";
-  const activeIdentifier = identifierMode === "phone"
-    ? phoneIdentifier.trim()
-    : emailIdentifier.trim();
+  const activeIdentifier = identifier.trim();
+  // Auto-detect: an "@" means email, anything else (digits, +, spaces) is treated as a phone number.
+  const identifierMode: IdentifierMode = activeIdentifier.includes("@") ? "email" : "phone";
 
   // Pre-fill last used credential on mount
   useEffect(() => {
     const lastCred = getLastCredential();
     if (lastCred) {
-      if (lastCred.includes("@")) {
-        setIdentifierMode("email");
-        setEmailIdentifier(lastCred);
-      } else {
-        setIdentifierMode("phone");
-        setPhoneIdentifier(lastCred);
-      }
+      setIdentifier(lastCred);
     }
   }, []);
 
@@ -316,56 +308,29 @@ function LoginPageInner() {
 
           <div style={{ marginBottom: "1rem" }}>
             <label style={{ display: "block", marginBottom: "0.5rem", color: "#333", fontWeight: "500" }}>
-              {identifierMode === "phone" ? "Phone Number" : "Email Address"}
+              Phone Number or Email
             </label>
-            {identifierMode === "phone" ? (
-              <input
-                type="tel"
-                value={phoneIdentifier}
-                onChange={(e) => setPhoneIdentifier(e.target.value)}
-                required
-                style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  border: "1px solid #ddd",
-                  borderRadius: "6px",
-                  fontSize: "1rem"
-                }}
-                placeholder="07XX XXX XXX or +256 7XX XXX XXX"
-              />
-            ) : (
-              <input
-                type="email"
-                value={emailIdentifier}
-                onChange={(e) => setEmailIdentifier(e.target.value)}
-                required
-                style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  border: "1px solid #ddd",
-                  borderRadius: "6px",
-                  fontSize: "1rem"
-                }}
-                placeholder="your@email.com"
-              />
+            <input
+              type="text"
+              inputMode={identifierMode === "phone" ? "tel" : "email"}
+              autoCapitalize="none"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
+              required
+              style={{
+                width: "100%",
+                padding: "0.75rem",
+                border: "1px solid #ddd",
+                borderRadius: "6px",
+                fontSize: "1rem"
+              }}
+              placeholder="07XX XXX XXX or your@email.com"
+            />
+            {activeIdentifier && (
+              <p style={{ marginTop: "0.4rem", marginBottom: 0, fontSize: "0.78rem", color: "#888" }}>
+                Detected as {identifierMode === "email" ? "email" : "phone number"}
+              </p>
             )}
-            <div style={{ marginTop: "0.5rem" }}>
-              <button
-                type="button"
-                onClick={() => setIdentifierMode(identifierMode === "phone" ? "email" : "phone")}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  color: "#1976d2",
-                  cursor: "pointer",
-                  fontSize: "0.85rem",
-                  textDecoration: "underline",
-                  padding: 0,
-                }}
-              >
-                {identifierMode === "phone" ? "Use email instead" : "Use phone instead"}
-              </button>
-            </div>
           </div>
 
           <div style={{ marginBottom: authStep === "confirmSignup" ? "1rem" : "1.5rem" }}>

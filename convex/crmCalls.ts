@@ -331,6 +331,7 @@ export const claimCrmLead = mutation({
 
     await ctx.db.patch(args.leadId, {
       assignedAgentId: args.agentId,
+      claimedAt: getUgandaTime(),
       queueStatus: "in_progress",
       updatedAt: getUgandaTime(),
     });

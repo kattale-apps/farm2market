@@ -202,11 +202,24 @@ export default function CrmAgentPage() {
               <div key={lead._id} style={{ background: "#fff", borderRadius: 12, border: "1px solid #e5e7eb", padding: "0.85rem" }}>
                 <div style={{ fontWeight: 700, fontSize: "1rem" }}>{idx + 1}. {lead.memberAlias || "Farmer"}</div>
                 <div style={{ marginTop: "0.2rem", color: "#666", fontSize: "0.88rem" }}>
-                  {lead.district || "-"} {lead.subCounty ? `, ${lead.subCounty}` : ""}
+                  {lead.memberPhone || "No phone on file"}
+                </div>
+                <div style={{ marginTop: "0.2rem", color: "#666", fontSize: "0.88rem" }}>
+                  {lead.district || "-"} {lead.subCounty ? `, ${lead.subCounty}` : ""} {lead.parish ? `, ${lead.parish}` : ""}
                 </div>
                 <div style={{ marginTop: "0.2rem", color: "#444", fontSize: "0.88rem" }}>
                   {lead.productName || "Bio Farm"} {lead.purchaseQuantity ? `- ${lead.purchaseQuantity}` : ""}
                 </div>
+                {(lead.cropGrown || lead.monthOfPlanting) && (
+                  <div style={{ marginTop: "0.2rem", color: "#444", fontSize: "0.86rem" }}>
+                    {lead.cropGrown ? `Crop: ${lead.cropGrown}` : ""}{lead.cropGrown && lead.monthOfPlanting ? " · " : ""}{lead.monthOfPlanting ? `Planted: ${lead.monthOfPlanting}` : ""}
+                  </div>
+                )}
+                {lead.upcomingSprayScheduleAt && (
+                  <div style={{ marginTop: "0.2rem", color: "#7c2d12", fontSize: "0.82rem" }}>
+                    Upcoming spray: {new Date(lead.upcomingSprayScheduleAt).toLocaleDateString()}
+                  </div>
+                )}
                 <div style={{ marginTop: "0.2rem", color: lead.isOverdue ? "#b91c1c" : "#166534", fontSize: "0.84rem", fontWeight: 600 }}>
                   {lead.isDueToday ? "Follow-up due today" : lead.isOverdue ? "Overdue" : "Scheduled"}
                 </div>
@@ -345,10 +358,17 @@ function LeadOpeningScript({ leadId, requesterId }: { leadId: Id<"crmLeads">; re
 
   if (!script?.rendered) return null;
 
+  const pastSprayDates: string[] = script.profile?.pastSprayDates || [];
+
   return (
     <div style={{ marginTop: "0.55rem", padding: "0.6rem", background: "#f0fdf4", borderRadius: 8, border: "1px solid #bbf7d0", fontSize: "0.86rem", color: "#14532d", lineHeight: 1.4 }}>
       <div style={{ fontWeight: 700, marginBottom: "0.25rem" }}>Opening Script</div>
       <div>{script.rendered}</div>
+      {pastSprayDates.length > 0 && (
+        <div style={{ marginTop: "0.4rem", fontSize: "0.8rem" }}>
+          Past spray dates: {pastSprayDates.join(", ")}
+        </div>
+      )}
     </div>
   );
 }

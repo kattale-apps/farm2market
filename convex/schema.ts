@@ -2294,6 +2294,13 @@ export default defineSchema({
     purchaseQuantity: v.optional(v.string()),
     district: v.optional(v.string()),
     subCounty: v.optional(v.string()),
+    parish: v.optional(v.string()),
+    clientName: v.optional(v.string()), // Free-text name captured at intake, shown to agents (not the anonymized account alias)
+    cropGrown: v.optional(v.string()),
+    monthOfPlanting: v.optional(v.string()),
+    pastSprayDates: v.optional(v.array(v.string())),
+    upcomingSprayScheduleAt: v.optional(v.number()),
+    wasNewClientAtIntake: v.optional(v.boolean()), // True if this intake auto-created the member account
     autoNextCallAt: v.number(),
     submittedAt: v.number(),
     createdAt: v.number(),

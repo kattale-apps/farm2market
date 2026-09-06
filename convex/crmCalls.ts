@@ -232,10 +232,15 @@ export const getCrmAgentQueue = query({
         const response = await ctx.db.get(lead.sourceCrmResponseId);
         return {
           ...lead,
-          memberAlias: member?.alias,
+          memberAlias: (response as any)?.clientName || member?.alias,
           memberPhone: member?.phoneNumber,
           district: response?.district,
           subCounty: response?.subCounty,
+          parish: (response as any)?.parish,
+          cropGrown: (response as any)?.cropGrown,
+          monthOfPlanting: (response as any)?.monthOfPlanting,
+          pastSprayDates: (response as any)?.pastSprayDates,
+          upcomingSprayScheduleAt: (response as any)?.upcomingSprayScheduleAt,
           productName: response?.productName,
           purchaseQuantity: response?.purchaseQuantity,
           purchaseDate: response?.purchaseDate,

@@ -26,7 +26,8 @@ class CommunityConfigManager private constructor(context: Context) {
         
         @Volatile
         private var instance: CommunityConfigManager? = null
-        
+
+        @JvmStatic
         fun getInstance(context: Context): CommunityConfigManager {
             return instance ?: synchronized(this) {
                 instance ?: CommunityConfigManager(context).also { instance = it }

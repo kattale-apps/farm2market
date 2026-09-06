@@ -19,7 +19,7 @@ All files have been created and modified to support community-specific APK build
    - Methods: `getCommunityId()`, `getAutoJoinStatus()`, `setAutoJoinComplete()`, `setCommunityId()`
    - Type-safe, error-handled
 
-3. **MainActivity.java** (Updated)
+3. **MainActivity.kt** (Updated)
    - Registers CommunityBridge plugin
    - Handles deep links: `farm2market://community/{slug}` and `https://farm2market-dev.vercel.app/join/{slug}`
    - Stores community slug from deep links for web layer to consume
@@ -154,7 +154,7 @@ COMMUNITY_APK_SUMMARY.md                 (NEW - this file)
 
 ```
 android/app/build.gradle                 (MODIFIED - added productFlavors)
-android/app/src/main/java/com/farm2market/uganda/MainActivity.java  (MODIFIED - added bridge & deep links)
+android/app/src/main/java/com/farm2market/uganda/MainActivity.kt  (MODIFIED - added bridge & deep links)
 android/app/src/main/AndroidManifest.xml (MODIFIED - added intent filters)
 ```
 

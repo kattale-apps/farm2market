@@ -223,7 +223,7 @@ export const joinCommunityBySlug = mutation({
 ### Modified Files:
 
 1. `android/app/build.gradle` - Added product flavors
-2. `android/app/src/main/java/com/farm2market/uganda/MainActivity.java` - Added bridge registration and deep link handling
+2. `android/app/src/main/java/com/farm2market/uganda/MainActivity.kt` - Added bridge registration and deep link handling
 3. `android/app/src/main/AndroidManifest.xml` - Added deep link intent filters
 
 ## Security Considerations

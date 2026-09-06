@@ -2,39 +2,29 @@
  * Deployment Mode Utilities
  * 
  * Provides utilities for detecting and working with deployment modes.
- * Supports "pilot" and "dev" deployment modes with separate URLs and databases.
+ * Supports "production" (FarmCoin) and "dev" (F2M) deployment modes with separate URLs and databases.
  */
 
-export type DeploymentMode = "pilot" | "dev";
+export type DeploymentMode = "production" | "dev";
 
 /**
  * Get the current deployment mode from environment variable
  * 
- * @returns "pilot" | "dev" (defaults to "pilot" for backward compatibility)
+ * @returns "production" | "dev" (defaults to "production")
  */
 export function getDeploymentMode(): DeploymentMode {
-  if (typeof window === "undefined") {
-    // Server-side: use process.env
-    const mode = process.env.NEXT_PUBLIC_DEPLOYMENT_MODE;
-    if (mode === "dev" || mode === "pilot") {
-      return mode;
-    }
-    return "pilot"; // Default for backward compatibility
-  }
-  
-  // Client-side: environment variables are injected at build time
   const mode = process.env.NEXT_PUBLIC_DEPLOYMENT_MODE;
-  if (mode === "dev" || mode === "pilot") {
-    return mode;
+  if (mode === "dev" || mode === "production") {
+    return mode as DeploymentMode;
   }
-  return "pilot"; // Default for backward compatibility
+  return "production";
 }
 
 /**
- * Check if the current deployment is in pilot mode
+ * Check if the current deployment is in production mode
  */
-export function isPilotMode(): boolean {
-  return getDeploymentMode() === "pilot";
+export function isProductionMode(): boolean {
+  return getDeploymentMode() === "production";
 }
 
 /**
@@ -49,7 +39,7 @@ export function isDevMode(): boolean {
  */
 export function getDeploymentModeLabel(): string {
   const mode = getDeploymentMode();
-  return mode === "dev" ? "Development" : "Pilot";
+  return mode === "dev" ? "F2M (Dev)" : "FarmCoin (Prod)";
 }
 
 /**

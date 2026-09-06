@@ -37,7 +37,7 @@ try {
 Write-Host ""
 Write-Host "=== Next Steps ===" -ForegroundColor Cyan
 Write-Host "1. Create Firebase project at https://console.firebase.google.com/" -ForegroundColor White
-Write-Host "2. Add Android app with package: com.farm2market.uganda" -ForegroundColor White
+Write-Host "2. Add Android app with package: com.farm2marketuganda.app" -ForegroundColor White
 Write-Host "3. Download google-services.json to android/app/" -ForegroundColor White
 Write-Host "4. Get FCM Server key from Firebase Console" -ForegroundColor White
 Write-Host "5. Set FCM_SERVER_KEY in Convex: npx convex env set FCM_SERVER_KEY `"key`"" -ForegroundColor White

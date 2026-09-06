@@ -163,8 +163,10 @@ export const updateQrCode = mutation({
     landingButtons: v.optional(v.array(landingButtonValidator)),
     landingSocialLinks: v.optional(v.array(landingSocialLinkValidator)),
     landingBackgroundColor: v.optional(v.string()),
-    activeFrom: v.optional(v.number()),
-    activeUntil: v.optional(v.number()),
+    // null clears the scheduling bound (back to always-on); undefined leaves
+    // it untouched — same sentinel convention as campaignId above.
+    activeFrom: v.optional(v.union(v.number(), v.null())),
+    activeUntil: v.optional(v.union(v.number(), v.null())),
     isActive: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
@@ -205,9 +207,15 @@ export const updateQrCode = mutation({
     for (const key of editableKeys) {
       const value = args[key];
       if (value === undefined) continue;
-      // null is the "clear this field" sentinel (campaignId only, so far);
-      // patch it as undefined, which Convex treats as removing the field.
+      // null is the "clear this field" sentinel; patch it as undefined,
+      // which Convex treats as removing the field.
       patch[key] = value === null ? undefined : value;
+    }
+
+    const nextActiveFrom = "activeFrom" in patch ? (patch.activeFrom as number | undefined) : existing.activeFrom;
+    const nextActiveUntil = "activeUntil" in patch ? (patch.activeUntil as number | undefined) : existing.activeUntil;
+    if (nextActiveFrom !== undefined && nextActiveUntil !== undefined && nextActiveUntil <= nextActiveFrom) {
+      throw new Error('"Active until" must be after "Active from".');
     }
 
     const nextLogoStorageId = args.logoStorageId ?? existing.logoStorageId;

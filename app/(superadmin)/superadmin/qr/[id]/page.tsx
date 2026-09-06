@@ -2,13 +2,21 @@
 
 export const dynamic = "force-dynamic";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useStoredUser } from "@/app/hooks/useStoredUser";
 import { QrCodeDisplay } from "@/app/components/qr/QrCodeDisplay";
 import { QrNav } from "../QrNav";
+
+/** epoch ms -> "YYYY-MM-DDTHH:mm" in the browser's local time, for a datetime-local input. */
+function toDatetimeLocalValue(ms: number | undefined): string {
+  if (!ms) return "";
+  const d = new Date(ms);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 export default function QrCodeDetailPage({ params }: { params: { id: string } }) {
   const { user } = useStoredUser();
@@ -30,6 +38,18 @@ export default function QrCodeDetailPage({ params }: { params: { id: string } })
   const [newDestination, setNewDestination] = useState("");
   const [status, setStatus] = useState<{ type: "idle" | "saving" | "error"; message?: string }>({ type: "idle" });
   const [campaignStatus, setCampaignStatus] = useState<{ type: "idle" | "saving" }>({ type: "idle" });
+
+  const [activeFromInput, setActiveFromInput] = useState("");
+  const [activeUntilInput, setActiveUntilInput] = useState("");
+  const [scheduleStatus, setScheduleStatus] = useState<{ type: "idle" | "saving" | "error"; message?: string }>({ type: "idle" });
+  const [scheduleSeededForId, setScheduleSeededForId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!qrCode || scheduleSeededForId === qrCode._id) return;
+    setActiveFromInput(toDatetimeLocalValue(qrCode.activeFrom));
+    setActiveUntilInput(toDatetimeLocalValue(qrCode.activeUntil));
+    setScheduleSeededForId(qrCode._id);
+  }, [qrCode, scheduleSeededForId]);
 
   if (qrCode === undefined) return <main style={{ padding: "2rem" }}>Loading...</main>;
   if (qrCode === null) return <main style={{ padding: "2rem" }}>QR code not found.</main>;
@@ -74,6 +94,43 @@ export default function QrCodeDetailPage({ params }: { params: { id: string } })
   };
 
   const currentCampaign = campaigns?.find((c) => c._id === qrCode.campaignId);
+
+  const handleSaveSchedule = async () => {
+    if (!userId) return;
+    setScheduleStatus({ type: "saving" });
+    try {
+      await updateQrCode({
+        adminId: userId,
+        qrCodeId,
+        activeFrom: activeFromInput ? new Date(activeFromInput).getTime() : null,
+        activeUntil: activeUntilInput ? new Date(activeUntilInput).getTime() : null,
+      });
+      setScheduleStatus({ type: "idle" });
+    } catch (error) {
+      setScheduleStatus({ type: "error", message: (error as Error).message });
+    }
+  };
+
+  const handleClearSchedule = async () => {
+    if (!userId) return;
+    setActiveFromInput("");
+    setActiveUntilInput("");
+    setScheduleStatus({ type: "saving" });
+    try {
+      await updateQrCode({ adminId: userId, qrCodeId, activeFrom: null, activeUntil: null });
+      setScheduleStatus({ type: "idle" });
+    } catch (error) {
+      setScheduleStatus({ type: "error", message: (error as Error).message });
+    }
+  };
+
+  const now = Date.now();
+  const scheduleState: "always-on" | "upcoming" | "running" | "ended" = (() => {
+    if (!qrCode.activeFrom && !qrCode.activeUntil) return "always-on";
+    if (qrCode.activeFrom && now < qrCode.activeFrom) return "upcoming";
+    if (qrCode.activeUntil && now > qrCode.activeUntil) return "ended";
+    return "running";
+  })();
 
   return (
     <main style={{ maxWidth: 720, margin: "0 auto", padding: "1.5rem" }}>
@@ -137,6 +194,44 @@ export default function QrCodeDetailPage({ params }: { params: { id: string } })
             <option key={c._id} value={c._id}>{c.name}</option>
           ))}
         </select>
+      </section>
+
+      <section style={sectionStyle}>
+        <h2 style={sectionHeading}>Running time</h2>
+        <p style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.75rem" }}>
+          Status: <strong>{scheduleLabel(scheduleState)}</strong>. Leave both fields blank for an always-on QR code.
+        </p>
+        <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+          <label style={{ display: "flex", flexDirection: "column", gap: "0.35rem", fontSize: "0.85rem", fontWeight: 600, color: "#333", flex: 1, minWidth: 200 }}>
+            Active from
+            <input
+              type="datetime-local"
+              value={activeFromInput}
+              onChange={(e) => setActiveFromInput(e.target.value)}
+              style={inputStyle}
+            />
+          </label>
+          <label style={{ display: "flex", flexDirection: "column", gap: "0.35rem", fontSize: "0.85rem", fontWeight: 600, color: "#333", flex: 1, minWidth: 200 }}>
+            Active until
+            <input
+              type="datetime-local"
+              value={activeUntilInput}
+              onChange={(e) => setActiveUntilInput(e.target.value)}
+              style={inputStyle}
+            />
+          </label>
+        </div>
+        {scheduleStatus.type === "error" && (
+          <p style={{ color: "#c62828", fontSize: "0.85rem", marginTop: "0.5rem" }}>{scheduleStatus.message}</p>
+        )}
+        <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.75rem", flexWrap: "wrap" }}>
+          <button onClick={handleSaveSchedule} disabled={scheduleStatus.type === "saving"} style={buttonStyle("#1976d2")}>
+            {scheduleStatus.type === "saving" ? "Saving..." : "Save running time"}
+          </button>
+          <button onClick={handleClearSchedule} disabled={scheduleStatus.type === "saving"} style={buttonStyle("#616161")}>
+            Clear (always-on)
+          </button>
+        </div>
       </section>
 
       <section style={sectionStyle}>
@@ -214,6 +309,13 @@ const inputStyle: React.CSSProperties = {
 
 const thStyle: React.CSSProperties = { textAlign: "left", padding: "0.5rem", borderBottom: "2px solid #eee", whiteSpace: "nowrap" };
 const tdStyle: React.CSSProperties = { padding: "0.5rem", borderBottom: "1px solid #f2f2f2", whiteSpace: "nowrap" };
+
+function scheduleLabel(state: "always-on" | "upcoming" | "running" | "ended"): string {
+  if (state === "always-on") return "Always on";
+  if (state === "upcoming") return "Scheduled — not yet started";
+  if (state === "ended") return "Ended — scan will show as inactive";
+  return "Running";
+}
 
 function buttonStyle(background: string): React.CSSProperties {
   return {

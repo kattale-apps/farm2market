@@ -109,9 +109,9 @@ export function CameraCapture({ formId, field, onUploadComplete }: Props) {
         // 5. Update the form with the new image metadata
         const imageMetadata = {
           storageId,
-          lat: latitude,
-          lng: longitude,
-          accuracy,
+          lat: latitude ?? undefined,
+          lng: longitude ?? undefined,
+          accuracy: accuracy ?? undefined,
           capturedAt: capturedAt.toISOString(),
         };
 
@@ -177,9 +177,9 @@ export function CameraCapture({ formId, field, onUploadComplete }: Props) {
         // Update the form with image metadata
         const imageMetadata = {
           storageId,
-          lat: latitude,
-          lng: longitude,
-          accuracy,
+          lat: latitude ?? undefined,
+          lng: longitude ?? undefined,
+          accuracy: accuracy ?? undefined,
           capturedAt: capturedAt.toISOString(),
         };
 

@@ -346,6 +346,12 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
     XLSX.writeFile(wb, `Farm2Market_Prices_${scopeDateKey}.xlsx`);
     recordPriceDownloadAudit({ userId: adminId, productType: priceSheetDownloadRequest.productType, scopeDateKey });
     setPriceSheetDownloadRequest(null);
+    // Deliberately keyed only on the query result: this effect should fire
+    // exactly once per download request, when its data arrives. Adding
+    // adminId/priceSheetDownloadRequest/recordPriceDownloadAudit as deps
+    // risks re-firing (duplicate file download + duplicate audit record) if
+    // any of those references change before the next request is made.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [priceSheetDownloadRows]);
 
   const notificationRecipients = useQuery(

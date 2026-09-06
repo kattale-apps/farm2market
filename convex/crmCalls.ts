@@ -37,7 +37,8 @@ function computeHealthScore(args: {
 
   const normalized = Math.max(0, Math.min(100, score));
 
-  const band = normalized >= 70 ? "green" : normalized >= 40 ? "yellow" : "red";
+  const band: "green" | "yellow" | "red" =
+    normalized >= 70 ? "green" : normalized >= 40 ? "yellow" : "red";
 
   return {
     score: normalized,
@@ -228,19 +229,19 @@ export const getCrmAgentQueue = query({
 
     const enriched = await Promise.all(
       filtered.map(async (lead: any) => {
-        const member = await ctx.db.get(lead.memberId);
-        const response = await ctx.db.get(lead.sourceCrmResponseId);
+        const member = (await ctx.db.get(lead.memberId)) as any;
+        const response = (await ctx.db.get(lead.sourceCrmResponseId)) as any;
         return {
           ...lead,
-          memberAlias: (response as any)?.clientName || member?.alias,
+          memberAlias: response?.clientName || member?.alias,
           memberPhone: member?.phoneNumber,
           district: response?.district,
           subCounty: response?.subCounty,
-          parish: (response as any)?.parish,
-          cropGrown: (response as any)?.cropGrown,
-          monthOfPlanting: (response as any)?.monthOfPlanting,
-          pastSprayDates: (response as any)?.pastSprayDates,
-          upcomingSprayScheduleAt: (response as any)?.upcomingSprayScheduleAt,
+          parish: response?.parish,
+          cropGrown: response?.cropGrown,
+          monthOfPlanting: response?.monthOfPlanting,
+          pastSprayDates: response?.pastSprayDates,
+          upcomingSprayScheduleAt: response?.upcomingSprayScheduleAt,
           productName: response?.productName,
           purchaseQuantity: response?.purchaseQuantity,
           purchaseDate: response?.purchaseDate,

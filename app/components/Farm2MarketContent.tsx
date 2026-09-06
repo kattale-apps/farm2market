@@ -562,7 +562,7 @@ export function Farm2MarketContent({ userId, userRole, isMobile }: Farm2MarketCo
               Your Transactions
             </h3>
           </div>
-          {transactionsExpanded && listings?.listings?.length > 0 && (
+          {transactionsExpanded && (listings?.listings?.length ?? 0) > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
               <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                 <button onClick={() => handleExportUTIDs("pdf")} style={{ padding: "0.5rem 1rem", background: "#ffc107", color: "#000", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "0.85rem", fontWeight: "500" }}>Export PDF</button>

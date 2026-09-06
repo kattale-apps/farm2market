@@ -776,6 +776,29 @@ export const searchQrCommunities = query({
 /**
  * Get user's joined communities
  */
+/**
+ * Get a user's community-account scope: whether their account is restricted
+ * to a single community (community_only) and, if so, which community they
+ * were onboarded through. Used to decide whether to show cross-community
+ * navigation or lock the UI to one community.
+ */
+export const getUserCommunityScope = query({
+  args: {
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      return { accountScope: undefined, onboardedViaCommunityId: null };
+    }
+
+    return {
+      accountScope: (user as any).accountScope as "full" | "community_only" | undefined,
+      onboardedViaCommunityId: (user as any).onboardedViaCommunityId ?? null,
+    };
+  },
+});
+
 export const getUserCommunities = query({
   args: {
     userId: v.id("users"),
@@ -2270,6 +2293,8 @@ export const getMyNavigationContext = query({
         adminCommunities: [],
         joinedCommunities: [],
         defaultCommunityId: null,
+        accountScope: undefined as "full" | "community_only" | undefined,
+        onboardedViaCommunityId: null as Id<"communities"> | null,
         error: "Not authenticated",
       };
     }
@@ -2301,6 +2326,8 @@ export const getMyNavigationContext = query({
         adminCommunities: [],
         joinedCommunities: [],
         defaultCommunityId: null,
+        accountScope: undefined as "full" | "community_only" | undefined,
+        onboardedViaCommunityId: null as Id<"communities"> | null,
         error: "User not found",
       };
     }
@@ -2378,6 +2405,8 @@ export const getMyNavigationContext = query({
       adminCommunities: adminCommunitiesMapped,
       joinedCommunities,
       defaultCommunityId,
+      accountScope: (user as any).accountScope as "full" | "community_only" | undefined,
+      onboardedViaCommunityId: (user as any).onboardedViaCommunityId ?? null,
       error: undefined,
     };
   },

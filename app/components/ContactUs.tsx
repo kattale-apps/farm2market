@@ -57,14 +57,8 @@ export function ContactUs({ isMobile = false, onOpenInbox }: ContactUsProps) {
   const handleShowContact = async () => {
     try {
       const stored = await getStoredUser();
-      if (stored) {
-        const contact = stored?.email || stored?.phoneNumber;
-        const alias = stored?.alias;
-        if (alias && contact) {
-          setAccountLabel(`${alias} (${contact})`);
-        } else if (alias) {
-          setAccountLabel(alias);
-        }
+      if (stored?.alias) {
+        setAccountLabel(stored.alias);
       }
     } catch {
       setAccountLabel("");

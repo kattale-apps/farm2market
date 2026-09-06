@@ -50,7 +50,7 @@ function Toast({ message, onClose }: { message: string; onClose: () => void }) {
 
 function TutorialManagementContent() {
   const { user, status: authStatus } = useStoredUser();
-  const adminId = (user?._id as Id<"users"> | undefined) ?? null;
+  const adminId = (user?.userId as Id<"users"> | undefined) ?? null;
   const [activeTab, setActiveTab] = useState<RoleCategory>("all");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<Id<"tutorialVideos"> | null>(null);

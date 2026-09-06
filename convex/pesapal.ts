@@ -19,6 +19,7 @@ import {
 } from "./_generated/server";
 import { checkPilotMode } from "./pilotMode";
 import { generateUTID, getUgandaTime } from "./utils";
+import { Id } from "./_generated/dataModel";
 
 // Pesapal API Configuration
 // Note: Environment variables must be set in Convex Dashboard → Settings → Environment Variables

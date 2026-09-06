@@ -17,9 +17,9 @@ import { v } from "convex/values";
 const imageMetadata = {
   storageId: v.id("_storage"),
   url: v.string(),
-  lat: v.number(),
-  lng: v.number(),
-  accuracy: v.number(),
+  lat: v.optional(v.number()), // GPS is best-effort; capture can proceed without it
+  lng: v.optional(v.number()),
+  accuracy: v.optional(v.number()),
   capturedAt: v.string(), // ISO 8601 string
 };
 
@@ -1482,7 +1482,7 @@ export default defineSchema({
     deletedAt: v.optional(v.number()),
     responseCount: v.number(),
     category: v.optional(v.string()),
-    formPurpose: v.optional(v.union(v.literal("tracker"), v.literal("profile"), v.literal("extension_work"))),
+    formPurpose: v.optional(v.union(v.literal("tracker"), v.literal("profile"), v.literal("extension_work"), v.literal("farmNeeds"))),
     paymentEnabled: v.optional(v.boolean()),
     paymentAmount: v.optional(v.number()),
     paymentAmountEditable: v.optional(v.boolean()),
@@ -1950,11 +1950,13 @@ export default defineSchema({
         v.literal("text"),
         v.literal("number"),
         v.literal("date"),
+        v.literal("select"),
         v.literal("yesno"),
         v.literal("photo"),
         v.literal("rating"),
         v.literal("gps")
       ),
+      options: v.optional(v.array(v.string())),
       unit: v.optional(v.string()),
       required: v.boolean(),
       emoji: v.optional(v.string()),

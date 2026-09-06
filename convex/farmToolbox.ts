@@ -961,8 +961,8 @@ export const getToolboxInsights = query({
     let topTemplateName: string | null = null;
     let topTemplateEmoji: string | null = null;
     if (topTemplateId) {
-      const tpl = await ctx.db.get(topTemplateId as any);
-      topTemplateName = tpl?.name ?? null;
+      const tpl = (await ctx.db.get(topTemplateId as any)) as any;
+      topTemplateName = tpl?.templateName ?? null;
       topTemplateEmoji = tpl?.emoji ?? null;
     }
 
@@ -993,7 +993,7 @@ export const getToolboxInsights = query({
         const tpl = await ctx.db.get(e.templateId);
         return {
           _id: e._id as string,
-          templateName: tpl?.name ?? "Unknown",
+          templateName: tpl?.templateName ?? "Unknown",
           templateEmoji: tpl?.emoji ?? null,
           submittedAt: e.submittedAt,
           fieldCount: e.fieldCount ?? e.fieldValues.length,

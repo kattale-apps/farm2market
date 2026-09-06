@@ -105,6 +105,12 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
     recordPriceDownloadAudit({ userId, productType: priceDownloadRequest.productType, scopeDateKey });
     setPriceDownloadRequest(null);
     setPriceReportLoading(null);
+    // Deliberately keyed only on the query result: this effect should fire
+    // exactly once per download request, when its data arrives. Adding
+    // userId/priceDownloadRequest/recordPriceDownloadAudit as deps risks
+    // re-firing (duplicate file download + duplicate audit record) if any
+    // of those references change before the next request is made.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [priceSheetRows]);
   
   const [purchasing, setPurchasing] = useState<Id<"traderInventory"> | null>(null);

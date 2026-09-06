@@ -357,7 +357,7 @@ export const activateImportedCommunityMember = mutation({
       communityId: importedMember.communityId,
       userId,
       joinedAt: getUgandaTime(),
-      communityRole: importedMember.communityRole || null,
+      communityRole: importedMember.communityRole || undefined,
     });
 
     if (role === "farmer") {

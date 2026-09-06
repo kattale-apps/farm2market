@@ -101,7 +101,7 @@ export default function StoreOnboardingPage() {
       if (onboardingStatus.buildingName && !buildingName) setBuildingName(onboardingStatus.buildingName);
       if (onboardingStatus.storeNumber && !storeNumber) setStoreNumber(onboardingStatus.storeNumber);
     }
-  }, [onboardingStatus, router]);
+  }, [onboardingStatus, router, storeType, storeTypeCustom, storageCapacity, streetAddress, buildingName, storeNumber]);
 
   useEffect(() => { setSelectedDistrictId(""); setSelectedSubcountyId(""); setSelectedParishId(""); }, [selectedRegionKey]);
   useEffect(() => { setSelectedSubcountyId(""); setSelectedParishId(""); }, [selectedDistrictId]);

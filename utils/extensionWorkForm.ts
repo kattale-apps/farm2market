@@ -24,7 +24,7 @@ export function getEffectivePaymentAmount(
     return Number.isFinite(parsed) ? parsed : null;
   }
 
-  if (typeof form.paymentAmount === "number") {
+  if (typeof form?.paymentAmount === "number") {
     return form.paymentAmount;
   }
 

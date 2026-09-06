@@ -1325,8 +1325,8 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
   const isProfile = selectedForm?.formPurpose === "profile";
   const isExtensionWork = selectedForm?.formPurpose === "extension_work";
 
-  const fields: any[] = formResponses?.fields ?? [];
-  const responses: any[] = formResponses?.responses ?? [];
+  const fields: any[] = useMemo(() => formResponses?.fields ?? [], [formResponses]);
+  const responses: any[] = useMemo(() => formResponses?.responses ?? [], [formResponses]);
 
   // ── Extract member list (fix: membersRaw is array, not dict) ──
   const memberList: any[] = useMemo(() => {

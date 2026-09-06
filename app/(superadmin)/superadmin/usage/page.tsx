@@ -47,6 +47,11 @@ function PricingEditor({
       setJuniorAdminImagePrice(selectedCommunity.juniorAdminImagePrice ?? 0);
       setMemberImageMessagePrice(selectedCommunity.memberImageMessagePrice ?? 0);
     }
+    // Deliberately depend on the specific fields we seed from, not the whole
+    // `selectedCommunity` object — that reference changes on every parent
+    // re-render and would keep resetting these editable fields while the
+    // admin is mid-edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCommunity?._id, selectedCommunity?.juniorAdminFreeMonthlyImageQuota, selectedCommunity?.juniorAdminImagePrice, selectedCommunity?.memberImageMessagePrice]);
   const [showToast, setShowToast] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});

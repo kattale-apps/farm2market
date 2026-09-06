@@ -168,7 +168,7 @@ export const listCrmAgents = query({
 
     const enriched = await Promise.all(
       agents.map(async (agent: any) => {
-        const user = await ctx.db.get(agent.agentUserId);
+        const user = (await ctx.db.get(agent.agentUserId)) as any;
         return {
           ...agent,
           userAlias: user?.alias,

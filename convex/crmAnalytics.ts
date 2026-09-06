@@ -111,7 +111,7 @@ export const getAgentPerformanceToday = query({
 
     const rows: Array<any> = [];
     for (const [agentId, callCount] of callsByAgent.entries()) {
-      const user = await ctx.db.get(agentId as any);
+      const user = (await ctx.db.get(agentId as any)) as any;
       rows.push({
         agentId,
         agentName: user?.alias || user?.email || "Unknown",
@@ -203,11 +203,11 @@ export const getOpportunityExportRows = query({
 
     const rows = await Promise.all(
       opportunities.map(async (opp: any) => {
-        const lead = await ctx.db.get(opp.leadId);
-        const member = lead ? await ctx.db.get(lead.memberId) : null;
-        const openedBy = await ctx.db.get(opp.openedByAgentId);
+        const lead = (await ctx.db.get(opp.leadId)) as any;
+        const member = lead ? ((await ctx.db.get(lead.memberId)) as any) : null;
+        const openedBy = (await ctx.db.get(opp.openedByAgentId)) as any;
         const assignedSales = opp.assignedSalesAgentId
-          ? await ctx.db.get(opp.assignedSalesAgentId)
+          ? ((await ctx.db.get(opp.assignedSalesAgentId)) as any)
           : null;
 
         return {

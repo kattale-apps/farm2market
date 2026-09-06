@@ -363,6 +363,14 @@ export default function SuperadminUsagePage() {
     return <div style={{ padding: "2rem", textAlign: "center" }}><p>Loading your session...</p></div>;
   }
 
+  if (authStatus === "unauthenticated" || user?.role !== "admin") {
+    return (
+      <div style={{ padding: "2rem", textAlign: "center" }}>
+        <p>You must be an admin to view this page.</p>
+      </div>
+    );
+  }
+
   return (
       <div className="min-h-screen bg-gray-50 p-4 md:p-8 pb-safe">
         <div className="max-w-md mx-auto md:max-w-none">

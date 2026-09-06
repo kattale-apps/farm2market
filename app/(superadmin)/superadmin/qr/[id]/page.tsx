@@ -25,9 +25,11 @@ export default function QrCodeDetailPage({ params }: { params: { id: string } })
     api.qrForms.listFormSubmissions,
     userId && qrCode?.formId ? { adminId: userId, formId: qrCode.formId } : "skip"
   );
+  const campaigns = useQuery(api.campaigns.listCampaigns, userId ? { adminId: userId } : "skip");
 
   const [newDestination, setNewDestination] = useState("");
   const [status, setStatus] = useState<{ type: "idle" | "saving" | "error"; message?: string }>({ type: "idle" });
+  const [campaignStatus, setCampaignStatus] = useState<{ type: "idle" | "saving" }>({ type: "idle" });
 
   if (qrCode === undefined) return <main style={{ padding: "2rem" }}>Loading...</main>;
   if (qrCode === null) return <main style={{ padding: "2rem" }}>QR code not found.</main>;
@@ -57,14 +59,33 @@ export default function QrCodeDetailPage({ params }: { params: { id: string } })
     await archiveQrCode({ adminId: userId, qrCodeId });
   };
 
+  const handleCampaignChange = async (value: string) => {
+    if (!userId) return;
+    setCampaignStatus({ type: "saving" });
+    try {
+      await updateQrCode({
+        adminId: userId,
+        qrCodeId,
+        campaignId: value ? (value as Id<"campaigns">) : null,
+      });
+    } finally {
+      setCampaignStatus({ type: "idle" });
+    }
+  };
+
+  const currentCampaign = campaigns?.find((c) => c._id === qrCode.campaignId);
+
   return (
     <main style={{ maxWidth: 720, margin: "0 auto", padding: "1.5rem" }}>
       <QrNav />
       <h1 style={{ fontSize: "1.6rem", fontWeight: 700, marginBottom: "0.25rem" }}>
         {qrCode.title || qrCode.code}
       </h1>
-      <p style={{ color: "#666", fontSize: "0.9rem", wordBreak: "break-all", marginBottom: "1.5rem" }}>
+      <p style={{ color: "#666", fontSize: "0.9rem", wordBreak: "break-all", marginBottom: "0.25rem" }}>
         {targetUrl}
+      </p>
+      <p style={{ color: "#999", fontSize: "0.85rem", marginBottom: "1.5rem" }}>
+        Campaign: {currentCampaign?.name ?? "None"}
       </p>
 
       <section style={sectionStyle}>
@@ -101,6 +122,21 @@ export default function QrCodeDetailPage({ params }: { params: { id: string } })
         <p style={{ fontSize: "0.8rem", color: "#999", marginTop: "0.5rem" }}>
           The QR image never changes — it always points at {targetUrl}. Only the destination it resolves to changes.
         </p>
+      </section>
+
+      <section style={sectionStyle}>
+        <h2 style={sectionHeading}>Campaign</h2>
+        <select
+          value={qrCode.campaignId ?? ""}
+          disabled={campaignStatus.type === "saving"}
+          onChange={(e) => handleCampaignChange(e.target.value)}
+          style={{ ...inputStyle, width: "100%" }}
+        >
+          <option value="">No campaign</option>
+          {(campaigns ?? []).map((c) => (
+            <option key={c._id} value={c._id}>{c.name}</option>
+          ))}
+        </select>
       </section>
 
       <section style={sectionStyle}>

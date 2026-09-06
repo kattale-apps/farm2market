@@ -699,7 +699,7 @@ export default function CommunityCrmPage() {
         <div style={{ marginTop: "1rem", border: "1px solid #e5e7eb", borderRadius: 12, padding: "0.9rem" }}>
           <h2 style={{ marginTop: 0, fontSize: "1.05rem" }}>Capture New Lead (Intake)</h2>
           <p style={{ marginTop: 0, color: "#666", fontSize: "0.9rem" }}>
-            Add a client's contact and farm details to create a lead. New clients get a member account automatically (login: their phone number); agents fill in the rest of their profile once reached.
+            Add a client&apos;s contact and farm details to create a lead. New clients get a member account automatically (login: their phone number); agents fill in the rest of their profile once reached.
           </p>
 
           <select

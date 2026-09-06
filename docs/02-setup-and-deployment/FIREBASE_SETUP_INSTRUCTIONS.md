@@ -38,9 +38,11 @@
 
 1. Open terminal in your project directory
 2. Run:
+
    ```bash
    npx convex env set FCM_SERVER_KEY "YOUR_SERVER_KEY_HERE"
    ```
+
    Replace `YOUR_SERVER_KEY_HERE` with the Server key you copied from Firebase
 
 3. Verify it's set:
@@ -55,11 +57,13 @@ The code is already set up! Just verify that `convex/pushNotifications.ts` has t
 ## Step 7: Rebuild and Test
 
 1. Sync Capacitor:
+
    ```bash
    npx cap sync android
    ```
 
 2. Rebuild the APK:
+
    ```bash
    cd android
    $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
@@ -86,21 +90,25 @@ The code is already set up! Just verify that `convex/pushNotifications.ts` has t
 ## Troubleshooting
 
 ### google-services.json not found
+
 - Make sure the file is in `android/app/google-services.json` (not `android/google-services.json`)
 - Check file name is exactly `google-services.json` (not `google-services.json.txt`)
 
 ### Build fails with "google-services plugin not applied"
+
 - Verify `google-services.json` exists in `android/app/`
 - Check that the file is valid JSON (not corrupted)
 - Try: `cd android && .\gradlew.bat clean`
 
 ### Push notifications not working
+
 - Verify FCM Server key is set in Convex: `npx convex env list`
 - Check device token is registered in Convex dashboard
 - Verify notification permission is granted on device
 - Check Firebase Console → Cloud Messaging → see if messages are being sent
 
 ### "FCM_SERVER_KEY not configured" error
+
 - Run: `npx convex env set FCM_SERVER_KEY "your-key"`
 - Verify: `npx convex env list`
 - Redeploy Convex functions if needed

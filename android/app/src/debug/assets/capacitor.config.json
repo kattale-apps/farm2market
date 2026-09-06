@@ -1,0 +1,19 @@
+{
+  "appId": "com.farm2marketuganda.app",
+  "appName": "FarmCoin",
+  "webDir": "out",
+  "server": {
+    "url": "https://dev.farm2marketuganda.com",
+    "cleartext": false
+  },
+  "android": {
+    "allowMixedContent": false,
+    "captureInput": true
+  },
+  "plugins": {
+    "Geolocation": {
+      "permissions": ["location", "coarseLocation"],
+      "enableHighAccuracy": true
+    }
+  }
+}

@@ -1,18 +1,18 @@
 apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
+apply plugin: 'org.jetbrains.kotlin.android'
 
 android {
     namespace = "com.farm2marketuganda.app"
     compileSdk = rootProject.ext.compileSdkVersion
-
     buildFeatures {
-        buildConfig true
+        buildConfig = true
     }
     defaultConfig {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
+        manifestPlaceholders.deepLinkHost = "dev.farm2marketuganda.com"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -20,7 +20,7 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
-    
+
     // Product flavors: community + deployment tier
     flavorDimensions "community", "deployment"
     productFlavors {
@@ -43,7 +43,7 @@ android {
             buildConfigField "String", "DEPLOYMENT_MODE", '"dev"'
             resValue "string", "app_name", "F2M Dev App"
         }
-        
+
         // Community flavors
         defaultCommunity {
             dimension "community"
@@ -66,28 +66,31 @@ android {
             resValue "string", "app_name", "Kyagalanyi Farmers"
         }
     }
-    
+
     // Load keystore properties for release signing
     def keystorePropertiesFile = rootProject.file("keystore.properties")
     def keystoreProperties = new Properties()
     if (keystorePropertiesFile.exists()) {
         keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
     }
-    
+
     signingConfigs {
         release {
-            if (keystorePropertiesFile.exists()) {
-                storeFile file(keystoreProperties['storeFile'])
+            if (keystorePropertiesFile.exists() && keystoreProperties['storeFile']) {
+                storeFile rootProject.file(keystoreProperties['storeFile'])
                 storePassword keystoreProperties['storePassword']
                 keyAlias keystoreProperties['keyAlias']
                 keyPassword keystoreProperties['keyPassword']
             }
         }
     }
-    
+
     buildTypes {
         release {
-            signingConfig signingConfigs.release
+            manifestPlaceholders.deepLinkHost = "www.farm2marketuganda.com"
+            if (keystorePropertiesFile.exists() && keystoreProperties['storeFile']) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
@@ -110,7 +113,7 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
-    
+
     // Firebase Cloud Messaging for push notifications
     implementation 'com.google.firebase:firebase-messaging:23.4.1'
     implementation 'com.google.firebase:firebase-analytics:21.6.1'

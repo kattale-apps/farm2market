@@ -78,8 +78,10 @@ export default function CommunityCrmPage() {
   const [removingFieldId, setRemovingFieldId] = useState("");
 
   const crmEnabledForSelected =
-    ((communities || []).find((c: any) => String(c._id) === String(selectedCommunityId || "")) as any)
-      ?.crmEnabled === true;
+    ((communities || []).find((c: any) => {
+      const currentCommunityId = c?._id ?? c?.id;
+      return String(currentCommunityId ?? "") === String(selectedCommunityId || "");
+    }) as any)?.crmEnabled === true;
 
   const crmForms = useQuery(
     (api as any).crmForms.getCommunityCrmForms,
@@ -139,7 +141,10 @@ export default function CommunityCrmPage() {
     if (!communities || communities.length === 0) return;
 
     if (communityIdFromUrl) {
-      const found = communities.find((c: any) => String(c._id) === String(communityIdFromUrl));
+      const found = communities.find((c: any) => {
+        const currentCommunityId = c?._id ?? c?.id;
+        return String(currentCommunityId ?? "") === String(communityIdFromUrl);
+      });
       if (found) {
         setSelectedCommunityId(communityIdFromUrl);
         return;
@@ -147,13 +152,19 @@ export default function CommunityCrmPage() {
     }
 
     if (!selectedCommunityId) {
-      setSelectedCommunityId(communities[0]._id);
+      const firstCommunityId = communities[0]?._id ?? communities[0]?.id;
+      if (firstCommunityId) {
+        setSelectedCommunityId(firstCommunityId as Id<"communities">);
+      }
     }
   }, [communities, communityIdFromUrl, selectedCommunityId]);
 
   const isAdmin = currentUser?.role === "admin";
   const selectedCommunity = useMemo(
-    () => (communities || []).find((c: any) => String(c._id) === String(selectedCommunityId || "")),
+    () => (communities || []).find((c: any) => {
+      const currentCommunityId = c?._id ?? c?.id;
+      return String(currentCommunityId ?? "") === String(selectedCommunityId || "");
+    }),
     [communities, selectedCommunityId]
   );
 

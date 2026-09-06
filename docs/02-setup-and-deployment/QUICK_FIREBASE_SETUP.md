@@ -11,23 +11,27 @@
 ## 🚀 What You Need to Do (5 Steps)
 
 ### Step 1: Create Firebase Project
+
 1. Go to https://console.firebase.google.com/
 2. Click **"Add project"** or **"Create a project"**
 3. Name it: `Farm2Market Uganda`
 4. Click through the setup (you can skip Google Analytics)
 
 ### Step 2: Add Android App
+
 1. In Firebase Console, click **Android icon** (or **Add app** → **Android**)
 2. Package name: `com.farm2marketuganda.app`
 3. App nickname: `Farm2Market Uganda` (optional)
 4. Click **Register app**
 
 ### Step 3: Download google-services.json
+
 1. Click **Download google-services.json**
 2. **Copy the file to**: `C:\Users\Administrator\Desktop\my-app\android\app\google-services.json`
    - Make sure it's in the `android/app/` folder, not just `android/`
 
 ### Step 4: Get FCM Server Key
+
 1. In Firebase Console, click **⚙️ Settings** → **Project settings**
 2. Go to **Cloud Messaging** tab
 3. Under **Cloud Messaging API (Legacy)**, copy the **Server key**
@@ -37,6 +41,7 @@
    ```
 
 ### Step 5: Rebuild APK
+
 ```powershell
 cd android
 $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
@@ -46,6 +51,7 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 ## ✅ Verification
 
 After setup, verify:
+
 - [ ] `android/app/google-services.json` exists
 - [ ] FCM_SERVER_KEY is set: `npx convex env list`
 - [ ] APK builds successfully

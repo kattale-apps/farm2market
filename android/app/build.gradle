@@ -20,10 +20,31 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
-    
-    // Product flavors for community-specific APKs
-    flavorDimensions "community"
+
+    // Product flavors: community + deployment tier
+    flavorDimensions "community", "deployment"
     productFlavors {
+        // PRODUCTION: FarmCoin (www.farm2marketuganda.com)
+        productionFlavors {
+            dimension "deployment"
+            buildConfigField "String", "SERVER_URL", '"https://www.farm2marketuganda.com"'
+            buildConfigField "String", "CONVEX_URL", '"https://greedy-tortoise-911.convex.cloud"'
+            buildConfigField "String", "DEPLOYMENT_MODE", '"production"'
+            resValue "string", "app_name", "FarmCoin"
+        }
+
+        // DEVELOPMENT: F2M (farm2market-dev.vercel.app)
+        f2mFlavors {
+            dimension "deployment"
+            applicationIdSuffix ".f2m"
+            versionNameSuffix "-f2m"
+            buildConfigField "String", "SERVER_URL", '"https://farm2market-dev.vercel.app"'
+            buildConfigField "String", "CONVEX_URL", '"https://adamant-armadillo-601.convex.cloud"'
+            buildConfigField "String", "DEPLOYMENT_MODE", '"dev"'
+            resValue "string", "app_name", "F2M Dev App"
+        }
+
+        // Community flavors
         defaultCommunity {
             dimension "community"
             buildConfigField "String", "DEFAULT_COMMUNITY_SLUG", '""'
@@ -45,14 +66,14 @@ android {
             resValue "string", "app_name", "Kyagalanyi Farmers"
         }
     }
-    
+
     // Load keystore properties for release signing
     def keystorePropertiesFile = rootProject.file("keystore.properties")
     def keystoreProperties = new Properties()
     if (keystorePropertiesFile.exists()) {
         keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
     }
-    
+
     signingConfigs {
         release {
             if (keystorePropertiesFile.exists() && keystoreProperties['storeFile']) {
@@ -63,7 +84,7 @@ android {
             }
         }
     }
-    
+
     buildTypes {
         release {
             manifestPlaceholders.deepLinkHost = "www.farm2marketuganda.com"
@@ -92,7 +113,7 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
-    
+
     // Firebase Cloud Messaging for push notifications
     implementation 'com.google.firebase:firebase-messaging:23.4.1'
     implementation 'com.google.firebase:firebase-analytics:21.6.1'

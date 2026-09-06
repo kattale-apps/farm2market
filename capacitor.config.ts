@@ -6,7 +6,7 @@ const serverUrl =
 const config: CapacitorConfig = {
   appId: "com.farm2marketuganda.app",
   appName: "FarmCoin",
-  webDir: "out", // Will be ignored when using server.url
+  webDir: "out",
   server: {
     url: serverUrl,
     cleartext: serverUrl.startsWith("http://"),

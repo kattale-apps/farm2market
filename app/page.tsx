@@ -207,8 +207,9 @@ export default function Home() {
             flexWrap: "wrap"
           }}>
             <a
-              href="/downloads/farm2market.apk"
-              download
+              href="https://github.com/kattale-apps/farm2market/releases/download/android-v20260908/app-defaultCommunity-productionFlavors-release.apk"
+              target="_blank"
+              rel="noopener noreferrer"
               style={{
                 display: "inline-block",
                 padding: "0.6rem 1.2rem",

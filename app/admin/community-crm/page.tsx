@@ -80,7 +80,7 @@ export default function CommunityCrmPage() {
   const [intakeCrmFormId, setIntakeCrmFormId] = useState<Id<"crmForms"> | null>(null);
   const [intakeMode, setIntakeMode] = useState<"existing" | "new">("new");
   const [memberSearch, setMemberSearch] = useState("");
-  const [intakeMemberId, setIntakeMemberId] = useState<Id<"users"> | null>(null);
+  const [selectedMemberIds, setSelectedMemberIds] = useState<Set<Id<"users">>>(new Set());
   const [newClientName, setNewClientName] = useState("");
   const [newClientPhone, setNewClientPhone] = useState("");
   const [intakeProductName, setIntakeProductName] = useState("");
@@ -176,8 +176,10 @@ export default function CommunityCrmPage() {
   );
 
   const communityMembers = useQuery(
-    api.messages.getCommunityMembersForMessaging,
-    selectedCommunityId && crmEnabledForSelected ? { communityId: selectedCommunityId } : "skip"
+    (api as any).crmForms.getCommunityMembersForCrmIntake,
+    userId && selectedCommunityId && crmEnabledForSelected
+      ? { requesterId: userId, communityId: selectedCommunityId }
+      : "skip"
   );
 
   const intakeDistricts = useQuery(api.locations.getActiveDistricts, {});
@@ -385,18 +387,49 @@ export default function CommunityCrmPage() {
     setFormActionBusyId("");
   };
 
+  const memberLocationLabel = (m: any) => {
+    const parts = [m?.parishText, m?.subCountyText, m?.districtText].filter(Boolean);
+    if (parts.length > 0) return parts.join(", ");
+    if (m?.village || m?.county) return [m?.village, m?.county].filter(Boolean).join(", ");
+    return "Location not on file";
+  };
+
   const filteredMembers = useMemo(() => {
     const term = memberSearch.trim().toLowerCase();
     const list = communityMembers || [];
-    if (!term) return list.slice(0, 20);
-    return list
-      .filter((m: any) =>
-        (m.alias || "").toLowerCase().includes(term) ||
-        (m.phoneNumber || "").toLowerCase().includes(term) ||
-        (m.email || "").toLowerCase().includes(term)
-      )
-      .slice(0, 20);
+    if (!term) return list;
+    return list.filter((m: any) =>
+      (m.alias || "").toLowerCase().includes(term) ||
+      (m.phoneNumber || "").toLowerCase().includes(term) ||
+      (m.email || "").toLowerCase().includes(term) ||
+      memberLocationLabel(m).toLowerCase().includes(term)
+    );
   }, [communityMembers, memberSearch]);
+
+  const allFilteredSelected =
+    filteredMembers.length > 0 && filteredMembers.every((m: any) => selectedMemberIds.has(m.userId));
+
+  const toggleMemberSelected = (memberId: Id<"users">) => {
+    setSelectedMemberIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(memberId)) next.delete(memberId);
+      else next.add(memberId);
+      return next;
+    });
+  };
+
+  const toggleSelectAllFiltered = () => {
+    setSelectedMemberIds((prev) => {
+      if (allFilteredSelected) {
+        const next = new Set(prev);
+        filteredMembers.forEach((m: any) => next.delete(m.userId));
+        return next;
+      }
+      const next = new Set(prev);
+      filteredMembers.forEach((m: any) => next.add(m.userId));
+      return next;
+    });
+  };
 
   const handleIntakeFieldChange = (crmFieldId: string, value: string) => {
     setIntakeFieldValues((prev) => ({ ...prev, [crmFieldId]: value }));
@@ -404,7 +437,7 @@ export default function CommunityCrmPage() {
 
   const handleSubmitIntake = async () => {
     if (!userId || !intakeCrmFormId) return;
-    if (intakeMode === "existing" && !intakeMemberId) return;
+    if (intakeMode === "existing" && selectedMemberIds.size === 0) return;
     if (intakeMode === "new" && (!newClientName.trim() || !newClientPhone.trim())) return;
 
     setSubmittingIntake(true);
@@ -423,31 +456,77 @@ export default function CommunityCrmPage() {
       const districtName = (intakeDistricts || []).find((d: any) => d.id === intakeDistrictId)?.name;
       const subcountyName = (intakeSubcounties || []).find((s: any) => s.id === intakeSubcountyId)?.name;
       const parishName = (intakeParishes || []).find((p: any) => p.id === intakeParishId)?.name;
+      const upcomingSprayScheduleAt = intakeUpcomingSprayDate
+        ? new Date(`${intakeUpcomingSprayDate}T09:00:00`).getTime()
+        : undefined;
 
-      const result = await submitCrmIntake({
-        crmFormId: intakeCrmFormId,
-        adminId: userId,
-        existingMemberId: intakeMode === "existing" ? intakeMemberId : undefined,
-        newClient: intakeMode === "new" ? { name: newClientName.trim(), phoneNumber: newClientPhone.trim() } : undefined,
-        purchaseDate: intakePurchaseDate || undefined,
-        productName: intakeProductName || undefined,
-        purchaseQuantity: intakeQuantity || undefined,
-        district: districtName || undefined,
-        subCounty: subcountyName || undefined,
-        parish: parishName || undefined,
-        cropGrown: intakeCropGrown || undefined,
-        monthOfPlanting: intakeMonthOfPlanting || undefined,
-        pastSprayDates: pastSprayDates.length > 0 ? pastSprayDates : undefined,
-        upcomingSprayScheduleAt: intakeUpcomingSprayDate ? new Date(`${intakeUpcomingSprayDate}T09:00:00`).getTime() : undefined,
-        responses,
-      });
+      if (intakeMode === "new") {
+        const result = await submitCrmIntake({
+          crmFormId: intakeCrmFormId,
+          adminId: userId,
+          newClient: { name: newClientName.trim(), phoneNumber: newClientPhone.trim() },
+          purchaseDate: intakePurchaseDate || undefined,
+          productName: intakeProductName || undefined,
+          purchaseQuantity: intakeQuantity || undefined,
+          district: districtName || undefined,
+          subCounty: subcountyName || undefined,
+          parish: parishName || undefined,
+          cropGrown: intakeCropGrown || undefined,
+          monthOfPlanting: intakeMonthOfPlanting || undefined,
+          pastSprayDates: pastSprayDates.length > 0 ? pastSprayDates : undefined,
+          upcomingSprayScheduleAt,
+          responses,
+        });
 
-      setMessage(
-        result.wasNewClient
-          ? "Lead captured and a new member account was created (login: their phone number)."
-          : "Lead captured. It will now appear in the agent call queue."
-      );
-      setIntakeMemberId(null);
+        setMessage(
+          result.wasNewClient
+            ? "Lead captured and a new member account was created (login: their phone number)."
+            : "Lead captured. It will now appear in the agent call queue."
+        );
+      } else {
+        // Existing members already have their location on file, so each one is
+        // submitted individually with their own district/sub-county/parish
+        // rather than forcing a single shared location on the whole batch. The
+        // manually picked dropdowns above only act as a fallback for members
+        // who don't have a location saved yet.
+        const membersById = new Map<string, any>((communityMembers || []).map((m: any) => [String(m.userId), m]));
+        const memberIds = Array.from(selectedMemberIds);
+
+        let succeeded = 0;
+        let failed = 0;
+        for (const memberId of memberIds) {
+          const member = membersById.get(String(memberId));
+          try {
+            await submitCrmIntake({
+              crmFormId: intakeCrmFormId,
+              adminId: userId,
+              existingMemberId: memberId,
+              purchaseDate: intakePurchaseDate || undefined,
+              productName: intakeProductName || undefined,
+              purchaseQuantity: intakeQuantity || undefined,
+              district: member?.districtText || districtName || undefined,
+              subCounty: member?.subCountyText || subcountyName || undefined,
+              parish: member?.parishText || parishName || undefined,
+              cropGrown: intakeCropGrown || undefined,
+              monthOfPlanting: intakeMonthOfPlanting || undefined,
+              pastSprayDates: pastSprayDates.length > 0 ? pastSprayDates : undefined,
+              upcomingSprayScheduleAt,
+              responses,
+            });
+            succeeded++;
+          } catch {
+            failed++;
+          }
+        }
+
+        setMessage(
+          failed === 0
+            ? `${succeeded} member${succeeded === 1 ? "" : "s"} added to the call queue.`
+            : `${succeeded} member${succeeded === 1 ? "" : "s"} added to the call queue; ${failed} failed.`
+        );
+      }
+
+      setSelectedMemberIds(new Set());
       setMemberSearch("");
       setNewClientName("");
       setNewClientPhone("");
@@ -838,40 +917,52 @@ export default function CommunityCrmPage() {
                 <>
                   <input
                     value={memberSearch}
-                    onChange={(e) => {
-                      setMemberSearch(e.target.value);
-                      setIntakeMemberId(null);
-                    }}
-                    placeholder="Search member by name, phone or email"
+                    onChange={(e) => setMemberSearch(e.target.value)}
+                    placeholder="Search by name, phone, email or location"
                     style={{ ...inputStyle, width: "100%", marginBottom: "0.5rem" }}
                   />
 
-                  {!intakeMemberId && memberSearch.trim().length > 0 && (
-                    <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, marginBottom: "0.65rem", maxHeight: 180, overflowY: "auto" }}>
-                      {(filteredMembers || []).length === 0 && (
-                        <div style={{ padding: "0.5rem", color: "#777", fontSize: "0.85rem" }}>No matching members.</div>
-                      )}
-                      {filteredMembers.map((m: any) => (
-                        <div
-                          key={m.userId}
-                          onClick={() => {
-                            setIntakeMemberId(m.userId);
-                            setMemberSearch(m.alias);
-                          }}
-                          style={{ padding: "0.5rem", cursor: "pointer", borderBottom: "1px solid #f3f4f6" }}
-                        >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
+                    <label style={{ display: "inline-flex", gap: "0.4rem", alignItems: "center", fontSize: "0.85rem", fontWeight: 600, cursor: filteredMembers.length === 0 ? "default" : "pointer" }}>
+                      <input
+                        type="checkbox"
+                        checked={allFilteredSelected}
+                        onChange={toggleSelectAllFiltered}
+                        disabled={filteredMembers.length === 0}
+                      />
+                      Select all {memberSearch.trim() ? "(matching)" : ""} ({filteredMembers.length})
+                    </label>
+                    <span style={{ fontSize: "0.85rem", color: "#166534", fontWeight: 600 }}>
+                      {selectedMemberIds.size} selected
+                    </span>
+                  </div>
+
+                  <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, marginBottom: "0.65rem", maxHeight: 280, overflowY: "auto" }}>
+                    {!communityMembers && (
+                      <div style={{ padding: "0.5rem", color: "#777", fontSize: "0.85rem" }}>Loading members...</div>
+                    )}
+                    {communityMembers && filteredMembers.length === 0 && (
+                      <div style={{ padding: "0.5rem", color: "#777", fontSize: "0.85rem" }}>No matching members.</div>
+                    )}
+                    {filteredMembers.map((m: any) => (
+                      <label
+                        key={m.userId}
+                        style={{ display: "flex", gap: "0.55rem", alignItems: "flex-start", padding: "0.5rem", cursor: "pointer", borderBottom: "1px solid #f3f4f6" }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedMemberIds.has(m.userId)}
+                          onChange={() => toggleMemberSelected(m.userId)}
+                          style={{ marginTop: "0.2rem" }}
+                        />
+                        <div>
                           <div style={{ fontWeight: 600, fontSize: "0.88rem" }}>{m.alias}</div>
                           <div style={{ fontSize: "0.78rem", color: "#666" }}>{m.phoneNumber || m.email || "-"}</div>
+                          <div style={{ fontSize: "0.78rem", color: "#1f7a3e" }}>{memberLocationLabel(m)}</div>
                         </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {intakeMemberId && (
-                    <div style={{ marginBottom: "0.65rem", fontSize: "0.85rem", color: "#166534", fontWeight: 600 }}>
-                      Selected member: {memberSearch}
-                    </div>
-                  )}
+                      </label>
+                    ))}
+                  </div>
                 </>
               )}
 
@@ -881,6 +972,11 @@ export default function CommunityCrmPage() {
                 <input value={intakePurchaseDate} onChange={(e) => setIntakePurchaseDate(e.target.value)} type="date" style={inputStyle} />
               </div>
 
+              {intakeMode === "existing" && (
+                <p style={{ marginTop: 0, marginBottom: "0.4rem", fontSize: "0.8rem", color: "#666" }}>
+                  Selected members use their own saved location automatically. The dropdowns below only apply as a fallback for members without a location on file.
+                </p>
+              )}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "0.55rem", marginBottom: "0.65rem" }}>
                 <select
                   value={intakeDistrictId}
@@ -980,11 +1076,15 @@ export default function CommunityCrmPage() {
                 disabled={
                   submittingIntake ||
                   !crmEnabledForSelected ||
-                  (intakeMode === "existing" ? !intakeMemberId : !newClientName.trim() || !newClientPhone.trim())
+                  (intakeMode === "existing" ? selectedMemberIds.size === 0 : !newClientName.trim() || !newClientPhone.trim())
                 }
                 style={{ minHeight: 44, padding: "0.6rem 0.95rem", borderRadius: 8, border: "none", background: BRAND, color: "#fff", fontWeight: 700, cursor: submittingIntake ? "not-allowed" : "pointer", marginTop: "0.4rem" }}
               >
-                {submittingIntake ? "Saving..." : "Capture Lead"}
+                {submittingIntake
+                  ? "Saving..."
+                  : intakeMode === "existing" && selectedMemberIds.size > 1
+                  ? `Add ${selectedMemberIds.size} Members to Call Queue`
+                  : "Capture Lead"}
               </button>
             </>
           )}

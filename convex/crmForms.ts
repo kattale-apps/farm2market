@@ -453,6 +453,49 @@ export const getCommunityCrmForms = query({
   },
 });
 
+/**
+ * Community members available for CRM intake, with their on-file location
+ * (district/sub-county/parish/county/village) so the intake form can
+ * auto-populate location instead of the admin re-entering it by hand. Sourced
+ * from the same `communityMemberships` join used for community messaging, so
+ * the set of members returned matches what admins already see elsewhere -
+ * this only adds location fields, it doesn't change who counts as a member.
+ */
+export const getCommunityMembersForCrmIntake = query({
+  args: {
+    communityId: v.id("communities"),
+    requesterId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    await requireCrmSupervisorOrAgentAccess(ctx, args.requesterId, args.communityId);
+
+    const memberships = await ctx.db
+      .query("communityMemberships")
+      .withIndex("by_community", (q: any) => q.eq("communityId", args.communityId))
+      .collect();
+
+    const members: any[] = [];
+    for (const m of memberships) {
+      const user = await ctx.db.get(m.userId);
+      if (!user) continue;
+      members.push({
+        userId: user._id,
+        alias: user.alias || "Unknown",
+        role: user.role || "farmer",
+        email: user.email,
+        phoneNumber: user.phoneNumber,
+        districtText: user.districtText,
+        subCountyText: user.subCountyText,
+        parishText: user.parishText,
+        county: user.county,
+        village: user.village,
+      });
+    }
+
+    return members;
+  },
+});
+
 export const getCrmFormDetails = query({
   args: {
     crmFormId: v.id("crmForms"),

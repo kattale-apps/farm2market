@@ -323,14 +323,14 @@ export const importCommunityMembersFromExcel = mutation({
           fullName: row.fullName.trim(),
           phoneNumber: normalizedPhone,
           email: finalEmail,
-          communityRole: row.communityRole?.trim() || null,
-          district: districtText || null,
+          communityRole: row.communityRole?.trim() || undefined,
+          district: districtText || undefined,
           status: hasLoggedIn ? "ACTIVATED" : "PENDING_ACTIVATION",
           createdAt: now,
           updatedAt: now,
           accountUserId: userId,
-          notes: row.notes?.trim() || null,
-          additionalData: Object.keys(additionalData).length > 0 ? additionalData : null,
+          notes: row.notes?.trim() || undefined,
+          additionalData: Object.keys(additionalData).length > 0 ? additionalData : undefined,
         });
 
         results.push({ row: rowIndex, id: importedId, userId, status: "success" });

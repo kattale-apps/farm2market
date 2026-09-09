@@ -3381,11 +3381,25 @@ export default function CommunityDashboardPage() {
                     <div style={{ color: "#333", marginBottom: "0.5rem" }}>
                       <strong>{getUploadState(communityId as string).importResults!.imported}</strong> members imported successfully
                     </div>
-                    {getUploadState(communityId as string).importResults!.errors.length > 0 && (
-                      <div style={{ color: "#c62828", marginTop: "0.5rem" }}>
-                        <strong>{getUploadState(communityId as string).importResults!.errors.length}</strong> errors encountered
-                      </div>
-                    )}
+                    {getUploadState(communityId as string).importResults!.errors.length > 0 && (() => {
+                      const errors = getUploadState(communityId as string).importResults!.errors;
+                      const uniqueMessages = Array.from(new Set(errors.map((e: any) => e.error || "Unknown error")));
+                      return (
+                        <div style={{ color: "#c62828", marginTop: "0.5rem" }}>
+                          <div><strong>{errors.length}</strong> errors encountered</div>
+                          <ul style={{ margin: "0.35rem 0 0 0", paddingLeft: "1.2rem" }}>
+                            {uniqueMessages.slice(0, 5).map((msg, idx) => (
+                              <li key={idx} style={{ fontSize: "0.82rem" }}>{msg}</li>
+                            ))}
+                          </ul>
+                          {uniqueMessages.length > 5 && (
+                            <div style={{ fontSize: "0.78rem", color: "#999", marginTop: "0.25rem" }}>
+                              ... and {uniqueMessages.length - 5} other distinct error message(s)
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </div>

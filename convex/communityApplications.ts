@@ -236,13 +236,28 @@ export const getCommunityMemberExportData = query({
         .collect();
 
       if (memberships.length > 0) {
-        const derivedMembers: any[] = memberships.map((m: any) => ({
-          status: "APPROVED",
-          joinedAt: m.joinedAt,
-          updatedAt: m.joinedAt,
-          applicationId: undefined,
-          farmerId: m.userId,
-        }));
+        // Same exclusion as getCommunityMembersByCommunityIds: don't count a
+        // still-pending-activation imported member as an "approved" member.
+        const pendingImportedUserIds = new Set(
+          (
+            await ctx.db
+              .query("communityImportedMembers")
+              .withIndex("by_community", (q: any) => q.eq("communityId", communityId))
+              .collect()
+          )
+            .filter((im: any) => im.status !== "ACTIVATED")
+            .map((im: any) => String(im.accountUserId))
+        );
+
+        const derivedMembers: any[] = memberships
+          .filter((m: any) => !pendingImportedUserIds.has(String(m.userId)))
+          .map((m: any) => ({
+            status: "APPROVED",
+            joinedAt: m.joinedAt,
+            updatedAt: m.joinedAt,
+            applicationId: undefined,
+            farmerId: m.userId,
+          }));
 
         filtered = status
           ? derivedMembers.filter((m: any) => m.status === status)
@@ -538,13 +553,32 @@ export const getCommunityMembersByCommunityIds = query({
               .collect();
 
             if (memberships.length > 0) {
-              const derivedMembers: any[] = memberships.map((m: any) => ({
-                status: "APPROVED",
-                joinedAt: m.joinedAt,
-                updatedAt: m.joinedAt,
-                applicationId: undefined,
-                farmerId: m.userId,
-              }));
+              // Excel-imported members get a communityMemberships row immediately
+              // (so they can log in the moment they're imported), but they aren't
+              // a real "approved" member yet until they activate their own
+              // account - exclude anyone still PENDING_ACTIVATION (or the legacy
+              // pre-account IMPORTED status) from this derived-APPROVED fallback,
+              // so they only show up under the Imported Members tab until then.
+              const pendingImportedUserIds = new Set(
+                (
+                  await ctx.db
+                    .query("communityImportedMembers")
+                    .withIndex("by_community", (q: any) => q.eq("communityId", communityId))
+                    .collect()
+                )
+                  .filter((im: any) => im.status !== "ACTIVATED")
+                  .map((im: any) => String(im.accountUserId))
+              );
+
+              const derivedMembers: any[] = memberships
+                .filter((m: any) => !pendingImportedUserIds.has(String(m.userId)))
+                .map((m: any) => ({
+                  status: "APPROVED",
+                  joinedAt: m.joinedAt,
+                  updatedAt: m.joinedAt,
+                  applicationId: undefined,
+                  farmerId: m.userId,
+                }));
 
               filtered = status
                 ? derivedMembers.filter((m: any) => m.status === status)

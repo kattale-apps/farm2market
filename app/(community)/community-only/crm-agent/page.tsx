@@ -67,6 +67,30 @@ export default function CrmAgentPage() {
   const [message, setMessage] = useState("");
   const [nameDrafts, setNameDrafts] = useState<Record<string, string>>({});
   const [savingNameLeadId, setSavingNameLeadId] = useState<string>("");
+  const [activeFormId, setActiveFormId] = useState<string>("");
+
+  // Group the queue by which intake form each lead came from - a supervisor
+  // creates a form per campaign (e.g. a region-specific follow-up), adds
+  // members to it, and agents pick which form/region to work from here
+  // instead of seeing every community's leads merged into one flat list.
+  const formTabs = useMemo(() => {
+    const counts = new Map<string, { formName: string; count: number }>();
+    for (const lead of queue || []) {
+      const key = String(lead.formId || "");
+      if (!key) continue;
+      const existing = counts.get(key);
+      if (existing) existing.count += 1;
+      else counts.set(key, { formName: lead.formName || "Form", count: 1 });
+    }
+    return Array.from(counts.entries())
+      .map(([formId, v]) => ({ formId, ...v }))
+      .sort((a, b) => a.formName.localeCompare(b.formName));
+  }, [queue]);
+
+  const displayedQueue = useMemo(() => {
+    if (!activeFormId) return queue || [];
+    return (queue || []).filter((lead: any) => String(lead.formId) === activeFormId);
+  }, [queue, activeFormId]);
 
   const greetingName = useMemo(() => {
     if (!currentUser) return "Agent";
@@ -216,11 +240,47 @@ export default function CrmAgentPage() {
 
         <h2 style={{ fontSize: "1rem", marginTop: "1rem", marginBottom: "0.6rem" }}>Call Now</h2>
 
+        {formTabs.length > 1 && (
+          <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
+            <button
+              onClick={() => setActiveFormId("")}
+              style={{
+                ...secondaryButtonStyle,
+                minHeight: 36,
+                padding: "0.4rem 0.75rem",
+                fontSize: "0.85rem",
+                background: activeFormId === "" ? BRAND : "#fff",
+                color: activeFormId === "" ? "#fff" : "#111827",
+                borderColor: activeFormId === "" ? BRAND : "#d1d5db",
+              }}
+            >
+              All ({(queue || []).length})
+            </button>
+            {formTabs.map((tab) => (
+              <button
+                key={tab.formId}
+                onClick={() => setActiveFormId(tab.formId)}
+                style={{
+                  ...secondaryButtonStyle,
+                  minHeight: 36,
+                  padding: "0.4rem 0.75rem",
+                  fontSize: "0.85rem",
+                  background: activeFormId === tab.formId ? BRAND : "#fff",
+                  color: activeFormId === tab.formId ? "#fff" : "#111827",
+                  borderColor: activeFormId === tab.formId ? BRAND : "#d1d5db",
+                }}
+              >
+                {tab.formName} ({tab.count})
+              </button>
+            ))}
+          </div>
+        )}
+
         {!queue && <p style={{ color: "#666" }}>Loading queue...</p>}
-        {(queue || []).length === 0 && <p style={{ color: "#666" }}>No call queue items yet.</p>}
+        {queue && displayedQueue.length === 0 && <p style={{ color: "#666" }}>No call queue items yet.</p>}
 
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-          {(queue || []).map((lead: any, idx: number) => {
+          {displayedQueue.map((lead: any, idx: number) => {
             const isActive = activeLeadId === String(lead._id);
             const canClaim = !lead.assignedAgentId;
 

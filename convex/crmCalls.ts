@@ -227,10 +227,19 @@ export const getCrmAgentQueue = query({
       return args.includeUnassigned === true && !row.assignedAgentId;
     });
 
+    // Fetched once per call, not per lead, so the queue can be grouped by
+    // which intake form (e.g. a region-specific campaign) each lead came from.
+    const forms = await ctx.db
+      .query("crmForms")
+      .withIndex("by_community", (q: any) => q.eq("communityId", args.communityId))
+      .collect();
+    const formById = new Map(forms.map((f: any) => [String(f._id), f]));
+
     const enriched = await Promise.all(
       filtered.map(async (lead: any) => {
         const member = (await ctx.db.get(lead.memberId)) as any;
         const response = (await ctx.db.get(lead.sourceCrmResponseId)) as any;
+        const form = formById.get(String(lead.sourceCrmFormId));
         return {
           ...lead,
           memberAlias: member?.verifiedName || response?.clientName || member?.alias,
@@ -246,6 +255,8 @@ export const getCrmAgentQueue = query({
           productName: response?.productName,
           purchaseQuantity: response?.purchaseQuantity,
           purchaseDate: response?.purchaseDate,
+          formId: lead.sourceCrmFormId,
+          formName: form?.name || "Unassigned Form",
           isDueToday: new Date(lead.nextCallAt).toDateString() === new Date().toDateString(),
           isOverdue: lead.nextCallAt < getUgandaTime(),
         };

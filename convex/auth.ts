@@ -12,6 +12,7 @@ import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { PILOT_SHARED_PASSWORD } from "./constants";
 import { getUgandaTime } from "./utils";
+import { markImportedMemberActivatedByUserId } from "./communityImports";
 
 const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
 
@@ -523,6 +524,7 @@ export const login = mutation({
     await ctx.db.patch(user._id, {
       lastActiveAt: getUgandaTime(),
     });
+    await markImportedMemberActivatedByUserId(ctx, user._id);
 
     // Return user info
     return {
@@ -987,6 +989,7 @@ export const loginWithSession = mutation({
 
     const now = getUgandaTime();
     await ctx.db.patch(user._id, { lastActiveAt: now });
+    await markImportedMemberActivatedByUserId(ctx, user._id);
 
     const sessionToken = generateSessionToken();
     await ctx.db.insert("sessions", {

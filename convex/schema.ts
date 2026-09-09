@@ -1808,7 +1808,11 @@ export default defineSchema({
     phoneNumber: v.string(), // Unique within community
     email: v.optional(v.string()),
     communityRole: v.optional(v.string()),
-    status: v.union(v.literal("IMPORTED"), v.literal("ACTIVATED")),
+    // IMPORTED: legacy pre-account-creation rows from before the one-step import flow.
+    // PENDING_ACTIVATION: account already created (phone login, like CRM's new-client
+    // flow) but the member hasn't logged in themselves yet.
+    // ACTIVATED: member has logged in at least once.
+    status: v.union(v.literal("IMPORTED"), v.literal("PENDING_ACTIVATION"), v.literal("ACTIVATED")),
     createdAt: v.number(),
     updatedAt: v.number(),
     accountUserId: v.optional(v.id("users")), // Links to created account after activation
@@ -1819,7 +1823,8 @@ export default defineSchema({
   })
     .index("by_community", ["communityId"])
     .index("by_phone", ["phoneNumber"])
-    .index("by_community_status", ["communityId", "status"]),
+    .index("by_community_status", ["communityId", "status"])
+    .index("by_account_user", ["accountUserId"]),
 
   /**
    * Market Price Submissions

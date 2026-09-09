@@ -12,7 +12,7 @@ interface CommunityMemberCardProps {
     phoneNumber: string;
     email: string;
     communityRole?: string;
-    status: "IMPORTED" | "ACTIVATED";
+    status: "IMPORTED" | "PENDING_ACTIVATION" | "ACTIVATED";
     accountUserId?: Id<"users">;
     notes?: string;
     additionalData?: Record<string, any>;
@@ -45,7 +45,7 @@ export function CommunityMemberCard({
       });
       setMessage({
         type: "success",
-        text: `Account created for ${member.fullName}`,
+        text: `Account created for ${member.fullName}. They can now log in with their phone number.`,
       });
       if (onActivationComplete) {
         onActivationComplete();
@@ -91,9 +91,17 @@ export function CommunityMemberCard({
     borderRadius: "12px",
     fontSize: "0.75rem",
     fontWeight: 600,
-    background: member.status === "ACTIVATED" ? "#2e7d32" : "#ff9800",
+    background:
+      member.status === "ACTIVATED" ? "#2e7d32" : member.status === "PENDING_ACTIVATION" ? "#1976d2" : "#ff9800",
     color: "#fff",
   };
+
+  const statusLabel =
+    member.status === "ACTIVATED"
+      ? "✓ Activated"
+      : member.status === "PENDING_ACTIVATION"
+      ? "Pending Activation"
+      : "Imported";
 
   const detailsStyle: React.CSSProperties = {
     display: "grid",
@@ -140,9 +148,7 @@ export function CommunityMemberCard({
     <div style={cardStyle}>
       <div style={headerStyle}>
         <h3 style={nameStyle}>{member.fullName}</h3>
-        <span style={statusBadgeStyle}>
-          {member.status === "ACTIVATED" ? "✓ Activated" : "Imported"}
-        </span>
+        <span style={statusBadgeStyle}>{statusLabel}</span>
       </div>
 
       {message && <div style={messageStyle}>{message.text}</div>}
@@ -191,13 +197,19 @@ export function CommunityMemberCard({
           </>
         )}
 
-        {member.status === "ACTIVATED" && member.accountUserId && (
+        {member.status !== "IMPORTED" && member.accountUserId && (
           <div style={detailRowStyle}>
             <span style={labelStyle}>Account ID</span>
             <span style={valueStyle}>{String(member.accountUserId).substring(0, 12)}...</span>
           </div>
         )}
       </div>
+
+      {member.status === "PENDING_ACTIVATION" && (
+        <p style={{ fontSize: "0.8rem", color: "#1976d2", margin: 0 }}>
+          Account created. Waiting for {member.fullName} to log in for the first time.
+        </p>
+      )}
 
       {member.status === "IMPORTED" && (
         <div style={{ marginTop: "0.75rem" }}>
@@ -217,10 +229,10 @@ export function CommunityMemberCard({
               width: "100%",
             }}
           >
-            {isActivating ? "Creating Account..." : "Create Account & Activate"}
+            {isActivating ? "Creating Account..." : "Create Account"}
           </button>
           <p style={{ fontSize: "0.75rem", color: "#888", marginTop: "0.5rem", margin: 0 }}>
-            Account will be created with email: {member.email}
+            Account will log in with phone number {member.phoneNumber} (used as both username and password).
           </p>
         </div>
       )}

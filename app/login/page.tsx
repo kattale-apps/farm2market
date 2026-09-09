@@ -312,7 +312,7 @@ function LoginPageInner() {
             </label>
             <input
               type="text"
-              inputMode={identifierMode === "phone" ? "tel" : "email"}
+              inputMode="text"
               autoCapitalize="none"
               value={identifier}
               onChange={(e) => setIdentifier(e.target.value)}

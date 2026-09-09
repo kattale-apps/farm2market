@@ -3199,7 +3199,7 @@ export default function CommunityDashboardPage() {
                       Click to upload or drag & drop
                     </div>
                     <div style={{ fontSize: "0.62rem", color: "#666" }}>
-                      Excel files (.xlsx, .xls) with a name column and a phone column (e.g. "Name"/"fullName", "Tel No"/"Phone"/"phoneNumber" all work). Optional: email, role, notes, and any other fields.
+                      Excel files (.xlsx, .xls) with a name column and a phone column (e.g. &quot;Name&quot;/&quot;fullName&quot;, &quot;Tel No&quot;/&quot;Phone&quot;/&quot;phoneNumber&quot; all work). Optional: email, role, notes, and any other fields.
                     </div>
                   </label>
                   {(() => {

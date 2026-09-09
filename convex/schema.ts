@@ -1777,6 +1777,28 @@ export default defineSchema({
   })
     .index("by_userId", ["userId"]),
 
+  traderProfiles: defineTable({
+    userId: v.id("users"),
+    businessName: v.string(),
+    region: v.optional(v.string()),
+    districtId: v.optional(v.id("districts")),
+    subcountyId: v.optional(v.id("subcounties")),
+    onboardingCompleted: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_userId", ["userId"]),
+
+  buyerProfiles: defineTable({
+    userId: v.id("users"),
+    businessName: v.string(),
+    region: v.optional(v.string()),
+    districtId: v.optional(v.id("districts")),
+    subcountyId: v.optional(v.id("subcounties")),
+    onboardingCompleted: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_userId", ["userId"]),
+
   storeProfiles: defineTable({
     userId: v.id("users"),
     region: v.optional(v.string()),

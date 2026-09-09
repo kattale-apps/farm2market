@@ -13,7 +13,13 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { getUgandaTime } from "./utils";
-import { getCommunityDefaultRole, ensureMandatoryRoleCommunityMembershipsForUser, CommunityRole } from "./communities";
+import {
+  getCommunityDefaultRole,
+  ensureMandatoryRoleCommunityMembershipsForUser,
+  ensureMandatoryRoleCommunityMembershipsForUserFast,
+  getAutoJoinCommunityIdsByRole,
+  CommunityRole,
+} from "./communities";
 
 const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
 
@@ -50,6 +56,12 @@ async function createOrJoinMemberAccount(
     phoneNumber: string;
     email?: string;
     communityRole?: string;
+    districtText?: string;
+    // Pre-fetched once per mutation call (bulk import) instead of once per
+    // row - ensureMandatoryRoleCommunityMembershipsForUser re-scans the
+    // whole communities table every time, which is fine for a single CRM
+    // intake/activation but far too slow across thousands of import rows.
+    autoJoinCommunityIdsByRole?: Record<CommunityRole, Id<"communities">[]>;
   }
 ) {
   const existingUser = await ctx.db
@@ -93,6 +105,7 @@ async function createOrJoinMemberAccount(
     passwordHash,
     accountScope: "community_only",
     onboardedViaCommunityId: args.communityId,
+    districtText: args.districtText,
   });
 
   await ctx.db.insert("communityMemberships", {
@@ -102,7 +115,11 @@ async function createOrJoinMemberAccount(
     communityRole: args.communityRole,
   });
 
-  await ensureMandatoryRoleCommunityMembershipsForUser(ctx, userId, args.role);
+  if (args.autoJoinCommunityIdsByRole) {
+    await ensureMandatoryRoleCommunityMembershipsForUserFast(ctx, userId, args.role, args.autoJoinCommunityIdsByRole);
+  } else {
+    await ensureMandatoryRoleCommunityMembershipsForUser(ctx, userId, args.role);
+  }
   if (args.role === "farmer") {
     await ensureBioFarmMembershipForFarmer(ctx, userId);
   }
@@ -219,6 +236,10 @@ export const importCommunityMembersFromExcel = mutation({
     }
     const communityDefaultRole = getCommunityDefaultRole((community as any).communityType);
 
+    // Fetched once for the whole batch (not per row) - see
+    // ensureMandatoryRoleCommunityMembershipsForUserFast for why.
+    const autoJoinCommunityIdsByRole = await getAutoJoinCommunityIdsByRole(ctx);
+
     // Validate and import rows
     const results: any[] = [];
     const errors: any[] = [];
@@ -272,13 +293,14 @@ export const importCommunityMembersFromExcel = mutation({
         }
 
         // Extract standard fields and store remaining as additional data
-        const standardFields = ["fullName", "phoneNumber", "email", "communityRole", "notes"];
+        const standardFields = ["fullName", "phoneNumber", "email", "communityRole", "notes", "district"];
         const additionalData: Record<string, any> = {};
         for (const [key, value] of Object.entries(row)) {
           if (!standardFields.includes(key) && value !== null && value !== undefined && value !== "") {
             additionalData[key] = value;
           }
         }
+        const districtText = typeof row.district === "string" ? row.district.trim() || undefined : undefined;
 
         // Create the real member account immediately (phone login, like CRM's
         // new-client intake) instead of leaving this as a placeholder an admin
@@ -289,6 +311,8 @@ export const importCommunityMembersFromExcel = mutation({
           phoneNumber: normalizedPhone,
           email: finalEmail,
           communityRole: row.communityRole?.trim() || undefined,
+          districtText,
+          autoJoinCommunityIdsByRole,
         });
         const account = await ctx.db.get(userId);
         const hasLoggedIn = !!account && account.lastActiveAt > account.createdAt;
@@ -300,6 +324,7 @@ export const importCommunityMembersFromExcel = mutation({
           phoneNumber: normalizedPhone,
           email: finalEmail,
           communityRole: row.communityRole?.trim() || null,
+          district: districtText || null,
           status: hasLoggedIn ? "ACTIVATED" : "PENDING_ACTIVATION",
           createdAt: now,
           updatedAt: now,
@@ -444,6 +469,7 @@ export const activateImportedCommunityMember = mutation({
       phoneNumber: importedMember.phoneNumber,
       email: importedMember.email,
       communityRole: importedMember.communityRole || undefined,
+      districtText: (importedMember as any).district || undefined,
     });
 
     const account = await ctx.db.get(userId);

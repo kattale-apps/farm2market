@@ -31,7 +31,10 @@ const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
  * Any column that doesn't match a known alias is left as-is and still gets
  * captured server-side as additionalData, so nothing is silently dropped.
  */
-const IMPORT_HEADER_ALIASES: Record<string, "fullName" | "phoneNumber" | "email" | "communityRole" | "notes"> = {
+const IMPORT_HEADER_ALIASES: Record<
+  string,
+  "fullName" | "phoneNumber" | "email" | "communityRole" | "notes" | "district"
+> = {
   fullname: "fullName",
   name: "fullName",
   names: "fullName",
@@ -63,6 +66,12 @@ const IMPORT_HEADER_ALIASES: Record<string, "fullName" | "phoneNumber" | "email"
   remarks: "notes",
   comment: "notes",
   comments: "notes",
+  location: "district",
+  district: "district",
+  place: "district",
+  area: "district",
+  town: "district",
+  village: "district",
 };
 
 function normalizeImportHeaderKey(header: string): string {
@@ -100,6 +109,9 @@ function remapImportedRow(row: Record<string, any>): Record<string, any> {
   }
   if (typeof remapped.fullName === "string") {
     remapped.fullName = remapped.fullName.trim();
+  }
+  if (typeof remapped.district === "string") {
+    remapped.district = remapped.district.trim();
   }
   return remapped;
 }
@@ -2241,6 +2253,7 @@ export default function CommunityDashboardPage() {
     parsedRows: any[];
     showPreview: boolean;
     importResults: { imported: number; failed: number; results: any[]; errors: any[] } | null;
+    importProgress: { done: number; total: number } | null;
   }>>({});
 
   const getUploadState = (cId: string) => uploadStateByComm[cId] || {
@@ -2249,6 +2262,7 @@ export default function CommunityDashboardPage() {
     parsedRows: [],
     showPreview: false,
     importResults: null,
+    importProgress: null,
   };
 
   const setUploadState = (cId: string, updates: Partial<typeof uploadStateByComm[string]>) => {
@@ -3227,6 +3241,7 @@ export default function CommunityDashboardPage() {
                             <th style={{ padding: "0.5rem" }}>Phone</th>
                             <th style={{ padding: "0.5rem" }}>Email</th>
                             <th style={{ padding: "0.5rem" }}>Role</th>
+                            <th style={{ padding: "0.5rem" }}>District</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -3236,6 +3251,7 @@ export default function CommunityDashboardPage() {
                               <td style={{ padding: "0.5rem" }}>{row.phoneNumber || "-"}</td>
                               <td style={{ padding: "0.5rem" }}>{row.email || "-"}</td>
                               <td style={{ padding: "0.5rem" }}>{row.communityRole || "-"}</td>
+                              <td style={{ padding: "0.5rem" }}>{row.district || "-"}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -3249,29 +3265,65 @@ export default function CommunityDashboardPage() {
                     <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
                       <button
                         onClick={async () => {
-                          if (!getUploadState(communityId as string).parsedRows.length) {
+                          const rows = getUploadState(communityId as string).parsedRows;
+                          if (!rows.length) {
                             setMessage({ type: "error", text: "No rows to import" });
                             return;
                           }
-                          setUploadState(communityId as string, { isUploading: true });
-                          try {
-                            const result = await importCommunityMembersFromExcel({
-                              adminId: userId as any,
-                              communityId: communityId as any,
-                              rows: getUploadState(communityId as string).parsedRows,
-                            });
-                            setUploadState(communityId as string, {
-                              importResults: result as any,
-                              isUploading: false,
-                              file: null,
-                              parsedRows: [],
-                              showPreview: false,
-                            });
-                            setMessage({ type: "success", text: `Imported ${(result as any).imported ?? 0} members successfully` });
-                          } catch (error: any) {
-                            setUploadState(communityId as string, { isUploading: false });
-                            setMessage({ type: "error", text: error?.message || "Import failed" });
+
+                          // A single mutation call covering thousands of rows each
+                          // creating a full account (several DB reads/writes apiece)
+                          // runs long enough to hit Convex's per-mutation limits and
+                          // just hangs forever client-side. Chunk it instead, so each
+                          // call stays small and the admin sees live progress.
+                          const IMPORT_BATCH_SIZE = 100;
+                          const batches: any[][] = [];
+                          for (let i = 0; i < rows.length; i += IMPORT_BATCH_SIZE) {
+                            batches.push(rows.slice(i, i + IMPORT_BATCH_SIZE));
                           }
+
+                          setUploadState(communityId as string, {
+                            isUploading: true,
+                            importProgress: { done: 0, total: rows.length },
+                          });
+
+                          let imported = 0;
+                          let failed = 0;
+                          const allResults: any[] = [];
+                          const allErrors: any[] = [];
+
+                          for (const batch of batches) {
+                            try {
+                              const result = await importCommunityMembersFromExcel({
+                                adminId: userId as any,
+                                communityId: communityId as any,
+                                rows: batch,
+                              });
+                              imported += (result as any).imported ?? 0;
+                              failed += (result as any).failed ?? 0;
+                              allResults.push(...((result as any).results || []));
+                              allErrors.push(...((result as any).errors || []));
+                            } catch (error: any) {
+                              failed += batch.length;
+                              allErrors.push({ row: "batch", error: error?.message || "Batch import failed" });
+                            }
+                            setUploadState(communityId as string, {
+                              importProgress: { done: Math.min(imported + failed, rows.length), total: rows.length },
+                            });
+                          }
+
+                          setUploadState(communityId as string, {
+                            importResults: { imported, failed, results: allResults, errors: allErrors },
+                            isUploading: false,
+                            importProgress: null,
+                            file: null,
+                            parsedRows: [],
+                            showPreview: false,
+                          });
+                          setMessage({
+                            type: imported > 0 ? "success" : "error",
+                            text: `Imported ${imported} of ${rows.length} members${failed > 0 ? ` (${failed} failed)` : ""}`,
+                          });
                         }}
                         disabled={getUploadState(communityId as string).isUploading}
                         style={{
@@ -3285,12 +3337,17 @@ export default function CommunityDashboardPage() {
                           minHeight: "44px",
                         }}
                       >
-                        {getUploadState(communityId as string).isUploading ? "Importing..." : "Import Members"}
+                        {(() => {
+                          const progress = getUploadState(communityId as string).importProgress;
+                          if (!getUploadState(communityId as string).isUploading) return "Import Members";
+                          return progress ? `Importing... ${progress.done}/${progress.total}` : "Importing...";
+                        })()}
                       </button>
                       <button
                         onClick={() => {
                           setUploadState(communityId as string, { showPreview: false, parsedRows: [], file: null });
                         }}
+                        disabled={getUploadState(communityId as string).isUploading}
                         style={{
                           padding: "0.6rem 1.25rem",
                           background: "#f0f0f0",
@@ -3298,7 +3355,7 @@ export default function CommunityDashboardPage() {
                           border: "none",
                           borderRadius: "8px",
                           fontWeight: 600,
-                          cursor: "pointer",
+                          cursor: getUploadState(communityId as string).isUploading ? "not-allowed" : "pointer",
                           minHeight: "44px",
                         }}
                       >

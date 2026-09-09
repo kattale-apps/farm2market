@@ -12,6 +12,7 @@ interface CommunityMemberCardProps {
     phoneNumber: string;
     email: string;
     communityRole?: string;
+    district?: string;
     status: "IMPORTED" | "PENDING_ACTIVATION" | "ACTIVATED";
     accountUserId?: Id<"users">;
     notes?: string;
@@ -168,6 +169,13 @@ export function CommunityMemberCard({
           <div style={detailRowStyle}>
             <span style={labelStyle}>Community Role</span>
             <span style={valueStyle}>{member.communityRole}</span>
+          </div>
+        )}
+
+        {member.district && (
+          <div style={detailRowStyle}>
+            <span style={labelStyle}>District</span>
+            <span style={valueStyle}>{member.district}</span>
           </div>
         )}
 

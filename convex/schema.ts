@@ -1809,6 +1809,7 @@ export default defineSchema({
     phoneNumber: v.string(), // Unique within community
     email: v.optional(v.string()),
     communityRole: v.optional(v.string()),
+    district: v.optional(v.string()), // Free-text location column from the source file (e.g. "LOCATION"); mirrored onto the created account's districtText.
     // IMPORTED: legacy pre-account-creation rows from before the one-step import flow.
     // PENDING_ACTIVATION: account already created (phone login, like CRM's new-client
     // flow) but the member hasn't logged in themselves yet.

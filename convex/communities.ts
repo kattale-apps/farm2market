@@ -19,7 +19,7 @@ function isVendorOnlyCommunity(communityType?: string | null): boolean {
   return communityType === "vendor";
 }
 
-async function ensureCommunityMembership(
+export async function ensureCommunityMembership(
   ctx: any,
   communityId: Id<"communities">,
   userId: Id<"users">
@@ -74,6 +74,45 @@ export async function ensureMandatoryRoleCommunityMembershipsForUser(
     if (!(community as any).autoJoinRoleMembers) continue;
     if (getCommunityDefaultRole((community as any).communityType) !== role) continue;
     await ensureCommunityMembership(ctx, community._id, userId);
+  }
+}
+
+/**
+ * Pre-fetch the auto-join community IDs for each role once, so a caller
+ * processing many users (e.g. a bulk Excel import) can join each user to
+ * their mandatory-role communities without re-scanning the whole
+ * `communities` table per user - ensureMandatoryRoleCommunityMembershipsForUser
+ * is fine for one-off calls (CRM intake, single member activation) but doing
+ * a full collect() per row is far too slow across thousands of rows.
+ */
+export async function getAutoJoinCommunityIdsByRole(
+  ctx: any
+): Promise<Record<CommunityRole, Id<"communities">[]>> {
+  const communities = await ctx.db.query("communities").collect();
+  const byRole: Record<CommunityRole, Id<"communities">[]> = {
+    farmer: [],
+    trader: [],
+    buyer: [],
+    vendor: [],
+    transporter: [],
+    store: [],
+  };
+  for (const community of communities) {
+    if (!(community as any).autoJoinRoleMembers) continue;
+    const role = getCommunityDefaultRole((community as any).communityType);
+    byRole[role].push(community._id);
+  }
+  return byRole;
+}
+
+export async function ensureMandatoryRoleCommunityMembershipsForUserFast(
+  ctx: any,
+  userId: Id<"users">,
+  role: CommunityRole,
+  autoJoinCommunityIdsByRole: Record<CommunityRole, Id<"communities">[]>
+) {
+  for (const communityId of autoJoinCommunityIdsByRole[role] || []) {
+    await ensureCommunityMembership(ctx, communityId, userId);
   }
 }
 

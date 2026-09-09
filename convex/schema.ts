@@ -57,6 +57,7 @@ export default defineSchema({
     sex: v.optional(v.union(v.literal("M"), v.literal("F"))), // Optional - farmer profile field
     role: v.union(v.literal("farmer"), v.literal("trader"), v.literal("buyer"), v.literal("admin"), v.literal("vendor"), v.literal("transporter"), v.literal("store")),
     alias: v.string(), // System-generated, stable, non-identifying
+    verifiedName: v.optional(v.string()), // Real name captured by a CRM agent on a call (or confirmed by an admin). Distinct from `alias`, which stays immutable/anonymized. Centralized on the member so it's captured once and reused across every lead/call instead of being re-entered per call.
     state: v.union(v.literal("active"), v.literal("suspended"), v.literal("deleted")), // User account state
     createdAt: v.number(),
     lastActiveAt: v.number(),

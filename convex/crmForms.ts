@@ -660,7 +660,7 @@ export const submitCrmIntake = mutation({
       memberId = args.existingMemberId as Id<"users">;
       const member = await ctx.db.get(memberId);
       if (!member) throw new Error("Selected member not found");
-      resolvedClientName = member.alias;
+      resolvedClientName = member.verifiedName || member.alias;
     }
 
     const now = getUgandaTime();
@@ -743,7 +743,7 @@ export const getLeadOpeningScript = query({
       requester?.alias || requester?.email || requester?.phoneNumber || "Agent";
 
     const memberName =
-      (response as any)?.clientName || member?.alias || member?.email || member?.phoneNumber || "valued customer";
+      member?.verifiedName || (response as any)?.clientName || member?.alias || member?.email || member?.phoneNumber || "valued customer";
 
     const genderTitle =
       member?.sex === "M" ? "Mr" : member?.sex === "F" ? "Mrs" : "Mr/Mrs";
@@ -775,7 +775,8 @@ export const getLeadOpeningScript = query({
       template,
       rendered,
       profile: {
-        clientName: (response as any)?.clientName || member?.alias || "Unknown",
+        clientName: member?.verifiedName || (response as any)?.clientName || member?.alias || "Unknown",
+        isNameVerified: Boolean(member?.verifiedName),
         phoneNumber: member?.phoneNumber || "-",
         district: response?.district || "-",
         subCounty: response?.subCounty || "-",

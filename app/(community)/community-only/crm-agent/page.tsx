@@ -49,6 +49,7 @@ export default function CrmAgentPage() {
 
   const claimCrmLead = useMutation((api as any).crmCalls.claimCrmLead);
   const submitCrmCallOutcome = useMutation((api as any).crmCalls.submitCrmCallOutcome);
+  const setCrmMemberVerifiedName = useMutation((api as any).crmCalls.setCrmMemberVerifiedName);
 
   const [activeLeadId, setActiveLeadId] = useState<string>("");
   const [submittingLeadId, setSubmittingLeadId] = useState<string>("");
@@ -64,6 +65,8 @@ export default function CrmAgentPage() {
   const [opportunityProbability, setOpportunityProbability] = useState<"high" | "medium" | "low">("high");
   const [opportunityNextActionDate, setOpportunityNextActionDate] = useState("");
   const [message, setMessage] = useState("");
+  const [nameDrafts, setNameDrafts] = useState<Record<string, string>>({});
+  const [savingNameLeadId, setSavingNameLeadId] = useState<string>("");
 
   const greetingName = useMemo(() => {
     if (!currentUser) return "Agent";
@@ -106,6 +109,29 @@ export default function CrmAgentPage() {
     } catch (error: any) {
       setMessage(error?.message || "Failed to claim lead");
     }
+  };
+
+  const handleSaveName = async (leadId: Id<"crmLeads">) => {
+    if (!userId) return;
+    const name = (nameDrafts[String(leadId)] || "").trim();
+    if (!name) return;
+
+    setSavingNameLeadId(String(leadId));
+    setMessage("");
+
+    try {
+      await setCrmMemberVerifiedName({ leadId, agentId: userId, name });
+      setMessage("Member name saved.");
+      setNameDrafts((prev) => {
+        const next = { ...prev };
+        delete next[String(leadId)];
+        return next;
+      });
+    } catch (error: any) {
+      setMessage(error?.message || "Failed to save member name");
+    }
+
+    setSavingNameLeadId("");
   };
 
   const handleSubmitCall = async (leadId: Id<"crmLeads">) => {
@@ -201,6 +227,28 @@ export default function CrmAgentPage() {
             return (
               <div key={lead._id} style={{ background: "#fff", borderRadius: 12, border: "1px solid #e5e7eb", padding: "0.85rem" }}>
                 <div style={{ fontWeight: 700, fontSize: "1rem" }}>{idx + 1}. {lead.memberAlias || "Farmer"}</div>
+                {!lead.isNameVerified && (
+                  <div style={{ marginTop: "0.35rem", display: "flex", gap: "0.4rem" }}>
+                    <input
+                      value={nameDrafts[String(lead._id)] ?? ""}
+                      onChange={(e) =>
+                        setNameDrafts((prev) => ({ ...prev, [String(lead._id)]: e.target.value }))
+                      }
+                      placeholder="Enter member's real name"
+                      style={{ ...inputStyle, minHeight: 38, flex: 1 }}
+                    />
+                    <button
+                      onClick={() => handleSaveName(lead._id)}
+                      disabled={
+                        savingNameLeadId === String(lead._id) ||
+                        !(nameDrafts[String(lead._id)] || "").trim()
+                      }
+                      style={{ ...secondaryButtonStyle, minHeight: 38, whiteSpace: "nowrap" }}
+                    >
+                      {savingNameLeadId === String(lead._id) ? "Saving..." : "Save Name"}
+                    </button>
+                  </div>
+                )}
                 <div style={{ marginTop: "0.2rem", color: "#666", fontSize: "0.88rem" }}>
                   {lead.memberPhone || "No phone on file"}
                 </div>

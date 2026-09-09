@@ -233,7 +233,8 @@ export const getCrmAgentQueue = query({
         const response = (await ctx.db.get(lead.sourceCrmResponseId)) as any;
         return {
           ...lead,
-          memberAlias: response?.clientName || member?.alias,
+          memberAlias: member?.verifiedName || response?.clientName || member?.alias,
+          isNameVerified: Boolean(member?.verifiedName),
           memberPhone: member?.phoneNumber,
           district: response?.district,
           subCounty: response?.subCounty,
@@ -311,6 +312,27 @@ export const getCrmAgentTodaySummary = query({
       dueToday,
       overdue,
     };
+  },
+});
+
+export const setCrmMemberVerifiedName = mutation({
+  args: {
+    leadId: v.id("crmLeads"),
+    agentId: v.id("users"),
+    name: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const lead = await ctx.db.get(args.leadId);
+    if (!lead) throw new Error("CRM lead not found");
+
+    await requireCrmSupervisorOrAgentAccess(ctx, args.agentId, lead.communityId);
+
+    const name = args.name.trim();
+    if (!name) throw new Error("Name cannot be empty");
+
+    await ctx.db.patch(lead.memberId, { verifiedName: name });
+
+    return { success: true };
   },
 });
 

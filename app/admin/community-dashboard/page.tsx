@@ -23,6 +23,87 @@ type MembersListTab = "approved" | "all" | "imported" | "activeFarmsee";
 
 const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
 
+/**
+ * Real-world member spreadsheets rarely use the exact camelCase column names
+ * the import mutation expects (fullName, phoneNumber). Map common header
+ * spellings - case/spacing/punctuation-insensitive - onto those canonical
+ * names so admins don't have to rename columns in Excel before uploading.
+ * Any column that doesn't match a known alias is left as-is and still gets
+ * captured server-side as additionalData, so nothing is silently dropped.
+ */
+const IMPORT_HEADER_ALIASES: Record<string, "fullName" | "phoneNumber" | "email" | "communityRole" | "notes"> = {
+  fullname: "fullName",
+  name: "fullName",
+  names: "fullName",
+  fullnames: "fullName",
+  membername: "fullName",
+  farmername: "fullName",
+  clientname: "fullName",
+  contactname: "fullName",
+  phonenumber: "phoneNumber",
+  phonenumbers: "phoneNumber",
+  phone: "phoneNumber",
+  phoneno: "phoneNumber",
+  tel: "phoneNumber",
+  telno: "phoneNumber",
+  telephone: "phoneNumber",
+  telephonenumber: "phoneNumber",
+  mobile: "phoneNumber",
+  mobilenumber: "phoneNumber",
+  cell: "phoneNumber",
+  cellnumber: "phoneNumber",
+  contact: "phoneNumber",
+  contactnumber: "phoneNumber",
+  email: "email",
+  emailaddress: "email",
+  communityrole: "communityRole",
+  role: "communityRole",
+  notes: "notes",
+  note: "notes",
+  remarks: "notes",
+  comment: "notes",
+  comments: "notes",
+};
+
+function normalizeImportHeaderKey(header: string): string {
+  return header.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * Some spreadsheets cram more than one phone number into a single cell
+ * (e.g. "0774 217928/ 0753 732101" or "0775 958559 0755958559"), and a
+ * single number is often written with an internal space at the natural
+ * 4+6 grouping ("0738 625752"). Match the first "0XXX XXXXXX"-shaped (or
+ * already-international "256XXXXXXXXX") number and strip its internal
+ * space, rather than passing the whole messy string through - which would
+ * otherwise get mashed into one long invalid string of digits by the
+ * import mutation's normalizer.
+ */
+function extractFirstPhoneNumber(value: string): string {
+  const match = value.match(/(?:\+?256\d{9})|(?:0\d{3}\s?\d{6})/);
+  if (!match) return value.trim();
+  return match[0].replace(/\s+/g, "");
+}
+
+function remapImportedRow(row: Record<string, any>): Record<string, any> {
+  const remapped: Record<string, any> = {};
+  for (const [header, value] of Object.entries(row)) {
+    const canonical = IMPORT_HEADER_ALIASES[normalizeImportHeaderKey(header)];
+    const key = canonical || header;
+    // Don't let an alias match overwrite a column that already used the
+    // canonical name verbatim (e.g. a sheet with both "Name" and "fullName").
+    if (remapped[key] !== undefined && remapped[key] !== "") continue;
+    remapped[key] = value;
+  }
+  if (remapped.phoneNumber !== undefined && remapped.phoneNumber !== null && remapped.phoneNumber !== "") {
+    remapped.phoneNumber = extractFirstPhoneNumber(String(remapped.phoneNumber));
+  }
+  if (typeof remapped.fullName === "string") {
+    remapped.fullName = remapped.fullName.trim();
+  }
+  return remapped;
+}
+
 /* ── Noticeboard tab (per community) ── */
 function NoticeboardTab({ communityId, userId }: { communityId: Id<"communities">; userId: Id<"users"> }) {
   const posts = useQuery(api.noticeboard.getCommunityNoticeboardPosts, { communityId });
@@ -3093,7 +3174,8 @@ export default function CommunityDashboardPage() {
                             const data = event.target.result;
                             const workbook = XLSX.read(data, { type: "array" });
                             const firstSheet = workbook.SheetNames[0];
-                            const rows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet]);
+                            const rawRows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet]) as Record<string, any>[];
+                            const rows = rawRows.map(remapImportedRow);
                             setUploadState(communityId as string, { parsedRows: rows, showPreview: true });
                           } catch (err: any) {
                             setMessage({ type: "error", text: "Failed to parse Excel file: " + err?.message });
@@ -3117,7 +3199,7 @@ export default function CommunityDashboardPage() {
                       Click to upload or drag & drop
                     </div>
                     <div style={{ fontSize: "0.62rem", color: "#666" }}>
-                      Excel files (.xlsx, .xls) with required columns: fullName, phoneNumber. Optional: email, communityRole, notes, and any other fields.
+                      Excel files (.xlsx, .xls) with a name column and a phone column (e.g. "Name"/"fullName", "Tel No"/"Phone"/"phoneNumber" all work). Optional: email, role, notes, and any other fields.
                     </div>
                   </label>
                   {(() => {

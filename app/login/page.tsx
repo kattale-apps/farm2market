@@ -13,10 +13,10 @@ type SignupRole = "farmer" | "trader" | "buyer" | "vendor" | "transporter" | "st
 const SIGNUP_ROLES: Array<{ value: SignupRole; label: string; signupEnabled: boolean }> = [
   { value: "farmer", label: "Farmer", signupEnabled: true },
   { value: "vendor", label: "Vendor", signupEnabled: true },
-  { value: "trader", label: "Trader", signupEnabled: false },
-  { value: "buyer", label: "Buyer", signupEnabled: false },
-  { value: "transporter", label: "Transporter", signupEnabled: false },
-  { value: "store", label: "Store", signupEnabled: false },
+  { value: "trader", label: "Trader", signupEnabled: true },
+  { value: "buyer", label: "Buyer", signupEnabled: true },
+  { value: "transporter", label: "Transporter", signupEnabled: true },
+  { value: "store", label: "Store", signupEnabled: true },
 ];
 
 /**
@@ -54,7 +54,7 @@ function LoginPageInner() {
   const signupWithSession = useMutation((api as any).auth.signupWithSession);
   const checkAccountExists = useMutation((api as any).auth.checkAccountExists);
 
-  const isFarmerSignupEnabled = selectedRole === "farmer" || selectedRole === "vendor";
+  const isSelectedRoleSignupEnabled = SIGNUP_ROLES.find((role) => role.value === selectedRole)?.signupEnabled ?? false;
   const selectedRoleLabel = SIGNUP_ROLES.find((role) => role.value === selectedRole)?.label || "Account";
   const activeIdentifier = identifier.trim();
   // Auto-detect: an "@" means email, anything else (digits, +, spaces) is treated as a phone number.
@@ -130,8 +130,8 @@ function LoginPageInner() {
       };
 
       if (authStep === "confirmSignup") {
-        if (!isFarmerSignupEnabled) {
-          setError("New account creation is currently enabled for Farmer and Vendor only. Existing accounts can still log in.");
+        if (!isSelectedRoleSignupEnabled) {
+          setError(`New account creation is currently disabled for ${selectedRoleLabel}. Existing accounts can still log in.`);
           setLoading(false);
           return;
         }
@@ -299,9 +299,9 @@ function LoginPageInner() {
                 );
               })}
             </div>
-            {!isFarmerSignupEnabled && (
+            {!isSelectedRoleSignupEnabled && (
               <p style={{ marginTop: "0.35rem", marginBottom: 0, fontSize: "0.82rem", color: "#ef6c00", fontWeight: 600 }}>
-                  New account creation is currently enabled for Farmer and Vendor only. Existing accounts can still log in.
+                  New account creation is currently disabled for {selectedRoleLabel}. Existing accounts can still log in.
               </p>
             )}
           </div>

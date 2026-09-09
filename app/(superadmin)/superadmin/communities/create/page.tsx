@@ -16,7 +16,7 @@ type CommunityFormData = {
   organizationName: string;
   description: string;
   primaryColor: string;
-  communityType: "farmer" | "vendor";
+  communityType: "farmer" | "trader" | "buyer" | "vendor" | "transporter" | "store";
   autoJoinRoleMembers: boolean;
   freeImageQuotaPerMonth: number;
   imagePostPrice: number;
@@ -577,13 +577,22 @@ export default function CreateCommunityPage() {
                       </label>
                       <select
                         value={formData.communityType}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, communityType: e.target.value as "farmer" | "vendor" }))}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            communityType: e.target.value as CommunityFormData["communityType"],
+                          }))
+                        }
                         className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
                       >
                         <option value="farmer">Farmer</option>
                         <option value="vendor">Vendor</option>
+                        <option value="trader">Trader</option>
+                        <option value="buyer">Buyer</option>
+                        <option value="transporter">Transporter</option>
+                        <option value="store">Store</option>
                       </select>
-                      <p className="text-xs text-gray-500 mt-2">Vendor communities will default QR signups to the vendor role.</p>
+                      <p className="text-xs text-gray-500 mt-2">QR signups for this community will default to the {formData.communityType} role.</p>
                     </div>
 
                     {/* Mandatory Role Auto-Join */}

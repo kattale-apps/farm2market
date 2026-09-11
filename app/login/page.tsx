@@ -301,17 +301,19 @@ function LoginPageInner() {
                     style={{
                       padding: "0.6rem 0.6rem",
                       borderRadius: "9px",
-                      border: `1px solid ${isSelected ? "#1976d2" : "#ddd"}`,
+                      border: `1.5px solid ${!entry.signupEnabled ? (isSelected ? "#f6bf26" : "#e0d8b0") : (isSelected ? "#1976d2" : "#a5d6a7")}`,
                       background: !entry.signupEnabled
-                        ? (isSelected ? "#fff8e1" : "#f5f5f5")
-                        : (isSelected ? "#e3f2fd" : "#fff"),
+                        ? (isSelected ? "#fff8e1" : "#fbfaf3")
+                        : (isSelected ? "#e3f2fd" : "#eef8ef"),
                       color: !entry.signupEnabled
-                        ? (isSelected ? "#ef6c00" : "#777")
-                        : (isSelected ? "#1976d2" : "#333"),
-                      fontWeight: isSelected ? 700 : 500,
+                        ? (isSelected ? "#ef6c00" : "#8a7f4a")
+                        : (isSelected ? "#1976d2" : "#2e7d32"),
+                      fontWeight: isSelected ? 700 : 600,
                       fontSize: "0.9rem",
                       cursor: !entry.signupEnabled ? "not-allowed" : "pointer",
                       opacity: !entry.signupEnabled && !isSelected ? 0.85 : 1,
+                      boxShadow: isSelected ? "0 2px 6px rgba(25,118,210,0.18)" : "0 1px 3px rgba(46,125,50,0.1)",
+                      transition: "all 0.15s ease",
                     }}
                     title={entry.signupEnabled ? "Enabled for signup" : "Signup currently disabled"}
                   >

@@ -19,6 +19,18 @@ const SIGNUP_ROLES: Array<{ value: SignupRole; label: string; signupEnabled: boo
   { value: "store", label: "Store", signupEnabled: true },
 ];
 
+// Same role palette used app-wide (see community-only/profile ROLE_COLORS,
+// admin/community-dashboard member badges) — kept in sync here for the
+// login category tabs so each role reads consistently across the app.
+const ROLE_STYLES: Record<SignupRole, { text: string; border: string; bgSelected: string; bgUnselected: string; borderUnselected: string }> = {
+  farmer: { text: "#2e7d32", border: "#2e7d32", bgSelected: "#c8e6c9", bgUnselected: "#e8f5e9", borderUnselected: "#a5d6a7" },
+  trader: { text: "#1565c0", border: "#1565c0", bgSelected: "#bbdefb", bgUnselected: "#e3f2fd", borderUnselected: "#90caf9" },
+  buyer: { text: "#6a1b9a", border: "#6a1b9a", bgSelected: "#e1bee7", bgUnselected: "#f3e5f5", borderUnselected: "#ce93d8" },
+  vendor: { text: "#e65100", border: "#e65100", bgSelected: "#ffe0b2", bgUnselected: "#fff3e0", borderUnselected: "#ffcc80" },
+  transporter: { text: "#0277bd", border: "#0277bd", bgSelected: "#b3e5fc", bgUnselected: "#e1f5fe", borderUnselected: "#81d4fa" },
+  store: { text: "#c62828", border: "#c62828", bgSelected: "#ffcdd2", bgUnselected: "#ffebee", borderUnselected: "#ef9a9a" },
+};
+
 /**
  * Login Page
  * 
@@ -292,6 +304,7 @@ function LoginPageInner() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "0.5rem" }}>
               {SIGNUP_ROLES.map((entry) => {
                 const isSelected = selectedRole === entry.value;
+                const roleStyle = ROLE_STYLES[entry.value];
                 return (
                   <button
                     key={entry.value}
@@ -301,18 +314,18 @@ function LoginPageInner() {
                     style={{
                       padding: "0.6rem 0.6rem",
                       borderRadius: "9px",
-                      border: `1.5px solid ${!entry.signupEnabled ? (isSelected ? "#f6bf26" : "#e0d8b0") : (isSelected ? "#1976d2" : "#a5d6a7")}`,
+                      border: `1.5px solid ${!entry.signupEnabled ? (isSelected ? "#f6bf26" : "#e0d8b0") : (isSelected ? roleStyle.border : roleStyle.borderUnselected)}`,
                       background: !entry.signupEnabled
                         ? (isSelected ? "#fff8e1" : "#fbfaf3")
-                        : (isSelected ? "#e3f2fd" : "#eef8ef"),
+                        : (isSelected ? roleStyle.bgSelected : roleStyle.bgUnselected),
                       color: !entry.signupEnabled
                         ? (isSelected ? "#ef6c00" : "#8a7f4a")
-                        : (isSelected ? "#1976d2" : "#2e7d32"),
+                        : roleStyle.text,
                       fontWeight: isSelected ? 700 : 600,
                       fontSize: "0.9rem",
                       cursor: !entry.signupEnabled ? "not-allowed" : "pointer",
                       opacity: !entry.signupEnabled && !isSelected ? 0.85 : 1,
-                      boxShadow: isSelected ? "0 2px 6px rgba(25,118,210,0.18)" : "0 1px 3px rgba(46,125,50,0.1)",
+                      boxShadow: isSelected ? `0 2px 6px ${roleStyle.text}40` : `0 1px 3px ${roleStyle.text}1a`,
                       transition: "all 0.15s ease",
                     }}
                     title={entry.signupEnabled ? "Enabled for signup" : "Signup currently disabled"}

@@ -58,17 +58,22 @@ This is a production system (`convex-dual-deploy.yml` deploys `develop` → dev 
   money/inventory mutations, prefer testing new money-moving logic with pilot mode
   respected, not bypassed.
 
-### Rule 4b — Always branch new feature work; never push straight to main
+### Rule 4b — Always branch new feature work; required path to prod is feature → develop → main
 Because `main` auto-deploys to prod on every push with no test/lint/type-check gate
-(Rule 4), new feature work must default to a dedicated feature branch (e.g.
-`feature/<name>`), not `main` or `develop` directly:
-- Commit and push feature work to its own branch first, so it can be reviewed and
-  tried on `develop`/dev before it ever reaches `main`/prod.
-- Only push to `main` when the owner explicitly says to deploy to prod — a bare
-  "push" request defaults to the feature branch, not `main`. If it's ambiguous which
-  the owner wants, ask rather than assume `main`.
-- Note this recommendation to the owner up front when starting new feature work, not
-  just at push time, so it's a default expectation rather than a last-minute check.
+(Rule 4, `convex-dual-deploy.yml`), new feature work must never go straight to `main`.
+The required sequence is:
+1. Commit and push feature work to its own dedicated branch (e.g. `feature/<name>`),
+   never directly to `develop` or `main`.
+2. Merge/push that branch to `develop` first. This deploys the Convex functions to the
+   **dev deployment** (`dev:adamant-armadillo-601`, see `.env.local` /
+   `convex-dual-deploy.yml`'s `convex-dev` job) and lets the owner try the feature on
+   dev before it goes anywhere near prod.
+3. Only merge `develop` into `main` (or otherwise push to `main`) when the owner
+   explicitly requests the merge/deploy to prod. A bare "push" request defaults to the
+   feature branch (step 1), not `develop` and never `main`. If it's ambiguous which
+   target the owner wants, ask rather than assume `develop` or `main`.
+- Note this required sequence to the owner up front when starting new feature work,
+  not just at push time, so it's a default expectation rather than a last-minute check.
 
 ### Rule 5 — Six user categories + two admin tiers, never conflated
 The app has exactly **six end-user role categories** plus **two distinct

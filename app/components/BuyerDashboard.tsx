@@ -128,6 +128,51 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   const [rewardCashoutMessage, setRewardCashoutMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [messageInboxOpen, setMessageInboxOpen] = useState(false);
   const [selectedMessageUtid, setSelectedMessageUtid] = useState<string | null>(null);
+  // Section collapse state — every major dashboard section starts collapsed
+  // behind a button so the dashboard isn't overcrowded on load.
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+  const toggleSection = (key: string) =>
+    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  const isSectionOpen = (key: string) => Boolean(openSections[key]);
+  const sectionToggleButtonStyle: React.CSSProperties = {
+    width: "100%",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: "1rem 1.25rem",
+    background: "#fff",
+    border: "1px solid #e0e0e0",
+    borderRadius: 12,
+    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+    marginBottom: "1.5rem",
+    cursor: "pointer",
+    fontFamily: '"Montserrat", sans-serif',
+    fontWeight: 700,
+    fontSize: "clamp(0.95rem, 3vw, 1.1rem)",
+    color: "#2c2c2c",
+    textAlign: "left",
+  };
+  const renderSectionToggle = (key: string, label: string) => (
+    <button type="button" onClick={() => toggleSection(key)} style={sectionToggleButtonStyle}>
+      <span>{label}</span>
+      <span style={{ color: "#1976d2", fontSize: "0.85rem" }}>Show ▾</span>
+    </button>
+  );
+  const hideSectionButtonStyle: React.CSSProperties = {
+    display: "block",
+    marginBottom: "0.75rem",
+    background: "none",
+    border: "none",
+    color: "#1976d2",
+    fontWeight: 700,
+    fontSize: "0.8rem",
+    cursor: "pointer",
+    padding: 0,
+    fontFamily: '"Montserrat", sans-serif',
+  };
+  const renderHideControl = (key: string) => (
+    <button type="button" onClick={() => toggleSection(key)} style={hideSectionButtonStyle}>▲ Hide</button>
+  );
   const SUPPORT_THREAD = "SUPPORT";
   const [isMobile, setIsMobile] = useState(false);
   const inboxRef = useRef<HTMLDivElement>(null);
@@ -918,6 +963,8 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       </Link>
 
       {/* Communities Section */}
+      {!isSectionOpen("communities") && renderSectionToggle("communities", "🌾 My Communities")}
+      {isSectionOpen("communities") && (
       <div style={{
         padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
@@ -926,6 +973,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
         border: "1px solid #e0e0e0",
         marginBottom: "1.5rem"
       }}>
+        {renderHideControl("communities")}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
           <h3 style={{
             margin: 0,
@@ -1072,8 +1120,11 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
           </div>
         )}
       </div>
+      )}
 
       {/* Trader Listing Orders */}
+      {!isSectionOpen("traderOrders") && renderSectionToggle("traderOrders", "📦 Trader Listing Orders")}
+      {isSectionOpen("traderOrders") && (
       <div style={{
         padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
@@ -1082,6 +1133,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
         border: "1px solid #e0e0e0",
         marginBottom: "1.5rem"
       }}>
+        {renderHideControl("traderOrders")}
         <h3 style={{
           marginTop: 0,
           marginBottom: "1rem",
@@ -1254,6 +1306,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
           </div>
         )}
       </div>
+      )}
 
       {messageInboxOpen && (
         <div
@@ -1388,7 +1441,10 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       )}
 
       {/* Wallet & Deposit Section */}
+      {!isSectionOpen("wallet") && renderSectionToggle("wallet", "💰 Wallet & Deposit")}
+      {isSectionOpen("wallet") && (
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", gap: "1rem", marginBottom: "1.5rem" }}>
+        {renderHideControl("wallet")}
         {/* Wallet Balance */}
         <div style={{
           padding: "clamp(1rem, 3vw, 1.5rem)",
@@ -1642,8 +1698,11 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
           )}
         </div>
       </div>
+      )}
 
       {/* Purchase Window Status */}
+      {!isSectionOpen("purchaseWindow") && renderSectionToggle("purchaseWindow", "🪟 Purchase Window Status")}
+      {isSectionOpen("purchaseWindow") && (
       <div style={{
         marginBottom: "1.5rem",
         padding: "clamp(1rem, 3vw, 1.5rem)",
@@ -1652,7 +1711,8 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
         border: `1px solid ${windowStatus?.isOpen ? "#4caf50" : "#ef5350"}`
       }}>
-          <h3 style={{ 
+          {renderHideControl("purchaseWindow")}
+          <h3 style={{
             marginTop: 0, 
             marginBottom: "1rem", 
             fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", 
@@ -1688,6 +1748,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
           </div>
         )}
       </div>
+      )}
 
       {/* Service Fee Info */}
       {serviceFeePercentage && (
@@ -1731,6 +1792,8 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       )}
 
       {/* Trader-sourced Listings */}
+      {!isSectionOpen("traderListings") && renderSectionToggle("traderListings", "📦 Trader-sourced Listings")}
+      {isSectionOpen("traderListings") && (
       <div style={{
         marginBottom: "1.5rem",
         padding: "clamp(1rem, 3vw, 1.5rem)",
@@ -1739,6 +1802,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
         border: "1px solid #e0e0e0"
       }}>
+        {renderHideControl("traderListings")}
         <h3 style={{
           marginTop: 0,
           marginBottom: "1rem",
@@ -1868,8 +1932,11 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
           </div>
         )}
       </div>
+      )}
 
       {/* Vendor & Store Listings */}
+      {!isSectionOpen("vendorStore") && renderSectionToggle("vendorStore", "🏪 Shop from Vendors & Stores")}
+      {isSectionOpen("vendorStore") && (
       <div style={{
         marginBottom: "1.5rem",
         padding: "clamp(1rem, 3vw, 1.5rem)",
@@ -1878,6 +1945,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
         border: "1px solid #e0e0e0"
       }}>
+        {renderHideControl("vendorStore")}
         <h3 style={{
           marginTop: 0,
           marginBottom: "1rem",
@@ -2049,8 +2117,11 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
           </div>
         )}
       </div>
+      )}
 
       {/* Farmer-sourced Inventory - Institutional Table View */}
+      {!isSectionOpen("farmerInventory") && renderSectionToggle("farmerInventory", "🌾 Farmer-sourced Inventory")}
+      {isSectionOpen("farmerInventory") && (
       <div style={{
         marginBottom: "1.5rem",
         padding: "clamp(1rem, 3vw, 1.5rem)",
@@ -2059,7 +2130,8 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
         border: "1px solid #e0e0e0"
       }}>
-          <h3 style={{ 
+          {renderHideControl("farmerInventory")}
+          <h3 style={{
             marginTop: 0, 
             marginBottom: "1rem", 
             fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", 
@@ -2444,8 +2516,11 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
           </>
         )}
       </div>
+      )}
 
       {/* Buyer Analytics Summary */}
+      {!isSectionOpen("analytics") && renderSectionToggle("analytics", "📊 Buyer Analytics")}
+      {isSectionOpen("analytics") && (
       <div style={{
         padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
@@ -2454,6 +2529,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
         border: "1px solid #e0e0e0",
         marginBottom: "1.5rem",
       }}>
+        {renderHideControl("analytics")}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.5rem" }}>
           <div>
             <h3 style={{ margin: 0, fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", fontWeight: "600", color: "#2c2c2c", fontFamily: '"Montserrat", sans-serif' }}>
@@ -2504,14 +2580,18 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
           </div>
         </div>
       </div>
+      )}
 
       {/* Purchase Analytics - Institutional Style */}
+      {!isSectionOpen("purchaseAnalytics") && renderSectionToggle("purchaseAnalytics", "📈 Purchase Analytics")}
+      {isSectionOpen("purchaseAnalytics") && (
       <div style={{
         display: "grid",
         gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))",
         gap: "1rem",
         marginBottom: "1.5rem"
       }}>
+        {renderHideControl("purchaseAnalytics")}
         <div style={{
           padding: "clamp(1rem, 3vw, 1.5rem)",
           background: "#fff",
@@ -2557,8 +2637,11 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
           </div>
         </div>
       </div>
+      )}
 
       {/* My Orders */}
+      {!isSectionOpen("myOrders") && renderSectionToggle("myOrders", "🧾 My Orders")}
+      {isSectionOpen("myOrders") && (
       <div style={{
         padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
@@ -2567,8 +2650,9 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
         border: "1px solid #e0e0e0",
         marginBottom: "1.5rem"
       }}>
-          <h3 style={{ 
-            marginTop: 0, 
+          {renderHideControl("myOrders")}
+          <h3 style={{
+            marginTop: 0,
             marginBottom: "1rem", 
             fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", 
             color: "#2c2c2c",
@@ -2785,8 +2869,11 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
           </div>
         )}
       </div>
+      )}
 
       {/* Transaction Ledger */}
+      {!isSectionOpen("ledger") && renderSectionToggle("ledger", "🧮 Transaction Ledger")}
+      {isSectionOpen("ledger") && (
       <div style={{
         padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
@@ -2795,6 +2882,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
         border: "1px solid #e0e0e0",
         marginBottom: "1.5rem"
       }}>
+        {renderHideControl("ledger")}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.5rem" }}>
           <h3 style={{ margin: 0, fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", color: "#1a1a1a" }}>
             Transaction Ledger
@@ -3020,8 +3108,11 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
           </>
         )}
       </div>
+      )}
 
       {/* Wallet Report */}
+      {!isSectionOpen("walletReport") && renderSectionToggle("walletReport", "📄 Wallet Report")}
+      {isSectionOpen("walletReport") && (
       <div style={{
         padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
@@ -3029,6 +3120,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
         border: "1px solid #e0e0e0"
       }}>
+        {renderHideControl("walletReport")}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.5rem" }}>
           <h3 style={{ margin: 0, fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", color: "#1a1a1a" }}>
             Wallet Report
@@ -3200,8 +3292,11 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
           </>
         )}
       </div>
+      )}
 
       {/* Market Price Reports Section */}
+      {!isSectionOpen("marketPrices") && renderSectionToggle("marketPrices", "📑 Market Price Reports")}
+      {isSectionOpen("marketPrices") && (
       <div style={{
         marginTop: "2rem",
         padding: "1.5rem",
@@ -3210,6 +3305,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
         boxShadow: "0 2px 8px rgba(0,0,0,0.07)",
         border: "1px solid #e8f5e9",
       }}>
+        {renderHideControl("marketPrices")}
         <h3 style={{
           fontSize: "1.1rem",
           fontWeight: "700",
@@ -3352,6 +3448,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
           Downloads include indicative prices only. Includes N days of available published market data.
         </p>
       </div>
+      )}
 
       {/* Contact Us Section */}
       <ContactUs

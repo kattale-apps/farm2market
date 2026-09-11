@@ -16,9 +16,10 @@ import { resolveCommunityLogo } from "../../lib/communityLogos";
 import { AdminFertilizerConfig } from "../../components/biofarm/AdminFertilizerConfig";
 import { exportSubmissionsToPDF } from "../../utils/exportUtils";
 import SubmissionPhotoGallery from "../../components/SubmissionPhotoGallery";
+import { CommunityAdvancePurchasePanel } from "../../components/advancePurchase/CommunityAdvancePurchasePanel";
 
 /* ── Tab types for community cards ── */
-type CommunityTab = "members" | "noticeboard" | "messages" | "forms" | "insights" | "fertilizer";
+type CommunityTab = "members" | "noticeboard" | "messages" | "forms" | "insights" | "fertilizer" | "advancePurchase";
 type MembersListTab = "approved" | "all" | "imported" | "activeFarmsee";
 
 const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
@@ -3094,11 +3095,11 @@ export default function CommunityDashboardPage() {
                   (currentUser as any)?.adminLevel === "super" ||
                   (currentUser as any)?.adminLevel === undefined ||
                   resolvedAdminCategory === "community"
-                    ? ["members", "noticeboard", "messages", "forms", "insights", "fertilizer"]
-                    : ["members", "noticeboard", "messages", "forms", "insights"]
+                    ? ["members", "noticeboard", "messages", "forms", "insights", "fertilizer", "advancePurchase"]
+                    : ["members", "noticeboard", "messages", "forms", "insights", "advancePurchase"]
                 ) as CommunityTab[]).map((tab) => {
                   const active = getActiveTab(communityId) === tab;
-                  const labels: Record<CommunityTab, string> = { members: "Members", noticeboard: "Noticeboard", messages: "Messages", forms: "Forms", insights: "📊 Insights", fertilizer: "🌱 Fertilizer" };
+                  const labels: Record<CommunityTab, string> = { members: "Members", noticeboard: "Noticeboard", messages: "Messages", forms: "Forms", insights: "📊 Insights", fertilizer: "🌱 Fertilizer", advancePurchase: "🌱 Advance Purchase" };
                   return (
                     <button
                       key={tab}
@@ -3148,6 +3149,13 @@ export default function CommunityDashboardPage() {
               {/* ── Fertilizer Tab ── */}
               {getActiveTab(communityId) === "fertilizer" && (
                 <AdminFertilizerConfig communityId={communityId} userId={userId!} />
+              )}
+
+              {/* ── Advance Purchase Tab ── */}
+              {getActiveTab(communityId) === "advancePurchase" && (
+                <div style={{ padding: "1.5rem" }}>
+                  <CommunityAdvancePurchasePanel adminId={userId!} communityId={communityId} />
+                </div>
               )}
 
               {/* ── Members Tab (existing content) ── */}

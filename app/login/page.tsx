@@ -328,7 +328,7 @@ function LoginPageInner() {
           </div>
 
           <div style={{ marginBottom: "0.55rem" }}>
-            <label style={{ display: "block", marginBottom: "0.3rem", color: "#333", fontWeight: "500", fontSize: "0.9rem" }}>
+            <label style={{ display: "block", marginBottom: "0.3rem", color: "#2e7d32", fontWeight: "500", fontSize: "0.9rem" }}>
               Phone Number or Email
             </label>
             <input
@@ -356,7 +356,7 @@ function LoginPageInner() {
           </div>
 
           <div style={{ marginBottom: authStep === "confirmSignup" ? "0.55rem" : "0.85rem" }}>
-            <label style={{ display: "block", marginBottom: "0.3rem", color: "#333", fontWeight: "500", fontSize: "0.9rem" }}>
+            <label style={{ display: "block", marginBottom: "0.3rem", color: "#2e7d32", fontWeight: "500", fontSize: "0.9rem" }}>
               Password
             </label>
             <div style={{ position: "relative" }}>

@@ -2618,4 +2618,258 @@ export default defineSchema({
     updatedBy: v.id("users"),
     updatedAt: v.number(),
   }),
+
+  // ============================================================
+  // ADVANCE PURCHASE MARKET (MVP)
+  // Community → Configuration → Farmer Offer (+ materialized
+  // Milestones) → Buyer Commitment (+ Proposals) → Evidence →
+  // Delivery. Payment reuses walletLedger exactly as the existing
+  // buyer-purchase flow does (capital_lock at funding time,
+  // profit_credit to the farmer at each approved milestone) —
+  // no new escrow ledger or payment processor.
+  // ============================================================
+
+  /**
+   * Community Admin configuration for the Advance Purchase Market.
+   * One community may have multiple configs (e.g. one per product
+   * category); farmers pick a config when creating an offer.
+   */
+  advancePurchaseConfigs: defineTable({
+    communityId: v.id("communities"),
+    adminId: v.id("users"),
+    name: v.string(), // e.g. "Coffee Seedlings Program"
+    productCategory: v.string(), // e.g. "coffee_seedlings", "produce", "livestock", "inputs" — free text, community-defined
+    instructions: v.optional(v.string()),
+    isActive: v.boolean(),
+    // Farmer-facing fields beyond the structured core fields, admin-configured.
+    customFields: v.array(v.object({
+      key: v.string(),
+      label: v.string(),
+      fieldType: v.string(), // text | number | select | textarea | date
+      options: v.optional(v.array(v.string())),
+      farmerEditable: v.boolean(),
+      required: v.boolean(),
+      order: v.number(),
+    })),
+    unitOptions: v.optional(v.array(v.string())), // e.g. ["seedlings", "kg", "bags", "head"]
+    recurrenceOptions: v.array(v.string()), // e.g. ["one_off", "seasonal", "production_cycle", "monthly"]
+    negotiationAllowed: v.boolean(),
+    buyerCanProposePrice: v.boolean(),
+    advancePercentage: v.optional(v.number()), // % of total due at funding vs balance later (display/config only in MVP)
+    minCommitmentQty: v.optional(v.number()),
+    maxCommitmentQty: v.optional(v.number()),
+    offerExpiryDays: v.optional(v.number()),
+    deliveryOptions: v.optional(v.array(v.object({
+      key: v.string(),
+      label: v.string(), // e.g. "Weekly delivery"
+      feeAmount: v.number(),
+      feeUnit: v.string(), // e.g. "per_item", "per_shipment"
+    }))),
+    insuranceEnabled: v.boolean(),
+    insuranceLabel: v.optional(v.string()),
+    insuranceAmount: v.optional(v.number()),
+    insuranceDescription: v.optional(v.string()),
+    // Milestone template — copied onto each offer at publish time so later
+    // edits here never retroactively change an in-progress offer.
+    milestoneTemplate: v.array(v.object({
+      order: v.number(),
+      name: v.string(),
+      expectedDaysFromPublish: v.optional(v.number()),
+      photoRequired: v.boolean(),
+      gpsRequired: v.boolean(),
+      timestampRequired: v.boolean(),
+      releasePercent: v.number(), // % of a commitment's total released on approval of this stage
+    })),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_community", ["communityId"])
+    .index("by_community_active", ["communityId", "isActive"]),
+
+  /**
+   * A farmer's recurring advance-purchase offer, published against a
+   * community config. Core priceable fields are structured; anything
+   * extra the admin configured lives in customFieldValues.
+   */
+  advancePurchaseOffers: defineTable({
+    communityId: v.id("communities"),
+    configId: v.id("advancePurchaseConfigs"),
+    farmerId: v.id("users"),
+    utid: v.string(),
+    productName: v.string(),
+    variety: v.optional(v.string()),
+    description: v.optional(v.string()),
+    unit: v.string(),
+    unitPrice: v.number(), // UGX
+    totalQuantity: v.number(),
+    quantityCommitted: v.number(), // sum of active commitments' quantity
+    minOrderQty: v.optional(v.number()),
+    maxOrderQty: v.optional(v.number()),
+    productionLocation: v.optional(v.string()),
+    deliveryLocation: v.optional(v.string()),
+    expectedDeliveryDate: v.optional(v.string()), // ISO
+    deliveryWindowDays: v.optional(v.number()),
+    cashComponent: v.optional(v.number()),
+    inKindComponent: v.optional(v.number()),
+    inKindInputs: v.optional(v.array(v.string())),
+    recurrence: v.string(), // one of the config's recurrenceOptions
+    negotiationAllowed: v.boolean(), // copied from config at publish time
+    buyerCanProposePrice: v.boolean(),
+    advancePercentage: v.optional(v.number()),
+    deliveryOptions: v.optional(v.array(v.object({
+      key: v.string(),
+      label: v.string(),
+      feeAmount: v.number(),
+      feeUnit: v.string(),
+    }))),
+    insuranceEnabled: v.boolean(),
+    insuranceLabel: v.optional(v.string()),
+    insuranceAmount: v.optional(v.number()),
+    insuranceDescription: v.optional(v.string()),
+    customFieldValues: v.array(v.object({
+      key: v.string(),
+      label: v.string(),
+      value: v.string(),
+    })),
+    status: v.union(
+      v.literal("draft"),
+      v.literal("published"),
+      v.literal("expired"),
+      v.literal("cancelled"),
+      v.literal("fulfilled")
+    ),
+    expiresAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_community", ["communityId"])
+    .index("by_farmer", ["farmerId"])
+    .index("by_status", ["status"])
+    .index("by_utid", ["utid"])
+    .index("by_config", ["configId"]),
+
+  /**
+   * Materialized production milestones for one offer (shared production
+   * timeline — evidence is submitted once per stage regardless of how
+   * many buyers have partially funded the offer).
+   */
+  advancePurchaseMilestones: defineTable({
+    offerId: v.id("advancePurchaseOffers"),
+    order: v.number(),
+    name: v.string(),
+    expectedDate: v.optional(v.string()), // ISO, derived from expectedDaysFromPublish
+    photoRequired: v.boolean(),
+    gpsRequired: v.boolean(),
+    timestampRequired: v.boolean(),
+    releasePercent: v.number(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("submitted"),
+      v.literal("approved"),
+      v.literal("rejected"),
+      v.literal("resubmission_required")
+    ),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_offer", ["offerId", "order"])
+    .index("by_status", ["status"]),
+
+  /**
+   * Evidence submissions against a milestone. Multiple rows per milestone
+   * allow resubmission history. Reuses the shared imageMetadata shape and
+   * the app's existing GPS/timestamp capture (GeneralCameraCapture).
+   */
+  advancePurchaseEvidence: defineTable({
+    milestoneId: v.id("advancePurchaseMilestones"),
+    offerId: v.id("advancePurchaseOffers"),
+    farmerId: v.id("users"),
+    ...imageMetadata,
+    // Future-proofing: MVP verification is human (community admin). These
+    // optional fields let a future automated check (e.g. a third-party
+    // verified-timestamp capture app) attach its own verification signal
+    // without a schema change — left undefined/unused for now.
+    verificationSource: v.optional(v.string()), // e.g. "timemark"
+    aiVerified: v.optional(v.boolean()),
+    status: v.union(
+      v.literal("pending_verification"),
+      v.literal("approved"),
+      v.literal("rejected"),
+      v.literal("resubmission_required")
+    ),
+    reviewerId: v.optional(v.id("users")),
+    reviewNotes: v.optional(v.string()),
+    submittedAt: v.number(),
+    reviewedAt: v.optional(v.number()),
+  })
+    .index("by_milestone", ["milestoneId", "submittedAt"])
+    .index("by_offer", ["offerId"])
+    .index("by_status", ["status"]),
+
+  /**
+   * A buyer's commitment (partial or full) against an offer's quantity.
+   * Funding debits the buyer's wallet exactly like buyerListingPurchases
+   * (capital_lock); each approved milestone credits the farmer's wallet
+   * (profit_credit) for that stage's percentage of this commitment's total.
+   */
+  advancePurchaseCommitments: defineTable({
+    offerId: v.id("advancePurchaseOffers"),
+    buyerId: v.id("users"),
+    utid: v.string(),
+    quantity: v.number(),
+    unitPriceAtCommit: v.number(),
+    cashAmount: v.number(),
+    inKindAmount: v.number(),
+    totalAmount: v.number(),
+    deliveryOptionKey: v.optional(v.string()),
+    deliveryFeeAmount: v.optional(v.number()),
+    insuranceOpted: v.optional(v.boolean()),
+    insuranceAmount: v.optional(v.number()),
+    status: v.union(
+      v.literal("pending_negotiation"),
+      v.literal("funded"),
+      v.literal("in_production"),
+      v.literal("ready_for_delivery"),
+      v.literal("delivered"),
+      v.literal("cancelled"),
+      v.literal("expired")
+    ),
+    walletUtid: v.optional(v.string()), // walletLedger utid for the funding debit
+    releasedAmount: v.number(), // sum of milestone-release credits to the farmer for this commitment
+    quantityDelivered: v.number(),
+    fundedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_offer", ["offerId"])
+    .index("by_buyer", ["buyerId", "createdAt"])
+    .index("by_status", ["status"])
+    .index("by_utid", ["utid"]),
+
+  /**
+   * Buyer negotiation proposal — only usable when the offer's
+   * buyerCanProposePrice/negotiationAllowed is true. Communicated to the
+   * farmer via the existing 1:1 messaging system (messages.sendMessage),
+   * not a new messaging channel.
+   */
+  advancePurchaseProposals: defineTable({
+    offerId: v.id("advancePurchaseOffers"),
+    buyerId: v.id("users"),
+    utid: v.string(),
+    proposedUnitPrice: v.optional(v.number()),
+    proposedQuantity: v.optional(v.number()),
+    proposedCashComponent: v.optional(v.number()),
+    proposedInKindComponent: v.optional(v.number()),
+    message: v.optional(v.string()),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("accepted"),
+      v.literal("rejected")
+    ),
+    createdAt: v.number(),
+    respondedAt: v.optional(v.number()),
+  })
+    .index("by_offer", ["offerId", "createdAt"])
+    .index("by_buyer", ["buyerId", "createdAt"])
+    .index("by_status", ["status"]),
 });

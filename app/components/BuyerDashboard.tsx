@@ -891,6 +891,32 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       {/* Profile Card */}
       <UserProfileCard userId={userId} />
 
+      {/* Advance Purchase Market quick link */}
+      <Link href="/buyer/advance-purchase" style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "0.75rem",
+        padding: "1rem 1.25rem",
+        background: "#f3e5f5",
+        border: "1.5px solid #ce93d8",
+        borderRadius: "14px",
+        textDecoration: "none",
+        color: "#6a1b9a",
+        fontFamily: '"Montserrat", sans-serif',
+        fontWeight: 700,
+        fontSize: "clamp(0.9rem,2.5vw,1rem)",
+        boxShadow: "0 0 0 1px rgba(106,27,154,0.20), 0 0 16px rgba(106,27,154,0.18), 0 2px 8px rgba(106,27,154,0.14)",
+        marginBottom: "1.5rem",
+      }}>
+        <span style={{ fontSize: "1.8rem" }}>🌱</span>
+        <div>
+          <div>Advance Purchase Market</div>
+          <div style={{ fontSize: "0.78rem", fontWeight: 500, color: "#8e24aa" }}>
+            Fund a farmer&apos;s next harvest ahead of delivery
+          </div>
+        </div>
+      </Link>
+
       {/* Communities Section */}
       <div style={{
         padding: "clamp(1rem, 3vw, 1.5rem)",

@@ -260,7 +260,8 @@ export const createOffer = mutation({
     configId: v.id("advancePurchaseConfigs"),
     productName: v.string(),
     variety: v.optional(v.string()),
-    description: v.optional(v.string()),
+    description: v.string(),
+    photoStorageIds: v.array(v.id("_storage")),
     unit: v.string(),
     unitPrice: v.number(),
     totalQuantity: v.number(),
@@ -295,6 +296,12 @@ export const createOffer = mutation({
     if (args.unitPrice <= 0 || args.totalQuantity <= 0) {
       throw new Error("Unit price and quantity must be positive");
     }
+    if (!args.description.trim()) {
+      throw new Error("A description of the product is required");
+    }
+    if (args.photoStorageIds.length === 0) {
+      throw new Error("At least one photo of the finished product/offering is required");
+    }
 
     for (const field of config.customFields) {
       if (field.required && !field.farmerEditable) continue; // admin fixed it — assumed present via default
@@ -321,6 +328,7 @@ export const createOffer = mutation({
       productName: args.productName,
       variety: args.variety,
       description: args.description,
+      photoStorageIds: args.photoStorageIds,
       unit: args.unit,
       unitPrice: args.unitPrice,
       totalQuantity: args.totalQuantity,
@@ -379,6 +387,7 @@ export const updateOffer = mutation({
     productName: v.optional(v.string()),
     variety: v.optional(v.string()),
     description: v.optional(v.string()),
+    photoStorageIds: v.optional(v.array(v.id("_storage"))),
     unitPrice: v.optional(v.number()),
     totalQuantity: v.optional(v.number()),
     productionLocation: v.optional(v.string()),
@@ -399,6 +408,12 @@ export const updateOffer = mutation({
     if (offer.status !== "draft") {
       throw new Error("Only a draft offer can be edited. Cancel and recreate a published offer instead.");
     }
+    if (args.description !== undefined && !args.description.trim()) {
+      throw new Error("A description of the product is required");
+    }
+    if (args.photoStorageIds !== undefined && args.photoStorageIds.length === 0) {
+      throw new Error("At least one photo of the finished product/offering is required");
+    }
     const { offerId, farmerId, ...patch } = args;
     await ctx.db.patch(args.offerId, { ...patch, updatedAt: getUgandaTime() });
     return { success: true };
@@ -414,6 +429,12 @@ export const publishOffer = mutation({
       throw new Error("You can only publish your own offer");
     }
     if (offer.status !== "draft") throw new Error("Offer is not a draft");
+    if (!offer.description || !offer.description.trim()) {
+      throw new Error("Add a product description before publishing");
+    }
+    if (!offer.photoStorageIds || offer.photoStorageIds.length === 0) {
+      throw new Error("Add at least one product photo before publishing");
+    }
     const config = await ctx.db.get(offer.configId);
     const now = getUgandaTime();
     const expiresAt = config?.offerExpiryDays ? now + config.offerExpiryDays * 24 * 60 * 60 * 1000 : undefined;
@@ -445,7 +466,15 @@ export const listMyOffers = query({
       .query("advancePurchaseOffers")
       .withIndex("by_farmer", (q: any) => q.eq("farmerId", args.farmerId))
       .collect();
-    return offers.sort((a: any, b: any) => b.createdAt - a.createdAt);
+    const enriched = await Promise.all(
+      offers.map(async (o: any) => ({
+        ...o,
+        photoUrls: o.photoStorageIds
+          ? (await Promise.all(o.photoStorageIds.map((id: any) => ctx.storage.getUrl(id)))).filter((u): u is string => !!u)
+          : [],
+      }))
+    );
+    return enriched.sort((a: any, b: any) => b.createdAt - a.createdAt);
   },
 });
 
@@ -477,6 +506,9 @@ export const listMarketOffers = query({
           .withIndex("by_offer", (q: any) => q.eq("offerId", o._id))
           .collect();
         const approvedCount = currentStage.filter((m: any) => m.status === "approved").length;
+        const photoUrls = o.photoStorageIds
+          ? (await Promise.all(o.photoStorageIds.map((id: any) => ctx.storage.getUrl(id)))).filter((u): u is string => !!u)
+          : [];
         return {
           ...o,
           farmerAlias: (farmer as any)?.alias,
@@ -484,6 +516,7 @@ export const listMarketOffers = query({
           quantityRemaining: o.totalQuantity - o.quantityCommitted,
           totalValue: o.unitPrice * o.totalQuantity,
           stageProgress: `${approvedCount} of ${currentStage.length}`,
+          photoUrls,
         };
       })
     );
@@ -508,6 +541,9 @@ export const getOfferDetail = query({
       .query("advancePurchaseCommitments")
       .withIndex("by_offer", (q: any) => q.eq("offerId", args.offerId))
       .collect();
+    const photoUrls = offer.photoStorageIds
+      ? (await Promise.all(offer.photoStorageIds.map((id: any) => ctx.storage.getUrl(id)))).filter((u): u is string => !!u)
+      : [];
 
     return {
       ...offer,
@@ -517,6 +553,7 @@ export const getOfferDetail = query({
       totalValue: offer.unitPrice * offer.totalQuantity,
       milestones: milestones.sort((a: any, b: any) => a.order - b.order),
       commitmentCount: commitments.length,
+      photoUrls,
     };
   },
 });

@@ -286,10 +286,10 @@ function LoginPageInner() {
 
         <form onSubmit={handleSubmit}>
           <div style={{ marginBottom: "0.55rem" }}>
-            <label style={{ display: "block", marginBottom: "0.3rem", color: "#333", fontWeight: "500", fontSize: "0.9rem" }}>
-              Category
+            <label style={{ display: "block", marginBottom: "0.35rem", color: "#2e7d32", fontWeight: "500", fontSize: "0.9rem" }}>
+              Select Category
             </label>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "0.4rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "0.5rem" }}>
               {SIGNUP_ROLES.map((entry) => {
                 const isSelected = selectedRole === entry.value;
                 return (
@@ -299,8 +299,8 @@ function LoginPageInner() {
                     disabled={!entry.signupEnabled}
                     onClick={() => setSelectedRole(entry.value)}
                     style={{
-                      padding: "0.4rem 0.55rem",
-                      borderRadius: "8px",
+                      padding: "0.6rem 0.6rem",
+                      borderRadius: "9px",
                       border: `1px solid ${isSelected ? "#1976d2" : "#ddd"}`,
                       background: !entry.signupEnabled
                         ? (isSelected ? "#fff8e1" : "#f5f5f5")
@@ -309,7 +309,7 @@ function LoginPageInner() {
                         ? (isSelected ? "#ef6c00" : "#777")
                         : (isSelected ? "#1976d2" : "#333"),
                       fontWeight: isSelected ? 700 : 500,
-                      fontSize: "0.82rem",
+                      fontSize: "0.9rem",
                       cursor: !entry.signupEnabled ? "not-allowed" : "pointer",
                       opacity: !entry.signupEnabled && !isSelected ? 0.85 : 1,
                     }}

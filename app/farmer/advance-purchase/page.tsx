@@ -6,14 +6,24 @@ import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import Link from "next/link";
 import { useStoredUser } from "../../hooks/useStoredUser";
+import { validateImageFile } from "../../utils/imageValidation";
 
 const FONT = '"Montserrat", sans-serif';
 
+interface PendingPhoto {
+  previewUrl: string;
+  storageId: Id<"_storage"> | null;
+  uploading: boolean;
+  error?: string;
+}
+
 function CreateOfferForm({ farmerId, config, onDone }: { farmerId: Id<"users">; config: any; onDone: () => void }) {
   const createOffer = useMutation(api.advancePurchase.createOffer);
+  const generateUploadUrl = useMutation(api.files.generateUploadUrl);
   const [productName, setProductName] = useState("");
   const [variety, setVariety] = useState("");
   const [description, setDescription] = useState("");
+  const [photos, setPhotos] = useState<PendingPhoto[]>([]);
   const [unit, setUnit] = useState(config.unitOptions?.[0] || "");
   const [unitPrice, setUnitPrice] = useState("");
   const [totalQuantity, setTotalQuantity] = useState("");
@@ -25,8 +35,41 @@ function CreateOfferForm({ farmerId, config, onDone }: { farmerId: Id<"users">; 
   const [error, setError] = useState<string | null>(null);
 
   const editableFields = (config.customFields || []).filter((f: any) => f.farmerEditable);
+  const uploadedPhotoIds = photos.map((p) => p.storageId).filter((id): id is Id<"_storage"> => !!id);
+  const stillUploading = photos.some((p) => p.uploading);
+  const canSubmit = !!productName.trim() && !!description.trim() && uploadedPhotoIds.length > 0 && !stillUploading;
+
+  const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    for (const file of files) {
+      const result = validateImageFile(file);
+      const previewUrl = URL.createObjectURL(file);
+      if (!result.valid) {
+        setPhotos((prev) => [...prev, { previewUrl, storageId: null, uploading: false, error: result.error }]);
+        continue;
+      }
+      setPhotos((prev) => [...prev, { previewUrl, storageId: null, uploading: true }]);
+      try {
+        const uploadUrl = await generateUploadUrl();
+        const res = await fetch(uploadUrl, { method: "POST", headers: { "Content-Type": file.type }, body: file });
+        const { storageId } = await res.json();
+        setPhotos((prev) => prev.map((p) => (p.previewUrl === previewUrl ? { ...p, storageId, uploading: false } : p)));
+      } catch (err) {
+        setPhotos((prev) => prev.map((p) => (p.previewUrl === previewUrl ? { ...p, uploading: false, error: "Upload failed" } : p)));
+      }
+    }
+  };
+
+  const removePhoto = (previewUrl: string) => {
+    setPhotos((prev) => prev.filter((p) => p.previewUrl !== previewUrl));
+  };
 
   const handleSubmit = async (publish: boolean) => {
+    if (!canSubmit) {
+      setError("Add a product name, description and at least one photo before saving");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -35,7 +78,8 @@ function CreateOfferForm({ farmerId, config, onDone }: { farmerId: Id<"users">; 
         configId: config._id,
         productName,
         variety: variety || undefined,
-        description: description || undefined,
+        description,
+        photoStorageIds: uploadedPhotoIds,
         unit,
         unitPrice: Number(unitPrice),
         totalQuantity: Number(totalQuantity),
@@ -63,7 +107,59 @@ function CreateOfferForm({ farmerId, config, onDone }: { farmerId: Id<"users">; 
 
       <input placeholder="Product name" value={productName} onChange={(e) => setProductName(e.target.value)} style={inputStyle} />
       <input placeholder="Variety / type (optional)" value={variety} onChange={(e) => setVariety(e.target.value)} style={inputStyle} />
-      <textarea placeholder="Description (optional)" value={description} onChange={(e) => setDescription(e.target.value)} style={inputStyle} />
+
+      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 600, color: "#333", marginBottom: "0.3rem" }}>
+        Description *
+      </label>
+      <textarea
+        placeholder="Describe and specify the product being offered (variety, quality, size, condition, etc.)"
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        required
+        style={inputStyle}
+      />
+
+      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 600, color: "#333", marginBottom: "0.3rem" }}>
+        Photo gallery of the finished product / offering *
+      </label>
+      <input type="file" accept="image/*" multiple onChange={handlePhotoSelect} style={{ marginBottom: "0.5rem" }} />
+      {photos.length > 0 && (
+        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.6rem" }}>
+          {photos.map((p) => (
+            <div key={p.previewUrl} style={{ position: "relative", width: 84, height: 84 }}>
+              <img
+                src={p.previewUrl}
+                alt="Product"
+                style={{
+                  width: 84, height: 84, objectFit: "cover", borderRadius: 8,
+                  border: p.error ? "2px solid #d32f2f" : "1px solid #ccc",
+                  opacity: p.uploading ? 0.5 : 1,
+                }}
+              />
+              {p.uploading && (
+                <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.7rem", fontWeight: 700, color: "#333" }}>
+                  Uploading…
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => removePhoto(p.previewUrl)}
+                style={{
+                  position: "absolute", top: -6, right: -6, width: 20, height: 20, borderRadius: "50%",
+                  border: "none", background: "#d32f2f", color: "#fff", fontSize: "0.7rem", cursor: "pointer", lineHeight: "20px", padding: 0,
+                }}
+              >
+                ✕
+              </button>
+              {p.error && (
+                <span style={{ position: "absolute", bottom: -18, left: 0, fontSize: "0.65rem", color: "#d32f2f", whiteSpace: "nowrap" }}>
+                  {p.error}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       <div style={{ display: "flex", gap: "0.5rem" }}>
         <select value={unit} onChange={(e) => setUnit(e.target.value)} style={{ ...inputStyle, flex: 1 }}>
@@ -95,11 +191,20 @@ function CreateOfferForm({ farmerId, config, onDone }: { farmerId: Id<"users">; 
         />
       ))}
 
+      {!canSubmit && !stillUploading && (
+        <p style={{ fontSize: "0.78rem", color: "#888", margin: "0 0 0.4rem" }}>
+          Product name, description and at least one photo are required.
+        </p>
+      )}
       {error && <p style={{ color: "#d32f2f", fontSize: "0.85rem" }}>{error}</p>}
 
       <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
-        <button disabled={busy} onClick={() => handleSubmit(true)} style={primaryBtn}>Publish offer</button>
-        <button disabled={busy} onClick={() => handleSubmit(false)} style={secondaryBtn}>Save as draft</button>
+        <button disabled={busy || !canSubmit} onClick={() => handleSubmit(true)} style={{ ...primaryBtn, opacity: busy || !canSubmit ? 0.6 : 1, cursor: busy || !canSubmit ? "not-allowed" : "pointer" }}>
+          Publish offer
+        </button>
+        <button disabled={busy || !canSubmit} onClick={() => handleSubmit(false)} style={{ ...secondaryBtn, opacity: busy || !canSubmit ? 0.6 : 1, cursor: busy || !canSubmit ? "not-allowed" : "pointer" }}>
+          Save as draft
+        </button>
       </div>
     </div>
   );
@@ -195,11 +300,16 @@ export default function FarmerAdvancePurchasePage() {
         <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
           {myOffers.map((o: any) => (
             <div key={o._id} style={{ padding: "0.85rem 1rem", background: "#fff", border: "1px solid #e0e0e0", borderRadius: 10 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontWeight: 700 }}>{o.productName}</div>
-                  <div style={{ fontSize: "0.8rem", color: "#888" }}>
-                    {o.quantityCommitted}/{o.totalQuantity} {o.unit} committed · {o.status}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                  {o.photoUrls?.[0] && (
+                    <img src={o.photoUrls[0]} alt={o.productName} style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 8, flexShrink: 0 }} />
+                  )}
+                  <div>
+                    <div style={{ fontWeight: 700 }}>{o.productName}</div>
+                    <div style={{ fontSize: "0.8rem", color: "#888" }}>
+                      {o.quantityCommitted}/{o.totalQuantity} {o.unit} committed · {o.status}
+                    </div>
                   </div>
                 </div>
                 {o.status === "draft" ? (

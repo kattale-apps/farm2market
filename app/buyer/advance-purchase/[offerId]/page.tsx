@@ -263,6 +263,21 @@ export default function AdvancePurchaseOfferDetailPage() {
         </div>
       </Section>
 
+      {offer.photoUrls && offer.photoUrls.length > 0 && (
+        <Section title="Product gallery">
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+            {offer.photoUrls.map((url: string, i: number) => (
+              <img
+                key={i}
+                src={url}
+                alt={`${offer.productName} ${i + 1}`}
+                style={{ width: 110, height: 110, objectFit: "cover", borderRadius: 8, border: "1px solid #e0e0e0" }}
+              />
+            ))}
+          </div>
+        </Section>
+      )}
+
       {offer.description && (
         <Section title="Description">
           <p style={{ margin: 0, fontSize: "0.9rem", color: "#444" }}>{offer.description}</p>

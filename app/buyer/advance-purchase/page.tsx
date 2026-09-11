@@ -96,11 +96,16 @@ export default function AdvancePurchaseMarketPage() {
               color: "#2c2c2c",
             }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: "1.05rem" }}>{offer.productName}</div>
-                <div style={{ fontSize: "0.8rem", color: "#888" }}>
-                  {offer.communityName} · seller {offer.farmerAlias}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.75rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.7rem" }}>
+                {offer.photoUrls?.[0] && (
+                  <img src={offer.photoUrls[0]} alt={offer.productName} style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 8, flexShrink: 0 }} />
+                )}
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: "1.05rem" }}>{offer.productName}</div>
+                  <div style={{ fontSize: "0.8rem", color: "#888" }}>
+                    {offer.communityName} · seller {offer.farmerAlias}
+                  </div>
                 </div>
               </div>
               <span style={{

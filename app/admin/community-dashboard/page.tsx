@@ -637,18 +637,37 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
   const hardDeleteForm = useMutation((api as any).forms.hardDeleteForm);
   const deleteForm = useMutation((api as any).forms.deleteForm);
   const updateForm = useMutation((api as any).forms.updateForm);
+  const apConfigs = useQuery((api as any).advancePurchase.listConfigsForCommunity, { communityId });
+  const createAPConfig = useMutation((api as any).advancePurchase.createConfig);
+  const updateAPConfig = useMutation((api as any).advancePurchase.updateConfig);
 
   const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [showBuilder, setShowBuilder] = useState(false);
   const [builderName, setBuilderName] = useState("");
   const [builderDescription, setBuilderDescription] = useState("");
   const [builderCategory, setBuilderCategory] = useState("custom");
-  const [builderPurpose, setBuilderPurpose] = useState<"tracker" | "profile" | "extension_work">("tracker");
+  const [builderPurpose, setBuilderPurpose] = useState<"tracker" | "profile" | "extension_work" | "advance_purchase">("tracker");
   const [builderPaymentEnabled, setBuilderPaymentEnabled] = useState(false);
   const [builderPaymentAmount, setBuilderPaymentAmount] = useState("5000");
   const [builderPaymentEditable, setBuilderPaymentEditable] = useState(false);
   const [builderFields, setBuilderFields] = useState<any[]>([
-    { fieldType: "text", label: "", required: true, helpText: "", placeholder: "", options: [] },
+    { fieldType: "text", label: "", required: true, helpText: "", placeholder: "", options: [], farmerEditable: true },
+  ]);
+  // Advance Purchase-only settings (formPurpose === "advance_purchase")
+  const [apProductCategory, setApProductCategory] = useState("");
+  const [apUnitOptions, setApUnitOptions] = useState("seedlings, kg, bags");
+  const [apRecurrenceOptions, setApRecurrenceOptions] = useState("one_off, seasonal, production_cycle");
+  const [apNegotiationAllowed, setApNegotiationAllowed] = useState(true);
+  const [apBuyerCanProposePrice, setApBuyerCanProposePrice] = useState(false);
+  const [apAdvancePercentage, setApAdvancePercentage] = useState("30");
+  const [apInsuranceEnabled, setApInsuranceEnabled] = useState(false);
+  const [apInsuranceLabel, setApInsuranceLabel] = useState("Farm insurance");
+  const [apInsuranceAmount, setApInsuranceAmount] = useState("");
+  const [apMilestones, setApMilestones] = useState<any[]>([
+    { order: 1, name: "Germinate", photoRequired: true, gpsRequired: true, timestampRequired: true, releasePercent: 25, expectedDaysFromPublish: 30 },
+    { order: 2, name: "Grow", photoRequired: true, gpsRequired: true, timestampRequired: true, releasePercent: 25, expectedDaysFromPublish: 90 },
+    { order: 3, name: "Harden", photoRequired: true, gpsRequired: true, timestampRequired: true, releasePercent: 25, expectedDaysFromPublish: 150 },
+    { order: 4, name: "Ready", photoRequired: true, gpsRequired: true, timestampRequired: true, releasePercent: 25, expectedDaysFromPublish: 180 },
   ]);
   const [expandedFormId, setExpandedFormId] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(typeof window !== "undefined" ? window.innerWidth < 768 : true);
@@ -676,9 +695,91 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
     }
   };
 
+  const resetBuilder = () => {
+    setShowBuilder(false);
+    setBuilderName("");
+    setBuilderDescription("");
+    setBuilderCategory("custom");
+    setBuilderPurpose("tracker");
+    setBuilderPaymentEnabled(false);
+    setBuilderPaymentAmount("5000");
+    setBuilderPaymentEditable(false);
+    setBuilderFields([{ fieldType: "text", label: "", required: true, helpText: "", placeholder: "", options: [], farmerEditable: true }]);
+    setApProductCategory("");
+    setApUnitOptions("seedlings, kg, bags");
+    setApRecurrenceOptions("one_off, seasonal, production_cycle");
+    setApNegotiationAllowed(true);
+    setApBuyerCanProposePrice(false);
+    setApAdvancePercentage("30");
+    setApInsuranceEnabled(false);
+    setApInsuranceLabel("Farm insurance");
+    setApInsuranceAmount("");
+    setApMilestones([
+      { order: 1, name: "Germinate", photoRequired: true, gpsRequired: true, timestampRequired: true, releasePercent: 25, expectedDaysFromPublish: 30 },
+      { order: 2, name: "Grow", photoRequired: true, gpsRequired: true, timestampRequired: true, releasePercent: 25, expectedDaysFromPublish: 90 },
+      { order: 3, name: "Harden", photoRequired: true, gpsRequired: true, timestampRequired: true, releasePercent: 25, expectedDaysFromPublish: 150 },
+      { order: 4, name: "Ready", photoRequired: true, gpsRequired: true, timestampRequired: true, releasePercent: 25, expectedDaysFromPublish: 180 },
+    ]);
+  };
+
+  const apMilestoneTotal = apMilestones.reduce((s, m) => s + Number(m.releasePercent || 0), 0);
+
   const handleCreateCustom = async () => {
     if (!builderName.trim()) return;
     const validFields = builderFields.filter((f) => f.label.trim());
+
+    if (builderPurpose === "advance_purchase") {
+      if (!apProductCategory.trim()) {
+        setMsg({ type: "error", text: "Product category is required for an Advance Purchase form" });
+        return;
+      }
+      if (Math.round(apMilestoneTotal) !== 100) {
+        setMsg({ type: "error", text: `Milestone release percentages must total 100% (currently ${apMilestoneTotal}%)` });
+        return;
+      }
+      try {
+        await createAPConfig({
+          adminId: userId,
+          communityId,
+          name: builderName,
+          productCategory: apProductCategory,
+          instructions: builderDescription || undefined,
+          customFields: validFields.map((f, idx) => ({
+            key: f.label.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || `field_${idx}`,
+            label: f.label,
+            fieldType: f.fieldType,
+            options: f.options?.length > 0 ? f.options.filter((o: string) => o.trim()) : undefined,
+            farmerEditable: f.farmerEditable !== false,
+            required: f.required,
+            order: idx,
+          })),
+          unitOptions: apUnitOptions.split(",").map((s) => s.trim()).filter(Boolean),
+          recurrenceOptions: apRecurrenceOptions.split(",").map((s) => s.trim()).filter(Boolean),
+          negotiationAllowed: apNegotiationAllowed,
+          buyerCanProposePrice: apBuyerCanProposePrice,
+          advancePercentage: apAdvancePercentage ? Number(apAdvancePercentage) : undefined,
+          insuranceEnabled: apInsuranceEnabled,
+          insuranceLabel: apInsuranceEnabled ? apInsuranceLabel : undefined,
+          insuranceAmount: apInsuranceEnabled && apInsuranceAmount ? Number(apInsuranceAmount) : undefined,
+          milestoneTemplate: apMilestones.map((m, idx) => ({
+            order: idx + 1,
+            name: m.name,
+            expectedDaysFromPublish: m.expectedDaysFromPublish || undefined,
+            photoRequired: m.photoRequired,
+            gpsRequired: m.gpsRequired,
+            timestampRequired: m.timestampRequired,
+            releasePercent: Number(m.releasePercent),
+          })),
+        });
+        setMsg({ type: "success", text: "Advance Purchase form created!" });
+        resetBuilder();
+        setTimeout(() => setMsg(null), 4000);
+      } catch (e: any) {
+        setMsg({ type: "error", text: e.message });
+      }
+      return;
+    }
+
     if (validFields.length === 0) {
       setMsg({ type: "error", text: "Add at least one field with a label" });
       return;
@@ -708,15 +809,7 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
         });
       }
       setMsg({ type: "success", text: "Custom form created!" });
-      setShowBuilder(false);
-      setBuilderName("");
-      setBuilderDescription("");
-      setBuilderCategory("custom");
-      setBuilderPurpose("tracker");
-      setBuilderPaymentEnabled(false);
-      setBuilderPaymentAmount("5000");
-      setBuilderPaymentEditable(false);
-      setBuilderFields([{ fieldType: "text", label: "", required: true, helpText: "", placeholder: "", options: [] }]);
+      resetBuilder();
       setTimeout(() => setMsg(null), 4000);
     } catch (e: any) {
       setMsg({ type: "error", text: e.message });
@@ -724,7 +817,7 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
   };
 
   const addField = () => {
-    setBuilderFields((prev) => [...prev, { fieldType: "text", label: "", required: false, helpText: "", placeholder: "", options: [] }]);
+    setBuilderFields((prev) => [...prev, { fieldType: "text", label: "", required: false, helpText: "", placeholder: "", options: [], farmerEditable: true }]);
   };
 
   const removeField = (idx: number) => {
@@ -733,6 +826,16 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
 
   const updateField = (idx: number, key: string, value: any) => {
     setBuilderFields((prev) => prev.map((f, i) => (i === idx ? { ...f, [key]: value } : f)));
+  };
+
+  const addApMilestone = () => {
+    setApMilestones((ms) => [...ms, { order: ms.length + 1, name: "", photoRequired: true, gpsRequired: true, timestampRequired: true, releasePercent: 0, expectedDaysFromPublish: undefined }]);
+  };
+  const removeApMilestone = (idx: number) => {
+    setApMilestones((ms) => ms.filter((_, i) => i !== idx).map((m, i) => ({ ...m, order: i + 1 })));
+  };
+  const updateApMilestone = (idx: number, patch: Record<string, any>) => {
+    setApMilestones((ms) => ms.map((m, i) => (i === idx ? { ...m, ...patch } : m)));
   };
 
   const CATEGORY_LABELS: Record<string, string> = {
@@ -871,33 +974,39 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
             <div style={{ marginBottom: "1rem" }}>
               <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#333", display: "block", marginBottom: "0.3rem" }}>Form Purpose</label>
               <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                {(["tracker", "profile", "extension_work"] as const).map((purpose) => (
-                  <button
-                    key={purpose}
-                    onClick={() => setBuilderPurpose(purpose)}
-                    style={{
-                      flex: "1 1 140px",
-                      padding: "0.5rem",
-                      borderRadius: "8px",
-                      border: `2px solid ${builderPurpose === purpose ? (purpose === "tracker" ? "#1976d2" : purpose === "profile" ? "#2e7d32" : "#ef6c00") : "#ddd"}`,
-                      background: builderPurpose === purpose ? (purpose === "tracker" ? "#e3f2fd" : purpose === "profile" ? "#e8f5e9" : "#fff3e0") : "#fff",
-                      color: builderPurpose === purpose ? (purpose === "tracker" ? "#1565c0" : purpose === "profile" ? "#2e7d32" : "#ef6c00") : "#666",
-                      fontSize: "0.82rem",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                      transition: "all 0.2s",
-                    }}
-                  >
-                    {purpose === "tracker" ? "📊 Tracker Form" : purpose === "profile" ? "👤 Profile Form" : "🧑‍🌾 Extension Work"}
-                  </button>
-                ))}
+                {(["tracker", "profile", "extension_work", "advance_purchase"] as const).map((purpose) => {
+                  const activeColor = purpose === "tracker" ? "#1976d2" : purpose === "profile" ? "#2e7d32" : purpose === "extension_work" ? "#ef6c00" : "#6a1b9a";
+                  const activeBg = purpose === "tracker" ? "#e3f2fd" : purpose === "profile" ? "#e8f5e9" : purpose === "extension_work" ? "#fff3e0" : "#f3e5f5";
+                  return (
+                    <button
+                      key={purpose}
+                      onClick={() => setBuilderPurpose(purpose)}
+                      style={{
+                        flex: "1 1 140px",
+                        padding: "0.5rem",
+                        borderRadius: "8px",
+                        border: `2px solid ${builderPurpose === purpose ? activeColor : "#ddd"}`,
+                        background: builderPurpose === purpose ? activeBg : "#fff",
+                        color: builderPurpose === purpose ? activeColor : "#666",
+                        fontSize: "0.82rem",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        transition: "all 0.2s",
+                      }}
+                    >
+                      {purpose === "tracker" ? "📊 Tracker Form" : purpose === "profile" ? "👤 Profile Form" : purpose === "extension_work" ? "🧑‍🌾 Extension Work" : "🌾 Advance Purchase"}
+                    </button>
+                  );
+                })}
               </div>
               <p style={{ fontSize: "0.72rem", color: "#888", margin: "0.25rem 0 0 0" }}>
                 {builderPurpose === "tracker"
                   ? "Tracker forms appear in the Trackers tab for data entry"
                   : builderPurpose === "profile"
                     ? "Profile forms appear in the community Profile tab for member info"
-                    : "Extension work forms can collect a payment before the member submits the form"}
+                    : builderPurpose === "extension_work"
+                      ? "Extension work forms can collect a payment before the member submits the form"
+                      : "Advance Purchase forms let farmers publish pre-funded offers with a milestone-based payment release tracker"}
               </p>
             </div>
             {builderPurpose === "extension_work" && (
@@ -941,6 +1050,122 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
                 )}
               </div>
             )}
+            {builderPurpose === "advance_purchase" && (
+              <div style={{ marginBottom: "1rem", padding: "0.8rem", borderRadius: "8px", border: "1px solid #e1bee7", background: "#faf3fb" }}>
+                <label style={{ fontSize: "0.8rem", fontWeight: 700, color: "#6a1b9a", display: "flex", alignItems: "center", gap: "0.35rem", marginBottom: "0.5rem" }}>
+                  🌾 Advance Purchase Settings
+                </label>
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "0.5rem", marginBottom: "0.5rem" }}>
+                  <div>
+                    <label style={{ fontSize: "0.78rem", fontWeight: 600, color: "#333" }}>Product Category *</label>
+                    <input
+                      value={apProductCategory}
+                      onChange={(e) => setApProductCategory(e.target.value)}
+                      placeholder="e.g. coffee_seedlings, produce"
+                      style={{ width: "100%", padding: "0.45rem", borderRadius: "6px", border: "1px solid #ccc", fontSize: "0.82rem", marginTop: "0.25rem" }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "0.78rem", fontWeight: 600, color: "#333" }}>Advance Percentage (%)</label>
+                    <input
+                      type="number"
+                      value={apAdvancePercentage}
+                      onChange={(e) => setApAdvancePercentage(e.target.value)}
+                      placeholder="30"
+                      style={{ width: "100%", padding: "0.45rem", borderRadius: "6px", border: "1px solid #ccc", fontSize: "0.82rem", marginTop: "0.25rem" }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "0.78rem", fontWeight: 600, color: "#333" }}>Units of measure (comma-separated)</label>
+                    <input
+                      value={apUnitOptions}
+                      onChange={(e) => setApUnitOptions(e.target.value)}
+                      style={{ width: "100%", padding: "0.45rem", borderRadius: "6px", border: "1px solid #ccc", fontSize: "0.82rem", marginTop: "0.25rem" }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "0.78rem", fontWeight: 600, color: "#333" }}>Recurrence options (comma-separated)</label>
+                    <input
+                      value={apRecurrenceOptions}
+                      onChange={(e) => setApRecurrenceOptions(e.target.value)}
+                      style={{ width: "100%", padding: "0.45rem", borderRadius: "6px", border: "1px solid #ccc", fontSize: "0.82rem", marginTop: "0.25rem" }}
+                    />
+                  </div>
+                </div>
+                <label style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.8rem", color: "#333", marginBottom: "0.3rem" }}>
+                  <input type="checkbox" checked={apNegotiationAllowed} onChange={(e) => setApNegotiationAllowed(e.target.checked)} />
+                  Allow buyer negotiation
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.8rem", color: "#333", marginBottom: "0.3rem" }}>
+                  <input type="checkbox" checked={apBuyerCanProposePrice} onChange={(e) => setApBuyerCanProposePrice(e.target.checked)} disabled={!apNegotiationAllowed} />
+                  Allow buyer to propose a different price
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.8rem", color: "#333", marginBottom: "0.3rem" }}>
+                  <input type="checkbox" checked={apInsuranceEnabled} onChange={(e) => setApInsuranceEnabled(e.target.checked)} />
+                  Offer optional insurance add-on
+                </label>
+                {apInsuranceEnabled && (
+                  <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.5rem", flexWrap: "wrap" }}>
+                    <input
+                      placeholder="Insurance label"
+                      value={apInsuranceLabel}
+                      onChange={(e) => setApInsuranceLabel(e.target.value)}
+                      style={{ flex: "1 1 140px", padding: "0.45rem", borderRadius: "6px", border: "1px solid #ccc", fontSize: "0.82rem" }}
+                    />
+                    <input
+                      type="number"
+                      placeholder="Insurance amount (UGX)"
+                      value={apInsuranceAmount}
+                      onChange={(e) => setApInsuranceAmount(e.target.value)}
+                      style={{ flex: "1 1 140px", padding: "0.45rem", borderRadius: "6px", border: "1px solid #ccc", fontSize: "0.82rem" }}
+                    />
+                  </div>
+                )}
+
+                <label style={{ fontSize: "0.8rem", fontWeight: 700, color: "#6a1b9a", display: "block", margin: "0.7rem 0 0.4rem" }}>
+                  📍 Milestone Tracker (verification stages)
+                </label>
+                {apMilestones.map((m, idx) => (
+                  <div key={idx} style={{ display: "flex", gap: "0.4rem", alignItems: "center", marginBottom: "0.4rem", flexWrap: "wrap" }}>
+                    <input
+                      placeholder="Stage name"
+                      value={m.name}
+                      onChange={(e) => updateApMilestone(idx, { name: e.target.value })}
+                      style={{ flex: "2 1 120px", padding: "0.4rem", borderRadius: "5px", border: "1px solid #ccc", fontSize: "0.82rem" }}
+                    />
+                    <input
+                      type="number"
+                      placeholder="% released"
+                      value={m.releasePercent}
+                      onChange={(e) => updateApMilestone(idx, { releasePercent: Number(e.target.value) })}
+                      style={{ flex: "1 1 90px", padding: "0.4rem", borderRadius: "5px", border: "1px solid #ccc", fontSize: "0.82rem" }}
+                    />
+                    <input
+                      type="number"
+                      placeholder="Days from publish"
+                      value={m.expectedDaysFromPublish ?? ""}
+                      onChange={(e) => updateApMilestone(idx, { expectedDaysFromPublish: Number(e.target.value) })}
+                      style={{ flex: "1 1 100px", padding: "0.4rem", borderRadius: "5px", border: "1px solid #ccc", fontSize: "0.82rem" }}
+                    />
+                    <button
+                      onClick={() => removeApMilestone(idx)}
+                      style={{ border: "none", background: "#ffebee", color: "#c62828", borderRadius: "5px", padding: "0.3rem 0.5rem", cursor: "pointer", fontSize: "0.8rem" }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+                <button
+                  onClick={addApMilestone}
+                  style={{ padding: "0.35rem 0.7rem", borderRadius: "6px", border: "1px dashed #999", background: "#fff", color: "#333", fontSize: "0.78rem", cursor: "pointer" }}
+                >
+                  + Add stage
+                </button>
+                <p style={{ fontSize: "0.75rem", margin: "0.4rem 0 0", color: Math.round(apMilestoneTotal) === 100 ? "#2e7d32" : "#c62828", fontWeight: 600 }}>
+                  Release percentages total: {apMilestoneTotal}% (must equal 100%)
+                </p>
+              </div>
+            )}
             <div style={{ marginBottom: "1rem" }}>
               <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#333" }}>Description</label>
               <input
@@ -955,30 +1180,34 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
             </div>
 
             {/* Fields */}
-            <h6 style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", fontWeight: 700, color: "#333" }}>Fields</h6>
-            <div
-              style={{
-                marginBottom: "0.6rem",
-                padding: "0.55rem 0.65rem",
-                borderRadius: "8px",
-                border: "1px solid #dcedc8",
-                background: "#f1f8e9",
-                color: "#33691e",
-                fontSize: "0.76rem",
-                lineHeight: 1.45,
-              }}
-            >
-              <strong>Bio Farm Application Record labels (recommended):</strong>
-              <br />Form name: <code>Application Record</code> (or <code>Spray Day Record</code>)
-              <br />Numeric fields: <code>Fertilizer used ml</code>, <code>Acres sprayed</code>, <code>Knapsacks sprayed</code>
-              <br />Photo field labels: <code>Best leaf</code>, <code>Worst leaf</code>, <code>Whole plant</code>, <code>Flowers</code>, <code>Fruits</code>, <code>Field overview</code>
-            </div>
+            <h6 style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", fontWeight: 700, color: "#333" }}>
+              {builderPurpose === "advance_purchase" ? "Custom Fields (asked when a farmer publishes an offer)" : "Fields"}
+            </h6>
+            {builderPurpose !== "advance_purchase" && (
+              <div
+                style={{
+                  marginBottom: "0.6rem",
+                  padding: "0.55rem 0.65rem",
+                  borderRadius: "8px",
+                  border: "1px solid #dcedc8",
+                  background: "#f1f8e9",
+                  color: "#33691e",
+                  fontSize: "0.76rem",
+                  lineHeight: 1.45,
+                }}
+              >
+                <strong>Bio Farm Application Record labels (recommended):</strong>
+                <br />Form name: <code>Application Record</code> (or <code>Spray Day Record</code>)
+                <br />Numeric fields: <code>Fertilizer used ml</code>, <code>Acres sprayed</code>, <code>Knapsacks sprayed</code>
+                <br />Photo field labels: <code>Best leaf</code>, <code>Worst leaf</code>, <code>Whole plant</code>, <code>Flowers</code>, <code>Fruits</code>, <code>Field overview</code>
+              </div>
+            )}
             {builderFields.map((field, idx) => (
               <div key={idx} style={{
                 padding: "0.75rem", borderRadius: "8px", border: "1px solid #d0d0d0",
                 background: "#fff", marginBottom: "0.5rem",
               }}>
-                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 120px auto auto", gap: "0.5rem", alignItems: "center" }}>
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 120px auto auto auto", gap: "0.5rem", alignItems: "center" }}>
                   <input
                     value={field.label}
                     onChange={(e) => updateField(idx, "label", e.target.value)}
@@ -1006,6 +1235,16 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
                     />
                     Required
                   </label>
+                  {builderPurpose === "advance_purchase" && (
+                    <label style={{ display: "flex", alignItems: "center", gap: "0.25rem", fontSize: "0.78rem", cursor: "pointer" }}>
+                      <input
+                        type="checkbox"
+                        checked={field.farmerEditable !== false}
+                        onChange={(e) => updateField(idx, "farmerEditable", e.target.checked)}
+                      />
+                      Farmer editable
+                    </label>
+                  )}
                   <button
                     onClick={() => removeField(idx)}
                     style={{
@@ -1040,11 +1279,13 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
               </button>
               <button
                 onClick={handleCreateCustom}
-                disabled={!builderName.trim()}
+                disabled={!builderName.trim() || (builderPurpose === "advance_purchase" && (!apProductCategory.trim() || Math.round(apMilestoneTotal) !== 100))}
                 style={{
                   padding: "0.4rem 0.9rem", borderRadius: "6px", border: "none",
-                  background: builderName.trim() ? "#1976d2" : "#bbb", color: "#fff",
-                  fontSize: "0.8rem", fontWeight: 600, cursor: builderName.trim() ? "pointer" : "not-allowed",
+                  background: (!builderName.trim() || (builderPurpose === "advance_purchase" && (!apProductCategory.trim() || Math.round(apMilestoneTotal) !== 100))) ? "#bbb" : "#1976d2",
+                  color: "#fff",
+                  fontSize: "0.8rem", fontWeight: 600,
+                  cursor: (!builderName.trim() || (builderPurpose === "advance_purchase" && (!apProductCategory.trim() || Math.round(apMilestoneTotal) !== 100))) ? "not-allowed" : "pointer",
                 }}
               >
                 Create Form
@@ -1142,6 +1383,90 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* Advance Purchase Forms (separate schema/backend, listed here so all forms are managed in one place) */}
+        {apConfigs !== undefined && apConfigs.length > 0 && (
+          <div style={{ marginTop: "1.5rem" }}>
+            <h5 style={{ margin: "0 0 0.75rem 0", fontSize: "0.95rem", fontWeight: 700, color: "#6a1b9a" }}>
+              🌾 Advance Purchase Forms
+            </h5>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+              {apConfigs.map((cfg: any) => {
+                const isExpanded = expandedFormId === `ap-${cfg._id}`;
+                return (
+                  <div key={cfg._id} style={{ borderRadius: "10px", border: "1px solid #e0e0e0", background: "#fff", overflow: "hidden" }}>
+                    <div
+                      onClick={() => setExpandedFormId(isExpanded ? null : `ap-${cfg._id}`)}
+                      style={{
+                        padding: "0.85rem 1rem", display: "flex", justifyContent: "space-between",
+                        alignItems: "center", cursor: "pointer", background: isExpanded ? "#faf3fb" : "#fafafa",
+                        borderBottom: isExpanded ? "1px solid #ddd" : "none", flexWrap: "wrap", gap: "0.5rem",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                        <span style={{ padding: "0.1rem 0.4rem", borderRadius: "999px", fontSize: "0.68rem", fontWeight: 600, background: "#6a1b9a", color: "#fff" }}>
+                          🌾 Advance Purchase
+                        </span>
+                        <strong style={{ fontSize: "0.9rem", color: "#333" }}>{cfg.name}</strong>
+                        <span style={{ fontSize: "0.75rem", color: cfg.isActive ? "#2e7d32" : "#999", fontWeight: 600 }}>
+                          {cfg.isActive ? "● Active" : "● Inactive"}
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                        <span style={{ fontSize: "0.78rem", color: "#888" }}>{cfg.milestoneTemplate?.length || 0} stages</span>
+                        <span style={{ fontSize: "1rem", color: "#888" }}>{isExpanded ? "▲" : "▼"}</span>
+                      </div>
+                    </div>
+                    {isExpanded && (
+                      <div style={{ padding: "1rem" }}>
+                        <p style={{ margin: "0 0 0.5rem", fontSize: "0.82rem", color: "#666" }}>
+                          Product category: <strong>{cfg.productCategory}</strong>
+                          {cfg.advancePercentage != null && <> · Advance: <strong>{cfg.advancePercentage}%</strong></>}
+                        </p>
+                        {cfg.instructions && (
+                          <p style={{ margin: "0 0 0.5rem", fontSize: "0.82rem", color: "#666" }}>{cfg.instructions}</p>
+                        )}
+                        <p style={{ margin: "0 0 0.35rem", fontSize: "0.8rem", fontWeight: 700, color: "#333" }}>Milestone Tracker</p>
+                        <ul style={{ margin: "0 0 0.75rem", paddingLeft: "1.1rem", fontSize: "0.8rem", color: "#555" }}>
+                          {(cfg.milestoneTemplate || []).map((m: any, i: number) => (
+                            <li key={i}>{m.name} — {m.releasePercent}% released{m.expectedDaysFromPublish != null ? `, ~${m.expectedDaysFromPublish}d` : ""}</li>
+                          ))}
+                        </ul>
+                        {cfg.customFields?.length > 0 && (
+                          <>
+                            <p style={{ margin: "0 0 0.35rem", fontSize: "0.8rem", fontWeight: 700, color: "#333" }}>Custom Fields</p>
+                            <ul style={{ margin: "0 0 0.75rem", paddingLeft: "1.1rem", fontSize: "0.8rem", color: "#555" }}>
+                              {cfg.customFields.map((f: any, i: number) => (
+                                <li key={i}>{f.label} ({f.fieldType}){f.required ? ", required" : ""}</li>
+                              ))}
+                            </ul>
+                          </>
+                        )}
+                        <button
+                          onClick={async () => {
+                            try {
+                              await updateAPConfig({ configId: cfg._id, adminId: userId, isActive: !cfg.isActive });
+                              setMsg({ type: "success", text: `Form ${cfg.isActive ? "deactivated" : "activated"}` });
+                            } catch (e: any) {
+                              setMsg({ type: "error", text: e.message });
+                            }
+                          }}
+                          style={{
+                            padding: "0.4rem 0.8rem", borderRadius: "6px", border: "none",
+                            background: cfg.isActive ? "#ffebee" : "#e8f5e9", color: cfg.isActive ? "#c62828" : "#2e7d32",
+                            fontSize: "0.8rem", fontWeight: 600, cursor: "pointer",
+                          }}
+                        >
+                          {cfg.isActive ? "Deactivate" : "Activate"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 

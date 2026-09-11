@@ -2699,6 +2699,7 @@ export default defineSchema({
     productName: v.string(),
     variety: v.optional(v.string()),
     description: v.optional(v.string()),
+    photoStorageIds: v.optional(v.array(v.id("_storage"))), // gallery of finished-product / offering photos
     unit: v.string(),
     unitPrice: v.number(), // UGX
     totalQuantity: v.number(),

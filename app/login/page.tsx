@@ -27,7 +27,7 @@ const ROLE_STYLES: Record<SignupRole, { text: string; border: string; bgSelected
   trader: { text: "#1565c0", border: "#1565c0", bgSelected: "#bbdefb", bgUnselected: "#e3f2fd", borderUnselected: "#90caf9" },
   buyer: { text: "#6a1b9a", border: "#6a1b9a", bgSelected: "#e1bee7", bgUnselected: "#f3e5f5", borderUnselected: "#ce93d8" },
   vendor: { text: "#e65100", border: "#e65100", bgSelected: "#ffe0b2", bgUnselected: "#fff3e0", borderUnselected: "#ffcc80" },
-  transporter: { text: "#0277bd", border: "#0277bd", bgSelected: "#b3e5fc", bgUnselected: "#e1f5fe", borderUnselected: "#81d4fa" },
+  transporter: { text: "#00838f", border: "#00838f", bgSelected: "#b2ebf2", bgUnselected: "#e0f7fa", borderUnselected: "#80deea" },
   store: { text: "#c62828", border: "#c62828", bgSelected: "#ffcdd2", bgUnselected: "#ffebee", borderUnselected: "#ef9a9a" },
 };
 

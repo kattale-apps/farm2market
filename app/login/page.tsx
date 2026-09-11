@@ -23,8 +23,8 @@ const SIGNUP_ROLES: Array<{ value: SignupRole; label: string; signupEnabled: boo
 // one hue per role so no two categories read as the same color.
 const ROLE_STYLES: Record<SignupRole, { text: string; border: string; bgSelected: string; bgUnselected: string; borderUnselected: string }> = {
   farmer: { text: "#2e7d32", border: "#2e7d32", bgSelected: "#c8e6c9", bgUnselected: "#e8f5e9", borderUnselected: "#a5d6a7" }, // green
-  vendor: { text: "#f9a825", border: "#f9a825", bgSelected: "#ffecb3", bgUnselected: "#fff8e1", borderUnselected: "#ffd54f" }, // yellow
-  trader: { text: "#ef6c00", border: "#ef6c00", bgSelected: "#ffe0b2", bgUnselected: "#fff3e0", borderUnselected: "#ffb74d" }, // orange
+  vendor: { text: "#ef6c00", border: "#ef6c00", bgSelected: "#ffe0b2", bgUnselected: "#fff3e0", borderUnselected: "#ffb74d" }, // orange
+  trader: { text: "#f9a825", border: "#f9a825", bgSelected: "#ffecb3", bgUnselected: "#fff8e1", borderUnselected: "#ffd54f" }, // yellow
   buyer: { text: "#1976d2", border: "#1976d2", bgSelected: "#bbdefb", bgUnselected: "#e3f2fd", borderUnselected: "#90caf9" }, // blue
   transporter: { text: "#c62828", border: "#c62828", bgSelected: "#ffcdd2", bgUnselected: "#ffebee", borderUnselected: "#ef9a9a" }, // red
   store: { text: "#7b1fa2", border: "#7b1fa2", bgSelected: "#e1bee7", bgUnselected: "#f3e5f5", borderUnselected: "#ce93d8" }, // purple

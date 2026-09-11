@@ -128,36 +128,35 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   const [rewardCashoutMessage, setRewardCashoutMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [messageInboxOpen, setMessageInboxOpen] = useState(false);
   const [selectedMessageUtid, setSelectedMessageUtid] = useState<string | null>(null);
-  // Section collapse state — every major dashboard section starts collapsed
-  // behind a button so the dashboard isn't overcrowded on load.
+  // Section collapse state — every major dashboard section is reached only
+  // via the "☰ More" menu; the main dashboard body always shows just the
+  // Advance Purchase Market link and the Wallet section.
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
   const toggleSection = (key: string) =>
     setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
   const isSectionOpen = (key: string) => Boolean(openSections[key]);
-  const sectionToggleButtonStyle: React.CSSProperties = {
-    width: "100%",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: "1rem 1.25rem",
-    background: "#fff",
-    border: "1px solid #e0e0e0",
-    borderRadius: 12,
-    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-    marginBottom: "1.5rem",
-    cursor: "pointer",
-    fontFamily: '"Montserrat", sans-serif',
-    fontWeight: 700,
-    fontSize: "clamp(0.95rem, 3vw, 1.1rem)",
-    color: "#2c2c2c",
-    textAlign: "left",
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const MORE_MENU_SECTIONS: Array<{ key: string; label: string }> = [
+    { key: "communities", label: "🌾 My Communities" },
+    { key: "traderOrders", label: "📦 Trader Listing Orders" },
+    { key: "purchaseWindow", label: "🪟 Purchase Window Status" },
+    { key: "traderListings", label: "📦 Trader-sourced Listings" },
+    { key: "vendorStore", label: "🏪 Shop from Vendors & Stores" },
+    { key: "farmerInventory", label: "🌾 Farmer-sourced Inventory" },
+    { key: "analytics", label: "📊 Buyer Analytics" },
+    { key: "purchaseAnalytics", label: "📈 Purchase Analytics" },
+    { key: "myOrders", label: "🧾 My Orders" },
+    { key: "ledger", label: "🧮 Transaction Ledger" },
+    { key: "walletReport", label: "📄 Wallet Report" },
+    { key: "marketPrices", label: "📑 Market Price Reports" },
+  ];
+  const openSectionFromMenu = (key: string) => {
+    setOpenSections((prev) => ({ ...prev, [key]: true }));
+    setMoreMenuOpen(false);
+    setTimeout(() => {
+      document.getElementById(`section-${key}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
   };
-  const renderSectionToggle = (key: string, label: string) => (
-    <button type="button" onClick={() => toggleSection(key)} style={sectionToggleButtonStyle}>
-      <span>{label}</span>
-      <span style={{ color: "#1976d2", fontSize: "0.85rem" }}>Show ▾</span>
-    </button>
-  );
   const hideSectionButtonStyle: React.CSSProperties = {
     display: "block",
     marginBottom: "0.75rem",
@@ -930,6 +929,75 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
               ? `(${messageThreads.reduce((sum, t) => sum + (t.unreadCount || 0), 0)})`
               : ""}
           </button>
+          <div style={{ position: "relative" }}>
+            <button
+              type="button"
+              onClick={() => setMoreMenuOpen((v) => !v)}
+              style={{
+                padding: "0.5rem 1rem",
+                background: moreMenuOpen ? "#1976d2" : "#f5f5f5",
+                color: moreMenuOpen ? "#fff" : "#333",
+                border: "1px solid #ddd",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "0.9rem",
+                fontWeight: "600",
+              }}
+            >
+              ☰ More ▾
+            </button>
+            {moreMenuOpen && (
+              <>
+                <div
+                  onClick={() => setMoreMenuOpen(false)}
+                  style={{ position: "fixed", inset: 0, zIndex: 9 }}
+                />
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "calc(100% + 0.4rem)",
+                    right: 0,
+                    zIndex: 10,
+                    background: "#fff",
+                    border: "1px solid #e0e0e0",
+                    borderRadius: "10px",
+                    boxShadow: "0 6px 20px rgba(0,0,0,0.15)",
+                    minWidth: "240px",
+                    maxHeight: "70vh",
+                    overflowY: "auto",
+                    padding: "0.4rem",
+                  }}
+                >
+                  {MORE_MENU_SECTIONS.map(({ key, label }) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => openSectionFromMenu(key)}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        width: "100%",
+                        padding: "0.6rem 0.75rem",
+                        background: isSectionOpen(key) ? "#e3f2fd" : "transparent",
+                        border: "none",
+                        borderRadius: "6px",
+                        cursor: "pointer",
+                        fontFamily: '"Montserrat", sans-serif',
+                        fontSize: "0.85rem",
+                        fontWeight: 600,
+                        color: "#2c2c2c",
+                        textAlign: "left",
+                      }}
+                    >
+                      <span>{label}</span>
+                      {isSectionOpen(key) && <span style={{ color: "#1976d2", fontSize: "0.78rem" }}>Open</span>}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -963,9 +1031,8 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       </Link>
 
       {/* Communities Section */}
-      {!isSectionOpen("communities") && renderSectionToggle("communities", "🌾 My Communities")}
       {isSectionOpen("communities") && (
-      <div style={{
+      <div id="section-communities" style={{
         padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
         borderRadius: "12px",
@@ -1123,9 +1190,8 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       )}
 
       {/* Trader Listing Orders */}
-      {!isSectionOpen("traderOrders") && renderSectionToggle("traderOrders", "📦 Trader Listing Orders")}
       {isSectionOpen("traderOrders") && (
-      <div style={{
+      <div id="section-traderOrders" style={{
         padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
         borderRadius: "12px",
@@ -1440,11 +1506,8 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
         </div>
       )}
 
-      {/* Wallet & Deposit Section */}
-      {!isSectionOpen("wallet") && renderSectionToggle("wallet", "💰 Wallet & Deposit")}
-      {isSectionOpen("wallet") && (
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", gap: "1rem", marginBottom: "1.5rem" }}>
-        {renderHideControl("wallet")}
+      {/* Wallet & Deposit Section — always visible on the main dashboard, everything else lives behind the menu */}
+      <div id="section-wallet" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", gap: "1rem", marginBottom: "1.5rem" }}>
         {/* Wallet Balance */}
         <div style={{
           padding: "clamp(1rem, 3vw, 1.5rem)",
@@ -1698,12 +1761,10 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
           )}
         </div>
       </div>
-      )}
 
       {/* Purchase Window Status */}
-      {!isSectionOpen("purchaseWindow") && renderSectionToggle("purchaseWindow", "🪟 Purchase Window Status")}
       {isSectionOpen("purchaseWindow") && (
-      <div style={{
+      <div id="section-purchaseWindow" style={{
         marginBottom: "1.5rem",
         padding: "clamp(1rem, 3vw, 1.5rem)",
         background: windowStatus?.isOpen ? "#e8f5e9" : "#ffebee",
@@ -1792,9 +1853,8 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       )}
 
       {/* Trader-sourced Listings */}
-      {!isSectionOpen("traderListings") && renderSectionToggle("traderListings", "📦 Trader-sourced Listings")}
       {isSectionOpen("traderListings") && (
-      <div style={{
+      <div id="section-traderListings" style={{
         marginBottom: "1.5rem",
         padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
@@ -1935,9 +1995,8 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       )}
 
       {/* Vendor & Store Listings */}
-      {!isSectionOpen("vendorStore") && renderSectionToggle("vendorStore", "🏪 Shop from Vendors & Stores")}
       {isSectionOpen("vendorStore") && (
-      <div style={{
+      <div id="section-vendorStore" style={{
         marginBottom: "1.5rem",
         padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
@@ -2120,9 +2179,8 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       )}
 
       {/* Farmer-sourced Inventory - Institutional Table View */}
-      {!isSectionOpen("farmerInventory") && renderSectionToggle("farmerInventory", "🌾 Farmer-sourced Inventory")}
       {isSectionOpen("farmerInventory") && (
-      <div style={{
+      <div id="section-farmerInventory" style={{
         marginBottom: "1.5rem",
         padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
@@ -2519,9 +2577,8 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       )}
 
       {/* Buyer Analytics Summary */}
-      {!isSectionOpen("analytics") && renderSectionToggle("analytics", "📊 Buyer Analytics")}
       {isSectionOpen("analytics") && (
-      <div style={{
+      <div id="section-analytics" style={{
         padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
         borderRadius: "12px",
@@ -2583,9 +2640,8 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       )}
 
       {/* Purchase Analytics - Institutional Style */}
-      {!isSectionOpen("purchaseAnalytics") && renderSectionToggle("purchaseAnalytics", "📈 Purchase Analytics")}
       {isSectionOpen("purchaseAnalytics") && (
-      <div style={{
+      <div id="section-purchaseAnalytics" style={{
         display: "grid",
         gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))",
         gap: "1rem",
@@ -2640,9 +2696,8 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       )}
 
       {/* My Orders */}
-      {!isSectionOpen("myOrders") && renderSectionToggle("myOrders", "🧾 My Orders")}
       {isSectionOpen("myOrders") && (
-      <div style={{
+      <div id="section-myOrders" style={{
         padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
         borderRadius: "12px",
@@ -2872,9 +2927,8 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       )}
 
       {/* Transaction Ledger */}
-      {!isSectionOpen("ledger") && renderSectionToggle("ledger", "🧮 Transaction Ledger")}
       {isSectionOpen("ledger") && (
-      <div style={{
+      <div id="section-ledger" style={{
         padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
         borderRadius: "12px",
@@ -3111,9 +3165,8 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       )}
 
       {/* Wallet Report */}
-      {!isSectionOpen("walletReport") && renderSectionToggle("walletReport", "📄 Wallet Report")}
       {isSectionOpen("walletReport") && (
-      <div style={{
+      <div id="section-walletReport" style={{
         padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
         borderRadius: "12px",
@@ -3295,9 +3348,8 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       )}
 
       {/* Market Price Reports Section */}
-      {!isSectionOpen("marketPrices") && renderSectionToggle("marketPrices", "📑 Market Price Reports")}
       {isSectionOpen("marketPrices") && (
-      <div style={{
+      <div id="section-marketPrices" style={{
         marginTop: "2rem",
         padding: "1.5rem",
         background: "#fff",

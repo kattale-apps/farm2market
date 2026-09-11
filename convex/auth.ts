@@ -12,6 +12,7 @@ import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { PILOT_SHARED_PASSWORD } from "./constants";
 import { getUgandaTime } from "./utils";
+import { markImportedMemberActivatedByUserId } from "./communityImports";
 
 const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
 
@@ -523,6 +524,7 @@ export const login = mutation({
     await ctx.db.patch(user._id, {
       lastActiveAt: getUgandaTime(),
     });
+    await markImportedMemberActivatedByUserId(ctx, user._id);
 
     // Return user info
     return {
@@ -783,17 +785,12 @@ export const requestPasswordReset = mutation({
       };
     }
 
-    // If user has no email and no recovery email was provided, ask for one
+    // Phone-only accounts don't need an email on file: in pilot mode the
+    // reset link is shown directly on screen rather than emailed, so
+    // requiring a recovery email here would only add friction without
+    // adding real delivery or security. If a recovery email is offered
+    // anyway, save it for future use, but never block the reset on it.
     const userEmail = user.email;
-    if (!userEmail && !args.recoveryEmail) {
-      return {
-        success: false,
-        needsEmail: true,
-        message: "This account has no email on file. Please provide a recovery email.",
-      };
-    }
-
-    // If a recovery email was provided, save it on the user for future use
     if (args.recoveryEmail && !userEmail) {
       await ctx.db.patch(user._id, { email: args.recoveryEmail.trim().toLowerCase() });
     }
@@ -992,6 +989,7 @@ export const loginWithSession = mutation({
 
     const now = getUgandaTime();
     await ctx.db.patch(user._id, { lastActiveAt: now });
+    await markImportedMemberActivatedByUserId(ctx, user._id);
 
     const sessionToken = generateSessionToken();
     await ctx.db.insert("sessions", {

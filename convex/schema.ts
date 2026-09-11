@@ -17,9 +17,9 @@ import { v } from "convex/values";
 const imageMetadata = {
   storageId: v.id("_storage"),
   url: v.string(),
-  lat: v.number(),
-  lng: v.number(),
-  accuracy: v.number(),
+  lat: v.optional(v.number()), // GPS is best-effort; capture can proceed without it
+  lng: v.optional(v.number()),
+  accuracy: v.optional(v.number()),
   capturedAt: v.string(), // ISO 8601 string
 };
 
@@ -57,6 +57,7 @@ export default defineSchema({
     sex: v.optional(v.union(v.literal("M"), v.literal("F"))), // Optional - farmer profile field
     role: v.union(v.literal("farmer"), v.literal("trader"), v.literal("buyer"), v.literal("admin"), v.literal("vendor"), v.literal("transporter"), v.literal("store")),
     alias: v.string(), // System-generated, stable, non-identifying
+    verifiedName: v.optional(v.string()), // Real name captured by a CRM agent on a call (or confirmed by an admin). Distinct from `alias`, which stays immutable/anonymized. Centralized on the member so it's captured once and reused across every lead/call instead of being re-entered per call.
     state: v.union(v.literal("active"), v.literal("suspended"), v.literal("deleted")), // User account state
     createdAt: v.number(),
     lastActiveAt: v.number(),
@@ -100,6 +101,8 @@ export default defineSchema({
     onboardedViaCommunityId: v.optional(v.id("communities")), // The community through which user was onboarded (for community_only accounts)
     supplyChainRole: v.optional(v.string()), // Role in the supply chain (e.g., "producer", "aggregator", "processor")
     supplyChainRoleOther: v.optional(v.string()), // Custom supply chain role if not in standard list
+    // QR platform (Phase 1: schema only, unenforced — Phase 2 wires real permission checks)
+    qrPermissions: v.optional(v.array(v.string())), // e.g. "qr.create", "forms.edit", "analytics.view"
   })
     .index("by_userId", ["userId"])
     .index("by_email", ["email"])
@@ -1482,7 +1485,7 @@ export default defineSchema({
     deletedAt: v.optional(v.number()),
     responseCount: v.number(),
     category: v.optional(v.string()),
-    formPurpose: v.optional(v.union(v.literal("tracker"), v.literal("profile"), v.literal("extension_work"))),
+    formPurpose: v.optional(v.union(v.literal("tracker"), v.literal("profile"), v.literal("extension_work"), v.literal("farmNeeds"))),
     paymentEnabled: v.optional(v.boolean()),
     paymentAmount: v.optional(v.number()),
     paymentAmountEditable: v.optional(v.boolean()),
@@ -1774,6 +1777,28 @@ export default defineSchema({
   })
     .index("by_userId", ["userId"]),
 
+  traderProfiles: defineTable({
+    userId: v.id("users"),
+    businessName: v.string(),
+    region: v.optional(v.string()),
+    districtId: v.optional(v.id("districts")),
+    subcountyId: v.optional(v.id("subcounties")),
+    onboardingCompleted: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_userId", ["userId"]),
+
+  buyerProfiles: defineTable({
+    userId: v.id("users"),
+    businessName: v.string(),
+    region: v.optional(v.string()),
+    districtId: v.optional(v.id("districts")),
+    subcountyId: v.optional(v.id("subcounties")),
+    onboardingCompleted: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_userId", ["userId"]),
+
   storeProfiles: defineTable({
     userId: v.id("users"),
     region: v.optional(v.string()),
@@ -1806,7 +1831,12 @@ export default defineSchema({
     phoneNumber: v.string(), // Unique within community
     email: v.optional(v.string()),
     communityRole: v.optional(v.string()),
-    status: v.union(v.literal("IMPORTED"), v.literal("ACTIVATED")),
+    district: v.optional(v.string()), // Free-text location column from the source file (e.g. "LOCATION"); mirrored onto the created account's districtText.
+    // IMPORTED: legacy pre-account-creation rows from before the one-step import flow.
+    // PENDING_ACTIVATION: account already created (phone login, like CRM's new-client
+    // flow) but the member hasn't logged in themselves yet.
+    // ACTIVATED: member has logged in at least once.
+    status: v.union(v.literal("IMPORTED"), v.literal("PENDING_ACTIVATION"), v.literal("ACTIVATED")),
     createdAt: v.number(),
     updatedAt: v.number(),
     accountUserId: v.optional(v.id("users")), // Links to created account after activation
@@ -1817,7 +1847,8 @@ export default defineSchema({
   })
     .index("by_community", ["communityId"])
     .index("by_phone", ["phoneNumber"])
-    .index("by_community_status", ["communityId", "status"]),
+    .index("by_community_status", ["communityId", "status"])
+    .index("by_account_user", ["accountUserId"]),
 
   /**
    * Market Price Submissions
@@ -1950,11 +1981,13 @@ export default defineSchema({
         v.literal("text"),
         v.literal("number"),
         v.literal("date"),
+        v.literal("select"),
         v.literal("yesno"),
         v.literal("photo"),
         v.literal("rating"),
         v.literal("gps")
       ),
+      options: v.optional(v.array(v.string())),
       unit: v.optional(v.string()),
       required: v.boolean(),
       emoji: v.optional(v.string()),
@@ -2294,6 +2327,13 @@ export default defineSchema({
     purchaseQuantity: v.optional(v.string()),
     district: v.optional(v.string()),
     subCounty: v.optional(v.string()),
+    parish: v.optional(v.string()),
+    clientName: v.optional(v.string()), // Free-text name captured at intake, shown to agents (not the anonymized account alias)
+    cropGrown: v.optional(v.string()),
+    monthOfPlanting: v.optional(v.string()),
+    pastSprayDates: v.optional(v.array(v.string())),
+    upcomingSprayScheduleAt: v.optional(v.number()),
+    wasNewClientAtIntake: v.optional(v.boolean()), // True if this intake auto-created the member account
     autoNextCallAt: v.number(),
     submittedAt: v.number(),
     createdAt: v.number(),
@@ -2333,6 +2373,7 @@ export default defineSchema({
     sourceCrmResponseId: v.id("crmFormResponses"),
     sourceCrmFormId: v.id("crmForms"),
     assignedAgentId: v.optional(v.id("users")),
+    claimedAt: v.optional(v.number()), // Set automatically when an agent claims this lead
     queueStatus: v.union(
       v.literal("open"),
       v.literal("in_progress"),
@@ -2426,4 +2467,409 @@ export default defineSchema({
     .index("by_community_stage", ["communityId", "stage"])
     .index("by_agent", ["openedByAgentId"])
     .index("by_lead", ["leadId"]),
+
+  /**
+   * QR Management Platform (Phase 1)
+   * - Self-contained module: no coupling to communities/CRM, so it can be
+   *   lifted into another app later.
+   * - A QR code always encodes a stable /q/[code] URL, never the destination
+   *   directly, so the destination can change without reprinting the QR.
+   */
+  campaigns: defineTable({
+    name: v.string(),
+    description: v.optional(v.string()),
+    isActive: v.optional(v.boolean()),
+    isDeleted: v.optional(v.boolean()),
+    startDate: v.optional(v.string()), // ISO date
+    endDate: v.optional(v.string()), // ISO date
+    createdBy: v.id("users"),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_createdBy", ["createdBy"]),
+
+  qrCodes: defineTable({
+    code: v.string(), // short public slug used in /q/[code]; unique via by_code index
+    destinationUrl: v.string(), // the changeable redirect target
+    title: v.optional(v.string()), // internal admin label, never shown publicly
+    campaignId: v.optional(v.id("campaigns")),
+    formId: v.optional(v.id("qrForms")),
+    createdBy: v.id("users"),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    isActive: v.boolean(),
+    isDeleted: v.optional(v.boolean()),
+    deletedAt: v.optional(v.number()),
+    // Visual style — color/logo/frame presets only (Phase 1 decision; the
+    // qrcode library doesn't support true dot/corner-shape rendering).
+    stylePresetId: v.optional(v.string()),
+    darkColor: v.optional(v.string()),
+    lightColor: v.optional(v.string()),
+    logoStorageId: v.optional(v.id("_storage")),
+    errorCorrectionLevel: v.optional(v.string()), // "L" | "M" | "Q" | "H"; forced to "H" server-side when a logo is set
+    // Optional public landing page (1:1, so kept as flat fields rather than a join table)
+    landingEnabled: v.optional(v.boolean()),
+    landingLogoStorageId: v.optional(v.id("_storage")),
+    landingHeroImageStorageId: v.optional(v.id("_storage")),
+    landingHeading: v.optional(v.string()),
+    landingDescription: v.optional(v.string()),
+    landingButtons: v.optional(v.array(v.object({ label: v.string(), url: v.string() }))),
+    landingSocialLinks: v.optional(v.array(v.object({ platform: v.string(), url: v.string() }))),
+    landingBackgroundColor: v.optional(v.string()), // Phase 4: additional landing-page feature
+    // Phase 4: optional scheduling window (events/time-boxed campaigns). When
+    // set, the QR resolves as inactive outside this window without the admin
+    // needing to flip isActive by hand.
+    activeFrom: v.optional(v.number()),
+    activeUntil: v.optional(v.number()),
+  })
+    .index("by_code", ["code"])
+    .index("by_createdBy", ["createdBy"])
+    .index("by_campaignId", ["campaignId"]),
+
+  qrScanEvents: defineTable({
+    qrCodeId: v.id("qrCodes"),
+    campaignId: v.optional(v.id("campaigns")), // denormalized for cheap Phase 3 filtering
+    createdAt: v.number(),
+    deviceCategory: v.optional(v.string()), // "mobile" | "tablet" | "desktop" | "other"
+    browser: v.optional(v.string()),
+    os: v.optional(v.string()),
+    referrer: v.optional(v.string()),
+    ipHash: v.optional(v.string()), // salted hash only, never raw IP
+  })
+    .index("by_qrCode_createdAt", ["qrCodeId", "createdAt"])
+    .index("by_campaign_createdAt", ["campaignId", "createdAt"])
+    .index("by_createdAt", ["createdAt"]),
+
+  qrRedirectEvents: defineTable({
+    qrCodeId: v.id("qrCodes"),
+    campaignId: v.optional(v.id("campaigns")),
+    scanEventId: v.optional(v.id("qrScanEvents")),
+    destinationUrl: v.string(), // snapshot at redirect time, so history stays accurate after later destination changes
+    createdAt: v.number(),
+    deviceCategory: v.optional(v.string()),
+    browser: v.optional(v.string()),
+    os: v.optional(v.string()),
+    referrer: v.optional(v.string()),
+  })
+    .index("by_qrCode_createdAt", ["qrCodeId", "createdAt"])
+    .index("by_campaign_createdAt", ["campaignId", "createdAt"])
+    .index("by_createdAt", ["createdAt"]),
+
+  qrForms: defineTable({
+    qrCodeId: v.id("qrCodes"),
+    title: v.string(),
+    createdBy: v.id("users"),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    isActive: v.boolean(),
+  })
+    .index("by_qrCode", ["qrCodeId"]),
+
+  qrFormFields: defineTable({
+    formId: v.id("qrForms"),
+    fieldType: v.union(
+      v.literal("text"),
+      v.literal("email"),
+      v.literal("phone"),
+      v.literal("number"),
+      v.literal("textarea"),
+      v.literal("select"),
+      v.literal("radio"),
+      v.literal("checkbox"),
+      v.literal("date")
+    ),
+    label: v.string(),
+    required: v.boolean(),
+    helpText: v.optional(v.string()),
+    options: v.optional(v.array(v.string())), // for select/radio/checkbox
+    order: v.number(),
+  })
+    .index("by_form", ["formId"]),
+
+  qrFormSubmissions: defineTable({
+    formId: v.id("qrForms"),
+    qrCodeId: v.id("qrCodes"),
+    createdAt: v.number(),
+    deviceCategory: v.optional(v.string()),
+  })
+    .index("by_form", ["formId"])
+    .index("by_qrCode_createdAt", ["qrCodeId", "createdAt"])
+    .index("by_createdAt", ["createdAt"]),
+
+  qrFormSubmissionValues: defineTable({
+    submissionId: v.id("qrFormSubmissions"),
+    fieldId: v.id("qrFormFields"),
+    value: v.string(),
+  })
+    .index("by_submission", ["submissionId"])
+    .index("by_field", ["fieldId"]),
+
+  /**
+   * QR Management Platform (Phase 2)
+   */
+  brandingSettings: defineTable({
+    // Single global settings row for this platform (a future multi-tenant
+    // lift would key this by an orgId — not needed yet, per "don't build a
+    // generic enterprise platform prematurely").
+    orgName: v.optional(v.string()),
+    logoStorageId: v.optional(v.id("_storage")),
+    primaryColor: v.optional(v.string()),
+    secondaryColor: v.optional(v.string()),
+    updatedBy: v.id("users"),
+    updatedAt: v.number(),
+  }),
+
+  // ============================================================
+  // ADVANCE PURCHASE MARKET (MVP)
+  // Community → Configuration → Farmer Offer (+ materialized
+  // Milestones) → Buyer Commitment (+ Proposals) → Evidence →
+  // Delivery. Payment reuses walletLedger exactly as the existing
+  // buyer-purchase flow does (capital_lock at funding time,
+  // profit_credit to the farmer at each approved milestone) —
+  // no new escrow ledger or payment processor.
+  // ============================================================
+
+  /**
+   * Community Admin configuration for the Advance Purchase Market.
+   * One community may have multiple configs (e.g. one per product
+   * category); farmers pick a config when creating an offer.
+   */
+  advancePurchaseConfigs: defineTable({
+    communityId: v.id("communities"),
+    adminId: v.id("users"),
+    name: v.string(), // e.g. "Coffee Seedlings Program"
+    productCategory: v.string(), // e.g. "coffee_seedlings", "produce", "livestock", "inputs" — free text, community-defined
+    instructions: v.optional(v.string()),
+    isActive: v.boolean(),
+    // Farmer-facing fields beyond the structured core fields, admin-configured.
+    customFields: v.array(v.object({
+      key: v.string(),
+      label: v.string(),
+      fieldType: v.string(), // text | number | select | textarea | date
+      options: v.optional(v.array(v.string())),
+      farmerEditable: v.boolean(),
+      required: v.boolean(),
+      order: v.number(),
+    })),
+    unitOptions: v.optional(v.array(v.string())), // e.g. ["seedlings", "kg", "bags", "head"]
+    recurrenceOptions: v.array(v.string()), // e.g. ["one_off", "seasonal", "production_cycle", "monthly"]
+    negotiationAllowed: v.boolean(),
+    buyerCanProposePrice: v.boolean(),
+    advancePercentage: v.optional(v.number()), // % of total due at funding vs balance later (display/config only in MVP)
+    minCommitmentQty: v.optional(v.number()),
+    maxCommitmentQty: v.optional(v.number()),
+    offerExpiryDays: v.optional(v.number()),
+    deliveryOptions: v.optional(v.array(v.object({
+      key: v.string(),
+      label: v.string(), // e.g. "Weekly delivery"
+      feeAmount: v.number(),
+      feeUnit: v.string(), // e.g. "per_item", "per_shipment"
+    }))),
+    insuranceEnabled: v.boolean(),
+    insuranceLabel: v.optional(v.string()),
+    insuranceAmount: v.optional(v.number()),
+    insuranceDescription: v.optional(v.string()),
+    // Milestone template — copied onto each offer at publish time so later
+    // edits here never retroactively change an in-progress offer.
+    milestoneTemplate: v.array(v.object({
+      order: v.number(),
+      name: v.string(),
+      expectedDaysFromPublish: v.optional(v.number()),
+      photoRequired: v.boolean(),
+      gpsRequired: v.boolean(),
+      timestampRequired: v.boolean(),
+      releasePercent: v.number(), // % of a commitment's total released on approval of this stage
+    })),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_community", ["communityId"])
+    .index("by_community_active", ["communityId", "isActive"]),
+
+  /**
+   * A farmer's recurring advance-purchase offer, published against a
+   * community config. Core priceable fields are structured; anything
+   * extra the admin configured lives in customFieldValues.
+   */
+  advancePurchaseOffers: defineTable({
+    communityId: v.id("communities"),
+    configId: v.id("advancePurchaseConfigs"),
+    farmerId: v.id("users"),
+    utid: v.string(),
+    productName: v.string(),
+    variety: v.optional(v.string()),
+    description: v.optional(v.string()),
+    unit: v.string(),
+    unitPrice: v.number(), // UGX
+    totalQuantity: v.number(),
+    quantityCommitted: v.number(), // sum of active commitments' quantity
+    minOrderQty: v.optional(v.number()),
+    maxOrderQty: v.optional(v.number()),
+    productionLocation: v.optional(v.string()),
+    deliveryLocation: v.optional(v.string()),
+    expectedDeliveryDate: v.optional(v.string()), // ISO
+    deliveryWindowDays: v.optional(v.number()),
+    cashComponent: v.optional(v.number()),
+    inKindComponent: v.optional(v.number()),
+    inKindInputs: v.optional(v.array(v.string())),
+    recurrence: v.string(), // one of the config's recurrenceOptions
+    negotiationAllowed: v.boolean(), // copied from config at publish time
+    buyerCanProposePrice: v.boolean(),
+    advancePercentage: v.optional(v.number()),
+    deliveryOptions: v.optional(v.array(v.object({
+      key: v.string(),
+      label: v.string(),
+      feeAmount: v.number(),
+      feeUnit: v.string(),
+    }))),
+    insuranceEnabled: v.boolean(),
+    insuranceLabel: v.optional(v.string()),
+    insuranceAmount: v.optional(v.number()),
+    insuranceDescription: v.optional(v.string()),
+    customFieldValues: v.array(v.object({
+      key: v.string(),
+      label: v.string(),
+      value: v.string(),
+    })),
+    status: v.union(
+      v.literal("draft"),
+      v.literal("published"),
+      v.literal("expired"),
+      v.literal("cancelled"),
+      v.literal("fulfilled")
+    ),
+    expiresAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_community", ["communityId"])
+    .index("by_farmer", ["farmerId"])
+    .index("by_status", ["status"])
+    .index("by_utid", ["utid"])
+    .index("by_config", ["configId"]),
+
+  /**
+   * Materialized production milestones for one offer (shared production
+   * timeline — evidence is submitted once per stage regardless of how
+   * many buyers have partially funded the offer).
+   */
+  advancePurchaseMilestones: defineTable({
+    offerId: v.id("advancePurchaseOffers"),
+    order: v.number(),
+    name: v.string(),
+    expectedDate: v.optional(v.string()), // ISO, derived from expectedDaysFromPublish
+    photoRequired: v.boolean(),
+    gpsRequired: v.boolean(),
+    timestampRequired: v.boolean(),
+    releasePercent: v.number(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("submitted"),
+      v.literal("approved"),
+      v.literal("rejected"),
+      v.literal("resubmission_required")
+    ),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_offer", ["offerId", "order"])
+    .index("by_status", ["status"]),
+
+  /**
+   * Evidence submissions against a milestone. Multiple rows per milestone
+   * allow resubmission history. Reuses the shared imageMetadata shape and
+   * the app's existing GPS/timestamp capture (GeneralCameraCapture).
+   */
+  advancePurchaseEvidence: defineTable({
+    milestoneId: v.id("advancePurchaseMilestones"),
+    offerId: v.id("advancePurchaseOffers"),
+    farmerId: v.id("users"),
+    ...imageMetadata,
+    // Future-proofing: MVP verification is human (community admin). These
+    // optional fields let a future automated check (e.g. a third-party
+    // verified-timestamp capture app) attach its own verification signal
+    // without a schema change — left undefined/unused for now.
+    verificationSource: v.optional(v.string()), // e.g. "timemark"
+    aiVerified: v.optional(v.boolean()),
+    status: v.union(
+      v.literal("pending_verification"),
+      v.literal("approved"),
+      v.literal("rejected"),
+      v.literal("resubmission_required")
+    ),
+    reviewerId: v.optional(v.id("users")),
+    reviewNotes: v.optional(v.string()),
+    submittedAt: v.number(),
+    reviewedAt: v.optional(v.number()),
+  })
+    .index("by_milestone", ["milestoneId", "submittedAt"])
+    .index("by_offer", ["offerId"])
+    .index("by_status", ["status"]),
+
+  /**
+   * A buyer's commitment (partial or full) against an offer's quantity.
+   * Funding debits the buyer's wallet exactly like buyerListingPurchases
+   * (capital_lock); each approved milestone credits the farmer's wallet
+   * (profit_credit) for that stage's percentage of this commitment's total.
+   */
+  advancePurchaseCommitments: defineTable({
+    offerId: v.id("advancePurchaseOffers"),
+    buyerId: v.id("users"),
+    utid: v.string(),
+    quantity: v.number(),
+    unitPriceAtCommit: v.number(),
+    cashAmount: v.number(),
+    inKindAmount: v.number(),
+    totalAmount: v.number(),
+    deliveryOptionKey: v.optional(v.string()),
+    deliveryFeeAmount: v.optional(v.number()),
+    insuranceOpted: v.optional(v.boolean()),
+    insuranceAmount: v.optional(v.number()),
+    status: v.union(
+      v.literal("pending_negotiation"),
+      v.literal("funded"),
+      v.literal("in_production"),
+      v.literal("ready_for_delivery"),
+      v.literal("delivered"),
+      v.literal("cancelled"),
+      v.literal("expired")
+    ),
+    walletUtid: v.optional(v.string()), // walletLedger utid for the funding debit
+    releasedAmount: v.number(), // sum of milestone-release credits to the farmer for this commitment
+    quantityDelivered: v.number(),
+    fundedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_offer", ["offerId"])
+    .index("by_buyer", ["buyerId", "createdAt"])
+    .index("by_status", ["status"])
+    .index("by_utid", ["utid"]),
+
+  /**
+   * Buyer negotiation proposal — only usable when the offer's
+   * buyerCanProposePrice/negotiationAllowed is true. Communicated to the
+   * farmer via the existing 1:1 messaging system (messages.sendMessage),
+   * not a new messaging channel.
+   */
+  advancePurchaseProposals: defineTable({
+    offerId: v.id("advancePurchaseOffers"),
+    buyerId: v.id("users"),
+    utid: v.string(),
+    proposedUnitPrice: v.optional(v.number()),
+    proposedQuantity: v.optional(v.number()),
+    proposedCashComponent: v.optional(v.number()),
+    proposedInKindComponent: v.optional(v.number()),
+    message: v.optional(v.string()),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("accepted"),
+      v.literal("rejected")
+    ),
+    createdAt: v.number(),
+    respondedAt: v.optional(v.number()),
+  })
+    .index("by_offer", ["offerId", "createdAt"])
+    .index("by_buyer", ["buyerId", "createdAt"])
+    .index("by_status", ["status"]),
 });

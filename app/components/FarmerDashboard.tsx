@@ -1127,6 +1127,27 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
             </span>
           </Link>
         )}
+        <Link href="/farmer/advance-purchase" style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "0.4rem",
+          padding: "1rem",
+          background: "#f3e5f5",
+          border: "1.5px solid #ce93d8",
+          borderRadius: "14px",
+          textDecoration: "none",
+          color: "#6a1b9a",
+          fontFamily: '"Montserrat", sans-serif',
+          fontWeight: 700,
+          fontSize: "clamp(0.82rem,2.5vw,0.95rem)",
+          boxShadow: "0 0 0 1px rgba(106,27,154,0.20), 0 0 16px rgba(106,27,154,0.18), 0 2px 8px rgba(106,27,154,0.14)",
+          minHeight: 86,
+        }}>
+          <span style={{ fontSize: "1.8rem" }}>🌱</span>
+          Advance Purchase
+        </Link>
       </div>
       )}
 

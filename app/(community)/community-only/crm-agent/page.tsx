@@ -49,6 +49,7 @@ export default function CrmAgentPage() {
 
   const claimCrmLead = useMutation((api as any).crmCalls.claimCrmLead);
   const submitCrmCallOutcome = useMutation((api as any).crmCalls.submitCrmCallOutcome);
+  const setCrmMemberVerifiedName = useMutation((api as any).crmCalls.setCrmMemberVerifiedName);
 
   const [activeLeadId, setActiveLeadId] = useState<string>("");
   const [submittingLeadId, setSubmittingLeadId] = useState<string>("");
@@ -64,6 +65,32 @@ export default function CrmAgentPage() {
   const [opportunityProbability, setOpportunityProbability] = useState<"high" | "medium" | "low">("high");
   const [opportunityNextActionDate, setOpportunityNextActionDate] = useState("");
   const [message, setMessage] = useState("");
+  const [nameDrafts, setNameDrafts] = useState<Record<string, string>>({});
+  const [savingNameLeadId, setSavingNameLeadId] = useState<string>("");
+  const [activeFormId, setActiveFormId] = useState<string>("");
+
+  // Group the queue by which intake form each lead came from - a supervisor
+  // creates a form per campaign (e.g. a region-specific follow-up), adds
+  // members to it, and agents pick which form/region to work from here
+  // instead of seeing every community's leads merged into one flat list.
+  const formTabs = useMemo(() => {
+    const counts = new Map<string, { formName: string; count: number }>();
+    for (const lead of queue || []) {
+      const key = String(lead.formId || "");
+      if (!key) continue;
+      const existing = counts.get(key);
+      if (existing) existing.count += 1;
+      else counts.set(key, { formName: lead.formName || "Form", count: 1 });
+    }
+    return Array.from(counts.entries())
+      .map(([formId, v]) => ({ formId, ...v }))
+      .sort((a, b) => a.formName.localeCompare(b.formName));
+  }, [queue]);
+
+  const displayedQueue = useMemo(() => {
+    if (!activeFormId) return queue || [];
+    return (queue || []).filter((lead: any) => String(lead.formId) === activeFormId);
+  }, [queue, activeFormId]);
 
   const greetingName = useMemo(() => {
     if (!currentUser) return "Agent";
@@ -106,6 +133,29 @@ export default function CrmAgentPage() {
     } catch (error: any) {
       setMessage(error?.message || "Failed to claim lead");
     }
+  };
+
+  const handleSaveName = async (leadId: Id<"crmLeads">) => {
+    if (!userId) return;
+    const name = (nameDrafts[String(leadId)] || "").trim();
+    if (!name) return;
+
+    setSavingNameLeadId(String(leadId));
+    setMessage("");
+
+    try {
+      await setCrmMemberVerifiedName({ leadId, agentId: userId, name });
+      setMessage("Member name saved.");
+      setNameDrafts((prev) => {
+        const next = { ...prev };
+        delete next[String(leadId)];
+        return next;
+      });
+    } catch (error: any) {
+      setMessage(error?.message || "Failed to save member name");
+    }
+
+    setSavingNameLeadId("");
   };
 
   const handleSubmitCall = async (leadId: Id<"crmLeads">) => {
@@ -190,23 +240,94 @@ export default function CrmAgentPage() {
 
         <h2 style={{ fontSize: "1rem", marginTop: "1rem", marginBottom: "0.6rem" }}>Call Now</h2>
 
+        {formTabs.length > 1 && (
+          <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
+            <button
+              onClick={() => setActiveFormId("")}
+              style={{
+                ...secondaryButtonStyle,
+                minHeight: 36,
+                padding: "0.4rem 0.75rem",
+                fontSize: "0.85rem",
+                background: activeFormId === "" ? BRAND : "#fff",
+                color: activeFormId === "" ? "#fff" : "#111827",
+                borderColor: activeFormId === "" ? BRAND : "#d1d5db",
+              }}
+            >
+              All ({(queue || []).length})
+            </button>
+            {formTabs.map((tab) => (
+              <button
+                key={tab.formId}
+                onClick={() => setActiveFormId(tab.formId)}
+                style={{
+                  ...secondaryButtonStyle,
+                  minHeight: 36,
+                  padding: "0.4rem 0.75rem",
+                  fontSize: "0.85rem",
+                  background: activeFormId === tab.formId ? BRAND : "#fff",
+                  color: activeFormId === tab.formId ? "#fff" : "#111827",
+                  borderColor: activeFormId === tab.formId ? BRAND : "#d1d5db",
+                }}
+              >
+                {tab.formName} ({tab.count})
+              </button>
+            ))}
+          </div>
+        )}
+
         {!queue && <p style={{ color: "#666" }}>Loading queue...</p>}
-        {(queue || []).length === 0 && <p style={{ color: "#666" }}>No call queue items yet.</p>}
+        {queue && displayedQueue.length === 0 && <p style={{ color: "#666" }}>No call queue items yet.</p>}
 
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-          {(queue || []).map((lead: any, idx: number) => {
+          {displayedQueue.map((lead: any, idx: number) => {
             const isActive = activeLeadId === String(lead._id);
             const canClaim = !lead.assignedAgentId;
 
             return (
               <div key={lead._id} style={{ background: "#fff", borderRadius: 12, border: "1px solid #e5e7eb", padding: "0.85rem" }}>
                 <div style={{ fontWeight: 700, fontSize: "1rem" }}>{idx + 1}. {lead.memberAlias || "Farmer"}</div>
+                {!lead.isNameVerified && (
+                  <div style={{ marginTop: "0.35rem", display: "flex", gap: "0.4rem" }}>
+                    <input
+                      value={nameDrafts[String(lead._id)] ?? ""}
+                      onChange={(e) =>
+                        setNameDrafts((prev) => ({ ...prev, [String(lead._id)]: e.target.value }))
+                      }
+                      placeholder="Enter member's real name"
+                      style={{ ...inputStyle, minHeight: 38, flex: 1 }}
+                    />
+                    <button
+                      onClick={() => handleSaveName(lead._id)}
+                      disabled={
+                        savingNameLeadId === String(lead._id) ||
+                        !(nameDrafts[String(lead._id)] || "").trim()
+                      }
+                      style={{ ...secondaryButtonStyle, minHeight: 38, whiteSpace: "nowrap" }}
+                    >
+                      {savingNameLeadId === String(lead._id) ? "Saving..." : "Save Name"}
+                    </button>
+                  </div>
+                )}
                 <div style={{ marginTop: "0.2rem", color: "#666", fontSize: "0.88rem" }}>
-                  {lead.district || "-"} {lead.subCounty ? `, ${lead.subCounty}` : ""}
+                  {lead.memberPhone || "No phone on file"}
+                </div>
+                <div style={{ marginTop: "0.2rem", color: "#666", fontSize: "0.88rem" }}>
+                  {lead.district || "-"} {lead.subCounty ? `, ${lead.subCounty}` : ""} {lead.parish ? `, ${lead.parish}` : ""}
                 </div>
                 <div style={{ marginTop: "0.2rem", color: "#444", fontSize: "0.88rem" }}>
                   {lead.productName || "Bio Farm"} {lead.purchaseQuantity ? `- ${lead.purchaseQuantity}` : ""}
                 </div>
+                {(lead.cropGrown || lead.monthOfPlanting) && (
+                  <div style={{ marginTop: "0.2rem", color: "#444", fontSize: "0.86rem" }}>
+                    {lead.cropGrown ? `Crop: ${lead.cropGrown}` : ""}{lead.cropGrown && lead.monthOfPlanting ? " · " : ""}{lead.monthOfPlanting ? `Planted: ${lead.monthOfPlanting}` : ""}
+                  </div>
+                )}
+                {lead.upcomingSprayScheduleAt && (
+                  <div style={{ marginTop: "0.2rem", color: "#7c2d12", fontSize: "0.82rem" }}>
+                    Upcoming spray: {new Date(lead.upcomingSprayScheduleAt).toLocaleDateString()}
+                  </div>
+                )}
                 <div style={{ marginTop: "0.2rem", color: lead.isOverdue ? "#b91c1c" : "#166534", fontSize: "0.84rem", fontWeight: 600 }}>
                   {lead.isDueToday ? "Follow-up due today" : lead.isOverdue ? "Overdue" : "Scheduled"}
                 </div>
@@ -345,10 +466,17 @@ function LeadOpeningScript({ leadId, requesterId }: { leadId: Id<"crmLeads">; re
 
   if (!script?.rendered) return null;
 
+  const pastSprayDates: string[] = script.profile?.pastSprayDates || [];
+
   return (
     <div style={{ marginTop: "0.55rem", padding: "0.6rem", background: "#f0fdf4", borderRadius: 8, border: "1px solid #bbf7d0", fontSize: "0.86rem", color: "#14532d", lineHeight: 1.4 }}>
       <div style={{ fontWeight: 700, marginBottom: "0.25rem" }}>Opening Script</div>
       <div>{script.rendered}</div>
+      {pastSprayDates.length > 0 && (
+        <div style={{ marginTop: "0.4rem", fontSize: "0.8rem" }}>
+          Past spray dates: {pastSprayDates.join(", ")}
+        </div>
+      )}
     </div>
   );
 }

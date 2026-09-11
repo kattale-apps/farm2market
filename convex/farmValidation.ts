@@ -120,9 +120,9 @@ export const attachImage = mutation({
     field: v.string(),
     metadata: v.object({
       storageId: v.id("_storage"),
-      lat: v.number(),
-      lng: v.number(),
-      accuracy: v.number(),
+      lat: v.optional(v.number()),
+      lng: v.optional(v.number()),
+      accuracy: v.optional(v.number()),
       capturedAt: v.string(),
     }),
   },

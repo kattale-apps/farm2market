@@ -230,12 +230,12 @@ function addReportHeader(doc: jsPDF, title: string, subtitle?: string) {
 
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(16);
-  doc.setFont(undefined, "bold");
+  (doc as any).setFont(undefined, "bold");
   doc.text(title, 10, 12);
 
   if (subtitle) {
     doc.setFontSize(10);
-    doc.setFont(undefined, "normal");
+    (doc as any).setFont(undefined, "normal");
     doc.text(subtitle, 10, 19);
   }
 
@@ -247,9 +247,9 @@ function addSectionTitle(doc: jsPDF, y: number, title: string) {
   doc.setFillColor(244, 247, 245);
   doc.rect(10, y - 4, pageWidth - 20, 8, "F");
   doc.setFontSize(11);
-  doc.setFont(undefined, "bold");
+  (doc as any).setFont(undefined, "bold");
   doc.text(title, 12, y + 1);
-  doc.setFont(undefined, "normal");
+  (doc as any).setFont(undefined, "normal");
   return y + 8;
 }
 
@@ -519,10 +519,10 @@ export async function exportSubmissionsToPDF(
     // Section: submission details
     doc.setFillColor(244, 247, 245);
     doc.rect(margin, y - 3, contentWidth, 6, "F");
-    doc.setFont(undefined, "bold");
+    (doc as any).setFont(undefined, "bold");
     doc.setFontSize(9);
     doc.text("Submission Details", labelX, y + 0.5);
-    doc.setFont(undefined, "normal");
+    (doc as any).setFont(undefined, "normal");
     y += 7;
 
     doc.setFontSize(8.5);
@@ -533,9 +533,9 @@ export async function exportSubmissionsToPDF(
         doc.setFillColor(255, 246, 179);
         doc.rect(margin, y - 3.4, contentWidth, 4.8, "F");
       }
-      doc.setFont(undefined, "bold");
+      (doc as any).setFont(undefined, "bold");
       doc.text(label, labelX, y);
-      doc.setFont(undefined, "normal");
+      (doc as any).setFont(undefined, "normal");
       if (isGpsRow) {
         doc.setTextColor(34, 100, 55);
       }
@@ -551,16 +551,16 @@ export async function exportSubmissionsToPDF(
       y += 2;
       doc.setFillColor(244, 247, 245);
       doc.rect(margin, y - 3, contentWidth, 6, "F");
-      doc.setFont(undefined, "bold");
+      (doc as any).setFont(undefined, "bold");
       doc.setFontSize(9);
       doc.text("Field Values", labelX, y + 0.5);
-      doc.setFont(undefined, "normal");
+      (doc as any).setFont(undefined, "normal");
       y += 7;
       doc.setFontSize(8.5);
       for (const [label, value] of fieldValues) {
-        doc.setFont(undefined, "bold");
+        (doc as any).setFont(undefined, "bold");
         doc.text(label, labelX, y);
-        doc.setFont(undefined, "normal");
+        (doc as any).setFont(undefined, "normal");
         doc.text(value, valueX, y, { maxWidth: contentWidth - 48 });
         y += lineH;
       }
@@ -624,10 +624,10 @@ export async function exportSubmissionsToPDF(
 
     // "FARMCOIN" label + caption
     doc.setFontSize(8.5);
-    doc.setFont(undefined, "bold");
+    (doc as any).setFont(undefined, "bold");
     doc.setTextColor(30, 30, 30);
     doc.text("FARMCOIN", pageWidth / 2, qrY + qrSize + 5, { align: "center" });
-    doc.setFont(undefined, "normal");
+    (doc as any).setFont(undefined, "normal");
     doc.setFontSize(7.5);
     doc.setTextColor(100, 100, 100);
     doc.text("Scan to join this community", pageWidth / 2, qrY + qrSize + 9.5, { align: "center" });

@@ -96,7 +96,10 @@ function MyInsightsPage() {
   ) as any;
 
   const safeInsights = Array.isArray(insights) ? insights : [];
-  const safeFertilizerPlans = Array.isArray(fertilizerPlans) ? fertilizerPlans : [];
+  const safeFertilizerPlans = useMemo(
+    () => (Array.isArray(fertilizerPlans) ? fertilizerPlans : []),
+    [fertilizerPlans]
+  );
 
   const bioFarmNames = useMemo(() => {
     const names = new Set<string>();

@@ -19,6 +19,23 @@ Write-Host "=====================================" -ForegroundColor Cyan
 Push-Location $PSScriptRoot
 
 try {
+    # Bake the F2M dev server URL into android/app/src/main/assets/capacitor.config.json.
+    # Without this, the APK silently keeps whatever server.url was last synced (e.g. production)
+    # regardless of which Gradle flavor/BuildConfig.SERVER_URL is selected.
+    Write-Host "Syncing Capacitor config for F2M dev server..." -ForegroundColor Yellow
+    Push-Location (Join-Path $PSScriptRoot "..")
+    try {
+        $env:CAPACITOR_SERVER_URL = "https://farm2market-dev.vercel.app"
+        & npx cap copy android
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "❌ Capacitor sync failed!" -ForegroundColor Red
+            exit 1
+        }
+    } finally {
+        Remove-Item Env:\CAPACITOR_SERVER_URL -ErrorAction SilentlyContinue
+        Pop-Location
+    }
+
     # Use Substring-based capitalization (not ToTitleCase, which lowercases the
     # rest of camelCase words like "defaultCommunity" -> "Defaultcommunity").
     function Capitalize([string]$s) { $s.Substring(0,1).ToUpper() + $s.Substring(1) }

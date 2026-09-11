@@ -12,9 +12,14 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
-import { BCU_PRESET_PASSWORD } from "./constants";
 import { getUgandaTime } from "./utils";
-import { getCommunityDefaultRole, ensureMandatoryRoleCommunityMembershipsForUser } from "./communities";
+import {
+  getCommunityDefaultRole,
+  ensureMandatoryRoleCommunityMembershipsForUser,
+  ensureMandatoryRoleCommunityMembershipsForUserFast,
+  getAutoJoinCommunityIdsByRole,
+  CommunityRole,
+} from "./communities";
 
 const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
 
@@ -36,6 +41,93 @@ async function ensureBioFarmMembershipForFarmer(ctx: any, userId: Id<"users">) {
 }
 
 /**
+ * Create (or reuse) a real member account for an imported row, the same way
+ * CRM's resolveOrCreateClientMember creates accounts for new clients: phone
+ * number as the login id, phone number as the (pilot-grade) password, joined
+ * to the community immediately. If a user with this phone number already
+ * exists (e.g. from CRM, another community import, or a normal signup), they
+ * are just joined to this community instead of creating a duplicate account.
+ */
+async function createOrJoinMemberAccount(
+  ctx: any,
+  args: {
+    communityId: Id<"communities">;
+    role: CommunityRole;
+    phoneNumber: string;
+    email?: string;
+    communityRole?: string;
+    districtText?: string;
+    // Pre-fetched once per mutation call (bulk import) instead of once per
+    // row - ensureMandatoryRoleCommunityMembershipsForUser re-scans the
+    // whole communities table every time, which is fine for a single CRM
+    // intake/activation but far too slow across thousands of import rows.
+    autoJoinCommunityIdsByRole?: Record<CommunityRole, Id<"communities">[]>;
+  }
+) {
+  const existingUser = await ctx.db
+    .query("users")
+    .withIndex("by_phone", (q: any) => q.eq("phoneNumber", args.phoneNumber))
+    .first();
+
+  const now = getUgandaTime();
+
+  if (existingUser) {
+    const alreadyMember = await ctx.db
+      .query("communityMemberships")
+      .withIndex("by_community_user", (q: any) =>
+        q.eq("communityId", args.communityId).eq("userId", existingUser._id)
+      )
+      .first();
+
+    if (!alreadyMember) {
+      await ctx.db.insert("communityMemberships", {
+        communityId: args.communityId,
+        userId: existingUser._id,
+        joinedAt: now,
+        communityRole: args.communityRole,
+      });
+    }
+
+    return { userId: existingUser._id as Id<"users">, wasNewUser: false };
+  }
+
+  const alias = generateAlias(args.role);
+  const passwordHash = simpleHash(args.phoneNumber);
+
+  const userId = await ctx.db.insert("users", {
+    phoneNumber: args.phoneNumber,
+    email: args.email,
+    role: args.role,
+    alias,
+    state: "active",
+    createdAt: now,
+    lastActiveAt: now,
+    passwordHash,
+    accountScope: "community_only",
+    onboardedViaCommunityId: args.communityId,
+    districtText: args.districtText,
+  });
+
+  await ctx.db.insert("communityMemberships", {
+    communityId: args.communityId,
+    userId,
+    joinedAt: now,
+    communityRole: args.communityRole,
+  });
+
+  if (args.autoJoinCommunityIdsByRole) {
+    await ensureMandatoryRoleCommunityMembershipsForUserFast(ctx, userId, args.role, args.autoJoinCommunityIdsByRole);
+  } else {
+    await ensureMandatoryRoleCommunityMembershipsForUser(ctx, userId, args.role);
+  }
+  if (args.role === "farmer") {
+    await ensureBioFarmMembershipForFarmer(ctx, userId);
+  }
+
+  return { userId: userId as Id<"users">, wasNewUser: true };
+}
+
+/**
  * Simple hash function for preset password (consistent with pilot password handling)
  */
 function simpleHash(password: string): string {
@@ -46,6 +138,15 @@ function simpleHash(password: string): string {
     hash = hash & hash;
   }
   return hash.toString(36);
+}
+
+/**
+ * Generate a random, non-identifying alias (consistent with the CRM new-client
+ * flow) so a member's phone number isn't leaked into their display name.
+ */
+function generateAlias(role: string): string {
+  const random = Math.random().toString(36).substring(2, 8);
+  return `${role}_${random}`;
 }
 
 /**
@@ -135,6 +236,10 @@ export const importCommunityMembersFromExcel = mutation({
     }
     const communityDefaultRole = getCommunityDefaultRole((community as any).communityType);
 
+    // Fetched once for the whole batch (not per row) - see
+    // ensureMandatoryRoleCommunityMembershipsForUserFast for why.
+    const autoJoinCommunityIdsByRole = await getAutoJoinCommunityIdsByRole(ctx);
+
     // Validate and import rows
     const results: any[] = [];
     const errors: any[] = [];
@@ -188,29 +293,47 @@ export const importCommunityMembersFromExcel = mutation({
         }
 
         // Extract standard fields and store remaining as additional data
-        const standardFields = ["fullName", "phoneNumber", "email", "communityRole", "notes"];
+        const standardFields = ["fullName", "phoneNumber", "email", "communityRole", "notes", "district"];
         const additionalData: Record<string, any> = {};
         for (const [key, value] of Object.entries(row)) {
           if (!standardFields.includes(key) && value !== null && value !== undefined && value !== "") {
             additionalData[key] = value;
           }
         }
+        const districtText = typeof row.district === "string" ? row.district.trim() || undefined : undefined;
 
-        // Insert imported member
+        // Create the real member account immediately (phone login, like CRM's
+        // new-client intake) instead of leaving this as a placeholder an admin
+        // has to manually activate later.
+        const { userId } = await createOrJoinMemberAccount(ctx, {
+          communityId,
+          role: communityDefaultRole,
+          phoneNumber: normalizedPhone,
+          email: finalEmail,
+          communityRole: row.communityRole?.trim() || undefined,
+          districtText,
+          autoJoinCommunityIdsByRole,
+        });
+        const account = await ctx.db.get(userId);
+        const hasLoggedIn = !!account && account.lastActiveAt > account.createdAt;
+
+        // Insert imported member record for admin-facing tracking/display
         const importedId = await ctx.db.insert("communityImportedMembers", {
           communityId,
           fullName: row.fullName.trim(),
           phoneNumber: normalizedPhone,
           email: finalEmail,
-          communityRole: row.communityRole?.trim() || null,
-          status: "IMPORTED",
+          communityRole: row.communityRole?.trim() || undefined,
+          district: districtText || undefined,
+          status: hasLoggedIn ? "ACTIVATED" : "PENDING_ACTIVATION",
           createdAt: now,
           updatedAt: now,
-          notes: row.notes?.trim() || null,
-          additionalData: Object.keys(additionalData).length > 0 ? additionalData : null,
+          accountUserId: userId,
+          notes: row.notes?.trim() || undefined,
+          additionalData: Object.keys(additionalData).length > 0 ? additionalData : undefined,
         });
 
-        results.push({ row: rowIndex, id: importedId, status: "success" });
+        results.push({ row: rowIndex, id: importedId, userId, status: "success" });
       } catch (err: any) {
         errors.push({ row: rowIndex, error: err.message || "Unknown error" });
       }
@@ -232,7 +355,9 @@ export const getImportedCommunityMembersByCommunityIds = query({
   args: {
     adminId: v.id("users"),
     communityIds: v.array(v.id("communities")),
-    status: v.optional(v.union(v.literal("IMPORTED"), v.literal("ACTIVATED"))),
+    status: v.optional(
+      v.union(v.literal("IMPORTED"), v.literal("PENDING_ACTIVATION"), v.literal("ACTIVATED"))
+    ),
   },
   handler: async (ctx, { adminId, communityIds, status }) => {
     // Verify admin authorization
@@ -261,12 +386,19 @@ export const getImportedCommunityMembersByCommunityIds = query({
     const results: any[] = [];
 
     for (const communityId of allowedCommunityIds) {
-      const members = await ctx.db
-        .query("communityImportedMembers")
-        .withIndex("by_community_status", (q) =>
-          q.eq("communityId", communityId).eq("status", status || "IMPORTED")
-        )
-        .collect();
+      // No status filter by default: admins need to see the whole imported
+      // roster (legacy IMPORTED placeholders, PENDING_ACTIVATION accounts
+      // waiting on the member's first login, and already-ACTIVATED members)
+      // in one list, not just one status at a time.
+      const members = status
+        ? await ctx.db
+            .query("communityImportedMembers")
+            .withIndex("by_community_status", (q) => q.eq("communityId", communityId).eq("status", status))
+            .collect()
+        : await ctx.db
+            .query("communityImportedMembers")
+            .withIndex("by_community", (q) => q.eq("communityId", communityId))
+            .collect();
 
       results.push(...members.map((m) => ({ ...m, communityId })));
     }
@@ -320,56 +452,39 @@ export const activateImportedCommunityMember = mutation({
       }
     }
 
-    // Check if account already exists with this email
-    const existingUser = await ctx.db
-      .query("users")
-      .withIndex("by_email", (q) => q.eq("email", importedMember.email))
-      .first();
-
-    if (existingUser) {
-      throw new Error("User account with this email already exists");
+    // Only legacy pre-account rows go through this path; anything already
+    // processed (PENDING_ACTIVATION or ACTIVATED) already has an account.
+    if (importedMember.status !== "IMPORTED") {
+      throw new Error("This member has already been processed");
     }
 
-    // Create user account
-    const passwordHash = simpleHash(BCU_PRESET_PASSWORD);
     const community = await ctx.db.get(importedMember.communityId);
     const role = getCommunityDefaultRole((community as any)?.communityType);
-    const userId = await ctx.db.insert("users", {
-      email: importedMember.email,
+
+    // Same one-step, phone-login account creation as a fresh Excel import,
+    // so legacy IMPORTED rows end up with the same login as everyone else.
+    const { userId } = await createOrJoinMemberAccount(ctx, {
+      communityId: importedMember.communityId,
       role,
-      alias: `${role}_${importedMember.phoneNumber}`,
-      state: "active",
-      createdAt: getUgandaTime(),
-      lastActiveAt: getUgandaTime(),
-      passwordHash,
+      phoneNumber: importedMember.phoneNumber,
+      email: importedMember.email,
+      communityRole: importedMember.communityRole || undefined,
+      districtText: (importedMember as any).district || undefined,
     });
 
-    // Update imported member record
+    const account = await ctx.db.get(userId);
+    const hasLoggedIn = !!account && account.lastActiveAt > account.createdAt;
+
     await ctx.db.patch(importedMemberId, {
-      status: "ACTIVATED",
+      status: hasLoggedIn ? "ACTIVATED" : "PENDING_ACTIVATION",
       accountUserId: userId,
-      presetPasswordHash: passwordHash,
       updatedAt: getUgandaTime(),
     });
-
-    // Add to community membership
-    await ctx.db.insert("communityMemberships", {
-      communityId: importedMember.communityId,
-      userId,
-      joinedAt: getUgandaTime(),
-      communityRole: importedMember.communityRole || null,
-    });
-
-    if (role === "farmer") {
-      await ensureBioFarmMembershipForFarmer(ctx, userId);
-    }
-    await ensureMandatoryRoleCommunityMembershipsForUser(ctx, userId, role);
 
     return {
       success: true,
       userId,
-      email: importedMember.email,
-      message: `Account created for ${importedMember.fullName}`,
+      message: `Account created for ${importedMember.fullName}. They can now log in with their phone number.`,
     };
   },
 });
@@ -407,9 +522,10 @@ export const deleteImportedMember = mutation({
       throw new Error("Imported member not found");
     }
 
-    // Only allow deletion of non-activated members
-    if (importedMember.status === "ACTIVATED") {
-      throw new Error("Cannot delete activated members");
+    // Only allow deleting the tracking record itself, not one with a real
+    // account already attached (covers both PENDING_ACTIVATION and ACTIVATED).
+    if (importedMember.accountUserId) {
+      throw new Error("Cannot delete a member who already has an account");
     }
 
     // Verify admin is assigned to the community
@@ -438,3 +554,24 @@ export const deleteImportedMember = mutation({
     return { success: true, message: "Imported member deleted" };
   },
 });
+
+/**
+ * Called from auth.login/loginWithSession on every successful login. If the
+ * logging-in user was created via an Excel import and is still awaiting
+ * their first login (status PENDING_ACTIVATION), flip their tracking row to
+ * ACTIVATED so admins can see they've come online. No-op for every other
+ * user (most logins won't have a matching row at all).
+ */
+export async function markImportedMemberActivatedByUserId(ctx: any, userId: Id<"users">) {
+  const importedMember = await ctx.db
+    .query("communityImportedMembers")
+    .withIndex("by_account_user", (q: any) => q.eq("accountUserId", userId))
+    .first();
+
+  if (importedMember && importedMember.status === "PENDING_ACTIVATION") {
+    await ctx.db.patch(importedMember._id, {
+      status: "ACTIVATED",
+      updatedAt: getUgandaTime(),
+    });
+  }
+}

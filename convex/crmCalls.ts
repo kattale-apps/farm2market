@@ -37,7 +37,8 @@ function computeHealthScore(args: {
 
   const normalized = Math.max(0, Math.min(100, score));
 
-  const band = normalized >= 70 ? "green" : normalized >= 40 ? "yellow" : "red";
+  const band: "green" | "yellow" | "red" =
+    normalized >= 70 ? "green" : normalized >= 40 ? "yellow" : "red";
 
   return {
     score: normalized,
@@ -226,19 +227,36 @@ export const getCrmAgentQueue = query({
       return args.includeUnassigned === true && !row.assignedAgentId;
     });
 
+    // Fetched once per call, not per lead, so the queue can be grouped by
+    // which intake form (e.g. a region-specific campaign) each lead came from.
+    const forms = await ctx.db
+      .query("crmForms")
+      .withIndex("by_community", (q: any) => q.eq("communityId", args.communityId))
+      .collect();
+    const formById = new Map(forms.map((f: any) => [String(f._id), f]));
+
     const enriched = await Promise.all(
       filtered.map(async (lead: any) => {
-        const member = await ctx.db.get(lead.memberId);
-        const response = await ctx.db.get(lead.sourceCrmResponseId);
+        const member = (await ctx.db.get(lead.memberId)) as any;
+        const response = (await ctx.db.get(lead.sourceCrmResponseId)) as any;
+        const form = formById.get(String(lead.sourceCrmFormId));
         return {
           ...lead,
-          memberAlias: member?.alias,
+          memberAlias: member?.verifiedName || response?.clientName || member?.alias,
+          isNameVerified: Boolean(member?.verifiedName),
           memberPhone: member?.phoneNumber,
           district: response?.district,
           subCounty: response?.subCounty,
+          parish: response?.parish,
+          cropGrown: response?.cropGrown,
+          monthOfPlanting: response?.monthOfPlanting,
+          pastSprayDates: response?.pastSprayDates,
+          upcomingSprayScheduleAt: response?.upcomingSprayScheduleAt,
           productName: response?.productName,
           purchaseQuantity: response?.purchaseQuantity,
           purchaseDate: response?.purchaseDate,
+          formId: lead.sourceCrmFormId,
+          formName: form?.name || "Unassigned Form",
           isDueToday: new Date(lead.nextCallAt).toDateString() === new Date().toDateString(),
           isOverdue: lead.nextCallAt < getUgandaTime(),
         };
@@ -308,6 +326,27 @@ export const getCrmAgentTodaySummary = query({
   },
 });
 
+export const setCrmMemberVerifiedName = mutation({
+  args: {
+    leadId: v.id("crmLeads"),
+    agentId: v.id("users"),
+    name: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const lead = await ctx.db.get(args.leadId);
+    if (!lead) throw new Error("CRM lead not found");
+
+    await requireCrmSupervisorOrAgentAccess(ctx, args.agentId, lead.communityId);
+
+    const name = args.name.trim();
+    if (!name) throw new Error("Name cannot be empty");
+
+    await ctx.db.patch(lead.memberId, { verifiedName: name });
+
+    return { success: true };
+  },
+});
+
 export const claimCrmLead = mutation({
   args: {
     leadId: v.id("crmLeads"),
@@ -325,6 +364,7 @@ export const claimCrmLead = mutation({
 
     await ctx.db.patch(args.leadId, {
       assignedAgentId: args.agentId,
+      claimedAt: getUgandaTime(),
       queueStatus: "in_progress",
       updatedAt: getUgandaTime(),
     });

@@ -13,10 +13,10 @@ type SignupRole = "farmer" | "trader" | "buyer" | "vendor" | "transporter" | "st
 const SIGNUP_ROLES: Array<{ value: SignupRole; label: string; signupEnabled: boolean }> = [
   { value: "farmer", label: "Farmer", signupEnabled: true },
   { value: "vendor", label: "Vendor", signupEnabled: true },
-  { value: "trader", label: "Trader", signupEnabled: false },
-  { value: "buyer", label: "Buyer", signupEnabled: false },
-  { value: "transporter", label: "Transporter", signupEnabled: false },
-  { value: "store", label: "Store", signupEnabled: false },
+  { value: "trader", label: "Trader", signupEnabled: true },
+  { value: "buyer", label: "Buyer", signupEnabled: true },
+  { value: "transporter", label: "Transporter", signupEnabled: true },
+  { value: "store", label: "Store", signupEnabled: true },
 ];
 
 /**
@@ -38,9 +38,7 @@ export default function LoginPage() {
 
 function LoginPageInner() {
   const [authStep, setAuthStep] = useState<AuthStep>("login");
-  const [identifierMode, setIdentifierMode] = useState<IdentifierMode>("phone");
-  const [phoneIdentifier, setPhoneIdentifier] = useState("");
-  const [emailIdentifier, setEmailIdentifier] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [selectedRole, setSelectedRole] = useState<SignupRole>("farmer");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -56,23 +54,17 @@ function LoginPageInner() {
   const signupWithSession = useMutation((api as any).auth.signupWithSession);
   const checkAccountExists = useMutation((api as any).auth.checkAccountExists);
 
-  const isFarmerSignupEnabled = selectedRole === "farmer" || selectedRole === "vendor";
+  const isSelectedRoleSignupEnabled = SIGNUP_ROLES.find((role) => role.value === selectedRole)?.signupEnabled ?? false;
   const selectedRoleLabel = SIGNUP_ROLES.find((role) => role.value === selectedRole)?.label || "Account";
-  const activeIdentifier = identifierMode === "phone"
-    ? phoneIdentifier.trim()
-    : emailIdentifier.trim();
+  const activeIdentifier = identifier.trim();
+  // Auto-detect: an "@" means email, anything else (digits, +, spaces) is treated as a phone number.
+  const identifierMode: IdentifierMode = activeIdentifier.includes("@") ? "email" : "phone";
 
   // Pre-fill last used credential on mount
   useEffect(() => {
     const lastCred = getLastCredential();
     if (lastCred) {
-      if (lastCred.includes("@")) {
-        setIdentifierMode("email");
-        setEmailIdentifier(lastCred);
-      } else {
-        setIdentifierMode("phone");
-        setPhoneIdentifier(lastCred);
-      }
+      setIdentifier(lastCred);
     }
   }, []);
 
@@ -138,8 +130,8 @@ function LoginPageInner() {
       };
 
       if (authStep === "confirmSignup") {
-        if (!isFarmerSignupEnabled) {
-          setError("New account creation is currently enabled for Farmer and Vendor only. Existing accounts can still log in.");
+        if (!isSelectedRoleSignupEnabled) {
+          setError(`New account creation is currently disabled for ${selectedRoleLabel}. Existing accounts can still log in.`);
           setLoading(false);
           return;
         }
@@ -202,14 +194,15 @@ function LoginPageInner() {
           display: flex;
           flex-direction: column;
           align-items: center;
+          justify-content: center;
           min-height: 100vh;
-          padding: 2rem 1rem;
+          padding: 0.75rem;
           background: transparent;
-          gap: 1.5rem;
+          gap: 1rem;
         }
         .f2m-login-card {
           background: #fff;
-          padding: 2rem;
+          padding: 1.1rem 1.25rem;
           border-radius: 12px;
           box-shadow: 0 2px 8px rgba(0,0,0,0.1);
           max-width: 400px;
@@ -231,52 +224,72 @@ function LoginPageInner() {
       `}</style>
     <main className="f2m-login-grid">
       <div className="f2m-login-card">
-        <h1 style={{ 
-          fontSize: "1.8rem", 
-          marginBottom: "0.5rem", 
-          color: "#2c2c2c",
-          fontFamily: '"Montserrat", sans-serif',
-          fontWeight: "800",
-          letterSpacing: "-0.02em",
-          textTransform: "uppercase"
-        }}>
-          Farm2Market Uganda
-        </h1>
-        <p style={{ 
-          color: "#2e7d32", 
-          marginBottom: "1.5rem", 
-          fontSize: "0.9rem", 
-          fontWeight: "600",
-          fontFamily: '"Montserrat", sans-serif',
-          letterSpacing: "0.1em",
-          textTransform: "uppercase"
-        }}>
-          Farm. Trace. Grow.
-        </p>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "0.5rem" }}>
+          <div>
+            <h1 style={{
+              fontSize: "1.4rem",
+              margin: 0,
+              color: "#2c2c2c",
+              fontFamily: '"Montserrat", sans-serif',
+              fontWeight: "800",
+              letterSpacing: "-0.02em",
+              textTransform: "uppercase"
+            }}>
+              Farm2Market Uganda
+            </h1>
+            <p style={{
+              color: "#2e7d32",
+              margin: "0.15rem 0 0",
+              fontSize: "0.75rem",
+              fontWeight: "600",
+              fontFamily: '"Montserrat", sans-serif',
+              letterSpacing: "0.1em",
+              textTransform: "uppercase"
+            }}>
+              Farm. Trace. Grow.
+            </p>
+          </div>
+          {/* TODO: point this at the Google Play Store listing once published; for now it downloads the APK directly. */}
+          <a
+            href="/api/download/android"
+            download="Farm2Market.apk"
+            title="Download Android App"
+            aria-label="Download Android App"
+            style={{
+              flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "2.25rem",
+              height: "2.25rem",
+              borderRadius: "50%",
+              background: "#e8f5e9",
+              border: "1px solid #4caf50",
+              fontSize: "1.1rem",
+              textDecoration: "none",
+            }}
+          >
+            📲
+          </a>
+        </div>
 
-        <div style={{ marginBottom: "1.25rem" }}>
-          <p style={{ margin: 0, color: "#333", fontSize: "1rem", fontWeight: 600 }}>
+        <div style={{ margin: "0.65rem 0 0.5rem" }}>
+          <p style={{ margin: 0, color: "#333", fontSize: "0.95rem", fontWeight: 600 }}>
             {authStep === "confirmSignup" ? "Confirm password to create your account." : "Log in to Farm2Market."}
           </p>
-          <p style={{ margin: "0.5rem 0 0", color: "#666", fontSize: "0.9rem", lineHeight: "1.5" }}>
-            {authStep === "confirmSignup"
-              ? "We could not find an account with this identifier."
-              : ""}
-          </p>
+          {authStep === "confirmSignup" && (
+            <p style={{ margin: "0.3rem 0 0", color: "#666", fontSize: "0.85rem", lineHeight: "1.4" }}>
+              We could not find an account with this identifier.
+            </p>
+          )}
         </div>
 
         <form onSubmit={handleSubmit}>
-          <p style={{ marginBottom: "1rem", color: "#666", fontSize: "0.9rem", lineHeight: "1.5" }}>
-            {authStep === "confirmSignup"
-              ? "Finish account creation by confirming your password."
-              : ""}
-          </p>
-
-          <div style={{ marginBottom: "1rem" }}>
-            <label style={{ display: "block", marginBottom: "0.5rem", color: "#333", fontWeight: "500" }}>
+          <div style={{ marginBottom: "0.55rem" }}>
+            <label style={{ display: "block", marginBottom: "0.3rem", color: "#333", fontWeight: "500", fontSize: "0.9rem" }}>
               Category
             </label>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "0.5rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "0.4rem" }}>
               {SIGNUP_ROLES.map((entry) => {
                 const isSelected = selectedRole === entry.value;
                 return (
@@ -286,7 +299,7 @@ function LoginPageInner() {
                     disabled={!entry.signupEnabled}
                     onClick={() => setSelectedRole(entry.value)}
                     style={{
-                      padding: "0.55rem 0.65rem",
+                      padding: "0.4rem 0.55rem",
                       borderRadius: "8px",
                       border: `1px solid ${isSelected ? "#1976d2" : "#ddd"}`,
                       background: !entry.signupEnabled
@@ -296,7 +309,7 @@ function LoginPageInner() {
                         ? (isSelected ? "#ef6c00" : "#777")
                         : (isSelected ? "#1976d2" : "#333"),
                       fontWeight: isSelected ? 700 : 500,
-                      fontSize: "0.85rem",
+                      fontSize: "0.82rem",
                       cursor: !entry.signupEnabled ? "not-allowed" : "pointer",
                       opacity: !entry.signupEnabled && !isSelected ? 0.85 : 1,
                     }}
@@ -307,69 +320,43 @@ function LoginPageInner() {
                 );
               })}
             </div>
-            {!isFarmerSignupEnabled && (
-              <p style={{ marginTop: "0.35rem", marginBottom: 0, fontSize: "0.82rem", color: "#ef6c00", fontWeight: 600 }}>
-                  New account creation is currently enabled for Farmer and Vendor only. Existing accounts can still log in.
+            {!isSelectedRoleSignupEnabled && (
+              <p style={{ marginTop: "0.3rem", marginBottom: 0, fontSize: "0.78rem", color: "#ef6c00", fontWeight: 600 }}>
+                  New account creation is currently disabled for {selectedRoleLabel}. Existing accounts can still log in.
               </p>
             )}
           </div>
 
-          <div style={{ marginBottom: "1rem" }}>
-            <label style={{ display: "block", marginBottom: "0.5rem", color: "#333", fontWeight: "500" }}>
-              {identifierMode === "phone" ? "Phone Number" : "Email Address"}
+          <div style={{ marginBottom: "0.55rem" }}>
+            <label style={{ display: "block", marginBottom: "0.3rem", color: "#333", fontWeight: "500", fontSize: "0.9rem" }}>
+              Phone Number or Email
             </label>
-            {identifierMode === "phone" ? (
-              <input
-                type="tel"
-                value={phoneIdentifier}
-                onChange={(e) => setPhoneIdentifier(e.target.value)}
-                required
-                style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  border: "1px solid #ddd",
-                  borderRadius: "6px",
-                  fontSize: "1rem"
-                }}
-                placeholder="07XX XXX XXX or +256 7XX XXX XXX"
-              />
-            ) : (
-              <input
-                type="email"
-                value={emailIdentifier}
-                onChange={(e) => setEmailIdentifier(e.target.value)}
-                required
-                style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  border: "1px solid #ddd",
-                  borderRadius: "6px",
-                  fontSize: "1rem"
-                }}
-                placeholder="your@email.com"
-              />
+            <input
+              type="text"
+              inputMode="text"
+              autoCapitalize="none"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
+              required
+              style={{
+                width: "100%",
+                padding: "0.6rem 0.7rem",
+                border: "1px solid #ddd",
+                borderRadius: "6px",
+                fontSize: "0.95rem",
+                boxSizing: "border-box",
+              }}
+              placeholder="07XX XXX XXX or your@email.com"
+            />
+            {activeIdentifier && (
+              <p style={{ marginTop: "0.4rem", marginBottom: 0, fontSize: "0.78rem", color: "#888" }}>
+                Detected as {identifierMode === "email" ? "email" : "phone number"}
+              </p>
             )}
-            <div style={{ marginTop: "0.5rem" }}>
-              <button
-                type="button"
-                onClick={() => setIdentifierMode(identifierMode === "phone" ? "email" : "phone")}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  color: "#1976d2",
-                  cursor: "pointer",
-                  fontSize: "0.85rem",
-                  textDecoration: "underline",
-                  padding: 0,
-                }}
-              >
-                {identifierMode === "phone" ? "Use email instead" : "Use phone instead"}
-              </button>
-            </div>
           </div>
 
-          <div style={{ marginBottom: authStep === "confirmSignup" ? "1rem" : "1.5rem" }}>
-            <label style={{ display: "block", marginBottom: "0.5rem", color: "#333", fontWeight: "500" }}>
+          <div style={{ marginBottom: authStep === "confirmSignup" ? "0.55rem" : "0.85rem" }}>
+            <label style={{ display: "block", marginBottom: "0.3rem", color: "#333", fontWeight: "500", fontSize: "0.9rem" }}>
               Password
             </label>
             <div style={{ position: "relative" }}>
@@ -380,11 +367,12 @@ function LoginPageInner() {
                 required
                 style={{
                   width: "100%",
-                  padding: "0.75rem",
+                  padding: "0.6rem 0.7rem",
                   paddingRight: "2.5rem",
                   border: "1px solid #ddd",
                   borderRadius: "6px",
-                  fontSize: "1rem"
+                  fontSize: "0.95rem",
+                  boxSizing: "border-box",
                 }}
                 placeholder={authStep === "confirmSignup" ? "Create a password (min. 6 characters)" : "Enter your password"}
                 minLength={authStep === "confirmSignup" ? 6 : undefined}
@@ -410,15 +398,15 @@ function LoginPageInner() {
               </button>
             </div>
             {authStep === "confirmSignup" && (
-              <p style={{ marginTop: "0.5rem", fontSize: "0.85rem", color: "#666" }}>
+              <p style={{ marginTop: "0.3rem", fontSize: "0.78rem", color: "#666" }}>
                 Password must be at least 6 characters long
               </p>
             )}
           </div>
 
           {authStep === "confirmSignup" && (
-            <div style={{ marginBottom: "1.5rem" }}>
-              <label style={{ display: "block", marginBottom: "0.5rem", color: "#333", fontWeight: "500" }}>
+            <div style={{ marginBottom: "0.85rem" }}>
+              <label style={{ display: "block", marginBottom: "0.3rem", color: "#333", fontWeight: "500", fontSize: "0.9rem" }}>
                 Confirm Password
               </label>
               <div style={{ position: "relative" }}>
@@ -429,11 +417,12 @@ function LoginPageInner() {
                   required
                   style={{
                     width: "100%",
-                    padding: "0.75rem",
+                    padding: "0.6rem 0.7rem",
                     paddingRight: "2.5rem",
                     border: "1px solid #ddd",
                     borderRadius: "6px",
-                    fontSize: "1rem"
+                    fontSize: "0.95rem",
+                    boxSizing: "border-box",
                   }}
                   placeholder="Confirm your password"
                 />
@@ -462,12 +451,13 @@ function LoginPageInner() {
 
           {error && (
             <div style={{
-              padding: "0.75rem",
+              padding: "0.55rem 0.65rem",
               background: error.includes("Confirm your password to create a new") ? "#fff8e1" : "#ffebee",
               border: error.includes("Confirm your password to create a new") ? "1px solid #f6bf26" : "1px solid #ef5350",
               borderRadius: "6px",
-              marginBottom: "1rem",
-              color: error.includes("Confirm your password to create a new") ? "#b26a00" : "#c62828"
+              marginBottom: "0.65rem",
+              color: error.includes("Confirm your password to create a new") ? "#b26a00" : "#c62828",
+              fontSize: "0.85rem",
             }}>
               {error}
             </div>
@@ -478,12 +468,12 @@ function LoginPageInner() {
             disabled={loading}
             style={{
               width: "100%",
-              padding: "0.75rem",
+              padding: "0.65rem",
               background: loading ? "#ccc" : "#1976d2",
               color: "#fff",
               border: "none",
               borderRadius: "6px",
-              fontSize: "1rem",
+              fontSize: "0.95rem",
               fontWeight: "500",
               cursor: loading ? "not-allowed" : "pointer"
             }}
@@ -494,8 +484,8 @@ function LoginPageInner() {
           </button>
         </form>
 
-        <div style={{ marginTop: "1rem", textAlign: "center" }}>
-          {authStep === "confirmSignup" ? (
+        {authStep === "confirmSignup" && (
+          <div style={{ marginTop: "0.6rem", textAlign: "center" }}>
             <button
               type="button"
               onClick={() => {
@@ -508,19 +498,17 @@ function LoginPageInner() {
                 border: "none",
                 color: "#1976d2",
                 cursor: "pointer",
-                fontSize: "0.9rem",
+                fontSize: "0.85rem",
                 textDecoration: "underline"
               }}
             >
               Back to log in
             </button>
-          ) : (
-            <></>
-          )}
-        </div>
+          </div>
+        )}
 
         {authStep === "login" && (
-          <div style={{ marginTop: "1rem", textAlign: "center" }}>
+          <div style={{ marginTop: "0.6rem", textAlign: "center" }}>
             <a
               href="#"
               onClick={(e) => {
@@ -531,58 +519,13 @@ function LoginPageInner() {
               style={{
                 color: "#1976d2",
                 textDecoration: "none",
-                fontSize: "0.9rem"
+                fontSize: "0.85rem"
               }}
             >
               Forgot your password?
             </a>
           </div>
         )}
-
-        {/* Android App Download Section */}
-        <div
-          style={{
-            marginTop: "2rem",
-            padding: "1.5rem",
-            background: "#e8f5e9",
-            borderRadius: "12px",
-            border: "2px solid #4caf50",
-            textAlign: "center",
-          }}
-        >
-          <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>📱</div>
-          <h3 style={{ fontSize: "1.2rem", marginBottom: "0.5rem", color: "#2e7d32", fontWeight: "600" }}>
-            Download Our Android App
-          </h3>
-          <p style={{ fontSize: "0.9rem", color: "#666", marginBottom: "1rem" }}>
-            Get the full mobile experience on your Android device
-          </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-            <a
-              href="/downloads/farm2market.apk"
-              download
-              style={{
-                display: "inline-block",
-                padding: "0.75rem 1.5rem",
-                background: "#4caf50",
-                color: "white",
-                textDecoration: "none",
-                borderRadius: "8px",
-                fontWeight: "600",
-                fontSize: "0.95rem",
-                transition: "background 0.3s",
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "#2e7d32")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "#4caf50")}
-            >
-              📥 Download APP
-            </a>
-          </div>
-          <p style={{ fontSize: "0.8rem", color: "#666", marginTop: "1rem" }}>
-            Version 1.2.0 • Android 5.0+
-          </p>
-        </div>
-
       </div>
     </main>
     </>

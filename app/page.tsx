@@ -87,6 +87,20 @@ export default function Home() {
       : "skip"
   );
 
+  const traderOnboardingStatus = useQuery(
+    api.traderOnboarding.checkOnboardingStatus,
+    user?.role === "trader" && user?.userId
+      ? { userId: user.userId as Id<"users"> }
+      : "skip"
+  );
+
+  const buyerOnboardingStatus = useQuery(
+    api.buyerOnboarding.checkOnboardingStatus,
+    user?.role === "buyer" && user?.userId
+      ? { userId: user.userId as Id<"users"> }
+      : "skip"
+  );
+
   const transporterOnboardingStatus = useQuery(
     api.transporterOnboarding.checkOnboardingStatus,
     user?.role === "transporter" && user?.userId
@@ -137,7 +151,22 @@ export default function Home() {
     if (user?.role === "store" && storeOnboardingStatus !== undefined && !storeOnboardingStatus.completed) {
       router.push("/onboarding/store");
     }
-  }, [user?.role, onboardingStatus, vendorOnboardingStatus, transporterOnboardingStatus, storeOnboardingStatus, router]);
+    if (user?.role === "trader" && traderOnboardingStatus !== undefined && !traderOnboardingStatus.completed) {
+      router.push("/onboarding/trader");
+    }
+    if (user?.role === "buyer" && buyerOnboardingStatus !== undefined && !buyerOnboardingStatus.completed) {
+      router.push("/onboarding/buyer");
+    }
+  }, [
+    user?.role,
+    onboardingStatus,
+    vendorOnboardingStatus,
+    transporterOnboardingStatus,
+    storeOnboardingStatus,
+    traderOnboardingStatus,
+    buyerOnboardingStatus,
+    router,
+  ]);
   
   // Show loading if checking auth
   if (!user || !user.userId || !user.role || !user.alias) {
@@ -207,8 +236,8 @@ export default function Home() {
             flexWrap: "wrap"
           }}>
             <a
-              href="/downloads/farm2market.apk"
-              download
+              href="/api/download/android"
+              download="Farm2Market.apk"
               style={{
                 display: "inline-block",
                 padding: "0.6rem 1.2rem",

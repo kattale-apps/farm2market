@@ -269,7 +269,7 @@ export const sendBroadcastNotification = mutation({
 export const sendRoleBasedNotification = mutation({
   args: {
     adminId: v.id("users"),
-    role: v.union(v.literal("farmer"), v.literal("trader"), v.literal("buyer"), v.literal("admin")),
+    role: v.union(v.literal("farmer"), v.literal("trader"), v.literal("buyer"), v.literal("vendor"), v.literal("admin")),
     title: v.string(),
     message: v.string(),
     reason: v.string(), // Required reason for sending notification

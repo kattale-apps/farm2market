@@ -77,6 +77,28 @@ export default function CommunityCrmPage() {
   const [addingField, setAddingField] = useState(false);
   const [removingFieldId, setRemovingFieldId] = useState("");
 
+  const [intakeCrmFormId, setIntakeCrmFormId] = useState<Id<"crmForms"> | null>(null);
+  const [intakeMode, setIntakeMode] = useState<"existing" | "new">("new");
+  const [memberSearch, setMemberSearch] = useState("");
+  const [selectedMemberIds, setSelectedMemberIds] = useState<Set<Id<"users">>>(new Set());
+  const [newClientName, setNewClientName] = useState("");
+  const [newClientPhone, setNewClientPhone] = useState("");
+  const [intakeProductName, setIntakeProductName] = useState("");
+  const [intakeQuantity, setIntakeQuantity] = useState("");
+  const [intakePurchaseDate, setIntakePurchaseDate] = useState("");
+  const [intakeDistrictId, setIntakeDistrictId] = useState<Id<"districts"> | "">("");
+  const [intakeSubcountyId, setIntakeSubcountyId] = useState<Id<"subcounties"> | "">("");
+  const [intakeParishId, setIntakeParishId] = useState<Id<"parishes"> | "">("");
+  const [intakeCropGrown, setIntakeCropGrown] = useState("");
+  const [intakeMonthOfPlanting, setIntakeMonthOfPlanting] = useState("");
+  const [intakePastSprayDates, setIntakePastSprayDates] = useState("");
+  const [intakeUpcomingSprayDate, setIntakeUpcomingSprayDate] = useState("");
+  const [intakeFieldValues, setIntakeFieldValues] = useState<Record<string, string>>({});
+  const [submittingIntake, setSubmittingIntake] = useState(false);
+
+  const CROP_OPTIONS = ["Coffee", "Maize", "Beans", "Groundnuts", "Rice", "Tomatoes", "Pineapple", "Bananas", "Other"];
+  const MONTH_OPTIONS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
   const crmEnabledForSelected =
     ((communities || []).find((c: any) => {
       const currentCommunityId = c?._id ?? c?.id;
@@ -118,6 +140,20 @@ export default function CommunityCrmPage() {
       : "skip"
   );
 
+  const todaysSubmittedForms = useQuery(
+    (api as any).crmAnalytics.getTodaysSubmittedForms,
+    userId && selectedCommunityId && crmEnabledForSelected
+      ? { requesterId: userId, communityId: selectedCommunityId }
+      : "skip"
+  );
+
+  const followUpsDueDetails = useQuery(
+    (api as any).crmAnalytics.getFollowUpsDueDetails,
+    userId && selectedCommunityId && crmEnabledForSelected
+      ? { requesterId: userId, communityId: selectedCommunityId }
+      : "skip"
+  );
+
   const opportunityExportRows = useQuery(
     (api as any).crmAnalytics.getOpportunityExportRows,
     userId && selectedCommunityId && crmEnabledForSelected
@@ -132,10 +168,38 @@ export default function CommunityCrmPage() {
       : "skip"
   );
 
+  const intakeCrmFormDetails = useQuery(
+    (api as any).crmForms.getCrmFormDetails,
+    userId && intakeCrmFormId && crmEnabledForSelected
+      ? { requesterId: userId, crmFormId: intakeCrmFormId }
+      : "skip"
+  );
+
+  const communityMembers = useQuery(
+    (api as any).crmForms.getCommunityMembersForCrmIntake,
+    userId && selectedCommunityId && crmEnabledForSelected
+      ? { requesterId: userId, communityId: selectedCommunityId }
+      : "skip"
+  );
+
+  const intakeDistricts = useQuery(api.locations.getActiveDistricts, {});
+  const intakeSubcounties = useQuery(
+    api.locations.getSubcountiesByDistrict,
+    intakeDistrictId ? { districtId: intakeDistrictId } : "skip"
+  );
+  const intakeParishes = useQuery(
+    api.locations.getParishesBySubcounty,
+    intakeSubcountyId ? { subcountyId: intakeSubcountyId } : "skip"
+  );
+
   const createCrmForm = useMutation((api as any).crmForms.createCrmForm);
+  const updateCrmForm = useMutation((api as any).crmForms.updateCrmForm);
+  const deleteCrmForm = useMutation((api as any).crmForms.deleteCrmForm);
   const addCrmFormField = useMutation((api as any).crmForms.addCrmFormField);
   const removeCrmFormField = useMutation((api as any).crmForms.removeCrmFormField);
   const assignCrmAgentByEmail = useMutation((api as any).crmAgents.assignCrmAgentByEmail);
+  const submitCrmIntake = useMutation((api as any).crmForms.submitCrmIntake);
+  const [formActionBusyId, setFormActionBusyId] = useState("");
 
   useEffect(() => {
     if (!communities || communities.length === 0) return;
@@ -286,6 +350,204 @@ export default function CommunityCrmPage() {
     setRemovingFieldId("");
   };
 
+  const handleToggleFormActive = async (form: any) => {
+    if (!userId) return;
+
+    setFormActionBusyId(String(form._id));
+    setMessage("");
+    try {
+      await updateCrmForm({
+        crmFormId: form._id,
+        adminId: userId,
+        isActive: !form.isActive,
+      });
+      setMessage(form.isActive ? "Form deactivated." : "Form activated.");
+    } catch (error: any) {
+      setMessage(error?.message || "Failed to update form");
+    }
+    setFormActionBusyId("");
+  };
+
+  const handleDeleteForm = async (form: any) => {
+    if (!userId) return;
+    if (!window.confirm(`Delete the form "${form.name}"? This cannot be undone.`)) return;
+
+    setFormActionBusyId(String(form._id));
+    setMessage("");
+    try {
+      await deleteCrmForm({
+        crmFormId: form._id,
+        adminId: userId,
+      });
+      if (selectedCrmFormId === form._id) setSelectedCrmFormId(null);
+      setMessage("Form deleted.");
+    } catch (error: any) {
+      setMessage(error?.message || "Failed to delete form");
+    }
+    setFormActionBusyId("");
+  };
+
+  const memberLocationLabel = (m: any) => {
+    const parts = [m?.parishText, m?.subCountyText, m?.districtText].filter(Boolean);
+    if (parts.length > 0) return parts.join(", ");
+    if (m?.village || m?.county) return [m?.village, m?.county].filter(Boolean).join(", ");
+    return "Location not on file";
+  };
+
+  const filteredMembers = useMemo(() => {
+    const term = memberSearch.trim().toLowerCase();
+    const list = communityMembers || [];
+    if (!term) return list;
+    return list.filter((m: any) =>
+      (m.alias || "").toLowerCase().includes(term) ||
+      (m.phoneNumber || "").toLowerCase().includes(term) ||
+      (m.email || "").toLowerCase().includes(term) ||
+      memberLocationLabel(m).toLowerCase().includes(term)
+    );
+  }, [communityMembers, memberSearch]);
+
+  const allFilteredSelected =
+    filteredMembers.length > 0 && filteredMembers.every((m: any) => selectedMemberIds.has(m.userId));
+
+  const toggleMemberSelected = (memberId: Id<"users">) => {
+    setSelectedMemberIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(memberId)) next.delete(memberId);
+      else next.add(memberId);
+      return next;
+    });
+  };
+
+  const toggleSelectAllFiltered = () => {
+    setSelectedMemberIds((prev) => {
+      if (allFilteredSelected) {
+        const next = new Set(prev);
+        filteredMembers.forEach((m: any) => next.delete(m.userId));
+        return next;
+      }
+      const next = new Set(prev);
+      filteredMembers.forEach((m: any) => next.add(m.userId));
+      return next;
+    });
+  };
+
+  const handleIntakeFieldChange = (crmFieldId: string, value: string) => {
+    setIntakeFieldValues((prev) => ({ ...prev, [crmFieldId]: value }));
+  };
+
+  const handleSubmitIntake = async () => {
+    if (!userId || !intakeCrmFormId) return;
+    if (intakeMode === "existing" && selectedMemberIds.size === 0) return;
+    if (intakeMode === "new" && (!newClientName.trim() || !newClientPhone.trim())) return;
+
+    setSubmittingIntake(true);
+    setMessage("");
+
+    try {
+      const responses = Object.entries(intakeFieldValues)
+        .filter(([, value]) => value.trim().length > 0)
+        .map(([crmFieldId, value]) => ({ crmFieldId: crmFieldId as Id<"crmFormFields">, value }));
+
+      const pastSprayDates = intakePastSprayDates
+        .split(",")
+        .map((d) => d.trim())
+        .filter(Boolean);
+
+      const districtName = (intakeDistricts || []).find((d: any) => d.id === intakeDistrictId)?.name;
+      const subcountyName = (intakeSubcounties || []).find((s: any) => s.id === intakeSubcountyId)?.name;
+      const parishName = (intakeParishes || []).find((p: any) => p.id === intakeParishId)?.name;
+      const upcomingSprayScheduleAt = intakeUpcomingSprayDate
+        ? new Date(`${intakeUpcomingSprayDate}T09:00:00`).getTime()
+        : undefined;
+
+      if (intakeMode === "new") {
+        const result = await submitCrmIntake({
+          crmFormId: intakeCrmFormId,
+          adminId: userId,
+          newClient: { name: newClientName.trim(), phoneNumber: newClientPhone.trim() },
+          purchaseDate: intakePurchaseDate || undefined,
+          productName: intakeProductName || undefined,
+          purchaseQuantity: intakeQuantity || undefined,
+          district: districtName || undefined,
+          subCounty: subcountyName || undefined,
+          parish: parishName || undefined,
+          cropGrown: intakeCropGrown || undefined,
+          monthOfPlanting: intakeMonthOfPlanting || undefined,
+          pastSprayDates: pastSprayDates.length > 0 ? pastSprayDates : undefined,
+          upcomingSprayScheduleAt,
+          responses,
+        });
+
+        setMessage(
+          result.wasNewClient
+            ? "Lead captured and a new member account was created (login: their phone number)."
+            : "Lead captured. It will now appear in the agent call queue."
+        );
+      } else {
+        // Existing members already have their location on file, so each one is
+        // submitted individually with their own district/sub-county/parish
+        // rather than forcing a single shared location on the whole batch. The
+        // manually picked dropdowns above only act as a fallback for members
+        // who don't have a location saved yet.
+        const membersById = new Map<string, any>((communityMembers || []).map((m: any) => [String(m.userId), m]));
+        const memberIds = Array.from(selectedMemberIds);
+
+        let succeeded = 0;
+        let failed = 0;
+        for (const memberId of memberIds) {
+          const member = membersById.get(String(memberId));
+          try {
+            await submitCrmIntake({
+              crmFormId: intakeCrmFormId,
+              adminId: userId,
+              existingMemberId: memberId,
+              purchaseDate: intakePurchaseDate || undefined,
+              productName: intakeProductName || undefined,
+              purchaseQuantity: intakeQuantity || undefined,
+              district: member?.districtText || districtName || undefined,
+              subCounty: member?.subCountyText || subcountyName || undefined,
+              parish: member?.parishText || parishName || undefined,
+              cropGrown: intakeCropGrown || undefined,
+              monthOfPlanting: intakeMonthOfPlanting || undefined,
+              pastSprayDates: pastSprayDates.length > 0 ? pastSprayDates : undefined,
+              upcomingSprayScheduleAt,
+              responses,
+            });
+            succeeded++;
+          } catch {
+            failed++;
+          }
+        }
+
+        setMessage(
+          failed === 0
+            ? `${succeeded} member${succeeded === 1 ? "" : "s"} added to the call queue.`
+            : `${succeeded} member${succeeded === 1 ? "" : "s"} added to the call queue; ${failed} failed.`
+        );
+      }
+
+      setSelectedMemberIds(new Set());
+      setMemberSearch("");
+      setNewClientName("");
+      setNewClientPhone("");
+      setIntakeProductName("");
+      setIntakeQuantity("");
+      setIntakePurchaseDate("");
+      setIntakeDistrictId("");
+      setIntakeSubcountyId("");
+      setIntakeParishId("");
+      setIntakeCropGrown("");
+      setIntakeMonthOfPlanting("");
+      setIntakePastSprayDates("");
+      setIntakeUpcomingSprayDate("");
+      setIntakeFieldValues({});
+    } catch (error: any) {
+      setMessage(error?.message || "Failed to capture lead");
+    }
+
+    setSubmittingIntake(false);
+  };
+
   const handleExportTodayCsv = () => {
     if (!todayPerformance || !selectedCommunity) return;
 
@@ -295,7 +557,7 @@ export default function CommunityCrmPage() {
         community: selectedCommunity.name,
         agents: todayPerformance.agents,
         callsAttempted: todayPerformance.callsAttempted,
-        answered: todayPerformance.answered,
+        claimedLeads: todayPerformance.claimedToday,
         completedFollowUps: todayPerformance.completedFollowUps,
         salesOpportunities: todayPerformance.salesOpportunities,
         orders: todayPerformance.orders,
@@ -382,7 +644,7 @@ export default function CommunityCrmPage() {
 
       const summaryRows = [
         ["Today's Calls", String(todayPerformance?.callsAttempted ?? 0)],
-        ["Answered", String(todayPerformance?.answered ?? 0)],
+        ["Claimed Leads", String(todayPerformance?.claimedToday ?? 0)],
         ["Completed Follow-ups", String(todayPerformance?.completedFollowUps ?? 0)],
         ["Opportunities (Today)", String(todayPerformance?.salesOpportunities ?? 0)],
         ["Orders", String(todayPerformance?.orders ?? 0)],
@@ -468,11 +730,53 @@ export default function CommunityCrmPage() {
 
         <div style={{ marginTop: "1rem", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "0.75rem" }}>
           <MetricCard label="Today's Calls" value={todayPerformance?.callsAttempted} />
-          <MetricCard label="Answered" value={todayPerformance?.answered} />
+          <MetricCard label="Claimed Leads" value={todayPerformance?.claimedToday} />
           <MetricCard label="Follow-ups Due" value={crmHomeSummary?.followUpsDueToday} />
           <MetricCard label="Sales Opportunities" value={todayPerformance?.salesOpportunities} />
           <MetricCard label="Product Issues" value={todayPerformance?.productIssues} />
           <MetricCard label="Agents" value={todayPerformance?.agents} />
+        </div>
+
+        <div style={{ marginTop: "1rem", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "0.75rem" }}>
+          <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: "0.9rem" }}>
+            <h3 style={{ marginTop: 0 }}>Today&apos;s Submitted Forms</h3>
+            {!todaysSubmittedForms && <p style={{ color: "#777" }}>Loading...</p>}
+            {(todaysSubmittedForms || []).length === 0 && <p style={{ color: "#777" }}>No forms submitted today yet.</p>}
+            <div style={{ maxHeight: 260, overflowY: "auto" }}>
+              {(todaysSubmittedForms || []).map((row: any) => (
+                <div key={row.responseId} style={{ padding: "0.45rem 0", borderBottom: "1px solid #f0f0f0" }}>
+                  <div style={{ fontWeight: 700 }}>{row.clientName}</div>
+                  <div style={{ fontSize: "0.82rem", color: "#666" }}>
+                    {row.formName} | {row.phoneNumber} | {row.district}{row.subCounty ? `, ${row.subCounty}` : ""}
+                  </div>
+                  <div style={{ fontSize: "0.78rem", color: "#999" }}>{new Date(row.submittedAt).toLocaleString()}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: "0.9rem" }}>
+            <h3 style={{ marginTop: 0 }}>Follow-ups Due (Upcoming Calls &amp; Confirmed Visits)</h3>
+            {!followUpsDueDetails && <p style={{ color: "#777" }}>Loading...</p>}
+            {(followUpsDueDetails || []).length === 0 && <p style={{ color: "#777" }}>No follow-ups due.</p>}
+            <div style={{ maxHeight: 260, overflowY: "auto" }}>
+              {(followUpsDueDetails || []).map((row: any) => (
+                <div key={row.leadId} style={{ padding: "0.45rem 0", borderBottom: "1px solid #f0f0f0" }}>
+                  <div style={{ fontWeight: 700 }}>
+                    {row.clientName} {row.isOverdue && <span style={{ color: "#b91c1c", fontWeight: 700, fontSize: "0.78rem" }}>OVERDUE</span>}
+                  </div>
+                  <div style={{ fontSize: "0.82rem", color: "#666" }}>
+                    {row.formName} | {row.phoneNumber} | Next call: {new Date(row.nextCallAt).toLocaleDateString()}
+                  </div>
+                  {row.confirmedVisitAt && (
+                    <div style={{ fontSize: "0.78rem", color: "#1f7a3e", fontWeight: 600 }}>
+                      Confirmed visit: {new Date(row.confirmedVisitAt).toLocaleDateString()}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
         {!crmEnabledForSelected && selectedCommunityId && (
@@ -548,7 +852,7 @@ export default function CommunityCrmPage() {
             style={{ ...inputStyle, width: "100%", marginTop: "0.7rem" }}
           />
           <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.45rem" }}>
-            Tokens: {"{{agent_name}}"}, {"{{customer_last_name}}"}, {"{{customer_gender_title}}"}, {"{{purchase_date}}"}, {"{{product_name}}"}, {"{{quantity}}"}, {"{{district}}"}, {"{{sub_county}}"}
+            Tokens: {"{{agent_name}}"}, {"{{customer_last_name}}"}, {"{{customer_gender_title}}"}, {"{{purchase_date}}"}, {"{{product_name}}"}, {"{{quantity}}"}, {"{{district}}"}, {"{{sub_county}}"}, {"{{parish}}"}, {"{{phone_number}}"}, {"{{crop_grown}}"}, {"{{month_of_planting}}"}
           </div>
           <div style={{ marginTop: "0.75rem", display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
             <button
@@ -565,6 +869,225 @@ export default function CommunityCrmPage() {
             )}
           </div>
           {message && <p style={{ marginBottom: 0, color: "#1f7a3e", fontWeight: 600 }}>{message}</p>}
+        </div>
+
+        <div style={{ marginTop: "1rem", border: "1px solid #e5e7eb", borderRadius: 12, padding: "0.9rem" }}>
+          <h2 style={{ marginTop: 0, fontSize: "1.05rem" }}>Capture New Lead (Intake)</h2>
+          <p style={{ marginTop: 0, color: "#666", fontSize: "0.9rem" }}>
+            Add a client&apos;s contact and farm details to create a lead. New clients get a member account automatically (login: their phone number); agents fill in the rest of their profile once reached.
+          </p>
+
+          <select
+            value={intakeCrmFormId || ""}
+            onChange={(e) => {
+              setIntakeCrmFormId((e.target.value || null) as Id<"crmForms"> | null);
+              setIntakeFieldValues({});
+            }}
+            style={{ ...inputStyle, width: "100%", marginBottom: "0.65rem" }}
+          >
+            <option value="">Select a CRM form...</option>
+            {(crmForms || []).filter((form: any) => form.isActive).map((form: any) => (
+              <option key={form._id} value={form._id}>{form.name}</option>
+            ))}
+          </select>
+
+          {intakeCrmFormId && (
+            <>
+              <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.65rem" }}>
+                <button
+                  onClick={() => setIntakeMode("new")}
+                  style={{ ...secondaryButtonStyleSmall, background: intakeMode === "new" ? BRAND : "#fff", color: intakeMode === "new" ? "#fff" : "#111827" }}
+                >
+                  New client
+                </button>
+                <button
+                  onClick={() => setIntakeMode("existing")}
+                  style={{ ...secondaryButtonStyleSmall, background: intakeMode === "existing" ? BRAND : "#fff", color: intakeMode === "existing" ? "#fff" : "#111827" }}
+                >
+                  Existing member
+                </button>
+              </div>
+
+              {intakeMode === "new" ? (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "0.55rem", marginBottom: "0.65rem" }}>
+                  <input value={newClientName} onChange={(e) => setNewClientName(e.target.value)} placeholder="Client full name" style={inputStyle} />
+                  <input value={newClientPhone} onChange={(e) => setNewClientPhone(e.target.value)} placeholder="Contact phone number" style={inputStyle} />
+                </div>
+              ) : (
+                <>
+                  <input
+                    value={memberSearch}
+                    onChange={(e) => setMemberSearch(e.target.value)}
+                    placeholder="Search by name, phone, email or location"
+                    style={{ ...inputStyle, width: "100%", marginBottom: "0.5rem" }}
+                  />
+
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
+                    <label style={{ display: "inline-flex", gap: "0.4rem", alignItems: "center", fontSize: "0.85rem", fontWeight: 600, cursor: filteredMembers.length === 0 ? "default" : "pointer" }}>
+                      <input
+                        type="checkbox"
+                        checked={allFilteredSelected}
+                        onChange={toggleSelectAllFiltered}
+                        disabled={filteredMembers.length === 0}
+                      />
+                      Select all {memberSearch.trim() ? "(matching)" : ""} ({filteredMembers.length})
+                    </label>
+                    <span style={{ fontSize: "0.85rem", color: "#166534", fontWeight: 600 }}>
+                      {selectedMemberIds.size} selected
+                    </span>
+                  </div>
+
+                  <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, marginBottom: "0.65rem", maxHeight: 280, overflowY: "auto" }}>
+                    {!communityMembers && (
+                      <div style={{ padding: "0.5rem", color: "#777", fontSize: "0.85rem" }}>Loading members...</div>
+                    )}
+                    {communityMembers && filteredMembers.length === 0 && (
+                      <div style={{ padding: "0.5rem", color: "#777", fontSize: "0.85rem" }}>No matching members.</div>
+                    )}
+                    {filteredMembers.map((m: any) => (
+                      <label
+                        key={m.userId}
+                        style={{ display: "flex", gap: "0.55rem", alignItems: "flex-start", padding: "0.5rem", cursor: "pointer", borderBottom: "1px solid #f3f4f6" }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedMemberIds.has(m.userId)}
+                          onChange={() => toggleMemberSelected(m.userId)}
+                          style={{ marginTop: "0.2rem" }}
+                        />
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: "0.88rem" }}>{m.alias}</div>
+                          <div style={{ fontSize: "0.78rem", color: "#666" }}>{m.phoneNumber || m.email || "-"}</div>
+                          <div style={{ fontSize: "0.78rem", color: "#1f7a3e" }}>{memberLocationLabel(m)}</div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "0.55rem", marginBottom: "0.65rem" }}>
+                <input value={intakeProductName} onChange={(e) => setIntakeProductName(e.target.value)} placeholder="Product name" style={inputStyle} />
+                <input value={intakeQuantity} onChange={(e) => setIntakeQuantity(e.target.value)} placeholder="Purchase quantity" style={inputStyle} />
+                <input value={intakePurchaseDate} onChange={(e) => setIntakePurchaseDate(e.target.value)} type="date" style={inputStyle} />
+              </div>
+
+              {intakeMode === "existing" && (
+                <p style={{ marginTop: 0, marginBottom: "0.4rem", fontSize: "0.8rem", color: "#666" }}>
+                  Selected members use their own saved location automatically. The dropdowns below only apply as a fallback for members without a location on file.
+                </p>
+              )}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "0.55rem", marginBottom: "0.65rem" }}>
+                <select
+                  value={intakeDistrictId}
+                  onChange={(e) => {
+                    setIntakeDistrictId(e.target.value as Id<"districts"> | "");
+                    setIntakeSubcountyId("");
+                    setIntakeParishId("");
+                  }}
+                  style={inputStyle}
+                >
+                  <option value="">District (optional)...</option>
+                  {(intakeDistricts || []).map((d: any) => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+                <select
+                  value={intakeSubcountyId}
+                  onChange={(e) => {
+                    setIntakeSubcountyId(e.target.value as Id<"subcounties"> | "");
+                    setIntakeParishId("");
+                  }}
+                  disabled={!intakeDistrictId}
+                  style={inputStyle}
+                >
+                  <option value="">Sub-county (optional)...</option>
+                  {(intakeSubcounties || []).map((s: any) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+                <select
+                  value={intakeParishId}
+                  onChange={(e) => setIntakeParishId(e.target.value as Id<"parishes"> | "")}
+                  disabled={!intakeSubcountyId}
+                  style={inputStyle}
+                >
+                  <option value="">Parish (optional)...</option>
+                  {(intakeParishes || []).map((p: any) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "0.55rem", marginBottom: "0.65rem" }}>
+                <select value={intakeCropGrown} onChange={(e) => setIntakeCropGrown(e.target.value)} style={inputStyle}>
+                  <option value="">Crop grown...</option>
+                  {CROP_OPTIONS.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+                <select value={intakeMonthOfPlanting} onChange={(e) => setIntakeMonthOfPlanting(e.target.value)} style={inputStyle}>
+                  <option value="">Month of planting...</option>
+                  {MONTH_OPTIONS.map((m) => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "0.55rem", marginBottom: "0.65rem" }}>
+                <div>
+                  <label style={{ display: "block", marginBottom: "0.2rem", fontSize: "0.82rem", color: "#666" }}>Past spray dates (optional, comma-separated)</label>
+                  <input value={intakePastSprayDates} onChange={(e) => setIntakePastSprayDates(e.target.value)} placeholder="e.g. 2026-04-10, 2026-05-02" style={{ ...inputStyle, width: "100%" }} />
+                </div>
+                <div>
+                  <label style={{ display: "block", marginBottom: "0.2rem", fontSize: "0.82rem", color: "#666" }}>Upcoming spray appointment (optional)</label>
+                  <input value={intakeUpcomingSprayDate} onChange={(e) => setIntakeUpcomingSprayDate(e.target.value)} type="date" style={{ ...inputStyle, width: "100%" }} />
+                </div>
+              </div>
+
+              {(intakeCrmFormDetails?.fields || []).map((field: any) => (
+                <div key={field._id} style={{ marginBottom: "0.5rem" }}>
+                  <label style={{ display: "block", marginBottom: "0.2rem", fontSize: "0.85rem", fontWeight: 600, color: "#374151" }}>
+                    {field.label}{field.required ? " *" : ""}
+                  </label>
+                  {Array.isArray(field.options) && field.options.length > 0 ? (
+                    <select
+                      value={intakeFieldValues[field._id] || ""}
+                      onChange={(e) => handleIntakeFieldChange(field._id, e.target.value)}
+                      style={{ ...inputStyle, width: "100%" }}
+                    >
+                      <option value="">Select...</option>
+                      {field.options.map((opt: string) => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      value={intakeFieldValues[field._id] || ""}
+                      onChange={(e) => handleIntakeFieldChange(field._id, e.target.value)}
+                      style={{ ...inputStyle, width: "100%" }}
+                    />
+                  )}
+                </div>
+              ))}
+
+              <button
+                onClick={handleSubmitIntake}
+                disabled={
+                  submittingIntake ||
+                  !crmEnabledForSelected ||
+                  (intakeMode === "existing" ? selectedMemberIds.size === 0 : !newClientName.trim() || !newClientPhone.trim())
+                }
+                style={{ minHeight: 44, padding: "0.6rem 0.95rem", borderRadius: 8, border: "none", background: BRAND, color: "#fff", fontWeight: 700, cursor: submittingIntake ? "not-allowed" : "pointer", marginTop: "0.4rem" }}
+              >
+                {submittingIntake
+                  ? "Saving..."
+                  : intakeMode === "existing" && selectedMemberIds.size > 1
+                  ? `Add ${selectedMemberIds.size} Members to Call Queue`
+                  : "Capture Lead"}
+              </button>
+            </>
+          )}
         </div>
 
         <div style={{ marginTop: "1rem", border: "1px solid #e5e7eb", borderRadius: 12, padding: "0.9rem" }}>
@@ -700,9 +1223,29 @@ export default function CommunityCrmPage() {
             {(crmForms || []).length === 0 && <p style={{ color: "#777" }}>No CRM forms yet.</p>}
             {(crmForms || []).map((form: any) => (
               <div key={form._id} style={{ padding: "0.5rem 0", borderBottom: "1px solid #f0f0f0" }}>
-                <div style={{ fontWeight: 700 }}>{form.name}</div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem" }}>
+                  <div style={{ fontWeight: 700 }}>
+                    {form.name} {!form.isActive && <span style={{ color: "#b91c1c", fontSize: "0.75rem", fontWeight: 700 }}>(inactive)</span>}
+                  </div>
+                </div>
                 <div style={{ fontSize: "0.85rem", color: "#666" }}>
                   Follow-up +{form.followUpOffsetDays} day(s) | Script {form.openingScriptEnabled ? "on" : "off"}
+                </div>
+                <div style={{ marginTop: "0.35rem", display: "flex", gap: "0.4rem" }}>
+                  <button
+                    onClick={() => handleToggleFormActive(form)}
+                    disabled={formActionBusyId === String(form._id) || !crmEnabledForSelected}
+                    style={{ minHeight: 30, padding: "0.3rem 0.6rem", borderRadius: 7, border: "1px solid #d1d5db", background: "#fff", color: "#374151", fontWeight: 600, fontSize: "0.78rem", cursor: formActionBusyId === String(form._id) ? "not-allowed" : "pointer" }}
+                  >
+                    {formActionBusyId === String(form._id) ? "Working..." : form.isActive ? "Deactivate" : "Activate"}
+                  </button>
+                  <button
+                    onClick={() => handleDeleteForm(form)}
+                    disabled={formActionBusyId === String(form._id) || !crmEnabledForSelected}
+                    style={{ minHeight: 30, padding: "0.3rem 0.6rem", borderRadius: 7, border: "1px solid #fecaca", background: "#fff5f5", color: "#b91c1c", fontWeight: 600, fontSize: "0.78rem", cursor: formActionBusyId === String(form._id) ? "not-allowed" : "pointer" }}
+                  >
+                    Delete
+                  </button>
                 </div>
               </div>
             ))}
@@ -735,6 +1278,16 @@ function MetricCard({ label, value }: { label: string; value: number | undefined
     </div>
   );
 }
+
+const secondaryButtonStyleSmall: CSSProperties = {
+  minHeight: 36,
+  padding: "0.35rem 0.75rem",
+  borderRadius: 8,
+  border: "1px solid #d1d5db",
+  fontWeight: 600,
+  fontSize: "0.85rem",
+  cursor: "pointer",
+};
 
 const inputStyle: CSSProperties = {
   minHeight: 44,

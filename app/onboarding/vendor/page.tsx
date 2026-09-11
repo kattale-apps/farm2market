@@ -98,7 +98,7 @@ export default function VendorOnboardingPage() {
       if (onboardingStatus.marketName && !marketName) setMarketName(onboardingStatus.marketName);
       if (onboardingStatus.stallNumber && !stallNumber) setStallNumber(onboardingStatus.stallNumber);
     }
-  }, [onboardingStatus, router]);
+  }, [onboardingStatus, router, marketType, marketName, stallNumber]);
 
   // Reset cascading location
   useEffect(() => { setSelectedDistrictId(""); setSelectedSubcountyId(""); setSelectedParishId(""); }, [selectedRegionKey]);

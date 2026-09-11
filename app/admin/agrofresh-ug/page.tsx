@@ -512,7 +512,7 @@ export default function AgroFreshUGAdminPage() {
               </div>
               <div style={{ fontSize: "0.9rem", color: "#4b5563" }}>
                 <strong>Preloaded Farmer Data:</strong>
-                <div>Name: {selectedDetails.form?.section1?.farmerFullName || selectedDetails.farmer?.alias || "-"}</div>
+                <div>Name: {selectedDetails.farmer?.verifiedName || selectedDetails.form?.section1?.farmerFullName || selectedDetails.farmer?.alias || "-"}</div>
                 <div>Phone: {selectedDetails.form?.section1?.phoneNumber || selectedDetails.farmer?.phoneNumber || "-"}</div>
                 <div>Email: {selectedDetails.form?.section1?.emailAddress || selectedDetails.farmer?.email || "-"}</div>
                 <div>County: {selectedDetails.form?.section1?.county || selectedDetails.farmer?.county || "-"}</div>

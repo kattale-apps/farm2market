@@ -92,3 +92,4 @@ android/keystore.properties
 *.swp
 *.swo
 *~
+.vercel

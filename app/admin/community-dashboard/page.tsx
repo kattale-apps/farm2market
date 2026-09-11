@@ -23,6 +23,99 @@ type MembersListTab = "approved" | "all" | "imported" | "activeFarmsee";
 
 const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
 
+/**
+ * Real-world member spreadsheets rarely use the exact camelCase column names
+ * the import mutation expects (fullName, phoneNumber). Map common header
+ * spellings - case/spacing/punctuation-insensitive - onto those canonical
+ * names so admins don't have to rename columns in Excel before uploading.
+ * Any column that doesn't match a known alias is left as-is and still gets
+ * captured server-side as additionalData, so nothing is silently dropped.
+ */
+const IMPORT_HEADER_ALIASES: Record<
+  string,
+  "fullName" | "phoneNumber" | "email" | "communityRole" | "notes" | "district"
+> = {
+  fullname: "fullName",
+  name: "fullName",
+  names: "fullName",
+  fullnames: "fullName",
+  membername: "fullName",
+  farmername: "fullName",
+  clientname: "fullName",
+  contactname: "fullName",
+  phonenumber: "phoneNumber",
+  phonenumbers: "phoneNumber",
+  phone: "phoneNumber",
+  phoneno: "phoneNumber",
+  tel: "phoneNumber",
+  telno: "phoneNumber",
+  telephone: "phoneNumber",
+  telephonenumber: "phoneNumber",
+  mobile: "phoneNumber",
+  mobilenumber: "phoneNumber",
+  cell: "phoneNumber",
+  cellnumber: "phoneNumber",
+  contact: "phoneNumber",
+  contactnumber: "phoneNumber",
+  email: "email",
+  emailaddress: "email",
+  communityrole: "communityRole",
+  role: "communityRole",
+  notes: "notes",
+  note: "notes",
+  remarks: "notes",
+  comment: "notes",
+  comments: "notes",
+  location: "district",
+  district: "district",
+  place: "district",
+  area: "district",
+  town: "district",
+  village: "district",
+};
+
+function normalizeImportHeaderKey(header: string): string {
+  return header.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * Some spreadsheets cram more than one phone number into a single cell
+ * (e.g. "0774 217928/ 0753 732101" or "0775 958559 0755958559"), and a
+ * single number is often written with an internal space at the natural
+ * 4+6 grouping ("0738 625752"). Match the first "0XXX XXXXXX"-shaped (or
+ * already-international "256XXXXXXXXX") number and strip its internal
+ * space, rather than passing the whole messy string through - which would
+ * otherwise get mashed into one long invalid string of digits by the
+ * import mutation's normalizer.
+ */
+function extractFirstPhoneNumber(value: string): string {
+  const match = value.match(/(?:\+?256\d{9})|(?:0\d{3}\s?\d{6})/);
+  if (!match) return value.trim();
+  return match[0].replace(/\s+/g, "");
+}
+
+function remapImportedRow(row: Record<string, any>): Record<string, any> {
+  const remapped: Record<string, any> = {};
+  for (const [header, value] of Object.entries(row)) {
+    const canonical = IMPORT_HEADER_ALIASES[normalizeImportHeaderKey(header)];
+    const key = canonical || header;
+    // Don't let an alias match overwrite a column that already used the
+    // canonical name verbatim (e.g. a sheet with both "Name" and "fullName").
+    if (remapped[key] !== undefined && remapped[key] !== "") continue;
+    remapped[key] = value;
+  }
+  if (remapped.phoneNumber !== undefined && remapped.phoneNumber !== null && remapped.phoneNumber !== "") {
+    remapped.phoneNumber = extractFirstPhoneNumber(String(remapped.phoneNumber));
+  }
+  if (typeof remapped.fullName === "string") {
+    remapped.fullName = remapped.fullName.trim();
+  }
+  if (typeof remapped.district === "string") {
+    remapped.district = remapped.district.trim();
+  }
+  return remapped;
+}
+
 /* ── Noticeboard tab (per community) ── */
 function NoticeboardTab({ communityId, userId }: { communityId: Id<"communities">; userId: Id<"users"> }) {
   const posts = useQuery(api.noticeboard.getCommunityNoticeboardPosts, { communityId });
@@ -1325,8 +1418,8 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
   const isProfile = selectedForm?.formPurpose === "profile";
   const isExtensionWork = selectedForm?.formPurpose === "extension_work";
 
-  const fields: any[] = formResponses?.fields ?? [];
-  const responses: any[] = formResponses?.responses ?? [];
+  const fields: any[] = useMemo(() => formResponses?.fields ?? [], [formResponses]);
+  const responses: any[] = useMemo(() => formResponses?.responses ?? [], [formResponses]);
 
   // ── Extract member list (fix: membersRaw is array, not dict) ──
   const memberList: any[] = useMemo(() => {
@@ -2160,6 +2253,7 @@ export default function CommunityDashboardPage() {
     parsedRows: any[];
     showPreview: boolean;
     importResults: { imported: number; failed: number; results: any[]; errors: any[] } | null;
+    importProgress: { done: number; total: number } | null;
   }>>({});
 
   const getUploadState = (cId: string) => uploadStateByComm[cId] || {
@@ -2168,6 +2262,7 @@ export default function CommunityDashboardPage() {
     parsedRows: [],
     showPreview: false,
     importResults: null,
+    importProgress: null,
   };
 
   const setUploadState = (cId: string, updates: Partial<typeof uploadStateByComm[string]>) => {
@@ -3093,7 +3188,8 @@ export default function CommunityDashboardPage() {
                             const data = event.target.result;
                             const workbook = XLSX.read(data, { type: "array" });
                             const firstSheet = workbook.SheetNames[0];
-                            const rows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet]);
+                            const rawRows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet]) as Record<string, any>[];
+                            const rows = rawRows.map(remapImportedRow);
                             setUploadState(communityId as string, { parsedRows: rows, showPreview: true });
                           } catch (err: any) {
                             setMessage({ type: "error", text: "Failed to parse Excel file: " + err?.message });
@@ -3117,7 +3213,7 @@ export default function CommunityDashboardPage() {
                       Click to upload or drag & drop
                     </div>
                     <div style={{ fontSize: "0.62rem", color: "#666" }}>
-                      Excel files (.xlsx, .xls) with required columns: fullName, phoneNumber. Optional: email, communityRole, notes, and any other fields.
+                      Excel files (.xlsx, .xls) with a name column and a phone column (e.g. &quot;Name&quot;/&quot;fullName&quot;, &quot;Tel No&quot;/&quot;Phone&quot;/&quot;phoneNumber&quot; all work). Optional: email, role, notes, and any other fields.
                     </div>
                   </label>
                   {(() => {
@@ -3145,6 +3241,7 @@ export default function CommunityDashboardPage() {
                             <th style={{ padding: "0.5rem" }}>Phone</th>
                             <th style={{ padding: "0.5rem" }}>Email</th>
                             <th style={{ padding: "0.5rem" }}>Role</th>
+                            <th style={{ padding: "0.5rem" }}>District</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -3154,6 +3251,7 @@ export default function CommunityDashboardPage() {
                               <td style={{ padding: "0.5rem" }}>{row.phoneNumber || "-"}</td>
                               <td style={{ padding: "0.5rem" }}>{row.email || "-"}</td>
                               <td style={{ padding: "0.5rem" }}>{row.communityRole || "-"}</td>
+                              <td style={{ padding: "0.5rem" }}>{row.district || "-"}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -3167,29 +3265,65 @@ export default function CommunityDashboardPage() {
                     <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
                       <button
                         onClick={async () => {
-                          if (!getUploadState(communityId as string).parsedRows.length) {
+                          const rows = getUploadState(communityId as string).parsedRows;
+                          if (!rows.length) {
                             setMessage({ type: "error", text: "No rows to import" });
                             return;
                           }
-                          setUploadState(communityId as string, { isUploading: true });
-                          try {
-                            const result = await importCommunityMembersFromExcel({
-                              adminId: userId as any,
-                              communityId: communityId as any,
-                              rows: getUploadState(communityId as string).parsedRows,
-                            });
-                            setUploadState(communityId as string, {
-                              importResults: result as any,
-                              isUploading: false,
-                              file: null,
-                              parsedRows: [],
-                              showPreview: false,
-                            });
-                            setMessage({ type: "success", text: `Imported ${(result as any).imported ?? 0} members successfully` });
-                          } catch (error: any) {
-                            setUploadState(communityId as string, { isUploading: false });
-                            setMessage({ type: "error", text: error?.message || "Import failed" });
+
+                          // A single mutation call covering thousands of rows each
+                          // creating a full account (several DB reads/writes apiece)
+                          // runs long enough to hit Convex's per-mutation limits and
+                          // just hangs forever client-side. Chunk it instead, so each
+                          // call stays small and the admin sees live progress.
+                          const IMPORT_BATCH_SIZE = 100;
+                          const batches: any[][] = [];
+                          for (let i = 0; i < rows.length; i += IMPORT_BATCH_SIZE) {
+                            batches.push(rows.slice(i, i + IMPORT_BATCH_SIZE));
                           }
+
+                          setUploadState(communityId as string, {
+                            isUploading: true,
+                            importProgress: { done: 0, total: rows.length },
+                          });
+
+                          let imported = 0;
+                          let failed = 0;
+                          const allResults: any[] = [];
+                          const allErrors: any[] = [];
+
+                          for (const batch of batches) {
+                            try {
+                              const result = await importCommunityMembersFromExcel({
+                                adminId: userId as any,
+                                communityId: communityId as any,
+                                rows: batch,
+                              });
+                              imported += (result as any).imported ?? 0;
+                              failed += (result as any).failed ?? 0;
+                              allResults.push(...((result as any).results || []));
+                              allErrors.push(...((result as any).errors || []));
+                            } catch (error: any) {
+                              failed += batch.length;
+                              allErrors.push({ row: "batch", error: error?.message || "Batch import failed" });
+                            }
+                            setUploadState(communityId as string, {
+                              importProgress: { done: Math.min(imported + failed, rows.length), total: rows.length },
+                            });
+                          }
+
+                          setUploadState(communityId as string, {
+                            importResults: { imported, failed, results: allResults, errors: allErrors },
+                            isUploading: false,
+                            importProgress: null,
+                            file: null,
+                            parsedRows: [],
+                            showPreview: false,
+                          });
+                          setMessage({
+                            type: imported > 0 ? "success" : "error",
+                            text: `Imported ${imported} of ${rows.length} members${failed > 0 ? ` (${failed} failed)` : ""}`,
+                          });
                         }}
                         disabled={getUploadState(communityId as string).isUploading}
                         style={{
@@ -3203,12 +3337,17 @@ export default function CommunityDashboardPage() {
                           minHeight: "44px",
                         }}
                       >
-                        {getUploadState(communityId as string).isUploading ? "Importing..." : "Import Members"}
+                        {(() => {
+                          const progress = getUploadState(communityId as string).importProgress;
+                          if (!getUploadState(communityId as string).isUploading) return "Import Members";
+                          return progress ? `Importing... ${progress.done}/${progress.total}` : "Importing...";
+                        })()}
                       </button>
                       <button
                         onClick={() => {
                           setUploadState(communityId as string, { showPreview: false, parsedRows: [], file: null });
                         }}
+                        disabled={getUploadState(communityId as string).isUploading}
                         style={{
                           padding: "0.6rem 1.25rem",
                           background: "#f0f0f0",
@@ -3216,7 +3355,7 @@ export default function CommunityDashboardPage() {
                           border: "none",
                           borderRadius: "8px",
                           fontWeight: 600,
-                          cursor: "pointer",
+                          cursor: getUploadState(communityId as string).isUploading ? "not-allowed" : "pointer",
                           minHeight: "44px",
                         }}
                       >
@@ -3242,11 +3381,25 @@ export default function CommunityDashboardPage() {
                     <div style={{ color: "#333", marginBottom: "0.5rem" }}>
                       <strong>{getUploadState(communityId as string).importResults!.imported}</strong> members imported successfully
                     </div>
-                    {getUploadState(communityId as string).importResults!.errors.length > 0 && (
-                      <div style={{ color: "#c62828", marginTop: "0.5rem" }}>
-                        <strong>{getUploadState(communityId as string).importResults!.errors.length}</strong> errors encountered
-                      </div>
-                    )}
+                    {getUploadState(communityId as string).importResults!.errors.length > 0 && (() => {
+                      const errors = getUploadState(communityId as string).importResults!.errors;
+                      const uniqueMessages = Array.from(new Set(errors.map((e: any) => e.error || "Unknown error")));
+                      return (
+                        <div style={{ color: "#c62828", marginTop: "0.5rem" }}>
+                          <div><strong>{errors.length}</strong> errors encountered</div>
+                          <ul style={{ margin: "0.35rem 0 0 0", paddingLeft: "1.2rem" }}>
+                            {uniqueMessages.slice(0, 5).map((msg, idx) => (
+                              <li key={idx} style={{ fontSize: "0.82rem" }}>{msg}</li>
+                            ))}
+                          </ul>
+                          {uniqueMessages.length > 5 && (
+                            <div style={{ fontSize: "0.78rem", color: "#999", marginTop: "0.25rem" }}>
+                              ... and {uniqueMessages.length - 5} other distinct error message(s)
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </div>

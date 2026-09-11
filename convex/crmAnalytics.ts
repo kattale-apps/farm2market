@@ -58,15 +58,117 @@ export const getCallCenterPerformanceToday = query({
       l.outcome === "good_result" || l.outcome === "problem" || l.outcome === "wants_more"
     ).length;
 
+    const allStatuses: Array<"open" | "in_progress" | "called" | "overdue" | "closed"> = [
+      "open",
+      "in_progress",
+      "called",
+      "overdue",
+      "closed",
+    ];
+    const leadsByStatus = await Promise.all(
+      allStatuses.map((status) =>
+        ctx.db
+          .query("crmLeads")
+          .withIndex("by_community_status_nextcall", (q: any) =>
+            q.eq("communityId", args.communityId).eq("queueStatus", status)
+          )
+          .collect()
+      )
+    );
+    const allLeads = leadsByStatus.flat();
+    const claimedToday = allLeads.filter(
+      (lead: any) => Number(lead.claimedAt || 0) >= dayStart
+    ).length;
+
     return {
       agents: agents.filter((a: any) => a.isActive).length,
       callsAttempted: todayLogs.length,
       answered: answeredCount,
+      claimedToday,
       completedFollowUps: followupsCompleted,
       salesOpportunities: todayOpportunities.length,
       orders: opportunities.filter((o: any) => o.stage === "order" || o.stage === "completed").length,
       productIssues: todayTickets.length,
     };
+  },
+});
+
+export const getTodaysSubmittedForms = query({
+  args: {
+    communityId: v.id("communities"),
+    requesterId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    await requireCrmSupervisorAccess(ctx, args.requesterId, args.communityId);
+
+    const dayStart = startOfDayTs(Date.now());
+
+    const responses = await ctx.db
+      .query("crmFormResponses")
+      .withIndex("by_community_submitted", (q: any) =>
+        q.eq("communityId", args.communityId).gte("submittedAt", dayStart)
+      )
+      .collect();
+
+    const rows = await Promise.all(
+      responses.map(async (response: any) => {
+        const form = (await ctx.db.get(response.crmFormId)) as any;
+        const member = (await ctx.db.get(response.memberId)) as any;
+        return {
+          responseId: String(response._id),
+          formName: form?.name || "Unknown form",
+          clientName: response.clientName || member?.alias || "Unknown",
+          phoneNumber: member?.phoneNumber || "-",
+          district: response.district || "-",
+          subCounty: response.subCounty || "-",
+          submittedAt: response.submittedAt,
+        };
+      })
+    );
+
+    return rows.sort((a, b) => Number(b.submittedAt || 0) - Number(a.submittedAt || 0));
+  },
+});
+
+export const getFollowUpsDueDetails = query({
+  args: {
+    communityId: v.id("communities"),
+    requesterId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    await requireCrmSupervisorAccess(ctx, args.requesterId, args.communityId);
+
+    const leadsOpen = await ctx.db
+      .query("crmLeads")
+      .withIndex("by_community_status_nextcall", (q: any) =>
+        q.eq("communityId", args.communityId).eq("queueStatus", "open")
+      )
+      .collect();
+
+    const now = Date.now();
+    const dayStart = startOfDayTs(now);
+    const dayEnd = dayStart + DAY_MS;
+
+    const due = leadsOpen.filter((l: any) => l.nextCallAt < dayEnd);
+
+    const rows = await Promise.all(
+      due.map(async (lead: any) => {
+        const member = (await ctx.db.get(lead.memberId)) as any;
+        const response = (await ctx.db.get(lead.sourceCrmResponseId)) as any;
+        const form = (await ctx.db.get(lead.sourceCrmFormId)) as any;
+        return {
+          leadId: String(lead._id),
+          clientName: response?.clientName || member?.alias || "Unknown",
+          phoneNumber: member?.phoneNumber || "-",
+          formName: form?.name || "Unknown form",
+          nextCallAt: lead.nextCallAt,
+          isOverdue: lead.nextCallAt < now,
+          confirmedVisitAt: response?.upcomingSprayScheduleAt || null,
+        };
+      })
+    );
+
+    return rows.sort((a, b) => Number(a.nextCallAt || 0) - Number(b.nextCallAt || 0));
   },
 });
 
@@ -111,7 +213,7 @@ export const getAgentPerformanceToday = query({
 
     const rows: Array<any> = [];
     for (const [agentId, callCount] of callsByAgent.entries()) {
-      const user = await ctx.db.get(agentId as any);
+      const user = (await ctx.db.get(agentId as any)) as any;
       rows.push({
         agentId,
         agentName: user?.alias || user?.email || "Unknown",
@@ -203,11 +305,11 @@ export const getOpportunityExportRows = query({
 
     const rows = await Promise.all(
       opportunities.map(async (opp: any) => {
-        const lead = await ctx.db.get(opp.leadId);
-        const member = lead ? await ctx.db.get(lead.memberId) : null;
-        const openedBy = await ctx.db.get(opp.openedByAgentId);
+        const lead = (await ctx.db.get(opp.leadId)) as any;
+        const member = lead ? ((await ctx.db.get(lead.memberId)) as any) : null;
+        const openedBy = (await ctx.db.get(opp.openedByAgentId)) as any;
         const assignedSales = opp.assignedSalesAgentId
-          ? await ctx.db.get(opp.assignedSalesAgentId)
+          ? ((await ctx.db.get(opp.assignedSalesAgentId)) as any)
           : null;
 
         return {

@@ -134,7 +134,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
           : "🛒 Farm 2 Market",
         disabled: farm2MarketLocked,
       },
-      { key: "advancePurchase", label: "🌱 Advance Purchase" },
+      { key: "advancePurchase", label: "🌱 Advanced Markets" },
     ] : []),
   ];
   const ROUTE_MENU_KEYS: Record<string, string> = {

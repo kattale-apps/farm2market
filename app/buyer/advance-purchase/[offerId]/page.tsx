@@ -142,7 +142,7 @@ export default function AdvancePurchaseOfferDetailPage() {
             marginBottom: "0.6rem",
           }}
         >
-          ← Advance Purchase Market
+          ← Advanced Markets
         </Link>
 
         <h1 style={{ fontSize: "1.4rem", fontWeight: 700, marginBottom: "0.1rem", color: "#fff" }}>{offer.productName}</h1>
@@ -281,7 +281,7 @@ export default function AdvancePurchaseOfferDetailPage() {
       </Section>
 
       <Section title="Production milestones">
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.75rem" }}>
           {offer.milestones.map((m: any, i: number) => (
             <div key={m._id} style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
               <span style={{
@@ -298,10 +298,34 @@ export default function AdvancePurchaseOfferDetailPage() {
             </div>
           ))}
         </div>
+        {offer.milestones.some((m: any) => m.proofPictures && m.proofPictures.length > 0) && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+            {offer.milestones.map((m: any) => (
+              m.proofPictures && m.proofPictures.length > 0 && (
+                <div key={m._id}>
+                  <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#666", marginBottom: "0.3rem" }}>
+                    {m.name} — proof pictures
+                  </div>
+                  <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                    {m.proofPictures.map((p: any) => (
+                      <img
+                        key={p._id}
+                        src={p.url}
+                        alt="Proof"
+                        onClick={() => setLightboxUrl(p.url)}
+                        style={{ width: 84, height: 84, objectFit: "cover", borderRadius: 8, border: "1px solid #e0e0e0", cursor: "zoom-in" }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )
+            ))}
+          </div>
+        )}
       </Section>
 
       {offer.photoUrls && offer.photoUrls.length > 0 && (
-        <Section title="Product gallery">
+        <Section title="Gallery">
           <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
             {offer.photoUrls.map((url: string, i: number) => (
               <img

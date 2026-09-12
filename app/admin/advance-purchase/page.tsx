@@ -29,10 +29,10 @@ export default function AdvancePurchaseAdminPage() {
 
   return (
     <div style={{ padding: "1rem", maxWidth: 720, margin: "0 auto", fontFamily: FONT }}>
-      <h1 style={{ fontSize: "1.4rem", fontWeight: 700, marginBottom: "0.25rem" }}>Advance Purchase — Community Admin</h1>
+      <h1 style={{ fontSize: "1.4rem", fontWeight: 700, marginBottom: "0.25rem" }}>Advanced Markets — Community Admin</h1>
       <p style={{ color: "#666", fontSize: "0.88rem", marginBottom: "1rem" }}>
-        Configure product fields, milestones and payment release rules, then review submitted milestone evidence.
-        This is also available as an &quot;Advance Purchase&quot; tab inside each community&apos;s dashboard.
+        Configure product fields, milestones and payment release rules, then review submitted milestone proof pictures.
+        This is also available as an &quot;Advanced Markets&quot; tab inside each community&apos;s dashboard.
       </p>
 
       <select

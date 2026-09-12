@@ -6,6 +6,7 @@ import { Id } from "../../../../../convex/_generated/dataModel";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useStoredUser } from "../../../../hooks/useStoredUser";
+import SubmissionPhotoGallery from "../../../../components/SubmissionPhotoGallery";
 
 const FONT = '"Montserrat", sans-serif';
 
@@ -26,7 +27,7 @@ export default function CommitmentDetailPage() {
     <div style={{ padding: "1rem", maxWidth: 640, margin: "0 auto", fontFamily: FONT }}>
       <div style={{ marginBottom: "1rem" }}>
         <Link href="/buyer/advance-purchase" style={{ color: "#1976d2", fontWeight: 600, fontSize: "0.9rem" }}>
-          ← Advance Purchase Market
+          ← Advanced Markets
         </Link>
       </div>
 
@@ -44,18 +45,35 @@ export default function CommitmentDetailPage() {
         </div>
       </div>
 
+      {detail.offer?.photoUrls && detail.offer.photoUrls.length > 0 && (
+        <div style={{ background: "#fff", border: "1px solid #e0e0e0", borderRadius: 12, padding: "1rem", marginBottom: "1rem" }}>
+          <h3 style={{ margin: "0 0 0.6rem", fontSize: "1rem" }}>Gallery</h3>
+          <SubmissionPhotoGallery photos={detail.offer.photoUrls} minTileWidth={100} tileHeight={100} />
+        </div>
+      )}
+
       <div style={{ background: "#fff", border: "1px solid #e0e0e0", borderRadius: 12, padding: "1rem" }}>
         <h3 style={{ margin: "0 0 0.6rem", fontSize: "1rem" }}>Production progress</h3>
         {detail.milestones.map((m: any) => (
-          <div key={m._id} style={{ display: "flex", justifyContent: "space-between", padding: "0.5rem 0", borderBottom: "1px solid #f0f0f0" }}>
-            <span>{m.name}</span>
-            <span style={{
-              fontSize: "0.78rem",
-              fontWeight: 700,
-              color: m.status === "approved" ? "#2e7d32" : m.status === "submitted" ? "#f57f17" : "#999",
-            }}>
-              {m.status === "approved" ? "✅ Approved" : m.status === "submitted" ? "⏳ Awaiting review" : "Pending"}
-            </span>
+          <div key={m._id} style={{ padding: "0.5rem 0", borderBottom: "1px solid #f0f0f0" }}>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span>{m.name}</span>
+              <span style={{
+                fontSize: "0.78rem",
+                fontWeight: 700,
+                color: m.status === "approved" ? "#2e7d32" : m.status === "submitted" ? "#f57f17" : "#999",
+              }}>
+                {m.status === "approved" ? "✅ Approved" : m.status === "submitted" ? "⏳ Awaiting review" : "Pending"}
+              </span>
+            </div>
+            {m.proofPictures && m.proofPictures.length > 0 && (
+              <div style={{ marginTop: "0.5rem" }}>
+                <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "#888", marginBottom: "0.3rem" }}>
+                  Proof pictures
+                </div>
+                <SubmissionPhotoGallery photos={m.proofPictures.map((p: any) => p.url)} minTileWidth={80} tileHeight={80} />
+              </div>
+            )}
           </div>
         ))}
       </div>

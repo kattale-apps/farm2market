@@ -16,12 +16,12 @@ export default function AdvancePurchaseMarketPage() {
   );
 
   if (status === "loading" || offers === undefined) {
-    return <div style={{ padding: "2rem", fontFamily: FONT }}>Loading Advance Purchase Market...</div>;
+    return <div style={{ padding: "2rem", fontFamily: FONT }}>Loading Advanced Markets...</div>;
   }
   if (status === "unauthenticated" || !user || user.role !== "buyer") {
     return (
       <div style={{ padding: "2rem", fontFamily: FONT }}>
-        <p>Please log in as a buyer to view the Advance Purchase Market.</p>
+        <p>Please log in as a buyer to view Advanced Markets.</p>
         <Link href="/" style={{ color: "#1976d2" }}>Back to home</Link>
       </div>
     );
@@ -53,7 +53,7 @@ export default function AdvancePurchaseMarketPage() {
           ← Back to Dashboard
         </Link>
         <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "#fff", marginBottom: "0.25rem" }}>
-          🌱 Advance Purchase Market
+          🌱 Advanced Markets
         </h1>
         <p style={{ color: "#eee", fontSize: "0.9rem", margin: 0 }}>
           Fund a farmer&apos;s production ahead of harvest. Money is released to the farmer as each production stage is verified.
@@ -62,7 +62,7 @@ export default function AdvancePurchaseMarketPage() {
 
       {myCommitments && myCommitments.length > 0 && (
         <div style={{ marginBottom: "1.5rem" }}>
-          <h2 style={{ fontSize: "1.05rem", fontWeight: 700, marginBottom: "0.5rem" }}>My Advance Purchases</h2>
+          <h2 style={{ fontSize: "1.05rem", fontWeight: 700, marginBottom: "0.5rem" }}>My Advanced Market Purchases</h2>
           <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
             {myCommitments.map((c: any) => (
               <Link
@@ -97,7 +97,7 @@ export default function AdvancePurchaseMarketPage() {
           borderRadius: 12,
           color: "#777",
         }}>
-          No advance purchase offers available yet.
+          No Advanced Markets offers available yet.
         </div>
       )}
 

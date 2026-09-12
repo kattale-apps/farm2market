@@ -730,7 +730,7 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
 
     if (builderPurpose === "advance_purchase") {
       if (!apProductCategory.trim()) {
-        setMsg({ type: "error", text: "Product category is required for an Advance Purchase form" });
+        setMsg({ type: "error", text: "Product category is required for an Advanced Markets form" });
         return;
       }
       if (Math.round(apMilestoneTotal) !== 100) {
@@ -771,7 +771,7 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
             releasePercent: Number(m.releasePercent),
           })),
         });
-        setMsg({ type: "success", text: "Advance Purchase form created!" });
+        setMsg({ type: "success", text: "Advanced Markets form created!" });
         resetBuilder();
         setTimeout(() => setMsg(null), 4000);
       } catch (e: any) {
@@ -994,7 +994,7 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
                         transition: "all 0.2s",
                       }}
                     >
-                      {purpose === "tracker" ? "📊 Tracker Form" : purpose === "profile" ? "👤 Profile Form" : purpose === "extension_work" ? "🧑‍🌾 Extension Work" : "🌾 Advance Purchase"}
+                      {purpose === "tracker" ? "📊 Tracker Form" : purpose === "profile" ? "👤 Profile Form" : purpose === "extension_work" ? "🧑‍🌾 Extension Work" : "🌾 Advanced Markets"}
                     </button>
                   );
                 })}
@@ -1006,7 +1006,7 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
                     ? "Profile forms appear in the community Profile tab for member info"
                     : builderPurpose === "extension_work"
                       ? "Extension work forms can collect a payment before the member submits the form"
-                      : "Advance Purchase forms let farmers publish pre-funded offers with a milestone-based payment release tracker"}
+                      : "Advanced Markets forms let farmers publish pre-funded offers with a milestone-based payment release tracker"}
               </p>
             </div>
             {builderPurpose === "extension_work" && (
@@ -1053,7 +1053,7 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
             {builderPurpose === "advance_purchase" && (
               <div style={{ marginBottom: "1rem", padding: "0.8rem", borderRadius: "8px", border: "1px solid #e1bee7", background: "#faf3fb" }}>
                 <label style={{ fontSize: "0.8rem", fontWeight: 700, color: "#6a1b9a", display: "flex", alignItems: "center", gap: "0.35rem", marginBottom: "0.5rem" }}>
-                  🌾 Advance Purchase Settings
+                  🌾 Advanced Markets Settings
                 </label>
                 <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "0.5rem", marginBottom: "0.5rem" }}>
                   <div>
@@ -1386,11 +1386,11 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
           </div>
         )}
 
-        {/* Advance Purchase Forms (separate schema/backend, listed here so all forms are managed in one place) */}
+        {/* Advanced Markets Forms (separate schema/backend, listed here so all forms are managed in one place) */}
         {apConfigs !== undefined && apConfigs.length > 0 && (
           <div style={{ marginTop: "1.5rem" }}>
             <h5 style={{ margin: "0 0 0.75rem 0", fontSize: "0.95rem", fontWeight: 700, color: "#6a1b9a" }}>
-              🌾 Advance Purchase Forms
+              🌾 Advanced Markets Forms
             </h5>
             <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
               {apConfigs.map((cfg: any) => {
@@ -1407,7 +1407,7 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
                     >
                       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
                         <span style={{ padding: "0.1rem 0.4rem", borderRadius: "999px", fontSize: "0.68rem", fontWeight: 600, background: "#6a1b9a", color: "#fff" }}>
-                          🌾 Advance Purchase
+                          🌾 Advanced Markets
                         </span>
                         <strong style={{ fontSize: "0.9rem", color: "#333" }}>{cfg.name}</strong>
                         <span style={{ fontSize: "0.75rem", color: cfg.isActive ? "#2e7d32" : "#999", fontWeight: 600 }}>
@@ -3424,7 +3424,7 @@ export default function CommunityDashboardPage() {
                     : ["members", "noticeboard", "messages", "forms", "insights", "advancePurchase"]
                 ) as CommunityTab[]).map((tab) => {
                   const active = getActiveTab(communityId) === tab;
-                  const labels: Record<CommunityTab, string> = { members: "Members", noticeboard: "Noticeboard", messages: "Messages", forms: "Forms", insights: "📊 Insights", fertilizer: "🌱 Fertilizer", advancePurchase: "🌱 Advance Purchase" };
+                  const labels: Record<CommunityTab, string> = { members: "Members", noticeboard: "Noticeboard", messages: "Messages", forms: "Forms", insights: "📊 Insights", fertilizer: "🌱 Fertilizer", advancePurchase: "🌱 Advanced Markets" };
                   return (
                     <button
                       key={tab}
@@ -3476,7 +3476,7 @@ export default function CommunityDashboardPage() {
                 <AdminFertilizerConfig communityId={communityId} userId={userId!} />
               )}
 
-              {/* ── Advance Purchase Tab ── */}
+              {/* ── Advanced Markets Tab ── */}
               {getActiveTab(communityId) === "advancePurchase" && (
                 <div style={{ padding: "1.5rem" }}>
                   <CommunityAdvancePurchasePanel adminId={userId!} communityId={communityId} />

@@ -54,7 +54,7 @@ async function assertCommunityAdmin(
   const isAssignedAdmin = assigned.includes(String(communityId));
 
   if (!isDirectAdmin && !isAssignedAdmin) {
-    throw new Error("Not authorized to manage the Advance Purchase configuration for this community");
+    throw new Error("Not authorized to manage the Advanced Markets configuration for this community");
   }
   return admin;
 }
@@ -282,11 +282,11 @@ export const createOffer = mutation({
     await checkPilotMode(ctx);
     const farmer = await ctx.db.get(args.farmerId);
     if (!farmer || !["farmer", "vendor", "store"].includes(farmer.role)) {
-      throw new Error("Only farmers can create an Advance Purchase offer");
+      throw new Error("Only farmers can create an Advanced Markets offer");
     }
     const config = await ctx.db.get(args.configId);
     if (!config || !config.isActive) {
-      throw new Error("This Advance Purchase configuration is not available");
+      throw new Error("This Advanced Markets configuration is not available");
     }
     await assertCommunityMember(ctx, args.farmerId, config.communityId);
 
@@ -420,6 +420,33 @@ export const updateOffer = mutation({
   },
 });
 
+export const addOfferPhotos = mutation({
+  args: {
+    offerId: v.id("advancePurchaseOffers"),
+    farmerId: v.id("users"),
+    storageIds: v.array(v.id("_storage")),
+  },
+  handler: async (ctx, args) => {
+    const offer = await ctx.db.get(args.offerId);
+    if (!offer) throw new Error("Offer not found");
+    if (String(offer.farmerId) !== String(args.farmerId)) {
+      throw new Error("You can only add photos to your own offer");
+    }
+    if (["cancelled", "fulfilled"].includes(offer.status)) {
+      throw new Error("This offer can no longer be updated");
+    }
+    if (args.storageIds.length === 0) {
+      throw new Error("Select at least one photo to add");
+    }
+    const existing = offer.photoStorageIds || [];
+    await ctx.db.patch(args.offerId, {
+      photoStorageIds: [...existing, ...args.storageIds],
+      updatedAt: getUgandaTime(),
+    });
+    return { success: true };
+  },
+});
+
 export const publishOffer = mutation({
   args: { offerId: v.id("advancePurchaseOffers"), farmerId: v.id("users") },
   handler: async (ctx, args) => {
@@ -544,6 +571,16 @@ export const getOfferDetail = query({
     const photoUrls = offer.photoStorageIds
       ? (await Promise.all(offer.photoStorageIds.map((id: any) => ctx.storage.getUrl(id)))).filter((u): u is string => !!u)
       : [];
+    const milestonesWithProof = await Promise.all(
+      milestones.map(async (m: any) => {
+        const proofPictures = await ctx.db
+          .query("advancePurchaseEvidence")
+          .withIndex("by_milestone", (q: any) => q.eq("milestoneId", m._id))
+          .collect();
+        proofPictures.sort((a: any, b: any) => b.submittedAt - a.submittedAt);
+        return { ...m, proofPictures };
+      })
+    );
 
     return {
       ...offer,
@@ -551,7 +588,7 @@ export const getOfferDetail = query({
       communityName: (community as any)?.name,
       quantityRemaining: offer.totalQuantity - offer.quantityCommitted,
       totalValue: offer.unitPrice * offer.totalQuantity,
-      milestones: milestones.sort((a: any, b: any) => a.order - b.order),
+      milestones: milestonesWithProof.sort((a: any, b: any) => a.order - b.order),
       commitmentCount: commitments.length,
       photoUrls,
     };
@@ -598,7 +635,7 @@ export const createProposal = mutation({
     await notifyUser(
       ctx,
       offer.farmerId,
-      "New Advance Purchase proposal",
+      "New Advanced Markets proposal",
       `A buyer proposed new terms for your "${offer.productName}" offer.`,
       offer.utid
     );
@@ -632,7 +669,7 @@ export const respondToProposal = mutation({
       proposal.buyerId,
       args.accept ? "Your proposal was accepted" : "Your proposal was rejected",
       args.accept
-        ? `The farmer accepted your proposed terms for "${offer.productName}". You can now fund the Advance Purchase.`
+        ? `The farmer accepted your proposed terms for "${offer.productName}". You can now fund it on Advanced Markets.`
         : `The farmer rejected your proposed terms for "${offer.productName}".`,
       offer.utid
     );
@@ -653,7 +690,7 @@ export const createCommitment = mutation({
   handler: async (ctx, args) => {
     await checkPilotMode(ctx);
     const buyer = await ctx.db.get(args.buyerId);
-    if (!buyer || buyer.role !== "buyer") throw new Error("Only buyers can fund an Advance Purchase");
+    if (!buyer || buyer.role !== "buyer") throw new Error("Only buyers can fund an Advanced Markets offer");
     const offer = await ctx.db.get(args.offerId);
     if (!offer || offer.status !== "published") throw new Error("Offer is not available");
     if (offer.expiresAt && getUgandaTime() > offer.expiresAt) {
@@ -772,7 +809,7 @@ export const createCommitment = mutation({
     await notifyUser(
       ctx,
       offer.farmerId,
-      "Advance Purchase funded",
+      "Advanced Markets order funded",
       `A buyer funded ${args.quantity} ${offer.unit} of your "${offer.productName}" offer.`,
       utid
     );
@@ -811,10 +848,23 @@ export const getCommitmentDetail = query({
           .collect()
       : [];
     milestones.sort((a: any, b: any) => a.order - b.order);
+    const milestonesWithProof = await Promise.all(
+      milestones.map(async (m: any) => {
+        const proofPictures = await ctx.db
+          .query("advancePurchaseEvidence")
+          .withIndex("by_milestone", (q: any) => q.eq("milestoneId", m._id))
+          .collect();
+        proofPictures.sort((a: any, b: any) => b.submittedAt - a.submittedAt);
+        return { ...m, proofPictures };
+      })
+    );
+    const photoUrls = offer?.photoStorageIds
+      ? (await Promise.all(offer.photoStorageIds.map((id: any) => ctx.storage.getUrl(id)))).filter((u): u is string => !!u)
+      : [];
     return {
       ...commitment,
-      offer,
-      milestones,
+      offer: offer ? { ...offer, photoUrls } : offer,
+      milestones: milestonesWithProof,
       pendingAmount: commitment.totalAmount - commitment.releasedAmount,
     };
   },
@@ -898,8 +948,8 @@ export const submitMilestoneEvidence = mutation({
       await notifyUser(
         ctx,
         community.communityAdminId,
-        "Advance Purchase evidence submitted",
-        `Evidence submitted for "${milestone.name}" on offer "${offer.productName}".`,
+        "Advanced Markets proof picture submitted",
+        `A proof picture was submitted for "${milestone.name}" on offer "${offer.productName}".`,
         offer.utid
       );
     }
@@ -923,13 +973,23 @@ export const listMyOffersProgress = query({
           .withIndex("by_offer", (q: any) => q.eq("offerId", offer._id))
           .collect();
         milestones.sort((a: any, b: any) => a.order - b.order);
+        const milestonesWithProof = await Promise.all(
+          milestones.map(async (m: any) => {
+            const proofPictures = await ctx.db
+              .query("advancePurchaseEvidence")
+              .withIndex("by_milestone", (q: any) => q.eq("milestoneId", m._id))
+              .collect();
+            proofPictures.sort((a: any, b: any) => b.submittedAt - a.submittedAt);
+            return { ...m, proofPictures };
+          })
+        );
         const commitments = await ctx.db
           .query("advancePurchaseCommitments")
           .withIndex("by_offer", (q: any) => q.eq("offerId", offer._id))
           .collect();
         const totalFunded = commitments.reduce((s: number, c: any) => s + c.totalAmount, 0);
         const totalReleased = commitments.reduce((s: number, c: any) => s + c.releasedAmount, 0);
-        return { offer, milestones, totalFunded, totalReleased, commitmentCount: commitments.length };
+        return { offer, milestones: milestonesWithProof, totalFunded, totalReleased, commitmentCount: commitments.length };
       })
     );
   },
@@ -960,6 +1020,30 @@ export const listPendingEvidenceForCommunity = query({
       }
     }
     return results.sort((a: any, b: any) => a.submittedAt - b.submittedAt);
+  },
+});
+
+export const listReviewedProofPicturesForCommunity = query({
+  args: { adminId: v.id("users"), communityId: v.id("communities") },
+  handler: async (ctx, args) => {
+    await assertCommunityAdmin(ctx, args.adminId, args.communityId);
+    const offers = await ctx.db
+      .query("advancePurchaseOffers")
+      .withIndex("by_community", (q: any) => q.eq("communityId", args.communityId))
+      .collect();
+    const results: any[] = [];
+    for (const offer of offers) {
+      const evidence = await ctx.db
+        .query("advancePurchaseEvidence")
+        .withIndex("by_offer", (q: any) => q.eq("offerId", offer._id))
+        .collect();
+      const reviewed = evidence.filter((e: any) => e.status !== "pending_verification");
+      for (const e of reviewed) {
+        const milestone = await ctx.db.get(e.milestoneId);
+        results.push({ ...e, offer, milestone });
+      }
+    }
+    return results.sort((a: any, b: any) => (b.reviewedAt || b.submittedAt) - (a.reviewedAt || a.submittedAt));
   },
 });
 
@@ -1052,7 +1136,7 @@ export const reviewMilestoneEvidence = mutation({
           await notifyUser(
             ctx,
             c.buyerId,
-            "Advance Purchase milestone approved",
+            "Advanced Markets milestone approved",
             `"${milestone.name}" was approved for "${offer.productName}". UGX ${releaseAmount.toLocaleString()} released to the farmer.`,
             offer.utid
           );

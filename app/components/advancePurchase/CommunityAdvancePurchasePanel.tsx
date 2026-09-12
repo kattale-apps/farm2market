@@ -83,7 +83,7 @@ function ConfigBuilder({ adminId, communityId, onDone }: { adminId: Id<"users">;
 
   return (
     <div style={{ background: "#fff", border: "1px solid #e0e0e0", borderRadius: 12, padding: "1rem", marginBottom: "1rem" }}>
-      <h3 style={{ margin: "0 0 0.75rem" }}>New Advance Purchase configuration</h3>
+      <h3 style={{ margin: "0 0 0.75rem" }}>New Advanced Markets configuration</h3>
       <input placeholder="Program name (e.g. Coffee Seedlings)" value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} />
       <input placeholder="Product category (e.g. coffee_seedlings, produce, livestock)" value={productCategory} onChange={(e) => setProductCategory(e.target.value)} style={inputStyle} />
       <textarea placeholder="Instructions shown to farmers (optional)" value={instructions} onChange={(e) => setInstructions(e.target.value)} style={inputStyle} />
@@ -137,50 +137,28 @@ function ConfigBuilder({ adminId, communityId, onDone }: { adminId: Id<"users">;
   );
 }
 
-function EvidenceReview({ adminId, communityId }: { adminId: Id<"users">; communityId: Id<"communities"> }) {
-  const pending = useQuery(api.advancePurchase.listPendingEvidenceForCommunity, { adminId, communityId });
-  const review = useMutation(api.advancePurchase.reviewMilestoneEvidence);
-  const [notes, setNotes] = useState<Record<string, string>>({});
+function ProofPictureHistory({ adminId, communityId }: { adminId: Id<"users">; communityId: Id<"communities"> }) {
+  const reviewed = useQuery(api.advancePurchase.listReviewedProofPicturesForCommunity, { adminId, communityId });
 
-  if (pending === undefined) return <p>Loading evidence...</p>;
-  if (pending.length === 0) {
-    return <p style={{ color: "#777", fontSize: "0.9rem" }}>No evidence awaiting review.</p>;
+  if (reviewed === undefined) return <p>Loading proof picture history...</p>;
+  if (reviewed.length === 0) {
+    return <p style={{ color: "#777", fontSize: "0.9rem" }}>No reviewed proof pictures yet.</p>;
   }
 
+  const statusColor: Record<string, string> = { approved: "#2e7d32", rejected: "#d32f2f", resubmission_required: "#f57f17" };
+  const statusLabel: Record<string, string> = { approved: "✅ Approved", rejected: "❌ Rejected", resubmission_required: "🔁 Resubmission requested" };
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-      {pending.map((e: any) => (
-        <div key={e._id} style={{ background: "#fff", border: "1px solid #e0e0e0", borderRadius: 12, padding: "1rem" }}>
-          <div style={{ fontWeight: 700 }}>{e.offer?.productName} — {e.milestone?.name}</div>
-          <img src={e.url} alt="Evidence" style={{ width: "100%", maxWidth: 320, borderRadius: 8, margin: "0.5rem 0" }} />
-          <p style={{ fontSize: "0.8rem", color: "#666" }}>
-            {e.lat != null ? `📍 ${e.lat.toFixed(5)}, ${e.lng.toFixed(5)}` : "No GPS"} · 🕒 {new Date(e.capturedAt).toLocaleString()}
-          </p>
-          <textarea
-            placeholder="Notes (optional)"
-            value={notes[e._id] || ""}
-            onChange={(ev) => setNotes((n) => ({ ...n, [e._id]: ev.target.value }))}
-            style={{ ...inputStyle, marginBottom: "0.5rem" }}
-          />
-          <div style={{ display: "flex", gap: "0.5rem" }}>
-            <button
-              onClick={() => review({ reviewerId: adminId, evidenceId: e._id, decision: "approved", reviewNotes: notes[e._id] })}
-              style={{ flex: 1, padding: "0.6rem", background: "#2e7d32", color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, cursor: "pointer" }}
-            >
-              Approve
-            </button>
-            <button
-              onClick={() => review({ reviewerId: adminId, evidenceId: e._id, decision: "resubmission_required", reviewNotes: notes[e._id] })}
-              style={{ flex: 1, padding: "0.6rem", background: "#f57f17", color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, cursor: "pointer" }}
-            >
-              Request resubmission
-            </button>
-            <button
-              onClick={() => review({ reviewerId: adminId, evidenceId: e._id, decision: "rejected", reviewNotes: notes[e._id] })}
-              style={{ flex: 1, padding: "0.6rem", background: "#d32f2f", color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, cursor: "pointer" }}
-            >
-              Reject
-            </button>
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+      {reviewed.map((e: any) => (
+        <div key={e._id} style={{ background: "#fff", border: "1px solid #e0e0e0", borderRadius: 12, padding: "0.85rem 1rem", display: "flex", gap: "0.75rem", alignItems: "flex-start" }}>
+          <img src={e.url} alt="Proof" style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 8, flexShrink: 0 }} />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 700, fontSize: "0.88rem" }}>{e.offer?.productName} — {e.milestone?.name}</div>
+            <div style={{ fontSize: "0.78rem", fontWeight: 700, color: statusColor[e.status] || "#777", margin: "0.15rem 0" }}>
+              {statusLabel[e.status] || e.status}
+            </div>
+            {e.reviewNotes && <div style={{ fontSize: "0.78rem", color: "#666" }}>{e.reviewNotes}</div>}
           </div>
         </div>
       ))}
@@ -188,10 +166,68 @@ function EvidenceReview({ adminId, communityId }: { adminId: Id<"users">; commun
   );
 }
 
+function EvidenceReview({ adminId, communityId }: { adminId: Id<"users">; communityId: Id<"communities"> }) {
+  const pending = useQuery(api.advancePurchase.listPendingEvidenceForCommunity, { adminId, communityId });
+  const review = useMutation(api.advancePurchase.reviewMilestoneEvidence);
+  const [notes, setNotes] = useState<Record<string, string>>({});
+
+  return (
+    <div>
+      <h4 style={{ margin: "0 0 0.6rem", fontSize: "0.95rem", color: "#333" }}>Awaiting review</h4>
+      {pending === undefined ? (
+        <p>Loading proof pictures...</p>
+      ) : pending.length === 0 ? (
+        <p style={{ color: "#777", fontSize: "0.9rem", marginBottom: "1.25rem" }}>No proof pictures awaiting review.</p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginBottom: "1.25rem" }}>
+          {pending.map((e: any) => (
+            <div key={e._id} style={{ background: "#fff", border: "1px solid #e0e0e0", borderRadius: 12, padding: "1rem" }}>
+              <div style={{ fontWeight: 700 }}>{e.offer?.productName} — {e.milestone?.name}</div>
+              <img src={e.url} alt="Proof" style={{ width: "100%", maxWidth: 320, borderRadius: 8, margin: "0.5rem 0" }} />
+              <p style={{ fontSize: "0.8rem", color: "#666" }}>
+                {e.lat != null ? `📍 ${e.lat.toFixed(5)}, ${e.lng.toFixed(5)}` : "No GPS"} · 🕒 {new Date(e.capturedAt).toLocaleString()}
+              </p>
+              <textarea
+                placeholder="Notes (optional)"
+                value={notes[e._id] || ""}
+                onChange={(ev) => setNotes((n) => ({ ...n, [e._id]: ev.target.value }))}
+                style={{ ...inputStyle, marginBottom: "0.5rem" }}
+              />
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <button
+                  onClick={() => review({ reviewerId: adminId, evidenceId: e._id, decision: "approved", reviewNotes: notes[e._id] })}
+                  style={{ flex: 1, padding: "0.6rem", background: "#2e7d32", color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, cursor: "pointer" }}
+                >
+                  Approve
+                </button>
+                <button
+                  onClick={() => review({ reviewerId: adminId, evidenceId: e._id, decision: "resubmission_required", reviewNotes: notes[e._id] })}
+                  style={{ flex: 1, padding: "0.6rem", background: "#f57f17", color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, cursor: "pointer" }}
+                >
+                  Request resubmission
+                </button>
+                <button
+                  onClick={() => review({ reviewerId: adminId, evidenceId: e._id, decision: "rejected", reviewNotes: notes[e._id] })}
+                  style={{ flex: 1, padding: "0.6rem", background: "#d32f2f", color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, cursor: "pointer" }}
+                >
+                  Reject
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <h4 style={{ margin: "0 0 0.6rem", fontSize: "0.95rem", color: "#333" }}>History</h4>
+      <ProofPictureHistory adminId={adminId} communityId={communityId} />
+    </div>
+  );
+}
+
 /**
- * Shared Advance Purchase config + evidence-review panel for a single
+ * Shared Advanced Markets config + proof-picture-review panel for a single
  * community. Used both by the standalone /admin/advance-purchase page
- * (which adds its own community picker) and by the "Advance Purchase"
+ * (which adds its own community picker) and by the "Advanced Markets"
  * tab inside the per-community community-dashboard console.
  */
 export function CommunityAdvancePurchasePanel({ adminId, communityId }: { adminId: Id<"users">; communityId: Id<"communities"> }) {
@@ -212,7 +248,7 @@ export function CommunityAdvancePurchasePanel({ adminId, communityId }: { adminI
           onClick={() => setTab("review")}
           style={{ flex: 1, padding: "0.6rem", background: tab === "review" ? BRAND : "#eee", color: tab === "review" ? "#fff" : "#333", border: "none", borderRadius: 8, fontWeight: 700, cursor: "pointer" }}
         >
-          Review evidence
+          Proof pictures
         </button>
       </div>
 

@@ -7,6 +7,8 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useStoredUser } from "../../../../hooks/useStoredUser";
 import { MilestoneEvidenceCapture } from "../../../../components/advancePurchase/MilestoneEvidenceCapture";
+import { AddOfferPhotos } from "../../../../components/advancePurchase/AddOfferPhotos";
+import SubmissionPhotoGallery from "../../../../components/SubmissionPhotoGallery";
 
 const FONT = '"Montserrat", sans-serif';
 
@@ -14,9 +16,8 @@ export default function FarmerOfferProgressPage() {
   const { offerId } = useParams<{ offerId: string }>();
   const { user, status } = useStoredUser();
   const offer = useQuery(api.advancePurchase.getOfferDetail, { offerId: offerId as Id<"advancePurchaseOffers"> });
-  const milestones = useQuery(api.advancePurchase.listMilestones, { offerId: offerId as Id<"advancePurchaseOffers"> });
 
-  if (status === "loading" || offer === undefined || milestones === undefined) {
+  if (status === "loading" || offer === undefined) {
     return <div style={{ padding: "2rem", fontFamily: FONT }}>Loading...</div>;
   }
   if (!user) return <div style={{ padding: "2rem", fontFamily: FONT }}>Please log in.</div>;
@@ -25,6 +26,7 @@ export default function FarmerOfferProgressPage() {
     return <div style={{ padding: "2rem", fontFamily: FONT }}>You can only view your own offer.</div>;
   }
 
+  const milestones = offer.milestones;
   const currentMilestone = milestones.find((m: any) => ["pending", "resubmission_required"].includes(m.status));
   const approvedCount = milestones.filter((m: any) => m.status === "approved").length;
 
@@ -42,23 +44,43 @@ export default function FarmerOfferProgressPage() {
       </p>
 
       <div style={{ background: "#fff", border: "1px solid #e0e0e0", borderRadius: 12, padding: "1rem", marginBottom: "1rem" }}>
+        <h3 style={{ margin: "0 0 0.6rem", fontSize: "1rem" }}>Gallery</h3>
+        {offer.photoUrls && offer.photoUrls.length > 0 && (
+          <div style={{ marginBottom: "0.6rem" }}>
+            <SubmissionPhotoGallery photos={offer.photoUrls} minTileWidth={90} tileHeight={90} />
+          </div>
+        )}
+        <AddOfferPhotos farmerId={user.userId as any} offerId={offer._id} />
+      </div>
+
+      <div style={{ background: "#fff", border: "1px solid #e0e0e0", borderRadius: 12, padding: "1rem", marginBottom: "1rem" }}>
         <h3 style={{ margin: "0 0 0.6rem", fontSize: "1rem" }}>Timeline</h3>
         {milestones.map((m: any) => (
-          <div key={m._id} style={{ display: "flex", justifyContent: "space-between", padding: "0.5rem 0", borderBottom: "1px solid #f0f0f0" }}>
-            <span>{m.name}{m.expectedDate ? ` · due ${new Date(m.expectedDate).toLocaleDateString()}` : ""}</span>
-            <span style={{
-              fontSize: "0.78rem",
-              fontWeight: 700,
-              color: m.status === "approved" ? "#2e7d32" : m.status === "submitted" ? "#f57f17" : m.status === "resubmission_required" || m.status === "rejected" ? "#d32f2f" : "#999",
-            }}>
-              {({
-                approved: "✅ Approved",
-                submitted: "⏳ Awaiting review",
-                resubmission_required: "🔁 Resubmit",
-                rejected: "❌ Rejected",
-                pending: "Pending",
-              } as Record<string, string>)[m.status]}
-            </span>
+          <div key={m._id} style={{ padding: "0.5rem 0", borderBottom: "1px solid #f0f0f0" }}>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span>{m.name}{m.expectedDate ? ` · due ${new Date(m.expectedDate).toLocaleDateString()}` : ""}</span>
+              <span style={{
+                fontSize: "0.78rem",
+                fontWeight: 700,
+                color: m.status === "approved" ? "#2e7d32" : m.status === "submitted" ? "#f57f17" : m.status === "resubmission_required" || m.status === "rejected" ? "#d32f2f" : "#999",
+              }}>
+                {({
+                  approved: "✅ Approved",
+                  submitted: "⏳ Awaiting review",
+                  resubmission_required: "🔁 Resubmit",
+                  rejected: "❌ Rejected",
+                  pending: "Pending",
+                } as Record<string, string>)[m.status]}
+              </span>
+            </div>
+            {m.proofPictures && m.proofPictures.length > 0 && (
+              <div style={{ marginTop: "0.5rem" }}>
+                <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "#888", marginBottom: "0.3rem" }}>
+                  Proof pictures
+                </div>
+                <SubmissionPhotoGallery photos={m.proofPictures.map((p: any) => p.url)} minTileWidth={80} tileHeight={80} />
+              </div>
+            )}
           </div>
         ))}
       </div>

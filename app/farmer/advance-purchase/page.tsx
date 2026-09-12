@@ -7,6 +7,7 @@ import { Id } from "../../../convex/_generated/dataModel";
 import Link from "next/link";
 import { useStoredUser } from "../../hooks/useStoredUser";
 import { validateImageFile } from "../../utils/imageValidation";
+import { AddOfferPhotos } from "../../components/advancePurchase/AddOfferPhotos";
 
 const FONT = '"Montserrat", sans-serif';
 
@@ -254,7 +255,7 @@ export default function FarmerAdvancePurchasePage() {
   const [creatingFor, setCreatingFor] = useState<string | null>(null);
 
   if (status === "loading" || configs === undefined || myOffers === undefined) {
-    return <div style={{ padding: "2rem", fontFamily: FONT }}>Loading Advance Purchase...</div>;
+    return <div style={{ padding: "2rem", fontFamily: FONT }}>Loading Advanced Markets...</div>;
   }
   if (!user || !["farmer", "vendor", "store"].includes(user.role)) {
     return <div style={{ padding: "2rem", fontFamily: FONT }}>Please log in as a farmer.</div>;
@@ -267,9 +268,9 @@ export default function FarmerAdvancePurchasePage() {
       <div style={{ marginBottom: "1rem" }}>
         <Link href="/" style={{ color: "#1976d2", fontWeight: 600, fontSize: "0.9rem" }}>← Back to Dashboard</Link>
       </div>
-      <h1 style={{ fontSize: "1.5rem", fontWeight: 700, marginBottom: "0.25rem" }}>🌱 Advance Purchase</h1>
+      <h1 style={{ fontSize: "1.5rem", fontWeight: 700, marginBottom: "0.25rem" }}>🌱 Advanced Markets</h1>
       <p style={{ color: "#666", fontSize: "0.9rem", marginBottom: "1.25rem" }}>
-        Publish a recurring advance-purchase offer using your community&apos;s configuration, then track buyer commitments and milestone payments.
+        Publish a recurring pre-funded offer using your community&apos;s configuration, then track buyer commitments and milestone payments.
       </p>
 
       {activeConfig ? (
@@ -279,7 +280,7 @@ export default function FarmerAdvancePurchasePage() {
           <h2 style={{ fontSize: "1.05rem", fontWeight: 700, marginBottom: "0.5rem" }}>Create a new offer</h2>
           {configs.length === 0 && (
             <div style={{ padding: "1rem", background: "#fafafa", border: "1px dashed #ccc", borderRadius: 10, color: "#777", fontSize: "0.88rem" }}>
-              No advance purchase form configured for your communities yet.
+              No Advanced Markets form configured for your communities yet.
             </div>
           )}
           <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
@@ -308,7 +309,7 @@ export default function FarmerAdvancePurchasePage() {
       <h2 style={{ fontSize: "1.05rem", fontWeight: 700, marginBottom: "0.5rem" }}>My offers</h2>
       {myOffers.length === 0 ? (
         <div style={{ padding: "1rem", background: "#fafafa", border: "1px dashed #ccc", borderRadius: 10, color: "#777", fontSize: "0.88rem" }}>
-          You have no active advance purchase offers.
+          You have no active Advanced Markets offers.
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
@@ -339,6 +340,9 @@ export default function FarmerAdvancePurchasePage() {
                   </Link>
                 )}
               </div>
+              {!["cancelled", "fulfilled"].includes(o.status) && (
+                <AddOfferPhotos farmerId={user.userId as any} offerId={o._id} />
+              )}
             </div>
           ))}
         </div>

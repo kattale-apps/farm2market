@@ -127,7 +127,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   const [rewardCashoutMessage, setRewardCashoutMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   // Section collapse state — every major dashboard section is reached only
   // via the "☰ More" menu; the main dashboard body always shows just the
-  // Advance Purchase Market link and the Wallet section.
+  // Advanced Markets link and the Wallet section.
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
   const toggleSection = (key: string) =>
     setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -993,7 +993,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       {moreSlot && createPortal(moreContent, moreSlot)}
       {profileExtraSlot && createPortal(<UserProfileCard userId={userId} />, profileExtraSlot)}
 
-      {/* Advance Purchase Market quick link */}
+      {/* Advanced Markets quick link */}
       <Link href="/buyer/advance-purchase" style={{
         display: "flex",
         alignItems: "center",
@@ -1012,7 +1012,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       }}>
         <span style={{ fontSize: "1.8rem" }}>🌱</span>
         <div>
-          <div>Advance Purchase Market</div>
+          <div>Advanced Markets</div>
           <div style={{ fontSize: "0.78rem", fontWeight: 500, color: "#8e24aa" }}>
             Fund a farmer&apos;s next harvest ahead of delivery
           </div>

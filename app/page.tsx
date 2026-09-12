@@ -201,16 +201,17 @@ export default function Home() {
           position: relative;
           display: grid;
           grid-template-columns: 1fr auto auto;
-          column-gap: 10px;
+          column-gap: 6px;
           row-gap: 4px;
           align-items: center;
           margin-bottom: 1rem;
-          padding: 0.6rem 0.7rem;
-          background: rgba(20, 30, 20, 0.75);
+          padding: 0.5rem 0.6rem;
+          background: linear-gradient(160deg, #8a5a2b 0%, #6b4423 100%);
           border-radius: 10px;
         }
-        .f2m-slot-brand { grid-area: brand; justify-self: start; }
-        .f2m-slot-title { grid-area: title; justify-self: start; min-width: 0; }
+        .f2m-slot-brand { grid-area: brand; justify-self: start; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+        .f2m-slot-title { grid-area: title; justify-self: start; min-width: 0; overflow: hidden; }
+        .f2m-slot-title h2 { overflow: hidden; text-overflow: ellipsis; }
         .f2m-slot-bell { grid-area: bell; justify-self: center; }
         .f2m-slot-msg { grid-area: msg; justify-self: center; }
         .f2m-slot-profile { grid-area: profile; justify-self: center; }
@@ -219,22 +220,23 @@ export default function Home() {
           display: flex;
           align-items: center;
           justify-content: center;
-          width: 28px;
-          height: 28px;
+          width: 56px;
+          height: 56px;
           padding: 0;
           background: none;
           border: none;
           color: #fff;
-          font-size: 1rem;
+          font-size: 2rem;
           line-height: 1;
           cursor: pointer;
+          flex-shrink: 0;
         }
         .f2m-dropdown {
           position: absolute;
           left: 50%;
           transform: translateX(-50%);
           top: calc(100% + 0.4rem);
-          width: min(300px, calc(100vw - 2rem));
+          width: min(340px, calc(100vw - 2rem));
           max-height: 70vh;
           overflow-y: auto;
           background: #fff;
@@ -316,6 +318,8 @@ export default function Home() {
                       )}
                     </div>
                   )}
+
+                  <div id="dashboard-profile-extra-slot" />
 
                   <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
                     <a href="/api/download/android" download="Farm2Market.apk" style={profileMenuLinkStyle}>

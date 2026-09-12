@@ -100,19 +100,19 @@ export function NotificationMailbox({ userId, compact = false }: NotificationMai
             e.currentTarget.style.boxShadow = unreadCount > 0 ? "0 4px 12px rgba(33, 150, 243, 0.3)" : "0 2px 8px rgba(0,0,0,0.15)";
           }}
         >
-          <BellIcon size={compact ? 16 : 28} color={compact ? "#fff" : "#1565c0"} />
+          <BellIcon size={compact ? 34 : 28} color={compact ? "#fff" : "#1565c0"} />
           {unreadCount > 0 && (
             <span
               style={{
                 position: "absolute",
-                top: compact ? "-4px" : "-6px",
-                right: compact ? "-4px" : "-6px",
+                top: compact ? "-2px" : "-6px",
+                right: compact ? "-2px" : "-6px",
                 background: "#d32f2f",
                 color: "#fff",
                 borderRadius: "50%",
-                width: compact ? "14px" : "28px",
-                height: compact ? "14px" : "28px",
-                fontSize: compact ? "0.55rem" : "0.85rem",
+                width: compact ? "20px" : "28px",
+                height: compact ? "20px" : "28px",
+                fontSize: compact ? "0.7rem" : "0.85rem",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",

@@ -5,14 +5,14 @@ import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { TraderListings } from "./TraderListings";
 import { CreateTraderListing } from "./CreateTraderListing";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { exportToExcel, exportToPDF, formatUTIDDataForExport } from "../utils/exportUtils";
 import { exportUTIDsByCategory, exportUTIDsByCategoryPDF, exportInventoryVolume, exportCapitalVolume } from "../utils/traderReports";
-import { ThreadView } from "./messages/ThreadView";
 import { formatUgandaDateTime, formatUgandaTimeOnly, getUgandaTime } from "../utils/timeUtils";
 import { ContactUs } from "./ContactUs";
 import { savePdfFromJsPDF } from "../utils/pdfDownload";
+import { useRouter } from "next/navigation";
 
 interface TraderDashboardProps {
   userId: Id<"users">;
@@ -20,6 +20,7 @@ interface TraderDashboardProps {
 }
 
 export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
+  const router = useRouter();
   const ledger = useQuery(api.traderDashboard.getLedgerBreakdown, { traderId: userId });
   const exposure = useQuery(api.traderDashboard.getExposureStatus, { traderId: userId });
   const inventory = useQuery(api.traderDashboard.getInventoryWithProjectedLoss, { traderId: userId });
@@ -58,14 +59,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
   const [processingOffers, setProcessingOffers] = useState<{ [key: string]: boolean }>({});
   const [offerMessages, setOfferMessages] = useState<{ [key: string]: { type: "success" | "error"; text: string } }>({});
   const user = useQuery(api.auth.getUser, { userId });
-  const [messageInboxOpen, setMessageInboxOpen] = useState(false);
-  const [selectedMessageUtid, setSelectedMessageUtid] = useState<string | null>(null);
-  const SUPPORT_THREAD = "SUPPORT";
   const [isMobile, setIsMobile] = useState(false);
-  const inboxRef = useRef<HTMLDivElement>(null);
-  const [isInboxNarrow, setIsInboxNarrow] = useState(false);
-  const isInboxStacked = isMobile || isInboxNarrow;
-  const activeThreadUtid = selectedMessageUtid || messageThreads?.[0]?.utid || SUPPORT_THREAD;
   const [openListingsPage, setOpenListingsPage] = useState(1);
   const [activeUtidPage, setActiveUtidPage] = useState(1);
   const [buyOffersPage, setBuyOffersPage] = useState(1);
@@ -152,21 +146,10 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
     const handleResize = () => {
       const width = window.innerWidth;
       setIsMobile(width <= 768);
-      setIsInboxNarrow(width <= 720);
     };
     handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, []);
-
-  useEffect(() => {
-    if (!inboxRef.current || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver((entries) => {
-      const width = entries[0]?.contentRect?.width || 0;
-      setIsInboxNarrow(width <= 720);
-    });
-    observer.observe(inboxRef.current);
-    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
@@ -667,14 +650,8 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
   const msgContent = (
     <button
       type="button"
-      onClick={() => {
-        const nextOpen = !messageInboxOpen;
-        setMessageInboxOpen(nextOpen);
-        if (nextOpen && !selectedMessageUtid) {
-          setSelectedMessageUtid(SUPPORT_THREAD);
-        }
-      }}
-      title="Inbox"
+      onClick={() => router.push("/messages")}
+      title="Messages"
       className="f2m-icon-btn"
       style={{ position: "relative" }}
     >
@@ -682,14 +659,14 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
       {unreadMessageCount > 0 && (
         <span style={{
           position: "absolute",
-          top: "-4px",
-          right: "-4px",
+          top: "-2px",
+          right: "-2px",
           background: "#d32f2f",
           color: "#fff",
           borderRadius: "50%",
-          width: "14px",
-          height: "14px",
-          fontSize: "0.55rem",
+          width: "20px",
+          height: "20px",
+          fontSize: "0.7rem",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -778,138 +755,6 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
           {proView ? "Simple View" : "Pro View"}
         </button>
       </div>
-
-      {messageInboxOpen && (
-        <div
-          id="message-inbox"
-          ref={inboxRef}
-          style={{
-          marginBottom: "1.5rem",
-          padding: "clamp(1rem, 3vw, 1.5rem)",
-          background: "#fff",
-          borderRadius: "12px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          border: "1px solid #e0e0e0",
-          width: "100%",
-          maxWidth: "100%",
-          boxSizing: "border-box",
-          overflowX: "hidden",
-        }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "clamp(0.5rem, 2vw, 1rem)", flexWrap: "wrap", gap: "0.5rem" }}>
-            <h3 style={{
-              marginTop: 0,
-              marginBottom: 0,
-              fontSize: "clamp(1.1rem, 3vw, 1.3rem)",
-              color: "#2c2c2c",
-              fontFamily: '"Montserrat", sans-serif',
-              fontWeight: "600",
-              letterSpacing: "-0.01em"
-            }}>
-              Messages Inbox
-            </h3>
-            <button
-              type="button"
-              onClick={() => setMessageInboxOpen(false)}
-              style={{
-                padding: "0.25rem 0.6rem",
-                background: "#f5f5f5",
-                border: "1px solid #ddd",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontSize: "0.8rem",
-                fontWeight: "600",
-              }}
-            >
-              x
-            </button>
-          </div>
-          {messageThreads === undefined ? (
-            <p style={{ color: "#999" }}>Loading message threads...</p>
-          ) : messageThreads.length === 0 ? (
-            <div>
-              <p style={{ color: "#666", marginBottom: "0.75rem" }}>
-                No messages yet. Start a support conversation with SuperAdmin below.
-              </p>
-              <ThreadView userId={userId} utid={SUPPORT_THREAD} />
-            </div>
-          ) : (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: isInboxStacked ? "1fr" : "minmax(220px, 1fr) 2fr",
-                gap: "1rem",
-                width: "100%",
-                maxWidth: "100%",
-                boxSizing: "border-box",
-                overflowX: "hidden",
-              }}
-            >
-              {!isInboxStacked && (
-                <div style={{
-                  border: "1px solid #e0e0e0",
-                  borderRadius: "8px",
-                  overflow: "hidden",
-                  maxHeight: "420px",
-                  overflowY: "auto",
-                  width: "100%",
-                  minWidth: 0,
-                }}>
-                  {messageThreads.map((thread) => {
-                    const isSelected = selectedMessageUtid === thread.utid;
-                    const isSupport = thread.utid === SUPPORT_THREAD;
-                    return (
-                      <button
-                        key={thread.utid}
-                        onClick={() => setSelectedMessageUtid(thread.utid)}
-                        style={{
-                          width: "100%",
-                          textAlign: "left",
-                          padding: "0.75rem",
-                          border: "none",
-                          borderBottom: "1px solid #e0e0e0",
-                          background: isSelected ? "#e3f2fd" : "#fff",
-                          cursor: "pointer",
-                        }}
-                      >
-                        <div style={{ fontWeight: "600", color: "#2c2c2c" }}>
-                          {isSupport ? "Support Inbox" : `UTID: ${thread.utid}`}
-                        </div>
-                        {isSupport && (
-                          <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.25rem" }}>
-                            General help with SuperAdmin
-                          </div>
-                        )}
-                        {thread.unreadCount > 0 && (
-                          <div style={{ marginTop: "0.35rem", fontSize: "0.75rem", color: "#d32f2f", fontWeight: "600" }}>
-                            {thread.unreadCount} unread
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-              <div style={{ width: "100%", minWidth: 0 }}>
-                {isInboxStacked ? (
-                  <ThreadView userId={userId} utid={activeThreadUtid} />
-                ) : selectedMessageUtid ? (
-                  <ThreadView userId={userId} utid={selectedMessageUtid} />
-                ) : (
-                  <div style={{
-                    padding: "2rem",
-                    border: "1px dashed #ddd",
-                    borderRadius: "8px",
-                    textAlign: "center",
-                    color: "#666"
-                  }}>
-                    Select a thread to view messages.
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
 
       {!proView ? (
         /* Simple View (Default) */
@@ -3170,15 +3015,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
       {/* Contact Us Section */}
       <ContactUs
         isMobile={false}
-        onOpenInbox={() => {
-          setMessageInboxOpen(true);
-          if (selectedMessageUtid === null) {
-            setSelectedMessageUtid(SUPPORT_THREAD);
-          }
-          if (typeof document !== "undefined") {
-            document.getElementById("message-inbox")?.scrollIntoView({ behavior: "smooth" });
-          }
-        }}
+        onOpenInbox={() => router.push("/messages")}
       />
     </div>
   );

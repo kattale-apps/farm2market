@@ -3,11 +3,10 @@
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { exportToExcel, exportToPDF, formatUTIDDataForExport } from "../utils/exportUtils";
 import { formatUgandaDateTime, getUgandaTime } from "../utils/timeUtils";
-import { ThreadView } from "./messages/ThreadView";
 import { ContactUs } from "./ContactUs";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -126,8 +125,6 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   const [rewardCashoutPhone, setRewardCashoutPhone] = useState<string>("");
   const [rewardReceiptUtid, setRewardReceiptUtid] = useState<string>("");
   const [rewardCashoutMessage, setRewardCashoutMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [messageInboxOpen, setMessageInboxOpen] = useState(false);
-  const [selectedMessageUtid, setSelectedMessageUtid] = useState<string | null>(null);
   // Section collapse state — every major dashboard section is reached only
   // via the "☰ More" menu; the main dashboard body always shows just the
   // Advance Purchase Market link and the Wallet section.
@@ -140,10 +137,12 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   const [titleSlot, setTitleSlot] = useState<HTMLElement | null>(null);
   const [msgSlot, setMsgSlot] = useState<HTMLElement | null>(null);
   const [moreSlot, setMoreSlot] = useState<HTMLElement | null>(null);
+  const [profileExtraSlot, setProfileExtraSlot] = useState<HTMLElement | null>(null);
   useEffect(() => {
     setTitleSlot(document.getElementById("dashboard-title-slot"));
     setMsgSlot(document.getElementById("dashboard-msg-slot"));
     setMoreSlot(document.getElementById("dashboard-more-slot"));
+    setProfileExtraSlot(document.getElementById("dashboard-profile-extra-slot"));
   }, []);
   const MORE_MENU_SECTIONS: Array<{ key: string; label: string }> = [
     { key: "communities", label: "🌾 My Communities" },
@@ -183,12 +182,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   const renderHideControl = (key: string) => (
     <button type="button" onClick={() => toggleSection(key)} style={hideSectionButtonStyle}>▲ Hide</button>
   );
-  const SUPPORT_THREAD = "SUPPORT";
   const [isMobile, setIsMobile] = useState(false);
-  const inboxRef = useRef<HTMLDivElement>(null);
-  const [isInboxNarrow, setIsInboxNarrow] = useState(false);
-  const isInboxStacked = isMobile || isInboxNarrow;
-  const activeThreadUtid = selectedMessageUtid || messageThreads?.[0]?.utid || SUPPORT_THREAD;
   const [inventoryPage, setInventoryPage] = useState(1);
   const [ordersPage, setOrdersPage] = useState(1);
   const [ledgerPage, setLedgerPage] = useState(1);
@@ -203,7 +197,6 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
     const handleResize = () => {
       const width = window.innerWidth;
       setIsMobile(width <= 768);
-      setIsInboxNarrow(width <= 720);
     };
     handleResize();
     window.addEventListener("resize", handleResize);
@@ -229,16 +222,6 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       setListingOrdersPage(1);
     }
   }, [paginationPreferences, ordersPageSize, ledgerPageSize, listingOrdersPageSize]);
-
-  useEffect(() => {
-    if (!inboxRef.current || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver((entries) => {
-      const width = entries[0]?.contentRect?.width || 0;
-      setIsInboxNarrow(width <= 720);
-    });
-    observer.observe(inboxRef.current);
-    return () => observer.disconnect();
-  }, []);
 
   const formatUGX = (amount: number) => {
     return new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX" }).format(amount);
@@ -913,14 +896,8 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   const msgContent = (
     <button
       type="button"
-      onClick={() => {
-        const nextOpen = !messageInboxOpen;
-        setMessageInboxOpen(nextOpen);
-        if (nextOpen && !selectedMessageUtid) {
-          setSelectedMessageUtid(SUPPORT_THREAD);
-        }
-      }}
-      title="Inbox"
+      onClick={() => router.push("/messages")}
+      title="Messages"
       className="f2m-icon-btn"
       style={{ position: "relative" }}
     >
@@ -928,14 +905,14 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       {unreadMessageCount > 0 && (
         <span style={{
           position: "absolute",
-          top: "-4px",
-          right: "-4px",
+          top: "-2px",
+          right: "-2px",
           background: "#d32f2f",
           color: "#fff",
           borderRadius: "50%",
-          width: "14px",
-          height: "14px",
-          fontSize: "0.55rem",
+          width: "20px",
+          height: "20px",
+          fontSize: "0.7rem",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -1006,9 +983,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       {titleSlot && createPortal(titleContent, titleSlot)}
       {msgSlot && createPortal(msgContent, msgSlot)}
       {moreSlot && createPortal(moreContent, moreSlot)}
-
-      {/* Profile Card */}
-      <UserProfileCard userId={userId} />
+      {profileExtraSlot && createPortal(<UserProfileCard userId={userId} />, profileExtraSlot)}
 
       {/* Advance Purchase Market quick link */}
       <Link href="/buyer/advance-purchase" style={{
@@ -1378,138 +1353,6 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
           </div>
         )}
       </div>
-      )}
-
-      {messageInboxOpen && (
-        <div
-          id="message-inbox"
-          ref={inboxRef}
-          style={{
-          marginBottom: "1.5rem",
-          padding: "clamp(1rem, 3vw, 1.5rem)",
-          background: "#fff",
-          borderRadius: "12px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          border: "1px solid #e0e0e0",
-          width: "100%",
-          maxWidth: "100%",
-          boxSizing: "border-box",
-          overflowX: "hidden",
-        }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "clamp(0.5rem, 2vw, 1rem)", flexWrap: "wrap", gap: "0.5rem" }}>
-            <h3 style={{
-              marginTop: 0,
-              marginBottom: 0,
-              fontSize: "clamp(1.1rem, 3vw, 1.3rem)",
-              color: "#2c2c2c",
-              fontFamily: '"Montserrat", sans-serif',
-              fontWeight: "600",
-              letterSpacing: "-0.01em"
-            }}>
-              Messages Inbox
-            </h3>
-            <button
-              type="button"
-              onClick={() => setMessageInboxOpen(false)}
-              style={{
-                padding: "0.25rem 0.6rem",
-                background: "#f5f5f5",
-                border: "1px solid #ddd",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontSize: "0.8rem",
-                fontWeight: "600",
-              }}
-            >
-              x
-            </button>
-          </div>
-          {messageThreads === undefined ? (
-            <p style={{ color: "#999" }}>Loading message threads...</p>
-          ) : messageThreads.length === 0 ? (
-            <div>
-              <p style={{ color: "#666", marginBottom: "0.75rem" }}>
-                No messages yet. Start a support conversation with SuperAdmin below.
-              </p>
-              <ThreadView userId={userId} utid={SUPPORT_THREAD} />
-            </div>
-          ) : (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: isInboxStacked ? "1fr" : "minmax(220px, 1fr) 2fr",
-                gap: "1rem",
-                width: "100%",
-                maxWidth: "100%",
-                boxSizing: "border-box",
-                overflowX: "hidden",
-              }}
-            >
-              {!isInboxStacked && (
-                <div style={{
-                  border: "1px solid #e0e0e0",
-                  borderRadius: "8px",
-                  overflow: "hidden",
-                  maxHeight: "420px",
-                  overflowY: "auto",
-                  width: "100%",
-                  minWidth: 0,
-                }}>
-                  {messageThreads.map((thread) => {
-                    const isSelected = selectedMessageUtid === thread.utid;
-                    const isSupport = thread.utid === SUPPORT_THREAD;
-                    return (
-                      <button
-                        key={thread.utid}
-                        onClick={() => setSelectedMessageUtid(thread.utid)}
-                        style={{
-                          width: "100%",
-                          textAlign: "left",
-                          padding: "0.75rem",
-                          border: "none",
-                          borderBottom: "1px solid #e0e0e0",
-                          background: isSelected ? "#e3f2fd" : "#fff",
-                          cursor: "pointer",
-                        }}
-                      >
-                        <div style={{ fontWeight: "600", color: "#2c2c2c" }}>
-                          {isSupport ? "Support Inbox" : `UTID: ${thread.utid}`}
-                        </div>
-                        {isSupport && (
-                          <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.25rem" }}>
-                            General help with SuperAdmin
-                          </div>
-                        )}
-                        {thread.unreadCount > 0 && (
-                          <div style={{ marginTop: "0.35rem", fontSize: "0.75rem", color: "#d32f2f", fontWeight: "600" }}>
-                            {thread.unreadCount} unread
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-              <div style={{ width: "100%", minWidth: 0 }}>
-                {isInboxStacked ? (
-                  <ThreadView userId={userId} utid={activeThreadUtid} />
-                ) : selectedMessageUtid ? (
-                  <ThreadView userId={userId} utid={selectedMessageUtid} />
-                ) : (
-                  <div style={{
-                    padding: "2rem",
-                    border: "1px dashed #ddd",
-                    borderRadius: "8px",
-                    textAlign: "center",
-                    color: "#666"
-                  }}>
-                    Select a thread to view messages.
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
       )}
 
       {/* Wallet & Deposit Section — always visible on the main dashboard, everything else lives behind the menu */}
@@ -3534,15 +3377,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       {/* Contact Us Section */}
       <ContactUs
         isMobile={false}
-        onOpenInbox={() => {
-          setMessageInboxOpen(true);
-          if (selectedMessageUtid === null) {
-            setSelectedMessageUtid(SUPPORT_THREAD);
-          }
-          if (typeof document !== "undefined") {
-            document.getElementById("message-inbox")?.scrollIntoView({ behavior: "smooth" });
-          }
-        }}
+        onOpenInbox={() => router.push("/messages")}
       />
     </div>
   );

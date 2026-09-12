@@ -4,11 +4,10 @@ import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { CreateListing } from "./CreateListing";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { exportToExcel, exportToPDF, formatUTIDDataForExport } from "../utils/exportUtils";
 import { formatUgandaDateTime, getUgandaTime } from "../utils/timeUtils";
-import { ThreadView } from "./messages/ThreadView";
 import { ContactUs } from "./ContactUs";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -83,8 +82,6 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
   const [counterPrice, setCounterPrice] = useState<string>("");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [creatingValidation, setCreatingValidation] = useState(false);
-  const [messageInboxOpen, setMessageInboxOpen] = useState(false);
-  const [selectedMessageUtid, setSelectedMessageUtid] = useState<string | null>(null);
   const [selectedListing, setSelectedListing] = useState<any | null>(null);
   const [expandedListings, setExpandedListings] = useState<Set<string>>(new Set());
   const [cancelledUnitIds, setCancelledUnitIds] = useState<Set<string>>(new Set());
@@ -116,14 +113,39 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
     setMsgSlot(document.getElementById("dashboard-msg-slot"));
     setMoreSlot(document.getElementById("dashboard-more-slot"));
   }, []);
-  const MORE_MENU_SECTIONS: Array<{ key: string; label: string }> = [
+  const farm2MarketLocked = !!farm2MarketAccess && !farm2MarketAccess.allowed;
+  const MORE_MENU_SECTIONS: Array<{ key: string; label: string; disabled?: boolean }> = [
     { key: "profile", label: "👤 Profile" },
     { key: "communities", label: "🌾 My Communities" },
+    ...(effectiveRole === "farmer" ? [
+      { key: "farmNeeds", label: "🧺 Farm Needs" },
+      { key: "farmToolbox", label: "🧰 Farm Toolbox" },
+      { key: "farmCalendar", label: "🗓️ Farm Calendar" },
+      {
+        key: "farm2market",
+        label: farm2MarketLocked
+          ? `🔒 Farm 2 Market (🪙 ${farm2MarketAccess?.balance ?? 0}/${farm2MarketAccess?.requiredBalance ?? 0})`
+          : "🛒 Farm 2 Market",
+        disabled: farm2MarketLocked,
+      },
+      { key: "advancePurchase", label: "🌱 Advance Purchase" },
+    ] : []),
   ];
+  const ROUTE_MENU_KEYS: Record<string, string> = {
+    profile: "/farmer/profile",
+    farmNeeds: "/farmer/farm-needs",
+    farmToolbox: "/farmer/toolbox",
+    farmCalendar: "/farmer/planner",
+    farm2market: "/farmer/farm2market",
+    advancePurchase: "/farmer/advance-purchase",
+  };
   const openSectionFromMenu = (key: string) => {
-    if (key === "profile") {
+    if (key === "farm2market" && farm2MarketLocked) {
+      return;
+    }
+    if (ROUTE_MENU_KEYS[key]) {
       setMoreMenuOpen(false);
-      router.push("/farmer/profile");
+      router.push(ROUTE_MENU_KEYS[key]);
       return;
     }
     setOpenSections((prev) => ({ ...prev, [key]: true }));
@@ -152,16 +174,11 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
   const transactionsPageKey = "farmer_transactions";
   const ledgerPageKey = "farmer_ledger";
   const ITEMS_PER_PAGE = 5;
-  const SUPPORT_THREAD = "SUPPORT";
   const [isMobile, setIsMobile] = useState(false);
   const [transactionsExpanded, setTransactionsExpanded] = useState(true);
   const [ledgerExpanded, setLedgerExpanded] = useState(true);
   const [clearingConcluded, setClearingConcluded] = useState(false);
   const [deletingNegId, setDeletingNegId] = useState<string | null>(null);
-  const inboxRef = useRef<HTMLDivElement>(null);
-  const [isInboxNarrow, setIsInboxNarrow] = useState(false);
-  const isInboxStacked = isMobile || isInboxNarrow;
-  const activeThreadUtid = selectedMessageUtid || messageThreads?.[0]?.utid || SUPPORT_THREAD;
   const getSortTimestamp = (item: any) => {
     const raw =
       item?.timestamp ??
@@ -192,22 +209,11 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
     if (!transactionsLedger?.transactions) return [];
     return [...transactionsLedger.transactions].sort((a: any, b: any) => getSortTimestamp(b) - getSortTimestamp(a));
   }, [transactionsLedger]);
-  const defaultSupportUtid = useMemo(() => {
-    const listingUtid = sortedListings?.[0]?.utid;
-    if (listingUtid) return listingUtid;
-    const negotiationUtid = sortedNegotiations?.[0]?.negotiationUtid;
-    if (negotiationUtid) return negotiationUtid;
-    const ledgerUtid = sortedLedgerTransactions?.[0]?.lockUtid;
-    if (ledgerUtid) return ledgerUtid;
-    return SUPPORT_THREAD;
-  }, [sortedListings, sortedNegotiations, sortedLedgerTransactions]);
-
   useEffect(() => {
     if (typeof window === "undefined") return;
     const handleResize = () => {
       const width = window.innerWidth;
       setIsMobile(width <= 768);
-      setIsInboxNarrow(width <= 720);
     };
     handleResize();
     window.addEventListener("resize", handleResize);
@@ -228,16 +234,6 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
       setLedgerPage(0);
     }
   }, [paginationPreferences, transactionsPageKey, ledgerPageKey, transactionsPageSize, ledgerPageSize]);
-
-  useEffect(() => {
-    if (!inboxRef.current || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver((entries) => {
-      const width = entries[0]?.contentRect?.width || 0;
-      setIsInboxNarrow(width <= 720);
-    });
-    observer.observe(inboxRef.current);
-    return () => observer.disconnect();
-  }, []);
 
   const formatDate = (timestamp: number) => {
     // Timestamps are stored in Uganda time, convert for display
@@ -962,14 +958,8 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
   const msgContent = (
     <button
       type="button"
-      onClick={() => {
-        const nextOpen = !messageInboxOpen;
-        setMessageInboxOpen(nextOpen);
-        if (nextOpen && !selectedMessageUtid && defaultSupportUtid) {
-          setSelectedMessageUtid(defaultSupportUtid);
-        }
-      }}
-      title="Inbox"
+      onClick={() => router.push("/messages")}
+      title="Messages"
       className="f2m-icon-btn"
       style={{ position: "relative" }}
     >
@@ -977,14 +967,14 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
       {unreadMessageCount > 0 && (
         <span style={{
           position: "absolute",
-          top: "-4px",
-          right: "-4px",
+          top: "-2px",
+          right: "-2px",
           background: "#d32f2f",
           color: "#fff",
           borderRadius: "50%",
-          width: "14px",
-          height: "14px",
-          fontSize: "0.55rem",
+          width: "20px",
+          height: "20px",
+          fontSize: "0.7rem",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -1018,10 +1008,11 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
             className="f2m-dropdown"
             style={{ padding: "0.4rem" }}
           >
-            {MORE_MENU_SECTIONS.map(({ key, label }) => (
+            {MORE_MENU_SECTIONS.map(({ key, label, disabled }) => (
               <button
                 key={key}
                 type="button"
+                disabled={disabled}
                 onClick={() => openSectionFromMenu(key)}
                 style={{
                   display: "flex",
@@ -1032,7 +1023,8 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
                   background: isSectionOpen(key) ? "#e3f2fd" : "transparent",
                   border: "none",
                   borderRadius: "6px",
-                  cursor: "pointer",
+                  cursor: disabled ? "not-allowed" : "pointer",
+                  opacity: disabled ? 0.6 : 1,
                   fontFamily: '"Montserrat", sans-serif',
                   fontSize: "0.85rem",
                   fontWeight: 600,
@@ -1086,293 +1078,10 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
         )}
       </div>
 
-      {/* Farmer quick links */}
-      {effectiveRole === "farmer" && (
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-        gap: "0.75rem",
-        marginBottom: "1.25rem",
-      }}>
-        <Link href="/farmer/farm-needs" style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: "0.4rem",
-          padding: "1rem",
-          background: "#ffebee",
-          border: "1.5px solid #ef9a9a",
-          borderRadius: "14px",
-          textDecoration: "none",
-          color: "#c62828",
-          fontFamily: '"Montserrat", sans-serif',
-          fontWeight: 700,
-          fontSize: "clamp(0.82rem,2.5vw,0.95rem)",
-          boxShadow: "0 0 0 1px rgba(198,40,40,0.20), 0 0 16px rgba(198,40,40,0.20), 0 2px 8px rgba(198,40,40,0.15)",
-          minHeight: 86,
-        }}>
-          <span style={{ fontSize: "1.8rem" }}>🧺</span>
-          Farm Needs
-        </Link>
-        <Link href="/farmer/toolbox" style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: "0.4rem",
-          padding: "1rem",
-          background: "#e8f5e9",
-          border: "1.5px solid #a5d6a7",
-          borderRadius: "14px",
-          textDecoration: "none",
-          color: "#2e7d32",
-          fontFamily: '"Montserrat", sans-serif',
-          fontWeight: 700,
-          fontSize: "clamp(0.82rem,2.5vw,0.95rem)",
-          boxShadow: "0 0 0 1px rgba(46,125,50,0.18), 0 0 16px rgba(46,125,50,0.18), 0 2px 8px rgba(46,125,50,0.14)",
-          minHeight: 86,
-        }}>
-          <span style={{ fontSize: "1.8rem" }}>🧰</span>
-          Farm Toolbox
-        </Link>
-        <Link href="/farmer/planner" style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: "0.4rem",
-          padding: "1rem",
-          background: "#e3f2fd",
-          border: "1.5px solid #90caf9",
-          borderRadius: "14px",
-          textDecoration: "none",
-          color: "#1565c0",
-          fontFamily: '"Montserrat", sans-serif',
-          fontWeight: 700,
-          fontSize: "clamp(0.82rem,2.5vw,0.95rem)",
-          boxShadow: "0 0 0 1px rgba(21,101,192,0.20), 0 0 16px rgba(21,101,192,0.18), 0 2px 8px rgba(21,101,192,0.12)",
-          minHeight: 86,
-        }}>
-          <span style={{ fontSize: "1.8rem" }}>🗓️</span>
-          Farm Calender
-        </Link>
-        {farm2MarketAccess && !farm2MarketAccess.allowed ? (
-          <div
-            aria-disabled="true"
-            title={farm2MarketAccess.reason || "Farm 2 Market is locked until required FarmCoins are reached."}
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "0.4rem",
-              padding: "1rem",
-              background: "#fffde7",
-              border: "1.5px solid #ffe082",
-              borderRadius: "14px",
-              color: "#f57f17",
-              fontFamily: '"Montserrat", sans-serif',
-              fontWeight: 700,
-              fontSize: "clamp(0.82rem,2.5vw,0.95rem)",
-              boxShadow: "0 0 0 1px rgba(245,127,23,0.22), 0 0 16px rgba(245,127,23,0.18), 0 2px 8px rgba(245,127,23,0.14)",
-              minHeight: 86,
-              cursor: "not-allowed",
-              opacity: 0.92,
-            }}
-          >
-            <span style={{ fontSize: "1.8rem" }}>🔒</span>
-            Farm 2 Market
-            <span style={{ fontSize: "0.76rem", fontWeight: 700, lineHeight: 1.3, textAlign: "center" }}>
-              🪙 {farm2MarketAccess.balance} / {farm2MarketAccess.requiredBalance}
-            </span>
-          </div>
-        ) : (
-          <Link href="/farmer/farm2market" style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "0.4rem",
-            padding: "1rem",
-            background: "#fffde7",
-            border: "1.5px solid #ffe082",
-            borderRadius: "14px",
-            textDecoration: "none",
-            color: "#f57f17",
-            fontFamily: '"Montserrat", sans-serif',
-            fontWeight: 700,
-            fontSize: "clamp(0.82rem,2.5vw,0.95rem)",
-            boxShadow: "0 0 0 1px rgba(245,127,23,0.22), 0 0 16px rgba(245,127,23,0.18), 0 2px 8px rgba(245,127,23,0.14)",
-            minHeight: 86,
-          }}>
-            <span style={{ fontSize: "1.8rem" }}>🛒</span>
-            Farm 2 Market
-            <span style={{ fontSize: "0.76rem", fontWeight: 700, lineHeight: 1.3 }}>
-              🪙 {farm2MarketAccess ? `${farm2MarketAccess.balance} / ${farm2MarketAccess.requiredBalance}` : "Checking..."}
-            </span>
-          </Link>
-        )}
-        <Link href="/farmer/advance-purchase" style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: "0.4rem",
-          padding: "1rem",
-          background: "#f3e5f5",
-          border: "1.5px solid #ce93d8",
-          borderRadius: "14px",
-          textDecoration: "none",
-          color: "#6a1b9a",
-          fontFamily: '"Montserrat", sans-serif',
-          fontWeight: 700,
-          fontSize: "clamp(0.82rem,2.5vw,0.95rem)",
-          boxShadow: "0 0 0 1px rgba(106,27,154,0.20), 0 0 16px rgba(106,27,154,0.18), 0 2px 8px rgba(106,27,154,0.14)",
-          minHeight: 86,
-        }}>
-          <span style={{ fontSize: "1.8rem" }}>🌱</span>
-          Advance Purchase
-        </Link>
-      </div>
-      )}
-
       {isSectionOpen("communities") && (
         <div id="section-communities">
           {renderHideControl("communities")}
           {communitiesSection}
-        </div>
-      )}
-
-      {messageInboxOpen && (
-        <div
-          id="message-inbox"
-          ref={inboxRef}
-          style={{
-          marginBottom: "1.5rem",
-          padding: "clamp(1rem, 3vw, 1.5rem)",
-          background: "#fff",
-          borderRadius: "12px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          border: "1px solid #e0e0e0",
-          width: "100%",
-          maxWidth: "100%",
-          boxSizing: "border-box",
-          overflowX: "hidden",
-        }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "clamp(0.5rem, 2vw, 1rem)", flexWrap: "wrap", gap: "0.5rem" }}>
-            <h3 style={{
-              marginTop: 0,
-              marginBottom: 0,
-              fontSize: "clamp(1.1rem, 3vw, 1.3rem)",
-              color: "#2c2c2c",
-              fontFamily: '"Montserrat", sans-serif',
-              fontWeight: "600",
-              letterSpacing: "-0.01em"
-            }}>
-              Messages Inbox
-            </h3>
-            <button
-              type="button"
-              onClick={() => setMessageInboxOpen(false)}
-              style={{
-                padding: "0.25rem 0.6rem",
-                background: "#f5f5f5",
-                border: "1px solid #ddd",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontSize: "0.8rem",
-                fontWeight: "600",
-              }}
-            >
-              x
-            </button>
-          </div>
-          {messageThreads === undefined || !Array.isArray(messageThreads) ? (
-            <p style={{ color: "#999" }}>Loading message threads...</p>
-          ) : messageThreads.length === 0 ? (
-            <div>
-              <p style={{ color: "#666", marginBottom: "0.75rem" }}>
-                No messages yet. Start a support conversation with SuperAdmin below.
-              </p>
-              <ThreadView userId={userId} utid={defaultSupportUtid} />
-            </div>
-          ) : (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: isInboxStacked ? "1fr" : "minmax(220px, 1fr) 2fr",
-                gap: "1rem",
-                width: "100%",
-                maxWidth: "100%",
-                boxSizing: "border-box",
-                overflowX: "hidden",
-              }}
-            >
-              {!isInboxStacked && (
-                <div style={{
-                  border: "1px solid #e0e0e0",
-                  borderRadius: "8px",
-                  overflow: "hidden",
-                  maxHeight: "420px",
-                  overflowY: "auto",
-                  width: "100%",
-                  minWidth: 0,
-                }}>
-                  {messageThreads.map((thread) => {
-                    const isSelected = selectedMessageUtid === thread.utid;
-                    const isSupport = thread.utid === SUPPORT_THREAD;
-                    return (
-                      <button
-                        key={thread.utid}
-                        onClick={() => setSelectedMessageUtid(thread.utid)}
-                        style={{
-                          width: "100%",
-                          textAlign: "left",
-                          padding: "0.75rem",
-                          border: "none",
-                          borderBottom: "1px solid #e0e0e0",
-                          background: isSelected ? "#e3f2fd" : "#fff",
-                          cursor: "pointer",
-                        }}
-                      >
-                        <div style={{ fontWeight: "600", color: "#2c2c2c" }}>
-                          {isSupport ? "Support Inbox" : `UTID: ${thread.utid}`}
-                        </div>
-                        {isSupport && (
-                          <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.25rem" }}>
-                            General help with SuperAdmin
-                          </div>
-                        )}
-                        {thread.unreadCount > 0 && (
-                          <div style={{ marginTop: "0.35rem", fontSize: "0.75rem", color: "#d32f2f", fontWeight: "600" }}>
-                            {thread.unreadCount} unread
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-              <div style={{ width: "100%", minWidth: 0 }}>
-                {isInboxStacked ? (
-                  <ThreadView userId={userId} utid={activeThreadUtid} />
-                ) : selectedMessageUtid ? (
-                  <ThreadView userId={userId} utid={selectedMessageUtid} />
-                ) : (
-                  <div style={{
-                    padding: "2rem",
-                    border: "1px dashed #ddd",
-                    borderRadius: "8px",
-                    textAlign: "center",
-                    color: "#666"
-                  }}>
-                    Select a thread to view messages.
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -1390,15 +1099,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
         </p>
         <button
           type="button"
-          onClick={() => {
-            setMessageInboxOpen(true);
-            if (!selectedMessageUtid && defaultSupportUtid) {
-              setSelectedMessageUtid(defaultSupportUtid);
-            }
-            if (typeof document !== "undefined") {
-              document.getElementById("message-inbox")?.scrollIntoView({ behavior: "smooth" });
-            }
-          }}
+          onClick={() => router.push("/messages")}
           style={{
             marginTop: "0.5rem",
             padding: "0.5rem 0.9rem",

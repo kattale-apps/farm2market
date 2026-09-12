@@ -100,7 +100,7 @@ export function NotificationMailbox({ userId, compact = false }: NotificationMai
             e.currentTarget.style.boxShadow = unreadCount > 0 ? "0 4px 12px rgba(33, 150, 243, 0.3)" : "0 2px 8px rgba(0,0,0,0.15)";
           }}
         >
-          <BellIcon size={compact ? 34 : 28} color={compact ? "#fff" : "#1565c0"} />
+          <BellIcon size={compact ? 51 : 28} color={compact ? "#fff" : "#1565c0"} />
           {unreadCount > 0 && (
             <span
               style={{

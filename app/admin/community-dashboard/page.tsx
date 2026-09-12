@@ -17,6 +17,7 @@ import { AdminFertilizerConfig } from "../../components/biofarm/AdminFertilizerC
 import { exportSubmissionsToPDF } from "../../utils/exportUtils";
 import SubmissionPhotoGallery from "../../components/SubmissionPhotoGallery";
 import { CommunityAdvancePurchasePanel } from "../../components/advancePurchase/CommunityAdvancePurchasePanel";
+import { GOODS_CATEGORIES, FARM_SERVICE_OPTIONS } from "../../utils/advancedMarketsOptions";
 
 /* ── Tab types for community cards ── */
 type CommunityTab = "members" | "noticeboard" | "messages" | "forms" | "insights" | "fertilizer" | "advancePurchase";
@@ -653,7 +654,12 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
   const [builderFields, setBuilderFields] = useState<any[]>([
     { fieldType: "text", label: "", required: true, helpText: "", placeholder: "", options: [], farmerEditable: true },
   ]);
-  // Advance Purchase-only settings (formPurpose === "advance_purchase")
+  // Advanced Markets-only settings (formPurpose === "advance_purchase")
+  const [apOfferKind, setApOfferKind] = useState<"goods" | "services">("goods");
+  const [apGoodsCategory, setApGoodsCategory] = useState<"crop" | "livestock">("crop");
+  const [apServiceCategory, setApServiceCategory] = useState(FARM_SERVICE_OPTIONS[0]);
+  const [apCustomService, setApCustomService] = useState("");
+  const [apUsingCustomService, setApUsingCustomService] = useState(false);
   const [apProductCategory, setApProductCategory] = useState("");
   const [apUnitOptions, setApUnitOptions] = useState("seedlings, kg, bags");
   const [apRecurrenceOptions, setApRecurrenceOptions] = useState("one_off, seasonal, production_cycle");
@@ -705,6 +711,11 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
     setBuilderPaymentAmount("5000");
     setBuilderPaymentEditable(false);
     setBuilderFields([{ fieldType: "text", label: "", required: true, helpText: "", placeholder: "", options: [], farmerEditable: true }]);
+    setApOfferKind("goods");
+    setApGoodsCategory("crop");
+    setApServiceCategory(FARM_SERVICE_OPTIONS[0]);
+    setApCustomService("");
+    setApUsingCustomService(false);
     setApProductCategory("");
     setApUnitOptions("seedlings, kg, bags");
     setApRecurrenceOptions("one_off, seasonal, production_cycle");
@@ -737,12 +748,19 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
         setMsg({ type: "error", text: `Milestone release percentages must total 100% (currently ${apMilestoneTotal}%)` });
         return;
       }
+      if (apOfferKind === "services" && apUsingCustomService && !apCustomService.trim()) {
+        setMsg({ type: "error", text: "Name the new service" });
+        return;
+      }
       try {
         await createAPConfig({
           adminId: userId,
           communityId,
           name: builderName,
           productCategory: apProductCategory,
+          offerKind: apOfferKind,
+          goodsCategory: apOfferKind === "goods" ? apGoodsCategory : undefined,
+          serviceCategory: apOfferKind === "services" ? (apUsingCustomService ? apCustomService.trim() : apServiceCategory) : undefined,
           instructions: builderDescription || undefined,
           customFields: validFields.map((f, idx) => ({
             key: f.label.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || `field_${idx}`,
@@ -1055,6 +1073,83 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
                 <label style={{ fontSize: "0.8rem", fontWeight: 700, color: "#6a1b9a", display: "flex", alignItems: "center", gap: "0.35rem", marginBottom: "0.5rem" }}>
                   🌾 Advanced Markets Settings
                 </label>
+
+                <label style={{ fontSize: "0.78rem", fontWeight: 600, color: "#333", display: "block", marginBottom: "0.3rem" }}>Offer type</label>
+                <div style={{ display: "flex", gap: "0.4rem", marginBottom: "0.5rem" }}>
+                  <button
+                    type="button"
+                    onClick={() => setApOfferKind("goods")}
+                    style={{
+                      flex: 1, padding: "0.5rem", borderRadius: "6px", cursor: "pointer", fontWeight: 700, fontSize: "0.82rem",
+                      border: apOfferKind === "goods" ? "2px solid #6a1b9a" : "1px solid #ccc",
+                      background: apOfferKind === "goods" ? "#f3e5f5" : "#fff",
+                      color: apOfferKind === "goods" ? "#6a1b9a" : "#666",
+                    }}
+                  >
+                    📦 Goods
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setApOfferKind("services")}
+                    style={{
+                      flex: 1, padding: "0.5rem", borderRadius: "6px", cursor: "pointer", fontWeight: 700, fontSize: "0.82rem",
+                      border: apOfferKind === "services" ? "2px solid #6a1b9a" : "1px solid #ccc",
+                      background: apOfferKind === "services" ? "#f3e5f5" : "#fff",
+                      color: apOfferKind === "services" ? "#6a1b9a" : "#666",
+                    }}
+                  >
+                    🧑‍🌾 Services
+                  </button>
+                </div>
+
+                {apOfferKind === "goods" ? (
+                  <div style={{ display: "flex", gap: "0.4rem", marginBottom: "0.5rem" }}>
+                    {GOODS_CATEGORIES.map((g) => (
+                      <button
+                        key={g.value}
+                        type="button"
+                        onClick={() => setApGoodsCategory(g.value)}
+                        style={{
+                          flex: 1, padding: "0.45rem", borderRadius: "6px", cursor: "pointer", fontWeight: 600, fontSize: "0.8rem",
+                          border: apGoodsCategory === g.value ? "2px solid #6a1b9a" : "1px solid #ccc",
+                          background: apGoodsCategory === g.value ? "#f3e5f5" : "#fff",
+                          color: apGoodsCategory === g.value ? "#6a1b9a" : "#666",
+                        }}
+                      >
+                        {g.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ marginBottom: "0.5rem" }}>
+                    <select
+                      value={apUsingCustomService ? "__custom__" : apServiceCategory}
+                      onChange={(e) => {
+                        if (e.target.value === "__custom__") {
+                          setApUsingCustomService(true);
+                        } else {
+                          setApUsingCustomService(false);
+                          setApServiceCategory(e.target.value);
+                        }
+                      }}
+                      style={{ width: "100%", padding: "0.45rem", borderRadius: "6px", border: "1px solid #ccc", fontSize: "0.82rem" }}
+                    >
+                      {FARM_SERVICE_OPTIONS.map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                      <option value="__custom__">+ Add a new service…</option>
+                    </select>
+                    {apUsingCustomService && (
+                      <input
+                        placeholder="New service name (e.g. Soil Testing)"
+                        value={apCustomService}
+                        onChange={(e) => setApCustomService(e.target.value)}
+                        style={{ width: "100%", padding: "0.45rem", borderRadius: "6px", border: "1px solid #ccc", fontSize: "0.82rem", marginTop: "0.4rem" }}
+                      />
+                    )}
+                  </div>
+                )}
+
                 <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "0.5rem", marginBottom: "0.5rem" }}>
                   <div>
                     <label style={{ fontSize: "0.78rem", fontWeight: 600, color: "#333" }}>Product Category *</label>
@@ -1279,13 +1374,13 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
               </button>
               <button
                 onClick={handleCreateCustom}
-                disabled={!builderName.trim() || (builderPurpose === "advance_purchase" && (!apProductCategory.trim() || Math.round(apMilestoneTotal) !== 100))}
+                disabled={!builderName.trim() || (builderPurpose === "advance_purchase" && (!apProductCategory.trim() || Math.round(apMilestoneTotal) !== 100 || (apOfferKind === "services" && apUsingCustomService && !apCustomService.trim())))}
                 style={{
                   padding: "0.4rem 0.9rem", borderRadius: "6px", border: "none",
-                  background: (!builderName.trim() || (builderPurpose === "advance_purchase" && (!apProductCategory.trim() || Math.round(apMilestoneTotal) !== 100))) ? "#bbb" : "#1976d2",
+                  background: (!builderName.trim() || (builderPurpose === "advance_purchase" && (!apProductCategory.trim() || Math.round(apMilestoneTotal) !== 100 || (apOfferKind === "services" && apUsingCustomService && !apCustomService.trim())))) ? "#bbb" : "#1976d2",
                   color: "#fff",
                   fontSize: "0.8rem", fontWeight: 600,
-                  cursor: (!builderName.trim() || (builderPurpose === "advance_purchase" && (!apProductCategory.trim() || Math.round(apMilestoneTotal) !== 100))) ? "not-allowed" : "pointer",
+                  cursor: (!builderName.trim() || (builderPurpose === "advance_purchase" && (!apProductCategory.trim() || Math.round(apMilestoneTotal) !== 100 || (apOfferKind === "services" && apUsingCustomService && !apCustomService.trim())))) ? "not-allowed" : "pointer",
                 }}
               >
                 Create Form
@@ -1409,6 +1504,13 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
                         <span style={{ padding: "0.1rem 0.4rem", borderRadius: "999px", fontSize: "0.68rem", fontWeight: 600, background: "#6a1b9a", color: "#fff" }}>
                           🌾 Advanced Markets
                         </span>
+                        {cfg.offerKind && (
+                          <span style={{ padding: "0.1rem 0.4rem", borderRadius: "999px", fontSize: "0.68rem", fontWeight: 600, background: "#e8f5e9", color: "#2e7d32" }}>
+                            {cfg.offerKind === "goods"
+                              ? (cfg.goodsCategory === "livestock" ? "🐄 Livestock" : "🌾 Crop")
+                              : `🧑‍🌾 ${cfg.serviceCategory || "Service"}`}
+                          </span>
+                        )}
                         <strong style={{ fontSize: "0.9rem", color: "#333" }}>{cfg.name}</strong>
                         <span style={{ fontSize: "0.75rem", color: cfg.isActive ? "#2e7d32" : "#999", fontWeight: 600 }}>
                           {cfg.isActive ? "● Active" : "● Inactive"}

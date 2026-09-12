@@ -123,7 +123,16 @@ export default function AdvancePurchaseMarketPage() {
                   <img src={offer.photoUrls[0]} alt={offer.productName} style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 8, flexShrink: 0 }} />
                 )}
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: "1.05rem" }}>{offer.productName}</div>
+                  <div style={{ fontWeight: 700, fontSize: "1.05rem", display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
+                    {offer.productName}
+                    {offer.offerKind && (
+                      <span style={{ padding: "0.1rem 0.4rem", borderRadius: 999, fontSize: "0.65rem", fontWeight: 700, background: "#e8f5e9", color: "#2e7d32" }}>
+                        {offer.offerKind === "goods"
+                          ? (offer.goodsCategory === "livestock" ? "🐄 Livestock" : "🌾 Crop")
+                          : `🧑‍🌾 ${offer.serviceCategory || "Service"}`}
+                      </span>
+                    )}
+                  </div>
                   <div style={{ fontSize: "0.8rem", color: "#888" }}>
                     {offer.communityName} · seller {offer.farmerAlias}
                   </div>

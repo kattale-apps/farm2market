@@ -123,6 +123,9 @@ export const createConfig = mutation({
     communityId: v.id("communities"),
     name: v.string(),
     productCategory: v.string(),
+    offerKind: v.union(v.literal("goods"), v.literal("services")),
+    goodsCategory: v.optional(v.union(v.literal("crop"), v.literal("livestock"))),
+    serviceCategory: v.optional(v.string()),
     instructions: v.optional(v.string()),
     customFields: v.array(customFieldValidator),
     unitOptions: v.optional(v.array(v.string())),
@@ -143,6 +146,12 @@ export const createConfig = mutation({
   handler: async (ctx, args) => {
     await assertCommunityAdmin(ctx, args.adminId, args.communityId);
 
+    if (args.offerKind === "goods" && !args.goodsCategory) {
+      throw new Error("Select whether this is a crop or livestock offer");
+    }
+    if (args.offerKind === "services" && !args.serviceCategory?.trim()) {
+      throw new Error("Select or name the farm service this offer is for");
+    }
     if (args.milestoneTemplate.length === 0) {
       throw new Error("Define at least one milestone/stage");
     }
@@ -168,6 +177,9 @@ export const updateConfig = mutation({
     adminId: v.id("users"),
     name: v.optional(v.string()),
     productCategory: v.optional(v.string()),
+    offerKind: v.optional(v.union(v.literal("goods"), v.literal("services"))),
+    goodsCategory: v.optional(v.union(v.literal("crop"), v.literal("livestock"))),
+    serviceCategory: v.optional(v.string()),
     instructions: v.optional(v.string()),
     customFields: v.optional(v.array(customFieldValidator)),
     unitOptions: v.optional(v.array(v.string())),
@@ -343,6 +355,9 @@ export const createOffer = mutation({
       inKindComponent: args.inKindComponent,
       inKindInputs: args.inKindInputs,
       recurrence: args.recurrence,
+      offerKind: config.offerKind,
+      goodsCategory: config.goodsCategory,
+      serviceCategory: config.serviceCategory,
       negotiationAllowed: config.negotiationAllowed,
       buyerCanProposePrice: config.buyerCanProposePrice,
       advancePercentage: config.advancePercentage,

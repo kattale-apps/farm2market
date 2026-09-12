@@ -298,7 +298,16 @@ export default function FarmerAdvancePurchasePage() {
                   fontFamily: FONT,
                 }}
               >
-                <div style={{ fontWeight: 700, color: "#2e7d32" }}>{c.name}</div>
+                <div style={{ fontWeight: 700, color: "#2e7d32", display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
+                  {c.name}
+                  {c.offerKind && (
+                    <span style={{ padding: "0.1rem 0.4rem", borderRadius: 999, fontSize: "0.68rem", fontWeight: 700, background: "#fff", color: "#2e7d32" }}>
+                      {c.offerKind === "goods"
+                        ? (c.goodsCategory === "livestock" ? "🐄 Livestock" : "🌾 Crop")
+                        : `🧑‍🌾 ${c.serviceCategory || "Service"}`}
+                    </span>
+                  )}
+                </div>
                 <div style={{ fontSize: "0.8rem", color: "#666" }}>{c.communityName} · {c.productCategory}</div>
               </button>
             ))}

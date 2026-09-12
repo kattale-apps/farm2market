@@ -2639,6 +2639,13 @@ export default defineSchema({
     adminId: v.id("users"),
     name: v.string(), // e.g. "Coffee Seedlings Program"
     productCategory: v.string(), // e.g. "coffee_seedlings", "produce", "livestock", "inputs" — free text, community-defined
+    // Top-level classification: a "goods" offer (crop or livestock) or a
+    // "services" offer (a farm extension service like planting/harvesting).
+    // Optional for backward compatibility with configs created before this
+    // field existed; new configs always set it.
+    offerKind: v.optional(v.union(v.literal("goods"), v.literal("services"))),
+    goodsCategory: v.optional(v.union(v.literal("crop"), v.literal("livestock"))),
+    serviceCategory: v.optional(v.string()), // e.g. "Planting", "Harvesting", or a custom admin-entered service name
     instructions: v.optional(v.string()),
     isActive: v.boolean(),
     // Farmer-facing fields beyond the structured core fields, admin-configured.
@@ -2714,6 +2721,9 @@ export default defineSchema({
     inKindComponent: v.optional(v.number()),
     inKindInputs: v.optional(v.array(v.string())),
     recurrence: v.string(), // one of the config's recurrenceOptions
+    offerKind: v.optional(v.union(v.literal("goods"), v.literal("services"))), // copied from config
+    goodsCategory: v.optional(v.union(v.literal("crop"), v.literal("livestock"))),
+    serviceCategory: v.optional(v.string()),
     negotiationAllowed: v.boolean(), // copied from config at publish time
     buyerCanProposePrice: v.boolean(),
     advancePercentage: v.optional(v.number()),

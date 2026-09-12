@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
+import { GOODS_CATEGORIES, FARM_SERVICE_OPTIONS } from "../../utils/advancedMarketsOptions";
 
 const FONT = '"Montserrat", sans-serif';
 const BRAND = "#2e7d32";
@@ -16,6 +17,11 @@ function ConfigBuilder({ adminId, communityId, onDone }: { adminId: Id<"users">;
   const createConfig = useMutation(api.advancePurchase.createConfig);
   const [name, setName] = useState("");
   const [productCategory, setProductCategory] = useState("");
+  const [offerKind, setOfferKind] = useState<"goods" | "services">("goods");
+  const [goodsCategory, setGoodsCategory] = useState<"crop" | "livestock">("crop");
+  const [serviceCategory, setServiceCategory] = useState(FARM_SERVICE_OPTIONS[0]);
+  const [customService, setCustomService] = useState("");
+  const [usingCustomService, setUsingCustomService] = useState(false);
   const [instructions, setInstructions] = useState("");
   const [unitOptions, setUnitOptions] = useState("seedlings, kg, bags");
   const [recurrenceOptions, setRecurrenceOptions] = useState("one_off, seasonal, production_cycle");
@@ -52,6 +58,9 @@ function ConfigBuilder({ adminId, communityId, onDone }: { adminId: Id<"users">;
         communityId,
         name,
         productCategory,
+        offerKind,
+        goodsCategory: offerKind === "goods" ? goodsCategory : undefined,
+        serviceCategory: offerKind === "services" ? (usingCustomService ? customService.trim() : serviceCategory) : undefined,
         instructions: instructions || undefined,
         customFields: [],
         unitOptions: unitOptions.split(",").map((s) => s.trim()).filter(Boolean),
@@ -85,6 +94,85 @@ function ConfigBuilder({ adminId, communityId, onDone }: { adminId: Id<"users">;
     <div style={{ background: "#fff", border: "1px solid #e0e0e0", borderRadius: 12, padding: "1rem", marginBottom: "1rem" }}>
       <h3 style={{ margin: "0 0 0.75rem" }}>New Advanced Markets configuration</h3>
       <input placeholder="Program name (e.g. Coffee Seedlings)" value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} />
+
+      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, color: "#333", marginBottom: "0.3rem" }}>
+        Offer type
+      </label>
+      <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.6rem" }}>
+        <button
+          type="button"
+          onClick={() => setOfferKind("goods")}
+          style={{
+            flex: 1, padding: "0.6rem", borderRadius: 8, cursor: "pointer", fontWeight: 700,
+            border: offerKind === "goods" ? `2px solid ${BRAND}` : "1px solid #ccc",
+            background: offerKind === "goods" ? "#e8f5e9" : "#fff",
+            color: offerKind === "goods" ? BRAND : "#666",
+          }}
+        >
+          📦 Goods
+        </button>
+        <button
+          type="button"
+          onClick={() => setOfferKind("services")}
+          style={{
+            flex: 1, padding: "0.6rem", borderRadius: 8, cursor: "pointer", fontWeight: 700,
+            border: offerKind === "services" ? `2px solid ${BRAND}` : "1px solid #ccc",
+            background: offerKind === "services" ? "#e8f5e9" : "#fff",
+            color: offerKind === "services" ? BRAND : "#666",
+          }}
+        >
+          🧑‍🌾 Services
+        </button>
+      </div>
+
+      {offerKind === "goods" ? (
+        <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.6rem" }}>
+          {GOODS_CATEGORIES.map((g) => (
+            <button
+              key={g.value}
+              type="button"
+              onClick={() => setGoodsCategory(g.value)}
+              style={{
+                flex: 1, padding: "0.5rem", borderRadius: 8, cursor: "pointer", fontWeight: 600, fontSize: "0.85rem",
+                border: goodsCategory === g.value ? `2px solid ${BRAND}` : "1px solid #ccc",
+                background: goodsCategory === g.value ? "#e8f5e9" : "#fff",
+                color: goodsCategory === g.value ? BRAND : "#666",
+              }}
+            >
+              {g.label}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div style={{ marginBottom: "0.6rem" }}>
+          <select
+            value={usingCustomService ? "__custom__" : serviceCategory}
+            onChange={(e) => {
+              if (e.target.value === "__custom__") {
+                setUsingCustomService(true);
+              } else {
+                setUsingCustomService(false);
+                setServiceCategory(e.target.value);
+              }
+            }}
+            style={inputStyle}
+          >
+            {FARM_SERVICE_OPTIONS.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+            <option value="__custom__">+ Add a new service…</option>
+          </select>
+          {usingCustomService && (
+            <input
+              placeholder="New service name (e.g. Soil Testing)"
+              value={customService}
+              onChange={(e) => setCustomService(e.target.value)}
+              style={inputStyle}
+            />
+          )}
+        </div>
+      )}
+
       <input placeholder="Product category (e.g. coffee_seedlings, produce, livestock)" value={productCategory} onChange={(e) => setProductCategory(e.target.value)} style={inputStyle} />
       <textarea placeholder="Instructions shown to farmers (optional)" value={instructions} onChange={(e) => setInstructions(e.target.value)} style={inputStyle} />
       <input placeholder="Units of measure, comma-separated" value={unitOptions} onChange={(e) => setUnitOptions(e.target.value)} style={inputStyle} />
@@ -128,7 +216,10 @@ function ConfigBuilder({ adminId, communityId, onDone }: { adminId: Id<"users">;
       {error && <p style={{ color: "#d32f2f", fontSize: "0.85rem" }}>{error}</p>}
       <button
         onClick={handleSubmit}
-        disabled={busy || !name || !productCategory || totalPercent !== 100}
+        disabled={
+          busy || !name || !productCategory || totalPercent !== 100 ||
+          (offerKind === "services" && usingCustomService && !customService.trim())
+        }
         style={{ padding: "0.75rem 1.25rem", background: BRAND, color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, cursor: "pointer" }}
       >
         {busy ? "Saving..." : "Save configuration"}
@@ -265,12 +356,21 @@ export function CommunityAdvancePurchasePanel({ adminId, communityId }: { adminI
           {configs === undefined ? (
             <p>Loading configurations...</p>
           ) : configs.length === 0 ? (
-            <p style={{ color: "#777", fontSize: "0.9rem" }}>No advance purchase form configured.</p>
+            <p style={{ color: "#777", fontSize: "0.9rem" }}>No Advanced Markets form configured.</p>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
               {configs.map((c: any) => (
                 <div key={c._id} style={{ padding: "0.75rem 1rem", background: "#fff", border: "1px solid #e0e0e0", borderRadius: 10 }}>
-                  <div style={{ fontWeight: 700 }}>{c.name} {c.isActive ? "" : "(inactive)"}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
+                    <div style={{ fontWeight: 700 }}>{c.name} {c.isActive ? "" : "(inactive)"}</div>
+                    {c.offerKind && (
+                      <span style={{ padding: "0.1rem 0.5rem", borderRadius: 999, fontSize: "0.7rem", fontWeight: 700, background: "#e8f5e9", color: BRAND }}>
+                        {c.offerKind === "goods"
+                          ? (c.goodsCategory === "livestock" ? "🐄 Livestock" : "🌾 Crop")
+                          : `🧑‍🌾 ${c.serviceCategory || "Service"}`}
+                      </span>
+                    )}
+                  </div>
                   <div style={{ fontSize: "0.8rem", color: "#888" }}>{c.productCategory} · {c.milestoneTemplate.length} stages</div>
                 </div>
               ))}

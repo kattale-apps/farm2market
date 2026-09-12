@@ -270,7 +270,7 @@ export default function FarmerAdvancePurchasePage() {
       </div>
       <h1 style={{ fontSize: "1.5rem", fontWeight: 700, marginBottom: "0.25rem" }}>🌱 Advanced Markets</h1>
       <p style={{ color: "#666", fontSize: "0.9rem", marginBottom: "1.25rem" }}>
-        Publish a recurring pre-funded offer using your community&apos;s configuration, then track buyer commitments and milestone payments.
+        Publish a recurring pre-funded offer using your community&apos;s configuration. Payments in Advanced Markets are based on milestones reached.
       </p>
 
       {activeConfig ? (

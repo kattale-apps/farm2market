@@ -8,6 +8,7 @@ import { useParams } from "next/navigation";
 import { useStoredUser } from "../../../../hooks/useStoredUser";
 import { MilestoneEvidenceCapture } from "../../../../components/advancePurchase/MilestoneEvidenceCapture";
 import { AddOfferPhotos } from "../../../../components/advancePurchase/AddOfferPhotos";
+import { EditOfferDetails } from "../../../../components/advancePurchase/EditOfferDetails";
 import SubmissionPhotoGallery from "../../../../components/SubmissionPhotoGallery";
 
 const FONT = '"Montserrat", sans-serif';
@@ -42,6 +43,12 @@ export default function FarmerOfferProgressPage() {
       <p style={{ color: "#777", fontSize: "0.85rem", marginBottom: "1rem" }}>
         {offer.quantityCommitted}/{offer.totalQuantity} {offer.unit} committed · Stage {approvedCount} of {milestones.length}
       </p>
+
+      {!["cancelled", "fulfilled"].includes(offer.status) && (
+        <div style={{ marginBottom: "1rem" }}>
+          <EditOfferDetails farmerId={user.userId as any} offer={offer} />
+        </div>
+      )}
 
       <div style={{ background: "#fff", border: "1px solid #e0e0e0", borderRadius: 12, padding: "1rem", marginBottom: "1rem" }}>
         <h3 style={{ margin: "0 0 0.6rem", fontSize: "1rem" }}>Gallery</h3>

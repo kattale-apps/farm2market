@@ -56,7 +56,7 @@ export default function AdvancePurchaseMarketPage() {
           🌱 Advanced Markets
         </h1>
         <p style={{ color: "#eee", fontSize: "0.9rem", margin: 0 }}>
-          Fund a farmer&apos;s production ahead of harvest. Money is released to the farmer as each production stage is verified.
+          Fund a farmer&apos;s production ahead of harvest. Payments in Advanced Markets are based on milestones reached.
         </p>
       </div>
 

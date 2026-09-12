@@ -1014,7 +1014,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
         <div>
           <div>Advanced Markets</div>
           <div style={{ fontSize: "0.78rem", fontWeight: 500, color: "#8e24aa" }}>
-            Fund a farmer&apos;s next harvest ahead of delivery
+            Payments in Advanced Markets are based on milestones reached
           </div>
         </div>
       </Link>

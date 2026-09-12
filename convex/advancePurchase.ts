@@ -420,14 +420,27 @@ export const updateOffer = mutation({
     if (String(offer.farmerId) !== String(args.farmerId)) {
       throw new Error("You can only edit your own offer");
     }
-    if (offer.status !== "draft") {
-      throw new Error("Only a draft offer can be edited. Cancel and recreate a published offer instead.");
+    if (["cancelled", "fulfilled"].includes(offer.status)) {
+      throw new Error("This offer can no longer be edited");
     }
     if (args.description !== undefined && !args.description.trim()) {
       throw new Error("A description of the product is required");
     }
     if (args.photoStorageIds !== undefined && args.photoStorageIds.length === 0) {
       throw new Error("At least one photo of the finished product/offering is required");
+    }
+    if (args.unitPrice !== undefined && args.unitPrice <= 0) {
+      throw new Error("Unit price must be positive");
+    }
+    if (args.totalQuantity !== undefined) {
+      if (args.totalQuantity <= 0) {
+        throw new Error("Total quantity must be positive");
+      }
+      if (args.totalQuantity < offer.quantityCommitted) {
+        throw new Error(
+          `Total quantity cannot be reduced below what buyers have already committed (${offer.quantityCommitted} ${offer.unit})`
+        );
+      }
     }
     const { offerId, farmerId, ...patch } = args;
     await ctx.db.patch(args.offerId, { ...patch, updatedAt: getUgandaTime() });

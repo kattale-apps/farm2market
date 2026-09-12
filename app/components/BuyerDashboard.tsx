@@ -146,7 +146,12 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   }, []);
   const MORE_MENU_SECTIONS: Array<{ key: string; label: string }> = [
     { key: "communities", label: "🌾 My Communities" },
-    { key: "rewards", label: "🪙 FarmCoin Rewards" },
+    {
+      key: "rewards",
+      label: typeof (buyerFarmcoinBalance as any)?.balance === "number"
+        ? `🪙 FarmCoin Rewards (${(buyerFarmcoinBalance as any).balance})`
+        : "🪙 FarmCoin Rewards",
+    },
     { key: "feesInfo", label: "💰 Service Fee & Kilo-Shaving Info" },
     { key: "traderOrders", label: "📦 Trader Listing Orders" },
     { key: "purchaseWindow", label: "🪟 Purchase Window Status" },
@@ -893,25 +898,6 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       gap: "0.6rem",
     }}>
       Hello, Buyer 🛒
-      {typeof (buyerFarmcoinBalance as any)?.balance === "number" && (
-        <span style={{
-          background: "linear-gradient(135deg, #fff8e1, #ffecb3)",
-          border: "1.5px solid #f9a825",
-          borderRadius: 20,
-          padding: "4px 12px",
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 4,
-          fontSize: "0.85rem",
-          fontWeight: 700,
-          color: "#f57f17",
-          fontFamily: '"Montserrat", sans-serif',
-          boxShadow: "0 2px 6px rgba(249,168,37,0.25)",
-          whiteSpace: "nowrap",
-        }}>
-          🪙 {(buyerFarmcoinBalance as any).balance}
-        </span>
-      )}
     </h2>
   );
 

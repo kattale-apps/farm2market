@@ -116,6 +116,12 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
   const farm2MarketLocked = !!farm2MarketAccess && !farm2MarketAccess.allowed;
   const MORE_MENU_SECTIONS: Array<{ key: string; label: string; disabled?: boolean }> = [
     { key: "profile", label: "👤 Profile" },
+    {
+      key: "farmcoinRewards",
+      label: typeof farmerFarmcoinBalance === "number"
+        ? `🪙 FarmCoin Rewards (${farmerFarmcoinBalance})`
+        : "🪙 FarmCoin Rewards",
+    },
     { key: "communities", label: "🌾 My Communities" },
     ...(effectiveRole === "farmer" ? [
       { key: "farmNeeds", label: "🧺 Farm Needs" },
@@ -933,25 +939,6 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
       gap: "0.6rem",
     }}>
       Hello, {effectiveRole === "vendor" ? "Vendor 🏪" : effectiveRole === "store" ? "Store 🏬" : "Farmer 👩🏾‍🌾"}
-      {typeof farmerFarmcoinBalance === "number" && (
-        <span style={{
-          background: "linear-gradient(135deg, #fff8e1, #ffecb3)",
-          border: "1.5px solid #f9a825",
-          borderRadius: 20,
-          padding: "4px 12px",
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 4,
-          fontSize: "0.85rem",
-          fontWeight: 700,
-          color: "#f57f17",
-          fontFamily: '"Montserrat", sans-serif',
-          boxShadow: "0 2px 6px rgba(249,168,37,0.25)",
-          whiteSpace: "nowrap",
-        }}>
-          🪙 {farmerFarmcoinBalance}
-        </span>
-      )}
     </h2>
   );
 
@@ -1077,6 +1064,44 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
           </p>
         )}
       </div>
+
+      {isSectionOpen("farmcoinRewards") && (
+        <div id="section-farmcoinRewards" style={{
+          background: "#fff",
+          borderRadius: "10px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+          border: "1px solid #e0e0e0",
+          padding: "1rem",
+          marginBottom: "1rem",
+        }}>
+          {renderHideControl("farmcoinRewards")}
+          <h3 style={{
+            margin: "0 0 0.75rem",
+            fontSize: "1.05rem",
+            fontWeight: 700,
+            color: "#2c2c2c",
+            fontFamily: '"Montserrat", sans-serif',
+          }}>
+            🪙 FarmCoin Rewards
+          </h3>
+          <div style={{
+            background: "linear-gradient(135deg, #fff8e1, #ffecb3)",
+            border: "1.5px solid #f9a825",
+            borderRadius: 12,
+            padding: "0.85rem 1rem",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}>
+            <span style={{ color: "#795548", fontSize: "0.9rem", fontWeight: 600, fontFamily: '"Montserrat", sans-serif' }}>
+              Balance
+            </span>
+            <span style={{ color: "#f57f17", fontSize: "1.1rem", fontWeight: 800, fontFamily: '"Montserrat", sans-serif' }}>
+              {typeof farmerFarmcoinBalance === "number" ? farmerFarmcoinBalance : 0} Token(s)
+            </span>
+          </div>
+        </div>
+      )}
 
       {isSectionOpen("communities") && (
         <div id="section-communities">

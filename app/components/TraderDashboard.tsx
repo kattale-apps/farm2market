@@ -93,7 +93,12 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
     setMoreSlot(document.getElementById("dashboard-more-slot"));
   }, []);
   const MORE_MENU_SECTIONS: Array<{ key: string; label: string }> = [
-    { key: "farmcoinTokens", label: "🪙 FarmCoin Tokens" },
+    {
+      key: "farmcoinTokens",
+      label: typeof farmcoinSummary?.balance === "number"
+        ? `🪙 FarmCoin Rewards (${farmcoinSummary.balance})`
+        : "🪙 FarmCoin Rewards",
+    },
     { key: "deliveryConfirmations", label: "🚚 Delivery Confirmations" },
     { key: "openListings", label: "📋 Open Listings" },
     { key: "todayActivity", label: "🗓️ Your Activity Today" },
@@ -630,25 +635,6 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
       gap: "0.6rem",
     }}>
       Hello, {userRole === "transporter" ? "Transporter 🚛" : "Trader 🚚"}
-      {typeof farmcoinSummary?.balance === "number" && (
-        <span style={{
-          background: "linear-gradient(135deg, #fff8e1, #ffecb3)",
-          border: "1.5px solid #f9a825",
-          borderRadius: 20,
-          padding: "4px 12px",
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 4,
-          fontSize: "0.85rem",
-          fontWeight: 700,
-          color: "#f57f17",
-          fontFamily: '"Montserrat", sans-serif',
-          boxShadow: "0 2px 6px rgba(249,168,37,0.25)",
-          whiteSpace: "nowrap",
-        }}>
-          🪙 {farmcoinSummary.balance}
-        </span>
-      )}
       {(user as any)?.isVerifiedTrader && (user as any)?.verificationStatus === "verified" && (
         <span style={{
           padding: "0.25rem 0.6rem",

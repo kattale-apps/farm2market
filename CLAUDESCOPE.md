@@ -114,6 +114,15 @@ evolves. When it is revised:
 - Part 2 (the map) should be refreshed whenever it's found to be stale, so scope
   decisions in future sessions are based on current reality, not drift.
 
+### Rule 7 — Always design mobile-first
+Every UI change — new screens, edits to existing ones, component layout, spacing,
+navigation — must be designed and verified for mobile viewport widths first, then
+adapted upward for larger screens. Farm2Market's end users (farmers, traders, buyers,
+vendors, transporters, store staff) predominantly access the app on phones, so a
+desktop-first layout that gets awkwardly squeezed onto mobile is not acceptable. When
+building or reviewing any UI, check the smallest supported width first and treat larger
+breakpoints as progressive enhancement, not the default.
+
 ---
 
 ## Part 2 — Codebase Map (refresh as it drifts)
@@ -212,5 +221,6 @@ wallet/payments/admin code)
 
 ---
 
-*Last written: 2026-09-11. Update Part 2 whenever it's found stale; update Part 1 only
+*Last written: 2026-09-12. Added Rule 7 (always design mobile-first) — does not weaken
+or replace any prior rule. Update Part 2 whenever it's found stale; update Part 1 only
 with explicit owner sign-off per Rule 6.*

@@ -6,9 +6,9 @@ import { Id } from "../../convex/_generated/dataModel";
 import { TraderListings } from "./TraderListings";
 import { CreateTraderListing } from "./CreateTraderListing";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { exportToExcel, exportToPDF, formatUTIDDataForExport } from "../utils/exportUtils";
 import { exportUTIDsByCategory, exportUTIDsByCategoryPDF, exportInventoryVolume, exportCapitalVolume } from "../utils/traderReports";
-import { NotificationMailbox } from "./NotificationMailbox";
 import { ThreadView } from "./messages/ThreadView";
 import { formatUgandaDateTime, formatUgandaTimeOnly, getUgandaTime } from "../utils/timeUtils";
 import { ContactUs } from "./ContactUs";
@@ -81,6 +81,71 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
   const buyOffersPageKey = "trader_buy_offers";
   const inventoryPageKey = "trader_inventory";
   const todayActivityPageKey = "trader_today_activity";
+
+  // Section collapse state — every major dashboard section is reached only
+  // via the "☰ More" menu; the main dashboard body always shows just the
+  // Sentify Wallet and Deposit Funds sections.
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+  const toggleSection = (key: string) =>
+    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  const isSectionOpen = (key: string) => Boolean(openSections[key]);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [titleSlot, setTitleSlot] = useState<HTMLElement | null>(null);
+  const [msgSlot, setMsgSlot] = useState<HTMLElement | null>(null);
+  const [moreSlot, setMoreSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    setTitleSlot(document.getElementById("dashboard-title-slot"));
+    setMsgSlot(document.getElementById("dashboard-msg-slot"));
+    setMoreSlot(document.getElementById("dashboard-more-slot"));
+  }, []);
+  const MORE_MENU_SECTIONS: Array<{ key: string; label: string }> = [
+    { key: "farmcoinTokens", label: "🪙 FarmCoin Tokens" },
+    { key: "deliveryConfirmations", label: "🚚 Delivery Confirmations" },
+    { key: "openListings", label: "📋 Open Listings" },
+    { key: "todayActivity", label: "🗓️ Your Activity Today" },
+    { key: "buyOffers", label: "💬 Buy-Offers from Buyers" },
+    { key: "createListing", label: "📝 Create Listing" },
+    { key: "listingsNegotiations", label: "📑 Listings & Negotiations" },
+    { key: "storageFeeInfo", label: "💰 Kilo-Shaving Rate Info" },
+    { key: "inventoryStorage", label: "📦 Inventory in Storage" },
+    { key: "transactionsLog", label: "🧾 Transactions Log" },
+    { key: "reports", label: "📊 Comprehensive Reports" },
+    { key: "inventoryTable", label: "📋 Inventory Table" },
+    { key: "analytics", label: "📈 Trader Analytics" },
+    { key: "analyticsCharts", label: "📉 Analytics Charts" },
+  ];
+  // A handful of sections only exist in the DOM for one of the two view modes
+  // (Simple vs Pro) — switch the view automatically so the menu always finds
+  // the section it just opened, instead of silently doing nothing.
+  const SIMPLE_VIEW_ONLY_KEYS = ["openListings", "todayActivity", "buyOffers", "deliveryConfirmations"];
+  const PRO_VIEW_ONLY_KEYS = ["createListing", "listingsNegotiations"];
+  const openSectionFromMenu = (key: string) => {
+    if (SIMPLE_VIEW_ONLY_KEYS.includes(key)) {
+      setProView(false);
+    } else if (PRO_VIEW_ONLY_KEYS.includes(key)) {
+      setProView(true);
+    }
+    setOpenSections((prev) => ({ ...prev, [key]: true }));
+    setMoreMenuOpen(false);
+    setTimeout(() => {
+      document.getElementById(`section-${key}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
+  };
+  const hideSectionButtonStyle: React.CSSProperties = {
+    display: "block",
+    marginBottom: "0.75rem",
+    background: "none",
+    border: "none",
+    color: "#1976d2",
+    fontWeight: 700,
+    fontSize: "0.8rem",
+    cursor: "pointer",
+    padding: 0,
+    fontFamily: '"Montserrat", sans-serif',
+  };
+  const renderHideControl = (key: string) => (
+    <button type="button" onClick={() => toggleSection(key)} style={hideSectionButtonStyle}>▲ Hide</button>
+  );
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -564,85 +629,154 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
     }
   }, [todayActivityPage, todayActivityTotalPages]);
 
+  const unreadMessageCount = messageThreads
+    ? messageThreads.reduce((sum, t) => sum + (t.unreadCount || 0), 0)
+    : 0;
+
+  const titleContent = (
+    <h2 style={{
+      fontSize: "clamp(1.05rem, 4vw, 1.4rem)",
+      margin: 0,
+      color: "#fff",
+      fontFamily: '"Montserrat", sans-serif',
+      fontWeight: "700",
+      letterSpacing: "-0.02em",
+      whiteSpace: "nowrap",
+      display: "flex",
+      alignItems: "center",
+      gap: "0.5rem",
+    }}>
+      {userRole === "transporter" ? "🚛 Transporter" : "🚚 Trader"}: {user?.alias || (userRole === "transporter" ? "Transporter" : "Trader")}
+      {(user as any)?.isVerifiedTrader && (user as any)?.verificationStatus === "verified" && (
+        <span style={{
+          padding: "0.25rem 0.6rem",
+          borderRadius: "999px",
+          fontSize: "0.75rem",
+          fontWeight: "600",
+          background: "#e8f5e9",
+          color: "#2e7d32",
+          border: "1px solid #81c784",
+          whiteSpace: "nowrap",
+        }}>
+          Verified
+        </span>
+      )}
+    </h2>
+  );
+
+  const msgContent = (
+    <button
+      type="button"
+      onClick={() => {
+        const nextOpen = !messageInboxOpen;
+        setMessageInboxOpen(nextOpen);
+        if (nextOpen && !selectedMessageUtid) {
+          setSelectedMessageUtid(SUPPORT_THREAD);
+        }
+      }}
+      title="Inbox"
+      className="f2m-icon-btn"
+      style={{ position: "relative" }}
+    >
+      ✉️
+      {unreadMessageCount > 0 && (
+        <span style={{
+          position: "absolute",
+          top: "-4px",
+          right: "-4px",
+          background: "#d32f2f",
+          color: "#fff",
+          borderRadius: "50%",
+          width: "14px",
+          height: "14px",
+          fontSize: "0.55rem",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontWeight: "bold",
+          border: "1.5px solid #fff",
+        }}>
+          {unreadMessageCount > 9 ? "9+" : unreadMessageCount}
+        </span>
+      )}
+    </button>
+  );
+
+  const moreContent = (
+    <div style={{ display: "inline-block" }}>
+      <button
+        type="button"
+        onClick={() => setMoreMenuOpen((v) => !v)}
+        title="More"
+        aria-label="More menu"
+        className="f2m-icon-btn"
+      >
+        ☰
+      </button>
+      {moreMenuOpen && (
+        <>
+          <div
+            onClick={() => setMoreMenuOpen(false)}
+            style={{ position: "fixed", inset: 0, zIndex: 9 }}
+          />
+          <div
+            className="f2m-dropdown"
+            style={{ padding: "0.4rem" }}
+          >
+            {MORE_MENU_SECTIONS.map(({ key, label }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => openSectionFromMenu(key)}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  width: "100%",
+                  padding: "0.6rem 0.75rem",
+                  background: isSectionOpen(key) ? "#e3f2fd" : "transparent",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontFamily: '"Montserrat", sans-serif',
+                  fontSize: "0.85rem",
+                  fontWeight: 600,
+                  color: "#2c2c2c",
+                  textAlign: "left",
+                }}
+              >
+                <span>{label}</span>
+                {isSectionOpen(key) && <span style={{ color: "#1976d2", fontSize: "0.78rem" }}>Open</span>}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+
   return (
     <div style={{ padding: "clamp(0.75rem, 2vw, 1rem)", maxWidth: "100%", boxSizing: "border-box" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
-            <h2 style={{ 
-              fontSize: "clamp(1.5rem, 4vw, 1.8rem)", 
-              marginBottom: "0.5rem", 
-              color: "#2c2c2c",
-              fontFamily: '"Montserrat", sans-serif',
-              fontWeight: "700",
-              letterSpacing: "-0.02em"
-            }}>
-              {userRole === "transporter" ? "Transporter" : "Trader"}: {user?.alias || (userRole === "transporter" ? "Transporter" : "Trader")}
-            </h2>
-            {(user as any)?.isVerifiedTrader && (user as any)?.verificationStatus === "verified" && (
-              <span style={{
-                padding: "0.25rem 0.6rem",
-                borderRadius: "999px",
-                fontSize: "0.8rem",
-                fontWeight: "600",
-                background: "#e8f5e9",
-                color: "#2e7d32",
-                border: "1px solid #81c784",
-              }}>
-                Verified
-              </span>
-            )}
-          </div>
-          <p style={{ 
-            color: "#3d3d3d", 
-            fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)",
-            fontFamily: '"Montserrat", sans-serif'
-          }}>
-            Location: District
-          </p>
-        </div>
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-          <NotificationMailbox userId={userId} />
-          <button
-            type="button"
-            onClick={() => {
-              const nextOpen = !messageInboxOpen;
-              setMessageInboxOpen(nextOpen);
-              if (nextOpen && !selectedMessageUtid) {
-                setSelectedMessageUtid(SUPPORT_THREAD);
-              }
-            }}
-            style={{
-              padding: "0.5rem 1rem",
-              background: messageInboxOpen ? "#1976d2" : "#f5f5f5",
-              color: messageInboxOpen ? "#fff" : "#333",
-              border: "1px solid #ddd",
-              borderRadius: "6px",
-              cursor: "pointer",
-              fontSize: "0.9rem",
-              fontWeight: "600"
-            }}
-          >
-            ≡ƒô⌐ Inbox {messageThreads && messageThreads.length > 0
-              ? `(${messageThreads.reduce((sum, t) => sum + (t.unreadCount || 0), 0)})`
-              : ""}
-          </button>
-          <button
-            onClick={() => setProView(!proView)}
-            style={{
-              padding: "0.5rem 1rem",
-              background: proView ? "#1976d2" : "#f5f5f5",
-              color: proView ? "#fff" : "#333",
-              border: "1px solid #ddd",
-              borderRadius: "6px",
-              cursor: "pointer",
-              fontSize: "0.9rem",
-              fontWeight: "600"
-            }}
-          >
-            {proView ? "Simple View" : "Pro View"}
-          </button>
-        </div>
+      {titleSlot && createPortal(titleContent, titleSlot)}
+      {msgSlot && createPortal(msgContent, msgSlot)}
+      {moreSlot && createPortal(moreContent, moreSlot)}
+
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "0.75rem" }}>
+        <button
+          onClick={() => setProView(!proView)}
+          style={{
+            padding: "0.5rem 1rem",
+            background: proView ? "#1976d2" : "#f5f5f5",
+            color: proView ? "#fff" : "#333",
+            border: "1px solid #ddd",
+            borderRadius: "6px",
+            cursor: "pointer",
+            fontSize: "0.9rem",
+            fontWeight: "600"
+          }}
+        >
+          {proView ? "Simple View" : "Pro View"}
+        </button>
       </div>
 
       {messageInboxOpen && (
@@ -781,7 +915,8 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
         /* Simple View (Default) */
         <>
           {/* FarmCoin Tokens */}
-          <div style={{
+          {isSectionOpen("farmcoinTokens") && (
+          <div id="section-farmcoinTokens" style={{
             marginBottom: "1.5rem",
             padding: "clamp(1rem, 3vw, 1.5rem)",
             background: "#fff",
@@ -789,10 +924,11 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
             boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
             border: "1px solid #e0e0e0"
           }}>
-            <h3 style={{ 
-              marginTop: 0, 
-              marginBottom: "0.75rem", 
-              fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", 
+            {renderHideControl("farmcoinTokens")}
+            <h3 style={{
+              marginTop: 0,
+              marginBottom: "0.75rem",
+              fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)",
               color: "#2c2c2c",
               fontFamily: '"Montserrat", sans-serif',
               fontWeight: "600",
@@ -835,6 +971,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
               </div>
             )}
           </div>
+          )}
 
           {/* Sentify Wallet */}
           <div style={{
@@ -921,7 +1058,8 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
           </div>
 
           {/* Delivery Confirmation (Trader) */}
-          <div style={{
+          {isSectionOpen("deliveryConfirmations") && (
+          <div id="section-deliveryConfirmations" style={{
             marginBottom: "1.5rem",
             padding: "clamp(1rem, 3vw, 1.5rem)",
             background: "#fff",
@@ -929,6 +1067,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
             boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
             border: "1px solid #e0e0e0"
           }}>
+            {renderHideControl("deliveryConfirmations")}
             <h3 style={{
               marginTop: 0,
               marginBottom: "0.75rem",
@@ -983,9 +1122,11 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
               </div>
             )}
           </div>
+          )}
 
           {/* Open Listings */}
-          <div style={{
+          {isSectionOpen("openListings") && (
+          <div id="section-openListings" style={{
             marginBottom: "1.5rem",
             padding: "clamp(1rem, 3vw, 1.5rem)",
             background: "#fff",
@@ -993,10 +1134,11 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
             boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
             border: "1px solid #e0e0e0"
           }}>
-            <h3 style={{ 
-              marginTop: 0, 
-              marginBottom: "1rem", 
-              fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", 
+            {renderHideControl("openListings")}
+            <h3 style={{
+              marginTop: 0,
+              marginBottom: "1rem",
+              fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)",
               color: "#2c2c2c",
               fontFamily: '"Montserrat", sans-serif',
               fontWeight: "600",
@@ -1163,9 +1305,11 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
               </div>
             )}
           </div>
+          )}
 
           {/* Your Activity Today */}
-          <div style={{
+          {isSectionOpen("todayActivity") && (
+          <div id="section-todayActivity" style={{
             padding: "clamp(1rem, 3vw, 1.5rem)",
             background: "#fff",
             borderRadius: "12px",
@@ -1173,10 +1317,11 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
             border: "1px solid #e0e0e0",
             marginBottom: "1.5rem"
           }}>
-            <h3 style={{ 
-              marginTop: 0, 
-              marginBottom: "1rem", 
-              fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", 
+            {renderHideControl("todayActivity")}
+            <h3 style={{
+              marginTop: 0,
+              marginBottom: "1rem",
+              fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)",
               color: "#2c2c2c",
               fontFamily: '"Montserrat", sans-serif',
               fontWeight: "600",
@@ -1344,9 +1489,11 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
               </div>
             )}
           </div>
+          )}
 
           {/* Buy-Offers from Buyers */}
-          <div style={{
+          {isSectionOpen("buyOffers") && (
+          <div id="section-buyOffers" style={{
             padding: "clamp(1rem, 3vw, 1.5rem)",
             background: "#fff",
             borderRadius: "12px",
@@ -1354,10 +1501,11 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
             border: "1px solid #e0e0e0",
             marginBottom: "1.5rem"
           }}>
-            <h3 style={{ 
-              marginTop: 0, 
-              marginBottom: "1rem", 
-              fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", 
+            {renderHideControl("buyOffers")}
+            <h3 style={{
+              marginTop: 0,
+              marginBottom: "1rem",
+              fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)",
               color: "#2c2c2c",
               fontFamily: '"Montserrat", sans-serif',
               fontWeight: "600",
@@ -1724,6 +1872,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
               </div>
             )}
           </div>
+          )}
 
           {/* Deposit Funds Section - Simple View */}
           <div style={{
@@ -1857,24 +2006,36 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
         /* Pro View */
         <>
           {/* Create Listing from Inventory */}
-          <CreateTraderListing userId={userId} />
+          {isSectionOpen("createListing") && (
+          <div id="section-createListing" style={{ marginBottom: "1.5rem" }}>
+            {renderHideControl("createListing")}
+            <CreateTraderListing userId={userId} />
+          </div>
+          )}
 
           {/* Listings & Negotiations */}
-          <TraderListings userId={userId} />
+          {isSectionOpen("listingsNegotiations") && (
+          <div id="section-listingsNegotiations" style={{ marginBottom: "1.5rem" }}>
+            {renderHideControl("listingsNegotiations")}
+            <TraderListings userId={userId} />
+          </div>
+          )}
 
           {/* FarmCoin Tokens */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))", gap: "1.5rem", marginBottom: "1.5rem" }}>
-            <div style={{
+            {isSectionOpen("farmcoinTokens") && (
+            <div id="section-farmcoinTokens" style={{
               padding: "clamp(1rem, 3vw, 1.5rem)",
               background: "#fff",
               borderRadius: "12px",
               boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
               border: "1px solid #e0e0e0"
             }}>
-              <h3 style={{ 
-                marginTop: 0, 
-                marginBottom: "0.75rem", 
-                fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", 
+              {renderHideControl("farmcoinTokens")}
+              <h3 style={{
+                marginTop: 0,
+                marginBottom: "0.75rem",
+                fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)",
                 color: "#2c2c2c",
                 fontFamily: '"Montserrat", sans-serif',
                 fontWeight: "600",
@@ -1917,6 +2078,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
                 </div>
               )}
             </div>
+            )}
 
             {/* Deposit Section */}
             <div style={{
@@ -2015,8 +2177,8 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
           </div>
 
       {/* Storage Fee Rate Info */}
-      {storageFeeRate && (
-        <div style={{
+      {isSectionOpen("storageFeeInfo") && storageFeeRate && (
+        <div id="section-storageFeeInfo" style={{
           marginBottom: "1.5rem",
           padding: "clamp(1rem, 3vw, 1.5rem)",
           background: "#fff3cd",
@@ -2024,6 +2186,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
           boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
           border: "1px solid #ffc107"
         }}>
+          {renderHideControl("storageFeeInfo")}
           <h3 style={{ marginTop: 0, marginBottom: "0.5rem", fontSize: "clamp(1rem, 3vw, 1.2rem)", color: "#856404" }}>
             Current Kilo-Shaving Rate
           </h3>
@@ -2034,7 +2197,8 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
       )}
 
       {/* Inventory */}
-      <div style={{
+      {isSectionOpen("inventoryStorage") && (
+      <div id="section-inventoryStorage" style={{
         marginBottom: "1.5rem",
         padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
@@ -2042,6 +2206,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
         border: "1px solid #e0e0e0"
       }}>
+        {renderHideControl("inventoryStorage")}
         <h3 style={{ marginTop: 0, marginBottom: "1rem", fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", color: "#1a1a1a" }}>
           Inventory in Storage
         </h3>
@@ -2302,9 +2467,11 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
           </div>
         )}
       </div>
+      )}
 
       {/* Transactions Log */}
-      <div style={{
+      {isSectionOpen("transactionsLog") && (
+      <div id="section-transactionsLog" style={{
         marginBottom: "1.5rem",
         padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
@@ -2312,6 +2479,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
         border: "1px solid #e0e0e0"
       }}>
+        {renderHideControl("transactionsLog")}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
           <h3 style={{ marginTop: 0, marginBottom: 0, fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", color: "#1a1a1a" }}>
             Transactions Log
@@ -2608,9 +2776,11 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
           </div>
         )}
       </div>
+      )}
 
       {/* Comprehensive Reports Section */}
-      <div style={{
+      {isSectionOpen("reports") && (
+      <div id="section-reports" style={{
         marginBottom: "1.5rem",
         padding: "clamp(1rem, 3vw, 1.5rem)",
         background: "#fff",
@@ -2618,6 +2788,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
         border: "1px solid #e0e0e0"
       }}>
+        {renderHideControl("reports")}
         <h3 style={{ marginTop: 0, marginBottom: "1rem", fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", color: "#1a1a1a" }}>
           Comprehensive Reports
         </h3>
@@ -2751,9 +2922,11 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
           </div>
         </div>
       </div>
+      )}
 
           {/* Pro View: Inventory Table */}
-          <div style={{
+          {isSectionOpen("inventoryTable") && (
+          <div id="section-inventoryTable" style={{
             marginBottom: "1.5rem",
             padding: "clamp(1rem, 3vw, 1.5rem)",
             background: "#fff",
@@ -2761,10 +2934,11 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
             boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
             border: "1px solid #e0e0e0"
           }}>
-            <h3 style={{ 
-              marginTop: 0, 
-              marginBottom: "1rem", 
-              fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", 
+            {renderHideControl("inventoryTable")}
+            <h3 style={{
+              marginTop: 0,
+              marginBottom: "1rem",
+              fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)",
               color: "#2c2c2c",
               fontFamily: '"Montserrat", sans-serif',
               fontWeight: "600",
@@ -2876,9 +3050,11 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
               </div>
             )}
           </div>
+          )}
 
           {/* Pro View: Analytics */}
-          <div style={{
+          {isSectionOpen("analytics") && (
+          <div id="section-analytics" style={{
             padding: "clamp(1rem, 3vw, 1.5rem)",
             background: "#fff",
             borderRadius: "12px",
@@ -2886,6 +3062,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
             border: "1px solid #e0e0e0",
             marginBottom: "1.5rem",
           }}>
+            {renderHideControl("analytics")}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.5rem" }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", fontWeight: "600", color: "#2c2c2c", fontFamily: '"Montserrat", sans-serif' }}>
@@ -2929,14 +3106,17 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
 
             </div>
           </div>
+          )}
 
           {/* Pro View: Analytics Placeholders */}
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))",
-            gap: "1.5rem",
-            marginBottom: "1.5rem"
-          }}>
+          {isSectionOpen("analyticsCharts") && (
+          <div id="section-analyticsCharts" style={{ marginBottom: "1.5rem" }}>
+            {renderHideControl("analyticsCharts")}
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))",
+              gap: "1.5rem",
+            }}>
             <div style={{
               padding: "clamp(1rem, 3vw, 1.5rem)",
               background: "#fff",
@@ -2981,7 +3161,9 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
                 [Graph: Lock vs Sales]
               </div>
             </div>
+            </div>
           </div>
+          )}
         </>
       )}
 

@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { AdminDashboard } from "./components/AdminDashboard";
-import { TraderDashboardSafe } from "./components/TraderDashboardSafe";
+import { TraderDashboard } from "./components/TraderDashboard";
 import { FarmerDashboard } from "./components/FarmerDashboard";
 import { BuyerDashboard } from "./components/BuyerDashboard";
 import { VendorDashboard } from "./components/VendorDashboard";
@@ -196,69 +196,103 @@ export default function Home() {
       minHeight: "100vh",
       boxSizing: "border-box"
     }}>
-      <div style={{
-        marginBottom: "1rem",
-        display: "flex",
-        flexWrap: "wrap",
-        justifyContent: "space-between",
-        alignItems: "center",
-        gap: "0.6rem",
-        padding: "0.6rem 0.85rem",
-        background: "rgba(20, 30, 20, 0.75)",
-        borderRadius: "10px",
-      }}>
-        <div style={{
-          fontWeight: 800,
-          color: "#fff",
-          fontSize: "clamp(0.95rem, 2.5vw, 1.15rem)",
-          fontFamily: '"Montserrat", sans-serif',
-          letterSpacing: "-0.02em",
-          textTransform: "uppercase",
-          whiteSpace: "nowrap",
-        }}>
-          Farm2Market
-        </div>
+      <style>{`
+        .f2m-banner {
+          position: relative;
+          display: grid;
+          grid-template-columns: 1fr auto auto;
+          column-gap: 10px;
+          row-gap: 4px;
+          align-items: center;
+          margin-bottom: 1rem;
+          padding: 0.6rem 0.7rem;
+          background: rgba(20, 30, 20, 0.75);
+          border-radius: 10px;
+        }
+        .f2m-slot-brand { grid-area: brand; justify-self: start; }
+        .f2m-slot-title { grid-area: title; justify-self: start; min-width: 0; }
+        .f2m-slot-bell { grid-area: bell; justify-self: center; }
+        .f2m-slot-msg { grid-area: msg; justify-self: center; }
+        .f2m-slot-profile { grid-area: profile; justify-self: center; }
+        .f2m-slot-more { grid-area: more; justify-self: center; }
+        .f2m-icon-btn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 28px;
+          height: 28px;
+          padding: 0;
+          background: none;
+          border: none;
+          color: #fff;
+          font-size: 1rem;
+          line-height: 1;
+          cursor: pointer;
+        }
+        .f2m-dropdown {
+          position: absolute;
+          left: 50%;
+          transform: translateX(-50%);
+          top: calc(100% + 0.4rem);
+          width: min(300px, calc(100vw - 2rem));
+          max-height: 70vh;
+          overflow-y: auto;
+          background: #fff;
+          border: 1px solid #e5e7eb;
+          border-radius: 10px;
+          box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+          padding: 0.75rem;
+          text-align: left;
+          z-index: 20;
+        }
+        .f2m-banner.has-dashboard-row {
+          grid-template-areas:
+            "brand   bell    msg"
+            "title   profile more";
+        }
+        @media (min-width: 700px) {
+          .f2m-banner.has-dashboard-row {
+            grid-template-columns: auto auto 1fr auto auto auto auto;
+            grid-template-areas: "brand title . bell profile msg more";
+            column-gap: 20px;
+          }
+        }
+      `}</style>
+      <div className="f2m-banner has-dashboard-row">
+        <div className="f2m-slot-brand" style={{
+            fontWeight: 800,
+            color: "#fff",
+            fontSize: "clamp(0.85rem, 2.5vw, 1.15rem)",
+            fontFamily: '"Montserrat", sans-serif',
+            letterSpacing: "-0.02em",
+            textTransform: "uppercase",
+            whiteSpace: "nowrap",
+          }}>
+            Farm2Market
+          </div>
 
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-          {user?.userId && <NotificationMailbox userId={user.userId as Id<"users">} />}
+          <div id="dashboard-title-slot" className="f2m-slot-title" />
 
-          <div style={{ position: "relative" }}>
-            <button
-              type="button"
-              onClick={() => setProfileMenuOpen((v) => !v)}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.35rem",
-                padding: "0.4rem 0.75rem",
-                borderRadius: "8px",
-                background: profileMenuOpen ? "#fff" : "rgba(255,255,255,0.15)",
-                color: profileMenuOpen ? "#1a1a1a" : "#fff",
-                border: "1px solid rgba(255,255,255,0.4)",
-                fontSize: "0.85rem",
-                fontWeight: 700,
-                cursor: "pointer",
-              }}
-            >
-              👤 {effectiveUser?.alias || user?.alias || "Profile"} ▾
-            </button>
-            {profileMenuOpen && (
-              <>
-                <div onClick={() => setProfileMenuOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 19 }} />
-                <div style={{
-                  position: "absolute",
-                  top: "calc(100% + 0.4rem)",
-                  right: 0,
-                  zIndex: 20,
-                  minWidth: "230px",
-                  maxWidth: "88vw",
-                  background: "#fff",
-                  border: "1px solid #e5e7eb",
-                  borderRadius: "10px",
-                  boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
-                  padding: "0.75rem",
-                  textAlign: "left",
-                }}>
+          <div className="f2m-slot-bell">
+            {user?.userId && <NotificationMailbox userId={user.userId as Id<"users">} compact />}
+          </div>
+
+          <div id="dashboard-msg-slot" className="f2m-slot-msg" />
+
+          <div className="f2m-slot-profile">
+              <button
+                type="button"
+                onClick={() => setProfileMenuOpen((v) => !v)}
+                title={effectiveUser?.alias || user?.alias || "Profile"}
+                aria-label="Profile menu"
+                className="f2m-icon-btn"
+              >
+                👤
+              </button>
+              {profileMenuOpen && (
+                <>
+                  <div onClick={() => setProfileMenuOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 19 }} />
+                  <div className="f2m-dropdown">
                   <p style={{ margin: "0 0 0.15rem", fontSize: "0.85rem", color: "#333" }}>
                     Logged in as: <strong style={{ color: "#1a1a1a" }}>{effectiveUser?.alias || user?.alias || "Unknown"}</strong>
                   </p>
@@ -324,7 +358,10 @@ export default function Home() {
               </>
             )}
           </div>
-        </div>
+
+          {/* Dashboard components portal their title / inbox / more-menu here so
+              they render as part of this one grid instead of a separate box. */}
+          <div id="dashboard-more-slot" className="f2m-slot-more" />
       </div>
 
       {/* Role-Based Dashboard */}
@@ -341,7 +378,7 @@ export default function Home() {
             </a>
           </div>
         )}
-        {user?.role === "trader" && user?.userId && <TraderDashboardSafe userId={user.userId as Id<"users">} />}
+        {user?.role === "trader" && user?.userId && <TraderDashboard userId={user.userId as Id<"users">} userRole="trader" />}
         {user?.role === "farmer" && user?.userId && <FarmerDashboard userId={user.userId as Id<"users">} />}
         {user?.role === "buyer" && user?.userId && <BuyerDashboard userId={user.userId as Id<"users">} />}
         {user?.role === "vendor" && user?.userId && <VendorDashboard userId={user.userId as Id<"users">} />}

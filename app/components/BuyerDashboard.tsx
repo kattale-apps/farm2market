@@ -4,6 +4,7 @@ import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { exportToExcel, exportToPDF, formatUTIDDataForExport } from "../utils/exportUtils";
 import { formatUgandaDateTime, getUgandaTime } from "../utils/timeUtils";
 import { ThreadView } from "./messages/ThreadView";
@@ -136,6 +137,14 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   const isSectionOpen = (key: string) => Boolean(openSections[key]);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [walletBalanceExpanded, setWalletBalanceExpanded] = useState(false);
+  const [titleSlot, setTitleSlot] = useState<HTMLElement | null>(null);
+  const [msgSlot, setMsgSlot] = useState<HTMLElement | null>(null);
+  const [moreSlot, setMoreSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    setTitleSlot(document.getElementById("dashboard-title-slot"));
+    setMsgSlot(document.getElementById("dashboard-msg-slot"));
+    setMoreSlot(document.getElementById("dashboard-more-slot"));
+  }, []);
   const MORE_MENU_SECTIONS: Array<{ key: string; label: string }> = [
     { key: "communities", label: "🌾 My Communities" },
     { key: "rewards", label: "🪙 FarmCoin Rewards" },
@@ -883,125 +892,120 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
 
   const user = useQuery(api.auth.getUser, { userId });
 
+  const unreadMessageCount = messageThreads
+    ? messageThreads.reduce((sum, t) => sum + (t.unreadCount || 0), 0)
+    : 0;
+
+  const titleContent = (
+    <h2 style={{
+      fontSize: "clamp(1.05rem, 4vw, 1.4rem)",
+      margin: 0,
+      color: "#fff",
+      fontFamily: '"Montserrat", sans-serif',
+      fontWeight: "700",
+      letterSpacing: "-0.02em",
+      whiteSpace: "nowrap",
+    }}>
+      Buyer Dashboard 🏢
+    </h2>
+  );
+
+  const msgContent = (
+    <button
+      type="button"
+      onClick={() => {
+        const nextOpen = !messageInboxOpen;
+        setMessageInboxOpen(nextOpen);
+        if (nextOpen && !selectedMessageUtid) {
+          setSelectedMessageUtid(SUPPORT_THREAD);
+        }
+      }}
+      title="Inbox"
+      className="f2m-icon-btn"
+      style={{ position: "relative" }}
+    >
+      ✉️
+      {unreadMessageCount > 0 && (
+        <span style={{
+          position: "absolute",
+          top: "-4px",
+          right: "-4px",
+          background: "#d32f2f",
+          color: "#fff",
+          borderRadius: "50%",
+          width: "14px",
+          height: "14px",
+          fontSize: "0.55rem",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontWeight: "bold",
+          border: "1.5px solid #fff",
+        }}>
+          {unreadMessageCount > 9 ? "9+" : unreadMessageCount}
+        </span>
+      )}
+    </button>
+  );
+
+  const moreContent = (
+    <div style={{ display: "inline-block" }}>
+      <button
+        type="button"
+        onClick={() => setMoreMenuOpen((v) => !v)}
+        title="More"
+        aria-label="More menu"
+        className="f2m-icon-btn"
+      >
+        ☰
+      </button>
+      {moreMenuOpen && (
+        <>
+          <div
+            onClick={() => setMoreMenuOpen(false)}
+            style={{ position: "fixed", inset: 0, zIndex: 9 }}
+          />
+          <div
+            className="f2m-dropdown"
+            style={{ padding: "0.4rem" }}
+          >
+            {MORE_MENU_SECTIONS.map(({ key, label }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => openSectionFromMenu(key)}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  width: "100%",
+                  padding: "0.6rem 0.75rem",
+                  background: isSectionOpen(key) ? "#e3f2fd" : "transparent",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontFamily: '"Montserrat", sans-serif',
+                  fontSize: "0.85rem",
+                  fontWeight: 600,
+                  color: "#2c2c2c",
+                  textAlign: "left",
+                }}
+              >
+                <span>{label}</span>
+                {isSectionOpen(key) && <span style={{ color: "#1976d2", fontSize: "0.78rem" }}>Open</span>}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+
   return (
     <div style={{ padding: "1rem", maxWidth: "100%", boxSizing: "border-box" }}>
-      <div style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        flexWrap: "wrap",
-        gap: "0.6rem",
-        marginBottom: "1.5rem",
-        padding: "0.6rem 0.9rem",
-        background: "rgba(20, 30, 20, 0.6)",
-        borderRadius: "10px",
-      }}>
-        <h2 style={{
-          fontSize: "clamp(1.3rem, 4vw, 1.6rem)",
-          margin: 0,
-          color: "#fff",
-          fontFamily: '"Montserrat", sans-serif',
-          fontWeight: "700",
-          letterSpacing: "-0.02em"
-        }}>
-          Buyer Dashboard 🏢
-        </h2>
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-          <button
-            type="button"
-            onClick={() => {
-              const nextOpen = !messageInboxOpen;
-              setMessageInboxOpen(nextOpen);
-              if (nextOpen && !selectedMessageUtid) {
-                setSelectedMessageUtid(SUPPORT_THREAD);
-              }
-            }}
-            style={{
-              padding: "0.5rem 1rem",
-              background: messageInboxOpen ? "#1976d2" : "#f5f5f5",
-              color: messageInboxOpen ? "#fff" : "#333",
-              border: "1px solid #ddd",
-              borderRadius: "6px",
-              cursor: "pointer",
-              fontSize: "0.9rem",
-              fontWeight: "600"
-            }}
-          >
-            📩 Inbox {messageThreads && messageThreads.length > 0
-              ? `(${messageThreads.reduce((sum, t) => sum + (t.unreadCount || 0), 0)})`
-              : ""}
-          </button>
-          <div style={{ position: "relative" }}>
-            <button
-              type="button"
-              onClick={() => setMoreMenuOpen((v) => !v)}
-              style={{
-                padding: "0.5rem 1rem",
-                background: moreMenuOpen ? "#1976d2" : "#f5f5f5",
-                color: moreMenuOpen ? "#fff" : "#333",
-                border: "1px solid #ddd",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontSize: "0.9rem",
-                fontWeight: "600",
-              }}
-            >
-              ☰ More ▾
-            </button>
-            {moreMenuOpen && (
-              <>
-                <div
-                  onClick={() => setMoreMenuOpen(false)}
-                  style={{ position: "fixed", inset: 0, zIndex: 9 }}
-                />
-                <div
-                  style={{
-                    position: "absolute",
-                    top: "calc(100% + 0.4rem)",
-                    right: 0,
-                    zIndex: 10,
-                    background: "#fff",
-                    border: "1px solid #e0e0e0",
-                    borderRadius: "10px",
-                    boxShadow: "0 6px 20px rgba(0,0,0,0.15)",
-                    minWidth: "240px",
-                    maxHeight: "70vh",
-                    overflowY: "auto",
-                    padding: "0.4rem",
-                  }}
-                >
-                  {MORE_MENU_SECTIONS.map(({ key, label }) => (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => openSectionFromMenu(key)}
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        width: "100%",
-                        padding: "0.6rem 0.75rem",
-                        background: isSectionOpen(key) ? "#e3f2fd" : "transparent",
-                        border: "none",
-                        borderRadius: "6px",
-                        cursor: "pointer",
-                        fontFamily: '"Montserrat", sans-serif',
-                        fontSize: "0.85rem",
-                        fontWeight: 600,
-                        color: "#2c2c2c",
-                        textAlign: "left",
-                      }}
-                    >
-                      <span>{label}</span>
-                      {isSectionOpen(key) && <span style={{ color: "#1976d2", fontSize: "0.78rem" }}>Open</span>}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
+      {titleSlot && createPortal(titleContent, titleSlot)}
+      {msgSlot && createPortal(msgContent, msgSlot)}
+      {moreSlot && createPortal(moreContent, moreSlot)}
 
       {/* Profile Card */}
       <UserProfileCard userId={userId} />

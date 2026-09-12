@@ -12,9 +12,9 @@ type SignupRole = "farmer" | "trader" | "buyer" | "vendor" | "transporter" | "st
 
 const SIGNUP_ROLES: Array<{ value: SignupRole; label: string; signupEnabled: boolean }> = [
   { value: "farmer", label: "Farmer", signupEnabled: true },
-  { value: "vendor", label: "Vendor", signupEnabled: true },
-  { value: "trader", label: "Trader", signupEnabled: true },
   { value: "buyer", label: "Buyer", signupEnabled: true },
+  { value: "trader", label: "Trader", signupEnabled: true },
+  { value: "vendor", label: "Vendor", signupEnabled: true },
   { value: "transporter", label: "Transporter", signupEnabled: true },
   { value: "store", label: "Store", signupEnabled: true },
 ];

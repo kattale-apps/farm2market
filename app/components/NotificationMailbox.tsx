@@ -8,9 +8,11 @@ import { formatUgandaDateTime } from "../utils/timeUtils";
 
 interface NotificationMailboxProps {
   userId: Id<"users">;
+  /** Renders a bare, half-size bell with no button chrome — for use inside compact nav bars. */
+  compact?: boolean;
 }
 
-function BellIcon({ size = 24 }: { size?: number }) {
+function BellIcon({ size = 24, color = "#1565c0" }: { size?: number; color?: string }) {
   return (
     <svg
       width={size}
@@ -22,14 +24,14 @@ function BellIcon({ size = 24 }: { size?: number }) {
     >
       <path
         d="M12 4a5 5 0 0 0-5 5v3.6c0 .9-.3 1.8-.9 2.4L4.5 17h15l-1.6-2c-.6-.6-.9-1.5-.9-2.4V9a5 5 0 0 0-5-5Z"
-        fill="#1565c0"
+        fill={color}
       />
-      <path d="M9.6 18.5a2.4 2.4 0 0 0 4.8 0" stroke="#1565c0" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M9.6 18.5a2.4 2.4 0 0 0 4.8 0" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }
 
-export function NotificationMailbox({ userId }: NotificationMailboxProps) {
+export function NotificationMailbox({ userId, compact = false }: NotificationMailboxProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
   
@@ -64,10 +66,11 @@ export function NotificationMailbox({ userId }: NotificationMailboxProps) {
   return (
     <>
       {/* Mailbox Icon Button */}
-      <div style={{ position: "relative", width: "100%", minWidth: 0 }}>
+      <div style={{ position: "relative", width: compact ? "auto" : "100%", minWidth: 0 }}>
         <button
           onClick={() => setIsOpen(!isOpen)}
-          style={{
+          className={compact ? "f2m-icon-btn" : undefined}
+          style={compact ? undefined : {
             position: "relative",
             padding: "0.85rem 0.7rem",
             background: unreadCount > 0 ? "#e3f2fd" : "#fff",
@@ -85,34 +88,36 @@ export function NotificationMailbox({ userId }: NotificationMailboxProps) {
             minWidth: 0,
           }}
           onMouseEnter={(e) => {
+            if (compact) return;
             e.currentTarget.style.background = unreadCount > 0 ? "#bbdefb" : "#f5f5f5";
             e.currentTarget.style.transform = "scale(1.1)";
             e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.2)";
           }}
           onMouseLeave={(e) => {
+            if (compact) return;
             e.currentTarget.style.background = unreadCount > 0 ? "#e3f2fd" : "#fff";
             e.currentTarget.style.transform = "scale(1)";
             e.currentTarget.style.boxShadow = unreadCount > 0 ? "0 4px 12px rgba(33, 150, 243, 0.3)" : "0 2px 8px rgba(0,0,0,0.15)";
           }}
         >
-          <BellIcon size={28} />
+          <BellIcon size={compact ? 16 : 28} color={compact ? "#fff" : "#1565c0"} />
           {unreadCount > 0 && (
             <span
               style={{
                 position: "absolute",
-                top: "-6px",
-                right: "-6px",
+                top: compact ? "-4px" : "-6px",
+                right: compact ? "-4px" : "-6px",
                 background: "#d32f2f",
                 color: "#fff",
                 borderRadius: "50%",
-                width: "28px",
-                height: "28px",
-                fontSize: "0.85rem",
+                width: compact ? "14px" : "28px",
+                height: compact ? "14px" : "28px",
+                fontSize: compact ? "0.55rem" : "0.85rem",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 fontWeight: "bold",
-                border: "3px solid #fff",
+                border: compact ? "1.5px solid #fff" : "3px solid #fff",
                 boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
               }}
             >

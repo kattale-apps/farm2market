@@ -5,9 +5,9 @@ import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { CreateListing } from "./CreateListing";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { exportToExcel, exportToPDF, formatUTIDDataForExport } from "../utils/exportUtils";
 import { formatUgandaDateTime, getUgandaTime } from "../utils/timeUtils";
-import { NotificationMailbox } from "./NotificationMailbox";
 import { ThreadView } from "./messages/ThreadView";
 import { ContactUs } from "./ContactUs";
 import Link from "next/link";
@@ -100,6 +100,53 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
   const [expiredUtidsPage, setExpiredUtidsPage] = useState(0);
   const [ledgerView, setLedgerView] = useState<"list" | "card">("list");
   const [ledgerPage, setLedgerPage] = useState(0);
+  // Section collapse state — data/settings sections are reached via the
+  // "☰ More" menu; the main dashboard body always shows the quick-link
+  // tiles and the message-inbox panel.
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+  const toggleSection = (key: string) =>
+    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  const isSectionOpen = (key: string) => Boolean(openSections[key]);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [titleSlot, setTitleSlot] = useState<HTMLElement | null>(null);
+  const [msgSlot, setMsgSlot] = useState<HTMLElement | null>(null);
+  const [moreSlot, setMoreSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    setTitleSlot(document.getElementById("dashboard-title-slot"));
+    setMsgSlot(document.getElementById("dashboard-msg-slot"));
+    setMoreSlot(document.getElementById("dashboard-more-slot"));
+  }, []);
+  const MORE_MENU_SECTIONS: Array<{ key: string; label: string }> = [
+    { key: "profile", label: "👤 Profile" },
+    { key: "communities", label: "🌾 My Communities" },
+  ];
+  const openSectionFromMenu = (key: string) => {
+    if (key === "profile") {
+      setMoreMenuOpen(false);
+      router.push("/farmer/profile");
+      return;
+    }
+    setOpenSections((prev) => ({ ...prev, [key]: true }));
+    setMoreMenuOpen(false);
+    setTimeout(() => {
+      document.getElementById(`section-${key}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
+  };
+  const hideSectionButtonStyle: React.CSSProperties = {
+    display: "block",
+    marginBottom: "0.75rem",
+    background: "none",
+    border: "none",
+    color: "#1976d2",
+    fontWeight: 700,
+    fontSize: "0.8rem",
+    cursor: "pointer",
+    padding: 0,
+    fontFamily: '"Montserrat", sans-serif',
+  };
+  const renderHideControl = (key: string) => (
+    <button type="button" onClick={() => toggleSection(key)} style={hideSectionButtonStyle}>▲ Hide</button>
+  );
   const [transactionsPageSize, setTransactionsPageSize] = useState(5);
   const [ledgerPageSize, setLedgerPageSize] = useState(5);
   const transactionsPageKey = "farmer_transactions";
@@ -872,132 +919,171 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
     </div>
   );
 
+  const unreadMessageCount = Array.isArray(messageThreads)
+    ? messageThreads.reduce((sum: number, t: any) => sum + (t.unreadCount || 0), 0)
+    : 0;
+
+  const titleContent = (
+    <h2 style={{
+      fontSize: "clamp(1.05rem, 4vw, 1.4rem)",
+      margin: 0,
+      color: "#fff",
+      fontFamily: '"Montserrat", sans-serif',
+      fontWeight: "700",
+      letterSpacing: "-0.02em",
+      whiteSpace: "nowrap",
+      display: "flex",
+      alignItems: "center",
+      gap: "0.6rem",
+    }}>
+      Hello, {effectiveRole === "vendor" ? "Vendor 🏪" : effectiveRole === "store" ? "Store 🏬" : "Farmer 👩🏾‍🌾"}
+      {typeof farmerFarmcoinBalance === "number" && (
+        <span style={{
+          background: "linear-gradient(135deg, #fff8e1, #ffecb3)",
+          border: "1.5px solid #f9a825",
+          borderRadius: 20,
+          padding: "4px 12px",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 4,
+          fontSize: "0.85rem",
+          fontWeight: 700,
+          color: "#f57f17",
+          fontFamily: '"Montserrat", sans-serif',
+          boxShadow: "0 2px 6px rgba(249,168,37,0.25)",
+          whiteSpace: "nowrap",
+        }}>
+          🪙 {farmerFarmcoinBalance}
+        </span>
+      )}
+    </h2>
+  );
+
+  const msgContent = (
+    <button
+      type="button"
+      onClick={() => {
+        const nextOpen = !messageInboxOpen;
+        setMessageInboxOpen(nextOpen);
+        if (nextOpen && !selectedMessageUtid && defaultSupportUtid) {
+          setSelectedMessageUtid(defaultSupportUtid);
+        }
+      }}
+      title="Inbox"
+      className="f2m-icon-btn"
+      style={{ position: "relative" }}
+    >
+      ✉️
+      {unreadMessageCount > 0 && (
+        <span style={{
+          position: "absolute",
+          top: "-4px",
+          right: "-4px",
+          background: "#d32f2f",
+          color: "#fff",
+          borderRadius: "50%",
+          width: "14px",
+          height: "14px",
+          fontSize: "0.55rem",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontWeight: "bold",
+          border: "1.5px solid #fff",
+        }}>
+          {unreadMessageCount > 9 ? "9+" : unreadMessageCount}
+        </span>
+      )}
+    </button>
+  );
+
+  const moreContent = (
+    <div style={{ display: "inline-block" }}>
+      <button
+        type="button"
+        onClick={() => setMoreMenuOpen((v) => !v)}
+        title="More"
+        aria-label="More menu"
+        className="f2m-icon-btn"
+      >
+        ☰
+      </button>
+      {moreMenuOpen && (
+        <>
+          <div
+            onClick={() => setMoreMenuOpen(false)}
+            style={{ position: "fixed", inset: 0, zIndex: 9 }}
+          />
+          <div
+            className="f2m-dropdown"
+            style={{ padding: "0.4rem" }}
+          >
+            {MORE_MENU_SECTIONS.map(({ key, label }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => openSectionFromMenu(key)}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  width: "100%",
+                  padding: "0.6rem 0.75rem",
+                  background: isSectionOpen(key) ? "#e3f2fd" : "transparent",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontFamily: '"Montserrat", sans-serif',
+                  fontSize: "0.85rem",
+                  fontWeight: 600,
+                  color: "#2c2c2c",
+                  textAlign: "left",
+                }}
+              >
+                <span>{label}</span>
+                {isSectionOpen(key) && <span style={{ color: "#1976d2", fontSize: "0.78rem" }}>Open</span>}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+
   return (
     <div style={{ padding: "1rem", maxWidth: "100%", boxSizing: "border-box" }}>
-      <div style={{ 
-        display: "flex",
-        flexDirection: isMobile ? "column" : "row",
-        justifyContent: "space-between", 
-        alignItems: isMobile ? "stretch" : "flex-start",
-        gap: isMobile ? "0.75rem" : "1.5rem",
-        marginBottom: "1.5rem",
-        padding: "clamp(1rem, 3vw, 1.5rem)",
+      {titleSlot && createPortal(titleContent, titleSlot)}
+      {msgSlot && createPortal(msgContent, msgSlot)}
+      {moreSlot && createPortal(moreContent, moreSlot)}
+
+      <div style={{
         background: "#fff",
-        borderRadius: "12px",
+        borderRadius: "10px",
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        border: "1px solid #e0e0e0"
+        border: "1px solid #e0e0e0",
+        padding: "0.6rem 0.9rem",
+        marginBottom: "1rem",
       }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-            <h2 style={{ 
-              fontSize: "clamp(1.5rem, 4vw, 1.8rem)", 
-              margin: 0, 
-              color: "#2c2c2c",
-              fontFamily: '"Montserrat", sans-serif',
-              fontWeight: "700",
-              letterSpacing: "-0.02em"
-            }}>
-              Hello, {effectiveRole === "vendor" ? "Vendor 🏪" : effectiveRole === "store" ? "Store 🏬" : "Farmer 👩🏾‍🌾"}
-            </h2>
-            {typeof farmerFarmcoinBalance === "number" && (
-              <div style={{
-                background: "linear-gradient(135deg, #fff8e1, #ffecb3)",
-                border: "1.5px solid #f9a825",
-                borderRadius: 20,
-                padding: "4px 12px",
-                display: "flex",
-                alignItems: "center",
-                gap: 4,
-                fontSize: "0.85rem",
-                fontWeight: 700,
-                color: "#f57f17",
-                fontFamily: '"Montserrat", sans-serif',
-                boxShadow: "0 2px 6px rgba(249,168,37,0.25)",
-              }}>
-                🪙 {farmerFarmcoinBalance}
-              </div>
-            )}
-          </div>
-          <p style={{ 
-            color: "#3d3d3d", 
-            fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)",
-            fontFamily: '"Montserrat", sans-serif',
-            margin: 0,
-            lineHeight: 1.35,
-            wordBreak: "break-word"
-          }}>
-            Location: {locationDisplay}
-          </p>
-          {profile?.farmSizeAcres && (
-            <p style={{ 
-              color: "#666", 
-              fontSize: "clamp(0.8rem, 2vw, 0.85rem)",
-              fontFamily: '"Montserrat", sans-serif',
-              margin: "0.25rem 0 0 0"
-            }}>
-              Farm Size: {profile.farmSizeAcres.toFixed(4)} acres
-            </p>
-          )}
-        </div>
-        <div style={{
-          display: "flex",
-          gap: "0.75rem",
-          alignItems: "flex-start",
-          flexWrap: "wrap",
-          width: isMobile ? "100%" : "auto",
+        <p style={{
+          color: "#3d3d3d",
+          fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)",
+          fontFamily: '"Montserrat", sans-serif',
+          margin: 0,
+          lineHeight: 1.35,
+          wordBreak: "break-word"
         }}>
-          <Link
-            href="/farmer/profile"
-            style={{
-              padding: "1rem 1.25rem",
-              background: "#4CAF50",
-              color: "white",
-              textDecoration: "none",
-              borderRadius: "12px",
-              fontSize: "1rem",
-              fontWeight: "600",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              minHeight: "64px",
-              minWidth: "96px",
-            }}
-          >
-            Profile
-          </Link>
-          <div id="notification-inbox">
-            <NotificationMailbox userId={userId} />
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              const nextOpen = !messageInboxOpen;
-              setMessageInboxOpen(nextOpen);
-              if (nextOpen && !selectedMessageUtid && defaultSupportUtid) {
-                setSelectedMessageUtid(defaultSupportUtid);
-              }
-            }}
-            style={{
-              padding: "1rem 1.25rem",
-              background: messageInboxOpen ? "#1976d2" : "#f5f5f5",
-              color: messageInboxOpen ? "#fff" : "#1a1a1a",
-              border: "2px solid #ddd",
-              borderRadius: "12px",
-              cursor: "pointer",
-              fontSize: "1rem",
-              fontWeight: "600",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              minHeight: "64px",
-              minWidth: "96px",
-            }}
-          >
-            📩 Inbox {Array.isArray(messageThreads) && messageThreads.length > 0
-              ? `(${messageThreads.reduce((sum: number, t: any) => sum + (t.unreadCount || 0), 0)})`
-              : ""}
-          </button>
-        </div>
+          Location: {locationDisplay}
+        </p>
+        {profile?.farmSizeAcres && (
+          <p style={{
+            color: "#666",
+            fontSize: "clamp(0.8rem, 2vw, 0.85rem)",
+            fontFamily: '"Montserrat", sans-serif',
+            margin: "0.25rem 0 0 0"
+          }}>
+            Farm Size: {profile.farmSizeAcres.toFixed(4)} acres
+          </p>
+        )}
       </div>
 
       {/* Farmer quick links */}
@@ -1151,7 +1237,12 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
       </div>
       )}
 
-      {communitiesSection}
+      {isSectionOpen("communities") && (
+        <div id="section-communities">
+          {renderHideControl("communities")}
+          {communitiesSection}
+        </div>
+      )}
 
       {messageInboxOpen && (
         <div

@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import { resolveCommunityLogo } from "../lib/communityLogos";
 import { useOfflineQuery } from "../hooks/useOfflineQuery";
 import { useOfflineMutation } from "../hooks/useOfflineMutation";
+import { menuAccentColor } from "../utils/menuAccentColors";
 
 interface FarmerDashboardProps {
   userId: Id<"users">;
@@ -995,7 +996,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
             className="f2m-dropdown"
             style={{ padding: "0.4rem" }}
           >
-            {MORE_MENU_SECTIONS.map(({ key, label, disabled }) => (
+            {MORE_MENU_SECTIONS.map(({ key, label, disabled }, idx) => (
               <button
                 key={key}
                 type="button"
@@ -1007,8 +1008,10 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
                   alignItems: "center",
                   width: "100%",
                   padding: "0.6rem 0.75rem",
+                  marginBottom: "0.25rem",
                   background: isSectionOpen(key) ? "#e3f2fd" : "transparent",
                   border: "none",
+                  borderLeft: `4px solid ${menuAccentColor(idx)}`,
                   borderRadius: "6px",
                   cursor: disabled ? "not-allowed" : "pointer",
                   opacity: disabled ? 0.6 : 1,

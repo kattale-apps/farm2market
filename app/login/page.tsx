@@ -5,18 +5,22 @@ import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { useRouter, useSearchParams } from "next/navigation";
 import { saveAuth, getLastCredential, saveLastCredential } from "../utils/authStorage";
+import { IS_PRODUCTION_DEPLOYMENT } from "../utils/env";
 
 type IdentifierMode = "phone" | "email";
 type AuthStep = "login" | "confirmSignup";
 type SignupRole = "farmer" | "trader" | "buyer" | "vendor" | "transporter" | "store";
 
+// Only Farmer and Buyer signup on the production deployment while the
+// other roles are still being built out; the develop preview and local
+// dev keep every role fully enabled (see app/utils/env.ts).
 const SIGNUP_ROLES: Array<{ value: SignupRole; label: string; signupEnabled: boolean }> = [
   { value: "farmer", label: "Farmer", signupEnabled: true },
   { value: "buyer", label: "Buyer", signupEnabled: true },
-  { value: "trader", label: "Trader", signupEnabled: true },
-  { value: "vendor", label: "Vendor", signupEnabled: true },
-  { value: "transporter", label: "Transporter", signupEnabled: true },
-  { value: "store", label: "Store", signupEnabled: true },
+  { value: "trader", label: "Trader", signupEnabled: !IS_PRODUCTION_DEPLOYMENT },
+  { value: "vendor", label: "Vendor", signupEnabled: !IS_PRODUCTION_DEPLOYMENT },
+  { value: "transporter", label: "Transporter", signupEnabled: !IS_PRODUCTION_DEPLOYMENT },
+  { value: "store", label: "Store", signupEnabled: !IS_PRODUCTION_DEPLOYMENT },
 ];
 
 // Spectrum-ordered role palette (green→yellow→orange→blue→red→purple),
@@ -343,7 +347,7 @@ function LoginPageInner() {
                     }}
                     title={entry.signupEnabled ? "Enabled for signup" : "Signup currently disabled"}
                   >
-                    {entry.label}
+                    {entry.signupEnabled ? entry.label : `🔐 ${entry.label}`}
                   </button>
                 );
               })}

@@ -13,6 +13,7 @@ import { formatUgandaDateTime, formatUgandaTimeOnly, getUgandaTime } from "../ut
 import { ContactUs } from "./ContactUs";
 import { savePdfFromJsPDF } from "../utils/pdfDownload";
 import { useRouter } from "next/navigation";
+import { menuAccentColor } from "../utils/menuAccentColors";
 
 interface TraderDashboardProps {
   userId: Id<"users">;
@@ -705,7 +706,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
             className="f2m-dropdown"
             style={{ padding: "0.4rem" }}
           >
-            {MORE_MENU_SECTIONS.map(({ key, label }) => (
+            {MORE_MENU_SECTIONS.map(({ key, label }, idx) => (
               <button
                 key={key}
                 type="button"
@@ -716,8 +717,10 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
                   alignItems: "center",
                   width: "100%",
                   padding: "0.6rem 0.75rem",
+                  marginBottom: "0.25rem",
                   background: isSectionOpen(key) ? "#e3f2fd" : "transparent",
                   border: "none",
+                  borderLeft: `4px solid ${menuAccentColor(idx)}`,
                   borderRadius: "6px",
                   cursor: "pointer",
                   fontFamily: '"Montserrat", sans-serif',

@@ -13,6 +13,8 @@ import { useRouter } from "next/navigation";
 import { resolveCommunityLogo } from "../lib/communityLogos";
 import { UserProfileCard } from "./UserProfileCard";
 import { savePdfFromJsPDF } from "../utils/pdfDownload";
+import { menuAccentColor } from "../utils/menuAccentColors";
+import { IS_PRODUCTION_DEPLOYMENT } from "../utils/env";
 
 interface BuyerDashboardProps {
   userId: Id<"users">;
@@ -144,7 +146,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
     setMoreSlot(document.getElementById("dashboard-more-slot"));
     setProfileExtraSlot(document.getElementById("dashboard-profile-extra-slot"));
   }, []);
-  const MORE_MENU_SECTIONS: Array<{ key: string; label: string }> = [
+  const RAW_MORE_MENU_SECTIONS: Array<{ key: string; label: string }> = [
     { key: "communities", label: "🌾 My Communities" },
     {
       key: "rewards",
@@ -165,7 +167,15 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
     { key: "walletReport", label: "📄 Wallet Report" },
     { key: "marketPrices", label: "📑 Market Price Reports" },
   ];
+  // These sections depend on other roles (trader/vendor/store) that are
+  // locked out of signup on the production deployment (see app/login/page.tsx),
+  // so on production they're shown but inert — fully active on the develop
+  // preview and locally so this area can keep being built out.
+  const MORE_MENU_SECTIONS: Array<{ key: string; label: string; disabled?: boolean }> = RAW_MORE_MENU_SECTIONS.map((section) => (
+    IS_PRODUCTION_DEPLOYMENT ? { ...section, label: `🔐 ${section.label}`, disabled: true } : section
+  ));
   const openSectionFromMenu = (key: string) => {
+    if (IS_PRODUCTION_DEPLOYMENT) return;
     setOpenSections((prev) => ({ ...prev, [key]: true }));
     setMoreMenuOpen(false);
     setTimeout(() => {
@@ -954,10 +964,11 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
             className="f2m-dropdown"
             style={{ padding: "0.4rem" }}
           >
-            {MORE_MENU_SECTIONS.map(({ key, label }) => (
+            {MORE_MENU_SECTIONS.map(({ key, label, disabled }, idx) => (
               <button
                 key={key}
                 type="button"
+                disabled={disabled}
                 onClick={() => openSectionFromMenu(key)}
                 style={{
                   display: "flex",
@@ -965,10 +976,13 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                   alignItems: "center",
                   width: "100%",
                   padding: "0.6rem 0.75rem",
+                  marginBottom: "0.25rem",
                   background: isSectionOpen(key) ? "#e3f2fd" : "transparent",
                   border: "none",
+                  borderLeft: `4px solid ${menuAccentColor(idx)}`,
                   borderRadius: "6px",
-                  cursor: "pointer",
+                  cursor: disabled ? "not-allowed" : "pointer",
+                  opacity: disabled ? 0.6 : 1,
                   fontFamily: '"Montserrat", sans-serif',
                   fontSize: "0.85rem",
                   fontWeight: 600,

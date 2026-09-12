@@ -293,7 +293,7 @@ export default function Home() {
                 aria-label="Profile menu"
                 className="f2m-icon-btn"
               >
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+                <svg width="38" height="38" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
                   <circle cx="12" cy="8" r="4" fill="currentColor" />
                   <path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8" fill="currentColor" />
                 </svg>

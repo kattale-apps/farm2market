@@ -948,7 +948,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
         <>
           <div
             onClick={() => setMoreMenuOpen(false)}
-            style={{ position: "fixed", inset: 0, zIndex: 9 }}
+            style={{ position: "fixed", inset: 0, zIndex: 999 }}
           />
           <div
             className="f2m-dropdown"

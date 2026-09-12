@@ -7,6 +7,7 @@ import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { useState, useEffect } from "react";
 import jsPDF from "jspdf";
+import Link from "next/link";
 import { useStoredUser } from "../../hooks/useStoredUser";
 
 export default function DeliveryVerificationPage() {
@@ -140,6 +141,9 @@ export default function DeliveryVerificationPage() {
 
   return (
     <div style={{ padding: "clamp(1rem, 4vw, 2rem)", maxWidth: "900px", margin: "0 auto" }}>
+      <div style={{ marginBottom: "1rem" }}>
+        <Link href="/storeadmin/dashboard" style={{ color: "#1976d2", fontWeight: 600, fontSize: "0.9rem", textDecoration: "none" }}>← Back to Dashboard</Link>
+      </div>
       <h1 style={{ fontSize: "clamp(1.5rem, 4vw, 2rem)", marginBottom: "1.5rem" }}>
         Delivery Verification
       </h1>

@@ -6,6 +6,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useStoredUser } from "../../hooks/useStoredUser";
 
 export default function TraderSettingsPage() {
@@ -66,6 +67,9 @@ export default function TraderSettingsPage() {
 
   return (
     <div style={{ padding: "clamp(1rem, 4vw, 2rem)", maxWidth: "800px", margin: "0 auto" }}>
+      <div style={{ marginBottom: "1rem" }}>
+        <Link href="/" style={{ color: "#1976d2", fontWeight: 600, fontSize: "0.9rem", textDecoration: "none" }}>← Back to Dashboard</Link>
+      </div>
       <h1 style={{ fontSize: "clamp(1.5rem, 4vw, 2rem)", marginBottom: "1.5rem" }}>
         Notification Settings
       </h1>

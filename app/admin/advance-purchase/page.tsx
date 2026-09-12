@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
+import Link from "next/link";
 import { useStoredUser } from "../../hooks/useStoredUser";
 import { CommunityAdvancePurchasePanel } from "../../components/advancePurchase/CommunityAdvancePurchasePanel";
 
@@ -29,6 +30,9 @@ export default function AdvancePurchaseAdminPage() {
 
   return (
     <div style={{ padding: "1rem", maxWidth: 720, margin: "0 auto", fontFamily: FONT }}>
+      <div style={{ marginBottom: "1rem" }}>
+        <Link href="/" style={{ color: "#1976d2", fontWeight: 600, fontSize: "0.9rem", textDecoration: "none" }}>← Back to Dashboard</Link>
+      </div>
       <h1 style={{ fontSize: "1.4rem", fontWeight: 700, marginBottom: "0.25rem" }}>Advanced Markets — Community Admin</h1>
       <p style={{ color: "#666", fontSize: "0.88rem", marginBottom: "1rem" }}>
         Configure product fields, milestones and payment release rules, then review submitted milestone proof pictures.

@@ -989,7 +989,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
         <>
           <div
             onClick={() => setMoreMenuOpen(false)}
-            style={{ position: "fixed", inset: 0, zIndex: 9 }}
+            style={{ position: "fixed", inset: 0, zIndex: 999 }}
           />
           <div
             className="f2m-dropdown"

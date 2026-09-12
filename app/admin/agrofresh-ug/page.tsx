@@ -313,8 +313,8 @@ export default function AgroFreshUGAdminPage() {
     <div style={{ padding: "2rem", maxWidth: 1200, margin: "0 auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
         <h1>AGROFRESH UG — Farm Validation Review</h1>
-        <Link href="/admin" style={{ color: "#1976d2", textDecoration: "none" }}>
-          ← Back to Admin
+        <Link href="/" style={{ color: "#1976d2", textDecoration: "none" }}>
+          ← Back to Dashboard
         </Link>
       </div>
 

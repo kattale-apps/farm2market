@@ -199,6 +199,7 @@ export default function Home() {
       <style>{`
         .f2m-banner {
           position: relative;
+          z-index: 5;
           display: grid;
           grid-template-columns: 1fr auto auto;
           column-gap: 6px;
@@ -249,7 +250,7 @@ export default function Home() {
           box-shadow: 0 8px 24px rgba(0,0,0,0.18);
           padding: 0.75rem;
           text-align: left;
-          z-index: 20;
+          z-index: 1000;
         }
         .f2m-banner.has-dashboard-row {
           grid-template-areas:
@@ -299,7 +300,7 @@ export default function Home() {
               </button>
               {profileMenuOpen && (
                 <>
-                  <div onClick={() => setProfileMenuOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 19 }} />
+                  <div onClick={() => setProfileMenuOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 999 }} />
                   <div className="f2m-dropdown">
                   <p style={{ margin: "0 0 0.15rem", fontSize: "0.85rem", color: "#333" }}>
                     Logged in as: <strong style={{ color: "#1a1a1a" }}>{effectiveUser?.alias || user?.alias || "Unknown"}</strong>

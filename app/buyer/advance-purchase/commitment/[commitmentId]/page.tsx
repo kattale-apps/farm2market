@@ -71,7 +71,15 @@ export default function CommitmentDetailPage() {
                 <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "#888", marginBottom: "0.3rem" }}>
                   Proof pictures
                 </div>
-                <SubmissionPhotoGallery photos={m.proofPictures.map((p: any) => p.url)} minTileWidth={80} tileHeight={80} />
+                <SubmissionPhotoGallery photos={[m.proofPictures[0].url]} minTileWidth={80} tileHeight={80} />
+                {m.proofPictures.length > 1 && (
+                  <div style={{ marginTop: "0.4rem" }}>
+                    <div style={{ fontSize: "0.68rem", color: "#aaa", marginBottom: "0.3rem" }}>
+                      Past submissions ({m.proofPictures.length - 1})
+                    </div>
+                    <SubmissionPhotoGallery photos={m.proofPictures.slice(1).map((p: any) => p.url)} minTileWidth={64} tileHeight={64} />
+                  </div>
+                )}
               </div>
             )}
           </div>

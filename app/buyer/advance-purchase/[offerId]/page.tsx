@@ -300,26 +300,44 @@ export default function AdvancePurchaseOfferDetailPage() {
         </div>
         {offer.milestones.some((m: any) => m.proofPictures && m.proofPictures.length > 0) && (
           <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-            {offer.milestones.map((m: any) => (
-              m.proofPictures && m.proofPictures.length > 0 && (
+            {offer.milestones.map((m: any) => {
+              if (!m.proofPictures || m.proofPictures.length === 0) return null;
+              const [latest, ...past] = m.proofPictures; // already sorted newest-first
+              return (
                 <div key={m._id}>
                   <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#666", marginBottom: "0.3rem" }}>
                     {m.name} — proof pictures
                   </div>
                   <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                    {m.proofPictures.map((p: any) => (
-                      <img
-                        key={p._id}
-                        src={p.url}
-                        alt="Proof"
-                        onClick={() => setLightboxUrl(p.url)}
-                        style={{ width: 84, height: 84, objectFit: "cover", borderRadius: 8, border: "1px solid #e0e0e0", cursor: "zoom-in" }}
-                      />
-                    ))}
+                    <img
+                      key={latest._id}
+                      src={latest.url}
+                      alt="Proof"
+                      onClick={() => setLightboxUrl(latest.url)}
+                      style={{ width: 84, height: 84, objectFit: "cover", borderRadius: 8, border: "1px solid #e0e0e0", cursor: "zoom-in" }}
+                    />
                   </div>
+                  {past.length > 0 && (
+                    <div style={{ marginTop: "0.4rem" }}>
+                      <div style={{ fontSize: "0.72rem", color: "#999", marginBottom: "0.3rem" }}>
+                        Past submissions ({past.length})
+                      </div>
+                      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                        {past.map((p: any) => (
+                          <img
+                            key={p._id}
+                            src={p.url}
+                            alt="Past proof"
+                            onClick={() => setLightboxUrl(p.url)}
+                            style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 8, border: "1px solid #e0e0e0", cursor: "zoom-in", opacity: 0.85 }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )
-            ))}
+              );
+            })}
           </div>
         )}
       </Section>

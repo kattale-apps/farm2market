@@ -115,7 +115,7 @@ export function EditOfferDetails({ farmerId, offer }: Props) {
           <input type="number" value={totalQuantity} onChange={(e) => setTotalQuantity(e.target.value)} style={inputStyle} />
           {offer.quantityCommitted > 0 && (
             <p style={{ fontSize: "0.7rem", color: "#888", margin: "-0.4rem 0 0.6rem" }}>
-              Can't go below {offer.quantityCommitted} {offer.unit} already committed
+              Can&apos;t go below {offer.quantityCommitted} {offer.unit} already committed
             </p>
           )}
         </div>

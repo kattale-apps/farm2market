@@ -42,6 +42,24 @@ export default function AdvancePurchaseOfferDetailPage() {
   const [proposedPrice, setProposedPrice] = useState<string>("");
   const [proposedQty, setProposedQty] = useState<string>("");
   const [proposalMsg, setProposalMsg] = useState("");
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+
+  const handleDownload = async (url: string) => {
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = `${offer?.productName || "product"}-photo.jpg`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch {
+      window.open(url, "_blank");
+    }
+  };
 
   if (status === "loading" || offer === undefined) {
     return <div style={{ padding: "2rem", fontFamily: FONT }}>Loading offer...</div>;
@@ -103,16 +121,35 @@ export default function AdvancePurchaseOfferDetailPage() {
 
   return (
     <div style={{ padding: "1rem", maxWidth: 640, margin: "0 auto", fontFamily: FONT }}>
-      <div style={{ marginBottom: "1rem" }}>
-        <Link href="/buyer/advance-purchase" style={{ color: "#1976d2", fontWeight: 600, fontSize: "0.9rem" }}>
+      <div style={{
+        background: "rgba(20, 30, 20, 0.72)",
+        borderRadius: 12,
+        padding: "0.85rem 1rem",
+        marginBottom: "1rem",
+      }}>
+        <Link
+          href="/buyer/advance-purchase"
+          style={{
+            display: "inline-block",
+            color: "#fff",
+            fontWeight: 700,
+            fontSize: "0.85rem",
+            background: "rgba(255,255,255,0.15)",
+            border: "1px solid rgba(255,255,255,0.4)",
+            borderRadius: 8,
+            padding: "0.4rem 0.75rem",
+            textDecoration: "none",
+            marginBottom: "0.6rem",
+          }}
+        >
           ← Advance Purchase Market
         </Link>
-      </div>
 
-      <h1 style={{ fontSize: "1.4rem", fontWeight: 700, marginBottom: "0.1rem" }}>{offer.productName}</h1>
-      <p style={{ color: "#777", fontSize: "0.85rem", marginBottom: "1rem" }}>
-        {offer.communityName} · seller {offer.farmerAlias} · {offer.quantityRemaining} {offer.unit} available
-      </p>
+        <h1 style={{ fontSize: "1.4rem", fontWeight: 700, marginBottom: "0.1rem", color: "#fff" }}>{offer.productName}</h1>
+        <p style={{ color: "#eee", fontSize: "0.85rem", margin: 0 }}>
+          {offer.communityName} · seller {offer.farmerAlias} · {offer.quantityRemaining} {offer.unit} available
+        </p>
+      </div>
 
       <Section title="Purchase">
         <p style={{ margin: "0 0 0.5rem" }}>
@@ -271,11 +308,73 @@ export default function AdvancePurchaseOfferDetailPage() {
                 key={i}
                 src={url}
                 alt={`${offer.productName} ${i + 1}`}
-                style={{ width: 110, height: 110, objectFit: "cover", borderRadius: 8, border: "1px solid #e0e0e0" }}
+                onClick={() => setLightboxUrl(url)}
+                style={{ width: 110, height: 110, objectFit: "cover", borderRadius: 8, border: "1px solid #e0e0e0", cursor: "zoom-in" }}
               />
             ))}
           </div>
         </Section>
+      )}
+
+      {lightboxUrl && (
+        <div
+          onClick={() => setLightboxUrl(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.85)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: "1.5rem",
+          }}
+        >
+          <img
+            src={lightboxUrl}
+            alt="Product enlarged"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: "100%", maxHeight: "80vh", objectFit: "contain", borderRadius: 8 }}
+          />
+          <div style={{ display: "flex", gap: "0.75rem", marginTop: "1rem" }}>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDownload(lightboxUrl);
+              }}
+              style={{
+                padding: "0.6rem 1rem",
+                background: "#2e7d32",
+                color: "#fff",
+                border: "none",
+                borderRadius: 8,
+                fontWeight: 700,
+                fontSize: "0.85rem",
+                cursor: "pointer",
+              }}
+            >
+              ⬇ Download
+            </button>
+            <button
+              type="button"
+              onClick={() => setLightboxUrl(null)}
+              style={{
+                padding: "0.6rem 1rem",
+                background: "rgba(255,255,255,0.15)",
+                border: "1px solid rgba(255,255,255,0.5)",
+                color: "#fff",
+                borderRadius: 8,
+                fontWeight: 700,
+                fontSize: "0.85rem",
+                cursor: "pointer",
+              }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
       )}
 
       {offer.description && (

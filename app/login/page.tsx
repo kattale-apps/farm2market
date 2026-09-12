@@ -221,6 +221,13 @@ function LoginPageInner() {
         }
         .f2m-panel-desktop { display: none; }
         .f2m-panel-mobile { max-width: 400px; width: 100%; }
+        @keyframes f2m-role-glow-pulse {
+          0%, 100% { box-shadow: 0 0 6px 1px var(--glow-color), 0 2px 6px var(--glow-shadow); }
+          50% { box-shadow: 0 0 16px 4px var(--glow-color), 0 2px 6px var(--glow-shadow); }
+        }
+        .f2m-role-glow {
+          animation: f2m-role-glow-pulse 1.6s ease-in-out infinite;
+        }
         @media (min-width: 900px) {
           .f2m-login-grid {
             flex-direction: row;
@@ -310,6 +317,7 @@ function LoginPageInner() {
                     type="button"
                     disabled={!entry.signupEnabled}
                     onClick={() => setSelectedRole(entry.value)}
+                    className={isSelected ? "f2m-role-glow" : undefined}
                     style={{
                       padding: "0.6rem 0.6rem",
                       borderRadius: "9px",
@@ -324,8 +332,14 @@ function LoginPageInner() {
                       fontSize: "0.9rem",
                       cursor: !entry.signupEnabled ? "not-allowed" : "pointer",
                       opacity: !entry.signupEnabled && !isSelected ? 0.85 : 1,
-                      boxShadow: isSelected ? `0 2px 6px ${roleStyle.text}40` : `0 1px 3px ${roleStyle.text}1a`,
+                      boxShadow: isSelected ? undefined : `0 1px 3px ${roleStyle.text}1a`,
                       transition: "all 0.15s ease",
+                      ...(isSelected
+                        ? ({
+                            "--glow-color": `${!entry.signupEnabled ? "#f6bf26" : roleStyle.border}80`,
+                            "--glow-shadow": `${!entry.signupEnabled ? "#f6bf26" : roleStyle.text}40`,
+                          } as React.CSSProperties)
+                        : {}),
                     }}
                     title={entry.signupEnabled ? "Enabled for signup" : "Signup currently disabled"}
                   >

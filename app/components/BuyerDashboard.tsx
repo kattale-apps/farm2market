@@ -6,7 +6,6 @@ import { Id } from "../../convex/_generated/dataModel";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { exportToExcel, exportToPDF, formatUTIDDataForExport } from "../utils/exportUtils";
 import { formatUgandaDateTime, getUgandaTime } from "../utils/timeUtils";
-import { NotificationMailbox } from "./NotificationMailbox";
 import { ThreadView } from "./messages/ThreadView";
 import { ContactUs } from "./ContactUs";
 import Link from "next/link";
@@ -136,8 +135,11 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
     setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
   const isSectionOpen = (key: string) => Boolean(openSections[key]);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [walletBalanceExpanded, setWalletBalanceExpanded] = useState(false);
   const MORE_MENU_SECTIONS: Array<{ key: string; label: string }> = [
     { key: "communities", label: "🌾 My Communities" },
+    { key: "rewards", label: "🪙 FarmCoin Rewards" },
+    { key: "feesInfo", label: "💰 Service Fee & Kilo-Shaving Info" },
     { key: "traderOrders", label: "📦 Trader Listing Orders" },
     { key: "purchaseWindow", label: "🪟 Purchase Window Status" },
     { key: "traderListings", label: "📦 Trader-sourced Listings" },
@@ -883,28 +885,28 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
 
   return (
     <div style={{ padding: "1rem", maxWidth: "100%", boxSizing: "border-box" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.5rem" }}>
-        <div>
-          <h2 style={{ 
-            fontSize: "clamp(1.5rem, 4vw, 1.8rem)", 
-            marginBottom: "0.5rem", 
-            color: "#2c2c2c",
-            fontFamily: '"Montserrat", sans-serif',
-            fontWeight: "700",
-            letterSpacing: "-0.02em"
-          }}>
-            Buyer Dashboard 🏢
-          </h2>
-          <p style={{ 
-            color: "#3d3d3d", 
-            fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)",
-            fontFamily: '"Montserrat", sans-serif'
-          }}>
-            Storage Location: Warehouse Name
-          </p>
-        </div>
+      <div style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        flexWrap: "wrap",
+        gap: "0.6rem",
+        marginBottom: "1.5rem",
+        padding: "0.6rem 0.9rem",
+        background: "rgba(20, 30, 20, 0.6)",
+        borderRadius: "10px",
+      }}>
+        <h2 style={{
+          fontSize: "clamp(1.3rem, 4vw, 1.6rem)",
+          margin: 0,
+          color: "#fff",
+          fontFamily: '"Montserrat", sans-serif',
+          fontWeight: "700",
+          letterSpacing: "-0.02em"
+        }}>
+          Buyer Dashboard 🏢
+        </h2>
         <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-          <NotificationMailbox userId={userId} />
           <button
             type="button"
             onClick={() => {
@@ -1508,135 +1510,51 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
 
       {/* Wallet & Deposit Section — always visible on the main dashboard, everything else lives behind the menu */}
       <div id="section-wallet" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", gap: "1rem", marginBottom: "1.5rem" }}>
-        {/* Wallet Balance */}
+        {/* Wallet Balance — compact by default, expandable for full detail */}
         <div style={{
-          padding: "clamp(1rem, 3vw, 1.5rem)",
+          padding: "clamp(0.75rem, 2.5vw, 1rem)",
           background: "#fff",
           borderRadius: "12px",
           boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
           border: "1px solid #e0e0e0"
         }}>
-          <h3 style={{ marginTop: 0, marginBottom: "1rem", fontSize: "clamp(1rem, 3vw, 1.2rem)", color: "#1a1a1a" }}>
-            Wallet Balance
-          </h3>
+          <button
+            type="button"
+            onClick={() => setWalletBalanceExpanded((v) => !v)}
+            style={{
+              display: "flex",
+              width: "100%",
+              justifyContent: "space-between",
+              alignItems: "center",
+              background: "none",
+              border: "none",
+              padding: 0,
+              cursor: "pointer",
+              fontFamily: '"Montserrat", sans-serif',
+            }}
+          >
+            <span style={{ fontSize: "0.9rem", color: "#666" }}>Wallet Balance</span>
+            <span style={{ fontSize: "0.75rem", color: "#1976d2", fontWeight: 700 }}>
+              {walletBalanceExpanded ? "▲ Hide" : "▼ Details"}
+            </span>
+          </button>
           {walletBalance === undefined ? (
-            <p style={{ color: "#999" }}>Loading...</p>
+            <p style={{ color: "#999", margin: "0.5rem 0 0" }}>Loading...</p>
           ) : (
             <div>
-              <div style={{ marginBottom: "1rem" }}>
-                <div style={{ color: "#666", fontSize: "0.9rem" }}>Available Balance</div>
-                <div style={{ fontSize: "1.5rem", fontWeight: "600", color: "#1976d2" }}>
-                  {formatUGX(walletBalance.balance)}
-                </div>
+              <div style={{ fontSize: "1.35rem", fontWeight: "600", color: "#1976d2", marginTop: "0.35rem" }}>
+                {formatUGX(walletBalance.balance)}
               </div>
-              <div>
-                <div style={{ color: "#666", fontSize: "0.9rem" }}>Total Deposits</div>
-                <div style={{ fontSize: "1.2rem", color: "#666" }}>
-                  {formatUGX(walletBalance.totalDeposits)}
+              {walletBalanceExpanded && (
+                <div style={{ marginTop: "0.75rem", paddingTop: "0.75rem", borderTop: "1px solid #eee" }}>
+                  <div style={{ color: "#666", fontSize: "0.9rem" }}>Total Deposits</div>
+                  <div style={{ fontSize: "1.1rem", color: "#666" }}>
+                    {formatUGX(walletBalance.totalDeposits)}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
-        </div>
-
-        {/* Buyer Reward Cash-out */}
-        <div style={{
-          padding: "clamp(1rem, 3vw, 1.5rem)",
-          background: "#fff",
-          borderRadius: "12px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          border: "1px solid #e0e0e0"
-        }}>
-          <h3 style={{ marginTop: 0, marginBottom: "1rem", fontSize: "clamp(1rem, 3vw, 1.2rem)", color: "#1a1a1a" }}>
-            Buyer FarmCoin Rewards
-          </h3>
-          <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.75rem" }}>
-            Sentify is to turn your FarmCoin into cash via mobile money.
-          </div>
-          <div style={{ marginBottom: "0.75rem" }}>
-            <div style={{ color: "#666", fontSize: "0.9rem" }}>Reward Balance</div>
-            <div style={{ fontSize: "1.25rem", fontWeight: "600", color: "#1976d2" }}>
-              {buyerRewardSummary?.balance ?? 0} Token(s)
-            </div>
-            {buyerRewardSummary && (
-              <div style={{ fontSize: "0.8rem", color: "#64748b" }}>
-                Cash-out rate: UGX {buyerRewardSummary.cashoutRate} per token
-              </div>
-            )}
-          </div>
-          {buyerRewardSummary?.recent?.length ? (
-            <div style={{ marginBottom: "0.75rem" }}>
-              <div style={{ fontSize: "0.8rem", color: "#666", marginBottom: "0.35rem" }}>
-                Recent rewards
-              </div>
-              <div style={{ display: "grid", gap: "0.35rem" }}>
-                {buyerRewardSummary.recent.map((entry: any, idx: number) => (
-                  <div key={idx} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", color: "#475569" }}>
-                    <span>{entry.source?.replace("_", " ")}</span>
-                    <span style={{ fontWeight: 600 }}>{entry.delta > 0 ? `+${entry.delta}` : entry.delta}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-            <div>
-              <label style={{ display: "block", marginBottom: "0.4rem", fontSize: "0.85rem", color: "#666" }}>
-                Select Reward Receipt
-              </label>
-              <select
-                value={rewardReceiptUtid}
-                onChange={(e) => setRewardReceiptUtid(e.target.value)}
-                style={{ width: "100%", padding: "0.6rem", borderRadius: "6px", border: "1px solid #ddd" }}
-              >
-                <option value="">Select receipt</option>
-                {(buyerRewardReceipts || []).map((receipt: any) => (
-                  <option key={receipt.utid} value={receipt.utid}>
-                    {receipt.utid} • {receipt.delta} token(s)
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label style={{ display: "block", marginBottom: "0.4rem", fontSize: "0.85rem", color: "#666" }}>
-                Mobile Money Phone Number
-              </label>
-              <input
-                type="tel"
-                value={rewardCashoutPhone}
-                onChange={(e) => setRewardCashoutPhone(e.target.value)}
-                placeholder="e.g., 2567XXXXXXXX"
-                style={{ width: "100%", padding: "0.6rem", borderRadius: "6px", border: "1px solid #ddd" }}
-              />
-            </div>
-            <button
-              type="button"
-              onClick={handleBuyerRewardCashout}
-              style={{
-                padding: "0.6rem 1rem",
-                background: "#1976d2",
-                color: "#fff",
-                border: "none",
-                borderRadius: "6px",
-                fontWeight: "600",
-                cursor: "pointer"
-              }}
-            >
-              Sentify Cash-out
-            </button>
-            {rewardCashoutMessage && (
-              <div style={{
-                padding: "0.6rem",
-                borderRadius: "6px",
-                fontSize: "0.85rem",
-                background: rewardCashoutMessage.type === "success" ? "#e8f5e9" : "#ffebee",
-                color: rewardCashoutMessage.type === "success" ? "#2e7d32" : "#c62828",
-                border: `1px solid ${rewardCashoutMessage.type === "success" ? "#c8e6c9" : "#ffcdd2"}`
-              }}>
-                {rewardCashoutMessage.text}
-              </div>
-            )}
-          </div>
         </div>
 
         {/* Deposit Section */}
@@ -1811,44 +1729,151 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       </div>
       )}
 
-      {/* Service Fee Info */}
-      {serviceFeePercentage && (
-        <div style={{
+      {/* Buyer FarmCoin Rewards */}
+      {isSectionOpen("rewards") && (
+        <div id="section-rewards" style={{
           marginBottom: "1.5rem",
           padding: "clamp(1rem, 3vw, 1.5rem)",
-          background: "#e3f2fd",
+          background: "#fff",
           borderRadius: "12px",
           boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          border: "1px solid #2196f3"
+          border: "1px solid #e0e0e0"
         }}>
-          <h3 style={{ marginTop: 0, marginBottom: "0.5rem", fontSize: "clamp(1rem, 3vw, 1.2rem)", color: "#1565c0" }}>
-            💰 Service Fee
+          {renderHideControl("rewards")}
+          <h3 style={{ marginTop: 0, marginBottom: "1rem", fontSize: "clamp(1rem, 3vw, 1.2rem)", color: "#1a1a1a" }}>
+            Buyer FarmCoin Rewards
           </h3>
-          <p style={{ margin: 0, color: "#666", fontSize: "clamp(0.9rem, 2.5vw, 1rem)" }}>
-            A <strong>{serviceFeePercentage.serviceFeePercentage}% service fee</strong> will be added to your purchase price.
-          </p>
+          <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.75rem" }}>
+            Sentify is to turn your FarmCoin into cash via mobile money.
+          </div>
+          <div style={{ marginBottom: "0.75rem" }}>
+            <div style={{ color: "#666", fontSize: "0.9rem" }}>Reward Balance</div>
+            <div style={{ fontSize: "1.25rem", fontWeight: "600", color: "#1976d2" }}>
+              {buyerRewardSummary?.balance ?? 0} Token(s)
+            </div>
+            {buyerRewardSummary && (
+              <div style={{ fontSize: "0.8rem", color: "#64748b" }}>
+                Cash-out rate: UGX {buyerRewardSummary.cashoutRate} per token
+              </div>
+            )}
+          </div>
+          {buyerRewardSummary?.recent?.length ? (
+            <div style={{ marginBottom: "0.75rem" }}>
+              <div style={{ fontSize: "0.8rem", color: "#666", marginBottom: "0.35rem" }}>
+                Recent rewards
+              </div>
+              <div style={{ display: "grid", gap: "0.35rem" }}>
+                {buyerRewardSummary.recent.map((entry: any, idx: number) => (
+                  <div key={idx} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", color: "#475569" }}>
+                    <span>{entry.source?.replace("_", " ")}</span>
+                    <span style={{ fontWeight: 600 }}>{entry.delta > 0 ? `+${entry.delta}` : entry.delta}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+            <div>
+              <label style={{ display: "block", marginBottom: "0.4rem", fontSize: "0.85rem", color: "#666" }}>
+                Select Reward Receipt
+              </label>
+              <select
+                value={rewardReceiptUtid}
+                onChange={(e) => setRewardReceiptUtid(e.target.value)}
+                style={{ width: "100%", padding: "0.6rem", borderRadius: "6px", border: "1px solid #ddd" }}
+              >
+                <option value="">Select receipt</option>
+                {(buyerRewardReceipts || []).map((receipt: any) => (
+                  <option key={receipt.utid} value={receipt.utid}>
+                    {receipt.utid} • {receipt.delta} token(s)
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={{ display: "block", marginBottom: "0.4rem", fontSize: "0.85rem", color: "#666" }}>
+                Mobile Money Phone Number
+              </label>
+              <input
+                type="tel"
+                value={rewardCashoutPhone}
+                onChange={(e) => setRewardCashoutPhone(e.target.value)}
+                placeholder="e.g., 2567XXXXXXXX"
+                style={{ width: "100%", padding: "0.6rem", borderRadius: "6px", border: "1px solid #ddd" }}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleBuyerRewardCashout}
+              style={{
+                padding: "0.6rem 1rem",
+                background: "#1976d2",
+                color: "#fff",
+                border: "none",
+                borderRadius: "6px",
+                fontWeight: "600",
+                cursor: "pointer"
+              }}
+            >
+              Sentify Cash-out
+            </button>
+            {rewardCashoutMessage && (
+              <div style={{
+                padding: "0.6rem",
+                borderRadius: "6px",
+                fontSize: "0.85rem",
+                background: rewardCashoutMessage.type === "success" ? "#e8f5e9" : "#ffebee",
+                color: rewardCashoutMessage.type === "success" ? "#2e7d32" : "#c62828",
+                border: `1px solid ${rewardCashoutMessage.type === "success" ? "#c8e6c9" : "#ffcdd2"}`
+              }}>
+                {rewardCashoutMessage.text}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
-      {/* Storage Fee Rate Info */}
-      {storageFeeRate && (
-        <div style={{
-          marginBottom: "1.5rem",
-          padding: "clamp(1rem, 3vw, 1.5rem)",
-          background: "#fff3cd",
-          borderRadius: "12px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          border: "1px solid #ffc107"
-        }}>
-          <h3 style={{ marginTop: 0, marginBottom: "0.5rem", fontSize: "clamp(1rem, 3vw, 1.2rem)", color: "#856404" }}>
-            ⚠️ Kilo-Shaving Information
-          </h3>
-          <p style={{ margin: 0, color: "#666", fontSize: "clamp(0.9rem, 2.5vw, 1rem)", marginBottom: "0.5rem" }}>
-            <strong>Grace Period:</strong> You have <strong>48 hours</strong> after purchase to collect your order before kilo-shaving begins.
-          </p>
-          <p style={{ margin: 0, color: "#666", fontSize: "clamp(0.9rem, 2.5vw, 1rem)" }}>
-            <strong>Rate:</strong> {storageFeeRate.rateKgPerDay} kg per day per 100kg block (applies after the 48-hour grace period).
-          </p>
+      {/* Service Fee & Kilo-Shaving Info */}
+      {isSectionOpen("feesInfo") && (
+        <div id="section-feesInfo" style={{ marginBottom: "1.5rem" }}>
+          {renderHideControl("feesInfo")}
+          {serviceFeePercentage && (
+            <div style={{
+              marginBottom: "1rem",
+              padding: "clamp(1rem, 3vw, 1.5rem)",
+              background: "#e3f2fd",
+              borderRadius: "12px",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+              border: "1px solid #2196f3"
+            }}>
+              <h3 style={{ marginTop: 0, marginBottom: "0.5rem", fontSize: "clamp(1rem, 3vw, 1.2rem)", color: "#1565c0" }}>
+                💰 Service Fee
+              </h3>
+              <p style={{ margin: 0, color: "#666", fontSize: "clamp(0.9rem, 2.5vw, 1rem)" }}>
+                A <strong>{serviceFeePercentage.serviceFeePercentage}% service fee</strong> will be added to your purchase price.
+              </p>
+            </div>
+          )}
+
+          {storageFeeRate && (
+            <div style={{
+              padding: "clamp(1rem, 3vw, 1.5rem)",
+              background: "#fff3cd",
+              borderRadius: "12px",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+              border: "1px solid #ffc107"
+            }}>
+              <h3 style={{ marginTop: 0, marginBottom: "0.5rem", fontSize: "clamp(1rem, 3vw, 1.2rem)", color: "#856404" }}>
+                ⚠️ Kilo-Shaving Information
+              </h3>
+              <p style={{ margin: 0, color: "#666", fontSize: "clamp(0.9rem, 2.5vw, 1rem)", marginBottom: "0.5rem" }}>
+                <strong>Grace Period:</strong> You have <strong>48 hours</strong> after purchase to collect your order before kilo-shaving begins.
+              </p>
+              <p style={{ margin: 0, color: "#666", fontSize: "clamp(0.9rem, 2.5vw, 1rem)" }}>
+                <strong>Rate:</strong> {storageFeeRate.rateKgPerDay} kg per day per 100kg block (applies after the 48-hour grace period).
+              </p>
+            </div>
+          )}
         </div>
       )}
 

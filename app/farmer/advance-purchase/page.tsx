@@ -39,8 +39,10 @@ function CreateOfferForm({ farmerId, config, onDone }: { farmerId: Id<"users">; 
   const stillUploading = photos.some((p) => p.uploading);
   const canSubmit = !!productName.trim() && !!description.trim() && uploadedPhotoIds.length > 0 && !stillUploading;
 
+  const MAX_PHOTOS = 4;
+
   const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
+    const files = Array.from(e.target.files || []).slice(0, Math.max(0, MAX_PHOTOS - photos.length));
     e.target.value = "";
     for (const file of files) {
       const result = validateImageFile(file);
@@ -120,9 +122,21 @@ function CreateOfferForm({ farmerId, config, onDone }: { farmerId: Id<"users">; 
       />
 
       <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 600, color: "#333", marginBottom: "0.3rem" }}>
-        Photo gallery of the finished product / offering *
+        Photo gallery of the finished product / offering * ({photos.length}/{MAX_PHOTOS})
       </label>
-      <input type="file" accept="image/*" multiple onChange={handlePhotoSelect} style={{ marginBottom: "0.5rem" }} />
+      <input
+        type="file"
+        accept="image/*"
+        multiple
+        disabled={photos.length >= MAX_PHOTOS}
+        onChange={handlePhotoSelect}
+        style={{ marginBottom: "0.5rem" }}
+      />
+      {photos.length >= MAX_PHOTOS && (
+        <p style={{ fontSize: "0.78rem", color: "#888", margin: "0 0 0.5rem" }}>
+          Maximum of {MAX_PHOTOS} photos reached. Remove one to add another.
+        </p>
+      )}
       {photos.length > 0 && (
         <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.6rem" }}>
           {photos.map((p) => (

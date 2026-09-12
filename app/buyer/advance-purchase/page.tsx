@@ -29,15 +29,36 @@ export default function AdvancePurchaseMarketPage() {
 
   return (
     <div style={{ padding: "1rem", maxWidth: 720, margin: "0 auto", fontFamily: FONT }}>
-      <div style={{ marginBottom: "1rem" }}>
-        <Link href="/" style={{ color: "#1976d2", fontWeight: 600, fontSize: "0.9rem" }}>← Back to Dashboard</Link>
+      <div style={{
+        background: "rgba(20, 30, 20, 0.72)",
+        borderRadius: 12,
+        padding: "0.85rem 1rem",
+        marginBottom: "1.25rem",
+      }}>
+        <Link
+          href="/"
+          style={{
+            display: "inline-block",
+            color: "#fff",
+            fontWeight: 700,
+            fontSize: "0.85rem",
+            background: "rgba(255,255,255,0.15)",
+            border: "1px solid rgba(255,255,255,0.4)",
+            borderRadius: 8,
+            padding: "0.4rem 0.75rem",
+            textDecoration: "none",
+            marginBottom: "0.6rem",
+          }}
+        >
+          ← Back to Dashboard
+        </Link>
+        <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "#fff", marginBottom: "0.25rem" }}>
+          🌱 Advance Purchase Market
+        </h1>
+        <p style={{ color: "#eee", fontSize: "0.9rem", margin: 0 }}>
+          Fund a farmer&apos;s production ahead of harvest. Money is released to the farmer as each production stage is verified.
+        </p>
       </div>
-      <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "#2c2c2c", marginBottom: "0.25rem" }}>
-        🌱 Advance Purchase Market
-      </h1>
-      <p style={{ color: "#666", fontSize: "0.9rem", marginBottom: "1.25rem" }}>
-        Fund a farmer&apos;s production ahead of harvest. Money is released to the farmer as each production stage is verified.
-      </p>
 
       {myCommitments && myCommitments.length > 0 && (
         <div style={{ marginBottom: "1.5rem" }}>

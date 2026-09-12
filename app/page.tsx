@@ -2,7 +2,7 @@
 
 export const dynamic = "force-dynamic";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
@@ -15,6 +15,7 @@ import { TransporterDashboard } from "./components/TransporterDashboard";
 import { StoreDashboard } from "./components/StoreDashboard";
 import { Id } from "../convex/_generated/dataModel";
 import { getStoredUser, clearAuth } from "./utils/authStorage";
+import { NotificationMailbox } from "./components/NotificationMailbox";
 // import { useMutation } from "convex/react";
 // import { initializePushNotifications } from "./utils/pushNotifications";
 
@@ -26,27 +27,28 @@ import { getStoredUser, clearAuth } from "./utils/authStorage";
  * - System statistics
  */
 
+const profileMenuLinkStyle: CSSProperties = {
+  display: "block",
+  padding: "0.45rem 0.6rem",
+  borderRadius: "6px",
+  background: "#f5f5f5",
+  color: "#1a1a1a",
+  textDecoration: "none",
+  fontSize: "0.85rem",
+  fontWeight: 600,
+};
+
 export default function Home() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
-  const [isMobile, setIsMobile] = useState(false);
-  const [showCommunityTooltip, setShowCommunityTooltip] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const isSuperAdmin = user?.role === "admin" && user?.adminLevel !== "junior";
   const isCrmCommunityAdmin =
     user?.role === "admin" &&
     user?.adminLevel === "junior" &&
     user?.adminCategory === "community_crm";
   const crmCommunityId = isCrmCommunityAdmin ? user?.assignedCommunityIds?.[0] : null;
-  
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    checkMobile();
-    window.addEventListener("resize", checkMobile);
-    return () => window.removeEventListener("resize", checkMobile);
-  }, []);
-  
+
   // TODO: Initialize push notifications when pushNotifications API is available
   // Push notifications will be enabled once the API is properly generated
   // useEffect(() => {
@@ -194,265 +196,134 @@ export default function Home() {
       minHeight: "100vh",
       boxSizing: "border-box"
     }}>
-      <div style={{ 
-        marginBottom: "2rem", 
-        display: "flex", 
-        flexDirection: isMobile ? "column" : "row",
-        justifyContent: "space-between", 
-        alignItems: isMobile ? "flex-start" : "center",
-        gap: isMobile ? "1rem" : "0",
-        padding: "clamp(1rem, 3vw, 1.5rem)",
-        background: "rgba(255, 255, 255, 0.95)",
-        borderRadius: "12px",
-        boxShadow: "0 2px 8px rgba(0,0,0,0.1)"
+      <div style={{
+        marginBottom: "1rem",
+        display: "flex",
+        flexWrap: "wrap",
+        justifyContent: "space-between",
+        alignItems: "center",
+        gap: "0.6rem",
+        padding: "0.6rem 0.85rem",
+        background: "rgba(20, 30, 20, 0.75)",
+        borderRadius: "10px",
       }}>
-        <div style={{ flex: 1 }}>
-          <h1 style={{ 
-            fontSize: "clamp(1.5rem, 5vw, 2.5rem)", 
-            marginBottom: "0.5rem", 
-            color: "#2c2c2c",
-            fontWeight: "800",
-            fontFamily: '"Montserrat", sans-serif',
-            letterSpacing: "-0.03em",
-            textTransform: "uppercase",
-            textShadow: "0 1px 2px rgba(255,255,255,0.8)"
-          }}>
-            Farm2Market Uganda
-          </h1>
-          <p style={{ 
-            color: "#2e7d32", 
-            fontSize: "clamp(0.9rem, 3vw, 1.2rem)",
-            fontWeight: "600",
-            fontFamily: '"Montserrat", sans-serif',
-            letterSpacing: "0.1em",
-            textTransform: "uppercase"
-          }}>
-            Farm. Trace. Grow.
-          </p>
-          <div style={{
-            marginTop: "1rem",
-            display: "flex",
-            gap: "0.75rem",
-            flexWrap: "wrap"
-          }}>
-            <a
-              href="/api/download/android"
-              download="Farm2Market.apk"
+        <div style={{
+          fontWeight: 800,
+          color: "#fff",
+          fontSize: "clamp(0.95rem, 2.5vw, 1.15rem)",
+          fontFamily: '"Montserrat", sans-serif',
+          letterSpacing: "-0.02em",
+          textTransform: "uppercase",
+          whiteSpace: "nowrap",
+        }}>
+          Farm2Market
+        </div>
+
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+          {user?.userId && <NotificationMailbox userId={user.userId as Id<"users">} />}
+
+          <div style={{ position: "relative" }}>
+            <button
+              type="button"
+              onClick={() => setProfileMenuOpen((v) => !v)}
               style={{
-                display: "inline-block",
-                padding: "0.6rem 1.2rem",
-                background: "#ffffff",
-                color: "#111827",
-                textDecoration: "none",
-                borderRadius: "6px",
-                fontSize: "0.9rem",
-                fontWeight: "700",
-                border: "1px solid #111827",
-                minWidth: "130px",
-                textAlign: "center",
-                height: "auto",
-                lineHeight: "1.5",
-                transition: "background 0.3s"
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.35rem",
+                padding: "0.4rem 0.75rem",
+                borderRadius: "8px",
+                background: profileMenuOpen ? "#fff" : "rgba(255,255,255,0.15)",
+                color: profileMenuOpen ? "#1a1a1a" : "#fff",
+                border: "1px solid rgba(255,255,255,0.4)",
+                fontSize: "0.85rem",
+                fontWeight: 700,
+                cursor: "pointer",
               }}
-              onMouseEnter={(e) => e.currentTarget.style.background = "#f8fafc"}
-              onMouseLeave={(e) => e.currentTarget.style.background = "#ffffff"}
             >
-              Download APP
-            </a>
-            <a
-              href="/contact"
-              style={{
-                display: "inline-block",
-                padding: "0.6rem 1.2rem",
-                background: "#ffffff",
-                color: "#2e7d32",
-                textDecoration: "none",
-                borderRadius: "6px",
-                fontSize: "0.9rem",
-                fontWeight: "700",
-                border: "1px solid #2e7d32",
-                minWidth: "130px",
-                textAlign: "center",
-                height: "auto",
-                lineHeight: "1.5",
-                transition: "background 0.3s"
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.background = "#f8fff9"}
-              onMouseLeave={(e) => e.currentTarget.style.background = "#ffffff"}
-            >
-              Contact Us
-            </a>
-            <a
-              href="/privacy-policy"
-              style={{
-                display: "inline-block",
-                padding: "0.6rem 1.2rem",
-                background: "#ffffff",
-                color: "#2e7d32",
-                textDecoration: "none",
-                borderRadius: "6px",
-                fontSize: "0.9rem",
-                fontWeight: "700",
-                border: "1px solid #2e7d32",
-                minWidth: "130px",
-                textAlign: "center",
-                height: "auto",
-                lineHeight: "1.5",
-                transition: "background 0.3s"
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.background = "#f8fff9"}
-              onMouseLeave={(e) => e.currentTarget.style.background = "#ffffff"}
-            >
-              Privacy Policy
-            </a>
-            {(effectiveUser?.role === "farmer" || effectiveUser?.role === "trader" || effectiveUser?.role === "buyer" || effectiveUser?.role === "vendor" || effectiveUser?.role === "transporter" || effectiveUser?.role === "store" || isEffectiveSuperAdmin || (effectiveUser?.role === "admin" && effectiveUser?.adminCategory === "community") || isEffectiveCrmCommunityAdmin) && (
-              <a
-                href={
-                  isEffectiveSuperAdmin ? "/admin/communities" :
-                  isEffectiveCrmCommunityAdmin && effectiveCrmCommunityId ? `/community-only/crm-agent?communityId=${effectiveCrmCommunityId}` :
-                  effectiveUser?.adminCategory === "community" ? "/admin/community-dashboard" :
-                  "/farmer/communities"
-                }
-                style={{
-                  display: "inline-block",
-                  padding: "0.6rem 1.2rem",
-                  background: "#ffffff",
-                  color: "#1976d2",
-                  textDecoration: "none",
-                  borderRadius: "6px",
-                  fontSize: "0.9rem",
-                  fontWeight: "700",
-                  border: "1px solid #1565c0",
-                  minWidth: "130px",
-                  textAlign: "center",
-                  height: "auto",
-                  lineHeight: "1.5",
-                  transition: "background 0.3s"
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "#f5f9ff";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "#ffffff";
-                }}
-              >
-                {isEffectiveSuperAdmin ? "Create a Community" : isEffectiveCrmCommunityAdmin ? "CRM Agent Workspace" : effectiveUser?.adminCategory === "community" ? "Community Dashboard" : "Join A Community"}
-              </a>
+              👤 {effectiveUser?.alias || user?.alias || "Profile"} ▾
+            </button>
+            {profileMenuOpen && (
+              <>
+                <div onClick={() => setProfileMenuOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 19 }} />
+                <div style={{
+                  position: "absolute",
+                  top: "calc(100% + 0.4rem)",
+                  right: 0,
+                  zIndex: 20,
+                  minWidth: "230px",
+                  maxWidth: "88vw",
+                  background: "#fff",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: "10px",
+                  boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
+                  padding: "0.75rem",
+                  textAlign: "left",
+                }}>
+                  <p style={{ margin: "0 0 0.15rem", fontSize: "0.85rem", color: "#333" }}>
+                    Logged in as: <strong style={{ color: "#1a1a1a" }}>{effectiveUser?.alias || user?.alias || "Unknown"}</strong>
+                  </p>
+                  <p style={{ margin: "0 0 0.6rem", fontSize: "0.8rem", color: "#666", textTransform: "capitalize" }}>
+                    Role: {effectiveUser?.role || user?.role || "unknown"}
+                  </p>
+
+                  {(effectiveUser?.role === "farmer" || effectiveUser?.role === "trader" || effectiveUser?.role === "buyer" || effectiveUser?.role === "vendor" || effectiveUser?.role === "transporter" || effectiveUser?.role === "store") && (
+                    <div style={{ marginBottom: "0.6rem", paddingBottom: "0.6rem", borderBottom: "1px solid #eee" }}>
+                      <div style={{ fontWeight: 700, marginBottom: "0.3rem", color: "#1b5e20", fontSize: "0.8rem" }}>
+                        Communities ({memberCommunities.length})
+                      </div>
+                      {memberCommunities.length === 0 ? (
+                        <div style={{ color: "#6b7280", fontSize: "0.8rem" }}>No memberships yet.</div>
+                      ) : (
+                        <ul style={{ margin: 0, paddingLeft: "1rem", fontSize: "0.8rem", color: "#374151" }}>
+                          {memberCommunities.map((c: any) => (
+                            <li key={c.id}>{c.name}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                    <a href="/api/download/android" download="Farm2Market.apk" style={profileMenuLinkStyle}>
+                      Download App
+                    </a>
+                    <a href="/contact" style={profileMenuLinkStyle}>Contact Us</a>
+                    <a href="/privacy-policy" style={profileMenuLinkStyle}>Privacy Policy</a>
+                    {(effectiveUser?.role === "farmer" || effectiveUser?.role === "trader" || effectiveUser?.role === "buyer" || effectiveUser?.role === "vendor" || effectiveUser?.role === "transporter" || effectiveUser?.role === "store" || isEffectiveSuperAdmin || (effectiveUser?.role === "admin" && effectiveUser?.adminCategory === "community") || isEffectiveCrmCommunityAdmin) && (
+                      <a
+                        href={
+                          isEffectiveSuperAdmin ? "/admin/communities" :
+                          isEffectiveCrmCommunityAdmin && effectiveCrmCommunityId ? `/community-only/crm-agent?communityId=${effectiveCrmCommunityId}` :
+                          effectiveUser?.adminCategory === "community" ? "/admin/community-dashboard" :
+                          "/farmer/communities"
+                        }
+                        style={profileMenuLinkStyle}
+                      >
+                        {isEffectiveSuperAdmin ? "Create a Community" : isEffectiveCrmCommunityAdmin ? "CRM Agent Workspace" : effectiveUser?.adminCategory === "community" ? "Community Dashboard" : "Join A Community"}
+                      </a>
+                    )}
+                    <button
+                      onClick={() => clearAuth().finally(() => router.push("/login"))}
+                      style={{
+                        marginTop: "0.3rem",
+                        padding: "0.5rem 0.75rem",
+                        background: "#fff5f5",
+                        border: "1px solid #dc3545",
+                        borderRadius: "6px",
+                        cursor: "pointer",
+                        fontSize: "0.85rem",
+                        fontWeight: 700,
+                        color: "#dc3545",
+                        textAlign: "left",
+                      }}
+                    >
+                      Logout
+                    </button>
+                  </div>
+                </div>
+              </>
             )}
           </div>
-        </div>
-        <div style={{ 
-          textAlign: isMobile ? "left" : "right",
-          width: isMobile ? "100%" : "auto",
-          display: "flex",
-          flexDirection: "column",
-          gap: "0.5rem"
-        }}>
-          <p style={{ 
-            color: "#333", 
-            fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", 
-            marginBottom: "0",
-            fontWeight: "500"
-          }}>
-            Logged in as: <strong style={{ color: "#1a1a1a" }}>{effectiveUser?.alias || user?.alias || "Unknown"}</strong>
-          </p>
-          <p style={{ 
-            color: "#555", 
-            fontSize: "clamp(0.8rem, 2.5vw, 0.85rem)", 
-            marginBottom: "0",
-            textTransform: "capitalize"
-          }}>
-            Role: {effectiveUser?.role || user?.role || "unknown"}
-          </p>
-          {(effectiveUser?.role === "farmer" || effectiveUser?.role === "trader" || effectiveUser?.role === "buyer" || effectiveUser?.role === "vendor" || effectiveUser?.role === "transporter" || effectiveUser?.role === "store") && (
-            <div style={{ position: "relative", alignSelf: isMobile ? "flex-start" : "flex-end" }}>
-              <button
-                type="button"
-                aria-haspopup="true"
-                aria-expanded={showCommunityTooltip}
-                onClick={() => setShowCommunityTooltip((prev) => !prev)}
-                onMouseEnter={() => setShowCommunityTooltip(true)}
-                onMouseLeave={() => setShowCommunityTooltip(false)}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "0.4rem",
-                  padding: isMobile ? "0.5rem 0.85rem" : "0.35rem 0.6rem",
-                  borderRadius: "999px",
-                  background: "#eef7ff",
-                  color: "#1e5aa7",
-                  fontSize: isMobile ? "0.9rem" : "0.8rem",
-                  fontWeight: 600,
-                  border: "1px solid #cfe3ff",
-                  cursor: "pointer",
-                  width: isMobile ? "100%" : "auto",
-                  justifyContent: "center",
-                }}
-              >
-                Communities ({memberCommunities.length}) ⓘ
-              </button>
-              {showCommunityTooltip && (
-                <div
-                  onMouseEnter={() => setShowCommunityTooltip(true)}
-                  onMouseLeave={() => setShowCommunityTooltip(false)}
-                  style={{
-                    position: "absolute",
-                    top: "120%",
-                    right: isMobile ? "auto" : 0,
-                    left: isMobile ? 0 : "auto",
-                    zIndex: 10,
-                    minWidth: isMobile ? "100%" : "220px",
-                    maxWidth: isMobile ? "90vw" : "320px",
-                    background: "#ffffff",
-                    border: "1px solid #e5e7eb",
-                    borderRadius: "10px",
-                    boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
-                    padding: "0.75rem",
-                    textAlign: "left",
-                  }}
-                >
-                  <div style={{ fontWeight: 700, marginBottom: "0.5rem", color: "#1b5e20" }}>
-                    Your Communities
-                  </div>
-                  {memberCommunities.length === 0 ? (
-                    <div style={{ color: "#6b7280", fontSize: "0.85rem" }}>No memberships yet.</div>
-                  ) : (
-                    <ul style={{ margin: 0, paddingLeft: "1rem", fontSize: "0.85rem", color: "#374151" }}>
-                      {memberCommunities.map((c: any) => (
-                        <li key={c.id}>{c.name}</li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-          <button
-            onClick={() => {
-              clearAuth().finally(() => router.push("/login"));
-            }}
-            style={{
-              padding: "0.6rem 1.2rem",
-              background: "#ffffff",
-              border: "1px solid #dc3545",
-              borderRadius: "6px",
-              cursor: "pointer",
-              fontSize: "0.9rem",
-              fontWeight: "700",
-              color: "#dc3545",
-              display: "inline-block",
-              minWidth: "130px",
-              textAlign: "center",
-              height: "auto",
-              lineHeight: "1.5",
-              boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-              transition: "background 0.2s"
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.background = "#fff5f5"}
-            onMouseLeave={(e) => e.currentTarget.style.background = "#ffffff"}
-          >
-            Logout
-          </button>
         </div>
       </div>
 

@@ -206,8 +206,18 @@ export default function Home() {
           align-items: center;
           margin-bottom: 1rem;
           padding: 0.5rem 0.6rem;
-          background: linear-gradient(160deg, #8a5a2b 0%, #6b4423 100%);
+          background: linear-gradient(160deg, rgba(255,255,255,0.30) 0%, rgba(255,255,255,0.10) 100%);
+          backdrop-filter: blur(16px) saturate(180%);
+          -webkit-backdrop-filter: blur(16px) saturate(180%);
+          border: 1px solid rgba(255,255,255,0.4);
           border-radius: 10px;
+          box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+        }
+        .f2m-banner, .f2m-banner h2, .f2m-slot-brand {
+          text-shadow: 0 1px 3px rgba(0,0,0,0.35);
+        }
+        .f2m-icon-btn {
+          text-shadow: 0 1px 3px rgba(0,0,0,0.35);
         }
         .f2m-slot-brand { grid-area: brand; justify-self: start; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
         .f2m-slot-title { grid-area: title; justify-self: start; min-width: 0; overflow: hidden; }
@@ -262,12 +272,11 @@ export default function Home() {
       `}</style>
       <div className="f2m-banner has-dashboard-row">
         <div className="f2m-slot-brand" style={{
-            fontWeight: 800,
+            fontWeight: 700,
             color: "#fff",
-            fontSize: "clamp(0.85rem, 2.5vw, 1.15rem)",
+            fontSize: "clamp(1.15rem, 4.4vw, 1.5rem)",
             fontFamily: '"Montserrat", sans-serif',
             letterSpacing: "-0.02em",
-            textTransform: "uppercase",
             whiteSpace: "nowrap",
           }}>
             Farm2Market

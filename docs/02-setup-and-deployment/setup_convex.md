@@ -3,7 +3,7 @@
 ## Deployment Modes
 
 This project supports two deployment modes:
-- **Pilot Mode**: Stable deployment (`https://chatty-camel-373.convex.cloud`)
+- **Pilot Mode**: Stable deployment (`https://greedy-tortoise-911.convex.cloud`)
 - **Dev Mode**: Development deployment (separate Convex project)
 
 See `docs/setup_dev_mode.md` for setting up dev mode.
@@ -15,7 +15,7 @@ See `docs/setup_dev_mode.md` for setting up dev mode.
 Create a `.env.local` file in the project root:
 
 ```bash
-NEXT_PUBLIC_CONVEX_URL=https://chatty-camel-373.convex.cloud
+NEXT_PUBLIC_CONVEX_URL=https://greedy-tortoise-911.convex.cloud
 NEXT_PUBLIC_DEPLOYMENT_MODE=pilot
 ```
 
@@ -38,7 +38,7 @@ NEXT_PUBLIC_DEPLOYMENT_MODE=dev
 2. Navigate to **Settings** → **Environment Variables**
 3. Add variables:
    - **Name**: `NEXT_PUBLIC_CONVEX_URL`
-     - **Value**: `https://chatty-camel-373.convex.cloud`
+     - **Value**: `https://greedy-tortoise-911.convex.cloud`
      - **Environment**: Production, Preview, Development (select all)
    - **Name**: `NEXT_PUBLIC_DEPLOYMENT_MODE`
      - **Value**: `pilot`

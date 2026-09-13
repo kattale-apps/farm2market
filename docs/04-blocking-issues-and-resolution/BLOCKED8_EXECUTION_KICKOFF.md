@@ -61,7 +61,7 @@
 
 **Phase 1 Tasks**:
 1. Log in to Convex dashboard
-2. Verify access to pilot deployment (`chatty-camel-373` or `greedy-tortoise-911`)
+2. Verify access to pilot deployment (`greedy-tortoise-911`)
 3. Verify access to dev deployment (`adamant-armadillo-601`)
 4. Document dashboard URLs and project information
 5. Verify access credentials are secured

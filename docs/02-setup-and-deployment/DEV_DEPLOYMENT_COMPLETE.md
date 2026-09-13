@@ -51,7 +51,7 @@
 
 ### Test Pilot Deployment:
 - Your existing pilot project should still work at its URL
-- It uses: `https://chatty-camel-373.convex.cloud` (or your pilot URL)
+- It uses: `https://greedy-tortoise-911.convex.cloud` (or your pilot URL)
 
 ---
 
@@ -60,7 +60,7 @@
 ### Pilot Deployment ✅
 - **Vercel Project**: `farm2market` (existing)
 - **Branch**: `main`
-- **Convex URL**: `https://chatty-camel-373.convex.cloud` (or your pilot URL)
+- **Convex URL**: `https://greedy-tortoise-911.convex.cloud` (or your pilot URL)
 - **Mode**: `pilot`
 - **Status**: ✅ Active
 

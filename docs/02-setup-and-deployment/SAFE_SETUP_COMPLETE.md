@@ -39,7 +39,7 @@ I've set up the infrastructure for **two separate deployment modes** (pilot and 
 
 **Status**: ✅ **UNCHANGED AND WORKING**
 
-- Your existing Convex URL (`https://chatty-camel-373.convex.cloud`) continues to work
+- Your existing Convex URL (`https://greedy-tortoise-911.convex.cloud`) continues to work
 - Your existing Vercel project continues to work
 - No changes required to existing configuration
 - Default mode is `pilot` (backward compatible)
@@ -82,7 +82,7 @@ npm run deploy:dev
 ## 📋 Current State
 
 ### Pilot Mode ✅
-- **Convex URL**: `https://chatty-camel-373.convex.cloud`
+- **Convex URL**: `https://greedy-tortoise-911.convex.cloud`
 - **Status**: Working (unchanged)
 - **Mode**: `pilot` (default)
 

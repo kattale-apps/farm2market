@@ -12,8 +12,8 @@
 
 ## Pilot Deployment (Existing)
 
-- **Project Name**: `greedy-tortoise-911` (or `chatty-camel-373`)
-- **Convex URL**: `https://chatty-camel-373.convex.cloud` (or `https://greedy-tortoise-911.convex.cloud`)
+- **Project Name**: `greedy-tortoise-911`
+- **Convex URL**: `https://greedy-tortoise-911.convex.cloud`
 - **Type**: Pilot/Production Deployment
 - **Status**: ✅ Active
 
@@ -36,7 +36,7 @@ Keep these environment variables:
 
 | Name | Value | Environments |
 |------|-------|--------------|
-| `NEXT_PUBLIC_CONVEX_URL` | `https://chatty-camel-373.convex.cloud` (or your pilot URL) | Production, Preview, Development |
+| `NEXT_PUBLIC_CONVEX_URL` | `https://greedy-tortoise-911.convex.cloud` (or your pilot URL) | Production, Preview, Development |
 | `NEXT_PUBLIC_DEPLOYMENT_MODE` | `pilot` | Production, Preview, Development |
 
 ---

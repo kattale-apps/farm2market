@@ -5,7 +5,7 @@
 ## Pilot Deployment ✅ (Active)
 
 - **Status**: ✅ Working
-- **Convex URL**: `https://chatty-camel-373.convex.cloud`
+- **Convex URL**: `https://greedy-tortoise-911.convex.cloud`
 - **Deployment Mode**: `pilot` (default)
 - **Vercel Project**: Existing project (configured)
 - **Branch**: `main`

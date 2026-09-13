@@ -29,9 +29,9 @@
 
 **Current Deployments**:
 1. **Pilot Deployment**:
-   - **Project**: `chatty-camel-373` (or `greedy-tortoise-911`)
-   - **Convex URL**: `https://chatty-camel-373.convex.cloud`
-   - **Dashboard**: https://dashboard.convex.dev/d/chatty-camel-373
+   - **Project**: `greedy-tortoise-911`
+   - **Convex URL**: `https://greedy-tortoise-911.convex.cloud`
+   - **Dashboard**: https://dashboard.convex.dev/d/greedy-tortoise-911
    - **Type**: Production/Pilot
    - **Status**: Active
 
@@ -79,7 +79,7 @@
 
 **Verification Steps**:
 1. Log in to Convex dashboard: https://dashboard.convex.dev
-2. Navigate to project: `chatty-camel-373` (pilot) or `adamant-armadillo-601` (dev)
+2. Navigate to project: `greedy-tortoise-911` (pilot) or `adamant-armadillo-601` (dev)
 3. Look for "Backups", "Data", "Settings", or "Disaster Recovery" section
 4. Document backup frequency (e.g., "Continuous", "Daily", "Hourly", "Real-time")
 5. Document backup retention policy (e.g., "30 days", "7 days", "Point-in-time recovery")
@@ -144,12 +144,12 @@
 **Expected Access**:
 - **Dashboard URL**: https://dashboard.convex.dev
 - **Team**: `kattale-global`
-- **Projects**: `chatty-camel-373` (pilot), `adamant-armadillo-601` (dev)
+- **Projects**: `greedy-tortoise-911` (pilot), `adamant-armadillo-601` (dev)
 
 **Verification Steps**:
 1. Operator logs in to Convex dashboard: https://dashboard.convex.dev
 2. Verify access to team: `kattale-global`
-3. Verify access to pilot project: `chatty-camel-373`
+3. Verify access to pilot project: `greedy-tortoise-911`
 4. Verify access to dev project: `adamant-armadillo-601`
 5. Document access status (✅ Access confirmed or ❌ Access denied)
 
@@ -178,7 +178,7 @@
 
 **Verification Steps**:
 1. Log in to Convex dashboard
-2. Navigate to pilot project: `chatty-camel-373`
+2. Navigate to pilot project: `greedy-tortoise-911`
 3. Look for backup-related sections
 4. Document available backup information:
    - Backup snapshots list
@@ -449,7 +449,7 @@
 **Verification Method**:
 - Log in to Convex dashboard: https://dashboard.convex.dev
 - Verify access to team: `kattale-global`
-- Verify access to projects: `chatty-camel-373`, `adamant-armadillo-601`
+- Verify access to projects: `greedy-tortoise-911`, `adamant-armadillo-601`
 - Verify access to backup/restore sections
 
 ---
@@ -502,7 +502,7 @@
 **Evidence**:
 - Convex is a managed service (backups are provider-managed)
 - Dashboard URLs are available: https://dashboard.convex.dev
-- Projects are identified: `chatty-camel-373` (pilot), `adamant-armadillo-601` (dev)
+- Projects are identified: `greedy-tortoise-911` (pilot), `adamant-armadillo-601` (dev)
 - Team is identified: `kattale-global`
 - **Operator verification required** for all backup/restore procedures
 
@@ -510,7 +510,7 @@
 1. **Operator Verification** (MANDATORY):
    - Log in to Convex dashboard: https://dashboard.convex.dev
    - Verify access to team: `kattale-global`
-   - Verify access to projects: `chatty-camel-373`, `adamant-armadillo-601`
+   - Verify access to projects: `greedy-tortoise-911`, `adamant-armadillo-601`
    - Check backup information in dashboard
    - Review Convex documentation: https://docs.convex.dev
    - Document backup frequency, retention, storage
@@ -545,7 +545,7 @@
 1. **Operator Dashboard Access Verification**:
    - Log in to Convex dashboard: https://dashboard.convex.dev
    - Verify access to team: `kattale-global`
-   - Verify access to projects: `chatty-camel-373`, `adamant-armadillo-601`
+   - Verify access to projects: `greedy-tortoise-911`, `adamant-armadillo-601`
    - Document access status
 
 2. **Backup Procedures Verification**:
@@ -614,7 +614,7 @@
 
 ### Deployment Information
 
-- **Pilot Deployment**: `chatty-camel-373` (https://chatty-camel-373.convex.cloud)
+- **Pilot Deployment**: `greedy-tortoise-911` (https://greedy-tortoise-911.convex.cloud)
 - **Dev Deployment**: `adamant-armadillo-601` (https://adamant-armadillo-601.convex.cloud)
 - **Team**: `kattale-global`
 

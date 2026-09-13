@@ -80,7 +80,7 @@ NEXT_PUBLIC_DEPLOYMENT_MODE=dev
 
 ### Pilot Vercel Project (Keep as is)
 ```
-NEXT_PUBLIC_CONVEX_URL=https://chatty-camel-373.convex.cloud
+NEXT_PUBLIC_CONVEX_URL=https://greedy-tortoise-911.convex.cloud
 NEXT_PUBLIC_DEPLOYMENT_MODE=pilot
 ```
 

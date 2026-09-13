@@ -6,7 +6,7 @@ Create `.env.local` in your project root with:
 
 ```bash
 # Pilot Deployment Environment Variables
-NEXT_PUBLIC_CONVEX_URL=https://chatty-camel-373.convex.cloud
+NEXT_PUBLIC_CONVEX_URL=https://greedy-tortoise-911.convex.cloud
 NEXT_PUBLIC_DEPLOYMENT_MODE=pilot
 ```
 
@@ -27,7 +27,7 @@ NEXT_PUBLIC_DEPLOYMENT_MODE=dev
 
 | Name | Value | Environments |
 |------|-------|--------------|
-| `NEXT_PUBLIC_CONVEX_URL` | `https://chatty-camel-373.convex.cloud` | Production, Preview, Development |
+| `NEXT_PUBLIC_CONVEX_URL` | `https://greedy-tortoise-911.convex.cloud` | Production, Preview, Development |
 | `NEXT_PUBLIC_DEPLOYMENT_MODE` | `pilot` | Production, Preview, Development |
 
 ### Dev Vercel Project

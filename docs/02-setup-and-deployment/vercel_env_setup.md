@@ -8,7 +8,7 @@ The Convex client requires the deployment URL to be available at **runtime** in 
 
 | Name | Value | Environments |
 |------|-------|--------------|
-| `NEXT_PUBLIC_CONVEX_URL` | `https://chatty-camel-373.convex.cloud` | ✅ Production<br>✅ Preview<br>✅ Development |
+| `NEXT_PUBLIC_CONVEX_URL` | `https://greedy-tortoise-911.convex.cloud` | ✅ Production<br>✅ Preview<br>✅ Development |
 
 ### How to Set in Vercel
 
@@ -16,7 +16,7 @@ The Convex client requires the deployment URL to be available at **runtime** in 
 2. Click **Add New**
 3. Enter:
    - **Name**: `NEXT_PUBLIC_CONVEX_URL`
-   - **Value**: `https://chatty-camel-373.convex.cloud`
+   - **Value**: `https://greedy-tortoise-911.convex.cloud`
    - **Environments**: Select all three (Production, Preview, Development)
 4. Click **Save**
 5. **Redeploy** your application (environment variables are injected at build time)

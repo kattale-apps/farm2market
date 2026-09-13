@@ -40,7 +40,7 @@ Now that `develop` is visible in Vercel:
 ### Pilot Deployment (Unchanged)
 - **Vercel**: `farm2market` project
 - **Branch**: `main`
-- **Convex**: `https://chatty-camel-373.convex.cloud` (or your pilot URL)
+- **Convex**: `https://greedy-tortoise-911.convex.cloud` (or your pilot URL)
 - **Mode**: `pilot`
 - **Status**: ✅ Active and stable
 

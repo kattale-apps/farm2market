@@ -485,7 +485,8 @@ export default defineSchema({
     userRole: v.union(v.literal("trader"), v.literal("buyer")),
     amount: v.number(), // Amount in UGX
     currency: v.string(), // Currency code (e.g., "UGX")
-    pesapalOrderTrackingId: v.string(), // Pesapal order tracking ID
+    pesapalOrderTrackingId: v.string(), // Pesapal's own order tracking ID (returned by SubmitOrderRequest, echoed on the callback/IPN)
+    pesapalMerchantReference: v.optional(v.string()), // Our F2M-... reference sent to Pesapal as `id`
     pesapalPaymentReference: v.optional(v.string()), // Pesapal payment reference
     status: v.union(
       v.literal("pending"), // Payment initiated, awaiting completion
@@ -503,6 +504,7 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_status", ["status"])
     .index("by_pesapal_order", ["pesapalOrderTrackingId"])
+    .index("by_merchant_reference", ["pesapalMerchantReference"])
     .index("by_wallet_utid", ["walletDepositUtid"]),
 
   /**
@@ -1445,7 +1447,8 @@ export default defineSchema({
    * - One successful payment can only be consumed once by a form response
    */
   extensionWorkPaymentIntents: defineTable({
-    orderTrackingId: v.string(),
+    orderTrackingId: v.string(), // Pesapal's own order tracking ID
+    merchantReference: v.optional(v.string()), // Our F2M-... reference sent to Pesapal as `id`
     memberId: v.id("users"),
     communityId: v.id("communities"),
     formId: v.id("communityForms"),
@@ -1465,6 +1468,7 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_order_tracking", ["orderTrackingId"])
+    .index("by_merchant_reference", ["merchantReference"])
     .index("by_member_form", ["memberId", "formId"])
     .index("by_member_form_status", ["memberId", "formId", "status"])
     .index("by_form", ["formId"]),

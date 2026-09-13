@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -31,6 +31,12 @@ export default function AdvancePurchaseOfferDetailPage() {
   const router = useRouter();
   const { user, status } = useStoredUser();
   const offer = useQuery(api.advancePurchase.getOfferDetail, { offerId: offerId as Id<"advancePurchaseOffers"> });
+  const walletBalance = useQuery(
+    api.buyerDashboard.getBuyerWalletBalance,
+    user?.userId && user.role === "buyer"
+      ? { buyerId: user.userId as Id<"users"> }
+      : "skip"
+  );
   const createCommitment = useMutation(api.advancePurchase.createCommitment);
   const createProposal = useMutation(api.advancePurchase.createProposal);
 
@@ -44,6 +50,23 @@ export default function AdvancePurchaseOfferDetailPage() {
   const [proposedQty, setProposedQty] = useState<string>("");
   const [proposalMsg, setProposalMsg] = useState("");
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [justToppedUp, setJustToppedUp] = useState(false);
+
+  // A buyer sent to the wallet to top up comes back here with their order
+  // spelled out in the query string, so they resume where they left off
+  // instead of re-entering quantity, delivery and insurance.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const qty = Number(params.get("qty"));
+    if (Number.isFinite(qty) && qty > 0) setQuantity(qty);
+    const delivery = params.get("delivery");
+    if (delivery) setDeliveryOptionKey(delivery);
+    if (params.get("insurance") === "1") setInsuranceOpted(true);
+    if ((params.get("paymentStatus") || "").toLowerCase().includes("complet")) {
+      setJustToppedUp(true);
+    }
+  }, []);
 
   const handleDownload = async (url: string) => {
     try {
@@ -81,7 +104,33 @@ export default function AdvancePurchaseOfferDetailPage() {
   const baseTotal = offer.unitPrice * quantity;
   const grandTotal = baseTotal + deliveryFee + insuranceFee;
 
+  // Advanced Markets is funded out of the buyer's wallet, so a buyer who has
+  // never deposited cannot commit. Rather than dead-ending them on an
+  // "insufficient balance" error, send them to the wallet top-up with the
+  // shortfall pre-filled and a return path back to this offer.
+  const availableBalance = walletBalance?.balance ?? null;
+  const shortfall =
+    availableBalance === null ? null : Math.max(0, grandTotal - availableBalance);
+  const needsTopUp = shortfall !== null && shortfall > 0;
+
+  const goToWalletTopUp = (amountNeeded: number) => {
+    const resume = new URLSearchParams({ qty: String(quantity) });
+    if (deliveryOptionKey) resume.set("delivery", deliveryOptionKey);
+    if (insuranceOpted) resume.set("insurance", "1");
+    const returnTo = `/buyer/advance-purchase/${offer._id}?${resume.toString()}`;
+    router.push(
+      `/?deposit=${Math.ceil(amountNeeded)}` +
+        `&returnTo=${encodeURIComponent(returnTo)}` +
+        `&depositReason=${encodeURIComponent(`Fund "${offer.productName}" in Advanced Markets`)}`
+    );
+  };
+
   const handleFund = async () => {
+    if (needsTopUp && shortfall !== null) {
+      goToWalletTopUp(shortfall);
+      return;
+    }
+
     setBusy(true);
     setError(null);
     try {
@@ -94,8 +143,14 @@ export default function AdvancePurchaseOfferDetailPage() {
       });
       router.push(`/buyer/advance-purchase/commitment/${result._id}`);
     } catch (err) {
-      setError((err as Error).message);
-    } finally {
+      // The balance query can lag behind a concurrent purchase, so honour the
+      // shortfall the server reports and route to the top-up anyway.
+      const data = (err as any)?.data;
+      if (data?.code === "INSUFFICIENT_WALLET_BALANCE") {
+        goToWalletTopUp(Number(data.shortfall) || grandTotal);
+        return;
+      }
+      setError(data?.message || (err as Error).message);
       setBusy(false);
     }
   };
@@ -201,7 +256,45 @@ export default function AdvancePurchaseOfferDetailPage() {
           {deliveryFee > 0 && <div>Delivery fee: UGX {deliveryFee.toLocaleString()}</div>}
           {insuranceFee > 0 && <div>Insurance: UGX {insuranceFee.toLocaleString()}</div>}
           <div style={{ fontWeight: 700, marginTop: "0.4rem" }}>Total due: UGX {Math.round(grandTotal).toLocaleString()}</div>
+          {availableBalance !== null && (
+            <div style={{ marginTop: "0.35rem", color: needsTopUp ? "#c62828" : "#2e7d32" }}>
+              Wallet balance: UGX {Math.round(availableBalance).toLocaleString()}
+              {needsTopUp && shortfall !== null
+                ? ` — UGX ${Math.round(shortfall).toLocaleString()} short`
+                : " — enough to fund this order"}
+            </div>
+          )}
         </div>
+
+        {needsTopUp && shortfall !== null && (
+          <div style={{
+            marginTop: "0.75rem",
+            padding: "0.7rem 0.8rem",
+            background: "#fff8e1",
+            border: "1px solid #ffe082",
+            borderRadius: 8,
+            fontSize: "0.85rem",
+            color: "#7a5c00",
+          }}>
+            Your wallet does not yet cover this order. Tap below to top up UGX{" "}
+            {Math.round(shortfall).toLocaleString()} via Pesapal — we&apos;ll bring you
+            straight back here afterwards.
+          </div>
+        )}
+
+        {justToppedUp && !needsTopUp && (
+          <div style={{
+            marginTop: "0.75rem",
+            padding: "0.7rem 0.8rem",
+            background: "#e8f5e9",
+            border: "1px solid #a5d6a7",
+            borderRadius: 8,
+            fontSize: "0.85rem",
+            color: "#1b5e20",
+          }}>
+            Your wallet top-up went through. Tap &quot;Deposit in Advance&quot; to fund this order.
+          </div>
+        )}
 
         {error && <p style={{ color: "#d32f2f", fontSize: "0.85rem", marginTop: "0.5rem" }}>{error}</p>}
 
@@ -213,7 +306,7 @@ export default function AdvancePurchaseOfferDetailPage() {
             marginTop: "0.9rem",
             width: "100%",
             padding: "0.9rem",
-            background: busy ? "#a5d6a7" : "#2e7d32",
+            background: busy ? "#a5d6a7" : needsTopUp ? "#1976d2" : "#2e7d32",
             color: "#fff",
             border: "none",
             borderRadius: 10,
@@ -222,7 +315,11 @@ export default function AdvancePurchaseOfferDetailPage() {
             cursor: busy ? "not-allowed" : "pointer",
           }}
         >
-          {busy ? "Processing..." : "Deposit in Advance"}
+          {busy
+            ? "Processing..."
+            : needsTopUp && shortfall !== null
+              ? `Top up UGX ${Math.round(shortfall).toLocaleString()} to continue`
+              : "Deposit in Advance"}
         </button>
 
         {offer.negotiationAllowed && (

@@ -2725,6 +2725,11 @@ export default defineSchema({
     deliveryLocation: v.optional(v.string()),
     expectedDeliveryDate: v.optional(v.string()), // ISO
     deliveryWindowDays: v.optional(v.number()),
+    // Payment split. cashPercent is the source of truth (0-100); the two
+    // component amounts are derived from it against the offer's total value so
+    // every existing consumer keeps reading absolute UGX. Offers created before
+    // the ratio existed have no cashPercent and keep their stored amounts.
+    cashPercent: v.optional(v.number()),
     cashComponent: v.optional(v.number()),
     inKindComponent: v.optional(v.number()),
     inKindInputs: v.optional(v.array(v.string())),

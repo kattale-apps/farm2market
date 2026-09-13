@@ -252,7 +252,7 @@ export default function AdvancePurchaseOfferDetailPage() {
 
         <div style={{ background: "#f5f5f5", borderRadius: 8, padding: "0.75rem", fontSize: "0.85rem" }}>
           <div>Cash to seller: UGX {Math.round(baseTotal - inKindShare).toLocaleString()}</div>
-          {offer.inKindComponent != null && <div>In-kind inputs: UGX {Math.round(inKindShare).toLocaleString()}</div>}
+          {inKindShare > 0 && <div>In-kind inputs: UGX {Math.round(inKindShare).toLocaleString()}</div>}
           {deliveryFee > 0 && <div>Delivery fee: UGX {deliveryFee.toLocaleString()}</div>}
           {insuranceFee > 0 && <div>Insurance: UGX {insuranceFee.toLocaleString()}</div>}
           <div style={{ fontWeight: 700, marginTop: "0.4rem" }}>Total due: UGX {Math.round(grandTotal).toLocaleString()}</div>

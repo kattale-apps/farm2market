@@ -327,6 +327,30 @@ export const listConfigsAvailableToFarmer = query({
   },
 });
 
+/**
+ * Split an offer's total value into cash and in-kind amounts.
+ *
+ * Farmers set the split as a ratio out of 100 (e.g. 50:50). The absolute
+ * amounts are derived here so that buyers, commitments and milestone releases
+ * keep working in UGX without knowing about percentages, and so the split stays
+ * correct when the unit price or quantity later changes.
+ */
+function splitByCashPercent(
+  cashPercent: number,
+  unitPrice: number,
+  totalQuantity: number,
+): { cashComponent: number; inKindComponent: number } {
+  const total = unitPrice * totalQuantity;
+  const cashComponent = Math.round(total * (cashPercent / 100));
+  return { cashComponent, inKindComponent: Math.round(total) - cashComponent };
+}
+
+function assertValidCashPercent(cashPercent: number) {
+  if (!Number.isFinite(cashPercent) || cashPercent < 0 || cashPercent > 100) {
+    throw new Error("The cash share must be a percentage between 0 and 100");
+  }
+}
+
 export const createOffer = mutation({
   args: {
     farmerId: v.id("users"),
@@ -344,6 +368,7 @@ export const createOffer = mutation({
     deliveryLocation: v.optional(v.string()),
     expectedDeliveryDate: v.optional(v.string()),
     deliveryWindowDays: v.optional(v.number()),
+    cashPercent: v.optional(v.number()),
     cashComponent: v.optional(v.number()),
     inKindComponent: v.optional(v.number()),
     inKindInputs: v.optional(v.array(v.string())),
@@ -376,6 +401,7 @@ export const createOffer = mutation({
     if (args.unitPrice <= 0 || args.totalQuantity <= 0) {
       throw new Error("Unit price and quantity must be positive");
     }
+    if (args.cashPercent !== undefined) assertValidCashPercent(args.cashPercent);
     if (!args.description.trim()) {
       throw new Error("A description of the product is required");
     }
@@ -419,8 +445,13 @@ export const createOffer = mutation({
       deliveryLocation: args.deliveryLocation,
       expectedDeliveryDate: args.expectedDeliveryDate,
       deliveryWindowDays: args.deliveryWindowDays,
-      cashComponent: args.cashComponent,
-      inKindComponent: args.inKindComponent,
+      cashPercent: args.cashPercent,
+      ...(args.cashPercent !== undefined
+        ? splitByCashPercent(args.cashPercent, args.unitPrice, args.totalQuantity)
+        : {
+            cashComponent: args.cashComponent,
+            inKindComponent: args.inKindComponent,
+          }),
       inKindInputs: args.inKindInputs,
       recurrence: args.recurrence,
       offerKind: config.offerKind,
@@ -477,6 +508,7 @@ export const updateOffer = mutation({
     deliveryLocation: v.optional(v.string()),
     expectedDeliveryDate: v.optional(v.string()),
     deliveryWindowDays: v.optional(v.number()),
+    cashPercent: v.optional(v.number()),
     cashComponent: v.optional(v.number()),
     inKindComponent: v.optional(v.number()),
     inKindInputs: v.optional(v.array(v.string())),
@@ -511,7 +543,84 @@ export const updateOffer = mutation({
       }
     }
     const { offerId, farmerId, ...patch } = args;
+
+    // Keep the derived amounts consistent with the ratio. This has to rerun
+    // whenever the ratio, the unit price or the quantity changes, otherwise the
+    // stored split would silently stop matching the percentage the farmer set.
+    const effectiveCashPercent =
+      args.cashPercent !== undefined ? args.cashPercent : (offer as any).cashPercent;
+    if (effectiveCashPercent !== undefined && effectiveCashPercent !== null) {
+      assertValidCashPercent(effectiveCashPercent);
+      const unitPrice = args.unitPrice !== undefined ? args.unitPrice : offer.unitPrice;
+      const totalQuantity =
+        args.totalQuantity !== undefined ? args.totalQuantity : offer.totalQuantity;
+      Object.assign(
+        patch,
+        splitByCashPercent(effectiveCashPercent, unitPrice, totalQuantity),
+      );
+    }
+
     await ctx.db.patch(args.offerId, { ...patch, updatedAt: getUgandaTime() });
+    return { success: true };
+  },
+});
+
+/**
+ * Permanently remove an offer that no buyer has committed to.
+ *
+ * cancelOffer only flips the status, which leaves abandoned drafts and
+ * mistakes cluttering the farmer's list forever. Deleting is only safe while
+ * quantityCommitted is 0 — once money is locked against an offer the
+ * commitment and its milestone history must survive.
+ */
+export const deleteOffer = mutation({
+  args: { offerId: v.id("advancePurchaseOffers"), farmerId: v.id("users") },
+  handler: async (ctx, args) => {
+    const offer = await ctx.db.get(args.offerId);
+    if (!offer) throw new Error("Offer not found");
+    if (String(offer.farmerId) !== String(args.farmerId)) {
+      throw new Error("You can only delete your own offer");
+    }
+    if (offer.quantityCommitted > 0) {
+      throw new Error(
+        "This offer has buyer commitments and cannot be deleted. Contact your community admin.",
+      );
+    }
+
+    // Defend against a commitment that exists without quantityCommitted having
+    // been updated: the counter must never be the only thing standing between a
+    // buyer's locked funds and a delete.
+    const commitments = await ctx.db
+      .query("advancePurchaseCommitments")
+      .withIndex("by_offer", (q: any) => q.eq("offerId", args.offerId))
+      .collect();
+    if (commitments.length > 0) {
+      throw new Error(
+        "This offer has buyer commitments and cannot be deleted. Contact your community admin.",
+      );
+    }
+
+    // Milestones and proposals are meaningless without the offer.
+    const milestones = await ctx.db
+      .query("advancePurchaseMilestones")
+      .withIndex("by_offer", (q: any) => q.eq("offerId", args.offerId))
+      .collect();
+    for (const m of milestones) {
+      const evidence = await ctx.db
+        .query("advancePurchaseEvidence")
+        .withIndex("by_milestone", (q: any) => q.eq("milestoneId", m._id))
+        .collect();
+      for (const e of evidence) await ctx.db.delete(e._id);
+      await ctx.db.delete(m._id);
+    }
+
+    const proposals = await ctx.db
+      .query("advancePurchaseProposals")
+      .withIndex("by_offer", (q: any) => q.eq("offerId", args.offerId))
+      .collect();
+    for (const pr of proposals) await ctx.db.delete(pr._id);
+
+    await ctx.db.delete(args.offerId);
     return { success: true };
   },
 });

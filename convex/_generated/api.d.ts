@@ -14,6 +14,7 @@ import type * as adminFinance from "../adminFinance.js";
 import type * as adminListings from "../adminListings.js";
 import type * as adminRedFlags from "../adminRedFlags.js";
 import type * as adminRoleManagement from "../adminRoleManagement.js";
+import type * as adminUsers from "../adminUsers.js";
 import type * as advancePurchase from "../advancePurchase.js";
 import type * as auth from "../auth.js";
 import type * as auth_index from "../auth/index.js";
@@ -123,6 +124,7 @@ declare const fullApi: ApiFromModules<{
   adminListings: typeof adminListings;
   adminRedFlags: typeof adminRedFlags;
   adminRoleManagement: typeof adminRoleManagement;
+  adminUsers: typeof adminUsers;
   advancePurchase: typeof advancePurchase;
   auth: typeof auth;
   "auth/index": typeof auth_index;

@@ -116,7 +116,7 @@ Both deployments run simultaneously with completely separate:
    - Start the Convex development server
 
    **Or manually set the Convex URL**:
-   - Create `.env.local` with: `NEXT_PUBLIC_CONVEX_URL=https://chatty-camel-373.convex.cloud`
+   - Create `.env.local` with: `NEXT_PUBLIC_CONVEX_URL=https://greedy-tortoise-911.convex.cloud`
    - For Vercel: Add this as an environment variable in project settings
    - See [setup_convex](docs/02-setup-and-deployment/setup_convex.md) for detailed instructions
 

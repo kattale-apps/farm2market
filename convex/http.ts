@@ -23,8 +23,8 @@ const http = httpRouter();
  * 2. Look for "Site URL" or check your deployment URL
  * 3. Your webhook will be: {your-site-url}/pesapal/webhook
  * 
- * Example: If your Convex URL is https://chatty-camel-373.convex.cloud
- *          Your webhook URL is: https://chatty-camel-373.convex.site/pesapal/webhook
+ * Example: If your Convex URL is https://greedy-tortoise-911.convex.cloud
+ *          Your webhook URL is: https://greedy-tortoise-911.convex.site/pesapal/webhook
  * 
  * Note: Convex HTTP endpoints use .convex.site domain (different from .convex.cloud)
  * 4. Get the notification_id from Pesapal after registration

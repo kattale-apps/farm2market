@@ -161,7 +161,7 @@ After deployment:
 - URL: Your current `farm2market` Vercel URL
 - Branch: `main`
 - Mode: `pilot`
-- Convex: `https://chatty-camel-373.convex.cloud`
+- Convex: `https://greedy-tortoise-911.convex.cloud`
 
 **Dev Project** (new):
 - URL: `farm2market-dev.vercel.app` (or your custom domain)

@@ -38,7 +38,7 @@ npx convex deploy --dry-run
 
 **Common mismatch:**
 - Deployed to: `https://amicable-dotterel-244.convex.cloud`
-- Vercel URL set to: `https://chatty-camel-373.convex.cloud`
+- Vercel URL set to: `https://greedy-tortoise-911.convex.cloud`
 - ❌ These don't match!
 
 ### 3. Check Network Tab

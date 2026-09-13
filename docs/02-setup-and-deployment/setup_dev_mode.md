@@ -11,7 +11,7 @@ This guide walks you through setting up the dev deployment mode **without affect
 ## Current State
 
 **Pilot Deployment (Existing - DO NOT CHANGE):**
-- Convex URL: `https://chatty-camel-373.convex.cloud`
+- Convex URL: `https://greedy-tortoise-911.convex.cloud`
 - Mode: `pilot` (defaults if not set)
 - Status: ✅ Working
 
@@ -90,7 +90,7 @@ This guide walks you through setting up the dev deployment mode **without affect
 
 1. **Check your existing pilot Vercel project**
 2. **Verify environment variables:**
-   - `NEXT_PUBLIC_CONVEX_URL` should be `https://chatty-camel-373.convex.cloud`
+   - `NEXT_PUBLIC_CONVEX_URL` should be `https://greedy-tortoise-911.convex.cloud`
    - `NEXT_PUBLIC_DEPLOYMENT_MODE` should be `pilot` (or not set, defaults to pilot)
 3. **Visit pilot URL** - should work exactly as before
 
@@ -122,7 +122,7 @@ If you want to test dev mode locally:
 2. **Or use pilot mode locally** (default):
    ```bash
    # For pilot mode local testing
-   NEXT_PUBLIC_CONVEX_URL=https://chatty-camel-373.convex.cloud
+   NEXT_PUBLIC_CONVEX_URL=https://greedy-tortoise-911.convex.cloud
    NEXT_PUBLIC_DEPLOYMENT_MODE=pilot
    ```
 
@@ -197,7 +197,7 @@ If you want to test dev mode locally:
 
 ### Pilot Deployment
 - **Vercel Project**: Your existing project
-- **Convex URL**: `https://chatty-camel-373.convex.cloud`
+- **Convex URL**: `https://greedy-tortoise-911.convex.cloud`
 - **Mode**: `pilot`
 - **Branch**: `main` (or `master`)
 

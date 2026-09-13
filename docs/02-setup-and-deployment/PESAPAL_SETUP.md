@@ -11,7 +11,26 @@ To use Pesapal payments, you must set the following environment variables in **C
 | `PESAPAL_CONSUMER_KEY`    | Your Pesapal Consumer Key                        | `<set-in-convex-dashboard>` | Yes                          |
 | `PESAPAL_CONSUMER_SECRET` | Your Pesapal Consumer Secret                     | `<set-in-convex-dashboard>` | Yes                          |
 | `PESAPAL_ENV`             | Environment: `sandbox` or `production`           | `sandbox`                   | No (defaults to sandbox)     |
-| `PESAPAL_NOTIFICATION_ID` | IPN Notification ID (if registered with Pesapal) | `abc123-def456-ghi789`      | No (only if IPN is required) |
+| `PESAPAL_NOTIFICATION_ID` | IPN Notification ID registered with Pesapal      | `abc123-def456-ghi789`      | Yes                          |
+| `PESAPAL_APP_BASE_URL`    | Public site URL used to rebuild callback/cancel URLs when the app reports a non-public origin (Capacitor reports `http://localhost`) | `https://farm2market-dev.vercel.app` | No (recommended, required for the Android app) |
+
+### Diagnosing a failed payment
+
+Payment failures raise a `ConvexError`, so the real Pesapal reason reaches the
+browser instead of a bare "Server Error". Two read-only checks help confirm the
+deployment itself is configured:
+
+```bash
+# Which variables this deployment can see
+npx convex run pesapal:checkPesapalConfig '{}'
+
+# Whether PESAPAL_NOTIFICATION_ID matches an IPN URL registered with Pesapal.
+# A mismatch here is the usual cause of "Invalid IPN URL ID" rejections.
+npx convex run pesapal:checkPesapalIpnRegistration '{}'
+```
+
+Add `--prod` to either command to check the production deployment. Environment
+variables are per-deployment: setting them on dev does **not** set them on prod.
 
 ### How to Set in Convex Dashboard
 

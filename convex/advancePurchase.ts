@@ -20,7 +20,7 @@
  *   generateUploadUrl; this file just stores the resulting imageMetadata.
  */
 
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { generateUTID, getUgandaTime } from "./utils";
 import { checkPilotMode } from "./pilotMode";
@@ -918,9 +918,18 @@ export const createCommitment = mutation({
       .first();
     const currentBalance = currentEntry?.balanceAfter || 0;
     if (currentBalance < grandTotal) {
-      throw new Error(
-        `Insufficient wallet balance. Required: ${grandTotal.toFixed(2)} UGX, Available: ${currentBalance.toFixed(2)} UGX. Top up your wallet via Pesapal first.`
-      );
+      // ConvexError (not Error) so the shortfall survives production error
+      // redaction: the buyer's offer page reads it and sends them straight to
+      // the wallet top-up instead of showing a dead end.
+      throw new ConvexError({
+        code: "INSUFFICIENT_WALLET_BALANCE",
+        message:
+          `Insufficient wallet balance. Required: UGX ${Math.round(grandTotal).toLocaleString()}, ` +
+          `available: UGX ${Math.round(currentBalance).toLocaleString()}. Top up your wallet first.`,
+        required: grandTotal,
+        available: currentBalance,
+        shortfall: grandTotal - currentBalance,
+      });
     }
 
     const now = getUgandaTime();

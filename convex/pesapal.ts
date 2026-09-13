@@ -8,7 +8,7 @@
  * - Webhook/callback handling
  */
 
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { api, internal } from "./_generated/api";
 import {
   action,
@@ -65,6 +65,270 @@ function extractIdFromUrl(
 }
 
 /**
+ * Every user-facing Pesapal failure is raised as a ConvexError.
+ *
+ * Convex redacts plain `Error` messages on production deployments — the client
+ * only ever sees "Server Error", which is what made these failures impossible
+ * to diagnose from the buyer dashboard. ConvexError data survives that
+ * redaction, so the real Pesapal reason reaches the UI.
+ */
+export function pesapalError(
+  code: string,
+  message: string,
+  extra?: Record<string, any>,
+): ConvexError<any> {
+  return new ConvexError({ code, message, ...(extra || {}) });
+}
+
+/**
+ * Pesapal validates billing names: generated aliases such as "buyer_snd6uu"
+ * are rejected because of the underscore and digits. Strip anything that is
+ * not a letter, space, apostrophe or hyphen and fall back to a safe default.
+ */
+function sanitizeBillingName(
+  value: string | undefined,
+  fallback: string,
+): string {
+  const cleaned = (value || "")
+    .replace(/_+/g, " ")
+    .replace(/[^A-Za-z '-]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned.length >= 2 ? cleaned.slice(0, 40) : fallback;
+}
+
+/**
+ * Pesapal expects a phone number as digits only.
+ */
+function sanitizePhone(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const digits = String(value).replace(/[^0-9]/g, "");
+  return digits.length >= 9 ? digits : undefined;
+}
+
+/**
+ * Pesapal rejects amounts that are not positive numbers with at most two
+ * decimal places.
+ */
+function normalizeAmount(amount: number): number {
+  if (typeof amount !== "number" || !Number.isFinite(amount) || amount <= 0) {
+    throw pesapalError(
+      "INVALID_AMOUNT",
+      "Enter a valid amount greater than zero before paying.",
+    );
+  }
+  return Math.round(amount * 100) / 100;
+}
+
+/**
+ * callback_url / cancellation_url must be absolute, publicly reachable http(s)
+ * URLs. Native shells (Capacitor) report origins like "capacitor://localhost",
+ * which Pesapal rejects outright — fall back to the configured public app URL.
+ */
+function normalizeReturnUrl(value: string, label: string): string {
+  const fallbackBase = (process.env.PESAPAL_APP_BASE_URL || "").replace(
+    /\/+$/,
+    "",
+  );
+
+  const parse = (candidate: string): URL | null => {
+    try {
+      const parsed = new URL(candidate);
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:")
+        return null;
+      return parsed;
+    } catch {
+      return null;
+    }
+  };
+
+  const direct = parse(value);
+  const isLoopback =
+    !!direct &&
+    (direct.hostname === "localhost" || direct.hostname === "127.0.0.1");
+
+  // A native shell (Capacitor) reports "http://localhost", which Pesapal cannot
+  // redirect a phone browser back to. Rewrite it onto the deployed site when
+  // one is configured; otherwise let it through so local development still
+  // works against the sandbox.
+  if (direct && !isLoopback) return direct.toString();
+
+  if (fallbackBase) {
+    const path = direct
+      ? `${direct.pathname}${direct.search}`
+      : value.startsWith("/")
+        ? value
+        : "/";
+    const rebuilt = parse(`${fallbackBase}${path}`);
+    if (rebuilt) return rebuilt.toString();
+  }
+
+  if (direct) return direct.toString();
+
+  throw pesapalError(
+    "INVALID_RETURN_URL",
+    `Cannot start the payment because the ${label} (${value || "empty"}) is not an http(s) address. ` +
+      `Set PESAPAL_APP_BASE_URL in the Convex environment variables to your deployed site URL.`,
+  );
+}
+
+/**
+ * Single place where a Pesapal order is submitted.
+ *
+ * Every caller (buyer deposit, trader deposit, extension-work form payment)
+ * goes through this so they cannot drift apart again. It returns *Pesapal's*
+ * order tracking id — the value Pesapal echoes back on the callback and the
+ * only value GetTransactionStatus accepts — alongside our own merchant
+ * reference.
+ */
+async function submitPesapalOrder(
+  ctx: any,
+  opts: {
+    email?: string;
+    phone?: string;
+    firstName?: string;
+    amount: number;
+    currency?: string;
+    description: string;
+    callbackUrl: string;
+    cancelUrl: string;
+  },
+): Promise<{
+  merchantReference: string;
+  orderTrackingId: string;
+  redirectUrl: string;
+}> {
+  const amount = normalizeAmount(opts.amount);
+  const callbackUrl = normalizeReturnUrl(opts.callbackUrl, "callback URL");
+  const cancelUrl = normalizeReturnUrl(opts.cancelUrl, "cancel URL");
+
+  const { token }: { token: string; expiresIn: number } = await ctx.runAction(
+    internal.pesapal.getPesapalAccessToken,
+    {},
+  );
+  if (!token || typeof token !== "string" || token.trim() === "") {
+    throw pesapalError(
+      "PESAPAL_AUTH_FAILED",
+      "Pesapal did not return a usable access token.",
+    );
+  }
+
+  const merchantReference = `F2M-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+  const phone = sanitizePhone(opts.phone);
+  const billingAddress: any = {
+    email_address: opts.email || FALLBACK_BILLING_EMAIL,
+    country_code: "UG",
+    first_name: sanitizeBillingName(opts.firstName, "Farm"),
+    last_name: "User",
+  };
+  if (phone) billingAddress.phone_number = phone;
+
+  const paymentRequest: any = {
+    id: merchantReference,
+    currency: opts.currency || "UGX",
+    amount,
+    description: (opts.description || "Farm2Market payment").slice(0, 100),
+    callback_url: callbackUrl,
+    cancellation_url: cancelUrl,
+    billing_address: billingAddress,
+  };
+
+  if (PESAPAL_NOTIFICATION_ID && PESAPAL_NOTIFICATION_ID.trim() !== "") {
+    paymentRequest.notification_id = PESAPAL_NOTIFICATION_ID.trim();
+  } else {
+    throw pesapalError(
+      "PESAPAL_NOT_CONFIGURED",
+      "PESAPAL_NOTIFICATION_ID is not set in this deployment's Convex environment variables. " +
+        "Register your IPN URL with Pesapal and add the notification id before taking payments.",
+    );
+  }
+
+  const response: Response = await fetch(
+    `${PESAPAL_BASE_URL}/api/Transactions/SubmitOrderRequest`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(paymentRequest),
+    },
+  );
+
+  const responseText = await response.text();
+  let paymentData: any = null;
+  try {
+    paymentData = JSON.parse(responseText);
+  } catch {
+    paymentData = null;
+  }
+
+  if (!response.ok || paymentData?.error) {
+    const err = paymentData?.error;
+    const detail =
+      err?.message ||
+      err?.code ||
+      paymentData?.message ||
+      responseText.substring(0, 300) ||
+      `HTTP ${response.status}`;
+    console.error("Pesapal SubmitOrderRequest rejected", {
+      status: response.status,
+      merchantReference,
+      environment: PESAPAL_ENV,
+      detail,
+    });
+    throw pesapalError(
+      "PESAPAL_ORDER_REJECTED",
+      `Pesapal rejected the payment request: ${detail}`,
+      { status: response.status, environment: PESAPAL_ENV },
+    );
+  }
+
+  // Pesapal's own tracking id. Everything downstream (callback query string,
+  // GetTransactionStatus, IPN) uses this and NOT our merchant reference.
+  const orderTrackingId: string =
+    paymentData?.order_tracking_id ||
+    paymentData?.orderTrackingId ||
+    paymentData?.data?.order_tracking_id ||
+    "";
+
+  if (!orderTrackingId) {
+    console.error(
+      "Pesapal response missing order_tracking_id:",
+      responseText.substring(0, 800),
+    );
+    throw pesapalError(
+      "PESAPAL_NO_TRACKING_ID",
+      "Pesapal accepted the order but did not return an order tracking id, so the payment could not be tracked.",
+    );
+  }
+
+  let redirectUrl: string =
+    paymentData?.redirect_url ||
+    paymentData?.redirectUrl ||
+    paymentData?.data?.redirect_url ||
+    paymentData?.response?.redirect_url ||
+    "";
+
+  if (!redirectUrl) {
+    redirectUrl = `${PESAPAL_BASE_URL}/api/Transactions/RedirectToMobileCheckout?OrderTrackingId=${encodeURIComponent(orderTrackingId)}`;
+  }
+
+  try {
+    new URL(redirectUrl);
+  } catch {
+    throw pesapalError(
+      "PESAPAL_BAD_REDIRECT",
+      `Pesapal returned an unusable checkout link: ${redirectUrl}`,
+    );
+  }
+
+  return { merchantReference, orderTrackingId, redirectUrl };
+}
+
+/**
  * Get Pesapal access token
  * This is a Convex action because it needs to make external HTTP requests
  * Internal helper function to avoid circular references
@@ -75,7 +339,8 @@ export const getPesapalAccessToken = internalAction({
     try {
       // Validate credentials are present
       if (!ACTUAL_CONSUMER_KEY || !ACTUAL_CONSUMER_SECRET) {
-        throw new Error(
+        throw pesapalError(
+          "PESAPAL_NOT_CONFIGURED",
           "Pesapal credentials are missing. " +
             "Please set PESAPAL_CONSUMER_KEY and PESAPAL_CONSUMER_SECRET environment variables in Convex Dashboard → Settings → Environment Variables. " +
             `Current environment: ${PESAPAL_ENV}, Base URL: ${PESAPAL_BASE_URL}`,
@@ -145,7 +410,11 @@ export const getPesapalAccessToken = internalAction({
         expiresIn: expiresIn,
       };
     } catch (error: any) {
-      throw new Error(`Failed to get Pesapal access token: ${error.message}`);
+      if (error instanceof ConvexError) throw error;
+      throw pesapalError(
+        "PESAPAL_AUTH_FAILED",
+        `Failed to get Pesapal access token: ${error?.message || error}`,
+      );
     }
   },
 });
@@ -171,262 +440,40 @@ export const initiatePesapalPayment = action({
     orderTrackingId: string;
     redirectUrl: string;
   }> => {
-    // Get access token
-    const { token }: { token: string; expiresIn: number } = await ctx.runAction(
-      internal.pesapal.getPesapalAccessToken,
-      {},
-    );
-
-    // Get user details
     const user: {
       id: any;
       email: string | undefined;
+      phoneNumber: string | undefined;
       role: string;
       alias: string;
     } | null = await ctx.runQuery(api.pesapal.getUserDetails, {
       userId: args.userId,
     });
     if (!user) {
-      throw new Error("User not found");
+      throw pesapalError("USER_NOT_FOUND", "User not found.");
     }
 
     if (user.role !== args.userRole) {
-      throw new Error(
-        `User role mismatch. Expected ${args.userRole}, got ${user.role}`,
+      throw pesapalError(
+        "ROLE_MISMATCH",
+        `This account is registered as "${user.role}", so it cannot make a ${args.userRole} deposit.`,
       );
     }
 
-    // Generate unique order tracking ID
-    const orderTrackingId = `F2M-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    const { merchantReference, orderTrackingId, redirectUrl } =
+      await submitPesapalOrder(ctx, {
+        email: user.email,
+        phone: user.phoneNumber,
+        firstName: user.alias,
+        amount: args.amount,
+        currency: args.currency || "UGX",
+        description: `Wallet deposit for ${args.userRole}`,
+        callbackUrl: args.callbackUrl,
+        cancelUrl: args.cancelUrl,
+      });
 
-    // Prepare payment request according to Pesapal API v3 format
-    // Note: notification_id is omitted - we use callback_url for payment confirmation
-    // If IPN webhooks are needed in the future, register an IPN URL first and use its ID here
-    // Build billing address, only including non-empty fields
-    const billingAddress: any = {
-      email_address: user.email || FALLBACK_BILLING_EMAIL,
-      country_code: "UG",
-      first_name: user.alias || "User",
-    };
-
-    // Only add optional fields if they have values (Pesapal may reject empty strings)
-    // For now, we'll keep the structure minimal as required fields are present
-
-    const paymentRequest: any = {
-      id: orderTrackingId,
-      currency: args.currency || "UGX",
-      amount: args.amount,
-      description: `Wallet deposit for ${args.userRole}`,
-      callback_url: args.callbackUrl,
-      cancellation_url: args.cancelUrl,
-      billing_address: billingAddress,
-    };
-
-    // Add notification_id only if provided via environment variable
-    // This is required if Pesapal API v3 mandates IPN registration
-    // To get notification_id: Register an IPN URL in Pesapal dashboard and copy the ID
-    if (PESAPAL_NOTIFICATION_ID && PESAPAL_NOTIFICATION_ID.trim() !== "") {
-      const notificationId = PESAPAL_NOTIFICATION_ID.trim();
-      paymentRequest.notification_id = notificationId;
-      console.log("✅ PESAPAL_NOTIFICATION_ID is set, including in request");
-      console.log(
-        "📋 Notification ID (first 20 chars):",
-        notificationId.substring(0, 20) + "...",
-      );
-      console.log("📋 Notification ID length:", notificationId.length);
-    } else {
-      console.warn(
-        "⚠️ PESAPAL_NOTIFICATION_ID is NOT set in Convex environment variables!",
-      );
-      console.warn(
-        "⚠️ This will cause 'Invalid IPN URL ID' error if Pesapal requires it.",
-      );
-      console.warn(
-        "⚠️ To fix: Go to Convex Dashboard → Settings → Environment Variables",
-      );
-      console.warn(
-        "⚠️ Add: PESAPAL_NOTIFICATION_ID = (your notification_id from Pesapal)",
-      );
-    }
-
-    // Log full request for debugging (to see exact structure being sent)
-    console.log(
-      "Pesapal payment request (full):",
-      JSON.stringify(paymentRequest, null, 2),
-    );
-
-    // Validate token before using
-    if (!token || typeof token !== "string" || token.trim() === "") {
-      throw new Error(
-        "Invalid access token received from Pesapal authentication",
-      );
-    }
-
-    // Submit payment request to Pesapal
-    const response: Response = await fetch(
-      `${PESAPAL_BASE_URL}/api/Transactions/SubmitOrderRequest`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(paymentRequest),
-      },
-    );
-
-    // Get response text first to handle both JSON and non-JSON responses
-    const responseText = await response.text();
-
-    if (!response.ok) {
-      let errorMessage = `Pesapal payment initiation failed: ${response.status}`;
-
-      try {
-        const errorData = JSON.parse(responseText);
-        if (errorData.error) {
-          const errorCode = errorData.error.code || "";
-          const errorMsg = errorData.error.message || "";
-
-          // Special handling for IPN URL ID errors
-          if (
-            errorCode.includes("invalid_api_request_parameters") &&
-            errorMsg.includes("Invalid IPN URL ID")
-          ) {
-            const hasNotificationId =
-              PESAPAL_NOTIFICATION_ID && PESAPAL_NOTIFICATION_ID.trim() !== "";
-            const notificationIdInfo = hasNotificationId
-              ? `Current value length: ${PESAPAL_NOTIFICATION_ID.trim().length}, preview: ${PESAPAL_NOTIFICATION_ID.trim().substring(0, 20)}...`
-              : "NOT SET in Convex environment variables";
-
-            errorMessage =
-              `Pesapal rejected the IPN URL ID. ` +
-              `Error: ${errorMsg}. ` +
-              `Diagnosis: PESAPAL_NOTIFICATION_ID is ${hasNotificationId ? "SET" : "NOT SET"}. ` +
-              `${hasNotificationId ? notificationIdInfo : ""} ` +
-              `\n\nTo fix this:\n` +
-              `1. Verify IPN URL is registered in Pesapal dashboard: https://farm2market-dev.vercel.app/api/pesapal/webhook\n` +
-              `2. Get the EXACT notification_id from Pesapal (copy it carefully, no spaces)\n` +
-              `3. Set PESAPAL_NOTIFICATION_ID in Convex Dashboard → Settings → Environment Variables\n` +
-              `4. Verify the notification_id matches exactly what Pesapal shows\n` +
-              `5. Redeploy Convex functions\n` +
-              `6. Test the webhook endpoint is accessible: https://farm2market-dev.vercel.app/api/pesapal/webhook\n` +
-              `See docs/PESAPAL_SETUP.md for detailed instructions.`;
-          } else {
-            errorMessage = `Pesapal payment error: ${errorMsg || errorCode || JSON.stringify(errorData.error)}`;
-          }
-        } else {
-          errorMessage += ` - ${errorData.message || responseText}`;
-        }
-      } catch {
-        errorMessage += ` - ${responseText}`;
-      }
-
-      throw new Error(errorMessage);
-    }
-
-    // Parse JSON response
-    let paymentData: any;
-    try {
-      paymentData = JSON.parse(responseText);
-    } catch (parseError) {
-      throw new Error(
-        `Pesapal returned invalid JSON response: ${responseText.substring(0, 500)}. ` +
-          `Status: ${response.status}, Content-Type: ${response.headers.get("content-type")}`,
-      );
-    }
-
-    // Log full response for debugging
-    console.log(
-      "Pesapal payment response:",
-      JSON.stringify(paymentData, null, 2),
-    );
-
-    // Extract redirect URL from response (Pesapal v3 may use different field names)
-    // Try multiple possible field names based on Pesapal API documentation
-    // Pesapal v3 typically returns: { redirect_url: "...", order_tracking_id: "..." }
-    let redirectUrl =
-      paymentData.redirect_url ||
-      paymentData.redirectUrl ||
-      paymentData.payment_url ||
-      paymentData.paymentUrl ||
-      paymentData.link ||
-      paymentData.url ||
-      paymentData.data?.redirect_url ||
-      paymentData.data?.redirectUrl ||
-      paymentData.data?.payment_url ||
-      paymentData.result?.redirect_url ||
-      paymentData.result?.redirectUrl ||
-      paymentData.instructions?.redirect_url ||
-      "";
-
-    // If no redirect URL found, try to construct it from order tracking ID
-    // Some Pesapal implementations return the order tracking ID and we construct the URL
-    if (
-      !redirectUrl &&
-      (paymentData.order_tracking_id ||
-        paymentData.orderTrackingId ||
-        orderTrackingId)
-    ) {
-      const trackingId =
-        paymentData.order_tracking_id ||
-        paymentData.orderTrackingId ||
-        orderTrackingId;
-      // Pesapal v3 redirect URL format might be: https://cybqa.pesapal.com/pesapalv3/api/RedirectToMobileCheckout/?OrderTrackingId=...
-      redirectUrl = `${PESAPAL_BASE_URL}/api/RedirectToMobileCheckout/?OrderTrackingId=${trackingId}`;
-    }
-
-    // Validate redirect URL is present and is a valid URL
-    if (
-      !redirectUrl ||
-      typeof redirectUrl !== "string" ||
-      redirectUrl.trim() === ""
-    ) {
-      const responseKeys = Object.keys(paymentData).join(", ");
-      const responseStr = JSON.stringify(paymentData, null, 2);
-
-      // Check if this is a successful response but with different structure
-      // Pesapal might return success with order_tracking_id but redirect URL in a different format
-      const actualTrackingId =
-        paymentData.order_tracking_id ||
-        paymentData.orderTrackingId ||
-        orderTrackingId;
-
-      if (actualTrackingId) {
-        // Payment was created - try constructed URL as fallback
-        const constructedUrl = `${PESAPAL_BASE_URL}/api/RedirectToMobileCheckout/?OrderTrackingId=${actualTrackingId}`;
-
-        // Log warning but use constructed URL
-        console.warn(
-          `Pesapal payment created (orderTrackingId: ${actualTrackingId}) but redirect URL not in response. ` +
-            `Using constructed URL: ${constructedUrl}. ` +
-            `Response keys: ${responseKeys}`,
-        );
-
-        // Use constructed URL as fallback
-        redirectUrl = constructedUrl;
-      } else {
-        // No order tracking ID either - this is a real problem
-        throw new Error(
-          `Pesapal payment response missing both redirect URL and order tracking ID. ` +
-            `Response contains keys: ${responseKeys}. ` +
-            `Full response: ${responseStr.substring(0, 1000)}... ` +
-            `Please check Pesapal API v3 documentation. Status: ${response.status}`,
-        );
-      }
-    }
-
-    // Validate it's a valid URL format
-    try {
-      new URL(redirectUrl);
-    } catch {
-      throw new Error(
-        `Pesapal returned invalid redirect URL format: ${redirectUrl}. ` +
-          `Expected a valid HTTP/HTTPS URL.`,
-      );
-    }
-
-    // Create payment transaction record
+    // Create payment transaction record keyed on Pesapal's tracking id, which
+    // is what the callback and the IPN webhook hand back to us.
     const transactionId: any = await ctx.runMutation(
       internal.pesapal.createPaymentTransaction,
       {
@@ -435,7 +482,8 @@ export const initiatePesapalPayment = action({
         amount: args.amount,
         currency: args.currency || "UGX",
         pesapalOrderTrackingId: orderTrackingId,
-        redirectUrl: redirectUrl,
+        pesapalMerchantReference: merchantReference,
+        redirectUrl,
         callbackUrl: args.callbackUrl,
       },
     );
@@ -443,7 +491,7 @@ export const initiatePesapalPayment = action({
     return {
       transactionId,
       orderTrackingId,
-      redirectUrl: redirectUrl,
+      redirectUrl,
     };
   },
 });
@@ -464,6 +512,7 @@ export const getUserDetails = query({
     return {
       id: user._id,
       email: user.email,
+      phoneNumber: user.phoneNumber,
       role: user.role,
       alias: user.alias,
     };
@@ -481,6 +530,7 @@ export const createPaymentTransaction = internalMutation({
     amount: v.number(),
     currency: v.string(),
     pesapalOrderTrackingId: v.string(),
+    pesapalMerchantReference: v.optional(v.string()),
     redirectUrl: v.string(),
     callbackUrl: v.string(),
   },
@@ -491,6 +541,7 @@ export const createPaymentTransaction = internalMutation({
       amount: args.amount,
       currency: args.currency,
       pesapalOrderTrackingId: args.pesapalOrderTrackingId,
+      pesapalMerchantReference: args.pesapalMerchantReference,
       redirectUrl: args.redirectUrl,
       callbackUrl: args.callbackUrl,
       status: "pending",
@@ -507,6 +558,7 @@ export const createPaymentTransaction = internalMutation({
 export const createExtensionWorkPaymentIntent = internalMutation({
   args: {
     orderTrackingId: v.string(),
+    merchantReference: v.optional(v.string()),
     memberId: v.id("users"),
     communityId: v.id("communities"),
     formId: v.id("communityForms"),
@@ -519,6 +571,7 @@ export const createExtensionWorkPaymentIntent = internalMutation({
       "extensionWorkPaymentIntents" as any,
       {
         orderTrackingId: args.orderTrackingId,
+        merchantReference: args.merchantReference,
         memberId: args.memberId,
         communityId: args.communityId,
         formId: args.formId,
@@ -531,6 +584,29 @@ export const createExtensionWorkPaymentIntent = internalMutation({
     );
   },
 });
+
+/**
+ * Resolve an extension-work intent from whichever identifier we are handed.
+ *
+ * Intents created before Pesapal's own tracking id was recorded still carry our
+ * `F2M-...` merchant reference in `orderTrackingId`, so try both indexes.
+ */
+async function findExtensionWorkIntent(ctx: any, identifier: string) {
+  const byTracking = await ctx.db
+    .query("extensionWorkPaymentIntents" as any)
+    .withIndex("by_order_tracking" as any, (q: any) =>
+      q.eq("orderTrackingId", identifier),
+    )
+    .first();
+  if (byTracking) return byTracking;
+
+  return await ctx.db
+    .query("extensionWorkPaymentIntents" as any)
+    .withIndex("by_merchant_reference" as any, (q: any) =>
+      q.eq("merchantReference", identifier),
+    )
+    .first();
+}
 
 /**
  * Update extension-work payment intent status from Pesapal verification.
@@ -547,12 +623,7 @@ export const markExtensionWorkPaymentIntent = internalMutation({
     paymentReference: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const intent = await ctx.db
-      .query("extensionWorkPaymentIntents" as any)
-      .withIndex("by_order_tracking" as any, (q: any) =>
-        q.eq("orderTrackingId", args.orderTrackingId),
-      )
-      .first();
+    const intent = await findExtensionWorkIntent(ctx, args.orderTrackingId);
 
     if (!intent) {
       return { updated: false };
@@ -579,12 +650,7 @@ export const getExtensionWorkPaymentIntentByOrderTrackingId = internalQuery({
     orderTrackingId: v.string(),
   },
   handler: async (ctx, args) => {
-    const intent = await ctx.db
-      .query("extensionWorkPaymentIntents" as any)
-      .withIndex("by_order_tracking" as any, (q: any) =>
-        q.eq("orderTrackingId", args.orderTrackingId),
-      )
-      .first();
+    const intent = await findExtensionWorkIntent(ctx, args.orderTrackingId);
 
     if (!intent) {
       return null;
@@ -697,8 +763,9 @@ export const verifyPesapalPayment = action({
 
     // Validate token
     if (!token || typeof token !== "string" || token.trim() === "") {
-      throw new Error(
-        "Invalid access token received from Pesapal authentication",
+      throw pesapalError(
+        "PESAPAL_AUTH_FAILED",
+        "Invalid access token received from Pesapal authentication.",
       );
     }
 
@@ -729,7 +796,7 @@ export const verifyPesapalPayment = action({
         errorMessage += ` - ${errorText}`;
       }
 
-      throw new Error(errorMessage);
+      throw pesapalError("PESAPAL_VERIFY_FAILED", errorMessage);
     }
 
     const paymentStatus: any = await response.json();
@@ -982,13 +1049,22 @@ export const completePaymentTransaction = internalMutation({
     paymentStatus: v.any(),
   },
   handler: async (ctx, args) => {
-    // Find payment transaction
-    const transaction = await ctx.db
-      .query("paymentTransactions")
-      .withIndex("by_pesapal_order", (q) =>
-        q.eq("pesapalOrderTrackingId", args.orderTrackingId),
-      )
-      .first();
+    // Find payment transaction. Pesapal hands back its own tracking id on the
+    // callback and the IPN; rows written before that id was stored still carry
+    // our `F2M-...` merchant reference, so fall back to that index.
+    const transaction =
+      (await ctx.db
+        .query("paymentTransactions")
+        .withIndex("by_pesapal_order", (q) =>
+          q.eq("pesapalOrderTrackingId", args.orderTrackingId),
+        )
+        .first()) ??
+      (await ctx.db
+        .query("paymentTransactions")
+        .withIndex("by_merchant_reference", (q) =>
+          q.eq("pesapalMerchantReference", args.orderTrackingId),
+        )
+        .first());
 
     if (!transaction) {
       return { notFound: true };
@@ -1013,17 +1089,25 @@ export const completePaymentTransaction = internalMutation({
       args.paymentStatus.payment_status_code === "1";
 
     if (!isCompleted) {
-      // Payment not completed - update status only
-      await ctx.db.patch(transaction._id, {
-        status: pesapalStatus.toLowerCase().includes("failed")
+      // Mobile-money orders sit in PENDING while the payer confirms on their
+      // handset. Only record a terminal status when Pesapal reports one —
+      // otherwise the transaction stays pending and can still complete.
+      const lowered = pesapalStatus.toLowerCase();
+      const nextStatus: "pending" | "failed" | "cancelled" | null =
+        lowered.includes("failed") || lowered.includes("invalid")
           ? "failed"
-          : "cancelled",
-        completedAt: Date.now(),
+          : lowered.includes("cancel") || lowered.includes("revers")
+            ? "cancelled"
+            : null;
+
+      await ctx.db.patch(transaction._id, {
+        status: nextStatus ?? "pending",
+        ...(nextStatus ? { completedAt: Date.now() } : {}),
         metadata: {
           pesapalResponse: args.paymentStatus,
         },
       });
-      return { completed: false, status: transaction.status };
+      return { completed: false, status: nextStatus ?? "pending" };
     }
 
     // Payment completed - credit wallet
@@ -1063,7 +1147,11 @@ export const completePaymentTransaction = internalMutation({
     await ctx.db.patch(transaction._id, {
       status: "completed",
       walletDepositUtid: depositUtid,
-      pesapalPaymentReference: args.paymentStatus.payment_reference || null,
+      pesapalPaymentReference:
+        typeof args.paymentStatus?.payment_reference === "string" &&
+        args.paymentStatus.payment_reference.length > 0
+          ? args.paymentStatus.payment_reference
+          : undefined,
       completedAt: Date.now(),
       metadata: {
         pesapalResponse: args.paymentStatus,
@@ -1162,6 +1250,73 @@ export const checkPesapalConfig = query({
 });
 
 /**
+ * Read-only diagnostic: ask Pesapal which IPN URLs this account has registered
+ * and report whether PESAPAL_NOTIFICATION_ID is one of them.
+ *
+ * "Invalid IPN URL ID" is the single most common reason SubmitOrderRequest is
+ * rejected, and it is otherwise invisible. Run with:
+ *   npx convex run pesapal:checkPesapalIpnRegistration '{}'
+ */
+export const checkPesapalIpnRegistration = action({
+  args: {},
+  handler: async (
+    ctx,
+  ): Promise<{
+    environment: string;
+    configuredNotificationId: string | null;
+    isRegistered: boolean;
+    registeredIpns: Array<{ id: string; url: string; status?: string }>;
+  }> => {
+    const { token }: { token: string } = await ctx.runAction(
+      internal.pesapal.getPesapalAccessToken,
+      {},
+    );
+
+    const response = await fetch(`${PESAPAL_BASE_URL}/api/URLSetup/GetIpnList`, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const text = await response.text();
+    if (!response.ok) {
+      throw pesapalError(
+        "PESAPAL_IPN_LIST_FAILED",
+        `Could not read the registered IPN list: ${response.status} - ${text.substring(0, 300)}`,
+      );
+    }
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      throw pesapalError(
+        "PESAPAL_IPN_LIST_FAILED",
+        `Pesapal returned a non-JSON IPN list: ${text.substring(0, 300)}`,
+      );
+    }
+
+    const list: any[] = Array.isArray(parsed) ? parsed : parsed?.data || [];
+    const registeredIpns = list.map((entry: any) => ({
+      id: String(entry.ipn_id || entry.id || ""),
+      url: String(entry.url || entry.ipn_url || ""),
+      status: entry.ipn_status_description || entry.status,
+    }));
+
+    const configured = PESAPAL_NOTIFICATION_ID?.trim() || null;
+
+    return {
+      environment: PESAPAL_ENV,
+      configuredNotificationId: configured,
+      isRegistered: !!configured && registeredIpns.some((i) => i.id === configured),
+      registeredIpns,
+    };
+  },
+});
+
+/**
  * Webhook handler for Pesapal payment notifications
  * This is called by Pesapal when payment status changes
  */
@@ -1224,111 +1379,42 @@ export const initiateExtensionWorkPayment = action({
       (extractIdFromUrl(args.callbackUrl, "formId") as any);
 
     if (!resolvedCommunityId || !resolvedFormId) {
-      throw new Error(
+      throw pesapalError(
+        "MISSING_PAYMENT_CONTEXT",
         "Missing required payment context. Open the form from Community Trackers and try again.",
       );
     }
 
-    const { token }: { token: string; expiresIn: number } = await ctx.runAction(
-      internal.pesapal.getPesapalAccessToken,
-      {},
-    );
-
     const user: {
       id: any;
       email: string | undefined;
+      phoneNumber: string | undefined;
       role: string;
       alias: string;
     } | null = await ctx.runQuery(api.pesapal.getUserDetails, {
       userId: args.userId,
     });
     if (!user) {
-      throw new Error("User not found");
+      throw pesapalError("USER_NOT_FOUND", "User not found.");
     }
 
-    const orderTrackingId = `F2M-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-    const billingAddress: any = {
-      email_address: user.email || FALLBACK_BILLING_EMAIL,
-      country_code: "UG",
-      first_name: user.alias || "User",
-    };
-
-    const paymentRequest: any = {
-      id: orderTrackingId,
-      currency: args.currency || "UGX",
-      amount: args.amount,
-      description: args.description || "Extension work form payment",
-      callback_url: args.callbackUrl,
-      cancellation_url: args.cancelUrl,
-      billing_address: billingAddress,
-    };
-
-    if (PESAPAL_NOTIFICATION_ID && PESAPAL_NOTIFICATION_ID.trim() !== "") {
-      paymentRequest.notification_id = PESAPAL_NOTIFICATION_ID.trim();
-    }
-
-    if (!token || typeof token !== "string" || token.trim() === "") {
-      throw new Error(
-        "Invalid access token received from Pesapal authentication",
-      );
-    }
-
-    const response: Response = await fetch(
-      `${PESAPAL_BASE_URL}/api/Transactions/SubmitOrderRequest`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(paymentRequest),
-      },
-    );
-
-    const responseText = await response.text();
-
-    if (!response.ok) {
-      let errorMessage = `Pesapal payment initiation failed: ${response.status}`;
-      try {
-        const errorData = JSON.parse(responseText);
-        if (errorData.error) {
-          const errorCode = errorData.error.code || "";
-          errorMessage += errorCode ? ` - ${errorCode}` : "";
-          errorMessage += errorData.error.message
-            ? ` - ${errorData.error.message}`
-            : "";
-        } else if (errorData.message) {
-          errorMessage += ` - ${errorData.message}`;
-        } else {
-          errorMessage += ` - ${responseText}`;
-        }
-      } catch {
-        errorMessage += ` - ${responseText}`;
-      }
-      throw new Error(errorMessage);
-    }
-
-    let redirectUrl = "";
-    try {
-      const data = JSON.parse(responseText);
-      redirectUrl =
-        data.redirectUrl ||
-        data.redirect_url ||
-        data.response?.redirect_url ||
-        "";
-    } catch {
-      redirectUrl = responseText;
-    }
-
-    if (!redirectUrl) {
-      throw new Error("Pesapal did not return a redirect URL.");
-    }
+    const { merchantReference, orderTrackingId, redirectUrl } =
+      await submitPesapalOrder(ctx, {
+        email: user.email,
+        phone: user.phoneNumber,
+        firstName: user.alias,
+        amount: args.amount,
+        currency: args.currency || "UGX",
+        description: args.description || "Extension work form payment",
+        callbackUrl: args.callbackUrl,
+        cancelUrl: args.cancelUrl,
+      });
 
     const intentId = await ctx.runMutation(
       internal.pesapal.createExtensionWorkPaymentIntent,
       {
         orderTrackingId,
+        merchantReference,
         memberId: args.userId,
         communityId: resolvedCommunityId,
         formId: resolvedFormId,
@@ -1369,7 +1455,10 @@ export const initiateTraderDeposit = action({
       userId: args.traderId,
     });
     if (!user || !["trader", "transporter"].includes(user.role)) {
-      throw new Error("User is not a trader");
+      throw pesapalError(
+        "NOT_TRADER",
+        "This account cannot make a trader deposit.",
+      );
     }
 
     return await ctx.runAction(api.pesapal.initiatePesapalPayment, {
@@ -1407,7 +1496,10 @@ export const initiateBuyerDeposit = action({
       userId: args.buyerId,
     });
     if (!user || user.role !== "buyer") {
-      throw new Error("User is not a buyer");
+      throw pesapalError(
+        "NOT_BUYER",
+        "This account cannot make a buyer deposit.",
+      );
     }
 
     return await ctx.runAction(api.pesapal.initiatePesapalPayment, {

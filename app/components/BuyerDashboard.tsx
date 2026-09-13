@@ -3,7 +3,7 @@
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { exportToExcel, exportToPDF, formatUTIDDataForExport } from "../utils/exportUtils";
 import { formatUgandaDateTime, getUgandaTime } from "../utils/timeUtils";
@@ -122,6 +122,11 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   const [vendorStorePurchaseMessage, setVendorStorePurchaseMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [depositAmount, setDepositAmount] = useState<string>("");
   const [isDepositing, setIsDepositing] = useState(false);
+  // Where to send the buyer once the deposit clears. Set when they arrive here
+  // from a flow that needs a funded wallet first (e.g. Advanced Markets).
+  const [depositReturnTo, setDepositReturnTo] = useState<string | null>(null);
+  const [depositReason, setDepositReason] = useState<string | null>(null);
+  const depositSectionRef = useRef<HTMLDivElement | null>(null);
   const [depositMessage, setDepositMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [listingPurchaseMessage, setListingPurchaseMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [rewardCashoutPhone, setRewardCashoutPhone] = useState<string>("");
@@ -259,6 +264,31 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
     return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amountUGX * rate);
   };
 
+  // Arrive here as "/?deposit=50000&returnTo=/buyer/advance-purchase/<id>" when
+  // a purchase needs a funded wallet: pre-fill the amount, explain why, and
+  // scroll the deposit card into view so the buyer only has to tap pay.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const requested = params.get("deposit");
+    const returnTo = params.get("returnTo");
+    const reason = params.get("depositReason");
+    if (!requested && !returnTo) return;
+
+    const amount = Number(requested);
+    if (Number.isFinite(amount) && amount > 0) {
+      setDepositAmount(String(Math.ceil(amount)));
+    }
+    if (returnTo && returnTo.startsWith("/")) setDepositReturnTo(returnTo);
+    if (reason) setDepositReason(reason);
+
+    // Let the dashboard paint before scrolling the deposit card into view.
+    const timer = window.setTimeout(() => {
+      depositSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   const handleDeposit = async () => {
     const amount = parseFloat(depositAmount);
     if (!depositAmount || isNaN(amount) || amount <= 0) {
@@ -271,8 +301,12 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
 
     try {
       const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
-      const callbackUrl = `${baseUrl}/payment/callback`;
-      const cancelUrl = `${baseUrl}/`;
+      // /payment/callback forwards to `returnTo` after verifying, so a buyer
+      // topping up mid-purchase lands back on the page they came from.
+      const callbackUrl = depositReturnTo
+        ? `${baseUrl}/payment/callback?returnTo=${encodeURIComponent(`${baseUrl}${depositReturnTo}`)}`
+        : `${baseUrl}/payment/callback`;
+      const cancelUrl = depositReturnTo ? `${baseUrl}${depositReturnTo}` : `${baseUrl}/`;
 
       const result = await initiateDeposit({
         buyerId: userId,
@@ -289,9 +323,13 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
         throw new Error("No redirect URL received from Pesapal");
       }
     } catch (error: any) {
+      // Convex redacts plain Error messages in production; pesapal.ts raises
+      // ConvexError, whose `data` survives and carries the real reason.
+      const detail =
+        error?.data?.message || error?.data?.code || error?.message || "Unknown error";
       setDepositMessage({
         type: "error",
-        text: `Failed to initiate payment: ${error.message}`,
+        text: `Failed to initiate payment: ${detail}`,
       });
       setIsDepositing(false);
     }
@@ -1492,7 +1530,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
         </div>
 
         {/* Deposit Section */}
-        <div style={{
+        <div ref={depositSectionRef} style={{
           padding: "clamp(1rem, 3vw, 1.5rem)",
           background: "#fff",
           borderRadius: "12px",
@@ -1502,6 +1540,22 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
           <h3 style={{ marginTop: 0, marginBottom: "1rem", fontSize: "clamp(1rem, 3vw, 1.2rem)", color: "#1a1a1a" }}>
             Deposit Funds Into Your Wallet
           </h3>
+          {depositReturnTo && (
+            <div style={{
+              marginBottom: "1rem",
+              padding: "0.75rem",
+              background: "#e3f2fd",
+              border: "1px solid #90caf9",
+              borderRadius: "8px",
+              fontSize: "0.9rem",
+              color: "#0d47a1",
+            }}>
+              {depositReason
+                ? `Top up to continue: ${depositReason}.`
+                : "Top up to continue your purchase."}{" "}
+              We&apos;ll take you back as soon as the payment clears.
+            </div>
+          )}
           <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
             <div>
               <label style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.9rem", color: "#666" }}>

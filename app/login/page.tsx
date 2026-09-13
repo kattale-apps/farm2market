@@ -542,8 +542,8 @@ function LoginPageInner() {
             }}
           >
             {loading
-              ? (authStep === "confirmSignup" ? "Creating account..." : "Logging in...")
-              : (authStep === "confirmSignup" ? "Create Account" : "Log in")}
+              ? (authStep === "confirmSignup" ? "Creating account..." : "Checking your details...")
+              : (authStep === "confirmSignup" ? "Create Account" : "Sign Up / Log In")}
           </button>
         </form>
 

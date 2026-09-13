@@ -524,7 +524,13 @@ export const login = mutation({
     await ctx.db.patch(user._id, {
       lastActiveAt: getUgandaTime(),
     });
-    await markImportedMemberActivatedByUserId(ctx, user._id);
+    try {
+      await markImportedMemberActivatedByUserId(ctx, user._id);
+    } catch (err) {
+      // Auxiliary bookkeeping only (flips an admin-facing import-tracking
+      // row) — must never block a login that's otherwise valid.
+      console.error("markImportedMemberActivatedByUserId failed during login:", err);
+    }
 
     // Return user info
     return {
@@ -961,55 +967,67 @@ export const loginWithSession = mutation({
     password: v.string(),
   },
   handler: async (ctx, args) => {
-    if (!args.email && !args.phoneNumber) {
-      throw new ConvexError("Either email or phone number is required");
+    try {
+      if (!args.email && !args.phoneNumber) {
+        throw new ConvexError("Either email or phone number is required");
+      }
+
+      let user = null;
+      if (args.email) {
+        const normalizedEmail = args.email.trim().toLowerCase();
+        user = await ctx.db
+          .query("users")
+          .withIndex("by_email", (q) => q.eq("email", normalizedEmail))
+          .first();
+      }
+      if (!user && args.phoneNumber) {
+        const normalizedPhone = normalizePhoneNumber(args.phoneNumber);
+        user = await ctx.db
+          .query("users")
+          .withIndex("by_phone", (q) => q.eq("phoneNumber", normalizedPhone))
+          .first();
+      }
+
+      if (!user) throw new ConvexError("Invalid email/phone or password");
+
+      const passwordHash = simpleHash(args.password.trim());
+      if (user.passwordHash !== passwordHash) throw new ConvexError("Invalid email/phone or password");
+      if (user.state !== "active") throw new ConvexError("Account is not active. Please contact support.");
+
+      const now = getUgandaTime();
+      await ctx.db.patch(user._id, { lastActiveAt: now });
+      try {
+        await markImportedMemberActivatedByUserId(ctx, user._id);
+      } catch (err) {
+        // Auxiliary bookkeeping only (flips an admin-facing import-tracking
+        // row) — must never block a login that's otherwise valid.
+        console.error("markImportedMemberActivatedByUserId failed during login:", err);
+      }
+
+      const sessionToken = generateSessionToken();
+      await ctx.db.insert("sessions", {
+        userId: user._id,
+        token: sessionToken,
+        expiresAt: now + SESSION_TTL_MS,
+        createdAt: now,
+        lastActiveAt: now,
+        invalidated: false,
+      });
+
+      return {
+        sessionToken,
+        userId: user._id,
+        alias: user.alias,
+        role: user.role,
+        adminLevel: user.adminLevel,
+        adminCategory: user.adminCategory,
+        assignedCommunityIds: user.assignedCommunityIds,
+      };
+    } catch (err) {
+      if (err instanceof ConvexError) throw err;
+      console.error("Unexpected error in loginWithSession:", err);
+      throw new ConvexError("Login failed unexpectedly. Please try again, or contact support if this continues.");
     }
-
-    let user = null;
-    if (args.email) {
-      const normalizedEmail = args.email.trim().toLowerCase();
-      user = await ctx.db
-        .query("users")
-        .withIndex("by_email", (q) => q.eq("email", normalizedEmail))
-        .first();
-    }
-    if (!user && args.phoneNumber) {
-      const normalizedPhone = normalizePhoneNumber(args.phoneNumber);
-      user = await ctx.db
-        .query("users")
-        .withIndex("by_phone", (q) => q.eq("phoneNumber", normalizedPhone))
-        .first();
-    }
-
-    if (!user) throw new ConvexError("Invalid email/phone or password");
-
-    const passwordHash = simpleHash(args.password.trim());
-    if (user.passwordHash !== passwordHash) throw new ConvexError("Invalid email/phone or password");
-    if (user.state !== "active") throw new ConvexError("Account is not active. Please contact support.");
-
-    const now = getUgandaTime();
-    await ctx.db.patch(user._id, { lastActiveAt: now });
-    await markImportedMemberActivatedByUserId(ctx, user._id);
-
-    const sessionToken = generateSessionToken();
-    await ctx.db.insert("sessions", {
-      userId: user._id,
-      token: sessionToken,
-      expiresAt: now + SESSION_TTL_MS,
-      createdAt: now,
-      lastActiveAt: now,
-      invalidated: false,
-    });
-
-    return {
-      sessionToken,
-      userId: user._id,
-      alias: user.alias,
-      role: user.role,
-      adminLevel: user.adminLevel,
-      adminCategory: user.adminCategory,
-      assignedCommunityIds: user.assignedCommunityIds,
-    };
   },
 });
 

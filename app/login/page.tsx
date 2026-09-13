@@ -54,7 +54,9 @@ export default function LoginPage() {
 function LoginPageInner() {
   const [authStep, setAuthStep] = useState<AuthStep>("login");
   const [identifier, setIdentifier] = useState("");
-  const [selectedRole, setSelectedRole] = useState<SignupRole>("farmer");
+  // No category is preselected — the user must choose one explicitly so
+  // nobody signs up under a role they never picked.
+  const [selectedRole, setSelectedRole] = useState<SignupRole | null>(null);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -134,6 +136,11 @@ function LoginPageInner() {
       }
       if (!password.trim()) {
         setError("Password is required");
+        setLoading(false);
+        return;
+      }
+      if (!selectedRole) {
+        setError("Please select your category above to continue.");
         setLoading(false);
         return;
       }
@@ -367,12 +374,12 @@ function LoginPageInner() {
                     }}
                     title={entry.signupEnabled ? "Enabled for signup" : "Signup currently disabled"}
                   >
-                    {entry.signupEnabled ? entry.label : `🔐 ${entry.label}`}
+                    {isSelected ? "✓ " : ""}{entry.signupEnabled ? entry.label : `🔐 ${entry.label}`}
                   </button>
                 );
               })}
             </div>
-            {!isSelectedRoleSignupEnabled && (
+            {selectedRole && !isSelectedRoleSignupEnabled && (
               <p style={{ marginTop: "0.3rem", marginBottom: 0, fontSize: "0.78rem", color: "#ef6c00", fontWeight: 600 }}>
                   New account creation is currently disabled for {selectedRoleLabel}. Existing accounts can still log in.
               </p>

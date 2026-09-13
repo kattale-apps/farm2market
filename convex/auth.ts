@@ -7,7 +7,7 @@
  * - Alias generation for anonymity
  */
 
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { PILOT_SHARED_PASSWORD } from "./constants";
@@ -189,51 +189,51 @@ export const createUser = mutation({
       .first();
 
     if (existing) {
-      throw new Error("User with this email already exists");
+      throw new ConvexError("User with this email already exists");
     }
 
     // If creating an admin account, verify creator is a super admin
     if (args.role === "admin") {
       if (!args.creatorAdminId) {
-        throw new Error("creatorAdminId is required when creating admin accounts");
+        throw new ConvexError("creatorAdminId is required when creating admin accounts");
       }
       
       const creatorUser = await ctx.db.get(args.creatorAdminId);
       if (!creatorUser || creatorUser.role !== "admin") {
-        throw new Error("Creator must be an admin");
+        throw new ConvexError("Creator must be an admin");
       }
       
       // Check if creator is super admin (adminLevel === "super" or undefined for backward compatibility)
       const isCreatorSuperAdmin = creatorUser.adminLevel === "super" || creatorUser.adminLevel === undefined;
       if (!isCreatorSuperAdmin) {
-        throw new Error("Only super admins can create admin accounts");
+        throw new ConvexError("Only super admins can create admin accounts");
       }
       
       // Validate adminLevel
       if (args.adminLevel !== undefined && args.adminLevel !== "super" && args.adminLevel !== "junior") {
-        throw new Error("Invalid adminLevel. Must be 'super' or 'junior'");
+        throw new ConvexError("Invalid adminLevel. Must be 'super' or 'junior'");
       }
       
       // If creating junior admin, adminCategory is required. Storage locations required for store admins only.
       if (args.adminLevel === "junior") {
         if (!args.adminCategory) {
-          throw new Error("Junior admins must have an adminCategory");
+          throw new ConvexError("Junior admins must have an adminCategory");
         }
         
         // Validate based on category
         if (args.adminCategory === "store") {
           // Store admins REQUIRE at least one storage location
           if (!args.allowedStorageLocationIds || args.allowedStorageLocationIds.length === 0) {
-            throw new Error("Store admins must have at least one assigned storage location");
+            throw new ConvexError("Store admins must have at least one assigned storage location");
           }
           // Validate that all location IDs exist and are active
           for (const locationId of args.allowedStorageLocationIds) {
             const location = await ctx.db.get(locationId);
             if (!location) {
-              throw new Error(`Storage location ${locationId} not found`);
+              throw new ConvexError(`Storage location ${locationId} not found`);
             }
             if (!location.active) {
-              throw new Error(`Storage location ${locationId} is not active`);
+              throw new ConvexError(`Storage location ${locationId} is not active`);
             }
           }
         } else if (args.adminCategory === "community") {
@@ -246,21 +246,21 @@ export const createUser = mutation({
             for (const communityId of args.assignedCommunityIds) {
               const community = await ctx.db.get(communityId);
               if (!community) {
-                throw new Error(`Community ${communityId} not found`);
+                throw new ConvexError(`Community ${communityId} not found`);
               }
             }
           }
         } else if (args.adminCategory === "community_crm") {
           if (!normalizedEmail.endsWith(".crm")) {
-            throw new Error("Community CRM admins must use an email ending in .crm");
+            throw new ConvexError("Community CRM admins must use an email ending in .crm");
           }
           if (!args.assignedCommunityIds || args.assignedCommunityIds.length !== 1) {
-            throw new Error("Community CRM admins must be assigned to exactly one community");
+            throw new ConvexError("Community CRM admins must be assigned to exactly one community");
           }
           for (const communityId of args.assignedCommunityIds) {
             const community = await ctx.db.get(communityId);
             if (!community) {
-              throw new Error(`Community ${communityId} not found`);
+              throw new ConvexError(`Community ${communityId} not found`);
             }
           }
         } else if (args.adminCategory === "finance" || args.adminCategory === "message") {
@@ -273,10 +273,10 @@ export const createUser = mutation({
           for (const locationId of args.allowedStorageLocationIds) {
             const location = await ctx.db.get(locationId);
             if (!location) {
-              throw new Error(`Storage location ${locationId} not found`);
+              throw new ConvexError(`Storage location ${locationId} not found`);
             }
             if (!location.active) {
-              throw new Error(`Storage location ${locationId} is not active`);
+              throw new ConvexError(`Storage location ${locationId} is not active`);
             }
           }
         }
@@ -284,13 +284,13 @@ export const createUser = mutation({
     } else {
       // For non-admin roles, adminLevel and allowedStorageLocationIds should not be set
       if (args.adminLevel !== undefined) {
-        throw new Error("adminLevel can only be set for admin role");
+        throw new ConvexError("adminLevel can only be set for admin role");
       }
       if (args.adminCategory !== undefined) {
-        throw new Error("adminCategory can only be set for admin role");
+        throw new ConvexError("adminCategory can only be set for admin role");
       }
       if (args.allowedStorageLocationIds !== undefined && args.allowedStorageLocationIds.length > 0) {
-        throw new Error("allowedStorageLocationIds can only be set for junior admin role");
+        throw new ConvexError("allowedStorageLocationIds can only be set for junior admin role");
       }
     }
 
@@ -374,26 +374,26 @@ export const signup = mutation({
   handler: async (ctx, args) => {
     // At least one of email or phone must be provided
     if (!args.email && !args.phoneNumber) {
-      throw new Error("Either email or phone number is required");
+      throw new ConvexError("Either email or phone number is required");
     }
 
     // Validate email if provided
     if (args.email) {
       if (!isValidEmail(args.email)) {
-        throw new Error("Invalid email format");
+        throw new ConvexError("Invalid email format");
       }
     }
 
     // Validate phone number if provided
     if (args.phoneNumber) {
       if (!isValidPhoneNumber(args.phoneNumber)) {
-        throw new Error("Invalid phone number format. Please use format: +256 7XX XXX XXX or 07XX XXX XXX");
+        throw new ConvexError("Invalid phone number format. Please use format: +256 7XX XXX XXX or 07XX XXX XXX");
       }
     }
 
     // Validate password length
     if (args.password.length < 6) {
-      throw new Error("Password must be at least 6 characters long");
+      throw new ConvexError("Password must be at least 6 characters long");
     }
 
     // Normalize phone number if provided
@@ -408,7 +408,7 @@ export const signup = mutation({
         .first();
 
       if (existingByEmail) {
-        throw new Error("User with this email already exists");
+        throw new ConvexError("User with this email already exists");
       }
     }
 
@@ -420,7 +420,7 @@ export const signup = mutation({
         .first();
 
       if (existingByPhone) {
-        throw new Error("User with this phone number already exists");
+        throw new ConvexError("User with this phone number already exists");
       }
     }
 
@@ -448,7 +448,7 @@ export const signup = mutation({
     // Fetch the created user
     const user = await ctx.db.get(userId);
     if (!user) {
-      throw new Error("Failed to create user");
+      throw new ConvexError("Failed to create user");
     }
 
     // Return user info
@@ -482,7 +482,7 @@ export const login = mutation({
   handler: async (ctx, args) => {
     // At least one of email or phone must be provided
     if (!args.email && !args.phoneNumber) {
-      throw new Error("Either email or phone number is required");
+      throw new ConvexError("Either email or phone number is required");
     }
 
     let user = null;
@@ -506,18 +506,18 @@ export const login = mutation({
     }
 
     if (!user) {
-      throw new Error("Invalid email/phone or password");
+      throw new ConvexError("Invalid email/phone or password");
     }
 
     // Validate password
     const passwordHash = simpleHash(args.password.trim());
     if (user.passwordHash !== passwordHash) {
-      throw new Error("Invalid email/phone or password");
+      throw new ConvexError("Invalid email/phone or password");
     }
 
     // Check if user is active
     if (user.state !== "active") {
-      throw new Error("Account is not active. Please contact support.");
+      throw new ConvexError("Account is not active. Please contact support.");
     }
 
     // Update last active timestamp
@@ -610,23 +610,23 @@ export const changePassword = mutation({
   },
   handler: async (ctx, args) => {
     const user = await ctx.db.get(args.userId);
-    if (!user) throw new Error("User not found");
+    if (!user) throw new ConvexError("User not found");
 
     // Verify current password
-    if (!user.passwordHash) throw new Error("User does not have a password set");
+    if (!user.passwordHash) throw new ConvexError("User does not have a password set");
 
     const currentHash = simpleHash(args.currentPassword.trim());
     if (user.passwordHash !== currentHash) {
-      throw new Error("Current password is incorrect");
+      throw new ConvexError("Current password is incorrect");
     }
 
     // Validate new password
     if (args.newPassword.length < 8) {
-      throw new Error("New password must be at least 8 characters");
+      throw new ConvexError("New password must be at least 8 characters");
     }
 
     if (args.currentPassword === args.newPassword) {
-      throw new Error("New password must be different from current password");
+      throw new ConvexError("New password must be different from current password");
     }
 
     // Hash new password
@@ -654,7 +654,7 @@ export const updateUserRoleAndAssignment = mutation({
   handler: async (ctx, args) => {
     const existingUser = await ctx.db.get(args.userId);
     if (!existingUser || existingUser.role !== "admin") {
-      throw new Error("Admin user not found");
+      throw new ConvexError("Admin user not found");
     }
 
     const nextAdminLevel = args.adminLevel ?? existingUser.adminLevel;
@@ -663,10 +663,10 @@ export const updateUserRoleAndAssignment = mutation({
 
     if (nextAdminLevel === "junior" && nextAdminCategory === "community_crm") {
       if (!existingUser.email || !existingUser.email.toLowerCase().endsWith(".crm")) {
-        throw new Error("Community CRM admins must use an email ending in .crm");
+        throw new ConvexError("Community CRM admins must use an email ending in .crm");
       }
       if (!Array.isArray(nextAssignedCommunityIds) || nextAssignedCommunityIds.length !== 1) {
-        throw new Error("Community CRM admins must be assigned to exactly one community");
+        throw new ConvexError("Community CRM admins must be assigned to exactly one community");
       }
     }
 
@@ -674,7 +674,7 @@ export const updateUserRoleAndAssignment = mutation({
       for (const communityId of nextAssignedCommunityIds) {
         const community = await ctx.db.get(communityId as any);
         if (!community) {
-          throw new Error(`Community ${communityId} not found`);
+          throw new ConvexError(`Community ${communityId} not found`);
         }
       }
     }
@@ -925,7 +925,7 @@ export const checkAccountExists = mutation({
   },
   handler: async (ctx, args) => {
     if (!args.email && !args.phoneNumber) {
-      throw new Error("Either email or phone number is required");
+      throw new ConvexError("Either email or phone number is required");
     }
 
     let user = null;
@@ -962,7 +962,7 @@ export const loginWithSession = mutation({
   },
   handler: async (ctx, args) => {
     if (!args.email && !args.phoneNumber) {
-      throw new Error("Either email or phone number is required");
+      throw new ConvexError("Either email or phone number is required");
     }
 
     let user = null;
@@ -981,11 +981,11 @@ export const loginWithSession = mutation({
         .first();
     }
 
-    if (!user) throw new Error("Invalid email/phone or password");
+    if (!user) throw new ConvexError("Invalid email/phone or password");
 
     const passwordHash = simpleHash(args.password.trim());
-    if (user.passwordHash !== passwordHash) throw new Error("Invalid email/phone or password");
-    if (user.state !== "active") throw new Error("Account is not active. Please contact support.");
+    if (user.passwordHash !== passwordHash) throw new ConvexError("Invalid email/phone or password");
+    if (user.state !== "active") throw new ConvexError("Account is not active. Please contact support.");
 
     const now = getUgandaTime();
     await ctx.db.patch(user._id, { lastActiveAt: now });
@@ -1033,16 +1033,16 @@ export const signupWithSession = mutation({
   },
   handler: async (ctx, args) => {
     if (!args.email && !args.phoneNumber) {
-      throw new Error("Either email or phone number is required");
+      throw new ConvexError("Either email or phone number is required");
     }
     if (args.email && !isValidEmail(args.email)) {
-      throw new Error("Invalid email format");
+      throw new ConvexError("Invalid email format");
     }
     if (args.phoneNumber && !isValidPhoneNumber(args.phoneNumber)) {
-      throw new Error("Invalid phone number format. Please use format: +256 7XX XXX XXX or 07XX XXX XXX");
+      throw new ConvexError("Invalid phone number format. Please use format: +256 7XX XXX XXX or 07XX XXX XXX");
     }
     if (args.password.length < 6) {
-      throw new Error("Password must be at least 6 characters long");
+      throw new ConvexError("Password must be at least 6 characters long");
     }
 
     const normalizedPhone = args.phoneNumber ? normalizePhoneNumber(args.phoneNumber) : undefined;
@@ -1053,14 +1053,14 @@ export const signupWithSession = mutation({
         .query("users")
         .withIndex("by_email", (q) => q.eq("email", normalizedEmail))
         .first();
-      if (existing) throw new Error("User with this email already exists");
+      if (existing) throw new ConvexError("User with this email already exists");
     }
     if (normalizedPhone) {
       const existing = await ctx.db
         .query("users")
         .withIndex("by_phone", (q) => q.eq("phoneNumber", normalizedPhone))
         .first();
-      if (existing) throw new Error("User with this phone number already exists");
+      if (existing) throw new ConvexError("User with this phone number already exists");
     }
 
     const alias = generateAlias(args.role);

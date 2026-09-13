@@ -129,6 +129,13 @@ function LoginPageInner() {
     setLoading(true);
 
     try {
+      // Category first: it's the first thing on the form, and a login can
+      // roll into signup, which needs it.
+      if (!selectedRole) {
+        setError("Please select your category above to continue.");
+        setLoading(false);
+        return;
+      }
       if (!activeIdentifier) {
         setError(identifierMode === "phone" ? "Phone number is required" : "Email is required");
         setLoading(false);
@@ -136,11 +143,6 @@ function LoginPageInner() {
       }
       if (!password.trim()) {
         setError("Password is required");
-        setLoading(false);
-        return;
-      }
-      if (!selectedRole) {
-        setError("Please select your category above to continue.");
         setLoading(false);
         return;
       }

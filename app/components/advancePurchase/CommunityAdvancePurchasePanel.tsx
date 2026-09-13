@@ -330,7 +330,13 @@ function VerifiedMembersManager({ adminId, communityId }: { adminId: Id<"users">
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [saved, setSaved] = useState(false);
 
+  const legacyFarmers = useQuery(
+    api.advancePurchase.listFarmersWithOffersForConfig,
+    selectedConfigId ? { configId: selectedConfigId as Id<"advancePurchaseConfigs"> } : "skip"
+  );
+
   const activeConfig = (configs ?? []).find((c: any) => c._id === selectedConfigId);
+  const legacyFarmerIds = new Set((legacyFarmers ?? []).map((f: any) => String(f._id)));
 
   // Sync the checkbox selection whenever the chosen config's saved allow-list changes.
   const configAllowedKey = activeConfig ? `${activeConfig._id}:${(activeConfig.allowedFarmerIds || []).join(",")}` : "";
@@ -340,8 +346,17 @@ function VerifiedMembersManager({ adminId, communityId }: { adminId: Id<"users">
     setSelectedIds(new Set((activeConfig.allowedFarmerIds || []).map((id: any) => String(id))));
   }
 
+  // Farmers who already posted to this form but aren't in the current
+  // community-members list for some reason (e.g. membership record
+  // changed) — still show them so they're visibly protected, not just
+  // silently included by the backend's own grandfathering.
   const eligibleMembers = (members ?? []).filter((m: any) => ["farmer", "vendor", "store"].includes(m.role));
-  const filteredMembers = eligibleMembers.filter((m: any) => {
+  const knownIds = new Set(eligibleMembers.map((m: any) => String(m._id)));
+  const combinedMembers = [
+    ...eligibleMembers,
+    ...(legacyFarmers ?? []).filter((f: any) => !knownIds.has(String(f._id))),
+  ];
+  const filteredMembers = combinedMembers.filter((m: any) => {
     if (roleFilter !== "all" && m.role !== roleFilter) return false;
     if (search.trim()) {
       const needle = search.trim().toLowerCase();
@@ -352,6 +367,7 @@ function VerifiedMembersManager({ adminId, communityId }: { adminId: Id<"users">
   });
 
   const toggle = (id: string) => {
+    if (legacyFarmerIds.has(id)) return; // already posted to this form — can't be unverified
     setSaved(false);
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -374,7 +390,8 @@ function VerifiedMembersManager({ adminId, communityId }: { adminId: Id<"users">
     <div>
       <p style={{ fontSize: "0.85rem", color: "#555", marginTop: 0 }}>
         Pick which Advance Market form to manage, then search/filter community members and select who is allowed to post to it.
-        Leave everyone unchecked to allow all community members (the default).
+        Leave everyone unchecked to allow all community members (the default). Members who already posted to a form are
+        always kept verified for it, even for forms created before this feature existed.
       </p>
 
       <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, color: "#333", marginBottom: "0.3rem" }}>
@@ -417,7 +434,7 @@ function VerifiedMembersManager({ adminId, communityId }: { adminId: Id<"users">
           <p style={{ fontSize: "0.8rem", color: "#555" }}>
             {selectedIds.size === 0
               ? "No restriction set — all community members may post to this form."
-              : `${selectedIds.size} member(s) selected as verified for this form.`}
+              : `${new Set([...selectedIds, ...legacyFarmerIds]).size} member(s) verified for this form${legacyFarmerIds.size > 0 ? ` (including ${legacyFarmerIds.size} who already posted)` : ""}.`}
           </p>
 
           {members === undefined ? (
@@ -426,28 +443,40 @@ function VerifiedMembersManager({ adminId, communityId }: { adminId: Id<"users">
             <p style={{ color: "#777", fontSize: "0.9rem" }}>No matching community members.</p>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", maxHeight: 360, overflowY: "auto", marginBottom: "0.75rem" }}>
-              {filteredMembers.map((m: any) => (
-                <label
-                  key={m._id}
-                  style={{
-                    display: "flex", alignItems: "center", gap: "0.6rem",
-                    padding: "0.5rem 0.7rem", borderRadius: 8,
-                    border: selectedIds.has(String(m._id)) ? `2px solid ${BRAND}` : "1px solid #e0e0e0",
-                    background: selectedIds.has(String(m._id)) ? "#e8f5e9" : "#fff",
-                    cursor: "pointer",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.has(String(m._id))}
-                    onChange={() => toggle(String(m._id))}
-                  />
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: "0.9rem" }}>{m.alias || "Unnamed"} <span style={{ fontWeight: 500, color: "#888", fontSize: "0.78rem" }}>· {m.role}</span></div>
-                    <div style={{ fontSize: "0.78rem", color: "#888" }}>{m.phone || "No phone"}{m.district ? ` · ${m.district}` : ""}</div>
-                  </div>
-                </label>
-              ))}
+              {filteredMembers.map((m: any) => {
+                const isLegacy = legacyFarmerIds.has(String(m._id));
+                const isChecked = isLegacy || selectedIds.has(String(m._id));
+                return (
+                  <label
+                    key={m._id}
+                    style={{
+                      display: "flex", alignItems: "center", gap: "0.6rem",
+                      padding: "0.5rem 0.7rem", borderRadius: 8,
+                      border: isChecked ? `2px solid ${BRAND}` : "1px solid #e0e0e0",
+                      background: isChecked ? "#e8f5e9" : "#fff",
+                      cursor: isLegacy ? "default" : "pointer",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      disabled={isLegacy}
+                      onChange={() => toggle(String(m._id))}
+                    />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, fontSize: "0.9rem" }}>
+                        {m.alias || "Unnamed"} <span style={{ fontWeight: 500, color: "#888", fontSize: "0.78rem" }}>· {m.role}</span>
+                        {isLegacy && (
+                          <span style={{ marginLeft: "0.4rem", fontSize: "0.68rem", fontWeight: 700, color: BRAND, background: "#e8f5e9", padding: "0.05rem 0.4rem", borderRadius: 999 }}>
+                            📦 Already posted
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: "0.78rem", color: "#888" }}>{m.phone || "No phone"}{m.district ? ` · ${m.district}` : ""}</div>
+                    </div>
+                  </label>
+                );
+              })}
             </div>
           )}
 

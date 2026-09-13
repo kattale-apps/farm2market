@@ -226,11 +226,50 @@ export const setAllowedFarmers = mutation({
     const config = await ctx.db.get(args.configId);
     if (!config) throw new Error("Configuration not found");
     await assertCommunityAdmin(ctx, args.adminId, config.communityId);
+
+    // Leaving the list empty means "no restriction — everyone allowed" and
+    // must stay that way. Otherwise, farmers who already published an
+    // offer against this form (whether from before this allow-list
+    // feature existed, or from a prior restriction that missed them)
+    // must never be silently locked out by this edit — union them in.
+    let finalFarmerIds: Id<"users">[] = args.farmerIds;
+    if (args.farmerIds.length > 0) {
+      const existingOffers = await ctx.db
+        .query("advancePurchaseOffers")
+        .withIndex("by_config", (q: any) => q.eq("configId", args.configId))
+        .collect();
+      const merged = new Map<string, Id<"users">>();
+      for (const id of args.farmerIds) merged.set(String(id), id);
+      for (const offer of existingOffers) merged.set(String(offer.farmerId), offer.farmerId);
+      finalFarmerIds = Array.from(merged.values());
+    }
+
     await ctx.db.patch(args.configId, {
-      allowedFarmerIds: args.farmerIds,
+      allowedFarmerIds: finalFarmerIds,
       updatedAt: getUgandaTime(),
     });
     return { success: true };
+  },
+});
+
+/**
+ * Farmers (or vendors/stores) who already have at least one offer under
+ * this config — used by the community admin's "Verified Members" tab so
+ * legacy participants are shown as already-verified rather than looking
+ * like they need to be picked again.
+ */
+export const listFarmersWithOffersForConfig = query({
+  args: { configId: v.id("advancePurchaseConfigs") },
+  handler: async (ctx, args) => {
+    const offers = await ctx.db
+      .query("advancePurchaseOffers")
+      .withIndex("by_config", (q: any) => q.eq("configId", args.configId))
+      .collect();
+    const farmerIds = Array.from(new Set(offers.map((o: any) => String(o.farmerId))));
+    const farmers = await Promise.all(
+      farmerIds.map((id) => ctx.db.get(id as Id<"users">))
+    );
+    return farmers.filter((f): f is Doc<"users"> => f !== null);
   },
 });
 

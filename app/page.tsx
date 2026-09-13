@@ -267,14 +267,26 @@ export default function Home() {
       `}</style>
       <div className="f2m-banner has-dashboard-row">
         <div className="f2m-slot-brand" style={{
-            fontWeight: 700,
-            color: "#fff",
-            fontSize: "clamp(1.15rem, 4.4vw, 1.5rem)",
             fontFamily: '"Montserrat", sans-serif',
-            letterSpacing: "-0.02em",
             whiteSpace: "nowrap",
+            lineHeight: 1.05,
           }}>
-            Farm2Market
+            <div style={{
+              fontWeight: 700,
+              color: "#fff",
+              fontSize: "clamp(1.15rem, 4.4vw, 1.5rem)",
+              letterSpacing: "-0.02em",
+            }}>
+              Farm2Market
+            </div>
+            <div style={{
+              fontWeight: 600,
+              color: "rgba(255,255,255,0.85)",
+              fontSize: "clamp(0.6rem, 2.2vw, 0.75rem)",
+              letterSpacing: "0.01em",
+            }}>
+              Uganda.com
+            </div>
           </div>
 
           <div id="dashboard-title-slot" className="f2m-slot-title" />

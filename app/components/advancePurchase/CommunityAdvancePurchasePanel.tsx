@@ -315,6 +315,155 @@ function EvidenceReview({ adminId, communityId }: { adminId: Id<"users">; commun
   );
 }
 
+function VerifiedMembersManager({ adminId, communityId }: { adminId: Id<"users">; communityId: Id<"communities"> }) {
+  const configs = useQuery(api.advancePurchase.listConfigsForCommunity, { communityId });
+  const members = useQuery(api.introspection.getCommunityMembers, {
+    adminId,
+    communityId,
+    status: "APPROVED",
+  });
+  const setAllowedFarmers = useMutation(api.advancePurchase.setAllowedFarmers);
+
+  const [selectedConfigId, setSelectedConfigId] = useState<string>("");
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState<"all" | "farmer" | "vendor" | "store">("all");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [saved, setSaved] = useState(false);
+
+  const activeConfig = (configs ?? []).find((c: any) => c._id === selectedConfigId);
+
+  // Sync the checkbox selection whenever the chosen config's saved allow-list changes.
+  const configAllowedKey = activeConfig ? `${activeConfig._id}:${(activeConfig.allowedFarmerIds || []).join(",")}` : "";
+  const [syncedKey, setSyncedKey] = useState("");
+  if (activeConfig && configAllowedKey !== syncedKey) {
+    setSyncedKey(configAllowedKey);
+    setSelectedIds(new Set((activeConfig.allowedFarmerIds || []).map((id: any) => String(id))));
+  }
+
+  const eligibleMembers = (members ?? []).filter((m: any) => ["farmer", "vendor", "store"].includes(m.role));
+  const filteredMembers = eligibleMembers.filter((m: any) => {
+    if (roleFilter !== "all" && m.role !== roleFilter) return false;
+    if (search.trim()) {
+      const needle = search.trim().toLowerCase();
+      const haystack = `${m.alias || ""} ${m.phone || ""} ${m.district || ""}`.toLowerCase();
+      if (!haystack.includes(needle)) return false;
+    }
+    return true;
+  });
+
+  const toggle = (id: string) => {
+    setSaved(false);
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const handleSave = async () => {
+    if (!activeConfig) return;
+    await setAllowedFarmers({
+      adminId,
+      configId: activeConfig._id,
+      farmerIds: Array.from(selectedIds) as Id<"users">[],
+    });
+    setSaved(true);
+  };
+
+  return (
+    <div>
+      <p style={{ fontSize: "0.85rem", color: "#555", marginTop: 0 }}>
+        Pick which Advance Market form to manage, then search/filter community members and select who is allowed to post to it.
+        Leave everyone unchecked to allow all community members (the default).
+      </p>
+
+      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, color: "#333", marginBottom: "0.3rem" }}>
+        Advance Market form
+      </label>
+      <select
+        value={selectedConfigId}
+        onChange={(e) => { setSelectedConfigId(e.target.value); setSaved(false); }}
+        style={inputStyle}
+      >
+        <option value="">Select a form…</option>
+        {(configs ?? []).map((c: any) => (
+          <option key={c._id} value={c._id}>{c.name}{c.isActive ? "" : " (inactive)"}</option>
+        ))}
+      </select>
+
+      {!activeConfig ? (
+        <p style={{ color: "#777", fontSize: "0.9rem" }}>Select a form above to manage its verified members.</p>
+      ) : (
+        <>
+          <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.6rem", flexWrap: "wrap" }}>
+            <input
+              placeholder="Search by name, phone, or district"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{ ...inputStyle, marginBottom: 0, flex: 2, minWidth: 180 }}
+            />
+            <select
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value as any)}
+              style={{ ...inputStyle, marginBottom: 0, flex: 1, minWidth: 120 }}
+            >
+              <option value="all">All roles</option>
+              <option value="farmer">Farmers</option>
+              <option value="vendor">Vendors</option>
+              <option value="store">Stores</option>
+            </select>
+          </div>
+
+          <p style={{ fontSize: "0.8rem", color: "#555" }}>
+            {selectedIds.size === 0
+              ? "No restriction set — all community members may post to this form."
+              : `${selectedIds.size} member(s) selected as verified for this form.`}
+          </p>
+
+          {members === undefined ? (
+            <p>Loading community members...</p>
+          ) : filteredMembers.length === 0 ? (
+            <p style={{ color: "#777", fontSize: "0.9rem" }}>No matching community members.</p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", maxHeight: 360, overflowY: "auto", marginBottom: "0.75rem" }}>
+              {filteredMembers.map((m: any) => (
+                <label
+                  key={m._id}
+                  style={{
+                    display: "flex", alignItems: "center", gap: "0.6rem",
+                    padding: "0.5rem 0.7rem", borderRadius: 8,
+                    border: selectedIds.has(String(m._id)) ? `2px solid ${BRAND}` : "1px solid #e0e0e0",
+                    background: selectedIds.has(String(m._id)) ? "#e8f5e9" : "#fff",
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(String(m._id))}
+                    onChange={() => toggle(String(m._id))}
+                  />
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: "0.9rem" }}>{m.alias || "Unnamed"} <span style={{ fontWeight: 500, color: "#888", fontSize: "0.78rem" }}>· {m.role}</span></div>
+                    <div style={{ fontSize: "0.78rem", color: "#888" }}>{m.phone || "No phone"}{m.district ? ` · ${m.district}` : ""}</div>
+                  </div>
+                </label>
+              ))}
+            </div>
+          )}
+
+          <button
+            onClick={handleSave}
+            style={{ padding: "0.7rem 1.1rem", background: BRAND, color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, cursor: "pointer" }}
+          >
+            Save verified members
+          </button>
+          {saved && <span style={{ marginLeft: "0.75rem", color: BRAND, fontWeight: 700, fontSize: "0.85rem" }}>✅ Saved</span>}
+        </>
+      )}
+    </div>
+  );
+}
+
 /**
  * Shared Advanced Markets config + proof-picture-review panel for a single
  * community. Used both by the standalone /admin/advance-purchase page
@@ -322,22 +471,28 @@ function EvidenceReview({ adminId, communityId }: { adminId: Id<"users">; commun
  * tab inside the per-community community-dashboard console.
  */
 export function CommunityAdvancePurchasePanel({ adminId, communityId }: { adminId: Id<"users">; communityId: Id<"communities"> }) {
-  const [tab, setTab] = useState<"configure" | "review">("configure");
+  const [tab, setTab] = useState<"configure" | "verified" | "review">("configure");
   const [showBuilder, setShowBuilder] = useState(false);
   const configs = useQuery(api.advancePurchase.listConfigsForCommunity, { communityId });
 
   return (
     <div style={{ fontFamily: FONT }}>
-      <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}>
+      <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem", flexWrap: "wrap" }}>
         <button
           onClick={() => setTab("configure")}
-          style={{ flex: 1, padding: "0.6rem", background: tab === "configure" ? BRAND : "#eee", color: tab === "configure" ? "#fff" : "#333", border: "none", borderRadius: 8, fontWeight: 700, cursor: "pointer" }}
+          style={{ flex: 1, padding: "0.6rem", background: tab === "configure" ? BRAND : "#eee", color: tab === "configure" ? "#fff" : "#333", border: "none", borderRadius: 8, fontWeight: 700, cursor: "pointer", minWidth: 120 }}
         >
           Configure
         </button>
         <button
+          onClick={() => setTab("verified")}
+          style={{ flex: 1, padding: "0.6rem", background: tab === "verified" ? BRAND : "#eee", color: tab === "verified" ? "#fff" : "#333", border: "none", borderRadius: 8, fontWeight: 700, cursor: "pointer", minWidth: 120 }}
+        >
+          Verified Members
+        </button>
+        <button
           onClick={() => setTab("review")}
-          style={{ flex: 1, padding: "0.6rem", background: tab === "review" ? BRAND : "#eee", color: tab === "review" ? "#fff" : "#333", border: "none", borderRadius: 8, fontWeight: 700, cursor: "pointer" }}
+          style={{ flex: 1, padding: "0.6rem", background: tab === "review" ? BRAND : "#eee", color: tab === "review" ? "#fff" : "#333", border: "none", borderRadius: 8, fontWeight: 700, cursor: "pointer", minWidth: 120 }}
         >
           Proof pictures
         </button>
@@ -378,6 +533,8 @@ export function CommunityAdvancePurchasePanel({ adminId, communityId }: { adminI
           )}
         </>
       )}
+
+      {tab === "verified" && <VerifiedMembersManager adminId={adminId} communityId={communityId} />}
 
       {tab === "review" && <EvidenceReview adminId={adminId} communityId={communityId} />}
     </div>

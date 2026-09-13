@@ -216,6 +216,24 @@ export const updateConfig = mutation({
   },
 });
 
+export const setAllowedFarmers = mutation({
+  args: {
+    adminId: v.id("users"),
+    configId: v.id("advancePurchaseConfigs"),
+    farmerIds: v.array(v.id("users")),
+  },
+  handler: async (ctx, args) => {
+    const config = await ctx.db.get(args.configId);
+    if (!config) throw new Error("Configuration not found");
+    await assertCommunityAdmin(ctx, args.adminId, config.communityId);
+    await ctx.db.patch(args.configId, {
+      allowedFarmerIds: args.farmerIds,
+      updatedAt: getUgandaTime(),
+    });
+    return { success: true };
+  },
+});
+
 export const listConfigsForCommunity = query({
   args: { communityId: v.id("communities"), onlyActive: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
@@ -259,6 +277,10 @@ export const listConfigsAvailableToFarmer = query({
         .collect();
       const community = await ctx.db.get(m.communityId);
       for (const c of configs) {
+        if (c.allowedFarmerIds && c.allowedFarmerIds.length > 0) {
+          const allowed = c.allowedFarmerIds.some((id: any) => String(id) === String(args.farmerId));
+          if (!allowed) continue;
+        }
         results.push({ ...c, communityName: (community as any)?.name });
       }
     }
@@ -301,6 +323,13 @@ export const createOffer = mutation({
       throw new Error("This Advanced Markets configuration is not available");
     }
     await assertCommunityMember(ctx, args.farmerId, config.communityId);
+
+    if (config.allowedFarmerIds && config.allowedFarmerIds.length > 0) {
+      const allowed = config.allowedFarmerIds.some((id: any) => String(id) === String(args.farmerId));
+      if (!allowed) {
+        throw new Error("You are not a verified member for this Advance Market form. Contact your community admin.");
+      }
+    }
 
     if (!config.recurrenceOptions.includes(args.recurrence)) {
       throw new Error("Recurrence option not allowed by this community's configuration");

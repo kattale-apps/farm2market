@@ -2648,6 +2648,10 @@ export default defineSchema({
     serviceCategory: v.optional(v.string()), // e.g. "Planting", "Harvesting", or a custom admin-entered service name
     instructions: v.optional(v.string()),
     isActive: v.boolean(),
+    // When set (non-empty), only these community members may post an offer
+    // against this config — the admin's "Verified Members" allow-list. When
+    // undefined/empty, every community member may post (backward compatible).
+    allowedFarmerIds: v.optional(v.array(v.id("users"))),
     // Farmer-facing fields beyond the structured core fields, admin-configured.
     customFields: v.array(v.object({
       key: v.string(),

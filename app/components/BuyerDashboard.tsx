@@ -913,7 +913,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
 
   const titleContent = (
     <h2 style={{
-      fontSize: "clamp(1.05rem, 4vw, 1.4rem)",
+      fontSize: "clamp(0.95rem, 3.6vw, 1.3rem)",
       margin: 0,
       color: "#fff",
       fontFamily: '"Montserrat", sans-serif',

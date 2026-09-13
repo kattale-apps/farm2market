@@ -107,12 +107,11 @@ export default function FarmerOfferProgressPage() {
           </h3>
           <p style={{ fontSize: "0.82rem", color: "#666", marginBottom: "0.75rem" }}>
             {currentMilestone.expectedDate ? `Due ${new Date(currentMilestone.expectedDate).toLocaleDateString()} · ` : ""}
-            Timestamp and location captured automatically.
+            Timestamp captured automatically.
           </p>
           <MilestoneEvidenceCapture
             farmerId={user.userId as any}
             milestoneId={currentMilestone._id}
-            gpsRequired={currentMilestone.gpsRequired}
             onSubmitted={() => {}}
           />
         </div>

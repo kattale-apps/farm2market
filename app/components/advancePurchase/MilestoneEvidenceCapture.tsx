@@ -9,7 +9,6 @@ import { GeneralCameraCapture } from "../GeneralCameraCapture";
 interface Props {
   farmerId: Id<"users">;
   milestoneId: Id<"advancePurchaseMilestones">;
-  gpsRequired: boolean;
   onSubmitted: () => void;
 }
 
@@ -22,7 +21,7 @@ function dataUrlToBlob(dataUrl: string): Blob {
   return new Blob([array], { type: mime });
 }
 
-export function MilestoneEvidenceCapture({ farmerId, milestoneId, gpsRequired, onSubmitted }: Props) {
+export function MilestoneEvidenceCapture({ farmerId, milestoneId, onSubmitted }: Props) {
   const generateUploadUrl = useMutation(api.files.generateUploadUrl);
   const submitEvidence = useMutation(api.advancePurchase.submitMilestoneEvidence);
   const [submitting, setSubmitting] = useState(false);
@@ -47,10 +46,6 @@ export function MilestoneEvidenceCapture({ farmerId, milestoneId, gpsRequired, o
 
   const handleSubmit = async () => {
     if (!pendingCapture) return;
-    if (gpsRequired && (pendingCapture.lat == null || pendingCapture.lng == null)) {
-      setError("Location could not be captured. Please enable GPS and retake the photo.");
-      return;
-    }
     setSubmitting(true);
     setError(null);
     try {

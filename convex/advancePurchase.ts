@@ -1013,9 +1013,8 @@ export const submitMilestoneEvidence = mutation({
     if (!["pending", "resubmission_required"].includes(milestone.status)) {
       throw new Error("This milestone is not awaiting evidence");
     }
-    if (milestone.gpsRequired && (args.lat == null || args.lng == null)) {
-      throw new Error("GPS location is required for this milestone but was not captured");
-    }
+    // GPS is captured best-effort when available but never required —
+    // farmers can submit proof pictures without location data.
 
     const url = await ctx.storage.getUrl(args.storageId);
     if (!url) throw new Error("Uploaded photo could not be found in storage");

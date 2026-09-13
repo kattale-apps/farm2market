@@ -6,6 +6,7 @@ import { getDeploymentMode, getConvexUrl } from "./utils/deployment";
 import { NetworkProvider } from "./context/NetworkContext";
 import { OfflineBanner } from "./components/OfflineBanner";
 import { CommunityAutoJoin } from "./components/CommunityAutoJoin";
+import { ChunkErrorRecovery } from "./components/ChunkErrorRecovery";
 import { setSyncClient } from "./lib/syncService";
 
 export function Providers({ children }: { children: ReactNode }) {
@@ -39,16 +40,18 @@ export function Providers({ children }: { children: ReactNode }) {
     console.warn(`[${deploymentMode.toUpperCase()}] Convex client is null - rendering without provider`);
     return (
       <NetworkProvider>
+        <ChunkErrorRecovery />
         {children}
         <OfflineBanner />
       </NetworkProvider>
     );
   }
-  
+
   console.log(`[${deploymentMode.toUpperCase()}] Rendering with ConvexProvider`);
   return (
     <ConvexProvider client={convex}>
       <NetworkProvider>
+        <ChunkErrorRecovery />
         <CommunityAutoJoin />
         {children}
         <OfflineBanner />

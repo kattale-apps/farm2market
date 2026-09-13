@@ -2,6 +2,14 @@ const withPWA = require('next-pwa')({
   dest: 'public',
   register: true,
   skipWaiting: true,
+  // Let a newly-activated service worker take control of already-open
+  // pages immediately, and use next-pwa's default runtime caching (which
+  // fetches pages/data NetworkFirst, only falling back to cache when
+  // offline) instead of the plugin's own bare-bones default — this
+  // shrinks the window where an installed app/PWA can be left running a
+  // stale cached page shell after a new deploy.
+  clientsClaim: true,
+  runtimeCaching: require('next-pwa/cache'),
   disable: process.env.NODE_ENV === 'development',
 });
 

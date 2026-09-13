@@ -48,7 +48,7 @@ export default function CommitmentDetailPage() {
       {detail.offer?.photoUrls && detail.offer.photoUrls.length > 0 && (
         <div style={{ background: "#fff", border: "1px solid #e0e0e0", borderRadius: 12, padding: "1rem", marginBottom: "1rem" }}>
           <h3 style={{ margin: "0 0 0.6rem", fontSize: "1rem" }}>Gallery</h3>
-          <SubmissionPhotoGallery photos={detail.offer.photoUrls} minTileWidth={100} tileHeight={100} />
+          <SubmissionPhotoGallery photos={detail.offer.photoUrls} minTileWidth={90} tileHeight={90} />
         </div>
       )}
 

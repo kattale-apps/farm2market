@@ -344,14 +344,14 @@ export default function AdvancePurchaseOfferDetailPage() {
 
       {offer.photoUrls && offer.photoUrls.length > 0 && (
         <Section title="Gallery">
-          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))", gap: "0.4rem" }}>
             {offer.photoUrls.map((url: string, i: number) => (
               <img
                 key={i}
                 src={url}
                 alt={`${offer.productName} ${i + 1}`}
                 onClick={() => setLightboxUrl(url)}
-                style={{ width: 110, height: 110, objectFit: "cover", borderRadius: 8, border: "1px solid #e0e0e0", cursor: "zoom-in" }}
+                style={{ width: "100%", height: 90, objectFit: "cover", borderRadius: 8, border: "1px solid #e0e0e0", cursor: "zoom-in" }}
               />
             ))}
           </div>

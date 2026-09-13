@@ -129,13 +129,10 @@ function LoginPageInner() {
     setLoading(true);
 
     try {
-      // Category first: it's the first thing on the form, and a login can
-      // roll into signup, which needs it.
-      if (!selectedRole) {
-        setError("Please select your category above to continue.");
-        setLoading(false);
-        return;
-      }
+      // The category is only used to create an account, so it is required at
+      // the signup step rather than here. Demanding it to log in locked out
+      // every role missing from the picker — admins above all, who have no
+      // category to choose.
       if (!activeIdentifier) {
         setError(identifierMode === "phone" ? "Phone number is required" : "Email is required");
         setLoading(false);
@@ -154,6 +151,11 @@ function LoginPageInner() {
       };
 
       if (authStep === "confirmSignup") {
+        if (!selectedRole) {
+          setError("Please select your category above to continue.");
+          setLoading(false);
+          return;
+        }
         if (!isSelectedRoleSignupEnabled) {
           setError(`New account creation is currently disabled for ${selectedRoleLabel}. Existing accounts can still log in.`);
           setLoading(false);
@@ -207,7 +209,11 @@ function LoginPageInner() {
             if (accountExists === false) {
               setAuthStep("confirmSignup");
               setConfirmPassword("");
-              setError(`Confirm your password to create a new ${selectedRoleLabel} account.`);
+              setError(
+                selectedRole
+                  ? `Confirm your password to create a new ${selectedRoleLabel} account.`
+                  : "No account found. Select your category above, then confirm your password to create one."
+              );
             } else if (accountExists === true) {
               setError("Invalid credentials. Please try again.");
             } else {
@@ -340,7 +346,7 @@ function LoginPageInner() {
         <form onSubmit={handleSubmit}>
           <div style={{ marginBottom: "0.55rem" }}>
             <label style={{ display: "block", marginBottom: "0.35rem", color: "#2e7d32", fontWeight: "500", fontSize: "0.9rem" }}>
-              Select Category
+              Select Category <span style={{ fontWeight: 400, color: "#777" }}>(new accounts only)</span>
             </label>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "0.5rem" }}>
               {SIGNUP_ROLES.map((entry) => {

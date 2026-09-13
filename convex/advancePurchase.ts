@@ -543,6 +543,41 @@ export const addOfferPhotos = mutation({
   },
 });
 
+export const removeOfferPhotos = mutation({
+  args: {
+    offerId: v.id("advancePurchaseOffers"),
+    farmerId: v.id("users"),
+    storageIds: v.array(v.id("_storage")),
+  },
+  handler: async (ctx, args) => {
+    const offer = await ctx.db.get(args.offerId);
+    if (!offer) throw new Error("Offer not found");
+    if (String(offer.farmerId) !== String(args.farmerId)) {
+      throw new Error("You can only edit your own offer's photos");
+    }
+    if (["cancelled", "fulfilled"].includes(offer.status)) {
+      throw new Error("This offer can no longer be updated");
+    }
+    if (args.storageIds.length === 0) {
+      throw new Error("Select at least one photo to remove");
+    }
+    const existing = offer.photoStorageIds || [];
+    const removeSet = new Set(args.storageIds.map((id) => String(id)));
+    const remaining = existing.filter((id: any) => !removeSet.has(String(id)));
+    if (remaining.length === 0) {
+      throw new Error("At least one product photo must remain");
+    }
+    await ctx.db.patch(args.offerId, {
+      photoStorageIds: remaining,
+      updatedAt: getUgandaTime(),
+    });
+    for (const id of args.storageIds) {
+      await ctx.storage.delete(id).catch(() => {});
+    }
+    return { success: true };
+  },
+});
+
 export const publishOffer = mutation({
   args: { offerId: v.id("advancePurchaseOffers"), farmerId: v.id("users") },
   handler: async (ctx, args) => {
@@ -664,9 +699,15 @@ export const getOfferDetail = query({
       .query("advancePurchaseCommitments")
       .withIndex("by_offer", (q: any) => q.eq("offerId", args.offerId))
       .collect();
-    const photoUrls = offer.photoStorageIds
-      ? (await Promise.all(offer.photoStorageIds.map((id: any) => ctx.storage.getUrl(id)))).filter((u): u is string => !!u)
+    const photos = offer.photoStorageIds
+      ? (await Promise.all(
+          offer.photoStorageIds.map(async (id: any) => {
+            const url = await ctx.storage.getUrl(id);
+            return url ? { storageId: id, url } : null;
+          })
+        )).filter((p): p is { storageId: any; url: string } => p !== null)
       : [];
+    const photoUrls = photos.map((p) => p.url);
     const milestonesWithProof = await Promise.all(
       milestones.map(async (m: any) => {
         const proofPictures = await ctx.db
@@ -687,6 +728,7 @@ export const getOfferDetail = query({
       milestones: milestonesWithProof.sort((a: any, b: any) => a.order - b.order),
       commitmentCount: commitments.length,
       photoUrls,
+      photos,
     };
   },
 });

@@ -7,7 +7,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useStoredUser } from "../../../../hooks/useStoredUser";
 import { MilestoneEvidenceCapture } from "../../../../components/advancePurchase/MilestoneEvidenceCapture";
-import { AddOfferPhotos } from "../../../../components/advancePurchase/AddOfferPhotos";
+import { EditOfferGallery } from "../../../../components/advancePurchase/EditOfferGallery";
 import { EditOfferDetails } from "../../../../components/advancePurchase/EditOfferDetails";
 import SubmissionPhotoGallery from "../../../../components/SubmissionPhotoGallery";
 
@@ -52,12 +52,7 @@ export default function FarmerOfferProgressPage() {
 
       <div style={{ background: "#fff", border: "1px solid #e0e0e0", borderRadius: 12, padding: "1rem", marginBottom: "1rem" }}>
         <h3 style={{ margin: "0 0 0.6rem", fontSize: "1rem" }}>Gallery</h3>
-        {offer.photoUrls && offer.photoUrls.length > 0 && (
-          <div style={{ marginBottom: "0.6rem" }}>
-            <SubmissionPhotoGallery photos={offer.photoUrls} minTileWidth={90} tileHeight={90} />
-          </div>
-        )}
-        <AddOfferPhotos farmerId={user.userId as any} offerId={offer._id} />
+        <EditOfferGallery farmerId={user.userId as any} offerId={offer._id} photos={offer.photos || []} />
       </div>
 
       <div style={{ background: "#fff", border: "1px solid #e0e0e0", borderRadius: 12, padding: "1rem", marginBottom: "1rem" }}>

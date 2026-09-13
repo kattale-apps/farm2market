@@ -136,6 +136,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   const isSectionOpen = (key: string) => Boolean(openSections[key]);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [walletBalanceExpanded, setWalletBalanceExpanded] = useState(false);
+  const [walletBalanceVisible, setWalletBalanceVisible] = useState(true);
   const [titleSlot, setTitleSlot] = useState<HTMLElement | null>(null);
   const [msgSlot, setMsgSlot] = useState<HTMLElement | null>(null);
   const [moreSlot, setMoreSlot] = useState<HTMLElement | null>(null);
@@ -1411,14 +1412,33 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
             <p style={{ color: "#999", margin: "0.5rem 0 0" }}>Loading...</p>
           ) : (
             <div>
-              <div style={{ fontSize: "1.35rem", fontWeight: "600", color: "#1976d2", marginTop: "0.35rem" }}>
-                {formatUGX(walletBalance.balance)}
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.35rem" }}>
+                <span style={{ fontSize: "1.35rem", fontWeight: "600", color: "#1976d2" }}>
+                  {walletBalanceVisible ? formatUGX(walletBalance.balance) : "UGX ••••••"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setWalletBalanceVisible((v) => !v)}
+                  aria-label={walletBalanceVisible ? "Hide balance" : "Show balance"}
+                  title={walletBalanceVisible ? "Hide balance" : "Show balance"}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: "0.15rem",
+                    cursor: "pointer",
+                    fontSize: "1.05rem",
+                    lineHeight: 1,
+                    color: "#666",
+                  }}
+                >
+                  {walletBalanceVisible ? "👁️" : "🙈"}
+                </button>
               </div>
               {walletBalanceExpanded && (
                 <div style={{ marginTop: "0.75rem", paddingTop: "0.75rem", borderTop: "1px solid #eee" }}>
                   <div style={{ color: "#666", fontSize: "0.9rem" }}>Total Deposits</div>
                   <div style={{ fontSize: "1.1rem", color: "#666" }}>
-                    {formatUGX(walletBalance.totalDeposits)}
+                    {walletBalanceVisible ? formatUGX(walletBalance.totalDeposits) : "UGX ••••••"}
                   </div>
                 </div>
               )}
@@ -1435,7 +1455,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
           border: "1px solid #e0e0e0"
         }}>
           <h3 style={{ marginTop: 0, marginBottom: "1rem", fontSize: "clamp(1rem, 3vw, 1.2rem)", color: "#1a1a1a" }}>
-            Deposit Funds
+            Deposit Funds Into Your Wallet
           </h3>
           <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
             <div>

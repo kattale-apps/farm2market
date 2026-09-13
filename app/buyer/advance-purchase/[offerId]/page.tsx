@@ -221,7 +221,7 @@ export default function AdvancePurchaseOfferDetailPage() {
             cursor: busy ? "not-allowed" : "pointer",
           }}
         >
-          {busy ? "Processing..." : "Fund Advance Purchase (wallet)"}
+          {busy ? "Processing..." : "Deposit in Advance"}
         </button>
 
         {offer.negotiationAllowed && (

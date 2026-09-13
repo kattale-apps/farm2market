@@ -13,29 +13,63 @@ const inputStyle: React.CSSProperties = {
   width: "100%", padding: "0.6rem", borderRadius: 8, border: "1px solid #ccc", marginBottom: "0.6rem", fontFamily: FONT, boxSizing: "border-box",
 };
 
-function ConfigBuilder({ adminId, communityId, onDone }: { adminId: Id<"users">; communityId: Id<"communities">; onDone: () => void }) {
+const DEFAULT_MILESTONES = [
+  { order: 1, name: "Germinate", photoRequired: true, gpsRequired: true, timestampRequired: true, releasePercent: 25, expectedDaysFromPublish: 30 },
+  { order: 2, name: "Grow", photoRequired: true, gpsRequired: true, timestampRequired: true, releasePercent: 25, expectedDaysFromPublish: 90 },
+  { order: 3, name: "Harden", photoRequired: true, gpsRequired: true, timestampRequired: true, releasePercent: 25, expectedDaysFromPublish: 150 },
+  { order: 4, name: "Ready", photoRequired: true, gpsRequired: true, timestampRequired: true, releasePercent: 25, expectedDaysFromPublish: 180 },
+];
+
+/**
+ * Creates a configuration, or edits an existing one when `existing` is passed.
+ *
+ * One form serves both so the two can never drift apart — an edit form that
+ * offered different fields from the create form would quietly make some
+ * settings uneditable, which is the problem this is fixing.
+ */
+function ConfigBuilder({ adminId, communityId, existing, onDone }: { adminId: Id<"users">; communityId: Id<"communities">; existing?: any; onDone: () => void }) {
   const createConfig = useMutation(api.advancePurchase.createConfig);
-  const [name, setName] = useState("");
-  const [productCategory, setProductCategory] = useState("");
-  const [offerKind, setOfferKind] = useState<"goods" | "services">("goods");
-  const [goodsCategory, setGoodsCategory] = useState<"crop" | "livestock">("crop");
-  const [serviceCategory, setServiceCategory] = useState(FARM_SERVICE_OPTIONS[0]);
-  const [customService, setCustomService] = useState("");
-  const [usingCustomService, setUsingCustomService] = useState(false);
-  const [instructions, setInstructions] = useState("");
-  const [unitOptions, setUnitOptions] = useState("seedlings, kg, bags");
-  const [recurrenceOptions, setRecurrenceOptions] = useState("one_off, seasonal, production_cycle");
-  const [negotiationAllowed, setNegotiationAllowed] = useState(true);
-  const [buyerCanProposePrice, setBuyerCanProposePrice] = useState(false);
-  const [insuranceEnabled, setInsuranceEnabled] = useState(false);
-  const [insuranceLabel, setInsuranceLabel] = useState("Farm insurance");
-  const [insuranceAmount, setInsuranceAmount] = useState("");
-  const [milestones, setMilestones] = useState([
-    { order: 1, name: "Germinate", photoRequired: true, gpsRequired: true, timestampRequired: true, releasePercent: 25, expectedDaysFromPublish: 30 },
-    { order: 2, name: "Grow", photoRequired: true, gpsRequired: true, timestampRequired: true, releasePercent: 25, expectedDaysFromPublish: 90 },
-    { order: 3, name: "Harden", photoRequired: true, gpsRequired: true, timestampRequired: true, releasePercent: 25, expectedDaysFromPublish: 150 },
-    { order: 4, name: "Ready", photoRequired: true, gpsRequired: true, timestampRequired: true, releasePercent: 25, expectedDaysFromPublish: 180 },
-  ]);
+  const updateConfig = useMutation(api.advancePurchase.updateConfig);
+  const isEdit = !!existing;
+  const existingService: string | undefined = existing?.serviceCategory;
+  const serviceIsPreset = !existingService || FARM_SERVICE_OPTIONS.includes(existingService as any);
+
+  const [name, setName] = useState(existing?.name ?? "");
+  const [productCategory, setProductCategory] = useState(existing?.productCategory ?? "");
+  const [offerKind, setOfferKind] = useState<"goods" | "services">(existing?.offerKind ?? "goods");
+  const [goodsCategory, setGoodsCategory] = useState<"crop" | "livestock">(existing?.goodsCategory ?? "crop");
+  const [serviceCategory, setServiceCategory] = useState(
+    serviceIsPreset && existingService ? existingService : FARM_SERVICE_OPTIONS[0]
+  );
+  const [customService, setCustomService] = useState(serviceIsPreset ? "" : (existingService ?? ""));
+  const [usingCustomService, setUsingCustomService] = useState(!serviceIsPreset);
+  const [instructions, setInstructions] = useState(existing?.instructions ?? "");
+  const [unitOptions, setUnitOptions] = useState<string>(
+    existing?.unitOptions?.join(", ") ?? "seedlings, kg, bags"
+  );
+  const [recurrenceOptions, setRecurrenceOptions] = useState<string>(
+    existing?.recurrenceOptions?.join(", ") ?? "one_off, seasonal, production_cycle"
+  );
+  const [negotiationAllowed, setNegotiationAllowed] = useState(existing?.negotiationAllowed ?? true);
+  const [buyerCanProposePrice, setBuyerCanProposePrice] = useState(existing?.buyerCanProposePrice ?? false);
+  const [insuranceEnabled, setInsuranceEnabled] = useState(existing?.insuranceEnabled ?? false);
+  const [insuranceLabel, setInsuranceLabel] = useState(existing?.insuranceLabel ?? "Farm insurance");
+  const [insuranceAmount, setInsuranceAmount] = useState(
+    existing?.insuranceAmount != null ? String(existing.insuranceAmount) : ""
+  );
+  const [milestones, setMilestones] = useState<any[]>(
+    existing?.milestoneTemplate?.length
+      ? existing.milestoneTemplate.map((m: any) => ({
+          order: m.order,
+          name: m.name,
+          photoRequired: m.photoRequired,
+          gpsRequired: m.gpsRequired,
+          timestampRequired: m.timestampRequired,
+          releasePercent: m.releasePercent,
+          expectedDaysFromPublish: m.expectedDaysFromPublish,
+        }))
+      : DEFAULT_MILESTONES
+  );
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -53,16 +87,13 @@ function ConfigBuilder({ adminId, communityId, onDone }: { adminId: Id<"users">;
     setBusy(true);
     setError(null);
     try {
-      await createConfig({
-        adminId,
-        communityId,
+      const payload = {
         name,
         productCategory,
         offerKind,
         goodsCategory: offerKind === "goods" ? goodsCategory : undefined,
         serviceCategory: offerKind === "services" ? (usingCustomService ? customService.trim() : serviceCategory) : undefined,
         instructions: instructions || undefined,
-        customFields: [],
         unitOptions: unitOptions.split(",").map((s) => s.trim()).filter(Boolean),
         recurrenceOptions: recurrenceOptions.split(",").map((s) => s.trim()).filter(Boolean),
         negotiationAllowed,
@@ -79,7 +110,15 @@ function ConfigBuilder({ adminId, communityId, onDone }: { adminId: Id<"users">;
           timestampRequired: m.timestampRequired,
           releasePercent: Number(m.releasePercent),
         })),
-      });
+      };
+
+      if (isEdit) {
+        // customFields is deliberately omitted: this form has no editor for
+        // them, and sending [] would wipe any that exist.
+        await updateConfig({ configId: existing._id, adminId, ...payload });
+      } else {
+        await createConfig({ adminId, communityId, customFields: [], ...payload });
+      }
       onDone();
     } catch (err) {
       setError((err as Error).message);
@@ -92,7 +131,9 @@ function ConfigBuilder({ adminId, communityId, onDone }: { adminId: Id<"users">;
 
   return (
     <div style={{ background: "#fff", border: "1px solid #e0e0e0", borderRadius: 12, padding: "1rem", marginBottom: "1rem" }}>
-      <h3 style={{ margin: "0 0 0.75rem" }}>New Advanced Markets configuration</h3>
+      <h3 style={{ margin: "0 0 0.75rem" }}>
+        {isEdit ? `Edit "${existing.name}"` : "New Advanced Markets configuration"}
+      </h3>
       <input placeholder="Program name (e.g. Coffee Seedlings)" value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} />
 
       <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, color: "#333", marginBottom: "0.3rem" }}>
@@ -214,16 +255,26 @@ function ConfigBuilder({ adminId, communityId, onDone }: { adminId: Id<"users">;
       </p>
 
       {error && <p style={{ color: "#d32f2f", fontSize: "0.85rem" }}>{error}</p>}
-      <button
-        onClick={handleSubmit}
-        disabled={
-          busy || !name || !productCategory || totalPercent !== 100 ||
-          (offerKind === "services" && usingCustomService && !customService.trim())
-        }
-        style={{ padding: "0.75rem 1.25rem", background: BRAND, color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, cursor: "pointer" }}
-      >
-        {busy ? "Saving..." : "Save configuration"}
-      </button>
+      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+        <button
+          onClick={handleSubmit}
+          disabled={
+            busy || !name || !productCategory || totalPercent !== 100 ||
+            (offerKind === "services" && usingCustomService && !customService.trim())
+          }
+          style={{ padding: "0.75rem 1.25rem", background: BRAND, color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, cursor: "pointer" }}
+        >
+          {busy ? "Saving..." : isEdit ? "Save changes" : "Save configuration"}
+        </button>
+        <button
+          type="button"
+          onClick={onDone}
+          disabled={busy}
+          style={{ padding: "0.75rem 1.25rem", background: "#fff", color: "#666", border: "1px solid #ccc", borderRadius: 8, fontWeight: 700, cursor: "pointer" }}
+        >
+          Cancel
+        </button>
+      </div>
     </div>
   );
 }
@@ -502,6 +553,9 @@ function VerifiedMembersManager({ adminId, communityId }: { adminId: Id<"users">
 export function CommunityAdvancePurchasePanel({ adminId, communityId }: { adminId: Id<"users">; communityId: Id<"communities"> }) {
   const [tab, setTab] = useState<"configure" | "verified" | "review">("configure");
   const [showBuilder, setShowBuilder] = useState(false);
+  const [editingConfig, setEditingConfig] = useState<any | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
+  const updateConfigActive = useMutation(api.advancePurchase.updateConfig);
   const configs = useQuery(api.advancePurchase.listConfigsForCommunity, { communityId });
 
   return (
@@ -530,11 +584,30 @@ export function CommunityAdvancePurchasePanel({ adminId, communityId }: { adminI
       {tab === "configure" && (
         <>
           {showBuilder ? (
-            <ConfigBuilder adminId={adminId} communityId={communityId} onDone={() => setShowBuilder(false)} />
+            <ConfigBuilder
+              key={editingConfig?._id || "new"}
+              adminId={adminId}
+              communityId={communityId}
+              existing={editingConfig || undefined}
+              onDone={() => {
+                setShowBuilder(false);
+                setEditingConfig(null);
+              }}
+            />
           ) : (
-            <button onClick={() => setShowBuilder(true)} style={{ padding: "0.7rem 1.1rem", background: BRAND, color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, cursor: "pointer", marginBottom: "1rem" }}>
+            <button
+              onClick={() => {
+                setEditingConfig(null);
+                setShowBuilder(true);
+              }}
+              style={{ padding: "0.7rem 1.1rem", background: BRAND, color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, cursor: "pointer", marginBottom: "1rem" }}
+            >
               + New configuration
             </button>
+          )}
+
+          {listError && (
+            <p style={{ color: "#d32f2f", fontSize: "0.85rem" }}>{listError}</p>
           )}
 
           {configs === undefined ? (
@@ -556,6 +629,37 @@ export function CommunityAdvancePurchasePanel({ adminId, communityId }: { adminI
                     )}
                   </div>
                   <div style={{ fontSize: "0.8rem", color: "#888" }}>{c.productCategory} · {c.milestoneTemplate.length} stages</div>
+                  <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.6rem", flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingConfig(c);
+                        setShowBuilder(true);
+                      }}
+                      style={{ padding: "0.4rem 0.9rem", borderRadius: 6, border: `1px solid ${BRAND}`, background: "#fff", color: BRAND, fontSize: "0.8rem", fontWeight: 700, cursor: "pointer" }}
+                    >
+                      ✏️ Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setListError(null);
+                        try {
+                          await updateConfigActive({ configId: c._id, adminId, isActive: !c.isActive });
+                        } catch (err) {
+                          setListError((err as Error).message);
+                        }
+                      }}
+                      style={{
+                        padding: "0.4rem 0.9rem", borderRadius: 6, border: "none",
+                        background: c.isActive ? "#ffebee" : "#e8f5e9",
+                        color: c.isActive ? "#c62828" : BRAND,
+                        fontSize: "0.8rem", fontWeight: 700, cursor: "pointer",
+                      }}
+                    >
+                      {c.isActive ? "Deactivate" : "Activate"}
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

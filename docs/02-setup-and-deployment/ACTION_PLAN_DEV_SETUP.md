@@ -101,7 +101,7 @@ Now you can:
    git checkout main
    git merge develop
    git push  # Auto-deploys to pilot URL
-   npm run deploy:pilot
+   npm run deploy:prod
    ```
 
 ---
@@ -130,7 +130,7 @@ Now you can:
 npm run deploy:dev
 
 # Deploy to pilot Convex
-npm run deploy:pilot
+npm run deploy:prod
 
 # Check current branch
 git branch --show-current

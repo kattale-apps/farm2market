@@ -86,7 +86,7 @@ git merge develop
 git push  # Auto-deploys to pilot URL
 
 # Deploy Convex functions to pilot
-npm run deploy:pilot
+npm run deploy:prod
 ```
 
 ---
@@ -99,8 +99,8 @@ npm run deploy:pilot
 - **Dev Convex**: https://dashboard.convex.dev/d/adamant-armadillo-601
 
 ### Commands
-- `npm run deploy:dev` - Deploy Convex to dev
-- `npm run deploy:pilot` - Deploy Convex to pilot
+- `npm run deploy:dev` - Deploy Convex to dev (`adamant-armadillo-601`)
+- `npm run deploy:prod` - Deploy Convex to production (`greedy-tortoise-911`)
 - `git checkout develop` - Switch to dev branch
 - `git checkout main` - Switch to pilot branch
 

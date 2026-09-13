@@ -291,9 +291,46 @@ export const createForm = mutation({
 /**
  * Update form metadata
  */
+/**
+ * Authorize an admin to manage a community's forms.
+ *
+ * Mirrors the inline check in archiveForm below, and the shape of
+ * advancePurchase.assertCommunityAdmin: a super admin, the community's own
+ * communityAdminId, or an admin with the community in assignedCommunityIds.
+ */
+async function assertCommunityFormAdmin(
+  ctx: { db: any },
+  adminId: Id<"users">,
+  communityId: Id<"communities">,
+) {
+  const admin = await ctx.db.get(adminId);
+  if (!admin || admin.role !== "admin") {
+    throw new Error("Not authorized: admin account required");
+  }
+
+  const isSuperAdmin =
+    (admin as any).adminLevel === "super" ||
+    ((admin as any).adminLevel === undefined && !(admin as any).adminCategory);
+  if (isSuperAdmin) return admin;
+
+  const community = await ctx.db.get(communityId);
+  if (!community) throw new Error("Community not found");
+
+  const isDirectAdmin =
+    String((community as any).communityAdminId || "") === String(adminId);
+  const assigned: string[] = ((admin as any).assignedCommunityIds || []).map(
+    (id: any) => String(id),
+  );
+  if (!isDirectAdmin && !assigned.includes(String(communityId))) {
+    throw new Error("Not authorized to manage forms for this community");
+  }
+  return admin;
+}
+
 export const updateForm = mutation({
   args: {
     formId: v.id("communityForms"),
+    adminId: v.id("users"),
     name: v.optional(v.string()),
     description: v.optional(v.string()),
     isActive: v.optional(v.boolean()),
@@ -303,6 +340,7 @@ export const updateForm = mutation({
     if (!form) {
       throw new Error("Form not found");
     }
+    await assertCommunityFormAdmin(ctx, args.adminId, (form as any).communityId);
 
     const updates: any = { updatedAt: getUgandaTime() };
     if (args.name !== undefined) updates.name = args.name;

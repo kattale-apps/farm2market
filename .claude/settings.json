@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run deploy:dev)",
+      "Bash(npm run deploy:dev *)",
+      "Bash(npm run deploy:prod)",
+      "Bash(npm run deploy:prod *)",
+      "Bash(npx convex deploy *)",
+      "Bash(npx convex dev *)"
+    ]
+  }
+}

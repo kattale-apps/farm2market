@@ -67,7 +67,7 @@ After setting the environment variable, you need to deploy your Convex functions
 ### Deploy to Pilot
 
 ```bash
-npm run deploy:pilot
+npm run deploy:prod
 # or
 npx convex deploy --project-name pilot-farm2market
 ```

@@ -2883,4 +2883,17 @@ export default defineSchema({
     .index("by_offer", ["offerId", "createdAt"])
     .index("by_buyer", ["buyerId", "createdAt"])
     .index("by_status", ["status"]),
+
+  /**
+   * Cached UGX -> foreign currency exchange rates, refreshed periodically
+   * from a free third-party FX API (see convex/exchangeRates.ts). A single
+   * row per base currency — wallet balances are always UGX today, but the
+   * base is stored so this could extend to other base currencies later.
+   */
+  exchangeRates: defineTable({
+    baseCurrency: v.string(), // "UGX"
+    rates: v.object({ USD: v.number(), GBP: v.number(), EUR: v.number() }), // foreign units per 1 base unit
+    fetchedAt: v.number(),
+    source: v.string(),
+  }).index("by_base", ["baseCurrency"]),
 });

@@ -39,6 +39,7 @@ import type * as demoData from "../demoData.js";
 import type * as errors from "../errors.js";
 import type * as errors_index from "../errors/index.js";
 import type * as errors_types from "../errors/types.js";
+import type * as exchangeRates from "../exchangeRates.js";
 import type * as farmCostTemplates from "../farmCostTemplates.js";
 import type * as farmNeeds from "../farmNeeds.js";
 import type * as farmPlanner from "../farmPlanner.js";
@@ -147,6 +148,7 @@ declare const fullApi: ApiFromModules<{
   errors: typeof errors;
   "errors/index": typeof errors_index;
   "errors/types": typeof errors_types;
+  exchangeRates: typeof exchangeRates;
   farmCostTemplates: typeof farmCostTemplates;
   farmNeeds: typeof farmNeeds;
   farmPlanner: typeof farmPlanner;

@@ -5,7 +5,7 @@
  */
 
 import { cronJobs } from "convex/server";
-import { internal } from "./_generated/api";
+import { internal, api } from "./_generated/api";
 
 const crons = cronJobs();
 
@@ -55,6 +55,15 @@ crons.daily(
   "freeze daily price snapshot",
   { hourUTC: 21, minuteUTC: 0 },
   internal.marketPrices.freezeDailySnapshot,
+);
+
+// Refresh the buyer wallet's UGX -> USD/GBP/EUR exchange rates twice a day
+// (the free source API itself only updates once every 24h, so this is
+// just a safety margin against a missed/failed fetch).
+crons.interval(
+  "refresh currency exchange rates",
+  { hours: 12 },
+  api.exchangeRates.fetchLatestRates,
 );
 
 export default crons;

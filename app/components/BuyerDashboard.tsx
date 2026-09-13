@@ -137,6 +137,15 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [walletBalanceExpanded, setWalletBalanceExpanded] = useState(false);
   const [walletBalanceVisible, setWalletBalanceVisible] = useState(true);
+  const [displayCurrency, setDisplayCurrency] = useState<"UGX" | "USD" | "GBP" | "EUR">("UGX");
+  const exchangeRates = useQuery(api.exchangeRates.getLatestRates, {});
+  const fetchExchangeRates = useAction(api.exchangeRates.fetchLatestRates);
+  useEffect(() => {
+    if (exchangeRates === undefined) return; // still loading
+    if (exchangeRates === null || exchangeRates.isStale) {
+      fetchExchangeRates().catch(() => {});
+    }
+  }, [exchangeRates, fetchExchangeRates]);
   const [titleSlot, setTitleSlot] = useState<HTMLElement | null>(null);
   const [msgSlot, setMsgSlot] = useState<HTMLElement | null>(null);
   const [moreSlot, setMoreSlot] = useState<HTMLElement | null>(null);
@@ -241,6 +250,13 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
 
   const formatUGX = (amount: number) => {
     return new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX" }).format(amount);
+  };
+
+  const formatInCurrency = (amountUGX: number, currency: "UGX" | "USD" | "GBP" | "EUR") => {
+    if (currency === "UGX") return formatUGX(amountUGX);
+    const rate = exchangeRates?.rates?.[currency];
+    if (!rate) return null;
+    return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amountUGX * rate);
   };
 
   const handleDeposit = async () => {
@@ -1015,19 +1031,19 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
         gap: "0.75rem",
         padding: "1rem 1.25rem",
         background: "#f3e5f5",
-        border: "1.5px solid #ce93d8",
+        border: "3px solid #000",
         borderRadius: "14px",
         textDecoration: "none",
         color: "#6a1b9a",
         fontFamily: '"Montserrat", sans-serif',
         fontWeight: 700,
         fontSize: "clamp(0.9rem,2.5vw,1rem)",
-        boxShadow: "0 0 0 1px rgba(106,27,154,0.20), 0 0 16px rgba(106,27,154,0.18), 0 2px 8px rgba(106,27,154,0.14)",
+        boxShadow: "0 0 0 1px #000, 0 0 22px 4px rgba(156,39,176,0.65), 0 0 40px 8px rgba(156,39,176,0.35), 0 2px 8px rgba(0,0,0,0.25)",
         marginBottom: "1.5rem",
       }}>
         <span style={{ fontSize: "1.8rem" }}>🌱</span>
         <div>
-          <div>Advanced Markets</div>
+          <div>ADVANCED MARKETS</div>
           <div style={{ fontSize: "0.78rem", fontWeight: 500, color: "#8e24aa" }}>
             Payments in Advanced Markets are based on milestones reached
           </div>
@@ -1412,7 +1428,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
             <p style={{ color: "#999", margin: "0.5rem 0 0" }}>Loading...</p>
           ) : (
             <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.35rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.35rem", flexWrap: "wrap" }}>
                 <span style={{ fontSize: "1.35rem", fontWeight: "600", color: "#1976d2" }}>
                   {walletBalanceVisible ? formatUGX(walletBalance.balance) : "UGX ••••••"}
                 </span>
@@ -1434,6 +1450,35 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                   {walletBalanceVisible ? "👁️" : "🙈"}
                 </button>
               </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginTop: "0.4rem" }}>
+                <select
+                  value={displayCurrency}
+                  onChange={(e) => setDisplayCurrency(e.target.value as typeof displayCurrency)}
+                  style={{
+                    fontSize: "0.75rem",
+                    padding: "0.2rem 0.4rem",
+                    borderRadius: 6,
+                    border: "1px solid #ddd",
+                    color: "#666",
+                    fontFamily: '"Montserrat", sans-serif',
+                  }}
+                >
+                  <option value="UGX">View in UGX</option>
+                  <option value="USD">View in USD</option>
+                  <option value="GBP">View in GBP</option>
+                  <option value="EUR">View in EUR</option>
+                </select>
+                {displayCurrency !== "UGX" && walletBalanceVisible && (
+                  <span style={{ fontSize: "0.85rem", color: "#666" }}>
+                    {formatInCurrency(walletBalance.balance, displayCurrency) ?? "Rates unavailable — try again shortly"}
+                  </span>
+                )}
+              </div>
+              {exchangeRates?.fetchedAt && displayCurrency !== "UGX" && walletBalanceVisible && (
+                <div style={{ fontSize: "0.68rem", color: "#aaa", marginTop: "0.2rem" }}>
+                  Rate updated {formatUgandaDateTime(exchangeRates.fetchedAt)}
+                </div>
+              )}
               {walletBalanceExpanded && (
                 <div style={{ marginTop: "0.75rem", paddingTop: "0.75rem", borderTop: "1px solid #eee" }}>
                   <div style={{ color: "#666", fontSize: "0.9rem" }}>Total Deposits</div>

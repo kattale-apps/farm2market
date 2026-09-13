@@ -87,7 +87,7 @@ This will:
 npx convex deploy --yes
 
 # Or use the npm script
-npm run deploy:pilot
+npm run deploy:prod
 ```
 
 ### 2.5 Get Convex Deployment URL

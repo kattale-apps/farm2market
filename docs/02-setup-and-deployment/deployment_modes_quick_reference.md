@@ -42,17 +42,34 @@ git push  # Auto-deploys to pilot URL
 
 ## Convex Deployments
 
-### Deploy to Pilot
-```bash
-git checkout main
-npx convex deploy --project-name pilot-farm2market
-```
+Two deployments, and the npm script names match what they actually do:
+
+| Target | Deployment | Command |
+|---|---|---|
+| Dev | `adamant-armadillo-601` | `npm run deploy:dev` |
+| Production | `greedy-tortoise-911` | `npm run deploy:prod` |
 
 ### Deploy to Dev
 ```bash
 git checkout develop
-npx convex deploy --project-name dev-farm2market
+npm run deploy:dev    # npx convex dev --once
 ```
+
+`convex deploy` cannot target a dev deployment — it always writes to the
+project's production deployment. Pushing to dev therefore uses
+`convex dev --once`, which is what `deploy:dev` runs.
+
+### Deploy to Production
+```bash
+git checkout main
+npm run deploy:prod   # npx convex deploy --env-file .env.local --yes
+```
+
+Confirm any target before a real deploy:
+```bash
+npx convex deploy --env-file .env.local --dry-run --yes
+```
+It prints the deployment URL it would write to and changes nothing.
 
 ---
 

@@ -1457,7 +1457,7 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
                       isActive={form.isActive}
                       onToggleActive={async () => {
                         try {
-                          await updateForm({ formId: form._id, isActive: !form.isActive });
+                          await updateForm({ formId: form._id, adminId: userId, isActive: !form.isActive });
                           setMsg({ type: "success", text: `Form ${form.isActive ? "deactivated" : "activated"}` });
                         } catch (e: any) {
                           setMsg({ type: "error", text: e.message });

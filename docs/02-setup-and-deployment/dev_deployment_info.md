@@ -54,7 +54,7 @@ npx convex deploy
 ```bash
 # Switch to pilot deployment first
 # Or use the pilot deployment directly
-npm run deploy:pilot
+npm run deploy:prod
 ```
 
 ---

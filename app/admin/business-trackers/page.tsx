@@ -146,7 +146,8 @@ export default function BusinessTrackersPage() {
 
   const handleToggleActive = async (formId: Id<"communityForms">, isActive: boolean) => {
     try {
-      await updateForm({ formId, isActive: !isActive });
+      if (!userId) return;
+      await updateForm({ formId, adminId: userId, isActive: !isActive });
     } catch (e: any) {
       setMessage({ type: "error", text: e.message });
     }

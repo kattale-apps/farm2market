@@ -17,8 +17,8 @@ I've set up the infrastructure for **two separate deployment modes** (pilot and 
 - ✅ Created `convex.json` - Convex configuration
 - ✅ Created `vercel.json` - Vercel configuration (doesn't break existing setup)
 - ✅ Updated `package.json` - Added deployment scripts:
-  - `npm run deploy:pilot` - Deploy to pilot Convex
-  - `npm run deploy:dev` - Deploy to dev Convex
+  - `npm run deploy:prod` - Deploy to production Convex (`greedy-tortoise-911`)
+  - `npm run deploy:dev` - Deploy to dev Convex (`adamant-armadillo-601`)
 
 ### 3. Deployment Scripts
 - ✅ Created `scripts/deploy-pilot.sh` & `scripts/deploy-pilot.ps1` (Windows)

@@ -173,30 +173,50 @@ function LoginPageInner() {
         } catch (loginErr: any) {
           const message = typeof loginErr === "string" ? loginErr : loginErr?.message || "Login failed";
           const normalizedMessage = message.toLowerCase();
-          const isInvalidCredentials = normalizedMessage.includes("invalid email/phone or password");
 
-          if (isInvalidCredentials) {
-            const existsResult = await checkAccountExists({
-              email: identifierMode === "email" ? activeIdentifier : undefined,
-              phoneNumber: identifierMode === "phone" ? activeIdentifier : undefined,
-            });
+          // "Account is not active" is the one failure where offering signup
+          // would be wrong — the account exists, it's just blocked.
+          if (normalizedMessage.includes("not active")) {
+            setError("This account is not active. Please contact support.");
+          } else {
+            // Any other login failure: ask the server whether this identifier
+            // has an account at all, and route to signup if it doesn't. This
+            // deliberately does not depend on matching the error text — a
+            // generic message (e.g. a redacted "Server Error") must not strand
+            // a first-time user who simply has no account yet.
+            let accountExists: boolean | null = null;
+            try {
+              const existsResult = await checkAccountExists({
+                email: identifierMode === "email" ? activeIdentifier : undefined,
+                phoneNumber: identifierMode === "phone" ? activeIdentifier : undefined,
+              });
+              accountExists = !!existsResult?.exists;
+            } catch (existsErr) {
+              console.error("checkAccountExists failed:", existsErr);
+            }
 
-            if (existsResult?.exists) {
-              setError("Invalid credentials. Please try again.");
-            } else {
+            if (accountExists === false) {
               setAuthStep("confirmSignup");
               setConfirmPassword("");
               setError(`Confirm your password to create a new ${selectedRoleLabel} account.`);
+            } else if (accountExists === true) {
+              setError("Invalid credentials. Please try again.");
+            } else {
+              // Couldn't determine — show the server's message, unless it's
+              // an opaque one that would mean nothing to the user.
+              const isOpaque = normalizedMessage.includes("server error") || normalizedMessage.includes("[convex");
+              setError(isOpaque ? "Login failed. Please check your details and try again." : message);
             }
-          } else {
-            setError(message);
           }
         }
       }
     } catch (err: any) {
       console.error("Auth error:", err);
-      const message = typeof err === "string" ? err : err?.message || (authStep === "confirmSignup" ? "Signup failed" : "Login failed");
-      setError(message);
+      const fallback = authStep === "confirmSignup" ? "Signup failed" : "Login failed";
+      const message = typeof err === "string" ? err : err?.message || fallback;
+      const normalized = message.toLowerCase();
+      const isOpaque = normalized.includes("server error") || normalized.includes("[convex");
+      setError(isOpaque ? `${fallback}. Please check your details and try again.` : message);
     } finally {
       setLoading(false);
     }

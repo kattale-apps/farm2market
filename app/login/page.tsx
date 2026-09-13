@@ -326,7 +326,9 @@ function LoginPageInner() {
 
         <div style={{ margin: "0.65rem 0 0.5rem" }}>
           <p style={{ margin: 0, color: "#333", fontSize: "0.95rem", fontWeight: 600 }}>
-            {authStep === "confirmSignup" ? "Confirm password to create your account." : "Log in to Farm2Market."}
+            {authStep === "confirmSignup"
+              ? "Confirm password to create your account."
+              : "Sign Up / Log In with Phone Number or Email"}
           </p>
           {authStep === "confirmSignup" && (
             <p style={{ margin: "0.3rem 0 0", color: "#666", fontSize: "0.85rem", lineHeight: "1.4" }}>

@@ -578,6 +578,35 @@ export const removeOfferPhotos = mutation({
   },
 });
 
+export const reorderOfferPhotos = mutation({
+  args: {
+    offerId: v.id("advancePurchaseOffers"),
+    farmerId: v.id("users"),
+    storageIds: v.array(v.id("_storage")),
+  },
+  handler: async (ctx, args) => {
+    const offer = await ctx.db.get(args.offerId);
+    if (!offer) throw new Error("Offer not found");
+    if (String(offer.farmerId) !== String(args.farmerId)) {
+      throw new Error("You can only reorder your own offer's photos");
+    }
+    if (["cancelled", "fulfilled"].includes(offer.status)) {
+      throw new Error("This offer can no longer be updated");
+    }
+    const existing = (offer.photoStorageIds || []).map((id: any) => String(id));
+    const incoming = args.storageIds.map((id) => String(id));
+    const sameSet = existing.length === incoming.length && existing.every((id: string) => incoming.includes(id));
+    if (!sameSet) {
+      throw new Error("Photo order must include exactly the offer's current photos");
+    }
+    await ctx.db.patch(args.offerId, {
+      photoStorageIds: args.storageIds,
+      updatedAt: getUgandaTime(),
+    });
+    return { success: true };
+  },
+});
+
 export const publishOffer = mutation({
   args: { offerId: v.id("advancePurchaseOffers"), farmerId: v.id("users") },
   handler: async (ctx, args) => {

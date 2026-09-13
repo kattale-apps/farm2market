@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
@@ -17,10 +17,14 @@ interface Props {
   photos: Photo[];
 }
 
+const LONG_PRESS_MS = 400;
+const MOVE_CANCEL_PX = 10;
+
 export function EditOfferGallery({ farmerId, offerId, photos }: Props) {
   const generateUploadUrl = useMutation(api.files.generateUploadUrl);
   const addOfferPhotos = useMutation(api.advancePurchase.addOfferPhotos);
   const removeOfferPhotos = useMutation(api.advancePurchase.removeOfferPhotos);
+  const reorderOfferPhotos = useMutation(api.advancePurchase.reorderOfferPhotos);
 
   const [managing, setManaging] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -28,6 +32,101 @@ export function EditOfferGallery({ farmerId, offerId, photos }: Props) {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+
+  const photoByStorageId = new Map(photos.map((p) => [String(p.storageId), p]));
+  const photosKey = photos.map((p) => String(p.storageId)).join(",");
+  const [order, setOrder] = useState<string[]>(photos.map((p) => String(p.storageId)));
+  useEffect(() => {
+    setOrder(photos.map((p) => String(p.storageId)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photosKey]);
+  const orderedPhotos = order.map((id) => photoByStorageId.get(id)).filter((p): p is Photo => !!p);
+
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const tileRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pointerStart = useRef<{ x: number; y: number } | null>(null);
+  const didDrag = useRef(false);
+
+  const clearLongPressTimer = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  const handlePointerDown = (e: React.PointerEvent, storageId: string) => {
+    if (managing) return;
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // ignore — capture is a reliability nice-to-have, not required
+    }
+    pointerStart.current = { x: e.clientX, y: e.clientY };
+    longPressTimer.current = setTimeout(() => {
+      setDraggingId(storageId);
+    }, LONG_PRESS_MS);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!pointerStart.current) return;
+    const dx = e.clientX - pointerStart.current.x;
+    const dy = e.clientY - pointerStart.current.y;
+    const moved = Math.hypot(dx, dy) > MOVE_CANCEL_PX;
+
+    if (!draggingId) {
+      if (moved) clearLongPressTimer();
+      return;
+    }
+
+    didDrag.current = true;
+    let overId: string | null = null;
+    tileRefs.current.forEach((el, id) => {
+      const rect = el.getBoundingClientRect();
+      if (e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom) {
+        overId = id;
+      }
+    });
+    if (overId && overId !== draggingId) {
+      setOrder((prev) => {
+        const from = prev.indexOf(draggingId);
+        const to = prev.indexOf(overId!);
+        if (from === -1 || to === -1) return prev;
+        const next = [...prev];
+        next.splice(from, 1);
+        next.splice(to, 0, draggingId);
+        return next;
+      });
+    }
+  };
+
+  const handlePointerUp = async () => {
+    clearLongPressTimer();
+    pointerStart.current = null;
+    if (draggingId) {
+      const wasDrag = didDrag.current;
+      setDraggingId(null);
+      if (wasDrag) {
+        try {
+          await reorderOfferPhotos({ offerId, farmerId, storageIds: order as Id<"_storage">[] });
+        } catch (err) {
+          setError((err as Error).message || "Failed to save new photo order");
+        }
+      }
+    }
+  };
+
+  const handleTileClick = (photo: Photo) => {
+    if (didDrag.current) {
+      didDrag.current = false;
+      return;
+    }
+    if (managing) {
+      toggleSelect(String(photo.storageId));
+    } else {
+      setLightboxUrl(photo.url);
+    }
+  };
 
   const toggleSelect = (storageId: string) => {
     setSelected((prev) => {
@@ -97,25 +196,50 @@ export function EditOfferGallery({ farmerId, offerId, photos }: Props) {
 
   return (
     <div>
-      {photos.length > 0 && (
+      {!managing && photos.length > 1 && (
+        <p style={{ fontSize: "0.72rem", color: "#999", margin: "0 0 0.4rem" }}>
+          Press and hold a photo to drag and reorder it.
+        </p>
+      )}
+
+      {orderedPhotos.length > 0 && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))", gap: "0.4rem", marginBottom: "0.6rem" }}>
-          {photos.map((p) => {
-            const isSelected = selected.has(String(p.storageId));
+          {orderedPhotos.map((p) => {
+            const id = String(p.storageId);
+            const isSelected = selected.has(id);
+            const isDragging = draggingId === id;
             return (
               <div
-                key={String(p.storageId)}
-                onClick={() => (managing ? toggleSelect(String(p.storageId)) : setLightboxUrl(p.url))}
-                style={{ position: "relative", cursor: "pointer" }}
+                key={id}
+                ref={(el) => {
+                  if (el) tileRefs.current.set(id, el);
+                  else tileRefs.current.delete(id);
+                }}
+                onPointerDown={(e) => handlePointerDown(e, id)}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerCancel={handlePointerUp}
+                onClick={() => handleTileClick(p)}
+                style={{
+                  position: "relative",
+                  cursor: managing ? "pointer" : "grab",
+                  touchAction: managing ? "auto" : "none",
+                  transform: isDragging ? "scale(1.08)" : "scale(1)",
+                  zIndex: isDragging ? 10 : 1,
+                  transition: "transform 0.15s ease",
+                }}
               >
                 <img
                   src={p.url}
                   alt="Product"
+                  draggable={false}
                   style={{
                     width: "100%",
                     height: 90,
                     objectFit: "cover",
                     borderRadius: 8,
-                    border: isSelected ? "2px solid #d32f2f" : "1px solid #e0e0e0",
+                    border: isSelected ? "2px solid #d32f2f" : isDragging ? "2px solid #2e7d32" : "1px solid #e0e0e0",
+                    boxShadow: isDragging ? "0 6px 16px rgba(0,0,0,0.3)" : "none",
                     opacity: managing && !isSelected ? 0.6 : 1,
                   }}
                 />

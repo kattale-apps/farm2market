@@ -107,7 +107,7 @@ function generateAlias(role: string): string {
  * Simple hash function for pilot password (NOT production-grade)
  * ⚠️ PILOT ONLY - Use proper password hashing in production
  */
-function simpleHash(password: string): string {
+export function simpleHash(password: string): string {
   // Simple hash for pilot - NOT secure, just for testing
   let hash = 0;
   for (let i = 0; i < password.length; i++) {

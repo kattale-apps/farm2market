@@ -346,7 +346,7 @@ function LoginPageInner() {
         <form onSubmit={handleSubmit}>
           <div style={{ marginBottom: "0.55rem" }}>
             <label style={{ display: "block", marginBottom: "0.35rem", color: "#2e7d32", fontWeight: "500", fontSize: "0.9rem" }}>
-              Select Category <span style={{ fontWeight: 400, color: "#777" }}>(new accounts only)</span>
+              Select Category
             </label>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "0.5rem" }}>
               {SIGNUP_ROLES.map((entry) => {

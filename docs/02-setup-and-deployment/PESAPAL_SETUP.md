@@ -12,7 +12,7 @@ To use Pesapal payments, you must set the following environment variables in **C
 | `PESAPAL_CONSUMER_SECRET` | Your Pesapal Consumer Secret                     | `<set-in-convex-dashboard>` | Yes                          |
 | `PESAPAL_ENV`             | Environment: `sandbox` or `production`           | `sandbox`                   | No (defaults to sandbox)     |
 | `PESAPAL_NOTIFICATION_ID` | IPN Notification ID registered with Pesapal      | `abc123-def456-ghi789`      | Yes                          |
-| `PESAPAL_APP_BASE_URL`    | Public site URL used to rebuild callback/cancel URLs when the app reports a non-public origin (Capacitor reports `http://localhost`) | `https://farm2market-dev.vercel.app` | No (recommended, required for the Android app) |
+| `PESAPAL_APP_BASE_URL`    | Public site URL used to rebuild callback/cancel URLs when the app reports a non-public origin (Capacitor reports `http://localhost`) | `https://www.farm2marketuganda.com` | No (recommended, required for the Android app) |
 
 ### Diagnosing a failed payment
 
@@ -27,7 +27,28 @@ npx convex run pesapal:checkPesapalConfig '{}'
 # Whether PESAPAL_NOTIFICATION_ID matches an IPN URL registered with Pesapal.
 # A mismatch here is the usual cause of "Invalid IPN URL ID" rejections.
 npx convex run pesapal:checkPesapalIpnRegistration '{}'
+
+# Register an IPN URL and get back the id to store in PESAPAL_NOTIFICATION_ID.
+# Reuses an existing registration for the same URL rather than adding a duplicate.
+npx convex run pesapal:registerPesapalIpn '{"url":"https://www.farm2marketuganda.com/api/pesapal/webhook"}'
 ```
+
+**The IPN URL must be publicly reachable.** Pesapal POSTs to it with no
+credentials, so a host behind Vercel Deployment Protection returns a redirect to
+`vercel.com/sso-api` and every notification is silently dropped. Verify with:
+
+```bash
+curl -i https://<your-domain>/api/pesapal/webhook   # expect 200, not 302
+```
+
+Notifications are the only path that credits a buyer who closes the browser
+after paying by mobile money; the `/payment/callback` page covers only buyers
+who stay until the redirect completes.
+
+**Registrations are permanent.** Pesapal exposes `RegisterIPN` and `GetIpnList`
+but no delete or edit endpoint, so a wrong URL cannot be withdrawn — it can only
+be superseded by registering another and pointing
+`PESAPAL_NOTIFICATION_ID` at the new id.
 
 Add `--prod` to either command to check the production deployment. Environment
 variables are per-deployment: setting them on dev does **not** set them on prod.
@@ -97,8 +118,8 @@ This error indicates that Pesapal API v3 is expecting a `notification_id` (IPN U
    - Navigate to **Settings** → **IPN (Instant Payment Notification)**
    - Click **Register IPN URL** or **Add IPN URL**
    - Enter:
-     - **Website Domain**: `https://farm2market-dev.vercel.app/`
-     - **IPN Listener Url**: `https://farm2market-dev.vercel.app/api/pesapal/webhook`
+     - **Website Domain**: `https://www.farm2marketuganda.com/`
+     - **IPN Listener Url**: `https://www.farm2marketuganda.com/api/pesapal/webhook`
    - Click **SAVE URL**
    - **IMPORTANT**: After saving, Pesapal will show a `notification_id` - this is NOT the URL!
    - The `notification_id` will look like: `abc123-def456-ghi789` or `550e8400-e29b-41d4-a716-446655440000` (UUID format)
@@ -117,7 +138,7 @@ This error indicates that Pesapal API v3 is expecting a `notification_id` (IPN U
    - Variable name: `PESAPAL_NOTIFICATION_ID`
    - Variable value: (paste the **notification_id** from Pesapal - NOT the URL!)
    - **IMPORTANT**: The value should be a UUID/alphanumeric string like `abc123-def456-ghi789`
-   - **NOT** a URL like `https://farm2market-dev.vercel.app/api/pesapal/webhook`
+   - **NOT** a URL like `https://www.farm2marketuganda.com/api/pesapal/webhook`
    - Click **Save** (Convex will auto-redeploy)
 
    **Common Mistake**: Setting the IPN URL as the notification_id value. The notification_id is a separate identifier that Pesapal provides after registering the URL.

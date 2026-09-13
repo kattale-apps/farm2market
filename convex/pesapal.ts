@@ -1250,6 +1250,123 @@ export const checkPesapalConfig = query({
 });
 
 /**
+ * Register an IPN URL with Pesapal and return the notification id to put in
+ * PESAPAL_NOTIFICATION_ID for this deployment.
+ *
+ * Pesapal has no endpoint to delete or edit a registration, so every call adds
+ * a permanent entry to the account. Check the existing list first:
+ *   npx convex run pesapal:checkPesapalIpnRegistration '{}'
+ *   npx convex run pesapal:registerPesapalIpn '{"url":"https://example.com/api/pesapal/webhook"}'
+ *
+ * The URL must be publicly reachable — a host behind Vercel Deployment
+ * Protection bounces Pesapal's POST to a login page and silently drops every
+ * notification.
+ */
+export const registerPesapalIpn = action({
+  args: {
+    url: v.string(),
+  },
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{
+    ipnId: string;
+    url: string;
+    status?: string;
+    environment: string;
+    alreadyRegistered: boolean;
+  }> => {
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(args.url);
+    } catch {
+      throw pesapalError("INVALID_IPN_URL", `Not a valid URL: ${args.url}`);
+    }
+    if (parsedUrl.protocol !== "https:") {
+      throw pesapalError(
+        "INVALID_IPN_URL",
+        `Pesapal requires an https IPN URL; got ${parsedUrl.protocol}//`,
+      );
+    }
+
+    const { token }: { token: string } = await ctx.runAction(
+      internal.pesapal.getPesapalAccessToken,
+      {},
+    );
+
+    // Registering the same URL twice just adds a second id, and neither can be
+    // removed, so reuse an existing registration when there is one.
+    const existing: {
+      registeredIpns: Array<{ id: string; url: string; status?: string }>;
+    } = await ctx.runAction(api.pesapal.checkPesapalIpnRegistration, {});
+    const match = existing.registeredIpns.find(
+      (i) => i.url.replace(/\/+$/, "") === args.url.replace(/\/+$/, ""),
+    );
+    if (match) {
+      return {
+        ipnId: match.id,
+        url: match.url,
+        status: match.status,
+        environment: PESAPAL_ENV,
+        alreadyRegistered: true,
+      };
+    }
+
+    const response = await fetch(
+      `${PESAPAL_BASE_URL}/api/URLSetup/RegisterIPN`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          url: args.url,
+          ipn_notification_type: "POST",
+        }),
+      },
+    );
+
+    const text = await response.text();
+    let parsed: any;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      throw pesapalError(
+        "PESAPAL_IPN_REGISTER_FAILED",
+        `Pesapal returned a non-JSON response: ${text.substring(0, 300)}`,
+      );
+    }
+
+    if (!response.ok || parsed?.error) {
+      throw pesapalError(
+        "PESAPAL_IPN_REGISTER_FAILED",
+        `Pesapal rejected the IPN registration: ${
+          parsed?.error?.message || parsed?.error?.code || text.substring(0, 300)
+        }`,
+      );
+    }
+
+    const ipnId = String(parsed.ipn_id || parsed.id || "");
+    if (!ipnId) {
+      throw pesapalError(
+        "PESAPAL_IPN_REGISTER_FAILED",
+        `Pesapal accepted the registration but returned no ipn_id: ${text.substring(0, 300)}`,
+      );
+    }
+
+    return {
+      ipnId,
+      url: String(parsed.url || args.url),
+      status: parsed.ipn_status_description || parsed.status,
+      environment: PESAPAL_ENV,
+      alreadyRegistered: false,
+    };
+  },
+});
+
+/**
  * Read-only diagnostic: ask Pesapal which IPN URLs this account has registered
  * and report whether PESAPAL_NOTIFICATION_ID is one of them.
  *

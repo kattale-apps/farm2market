@@ -331,7 +331,6 @@ export default function FarmerAdvancePurchasePage() {
                     </span>
                   )}
                 </div>
-                <div style={{ fontSize: "0.8rem", color: "#666" }}>{c.communityName} · {c.productCategory}</div>
               </button>
             ))}
           </div>

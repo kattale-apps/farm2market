@@ -169,9 +169,6 @@ export default function AdvancePurchaseMarketPage() {
                       </span>
                     )}
                   </div>
-                  <div style={{ fontSize: "0.8rem", color: "#888" }}>
-                    {offer.communityName} · seller {offer.farmerAlias}
-                  </div>
                 </div>
               </div>
               <span style={{
@@ -187,7 +184,7 @@ export default function AdvancePurchaseMarketPage() {
               </span>
             </div>
             <div style={{ marginTop: "0.6rem", fontSize: "0.9rem", color: "#444" }}>
-              {offer.quantityRemaining} {offer.unit} remaining · UGX {offer.unitPrice.toLocaleString()} each
+              {offer.quantityRemaining} {offer.unit} available · UGX {offer.unitPrice.toLocaleString()} each
             </div>
             <div style={{ fontSize: "0.85rem", color: "#666" }}>
               Total value UGX {offer.totalValue.toLocaleString()}

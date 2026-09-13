@@ -148,7 +148,7 @@ export default function AdvancePurchaseOfferDetailPage() {
 
         <h1 style={{ fontSize: "1.4rem", fontWeight: 700, marginBottom: "0.1rem", color: "#fff" }}>{offer.productName}</h1>
         <p style={{ color: "#eee", fontSize: "0.85rem", margin: 0 }}>
-          {offer.communityName} · seller {offer.farmerAlias} · {offer.quantityRemaining} {offer.unit} available
+          {offer.quantityRemaining} {offer.unit} available
         </p>
       </div>
 

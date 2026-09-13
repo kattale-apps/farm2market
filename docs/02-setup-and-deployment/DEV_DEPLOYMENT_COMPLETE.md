@@ -95,7 +95,7 @@ npm run deploy:dev
 git checkout main
 git merge develop
 git push  # Auto-deploys to pilot URL
-npm run deploy:pilot
+npm run deploy:prod
 ```
 
 ---

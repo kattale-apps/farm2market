@@ -64,7 +64,7 @@ const mode = getDeploymentMode(); // "pilot" | "dev"
 
 ### Deploy to Pilot
 ```bash
-npm run deploy:pilot
+npm run deploy:prod
 ```
 
 ### Deploy to Dev

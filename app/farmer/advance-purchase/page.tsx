@@ -265,13 +265,36 @@ export default function FarmerAdvancePurchasePage() {
 
   return (
     <div style={{ padding: "1rem", maxWidth: 640, margin: "0 auto", fontFamily: FONT }}>
-      <div style={{ marginBottom: "1rem" }}>
-        <Link href="/" style={{ color: "#1976d2", fontWeight: 600, fontSize: "0.9rem" }}>← Back to Dashboard</Link>
+      <div style={{
+        background: "rgba(20, 30, 20, 0.72)",
+        borderRadius: 12,
+        padding: "0.85rem 1rem",
+        marginBottom: "1.25rem",
+      }}>
+        <Link
+          href="/"
+          style={{
+            display: "inline-block",
+            color: "#fff",
+            fontWeight: 700,
+            fontSize: "0.85rem",
+            background: "rgba(255,255,255,0.15)",
+            border: "1px solid rgba(255,255,255,0.4)",
+            borderRadius: 8,
+            padding: "0.4rem 0.75rem",
+            textDecoration: "none",
+            marginBottom: "0.6rem",
+          }}
+        >
+          ← Back to Dashboard
+        </Link>
+        <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "#fff", marginBottom: "0.25rem" }}>
+          🌱 Advanced Markets
+        </h1>
+        <p style={{ color: "#eee", fontSize: "0.9rem", margin: 0 }}>
+          Payments in Advanced Markets are based on milestones reached.
+        </p>
       </div>
-      <h1 style={{ fontSize: "1.5rem", fontWeight: 700, marginBottom: "0.25rem" }}>🌱 Advanced Markets</h1>
-      <p style={{ color: "#666", fontSize: "0.9rem", marginBottom: "1.25rem" }}>
-        Publish a recurring pre-funded offer using your community&apos;s configuration. Payments in Advanced Markets are based on milestones reached.
-      </p>
 
       {activeConfig ? (
         <CreateOfferForm farmerId={user.userId as any} config={activeConfig} onDone={() => setCreatingFor(null)} />

@@ -4,6 +4,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { formatUgandaDateTime } from "../utils/timeUtils";
 
 interface NotificationMailboxProps {
@@ -127,8 +128,10 @@ export function NotificationMailbox({ userId, compact = false }: NotificationMai
         </button>
       </div>
 
-      {/* Mailbox Modal */}
-      {isOpen && (
+      {/* Mailbox Modal — portaled to <body> so the banner's backdrop-filter
+          (which creates a new containing block for descendant fixed-position
+          elements) can't shrink this overlay down to the banner's own size. */}
+      {isOpen && typeof document !== "undefined" && createPortal(
         <div
           style={{
             position: "fixed",
@@ -430,7 +433,8 @@ export function NotificationMailbox({ userId, compact = false }: NotificationMai
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

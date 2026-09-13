@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import Link from "next/link";
@@ -7,8 +8,11 @@ import { useStoredUser } from "../../hooks/useStoredUser";
 
 const FONT = '"Montserrat", sans-serif';
 
+type MarketTab = "goods" | "services";
+
 export default function AdvancePurchaseMarketPage() {
   const { user, status } = useStoredUser();
+  const [tab, setTab] = useState<MarketTab>("goods");
   const offers = useQuery(api.advancePurchase.listMarketOffers, {});
   const myCommitments = useQuery(
     api.advancePurchase.listMyCommitments,
@@ -26,6 +30,11 @@ export default function AdvancePurchaseMarketPage() {
       </div>
     );
   }
+
+  // Legacy offers created before the goods/services classification existed
+  // have no offerKind — treat them as goods (crop) since that's all this
+  // market used to sell.
+  const visibleOffers = offers.filter((offer: any) => (offer.offerKind || "goods") === tab);
 
   return (
     <div style={{ padding: "1rem", maxWidth: 720, margin: "0 auto", fontFamily: FONT }}>
@@ -56,7 +65,7 @@ export default function AdvancePurchaseMarketPage() {
           🌱 Advanced Markets
         </h1>
         <p style={{ color: "#eee", fontSize: "0.9rem", margin: 0 }}>
-          Fund a farmer&apos;s production ahead of harvest. Payments in Advanced Markets are based on milestones reached.
+          Payments in Advanced Markets are based on milestones reached.
         </p>
       </div>
 
@@ -88,7 +97,34 @@ export default function AdvancePurchaseMarketPage() {
         </div>
       )}
 
-      {offers.length === 0 && (
+      <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}>
+        <button
+          type="button"
+          onClick={() => setTab("goods")}
+          style={{
+            flex: 1, padding: "0.6rem", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: "0.85rem",
+            border: tab === "goods" ? "2px solid #2e7d32" : "1px solid #ccc",
+            background: tab === "goods" ? "#e8f5e9" : "#fff",
+            color: tab === "goods" ? "#2e7d32" : "#666",
+          }}
+        >
+          🌾 Crops &amp; Livestock
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("services")}
+          style={{
+            flex: 1, padding: "0.6rem", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: "0.85rem",
+            border: tab === "services" ? "2px solid #2e7d32" : "1px solid #ccc",
+            background: tab === "services" ? "#e8f5e9" : "#fff",
+            color: tab === "services" ? "#2e7d32" : "#666",
+          }}
+        >
+          🧑‍🌾 Farm Services
+        </button>
+      </div>
+
+      {visibleOffers.length === 0 && (
         <div style={{
           padding: "2rem 1rem",
           textAlign: "center",
@@ -97,12 +133,12 @@ export default function AdvancePurchaseMarketPage() {
           borderRadius: 12,
           color: "#777",
         }}>
-          No Advanced Markets offers available yet.
+          {tab === "goods" ? "No crop or livestock offers available yet." : "No farm service offers available yet."}
         </div>
       )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: "0.9rem" }}>
-        {offers.map((offer: any) => (
+        {visibleOffers.map((offer: any) => (
           <Link
             key={offer._id}
             href={`/buyer/advance-purchase/${offer._id}`}

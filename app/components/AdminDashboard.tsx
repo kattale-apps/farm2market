@@ -943,6 +943,39 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
               marginBottom: "2rem",
             }}
           >
+            {/* Users */}
+            <a href="/superadmin/users" style={{ textDecoration: "none" }}>
+              <div
+                style={{
+                  ...utilityCardStyle,
+                  cursor: "pointer",
+                  transition: "transform 0.2s, box-shadow 0.2s",
+                  background: "linear-gradient(135deg, #283593 0%, #1a237e 100%)",
+                  color: "#fff",
+                  minHeight: "140px",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-4px)";
+                  e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.15)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.06)";
+                }}
+              >
+                <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>👤</div>
+                <div>
+                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Users</h3>
+                  <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.95 }}>
+                    Every user by category with full details, account activation and password resets
+                  </p>
+                </div>
+              </div>
+            </a>
+
             {/* Finance Dashboard */}
             <a href="/admin/finance" style={{ textDecoration: "none" }}>
               <div

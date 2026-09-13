@@ -1,21 +1,33 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 type SubmissionPhotoGalleryProps = {
   photos: string[];
   minTileWidth?: number;
   tileHeight?: number;
+  /** When set, paginates the grid to this many photos per page instead of showing them all at once. */
+  perPage?: number;
 };
 
 export default function SubmissionPhotoGallery({
   photos,
   minTileWidth = 100,
   tileHeight = 90,
+  perPage,
 }: SubmissionPhotoGalleryProps) {
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+
+  const totalPages = perPage ? Math.max(1, Math.ceil(photos.length / perPage)) : 1;
+  useEffect(() => {
+    if (page > totalPages - 1) setPage(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photos.length]);
 
   if (!photos?.length) return null;
+
+  const visiblePhotos = perPage ? photos.slice(page * perPage, page * perPage + perPage) : photos;
 
   const handleDownload = async (url: string) => {
     try {
@@ -43,7 +55,7 @@ export default function SubmissionPhotoGallery({
           gap: "0.4rem",
         }}
       >
-        {photos.map((url, idx) => (
+        {visiblePhotos.map((url, idx) => (
           <img
             key={`${url}-${idx}`}
             src={url}
@@ -60,6 +72,38 @@ export default function SubmissionPhotoGallery({
           />
         ))}
       </div>
+
+      {perPage && totalPages > 1 && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.75rem", marginTop: "0.6rem" }}>
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            disabled={page === 0}
+            style={{
+              padding: "0.3rem 0.7rem", borderRadius: 6, border: "1px solid #ccc",
+              background: page === 0 ? "#f5f5f5" : "#fff", color: page === 0 ? "#bbb" : "#1976d2",
+              fontSize: "0.78rem", fontWeight: 700, cursor: page === 0 ? "not-allowed" : "pointer",
+            }}
+          >
+            ‹ Prev
+          </button>
+          <span style={{ fontSize: "0.78rem", color: "#666" }}>
+            Page {page + 1} of {totalPages}
+          </span>
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+            disabled={page >= totalPages - 1}
+            style={{
+              padding: "0.3rem 0.7rem", borderRadius: 6, border: "1px solid #ccc",
+              background: page >= totalPages - 1 ? "#f5f5f5" : "#fff", color: page >= totalPages - 1 ? "#bbb" : "#1976d2",
+              fontSize: "0.78rem", fontWeight: 700, cursor: page >= totalPages - 1 ? "not-allowed" : "pointer",
+            }}
+          >
+            Next ›
+          </button>
+        </div>
+      )}
 
       {lightboxUrl && (
         <div

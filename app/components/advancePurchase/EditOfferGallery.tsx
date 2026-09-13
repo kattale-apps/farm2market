@@ -19,6 +19,7 @@ interface Props {
 
 const LONG_PRESS_MS = 400;
 const MOVE_CANCEL_PX = 10;
+const PER_PAGE = 9;
 
 export function EditOfferGallery({ farmerId, offerId, photos }: Props) {
   const generateUploadUrl = useMutation(api.files.generateUploadUrl);
@@ -41,6 +42,14 @@ export function EditOfferGallery({ farmerId, offerId, photos }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [photosKey]);
   const orderedPhotos = order.map((id) => photoByStorageId.get(id)).filter((p): p is Photo => !!p);
+
+  const [page, setPage] = useState(0);
+  const totalPages = Math.max(1, Math.ceil(orderedPhotos.length / PER_PAGE));
+  useEffect(() => {
+    if (page > totalPages - 1) setPage(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderedPhotos.length]);
+  const visiblePhotos = orderedPhotos.slice(page * PER_PAGE, page * PER_PAGE + PER_PAGE);
 
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const tileRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -198,13 +207,13 @@ export function EditOfferGallery({ farmerId, offerId, photos }: Props) {
     <div>
       {!managing && photos.length > 1 && (
         <p style={{ fontSize: "0.72rem", color: "#999", margin: "0 0 0.4rem" }}>
-          Press and hold a photo to drag and reorder it.
+          Press and hold a photo to drag and reorder it{totalPages > 1 ? " (within the current page)" : ""}.
         </p>
       )}
 
       {orderedPhotos.length > 0 && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))", gap: "0.4rem", marginBottom: "0.6rem" }}>
-          {orderedPhotos.map((p) => {
+          {visiblePhotos.map((p) => {
             const id = String(p.storageId);
             const isSelected = selected.has(id);
             const isDragging = draggingId === id;
@@ -256,6 +265,38 @@ export function EditOfferGallery({ farmerId, offerId, photos }: Props) {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {totalPages > 1 && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.75rem", marginBottom: "0.6rem" }}>
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            disabled={page === 0}
+            style={{
+              padding: "0.3rem 0.7rem", borderRadius: 6, border: "1px solid #ccc",
+              background: page === 0 ? "#f5f5f5" : "#fff", color: page === 0 ? "#bbb" : "#1976d2",
+              fontSize: "0.78rem", fontWeight: 700, cursor: page === 0 ? "not-allowed" : "pointer",
+            }}
+          >
+            ‹ Prev
+          </button>
+          <span style={{ fontSize: "0.78rem", color: "#666" }}>
+            Page {page + 1} of {totalPages}
+          </span>
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+            disabled={page >= totalPages - 1}
+            style={{
+              padding: "0.3rem 0.7rem", borderRadius: 6, border: "1px solid #ccc",
+              background: page >= totalPages - 1 ? "#f5f5f5" : "#fff", color: page >= totalPages - 1 ? "#bbb" : "#1976d2",
+              fontSize: "0.78rem", fontWeight: 700, cursor: page >= totalPages - 1 ? "not-allowed" : "pointer",
+            }}
+          >
+            Next ›
+          </button>
         </div>
       )}
 

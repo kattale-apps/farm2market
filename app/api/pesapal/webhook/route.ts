@@ -4,16 +4,16 @@
  * This endpoint receives payment notifications from Pesapal.
  * 
  * IMPORTANT: Pesapal requires the IPN URL to be on the same domain as your website.
- * Since your site is on Vercel (farm2market-dev.vercel.app), use this Next.js route
+ * Since your site is on Vercel (www.farm2marketuganda.com), use this Next.js route
  * instead of the Convex HTTP endpoint.
  * 
- * Webhook URL: https://farm2market-dev.vercel.app/api/pesapal/webhook
+ * Webhook URL: https://www.farm2marketuganda.com/api/pesapal/webhook
  * 
  * To set up:
  * 1. Deploy this Next.js app to Vercel
  * 2. Register the webhook URL in Pesapal dashboard:
- *    - Website Domain: https://farm2market-dev.vercel.app/
- *    - IPN Listener Url: https://farm2market-dev.vercel.app/api/pesapal/webhook
+ *    - Website Domain: https://www.farm2marketuganda.com/
+ *    - IPN Listener Url: https://www.farm2marketuganda.com/api/pesapal/webhook
  * 3. Get the notification_id from Pesapal after registration
  * 4. Set PESAPAL_NOTIFICATION_ID in Convex Dashboard environment variables
  */

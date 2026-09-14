@@ -351,3 +351,42 @@ export const getAllParishes = query({
     }));
   },
 });
+
+/**
+ * Lookup tables for folding free-text district values onto real districts.
+ *
+ * Members store whatever was typed into `districtText`, which in practice mixes
+ * casing, misspellings, and plenty of subcounty names. The insights dashboard
+ * resolves those client-side (see app/utils/districtNormalization.ts) and needs
+ * both the canonical district list and the subcounty hierarchy to do it
+ * safely — a subcounty name can sit within two edits of an unrelated district,
+ * so knowing it IS a subcounty is what prevents a wrong attribution.
+ *
+ * Parishes are deliberately left out: they resolve only a handful of extra
+ * values but are roughly six times the payload.
+ */
+export const getDistrictResolutionTable = query({
+  args: {},
+  handler: async (ctx) => {
+    const districts = await ctx.db
+      .query("districts")
+      .withIndex("by_active", (q) => q.eq("active", true))
+      .collect();
+
+    const districtNameById = new Map(districts.map((d) => [String(d._id), d.name]));
+
+    const subcounties = await ctx.db
+      .query("subcounties")
+      .withIndex("by_active", (q) => q.eq("active", true))
+      .collect();
+
+    const places = subcounties
+      .map((s) => ({ name: s.name, district: districtNameById.get(String(s.districtId)) || "" }))
+      .filter((p) => p.district);
+
+    return {
+      districts: districts.map((d) => d.name),
+      places,
+    };
+  },
+});

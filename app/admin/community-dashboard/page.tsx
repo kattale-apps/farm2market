@@ -18,6 +18,8 @@ import { exportSubmissionsToPDF } from "../../utils/exportUtils";
 import SubmissionPhotoGallery from "../../components/SubmissionPhotoGallery";
 import { CommunityAdvancePurchasePanel } from "../../components/advancePurchase/CommunityAdvancePurchasePanel";
 import { GOODS_CATEGORIES, FARM_SERVICE_OPTIONS } from "../../utils/advancedMarketsOptions";
+import { tallyDistricts, buildDistrictMatcher } from "../../utils/districtNormalization";
+import { CrmInsightsSection } from "../../components/crm/CrmInsightsSection";
 
 /* ── Tab types for community cards ── */
 type CommunityTab = "members" | "noticeboard" | "messages" | "forms" | "insights" | "fertilizer" | "advancePurchase";
@@ -1760,7 +1762,7 @@ function FormDetailView({ formId, formName, isActive, onToggleActive, onDelete }
 /* ── Insights tab (per community) ── */
 const CHART_COLORS = ["#2e7d32","#1565c0","#ef6c00","#8e24aa","#c62828","#00838f","#6d4c41","#546e7a","#d4e157","#ff8a65"];
 
-function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; userId: Id<"users"> }) {
+function InsightsTab({ communityId, userId, crmEnabled }: { communityId: Id<"communities">; userId: Id<"users">; crmEnabled?: boolean }) {
   const forms = useQuery((api as any).forms.getCommunityForms, { communityId });
   const [selectedFormId, setSelectedFormId] = useState<string>("");
   const formResponses = useQuery(
@@ -1771,8 +1773,12 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
     api.communityApplications.getCommunityMembersByCommunityIds,
     userId ? { adminId: userId, communityIds: [communityId], status: "APPROVED" as const } : "skip"
   );
+  // Canonical districts + subcounty hierarchy, used to fold the free-text
+  // district values on member records onto real districts before charting.
+  const districtTable = useQuery(api.locations.getDistrictResolutionTable, {});
   const chartRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [showMemberInsights, setShowMemberInsights] = useState(true);
+  const [showDistrictAudit, setShowDistrictAudit] = useState(false);
   const [isMobile, setIsMobile] = useState(typeof window !== "undefined" ? window.innerWidth < 768 : true);
   const [viewportWidth, setViewportWidth] = useState(typeof window !== "undefined" ? window.innerWidth : 375);
 
@@ -1822,22 +1828,27 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
 
   const xAxisHeight = isMobile ? 56 : 34;
 
-  const mobilePieTopN = useMemo(() => {
+  // How many slices a donut may show before the rest is rolled into "Other".
+  // This used to apply on mobile only, which let a community spanning hundreds
+  // of districts render hundreds of legend entries on desktop — enough to
+  // overflow the chart card and paint over the rest of the page.
+  const pieTopN = useMemo(() => {
     const width = viewportWidth;
     if (width <= 360) return 4;
     if (width <= 767) return 5;
-    return 6;
+    return 8;
   }, [viewportWidth]);
 
-  const getMobilePieData = useCallback((data: Array<{ name: string; value: number; fill?: string }>, topN = 5) => {
+  const getPieData = useCallback((data: Array<{ name: string; value: number; fill?: string }>, topN = 8) => {
     if (!Array.isArray(data)) return [];
-    if (!isMobile || data.length <= topN) return data;
+    if (data.length <= topN) return data;
     const sorted = [...data].sort((a, b) => (b.value || 0) - (a.value || 0));
     const top = sorted.slice(0, topN);
-    const otherValue = sorted.slice(topN).reduce((sum, item) => sum + (item.value || 0), 0);
+    const rest = sorted.slice(topN);
+    const otherValue = rest.reduce((sum, item) => sum + (item.value || 0), 0);
     if (otherValue <= 0) return top;
-    return [...top, { name: "Other", value: otherValue, fill: "#b0bec5" }];
-  }, [isMobile]);
+    return [...top, { name: `Other (${rest.length})`, value: otherValue, fill: "#b0bec5" }];
+  }, []);
 
   const trackerForms = (forms ?? []).filter((f: any) => f.formPurpose === "tracker" || !f.formPurpose);
   const profileForms = (forms ?? []).filter((f: any) => f.formPurpose === "profile");
@@ -1858,6 +1869,12 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
 
   const totalMembers = memberList.length;
 
+  const canonicalDistricts: string[] = useMemo(
+    () => districtTable?.districts ?? [],
+    [districtTable]
+  );
+  const canonicalPlaces = useMemo(() => districtTable?.places ?? [], [districtTable]);
+
   // ── Member Insights (category-agnostic) ──
   const memberInsights = useMemo(() => {
     if (!memberList.length) return null;
@@ -1874,19 +1891,47 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
     const sexFreq: Record<string, number> = {};
     farmers.forEach((f: any) => { const s = f.sex === "M" ? "Male" : f.sex === "F" ? "Female" : "Not Set"; sexFreq[s] = (sexFreq[s] || 0) + 1; });
     const sexData = Object.entries(sexFreq).sort(([,a],[,b]) => b - a).map(([name, value]) => ({ name, value }));
+    // Sex is not captured during onboarding today, so for most communities this
+    // chart is a donut that only says "Not Set 100%". Hide it until at least one
+    // member has a value — it then comes back on its own.
+    const hasSexData = sexData.some((d) => d.name !== "Not Set" && d.value > 0);
 
-    // District distribution
-    const districtFreq: Record<string, number> = {};
-    farmers.forEach((f: any) => { const d = f.districtText || "Unknown"; districtFreq[d] = (districtFreq[d] || 0) + 1; });
+    // District distribution. The stored value is free text, so fold the
+    // spellings, town-council suffixes and subcounty names onto real districts
+    // before counting — otherwise one district is counted many times over and
+    // the "Districts" figure claims a reach the community does not have.
+    const districtTally = tallyDistricts(
+      farmers.map((f: any) => f.districtText),
+      canonicalDistricts,
+      canonicalPlaces
+    );
+    const matchDistrict = buildDistrictMatcher(canonicalDistricts, canonicalPlaces);
+    const canonicalOf = (raw: any) => matchDistrict(raw).canonical || "Unknown";
+
     const districtColors: Record<string, string> = {};
-    Object.keys(districtFreq).sort().forEach((d, i) => { districtColors[d] = CHART_COLORS[i % CHART_COLORS.length]; });
-    const districtData = Object.entries(districtFreq).sort(([,a],[,b]) => b - a).map(([name, value]) => ({ name, value, fill: districtColors[name] }));
+    [...districtTally.districts.map((d) => d.name)].sort().forEach((d, i) => {
+      districtColors[d] = CHART_COLORS[i % CHART_COLORS.length];
+    });
+    districtColors["Unknown"] = "#b0bec5";
 
-    // Subcounty distribution (colour-coded by district)
+    const districtData = districtTally.districts.map(({ name, value }) => ({
+      name,
+      value,
+      fill: districtColors[name],
+    }));
+    if (districtTally.unrecognisedMembers > 0) {
+      districtData.push({
+        name: "Unrecognised location",
+        value: districtTally.unrecognisedMembers,
+        fill: "#b0bec5",
+      });
+    }
+
+    // Subcounty distribution (colour-coded by the member's resolved district)
     const subcountyMap: Record<string, { count: number; district: string }> = {};
     farmers.forEach((f: any) => {
       const sc = f.subCountyText || "Unknown";
-      const d = f.districtText || "Unknown";
+      const d = canonicalOf(f.districtText);
       if (!subcountyMap[sc]) subcountyMap[sc] = { count: 0, district: d };
       subcountyMap[sc].count++;
     });
@@ -1907,7 +1952,7 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
     // Average farm size per district
     const districtFarmAcc: Record<string, { total: number; count: number }> = {};
     farmSizes.forEach((f: any) => {
-      const d = f.districtText || "Unknown";
+      const d = canonicalOf(f.districtText);
       if (!districtFarmAcc[d]) districtFarmAcc[d] = { total: 0, count: 0 };
       districtFarmAcc[d].total += f.farmSizeAcres;
       districtFarmAcc[d].count++;
@@ -1926,16 +1971,17 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
     farmers.forEach((f: any) => { if (f.supplyChainRole) { scRoleFreq[f.supplyChainRole] = (scRoleFreq[f.supplyChainRole] || 0) + 1; } });
     const scRoleData = Object.entries(scRoleFreq).sort(([,a],[,b]) => b - a).map(([name, value]) => ({ name, value }));
 
-    const distinctDistricts = Object.keys(districtFreq).filter(d => d !== "Unknown").length;
+    const distinctDistricts = districtTally.distinctDistricts;
     const distinctSubcounties = Object.keys(subcountyMap).filter(s => s !== "Unknown").length;
 
     return {
-      roleData, roleColors, sexData, districtData, districtColors, subcountyData,
+      roleData, roleColors, sexData, hasSexData, districtData, districtColors, subcountyData,
       hasFarmData, totalFarmSize, histData, avgFarmData,
       regionData, scRoleData,
       distinctDistricts, distinctSubcounties, totalMemberCount: farmers.length,
+      districtTally,
     };
-  }, [memberList]);
+  }, [memberList, canonicalDistricts, canonicalPlaces]);
 
   // Aggregate per-field data
   const fieldAggregations = useMemo(() => {
@@ -2172,9 +2218,9 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
             ) : (
               <>
                 {(() => {
-                  const rolePieData = getMobilePieData(memberInsights.roleData, mobilePieTopN);
-                  const sexPieData = getMobilePieData(memberInsights.sexData, mobilePieTopN);
-                  const districtPieData = getMobilePieData(memberInsights.districtData, mobilePieTopN);
+                  const rolePieData = getPieData(memberInsights.roleData, pieTopN);
+                  const sexPieData = getPieData(memberInsights.sexData, pieTopN);
+                  const districtPieData = getPieData(memberInsights.districtData, pieTopN);
                   return (
                     <>
                 {/* KPI Cards */}
@@ -2209,6 +2255,83 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
                   <button onClick={handleExportMembersPDF} style={{ padding: "0.45rem 0.85rem", borderRadius: "6px", border: "1px solid #6a1b9a", background: "#f3e5f5", color: "#6a1b9a", fontWeight: 600, fontSize: "0.82rem", cursor: "pointer" }}>📄 Export Members PDF</button>
                 </div>
 
+                {/* Location data quality — the district field is free text, so
+                    say plainly what was folded together and what could not be. */}
+                {(memberInsights.districtTally.corrections.length > 0 ||
+                  memberInsights.districtTally.unrecognised.length > 0) && (
+                  <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "10px", padding: "0.75rem 0.9rem", marginBottom: "1.25rem" }}>
+                    <div style={{ fontSize: "0.82rem", color: "#92400e", lineHeight: 1.6 }}>
+                      <strong>Location data quality.</strong>{" "}
+                      {memberInsights.districtTally.rawSpellings} different district spellings were
+                      entered by members. These resolve to{" "}
+                      <strong>{memberInsights.distinctDistricts} real districts</strong>
+                      {memberInsights.districtTally.unrecognisedMembers > 0 && (
+                        <>
+                          , with{" "}
+                          <strong>
+                            {memberInsights.districtTally.unrecognisedMembers} member
+                            {memberInsights.districtTally.unrecognisedMembers === 1 ? "" : "s"}
+                          </strong>{" "}
+                          whose location could not be matched
+                        </>
+                      )}
+                      . Charts count the resolved districts; member records are unchanged.
+                    </div>
+                    <button
+                      onClick={() => setShowDistrictAudit(!showDistrictAudit)}
+                      style={{ marginTop: "0.5rem", padding: "0.3rem 0.7rem", borderRadius: "6px", border: "1px solid #d97706", background: "#fff", color: "#92400e", fontWeight: 600, fontSize: "0.78rem", cursor: "pointer" }}
+                    >
+                      {showDistrictAudit ? "Hide details" : "Review what was matched"}
+                    </button>
+
+                    {showDistrictAudit && (
+                      <div style={{ marginTop: "0.75rem", display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "0.75rem" }}>
+                        <div style={{ background: "#fff", border: "1px solid #fde68a", borderRadius: "8px", padding: "0.6rem" }}>
+                          <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#92400e", marginBottom: "0.4rem" }}>
+                            Matched to a district ({memberInsights.districtTally.corrections.length})
+                          </div>
+                          <div style={{ maxHeight: 220, overflowY: "auto", fontSize: "0.75rem" }}>
+                            {memberInsights.districtTally.corrections.map((c: any) => (
+                              <div key={`${c.raw}->${c.canonical}`} style={{ padding: "0.25rem 0", borderBottom: "1px solid #f5f5f5", display: "flex", justifyContent: "space-between", gap: "0.5rem" }}>
+                                <span style={{ color: "#555" }}>
+                                  {c.raw} <span style={{ color: "#999" }}>→</span>{" "}
+                                  <strong style={{ color: "#1a237e" }}>{c.canonical}</strong>
+                                </span>
+                                <span style={{ color: "#999", whiteSpace: "nowrap" }}>
+                                  {c.method === "spelling" ? "spelling" : c.method === "place" ? "subcounty" : "compound"} · {c.value}
+                                </span>
+                              </div>
+                            ))}
+                            {memberInsights.districtTally.corrections.length === 0 && (
+                              <div style={{ color: "#999" }}>Nothing needed adjusting.</div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div style={{ background: "#fff", border: "1px solid #fde68a", borderRadius: "8px", padding: "0.6rem" }}>
+                          <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#92400e", marginBottom: "0.4rem" }}>
+                            Not matched ({memberInsights.districtTally.unrecognised.length})
+                          </div>
+                          <div style={{ fontSize: "0.72rem", color: "#999", marginBottom: "0.3rem" }}>
+                            Usually villages or parishes typed into the district field. Correct these on the member record to pull them into a district.
+                          </div>
+                          <div style={{ maxHeight: 190, overflowY: "auto", fontSize: "0.75rem" }}>
+                            {memberInsights.districtTally.unrecognised.map((u: any) => (
+                              <div key={u.raw} style={{ padding: "0.25rem 0", borderBottom: "1px solid #f5f5f5", display: "flex", justifyContent: "space-between", gap: "0.5rem" }}>
+                                <span style={{ color: "#555" }}>{u.raw}</span>
+                                <span style={{ color: "#999" }}>{u.value}</span>
+                              </div>
+                            ))}
+                            {memberInsights.districtTally.unrecognised.length === 0 && (
+                              <div style={{ color: "#999" }}>Every location matched a district.</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Charts grid */}
                 <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "1rem" }}>
                   {/* Role Distribution (donut) */}
@@ -2240,7 +2363,8 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
                     <div style={{ height: isMobile ? "120px" : "100px" }} />
                   </div>
 
-                  {/* Sex Distribution */}
+                  {/* Sex Distribution — only once members actually have a sex recorded */}
+                  {memberInsights.hasSexData && (
                   <div style={{ background: "#fafafa", borderRadius: "10px", border: "1px solid #eee", padding: "1rem" }}>
                     <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "0.9rem", fontWeight: 700, color: "#333" }}>Distribution by Sex</h4>
                     <ResponsiveContainer width="100%" height={isMobile ? 260 : 240}>
@@ -2263,6 +2387,7 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
+                  )}
 
                   {/* District Distribution (donut) */}
                   <div style={{ background: "#fafafa", borderRadius: "10px", border: "1px solid #eee", padding: "1rem" }}>
@@ -2390,7 +2515,15 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
       {/* ═══════════ DIVIDER ═══════════ */}
       <hr style={{ border: "none", borderTop: "2px solid #e0e0e0", margin: "1.5rem 0" }} />
 
-      {/* ═══════════ SECTION 2: Form Response Insights ═══════════ */}
+      {/* ═══════════ SECTION 2: Call Centre Insights ═══════════ */}
+      {crmEnabled && (
+        <>
+          <CrmInsightsSection communityId={communityId} userId={userId} isMobile={isMobile} />
+          <hr style={{ border: "none", borderTop: "2px solid #e0e0e0", margin: "1.5rem 0" }} />
+        </>
+      )}
+
+      {/* ═══════════ SECTION 3: Form Response Insights ═══════════ */}
       <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: "#1a237e", marginBottom: "0.75rem" }}>📋 Form Response Insights</h3>
 
       {forms.length === 0 && (
@@ -2499,7 +2632,7 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
                         )}
                         {agg.type === "pie" && (
                           (() => {
-                            const aggPieData = getMobilePieData(agg.pieData, mobilePieTopN);
+                            const aggPieData = getPieData(agg.pieData, pieTopN);
                             return (
                           <ResponsiveContainer width="100%" height={isMobile ? 260 : 220}>
                             <PieChart>
@@ -3570,7 +3703,7 @@ export default function CommunityDashboardPage() {
 
               {/* ── Insights Tab ── */}
               {getActiveTab(communityId) === "insights" && (
-                <InsightsTab communityId={communityId} userId={userId!} />
+                <InsightsTab communityId={communityId} userId={userId!} crmEnabled={community.crmEnabled === true} />
               )}
 
               {/* ── Fertilizer Tab ── */}

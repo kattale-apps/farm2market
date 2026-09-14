@@ -332,3 +332,282 @@ export const getOpportunityExportRows = query({
     return rows.sort((a: any, b: any) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
   },
 });
+
+/**
+ * Full CRM submission history: every intake form with the answers that were
+ * recorded on it, plus the calls that followed.
+ *
+ * getTodaysSubmittedForms deliberately stays as it is — it backs the "what
+ * happened today" card on the CRM home. This is the reviewable archive: the
+ * answers agents captured, and what each follow-up call found, which is the
+ * part that was previously only in the database.
+ */
+export const getCrmSubmissions = query({
+  args: {
+    communityId: v.id("communities"),
+    requesterId: v.id("users"),
+    /** Inclusive lower bound on submittedAt. Omit for all time. */
+    fromTs: v.optional(v.number()),
+    /** Exclusive upper bound on submittedAt. */
+    toTs: v.optional(v.number()),
+    crmFormId: v.optional(v.id("crmForms")),
+    /** Keep only submissions whose most recent call had this outcome. */
+    outcome: v.optional(
+      v.union(
+        v.literal("good_result"),
+        v.literal("problem"),
+        v.literal("wants_more"),
+        v.literal("no_answer"),
+        v.literal("never_called")
+      )
+    ),
+    /** Matches client name, phone number or district, case-insensitively. */
+    search: v.optional(v.string()),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await requireCrmSupervisorAccess(ctx, args.requesterId, args.communityId);
+
+    const limit = Math.min(Math.max(args.limit ?? 100, 1), 500);
+
+    const responses = await ctx.db
+      .query("crmFormResponses")
+      .withIndex("by_community_submitted", (q: any) => {
+        let range = q.eq("communityId", args.communityId);
+        if (args.fromTs != null) range = range.gte("submittedAt", args.fromTs);
+        if (args.toTs != null) range = range.lt("submittedAt", args.toTs);
+        return range;
+      })
+      .collect();
+
+    const byForm = args.crmFormId
+      ? responses.filter((r: any) => String(r.crmFormId) === String(args.crmFormId))
+      : responses;
+
+    const newestFirst = byForm.sort(
+      (a: any, b: any) => Number(b.submittedAt || 0) - Number(a.submittedAt || 0)
+    );
+
+    // Field definitions are per form and shared by every response to it, so
+    // they are fetched once rather than per row.
+    const fieldsByForm = new Map<string, any[]>();
+    const formById = new Map<string, any>();
+    const userById = new Map<string, any>();
+
+    const loadUser = async (id: any) => {
+      if (!id) return null;
+      const key = String(id);
+      if (userById.has(key)) return userById.get(key);
+      const user = await ctx.db.get(id);
+      userById.set(key, user);
+      return user;
+    };
+
+    const rows: any[] = [];
+
+    for (const response of newestFirst) {
+      const formKey = String(response.crmFormId);
+      if (!formById.has(formKey)) {
+        formById.set(formKey, await ctx.db.get(response.crmFormId));
+        const fields = await ctx.db
+          .query("crmFormFields")
+          .withIndex("by_form", (q: any) => q.eq("crmFormId", response.crmFormId))
+          .collect();
+        fieldsByForm.set(
+          formKey,
+          fields.sort((a: any, b: any) => Number(a.order || 0) - Number(b.order || 0))
+        );
+      }
+      const form = formById.get(formKey);
+      const fields = fieldsByForm.get(formKey) || [];
+
+      const member = await loadUser(response.memberId);
+      const submittedBy = await loadUser(response.submittedByUserId);
+
+      const values = await ctx.db
+        .query("crmFormResponseValues")
+        .withIndex("by_response", (q: any) => q.eq("crmResponseId", response._id))
+        .collect();
+      const valueByField = new Map(values.map((v2: any) => [String(v2.crmFieldId), v2.value]));
+
+      const answers = fields.map((field: any) => ({
+        fieldId: String(field._id),
+        label: field.label,
+        fieldType: field.fieldType,
+        value: valueByField.get(String(field._id)) ?? "",
+      }));
+
+      // Calls are hung off the lead this submission created.
+      const lead = await ctx.db
+        .query("crmLeads")
+        .withIndex("by_source_response", (q: any) => q.eq("sourceCrmResponseId", response._id))
+        .first();
+
+      let calls: any[] = [];
+      if (lead) {
+        const logs = await ctx.db
+          .query("crmCallLogs")
+          .withIndex("by_lead", (q: any) => q.eq("leadId", lead._id))
+          .collect();
+        logs.sort((a: any, b: any) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+        calls = await Promise.all(
+          logs.map(async (log: any) => {
+            const agent = await loadUser(log.agentId);
+            return {
+              callId: String(log._id),
+              createdAt: log.createdAt,
+              agentName: agent?.alias || "Unknown agent",
+              outcome: log.outcome,
+              usageStatus: log.usageStatus ?? null,
+              resultRating: log.resultRating ?? null,
+              issueType: log.issueType ?? null,
+              repurchaseIntent: log.repurchaseIntent ?? null,
+              notes: log.notes ?? "",
+              healthScore: log.healthScore ?? null,
+              healthBand: log.healthBand ?? null,
+            };
+          })
+        );
+      }
+
+      rows.push({
+        responseId: String(response._id),
+        crmFormId: formKey,
+        formName: form?.name || "Unknown form",
+        clientName: response.clientName || member?.alias || "Unknown",
+        phoneNumber: member?.phoneNumber || "-",
+        district: response.district || "-",
+        subCounty: response.subCounty || "-",
+        parish: response.parish || "-",
+        submittedAt: response.submittedAt,
+        submittedByName: submittedBy?.alias || "Unknown",
+        sourceEventType: response.sourceEventType,
+        wasNewClientAtIntake: response.wasNewClientAtIntake ?? false,
+        // Structured intake fields live on the response itself rather than in
+        // the custom-field table, so they are surfaced alongside the answers.
+        purchase: {
+          productName: response.productName ?? null,
+          purchaseQuantity: response.purchaseQuantity ?? null,
+          purchaseDate: response.purchaseDate ?? null,
+          cropGrown: response.cropGrown ?? null,
+          monthOfPlanting: response.monthOfPlanting ?? null,
+          pastSprayDates: response.pastSprayDates ?? [],
+          upcomingSprayScheduleAt: response.upcomingSprayScheduleAt ?? null,
+        },
+        answers,
+        calls,
+        callCount: calls.length,
+        latestOutcome: calls[0]?.outcome ?? null,
+        latestHealthBand: lead?.latestHealthBand ?? null,
+        latestHealthScore: lead?.latestHealthScore ?? null,
+        queueStatus: lead?.queueStatus ?? null,
+        nextCallAt: lead?.nextCallAt ?? null,
+      });
+    }
+
+    const needle = String(args.search || "").trim().toLowerCase();
+    const searched = needle
+      ? rows.filter((r) =>
+          [r.clientName, r.phoneNumber, r.district, r.subCounty, r.formName]
+            .join(" ")
+            .toLowerCase()
+            .includes(needle)
+        )
+      : rows;
+
+    const filtered = args.outcome
+      ? searched.filter((r) =>
+          args.outcome === "never_called"
+            ? r.callCount === 0
+            : r.latestOutcome === args.outcome
+        )
+      : searched;
+
+    return {
+      rows: filtered.slice(0, limit),
+      totalMatching: filtered.length,
+      totalCalls: filtered.reduce((sum, r) => sum + r.callCount, 0),
+      truncated: filtered.length > limit,
+    };
+  },
+});
+
+/**
+ * Aggregated CRM outcomes for the community insights dashboard: what agents
+ * are finding on the phone, rolled up for charting.
+ */
+export const getCrmInsights = query({
+  args: {
+    communityId: v.id("communities"),
+    requesterId: v.id("users"),
+    fromTs: v.optional(v.number()),
+    toTs: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await requireCrmSupervisorAccess(ctx, args.requesterId, args.communityId);
+
+    const responses = await ctx.db
+      .query("crmFormResponses")
+      .withIndex("by_community_submitted", (q: any) => {
+        let range = q.eq("communityId", args.communityId);
+        if (args.fromTs != null) range = range.gte("submittedAt", args.fromTs);
+        if (args.toTs != null) range = range.lt("submittedAt", args.toTs);
+        return range;
+      })
+      .collect();
+
+    const logs = await ctx.db
+      .query("crmCallLogs")
+      .withIndex("by_community_created", (q: any) => q.eq("communityId", args.communityId))
+      .collect();
+    const callsInRange = logs.filter((l: any) => {
+      if (args.fromTs != null && Number(l.createdAt) < args.fromTs) return false;
+      if (args.toTs != null && Number(l.createdAt) >= args.toTs) return false;
+      return true;
+    });
+
+    const tally = (items: any[], pick: (item: any) => string | null | undefined) => {
+      const freq: Record<string, number> = {};
+      for (const item of items) {
+        const key = pick(item);
+        if (!key) continue;
+        freq[key] = (freq[key] || 0) + 1;
+      }
+      return Object.entries(freq)
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value);
+    };
+
+    // Submissions per day, oldest first, for the trend line.
+    const perDay: Record<string, number> = {};
+    for (const r of responses) {
+      const key = new Date(Number(r.submittedAt)).toISOString().slice(0, 10);
+      perDay[key] = (perDay[key] || 0) + 1;
+    }
+    const submissionsOverTime = Object.entries(perDay)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    const healthScores = callsInRange
+      .map((l: any) => Number(l.healthScore))
+      .filter((n: number) => Number.isFinite(n));
+
+    return {
+      totalSubmissions: responses.length,
+      totalCalls: callsInRange.length,
+      newClients: responses.filter((r: any) => r.wasNewClientAtIntake).length,
+      averageHealthScore: healthScores.length
+        ? Math.round((healthScores.reduce((a: number, b: number) => a + b, 0) / healthScores.length) * 10) / 10
+        : null,
+      outcomeData: tally(callsInRange, (l) => l.outcome),
+      usageData: tally(callsInRange, (l) => l.usageStatus),
+      resultRatingData: tally(callsInRange, (l) => l.resultRating),
+      issueTypeData: tally(callsInRange, (l) => l.issueType),
+      repurchaseData: tally(callsInRange, (l) => l.repurchaseIntent),
+      healthBandData: tally(callsInRange, (l) => l.healthBand),
+      cropData: tally(responses, (r) => r.cropGrown),
+      productData: tally(responses, (r) => r.productName),
+      submissionsOverTime,
+    };
+  },
+});

@@ -8,6 +8,13 @@ import { useStoredUser } from "../../hooks/useStoredUser";
 
 const FONT = '"Montserrat", sans-serif';
 
+/**
+ * Text that sits directly on the app's photographic background, with no card
+ * behind it, needs a white halo to stay readable over both the bright and the
+ * dark parts of the photo. Matches the other Advanced Markets headers.
+ */
+const ON_PHOTO_SHADOW = "0 1px 2px rgba(255,255,255,0.95), 0 0 8px rgba(255,255,255,0.9)";
+
 type MarketTab = "goods" | "services";
 
 /** Status pill colours, so the status reads as state rather than as a link. */
@@ -83,8 +90,10 @@ export default function AdvancePurchaseMarketPage() {
 
       {myCommitments && myCommitments.length > 0 && (
         <div style={{ marginBottom: "1.5rem" }}>
-          <h2 style={{ fontSize: "1.05rem", fontWeight: 700, marginBottom: "0.15rem" }}>My Advanced Market Purchases</h2>
-          <p style={{ fontSize: "0.8rem", color: "#f1f1f1", margin: "0 0 0.6rem" }}>
+          <h2 style={{ fontSize: "1.05rem", fontWeight: 700, marginBottom: "0.15rem", color: "#1a1a1a", textShadow: ON_PHOTO_SHADOW }}>
+            My Advanced Market Purchases
+          </h2>
+          <p style={{ fontSize: "0.8rem", color: "#333", fontWeight: 600, margin: "0 0 0.6rem", textShadow: ON_PHOTO_SHADOW }}>
             Tap a purchase to follow its milestones and download the order form.
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
@@ -94,7 +103,7 @@ export default function AdvancePurchaseMarketPage() {
                 <Link
                   key={c._id}
                   href={`/buyer/advance-purchase/commitment/${c._id}`}
-                  className="purchase-card"
+                  className="am-purchase-card"
                   aria-label={`Open ${c.offer?.productName || "purchase"} order details`}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.6rem" }}>
@@ -123,17 +132,22 @@ export default function AdvancePurchaseMarketPage() {
 
                   {/* An explicit call to action, because a card that merely looks
                       nice still does not tell anyone it can be tapped. */}
-                  <div className="purchase-cta">
+                  <div className="am-purchase-cta">
                     <span>View order &amp; download form</span>
-                    <span aria-hidden="true" className="purchase-chevron">›</span>
+                    <span aria-hidden="true" className="am-purchase-chevron">›</span>
                   </div>
                 </Link>
               );
             })}
           </div>
 
-          <style jsx>{`
-            .purchase-card {
+          {/* Global rather than scoped: styled-jsx adds its hash class only to
+              plain DOM elements, never to a child component, so a scoped rule
+              can never match the <Link> below — which is why the card rendered
+              with no background and underlined text. Names are prefixed to keep
+              global scope safe. */}
+          <style jsx global>{`
+            .am-purchase-card {
               display: block;
               padding: 0.8rem 0.95rem;
               background: #fff;
@@ -147,25 +161,25 @@ export default function AdvancePurchaseMarketPage() {
               -webkit-tap-highlight-color: rgba(123, 31, 162, 0.12);
             }
             /* Pressing it should feel like pressing something. */
-            .purchase-card:active {
+            .am-purchase-card:active {
               transform: scale(0.985);
               background: #faf5fc;
               box-shadow: 0 1px 3px rgba(74, 20, 140, 0.18);
             }
-            .purchase-card:focus-visible {
+            .am-purchase-card:focus-visible {
               outline: 3px solid #7b1fa2;
               outline-offset: 2px;
             }
             @media (hover: hover) {
-              .purchase-card:hover {
+              .am-purchase-card:hover {
                 transform: translateY(-1px);
                 box-shadow: 0 6px 16px rgba(74, 20, 140, 0.2);
               }
-              .purchase-card:hover .purchase-chevron {
+              .am-purchase-card:hover .am-purchase-chevron {
                 transform: translateX(3px);
               }
             }
-            .purchase-cta {
+            .am-purchase-cta {
               display: flex;
               align-items: center;
               justify-content: space-between;
@@ -176,7 +190,7 @@ export default function AdvancePurchaseMarketPage() {
               font-weight: 700;
               color: #7b1fa2;
             }
-            .purchase-chevron {
+            .am-purchase-chevron {
               font-size: 1.2rem;
               line-height: 1;
               transition: transform 0.12s ease;
@@ -184,11 +198,11 @@ export default function AdvancePurchaseMarketPage() {
             /* Nudge the chevron on arrival so the row reads as interactive
                even before anyone touches it. Respects reduced-motion. */
             @media (prefers-reduced-motion: no-preference) {
-              .purchase-chevron {
-                animation: purchase-nudge 2.4s ease-in-out 3;
+              .am-purchase-chevron {
+                animation: am-purchase-nudge 2.4s ease-in-out 3;
               }
             }
-            @keyframes purchase-nudge {
+            @keyframes am-purchase-nudge {
               0%, 70%, 100% { transform: translateX(0); }
               80% { transform: translateX(4px); }
               90% { transform: translateX(0); }

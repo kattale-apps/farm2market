@@ -2434,6 +2434,35 @@ export default defineSchema({
     .index("by_agent_created", ["agentId", "createdAt"])
     .index("by_community_created", ["communityId", "createdAt"]),
 
+  /**
+   * Answers an agent gave to the form's own questions during one call.
+   *
+   * Separate from crmFormResponseValues, which holds the answers captured once
+   * at intake. A lead is called repeatedly and these answers change each time —
+   * "how much is left" and "when will you buy the next dose" are the numbers
+   * logistics plans against, so each call keeps its own set rather than
+   * overwriting the last.
+   *
+   * label and fieldType are snapshots taken at submission. Admins rename and
+   * delete form fields, and a past call's answers must stay readable when they
+   * do — the same reason advancePurchase copies its milestone template onto
+   * each offer instead of pointing at the live config.
+   */
+  crmCallAnswers: defineTable({
+    callLogId: v.id("crmCallLogs"),
+    leadId: v.id("crmLeads"),
+    communityId: v.id("communities"),
+    crmFieldId: v.id("crmFormFields"),
+    label: v.string(),
+    fieldType: v.string(),
+    value: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_call", ["callLogId"])
+    .index("by_lead", ["leadId"])
+    .index("by_field", ["crmFieldId"])
+    .index("by_community_created", ["communityId", "createdAt"]),
+
   crmTickets: defineTable({
     leadId: v.id("crmLeads"),
     communityId: v.id("communities"),

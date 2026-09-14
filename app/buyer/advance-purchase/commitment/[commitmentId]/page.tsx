@@ -41,6 +41,7 @@ export default function CommitmentDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [downloadStep, setDownloadStep] = useState("");
 
   if (status === "loading" || detail === undefined) {
     return <div style={{ padding: "2rem", fontFamily: FONT }}>Loading...</div>;
@@ -89,11 +90,19 @@ export default function CommitmentDetailPage() {
       const { exportAdvanceMarketCommitmentToPDF } = await import(
         "../../../../utils/exportUtils"
       );
-      await exportAdvanceMarketCommitmentToPDF(detail, user.alias);
+      const result = await exportAdvanceMarketCommitmentToPDF(detail, user.alias, setDownloadStep);
+      // On the phone the file lands in Documents rather than a downloads bar,
+      // so say so — otherwise a successful save looks like nothing happened.
+      if (result?.ok && result.method === "saved") {
+        setNotice(`Saved ${result.filename} to your Documents folder.`);
+      } else if (result && !result.ok) {
+        setError(result.error);
+      }
     } catch (e: any) {
       setError(e?.message || "Could not build the PDF. Please try again.");
     } finally {
       setDownloading(false);
+      setDownloadStep("");
     }
   };
 
@@ -128,7 +137,7 @@ export default function CommitmentDetailPage() {
           cursor: downloading ? "wait" : "pointer",
         }}
       >
-        {downloading ? "Preparing PDF..." : "⬇️ Download order form (PDF)"}
+        {downloading ? downloadStep || "Preparing PDF..." : "⬇️ Download order form (PDF)"}
       </button>
 
       {notice && (

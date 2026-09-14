@@ -11,6 +11,14 @@ import SubmissionPhotoGallery from "../../../../components/SubmissionPhotoGaller
 
 const FONT = '"Montserrat", sans-serif';
 
+/**
+ * This header sits directly on the app's photographic background with no card
+ * behind it, where mid-grey text disappears against the leaves. A white halo
+ * keeps it readable over both the bright and the dark parts of the photo
+ * without putting a panel behind it.
+ */
+const ON_PHOTO_SHADOW = "0 1px 2px rgba(255,255,255,0.95), 0 0 8px rgba(255,255,255,0.9)";
+
 const CARD: React.CSSProperties = {
   background: "#fff",
   border: "1px solid #e0e0e0",
@@ -109,13 +117,18 @@ export default function CommitmentDetailPage() {
   return (
     <div style={{ padding: "1rem", maxWidth: 640, margin: "0 auto", fontFamily: FONT }}>
       <div style={{ marginBottom: "1rem" }}>
-        <Link href="/buyer/advance-purchase" style={{ color: "#1976d2", fontWeight: 600, fontSize: "0.9rem" }}>
+        <Link
+          href="/buyer/advance-purchase"
+          style={{ color: "#0d47a1", fontWeight: 700, fontSize: "0.9rem", textShadow: ON_PHOTO_SHADOW }}
+        >
           ← Advanced Markets
         </Link>
       </div>
 
-      <h1 style={{ fontSize: "1.3rem", fontWeight: 700 }}>{detail.offer?.productName}</h1>
-      <p style={{ color: "#777", fontSize: "0.85rem", marginBottom: "1rem" }}>
+      <h1 style={{ fontSize: "1.3rem", fontWeight: 700, color: "#1a1a1a", textShadow: ON_PHOTO_SHADOW }}>
+        {detail.offer?.productName}
+      </h1>
+      <p style={{ color: "#333", fontWeight: 600, fontSize: "0.85rem", marginBottom: "1rem", textShadow: ON_PHOTO_SHADOW }}>
         {detail.quantity} {detail.offer?.unit} · status: {detail.status.replace(/_/g, " ")}
       </p>
 

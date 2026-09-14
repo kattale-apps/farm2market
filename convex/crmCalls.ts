@@ -69,6 +69,18 @@ export const submitCrmCallOutcome = mutation({
     expectedPurchaseMonth: v.optional(v.string()),
     probability: v.optional(v.union(v.literal("low"), v.literal("medium"), v.literal("high"))),
     opportunityNextActionAt: v.optional(v.number()),
+    /**
+     * Answers to the source form's own questions, captured on this call.
+     * Optional so an agent logging "no answer" is not forced to invent them.
+     */
+    answers: v.optional(
+      v.array(
+        v.object({
+          crmFieldId: v.id("crmFormFields"),
+          value: v.string(),
+        })
+      )
+    ),
   },
   handler: async (ctx, args) => {
     const lead = await ctx.db.get(args.leadId);
@@ -125,6 +137,29 @@ export const submitCrmCallOutcome = mutation({
       healthBand: health.band,
       createdAt: now,
     });
+
+    // Store the form answers against this specific call. Field definitions are
+    // verified to belong to the lead's own form so a caller cannot write values
+    // onto another community's questions, and the label is snapshotted so the
+    // answer stays readable if the question is later renamed or removed.
+    for (const answer of args.answers || []) {
+      if (!answer.value.trim()) continue;
+      const field = await ctx.db.get(answer.crmFieldId);
+      if (!field) continue;
+      if (String(field.crmFormId) !== String(lead.sourceCrmFormId)) {
+        throw new Error("Answer does not belong to this lead's form");
+      }
+      await ctx.db.insert("crmCallAnswers", {
+        callLogId,
+        leadId: args.leadId,
+        communityId: lead.communityId,
+        crmFieldId: answer.crmFieldId,
+        label: field.label,
+        fieldType: field.fieldType,
+        value: answer.value.trim(),
+        createdAt: now,
+      });
+    }
 
     let queueStatus: "open" | "in_progress" | "called" | "overdue" | "closed" = "called";
 

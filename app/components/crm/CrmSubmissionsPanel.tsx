@@ -143,7 +143,7 @@ export function CrmSubmissionsPanel({
       "Submitted", "Client", "Phone", "Form", "District", "SubCounty",
       "Product", "Quantity", "Crop", "Planting month",
       "Answers", "Calls", "Latest outcome", "Health",
-      "Opportunities", "Issues",
+      "Opportunities", "Issues", "Call answers",
     ];
     const lines = [header.map(csvCell).join(",")];
     for (const row of rows) {
@@ -166,6 +166,9 @@ export function CrmSubmissionsPanel({
           .map((o: any) => [o.productName, o.quantity, o.expectedPurchaseMonth].filter(Boolean).join(" "))
           .join(" | "),
         (row.tickets || []).map((t: any) => `${t.title} (${t.status})`).join(" | "),
+        (row.calls || [])
+          .flatMap((c: any) => (c.answers || []).map((a: any) => `${a.label}: ${a.value}`))
+          .join(" | "),
       ].map(csvCell).join(","));
     }
     const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
@@ -332,8 +335,8 @@ export function CrmSubmissionsPanel({
                     </div>
                     {(!row.answers || row.answers.length === 0) && (
                       <div style={{ fontSize: "0.8rem", color: "#999" }}>
-                        This form has no custom questions — add fields under “Manage CRM Form Fields” and
-                        future intakes will record answers here. The call answers below are unaffected.
+                        No questions were answered at intake. Agents now answer the form&apos;s questions on
+                        every call, so look under each call below.
                       </div>
                     )}
                     {(row.answers || []).map((answer: any) => (
@@ -380,6 +383,16 @@ export function CrmSubmissionsPanel({
                             </span>
                           )}
                         </div>
+                        {call.answers?.length > 0 && (
+                          <div style={{ marginTop: "0.45rem", borderTop: "1px dashed #e5e7eb", paddingTop: "0.35rem" }}>
+                            {call.answers.map((answer: any) => (
+                              <div key={answer.answerId} style={{ display: "flex", gap: "0.6rem", padding: "0.15rem 0", fontSize: "0.79rem" }}>
+                                <span style={{ flex: "0 0 55%", color: "#666" }}>{answer.label}</span>
+                                <span style={{ flex: 1, fontWeight: 600, color: "#111" }}>{answer.value}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                         {call.notes && (
                           <div style={{ marginTop: "0.35rem", fontSize: "0.79rem", color: "#444", fontStyle: "italic" }}>
                             “{call.notes}”

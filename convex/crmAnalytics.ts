@@ -456,6 +456,19 @@ export const getCrmSubmissions = query({
     ).flat();
     const ticketsByLead = groupByLead(tickets);
 
+    // Answers an agent recorded during a call, keyed by the call they belong to.
+    const callAnswers = await ctx.db
+      .query("crmCallAnswers")
+      .withIndex("by_community_created", (q: any) => q.eq("communityId", args.communityId))
+      .collect();
+    const answersByCall = new Map<string, any[]>();
+    for (const answer of callAnswers) {
+      const key = String(answer.callLogId);
+      const bucket = answersByCall.get(key);
+      if (bucket) bucket.push(answer);
+      else answersByCall.set(key, [answer]);
+    }
+
     // Field definitions are per form and shared by every response to it, so
     // they are fetched once rather than per row.
     const fieldsByForm = new Map<string, any[]>();
@@ -536,6 +549,14 @@ export const getCrmSubmissions = query({
             notes: log.notes ?? "",
             healthScore: log.healthScore ?? null,
             healthBand: log.healthBand ?? null,
+            answers: (answersByCall.get(String(log._id)) || [])
+              .sort((a: any, b: any) => String(a.label).localeCompare(String(b.label)))
+              .map((a: any) => ({
+                answerId: String(a._id),
+                label: a.label,
+                fieldType: a.fieldType,
+                value: a.value,
+              })),
           };
         })
       );

@@ -279,6 +279,25 @@ export default function AdvancePurchaseMarketPage() {
             -webkit-tap-highlight-color: rgba(123, 31, 162, 0.12);
           }
           /* Pressing it should feel like pressing something. */
+          /* A slow purple glow, so the card reads as "press me" without any
+             text. It breathes rather than flashes, and stops after a few
+             cycles so it does not nag. */
+          @media (prefers-reduced-motion: no-preference) {
+            .am-purchase-card {
+              animation: am-purchase-glow 2.8s ease-in-out 4;
+            }
+          }
+          @keyframes am-purchase-glow {
+            0%, 100% {
+              box-shadow: 0 2px 8px rgba(74, 20, 140, 0.14);
+              border-color: #e5d4ec;
+            }
+            50% {
+              box-shadow: 0 0 0 4px rgba(123, 31, 162, 0.16),
+                          0 4px 18px rgba(123, 31, 162, 0.42);
+              border-color: #c79fd8;
+            }
+          }
           .am-purchase-card:active {
             transform: scale(0.985);
             background: #faf5fc;

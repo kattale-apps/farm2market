@@ -229,12 +229,48 @@ export default function Home() {
           height: 56px;
           padding: 0;
           background: none;
-          border: none;
           color: #fff;
           font-size: 2rem;
           line-height: 1;
           cursor: pointer;
           flex-shrink: 0;
+          /* A transparent border is reserved up front so the selected state can
+             fill it in without the icon shifting by a pixel. */
+          border: 1.5px solid transparent;
+          border-radius: 14px;
+          transition: background 0.14s ease, border-color 0.14s ease, transform 0.14s ease;
+          -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Each icon carries its own colour so it can be recognised by hue
+           rather than by reading it. These are the light-end variants of each
+           hue: the banner is a dark translucent green, so the mid shades used
+           on white cards would disappear into it. */
+        .f2m-slot-profile .f2m-icon-btn { color: #ff5252; }
+        .f2m-slot-msg .f2m-icon-btn { color: #64b5f6; }
+        .f2m-slot-bell .f2m-icon-btn { color: #ffc107; }
+        .f2m-slot-more .f2m-icon-btn {
+          color: #000;
+          /* Black on a dark banner is close to invisible on its own. The halo
+             keeps the requested colour readable. */
+          filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.95))
+                  drop-shadow(0 0 1px rgba(255, 255, 255, 1));
+        }
+
+        /* Pressed, and stays lit while that icon's panel is open, so it is
+           obvious which one was tapped. */
+        .f2m-icon-btn:active {
+          transform: scale(0.92);
+          background: rgba(255, 255, 255, 0.18);
+          border-color: rgba(255, 255, 255, 0.5);
+        }
+        .f2m-icon-btn.is-active {
+          background: rgba(255, 255, 255, 0.22);
+          border-color: currentColor;
+        }
+        .f2m-icon-btn:focus-visible {
+          outline: 3px solid rgba(255, 255, 255, 0.9);
+          outline-offset: 2px;
         }
         .f2m-dropdown {
           position: absolute;
@@ -303,7 +339,8 @@ export default function Home() {
                 onClick={() => setProfileMenuOpen((v) => !v)}
                 title={effectiveUser?.alias || user?.alias || "Profile"}
                 aria-label="Profile menu"
-                className="f2m-icon-btn"
+                aria-expanded={profileMenuOpen}
+                className={`f2m-icon-btn${profileMenuOpen ? " is-active" : ""}`}
               >
                 <svg width="38" height="38" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
                   <circle cx="12" cy="8" r="4" fill="currentColor" />

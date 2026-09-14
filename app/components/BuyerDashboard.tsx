@@ -1087,9 +1087,23 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
         boxShadow: "0 0 0 1px #000, 0 0 22px 4px rgba(156,39,176,0.65), 0 0 40px 8px rgba(156,39,176,0.35), 0 2px 8px rgba(0,0,0,0.25)",
         marginBottom: "1.5rem",
       }}>
-        <span style={{ fontSize: "1.8rem" }}>🌱</span>
-        <div>
-          <div>ADVANCED MARKETS</div>
+        {/* An emoji ignores `color` entirely, but it does take a filter, so the
+            halo is built from layered drop-shadows. */}
+        <span
+          style={{
+            fontSize: "1.8rem",
+            flexShrink: 0,
+            lineHeight: 1,
+            filter:
+              "drop-shadow(0 0 2px rgba(255,255,255,0.95)) drop-shadow(0 0 7px rgba(123,31,162,0.6)) drop-shadow(0 0 14px rgba(156,39,176,0.45))",
+          }}
+        >
+          🌱
+        </span>
+        {/* minWidth lets the subtitle wrap so it is the title that keeps its
+            single line, rather than the title being squeezed by the arrow. */}
+        <div style={{ minWidth: 0 }}>
+          <div style={{ whiteSpace: "nowrap" }}>ADVANCED MARKETS</div>
           <div style={{ fontSize: "0.78rem", fontWeight: 500, color: "#8e24aa" }}>
             Payments in Advanced Markets are based on milestones reached
           </div>

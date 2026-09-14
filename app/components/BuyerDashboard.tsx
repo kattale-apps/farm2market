@@ -126,6 +126,9 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   // Where to send the buyer once the deposit clears. Set when they arrive here
   // from a flow that needs a funded wallet first (e.g. Advanced Markets).
   const [depositReturnTo, setDepositReturnTo] = useState<string | null>(null);
+  // Collapsed by default so the wallet card stays short; opened on demand, or
+  // automatically when the buyer was sent here specifically to top up.
+  const [depositOpen, setDepositOpen] = useState(false);
   const [depositReason, setDepositReason] = useState<string | null>(null);
   const depositSectionRef = useRef<HTMLDivElement | null>(null);
   const [depositMessage, setDepositMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -282,6 +285,9 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
     }
     if (returnTo && returnTo.startsWith("/")) setDepositReturnTo(returnTo);
     if (reason) setDepositReason(reason);
+    // Arriving from "top up to continue" means the amount box is the whole
+    // reason they are here, so it must not be behind a collapsed heading.
+    if (requested || returnTo || reason) setDepositOpen(true);
 
     // Let the dashboard paint before scrolling the deposit card into view.
     const timer = window.setTimeout(() => {
@@ -1539,9 +1545,63 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
           boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
           border: "1px solid #e0e0e0"
         }}>
-          <h3 style={{ marginTop: 0, marginBottom: "1rem", fontSize: "clamp(1rem, 3vw, 1.2rem)", color: "#1a1a1a" }}>
-            Deposit Funds Into Your Wallet
-          </h3>
+          <button
+            type="button"
+            onClick={() => setDepositOpen((v) => !v)}
+            aria-expanded={depositOpen}
+            aria-controls="deposit-panel"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "0.75rem",
+              width: "100%",
+              padding: 0,
+              margin: 0,
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              textAlign: "left",
+              fontFamily: "inherit",
+            }}
+          >
+            <h3 style={{ margin: 0, fontSize: "clamp(1rem, 3vw, 1.2rem)", color: "#1a1a1a" }}>
+              Deposit Funds Into Your Wallet
+            </h3>
+            <span
+              aria-hidden="true"
+              style={{
+                flexShrink: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 32,
+                height: 32,
+                borderRadius: 8,
+                border: "1.5px solid #1976d2",
+                color: "#1976d2",
+                fontSize: "1.25rem",
+                fontWeight: 700,
+                lineHeight: 1,
+                transition: "background 0.16s ease",
+                background: depositOpen ? "#e3f2fd" : "#fff",
+              }}
+            >
+              {/* Only the glyph turns; rotating the box would spin the rounded
+                  square into a diamond. */}
+              <span
+                style={{
+                  display: "block",
+                  transition: "transform 0.16s ease",
+                  transform: depositOpen ? "rotate(45deg)" : "none",
+                }}
+              >
+                +
+              </span>
+            </span>
+          </button>
+          {depositOpen && (
+          <div id="deposit-panel" style={{ marginTop: "1rem" }}>
           {depositReturnTo && (
             <div style={{
               marginBottom: "1rem",
@@ -1666,6 +1726,8 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                 ))}
               </div>
             </div>
+          )}
+          </div>
           )}
         </div>
       </div>

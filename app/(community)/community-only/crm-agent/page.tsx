@@ -68,6 +68,17 @@ export default function CrmAgentPage() {
   const [nameDrafts, setNameDrafts] = useState<Record<string, string>>({});
   const [savingNameLeadId, setSavingNameLeadId] = useState<string>("");
   const [activeFormId, setActiveFormId] = useState<string>("");
+  const [fieldAnswers, setFieldAnswers] = useState<Record<string, string>>({});
+
+  // The questions the supervisor put on the form this lead came from. They are
+  // what logistics plans against (remaining quantity, next dose date), so the
+  // agent answers them on every call rather than only at intake.
+  const activeLead = (queue || []).find((l: any) => String(l._id) === activeLeadId);
+  const activeLeadFormDetails = useQuery(
+    (api as any).crmForms.getCrmFormDetails,
+    userId && activeLead?.formId ? { requesterId: userId, crmFormId: activeLead.formId } : "skip"
+  );
+  const callFields: any[] = activeLeadFormDetails?.fields || [];
 
   // Group the queue by which intake form each lead came from - a supervisor
   // creates a form per campaign (e.g. a region-specific follow-up), adds
@@ -121,6 +132,7 @@ export default function CrmAgentPage() {
     setExpectedPurchaseMonth("");
     setOpportunityProbability("high");
     setOpportunityNextActionDate("");
+    setFieldAnswers({});
   };
 
   const handleClaim = async (leadId: Id<"crmLeads">) => {
@@ -158,8 +170,26 @@ export default function CrmAgentPage() {
     setSavingNameLeadId("");
   };
 
+  const callAnswerPayload = callFields
+    .map((field: any) => ({ crmFieldId: field._id, value: (fieldAnswers[String(field._id)] || "").trim() }))
+    .filter((a) => a.value !== "");
+
+  // A call nobody answered has nothing to report, so required questions only
+  // bind when the agent actually spoke to the farmer.
+  const missingRequired =
+    outcome === "no_answer"
+      ? []
+      : callFields.filter(
+          (field: any) => field.required && !(fieldAnswers[String(field._id)] || "").trim()
+        );
+
   const handleSubmitCall = async (leadId: Id<"crmLeads">) => {
     if (!userId) return;
+
+    if (missingRequired.length > 0) {
+      setMessage(`Please answer: ${missingRequired.map((f: any) => f.label).join(", ")}`);
+      return;
+    }
 
     setSubmittingLeadId(String(leadId));
     setMessage("");
@@ -180,6 +210,7 @@ export default function CrmAgentPage() {
         expectedPurchaseMonth: shouldCaptureOpportunity ? (expectedPurchaseMonth || undefined) : undefined,
         probability: shouldCaptureOpportunity ? opportunityProbability : undefined,
         opportunityNextActionAt: shouldCaptureOpportunity ? toTimestamp(opportunityNextActionDate) : undefined,
+        answers: callAnswerPayload.length > 0 ? callAnswerPayload : undefined,
       });
       setMessage("Call outcome saved.");
       resetForm();
@@ -387,6 +418,60 @@ export default function CrmAgentPage() {
                       <option value="maybe">Maybe</option>
                       <option value="no">No</option>
                     </select>
+
+                    {callFields.length > 0 && (
+                      <div style={{ marginTop: "0.6rem", border: "1px solid #dcfce7", background: "#f0fdf4", borderRadius: 10, padding: "0.6rem" }}>
+                        <div style={{ fontWeight: 700, fontSize: "0.86rem", color: "#14532d" }}>
+                          {activeLeadFormDetails?.form?.name || "Form"} questions
+                        </div>
+                        <div style={{ fontSize: "0.76rem", color: "#3f6212", marginBottom: "0.3rem" }}>
+                          Recorded against this call and used for stock and delivery planning.
+                        </div>
+                        {callFields.map((field: any) => {
+                          const key = String(field._id);
+                          const value = fieldAnswers[key] ?? "";
+                          const setValue = (next: string) =>
+                            setFieldAnswers((prev) => ({ ...prev, [key]: next }));
+                          return (
+                            <div key={key}>
+                              <label style={labelStyle}>
+                                {field.label}
+                                {field.required && outcome !== "no_answer" && (
+                                  <span style={{ color: "#b91c1c" }}> *</span>
+                                )}
+                              </label>
+                              {field.fieldType === "select" ? (
+                                <select value={value} onChange={(e) => setValue(e.target.value)} style={inputStyle}>
+                                  <option value="">Select...</option>
+                                  {(field.options || []).map((option: string) => (
+                                    <option key={option} value={option}>{option}</option>
+                                  ))}
+                                </select>
+                              ) : field.fieldType === "textarea" ? (
+                                <textarea
+                                  value={value}
+                                  onChange={(e) => setValue(e.target.value)}
+                                  rows={2}
+                                  placeholder={field.placeholder || ""}
+                                  style={{ ...inputStyle, resize: "vertical" }}
+                                />
+                              ) : (
+                                <input
+                                  type={field.fieldType === "number" ? "number" : field.fieldType === "date" ? "date" : "text"}
+                                  value={value}
+                                  onChange={(e) => setValue(e.target.value)}
+                                  placeholder={field.placeholder || ""}
+                                  style={inputStyle}
+                                />
+                              )}
+                              {field.helpText && (
+                                <div style={{ fontSize: "0.72rem", color: "#6b7280", marginTop: "-0.15rem" }}>{field.helpText}</div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
 
                     <label style={labelStyle}>Notes</label>
                     <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} style={{ ...inputStyle, resize: "vertical" }} />

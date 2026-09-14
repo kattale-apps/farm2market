@@ -29,8 +29,9 @@ function CreateOfferForm({ farmerId, config, onDone }: { farmerId: Id<"users">; 
   const [unitPrice, setUnitPrice] = useState("");
   const [totalQuantity, setTotalQuantity] = useState("");
   const [recurrence, setRecurrence] = useState(config.recurrenceOptions?.[0] || "");
-  const [cashComponent, setCashComponent] = useState("");
-  const [inKindComponent, setInKindComponent] = useState("");
+  // The payment split is entered as a ratio out of 100 (e.g. 50:50); the
+  // backend derives the UGX amounts from it.
+  const [cashPercent, setCashPercent] = useState("100");
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -87,8 +88,7 @@ function CreateOfferForm({ farmerId, config, onDone }: { farmerId: Id<"users">; 
         unitPrice: Number(unitPrice),
         totalQuantity: Number(totalQuantity),
         recurrence,
-        cashComponent: cashComponent ? Number(cashComponent) : undefined,
-        inKindComponent: inKindComponent ? Number(inKindComponent) : undefined,
+        cashPercent: cashPercent === "" ? undefined : Number(cashPercent),
         customFieldValues: Object.entries(customValues).map(([key, value]) => {
           const field = editableFields.find((f: any) => f.key === key) || config.customFields.find((f: any) => f.key === key);
           return { key, label: field?.label || key, value };
@@ -192,8 +192,7 @@ function CreateOfferForm({ farmerId, config, onDone }: { farmerId: Id<"users">; 
       </select>
 
       <div style={{ display: "flex", gap: "0.5rem" }}>
-        <input placeholder="Cash component (optional)" type="number" value={cashComponent} onChange={(e) => setCashComponent(e.target.value)} style={{ ...inputStyle, flex: 1 }} />
-        <input placeholder="In-kind component (optional)" type="number" value={inKindComponent} onChange={(e) => setInKindComponent(e.target.value)} style={{ ...inputStyle, flex: 1 }} />
+        <CashInKindRatio value={cashPercent} onChange={setCashPercent} />
       </div>
 
       {editableFields.map((f: any) => (
@@ -241,6 +240,132 @@ const secondaryBtn: React.CSSProperties = {
   flex: 1, padding: "0.75rem", background: "#eee", color: "#333", border: "none", borderRadius: 8, fontWeight: 700, cursor: "pointer",
 };
 
+/**
+ * Inline payment-split editor shown on each of the farmer's own offers.
+ */
+function OfferPaymentSplit({ farmerId, offer }: { farmerId: any; offer: any }) {
+  const updateOffer = useMutation(api.advancePurchase.updateOffer);
+  const [open, setOpen] = useState(false);
+  const [cashPercent, setCashPercent] = useState(
+    offer.cashPercent != null ? String(offer.cashPercent) : "100"
+  );
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  const currentLabel =
+    offer.cashPercent != null
+      ? `${offer.cashPercent}:${100 - offer.cashPercent}`
+      : "not set";
+
+  const save = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await updateOffer({
+        offerId: offer._id,
+        farmerId,
+        cashPercent: Number(cashPercent),
+      });
+      setSaved(true);
+      setOpen(false);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={{ marginTop: "0.5rem" }}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        style={{ background: "none", border: "none", padding: 0, color: "#1976d2", fontWeight: 700, fontSize: "0.8rem", cursor: "pointer", fontFamily: FONT }}
+      >
+        Cash : in-kind — {currentLabel} {open ? "▲" : "▼"}
+      </button>
+      {saved && !open && (
+        <span style={{ marginLeft: "0.5rem", fontSize: "0.78rem", color: "#2e7d32" }}>Saved</span>
+      )}
+      {open && (
+        <div style={{ marginTop: "0.4rem", padding: "0.6rem", background: "#f7f7f7", borderRadius: 8 }}>
+          <CashInKindRatio value={cashPercent} onChange={setCashPercent} />
+          {error && <p style={{ color: "#d32f2f", fontSize: "0.8rem", margin: "0 0 0.4rem" }}>{error}</p>}
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <button
+              type="button"
+              onClick={save}
+              disabled={busy}
+              style={{ padding: "0.45rem 0.9rem", background: "#2e7d32", color: "#fff", border: "none", borderRadius: 6, fontWeight: 700, fontSize: "0.8rem", cursor: "pointer" }}
+            >
+              {busy ? "Saving..." : "Save split"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              disabled={busy}
+              style={{ padding: "0.45rem 0.9rem", background: "#fff", color: "#666", border: "1px solid #ccc", borderRadius: 6, fontWeight: 700, fontSize: "0.8rem", cursor: "pointer" }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Cash / in-kind split, entered as a ratio out of 100.
+ *
+ * Only the cash share is editable — in-kind is always the remainder, so the two
+ * cannot be set to anything that does not add up to 100.
+ */
+function CashInKindRatio({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  const cash = value === "" ? 0 : Math.min(100, Math.max(0, Number(value) || 0));
+  const inKind = 100 - cash;
+
+  return (
+    <div style={{ flex: 1, marginBottom: "0.6rem" }}>
+      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, color: "#333", marginBottom: "0.3rem" }}>
+        Payment split — cash : in-kind
+      </label>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={5}
+          value={cash}
+          onChange={(e) => onChange(e.target.value)}
+          style={{ flex: 1 }}
+        />
+        <input
+          type="number"
+          min={0}
+          max={100}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          style={{ width: 72, padding: "0.4rem", borderRadius: 6, border: "1px solid #ccc", fontFamily: FONT }}
+        />
+      </div>
+      <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#2e7d32", marginTop: "0.25rem" }}>
+        {cash}:{inKind}
+        <span style={{ fontWeight: 400, color: "#777" }}>
+          {" "}— {cash}% cash, {inKind}% in-kind inputs
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default function FarmerAdvancePurchasePage() {
   const { user, status } = useStoredUser();
   const configs = useQuery(
@@ -252,6 +377,8 @@ export default function FarmerAdvancePurchasePage() {
     user ? { farmerId: user.userId as any } : "skip"
   );
   const publishOffer = useMutation(api.advancePurchase.publishOffer);
+  const deleteOffer = useMutation(api.advancePurchase.deleteOffer);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [creatingFor, setCreatingFor] = useState<string | null>(null);
 
   if (status === "loading" || configs === undefined || myOffers === undefined) {
@@ -339,6 +466,9 @@ export default function FarmerAdvancePurchasePage() {
       )}
 
       <h2 style={{ fontSize: "1.05rem", fontWeight: 700, marginBottom: "0.5rem" }}>My offers</h2>
+      {deleteError && (
+        <p style={{ color: "#d32f2f", fontSize: "0.85rem", marginTop: 0 }}>{deleteError}</p>
+      )}
       {myOffers.length === 0 ? (
         <div style={{ padding: "1rem", background: "#fafafa", border: "1px dashed #ccc", borderRadius: 10, color: "#777", fontSize: "0.88rem" }}>
           You have no active Advanced Markets offers.
@@ -373,7 +503,27 @@ export default function FarmerAdvancePurchasePage() {
                 )}
               </div>
               {!["cancelled", "fulfilled"].includes(o.status) && (
-                <AddOfferPhotos farmerId={user.userId as any} offerId={o._id} />
+                <>
+                  <AddOfferPhotos farmerId={user.userId as any} offerId={o._id} />
+                  <OfferPaymentSplit farmerId={user.userId as any} offer={o} />
+                </>
+              )}
+              {o.quantityCommitted === 0 && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!window.confirm(`Delete "${o.productName}"? This cannot be undone.`)) return;
+                    setDeleteError(null);
+                    try {
+                      await deleteOffer({ offerId: o._id, farmerId: user.userId as any });
+                    } catch (err) {
+                      setDeleteError((err as Error).message);
+                    }
+                  }}
+                  style={{ marginTop: "0.5rem", padding: "0.4rem 0.85rem", background: "#fff", color: "#c62828", border: "1px solid #ef9a9a", borderRadius: 8, fontWeight: 700, fontSize: "0.8rem", cursor: "pointer" }}
+                >
+                  🗑 Delete offer
+                </button>
               )}
             </div>
           ))}

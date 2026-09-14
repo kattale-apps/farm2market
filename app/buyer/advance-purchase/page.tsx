@@ -10,6 +10,18 @@ const FONT = '"Montserrat", sans-serif';
 
 type MarketTab = "goods" | "services";
 
+/** Status pill colours, so the status reads as state rather than as a link. */
+const STATUS_TONES: Record<string, { bg: string; fg: string }> = {
+  funded: { bg: "#e3f2fd", fg: "#1565c0" },
+  in_production: { bg: "#fff8e1", fg: "#ef6c00" },
+  ready_for_delivery: { bg: "#e8f5e9", fg: "#2e7d32" },
+  delivered: { bg: "#e8f5e9", fg: "#1b5e20" },
+  cancelled: { bg: "#f5f5f5", fg: "#757575" },
+  expired: { bg: "#f5f5f5", fg: "#757575" },
+  pending_negotiation: { bg: "#ede7f6", fg: "#5e35b1" },
+  default: { bg: "#f3e5f5", fg: "#6a1b9a" },
+};
+
 export default function AdvancePurchaseMarketPage() {
   const { user, status } = useStoredUser();
   const [tab, setTab] = useState<MarketTab>("goods");
@@ -71,29 +83,117 @@ export default function AdvancePurchaseMarketPage() {
 
       {myCommitments && myCommitments.length > 0 && (
         <div style={{ marginBottom: "1.5rem" }}>
-          <h2 style={{ fontSize: "1.05rem", fontWeight: 700, marginBottom: "0.5rem" }}>My Advanced Market Purchases</h2>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-            {myCommitments.map((c: any) => (
-              <Link
-                key={c._id}
-                href={`/buyer/advance-purchase/commitment/${c._id}`}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  padding: "0.75rem 1rem",
-                  background: "#f3e5f5",
-                  borderRadius: 10,
-                  textDecoration: "none",
-                  color: "#4a148c",
-                  fontSize: "0.88rem",
-                  fontWeight: 600,
-                }}
-              >
-                <span>{c.offer?.productName} · {c.quantity} {c.offer?.unit}</span>
-                <span>{c.status.replace(/_/g, " ")}</span>
-              </Link>
-            ))}
+          <h2 style={{ fontSize: "1.05rem", fontWeight: 700, marginBottom: "0.15rem" }}>My Advanced Market Purchases</h2>
+          <p style={{ fontSize: "0.8rem", color: "#f1f1f1", margin: "0 0 0.6rem" }}>
+            Tap a purchase to follow its milestones and download the order form.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+            {myCommitments.map((c: any) => {
+              const tone = STATUS_TONES[c.status] || STATUS_TONES.default;
+              return (
+                <Link
+                  key={c._id}
+                  href={`/buyer/advance-purchase/commitment/${c._id}`}
+                  className="purchase-card"
+                  aria-label={`Open ${c.offer?.productName || "purchase"} order details`}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.6rem" }}>
+                    <span style={{ fontWeight: 700, fontSize: "0.95rem", color: "#4a148c", lineHeight: 1.35 }}>
+                      {c.offer?.productName}
+                    </span>
+                    <span style={{
+                      flexShrink: 0,
+                      fontSize: "0.68rem",
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.02em",
+                      padding: "0.22rem 0.5rem",
+                      borderRadius: 999,
+                      background: tone.bg,
+                      color: tone.fg,
+                    }}>
+                      {c.status.replace(/_/g, " ")}
+                    </span>
+                  </div>
+
+                  <div style={{ fontSize: "0.84rem", color: "#6a4c78", marginTop: "0.2rem" }}>
+                    {c.quantity} {c.offer?.unit}
+                    {typeof c.totalAmount === "number" ? ` · UGX ${Math.round(c.totalAmount).toLocaleString()}` : ""}
+                  </div>
+
+                  {/* An explicit call to action, because a card that merely looks
+                      nice still does not tell anyone it can be tapped. */}
+                  <div className="purchase-cta">
+                    <span>View order &amp; download form</span>
+                    <span aria-hidden="true" className="purchase-chevron">›</span>
+                  </div>
+                </Link>
+              );
+            })}
           </div>
+
+          <style jsx>{`
+            .purchase-card {
+              display: block;
+              padding: 0.8rem 0.95rem;
+              background: #fff;
+              border: 1px solid #e5d4ec;
+              border-left: 4px solid #7b1fa2;
+              border-radius: 12px;
+              text-decoration: none;
+              color: inherit;
+              box-shadow: 0 2px 8px rgba(74, 20, 140, 0.14);
+              transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+              -webkit-tap-highlight-color: rgba(123, 31, 162, 0.12);
+            }
+            /* Pressing it should feel like pressing something. */
+            .purchase-card:active {
+              transform: scale(0.985);
+              background: #faf5fc;
+              box-shadow: 0 1px 3px rgba(74, 20, 140, 0.18);
+            }
+            .purchase-card:focus-visible {
+              outline: 3px solid #7b1fa2;
+              outline-offset: 2px;
+            }
+            @media (hover: hover) {
+              .purchase-card:hover {
+                transform: translateY(-1px);
+                box-shadow: 0 6px 16px rgba(74, 20, 140, 0.2);
+              }
+              .purchase-card:hover .purchase-chevron {
+                transform: translateX(3px);
+              }
+            }
+            .purchase-cta {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              margin-top: 0.55rem;
+              padding-top: 0.5rem;
+              border-top: 1px dashed #ecdff2;
+              font-size: 0.82rem;
+              font-weight: 700;
+              color: #7b1fa2;
+            }
+            .purchase-chevron {
+              font-size: 1.2rem;
+              line-height: 1;
+              transition: transform 0.12s ease;
+            }
+            /* Nudge the chevron on arrival so the row reads as interactive
+               even before anyone touches it. Respects reduced-motion. */
+            @media (prefers-reduced-motion: no-preference) {
+              .purchase-chevron {
+                animation: purchase-nudge 2.4s ease-in-out 3;
+              }
+            }
+            @keyframes purchase-nudge {
+              0%, 70%, 100% { transform: translateX(0); }
+              80% { transform: translateX(4px); }
+              90% { transform: translateX(0); }
+            }
+          `}</style>
         </div>
       )}
 

@@ -8,7 +8,7 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { formatUgandaDate, formatUgandaTimeOnly, formatUgandaDateTime, getUgandaTime } from "./timeUtils";
-import { savePdfFromJsPDF } from "./pdfDownload";
+import { savePdfFromJsPDF, type PdfSaveResult } from "./pdfDownload";
 import {
   isCommunityDetailsGpsRow,
   isCommunityResponseGpsRow,
@@ -159,18 +159,84 @@ export function formatUTIDDataForExport(utids: any[]): UTIDReportData[] {
 /**
  * Convert image URL to base64 string
  */
+/**
+ * A report can embed dozens of photos, and every one is fetched before the PDF
+ * can be written. On a slow mobile connection a single stalled request used to
+ * leave the caller waiting forever with no way to tell that it had hung, so
+ * each fetch is capped and a timed-out photo is simply skipped.
+ */
+const PHOTO_FETCH_TIMEOUT_MS = 15000;
+
 async function urlToBase64(url: string): Promise<string> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PHOTO_FETCH_TIMEOUT_MS);
   try {
-    const response = await fetch(url);
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) return "";
     const blob = await response.blob();
-    return new Promise((resolve) => {
+    return await new Promise((resolve) => {
       const reader = new FileReader();
+      reader.onerror = () => resolve("");
       reader.onloadend = () => resolve(reader.result as string);
       reader.readAsDataURL(blob);
     });
   } catch {
-    return ""; // Return empty string if fetch fails
+    return ""; // Unreachable, too slow, or blocked — the caller draws a placeholder.
+  } finally {
+    clearTimeout(timer);
   }
+}
+
+/**
+ * Photos are embedded into the PDF as-is unless they are shrunk first, and the
+ * originals are camera-resolution — a single gallery photo out of Convex
+ * storage runs to well over 2 MB. A dozen of those made the export download
+ * tens of megabytes before it could even start writing, then produced a file
+ * too large to open comfortably on a phone.
+ *
+ * A PDF tile is at most ~65 mm wide, which is roughly 770 px at 300 dpi, so
+ * capping the longest edge at 1000 px loses nothing visible and cuts the
+ * payload by an order of magnitude.
+ */
+const MAX_EMBEDDED_PHOTO_PX = 1000;
+const EMBEDDED_PHOTO_QUALITY = 0.8;
+
+async function downscaleBase64(
+  base64: string,
+  maxDimension = MAX_EMBEDDED_PHOTO_PX
+): Promise<string> {
+  if (!base64) return base64;
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const iw = img.naturalWidth || img.width;
+      const ih = img.naturalHeight || img.height;
+      if (!iw || !ih) {
+        resolve(base64);
+        return;
+      }
+
+      const scale = Math.min(1, maxDimension / Math.max(iw, ih));
+      if (scale >= 1) {
+        resolve(base64);
+        return;
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(iw * scale));
+      canvas.height = Math.max(1, Math.round(ih * scale));
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        resolve(base64);
+        return;
+      }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", EMBEDDED_PHOTO_QUALITY));
+    };
+    img.onerror = () => resolve(base64);
+    img.src = base64;
+  });
 }
 
 /**
@@ -206,9 +272,10 @@ async function cropBase64ToAspect(base64: string, targetAspect: number): Promise
         sy = Math.max(0, Math.round((ih - sh) / 2));
       }
 
+      const outputScale = Math.min(1, MAX_EMBEDDED_PHOTO_PX / Math.max(sw, sh));
       const canvas = document.createElement("canvas");
-      canvas.width = Math.max(1, sw);
-      canvas.height = Math.max(1, sh);
+      canvas.width = Math.max(1, Math.round(sw * outputScale));
+      canvas.height = Math.max(1, Math.round(sh * outputScale));
       const ctx = canvas.getContext("2d");
       if (!ctx) {
         resolve(base64);
@@ -216,7 +283,7 @@ async function cropBase64ToAspect(base64: string, targetAspect: number): Promise
       }
 
       ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL("image/jpeg", 0.92));
+      resolve(canvas.toDataURL("image/jpeg", EMBEDDED_PHOTO_QUALITY));
     };
     img.onerror = () => resolve(base64);
     img.src = base64;
@@ -373,8 +440,9 @@ async function renderPhotosAdaptivePaged(params: {
       const y = sectionY + row * (layout.cell + gap);
 
       try {
-        const base64 = await urlToBase64(photos[absoluteIndex]);
-        if (!base64) throw new Error("Empty image");
+        const fetched = await urlToBase64(photos[absoluteIndex]);
+        if (!fetched) throw new Error("Empty image");
+        const base64 = await downscaleBase64(fetched);
 
         const props = (doc as any).getImageProperties(base64);
         const iw = Number(props?.width || 1);
@@ -1043,12 +1111,21 @@ function milestoneStatusLabel(status: string): string {
  */
 export async function exportAdvanceMarketCommitmentToPDF(
   detail: any,
-  buyerName?: string
-): Promise<void> {
-  if (!detail) return;
+  buyerName?: string,
+  onProgress?: (message: string) => void
+): Promise<PdfSaveResult | undefined> {
+  if (!detail) return undefined;
 
   const offer = detail.offer || {};
   const milestones: any[] = detail.milestones || [];
+
+  // Photos dominate the wait on a mobile connection, so the caller is told how
+  // far along it is rather than being left with a spinner that never explains
+  // itself.
+  const photoCount =
+    (offer.photoUrls || []).length +
+    milestones.reduce((sum: number, m: any) => sum + (m.proofPictures || []).length, 0);
+  onProgress?.(photoCount > 0 ? `Fetching ${photoCount} photo${photoCount === 1 ? "" : "s"}...` : "Building PDF...");
 
   const logoBase64 = await urlToBase64(TOOLBOX_LOGO_PATH);
 
@@ -1181,6 +1258,7 @@ export async function exportAdvanceMarketCommitmentToPDF(
   // Product gallery
   const galleryPhotos: string[] = offer.photoUrls || [];
   if (galleryPhotos.length) {
+    onProgress?.(`Adding ${galleryPhotos.length} product photo${galleryPhotos.length === 1 ? "" : "s"}...`);
     let y = autoTableEndY(doc) + 8;
     if (y > pageHeight - 70) y = newPage("Advanced Markets Order — Product Photos");
     await renderPhotosAdaptivePaged({
@@ -1216,6 +1294,7 @@ export async function exportAdvanceMarketCommitmentToPDF(
   }
 
   if (proofPhotos.length) {
+    onProgress?.(`Adding ${proofPhotos.length} proof picture${proofPhotos.length === 1 ? "" : "s"}...`);
     await renderCaptionedPhotoGrid({
       doc,
       photos: proofPhotos,
@@ -1229,9 +1308,10 @@ export async function exportAdvanceMarketCommitmentToPDF(
   }
 
   addPageNumbersIfNeeded(doc);
+  onProgress?.("Saving...");
 
   const safeProduct = String(offer.productName || "Order")
     .replace(/[^a-zA-Z0-9]+/g, "_")
     .slice(0, 40);
-  await savePdfFromJsPDF(doc, `Advanced_Market_Order_${safeProduct}_${detail.utid || ""}.pdf`);
+  return savePdfFromJsPDF(doc, `Advanced_Market_Order_${safeProduct}_${detail.utid || ""}.pdf`);
 }

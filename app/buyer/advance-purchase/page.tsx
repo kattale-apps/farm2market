@@ -284,7 +284,7 @@ export default function AdvancePurchaseMarketPage() {
              cycles so it does not nag. */
           @media (prefers-reduced-motion: no-preference) {
             .am-purchase-card {
-              animation: am-purchase-glow 2.8s ease-in-out 4;
+              animation: am-purchase-glow 2.2s ease-in-out 6;
             }
           }
           @keyframes am-purchase-glow {
@@ -293,9 +293,13 @@ export default function AdvancePurchaseMarketPage() {
               border-color: #e5d4ec;
             }
             50% {
-              box-shadow: 0 0 0 4px rgba(123, 31, 162, 0.16),
-                          0 4px 18px rgba(123, 31, 162, 0.42);
-              border-color: #c79fd8;
+              /* Two rings plus a wide bloom: the inner ring gives the beam a
+                 hard edge so it still reads in daylight on a phone, while the
+                 bloom carries it beyond the card. */
+              box-shadow: 0 0 0 5px rgba(123, 31, 162, 0.34),
+                          0 0 0 11px rgba(123, 31, 162, 0.16),
+                          0 6px 34px rgba(123, 31, 162, 0.72);
+              border-color: #7b1fa2;
             }
           }
           .am-purchase-card:active {

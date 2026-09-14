@@ -1094,6 +1094,14 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
             Payments in Advanced Markets are based on milestones reached
           </div>
         </div>
+        {/* Sits at the far right and keeps travelling, so the box reads as
+            something to press even to someone who cannot read the label. */}
+        <span aria-hidden="true" className="am-quicklink-arrow">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+            <path d="M4.5 12h13" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" />
+            <path d="M12.5 6.2 18.6 12l-6.1 5.8" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
       </Link>
 
       {/* Communities Section */}

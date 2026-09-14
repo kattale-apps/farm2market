@@ -272,6 +272,34 @@ export default function Home() {
           outline: 3px solid rgba(255, 255, 255, 0.9);
           outline-offset: 2px;
         }
+        /* Advanced Markets quick link on the dashboards: a travelling arrow
+           pinned to the right end of the box. Drawn as SVG because the
+           self-hosted Montserrat subset does not cover U+2192, so a "→"
+           character would fall back to whatever the device has. */
+        .am-quicklink-arrow {
+          margin-left: auto;
+          flex-shrink: 0;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 34px;
+          height: 34px;
+          border-radius: 50%;
+          background: #7b1fa2;
+          color: #fff;
+          box-shadow: 0 2px 8px rgba(123, 31, 162, 0.5);
+          transition: transform 0.12s ease;
+        }
+        @media (prefers-reduced-motion: no-preference) {
+          .am-quicklink-arrow {
+            animation: am-quicklink-arrow-slide 1.5s ease-in-out infinite;
+          }
+        }
+        @keyframes am-quicklink-arrow-slide {
+          0%, 100% { transform: translateX(0); }
+          50% { transform: translateX(8px); }
+        }
+
         .f2m-dropdown {
           position: absolute;
           left: 50%;

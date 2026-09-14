@@ -70,7 +70,7 @@ export function NotificationMailbox({ userId, compact = false }: NotificationMai
       <div style={{ position: "relative", width: compact ? "auto" : "100%", minWidth: 0 }}>
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className={compact ? "f2m-icon-btn" : undefined}
+          className={compact ? `f2m-icon-btn${isOpen ? " is-active" : ""}` : undefined}
           style={compact ? undefined : {
             position: "relative",
             padding: "0.85rem 0.7rem",
@@ -101,7 +101,7 @@ export function NotificationMailbox({ userId, compact = false }: NotificationMai
             e.currentTarget.style.boxShadow = unreadCount > 0 ? "0 4px 12px rgba(33, 150, 243, 0.3)" : "0 2px 8px rgba(0,0,0,0.15)";
           }}
         >
-          <BellIcon size={compact ? 36 : 28} color={compact ? "#fff" : "#1565c0"} />
+          <BellIcon size={compact ? 36 : 28} color={compact ? "currentColor" : "#1565c0"} />
           {unreadCount > 0 && (
             <span
               style={{

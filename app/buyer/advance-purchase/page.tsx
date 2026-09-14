@@ -202,16 +202,20 @@ export default function AdvancePurchaseMarketPage() {
               color: "#2c2c2c",
             }}
           >
+            {/* A flex item defaults to min-width:auto, so without minWidth:0 the
+                left group refuses to shrink below its longest unbroken word and
+                shoves the stage pill outside the card. The pill keeps its own
+                width instead, since "Stage 0 of 24" must not be cut in half. */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.75rem" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.7rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.7rem", flex: "1 1 auto", minWidth: 0 }}>
                 {offer.photoUrls?.[0] && (
                   <img src={offer.photoUrls[0]} alt={offer.productName} style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 8, flexShrink: 0 }} />
                 )}
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: "1.05rem", display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
-                    {offer.productName}
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: "1.05rem", display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap", minWidth: 0 }}>
+                    <span style={{ overflowWrap: "anywhere" }}>{offer.productName}</span>
                     {offer.offerKind && (
-                      <span style={{ padding: "0.1rem 0.4rem", borderRadius: 999, fontSize: "0.65rem", fontWeight: 700, background: "#e8f5e9", color: "#2e7d32" }}>
+                      <span style={{ padding: "0.1rem 0.4rem", borderRadius: 999, fontSize: "0.65rem", fontWeight: 700, background: "#e8f5e9", color: "#2e7d32", whiteSpace: "nowrap" }}>
                         {offer.offerKind === "goods"
                           ? (offer.goodsCategory === "livestock" ? "🐄 Livestock" : "🌾 Crop")
                           : `🧑‍🌾 ${offer.serviceCategory || "Service"}`}
@@ -228,6 +232,7 @@ export default function AdvancePurchaseMarketPage() {
                 background: "#e8f5e9",
                 color: "#2e7d32",
                 whiteSpace: "nowrap",
+                flexShrink: 0,
               }}>
                 Stage {offer.stageProgress}
               </span>
@@ -274,6 +279,25 @@ export default function AdvancePurchaseMarketPage() {
             -webkit-tap-highlight-color: rgba(123, 31, 162, 0.12);
           }
           /* Pressing it should feel like pressing something. */
+          /* A slow purple glow, so the card reads as "press me" without any
+             text. It breathes rather than flashes, and stops after a few
+             cycles so it does not nag. */
+          @media (prefers-reduced-motion: no-preference) {
+            .am-purchase-card {
+              animation: am-purchase-glow 2.8s ease-in-out 4;
+            }
+          }
+          @keyframes am-purchase-glow {
+            0%, 100% {
+              box-shadow: 0 2px 8px rgba(74, 20, 140, 0.14);
+              border-color: #e5d4ec;
+            }
+            50% {
+              box-shadow: 0 0 0 4px rgba(123, 31, 162, 0.16),
+                          0 4px 18px rgba(123, 31, 162, 0.42);
+              border-color: #c79fd8;
+            }
+          }
           .am-purchase-card:active {
             transform: scale(0.985);
             background: #faf5fc;

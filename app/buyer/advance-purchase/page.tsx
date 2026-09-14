@@ -141,73 +141,6 @@ export default function AdvancePurchaseMarketPage() {
             })}
           </div>
 
-          {/* Global rather than scoped: styled-jsx adds its hash class only to
-              plain DOM elements, never to a child component, so a scoped rule
-              can never match the <Link> below — which is why the card rendered
-              with no background and underlined text. Names are prefixed to keep
-              global scope safe. */}
-          <style jsx global>{`
-            .am-purchase-card {
-              display: block;
-              padding: 0.8rem 0.95rem;
-              background: #fff;
-              border: 1px solid #e5d4ec;
-              border-left: 4px solid #7b1fa2;
-              border-radius: 12px;
-              text-decoration: none;
-              color: inherit;
-              box-shadow: 0 2px 8px rgba(74, 20, 140, 0.14);
-              transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
-              -webkit-tap-highlight-color: rgba(123, 31, 162, 0.12);
-            }
-            /* Pressing it should feel like pressing something. */
-            .am-purchase-card:active {
-              transform: scale(0.985);
-              background: #faf5fc;
-              box-shadow: 0 1px 3px rgba(74, 20, 140, 0.18);
-            }
-            .am-purchase-card:focus-visible {
-              outline: 3px solid #7b1fa2;
-              outline-offset: 2px;
-            }
-            @media (hover: hover) {
-              .am-purchase-card:hover {
-                transform: translateY(-1px);
-                box-shadow: 0 6px 16px rgba(74, 20, 140, 0.2);
-              }
-              .am-purchase-card:hover .am-purchase-chevron {
-                transform: translateX(3px);
-              }
-            }
-            .am-purchase-cta {
-              display: flex;
-              align-items: center;
-              justify-content: space-between;
-              margin-top: 0.55rem;
-              padding-top: 0.5rem;
-              border-top: 1px dashed #ecdff2;
-              font-size: 0.82rem;
-              font-weight: 700;
-              color: #7b1fa2;
-            }
-            .am-purchase-chevron {
-              font-size: 1.2rem;
-              line-height: 1;
-              transition: transform 0.12s ease;
-            }
-            /* Nudge the chevron on arrival so the row reads as interactive
-               even before anyone touches it. Respects reduced-motion. */
-            @media (prefers-reduced-motion: no-preference) {
-              .am-purchase-chevron {
-                animation: am-purchase-nudge 2.4s ease-in-out 3;
-              }
-            }
-            @keyframes am-purchase-nudge {
-              0%, 70%, 100% { transform: translateX(0); }
-              80% { transform: translateX(4px); }
-              90% { transform: translateX(0); }
-            }
-          `}</style>
         </div>
       )}
 
@@ -256,6 +189,8 @@ export default function AdvancePurchaseMarketPage() {
           <Link
             key={offer._id}
             href={`/buyer/advance-purchase/${offer._id}`}
+            className="am-offer-card"
+            aria-label={`Open ${offer.productName}`}
             style={{
               display: "block",
               padding: "1rem 1.1rem",
@@ -304,9 +239,156 @@ export default function AdvancePurchaseMarketPage() {
               Total value UGX {offer.totalValue.toLocaleString()}
               {offer.expectedDeliveryDate ? ` · delivery ~${new Date(offer.expectedDeliveryDate).toLocaleDateString()}` : ""}
             </div>
+
+            {/* The icons, not the words, are what make this readable to someone
+                who cannot read the label. */}
+            <div className="am-offer-cta">
+              <span aria-hidden="true" className="am-offer-tap">👆</span>
+              <span>Tap to open</span>
+              <span aria-hidden="true" className="am-offer-chevron">›</span>
+            </div>
           </Link>
         ))}
       </div>
+
+      {/* Kept at the top level of the page, not inside the purchases section:
+          the offer cards below render even when a buyer has no purchases yet,
+          and styles nested in that conditional would simply not exist for them. */}
+        {/* Global rather than scoped: styled-jsx adds its hash class only to
+            plain DOM elements, never to a child component, so a scoped rule
+            can never match the <Link> below — which is why the card rendered
+            with no background and underlined text. Names are prefixed to keep
+            global scope safe. */}
+        <style jsx global>{`
+          .am-purchase-card {
+            display: block;
+            padding: 0.8rem 0.95rem;
+            background: #fff;
+            border: 1px solid #e5d4ec;
+            border-left: 4px solid #7b1fa2;
+            border-radius: 12px;
+            text-decoration: none;
+            color: inherit;
+            box-shadow: 0 2px 8px rgba(74, 20, 140, 0.14);
+            transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+            -webkit-tap-highlight-color: rgba(123, 31, 162, 0.12);
+          }
+          /* Pressing it should feel like pressing something. */
+          .am-purchase-card:active {
+            transform: scale(0.985);
+            background: #faf5fc;
+            box-shadow: 0 1px 3px rgba(74, 20, 140, 0.18);
+          }
+          .am-purchase-card:focus-visible {
+            outline: 3px solid #7b1fa2;
+            outline-offset: 2px;
+          }
+          @media (hover: hover) {
+            .am-purchase-card:hover {
+              transform: translateY(-1px);
+              box-shadow: 0 6px 16px rgba(74, 20, 140, 0.2);
+            }
+            .am-purchase-card:hover .am-purchase-chevron {
+              transform: translateX(3px);
+            }
+          }
+          .am-purchase-cta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 0.55rem;
+            padding-top: 0.5rem;
+            border-top: 1px dashed #ecdff2;
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: #7b1fa2;
+          }
+          .am-purchase-chevron {
+            font-size: 1.2rem;
+            line-height: 1;
+            transition: transform 0.12s ease;
+          }
+          /* Nudge the chevron on arrival so the row reads as interactive
+             even before anyone touches it. Respects reduced-motion. */
+          @media (prefers-reduced-motion: no-preference) {
+            .am-purchase-chevron {
+              animation: am-purchase-nudge 2.4s ease-in-out 3;
+            }
+          }
+          /* ---- Offer cards ------------------------------------------------
+             Some users cannot read the label, so the cue has to work without
+             it: a pointing finger and a chevron, plus motion, which needs no
+             language at all. Only the FIRST card animates, and only a few
+             times — enough to teach that these cards open, without the whole
+             list twitching. */
+          .am-offer-card {
+            transition: transform 0.12s ease, box-shadow 0.12s ease;
+            -webkit-tap-highlight-color: rgba(46, 125, 50, 0.12);
+          }
+          .am-offer-card:active {
+            transform: scale(0.985);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
+          }
+          .am-offer-card:focus-visible {
+            outline: 3px solid #2e7d32;
+            outline-offset: 2px;
+          }
+          @media (hover: hover) {
+            .am-offer-card:hover {
+              transform: translateY(-1px);
+              box-shadow: 0 6px 16px rgba(0, 0, 0, 0.14);
+            }
+            .am-offer-card:hover .am-offer-chevron {
+              transform: translateX(3px);
+            }
+          }
+          .am-offer-cta {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            margin-top: 0.7rem;
+            padding-top: 0.55rem;
+            border-top: 1px solid #eee;
+            font-size: 0.84rem;
+            font-weight: 700;
+            color: #2e7d32;
+          }
+          .am-offer-tap {
+            font-size: 1rem;
+            display: inline-block;
+            transform-origin: center bottom;
+          }
+          .am-offer-chevron {
+            margin-left: auto;
+            font-size: 1.2rem;
+            line-height: 1;
+            transition: transform 0.12s ease;
+          }
+          @media (prefers-reduced-motion: no-preference) {
+            .am-offer-card:first-child .am-offer-tap {
+              animation: am-tap-hint 2.6s ease-in-out 3;
+            }
+            .am-offer-card:first-child .am-offer-chevron {
+              animation: am-chevron-hint 2.6s ease-in-out 3;
+            }
+          }
+          @keyframes am-tap-hint {
+            0%, 58%, 100% { transform: translateY(0) scale(1); }
+            68% { transform: translateY(-3px) scale(1.14); }
+            78% { transform: translateY(0) scale(1); }
+            88% { transform: translateY(-2px) scale(1.08); }
+          }
+          @keyframes am-chevron-hint {
+            0%, 58%, 100% { transform: translateX(0); }
+            72% { transform: translateX(4px); }
+            84% { transform: translateX(0); }
+          }
+          @keyframes am-purchase-nudge {
+            0%, 70%, 100% { transform: translateX(0); }
+            80% { transform: translateX(4px); }
+            90% { transform: translateX(0); }
+          }
+        `}</style>
     </div>
   );
 }

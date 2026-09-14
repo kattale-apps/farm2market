@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useAction } from "convex/react";
+import { EnvelopeIcon, MenuIcon } from "./icons/HeaderIcons";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -974,7 +975,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       className="f2m-icon-btn"
       style={{ position: "relative" }}
     >
-      ✉️
+      <EnvelopeIcon />
       {unreadMessageCount > 0 && (
         <span style={{
           position: "absolute",
@@ -1005,9 +1006,10 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
         onClick={() => setMoreMenuOpen((v) => !v)}
         title="More"
         aria-label="More menu"
-        className="f2m-icon-btn"
+        className={`f2m-icon-btn${moreMenuOpen ? " is-active" : ""}`}
+        aria-expanded={moreMenuOpen}
       >
-        ☰
+        <MenuIcon />
       </button>
       {moreMenuOpen && (
         <>

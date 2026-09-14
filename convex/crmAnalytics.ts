@@ -346,9 +346,11 @@ export const getCrmSubmissions = query({
   args: {
     communityId: v.id("communities"),
     requesterId: v.id("users"),
-    /** Inclusive lower bound on submittedAt. Omit for all time. */
+    /**
+     * Activity window. A submission is kept when the form was submitted OR any
+     * of its calls were logged inside it — not merely when it was submitted.
+     */
     fromTs: v.optional(v.number()),
-    /** Exclusive upper bound on submittedAt. */
     toTs: v.optional(v.number()),
     crmFormId: v.optional(v.id("crmForms")),
     /** Keep only submissions whose most recent call had this outcome. */
@@ -370,23 +372,49 @@ export const getCrmSubmissions = query({
 
     const limit = Math.min(Math.max(args.limit ?? 100, 1), 500);
 
+    // Deliberately unbounded by date at the index. The time range filters on
+    // ACTIVITY, not on when the form happened to be submitted: a client whose
+    // intake was captured last week but who was called this morning belongs in
+    // "Today". Filtering the index by submittedAt hid exactly those rows, which
+    // is the common case once a community has been running for a while.
     const responses = await ctx.db
       .query("crmFormResponses")
-      .withIndex("by_community_submitted", (q: any) => {
-        let range = q.eq("communityId", args.communityId);
-        if (args.fromTs != null) range = range.gte("submittedAt", args.fromTs);
-        if (args.toTs != null) range = range.lt("submittedAt", args.toTs);
-        return range;
-      })
+      .withIndex("by_community_submitted", (q: any) => q.eq("communityId", args.communityId))
       .collect();
 
     const byForm = args.crmFormId
       ? responses.filter((r: any) => String(r.crmFormId) === String(args.crmFormId))
       : responses;
 
-    const newestFirst = byForm.sort(
-      (a: any, b: any) => Number(b.submittedAt || 0) - Number(a.submittedAt || 0)
-    );
+    // Leads and call logs are fetched per community rather than per response,
+    // so the number of database queries does not grow with the result set.
+    const leadStatuses = ["open", "in_progress", "called", "overdue", "closed"] as const;
+    const leads = (
+      await Promise.all(
+        leadStatuses.map((status) =>
+          ctx.db
+            .query("crmLeads")
+            .withIndex("by_community_status_nextcall", (q: any) =>
+              q.eq("communityId", args.communityId).eq("queueStatus", status)
+            )
+            .collect()
+        )
+      )
+    ).flat();
+    const leadByResponse = new Map<string, any>();
+    for (const lead of leads) leadByResponse.set(String(lead.sourceCrmResponseId), lead);
+
+    const allLogs = await ctx.db
+      .query("crmCallLogs")
+      .withIndex("by_community_created", (q: any) => q.eq("communityId", args.communityId))
+      .collect();
+    const logsByLead = new Map<string, any[]>();
+    for (const log of allLogs) {
+      const key = String(log.leadId);
+      const bucket = logsByLead.get(key);
+      if (bucket) bucket.push(log);
+      else logsByLead.set(key, [log]);
+    }
 
     // Field definitions are per form and shared by every response to it, so
     // they are fetched once rather than per row.
@@ -405,7 +433,20 @@ export const getCrmSubmissions = query({
 
     const rows: any[] = [];
 
-    for (const response of newestFirst) {
+    for (const response of byForm) {
+      const lead = leadByResponse.get(String(response._id));
+      const logs = lead ? (logsByLead.get(String(lead._id)) || []) : [];
+      const lastCallAt = logs.reduce(
+        (latest: number, log: any) => Math.max(latest, Number(log.createdAt || 0)),
+        0
+      );
+
+      // Keep the row if EITHER the form or any of its calls fall in the window.
+      const submittedAt = Number(response.submittedAt || 0);
+      const activeAt = Math.max(submittedAt, lastCallAt);
+      if (args.fromTs != null && activeAt < args.fromTs) continue;
+      if (args.toTs != null && Math.min(submittedAt, lastCallAt || submittedAt) >= args.toTs) continue;
+
       const formKey = String(response.crmFormId);
       if (!formById.has(formKey)) {
         formById.set(formKey, await ctx.db.get(response.crmFormId));
@@ -437,38 +478,27 @@ export const getCrmSubmissions = query({
         value: valueByField.get(String(field._id)) ?? "",
       }));
 
-      // Calls are hung off the lead this submission created.
-      const lead = await ctx.db
-        .query("crmLeads")
-        .withIndex("by_source_response", (q: any) => q.eq("sourceCrmResponseId", response._id))
-        .first();
-
-      let calls: any[] = [];
-      if (lead) {
-        const logs = await ctx.db
-          .query("crmCallLogs")
-          .withIndex("by_lead", (q: any) => q.eq("leadId", lead._id))
-          .collect();
-        logs.sort((a: any, b: any) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
-        calls = await Promise.all(
-          logs.map(async (log: any) => {
-            const agent = await loadUser(log.agentId);
-            return {
-              callId: String(log._id),
-              createdAt: log.createdAt,
-              agentName: agent?.alias || "Unknown agent",
-              outcome: log.outcome,
-              usageStatus: log.usageStatus ?? null,
-              resultRating: log.resultRating ?? null,
-              issueType: log.issueType ?? null,
-              repurchaseIntent: log.repurchaseIntent ?? null,
-              notes: log.notes ?? "",
-              healthScore: log.healthScore ?? null,
-              healthBand: log.healthBand ?? null,
-            };
-          })
-        );
-      }
+      const sortedLogs = [...logs].sort(
+        (a: any, b: any) => Number(b.createdAt || 0) - Number(a.createdAt || 0)
+      );
+      const calls = await Promise.all(
+        sortedLogs.map(async (log: any) => {
+          const agent = await loadUser(log.agentId);
+          return {
+            callId: String(log._id),
+            createdAt: log.createdAt,
+            agentName: agent?.alias || "Unknown agent",
+            outcome: log.outcome,
+            usageStatus: log.usageStatus ?? null,
+            resultRating: log.resultRating ?? null,
+            issueType: log.issueType ?? null,
+            repurchaseIntent: log.repurchaseIntent ?? null,
+            notes: log.notes ?? "",
+            healthScore: log.healthScore ?? null,
+            healthBand: log.healthBand ?? null,
+          };
+        })
+      );
 
       rows.push({
         responseId: String(response._id),
@@ -480,6 +510,7 @@ export const getCrmSubmissions = query({
         subCounty: response.subCounty || "-",
         parish: response.parish || "-",
         submittedAt: response.submittedAt,
+        lastActivityAt: activeAt,
         submittedByName: submittedBy?.alias || "Unknown",
         sourceEventType: response.sourceEventType,
         wasNewClientAtIntake: response.wasNewClientAtIntake ?? false,
@@ -522,6 +553,10 @@ export const getCrmSubmissions = query({
             : r.latestOutcome === args.outcome
         )
       : searched;
+
+    // Most recently active first, so a client called this morning tops the list
+    // even if their intake was captured weeks ago.
+    filtered.sort((a, b) => Number(b.lastActivityAt || 0) - Number(a.lastActivityAt || 0));
 
     return {
       rows: filtered.slice(0, limit),

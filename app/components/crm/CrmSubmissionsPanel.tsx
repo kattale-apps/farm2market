@@ -101,7 +101,7 @@ export function CrmSubmissionsPanel({
   requesterId: Id<"users">;
   crmForms: Array<{ _id: string; name: string }>;
 }) {
-  const [range, setRange] = useState<RangeKey>("today");
+  const [range, setRange] = useState<RangeKey>("all");
   const [formId, setFormId] = useState<string>("");
   const [outcome, setOutcome] = useState<string>("");
   const [search, setSearch] = useState("");
@@ -180,7 +180,10 @@ export function CrmSubmissionsPanel({
       </div>
 
       {/* Filters */}
-      <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginTop: "0.7rem" }}>
+      <div style={{ fontSize: "0.76rem", color: "#888", marginTop: "0.55rem" }}>
+        Filters on activity: a form appears if it was submitted or called in the period.
+      </div>
+      <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginTop: "0.35rem" }}>
         {RANGE_OPTIONS.map((option) => (
           <button
             key={option.key}
@@ -268,7 +271,8 @@ export function CrmSubmissionsPanel({
                     {row.subCounty && row.subCounty !== "-" ? `, ${row.subCounty}` : ""}
                   </span>
                   <span style={{ fontSize: "0.74rem", color: "#999", display: "block" }}>
-                    {formatDateTime(row.submittedAt)} · {row.callCount} call{row.callCount === 1 ? "" : "s"}
+                    Submitted {formatDateTime(row.submittedAt)} · {row.callCount} call{row.callCount === 1 ? "" : "s"}
+                    {row.callCount > 0 && row.calls?.[0] ? ` · last call ${formatDateTime(row.calls[0].createdAt)}` : ""}
                   </span>
                 </span>
                 <span style={{ textAlign: "right", whiteSpace: "nowrap", fontSize: "0.76rem" }}>
@@ -305,7 +309,10 @@ export function CrmSubmissionsPanel({
                       Form answers ({row.answers?.length || 0})
                     </div>
                     {(!row.answers || row.answers.length === 0) && (
-                      <div style={{ fontSize: "0.8rem", color: "#999" }}>This form has no custom questions.</div>
+                      <div style={{ fontSize: "0.8rem", color: "#999" }}>
+                        This form has no custom questions — add fields under “Manage CRM Form Fields” and
+                        future intakes will record answers here. The call answers below are unaffected.
+                      </div>
                     )}
                     {(row.answers || []).map((answer: any) => (
                       <div key={answer.fieldId} style={{ display: "flex", gap: "0.6rem", padding: "0.22rem 0", borderBottom: "1px solid #f2f2f2", fontSize: "0.8rem" }}>

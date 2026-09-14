@@ -4,6 +4,18 @@ import { requireCrmSupervisorAccess } from "./crmAuth";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/** Buckets rows that carry a leadId, so each lead's extras resolve in one pass. */
+function groupByLead<T extends { leadId: unknown }>(items: T[]): Map<string, T[]> {
+  const grouped = new Map<string, T[]>();
+  for (const item of items) {
+    const key = String(item.leadId);
+    const bucket = grouped.get(key);
+    if (bucket) bucket.push(item);
+    else grouped.set(key, [item]);
+  }
+  return grouped;
+}
+
 function startOfDayTs(ts: number) {
   const d = new Date(ts);
   d.setHours(0, 0, 0, 0);
@@ -408,13 +420,41 @@ export const getCrmSubmissions = query({
       .query("crmCallLogs")
       .withIndex("by_community_created", (q: any) => q.eq("communityId", args.communityId))
       .collect();
-    const logsByLead = new Map<string, any[]>();
-    for (const log of allLogs) {
-      const key = String(log.leadId);
-      const bucket = logsByLead.get(key);
-      if (bucket) bucket.push(log);
-      else logsByLead.set(key, [log]);
-    }
+    const logsByLead = groupByLead(allLogs);
+
+    // A call can also raise a sales opportunity or an issue ticket. Those are
+    // answers the agent entered on the call form just as much as the outcome
+    // fields are, so they belong on the submission rather than only in the
+    // headline counters.
+    const opportunityStages = ["new", "follow_up", "order", "completed", "lost"] as const;
+    const opportunities = (
+      await Promise.all(
+        opportunityStages.map((stage) =>
+          ctx.db
+            .query("crmSalesOpportunities")
+            .withIndex("by_community_stage", (q: any) =>
+              q.eq("communityId", args.communityId).eq("stage", stage)
+            )
+            .collect()
+        )
+      )
+    ).flat();
+    const opportunitiesByLead = groupByLead(opportunities);
+
+    const ticketStatuses = ["open", "in_progress", "resolved"] as const;
+    const tickets = (
+      await Promise.all(
+        ticketStatuses.map((status) =>
+          ctx.db
+            .query("crmTickets")
+            .withIndex("by_community_status", (q: any) =>
+              q.eq("communityId", args.communityId).eq("status", status)
+            )
+            .collect()
+        )
+      )
+    ).flat();
+    const ticketsByLead = groupByLead(tickets);
 
     // Field definitions are per form and shared by every response to it, so
     // they are fetched once rather than per row.
@@ -500,6 +540,29 @@ export const getCrmSubmissions = query({
         })
       );
 
+      const leadKey = lead ? String(lead._id) : "";
+      const leadOpportunities = (opportunitiesByLead.get(leadKey) || [])
+        .sort((a: any, b: any) => Number(b.createdAt || 0) - Number(a.createdAt || 0))
+        .map((o: any) => ({
+          opportunityId: String(o._id),
+          productName: o.productName ?? null,
+          quantity: o.quantity ?? null,
+          expectedPurchaseMonth: o.expectedPurchaseMonth ?? null,
+          probability: o.probability ?? null,
+          stage: o.stage,
+          nextActionAt: o.nextActionAt ?? null,
+          createdAt: o.createdAt,
+        }));
+      const leadTickets = (ticketsByLead.get(leadKey) || [])
+        .sort((a: any, b: any) => Number(b.createdAt || 0) - Number(a.createdAt || 0))
+        .map((t: any) => ({
+          ticketId: String(t._id),
+          title: t.title,
+          details: t.details ?? "",
+          status: t.status,
+          createdAt: t.createdAt,
+        }));
+
       rows.push({
         responseId: String(response._id),
         crmFormId: formKey,
@@ -527,6 +590,8 @@ export const getCrmSubmissions = query({
         },
         answers,
         calls,
+        opportunities: leadOpportunities,
+        tickets: leadTickets,
         callCount: calls.length,
         latestOutcome: calls[0]?.outcome ?? null,
         latestHealthBand: lead?.latestHealthBand ?? null,
@@ -562,6 +627,8 @@ export const getCrmSubmissions = query({
       rows: filtered.slice(0, limit),
       totalMatching: filtered.length,
       totalCalls: filtered.reduce((sum, r) => sum + r.callCount, 0),
+      totalOpportunities: filtered.reduce((sum, r) => sum + r.opportunities.length, 0),
+      totalTickets: filtered.reduce((sum, r) => sum + r.tickets.length, 0),
       truncated: filtered.length > limit,
     };
   },

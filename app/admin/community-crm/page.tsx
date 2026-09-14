@@ -10,6 +10,7 @@ import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { useStoredUser } from "../../hooks/useStoredUser";
 import { savePdfFromJsPDF } from "../../utils/pdfDownload";
+import { CrmSubmissionsPanel } from "../../components/crm/CrmSubmissionsPanel";
 
 const FONT = '"Montserrat", sans-serif';
 const BRAND = "#1f7a3e";
@@ -778,6 +779,14 @@ export default function CommunityCrmPage() {
             </div>
           </div>
         </div>
+
+        {selectedCommunityId && userId && crmEnabledForSelected && (
+          <CrmSubmissionsPanel
+            communityId={selectedCommunityId}
+            requesterId={userId}
+            crmForms={(crmForms || []) as any}
+          />
+        )}
 
         {!crmEnabledForSelected && selectedCommunityId && (
           <div style={{ marginTop: "0.9rem", border: "1px solid #fde68a", background: "#fffbeb", color: "#92400e", borderRadius: 10, padding: "0.8rem" }}>

@@ -1103,6 +1103,174 @@ export const createCommitment = mutation({
   },
 });
 
+// --------------------------------------------------------------------
+// BUYER — Exiting a commitment
+//
+// Two doors out, differing only in how much is still refundable:
+//   cancelCommitment  — nothing has been released to the farmer yet, so the
+//                       whole committed amount (produce, delivery fee and
+//                       insurance) goes back to the buyer's wallet.
+//   forfeitCommitment — production has started. Milestone money already
+//                       released to the farmer stays with the farmer; only
+//                       the unreleased balance returns to the buyer.
+//
+// Both free the quantity back onto the offer so another buyer can take it,
+// and both refund with a capital_unlock ledger entry — the same reversal of
+// a capital_lock that the trader-expiry path in scheduled.ts uses.
+// --------------------------------------------------------------------
+
+async function refundCommitmentToBuyer(
+  ctx: { db: any },
+  commitment: Doc<"advancePurchaseCommitments">,
+  offer: Doc<"advancePurchaseOffers">,
+  reason: "buyer_cancelled" | "buyer_forfeited"
+) {
+  const now = getUgandaTime();
+  const refundAmount = Math.max(0, commitment.totalAmount - commitment.releasedAmount);
+  const refundUtid = generateUTID("buyer");
+
+  if (refundAmount > 0) {
+    const latestEntry = await ctx.db
+      .query("walletLedger")
+      .withIndex("by_user", (q: any) => q.eq("userId", commitment.buyerId))
+      .order("desc")
+      .first();
+    const balanceAfter = (latestEntry?.balanceAfter || 0) + refundAmount;
+
+    await ctx.db.insert("walletLedger", {
+      userId: commitment.buyerId,
+      utid: refundUtid,
+      type: "capital_unlock",
+      amount: refundAmount,
+      balanceAfter,
+      timestamp: now,
+      metadata: {
+        type: "advance_purchase_refund",
+        reason,
+        offerId: offer._id,
+        offerUtid: offer.utid,
+        productName: offer.productName,
+        commitmentId: commitment._id,
+        commitmentUtid: commitment.utid,
+        reversedLockUtid: commitment.walletUtid,
+        totalAmount: commitment.totalAmount,
+        // Kept by the farmer for milestones already approved — 0 on a cancel.
+        forfeitedToFarmer: commitment.releasedAmount,
+      },
+    });
+  }
+
+  await ctx.db.patch(commitment._id, {
+    status: "cancelled" as const,
+    updatedAt: now,
+  });
+
+  // Release the reserved quantity so the offer can be sold again. Guard
+  // against drifting below zero if the counter was ever patched elsewhere.
+  await ctx.db.patch(offer._id, {
+    quantityCommitted: Math.max(0, offer.quantityCommitted - commitment.quantity),
+    updatedAt: now,
+  });
+
+  return { refundAmount, refundUtid, forfeitedToFarmer: commitment.releasedAmount };
+}
+
+async function loadCommitmentForBuyer(
+  ctx: { db: any },
+  buyerId: Id<"users">,
+  commitmentId: Id<"advancePurchaseCommitments">
+) {
+  const commitment = await ctx.db.get(commitmentId);
+  if (!commitment) throw new Error("Order not found");
+  if (String(commitment.buyerId) !== String(buyerId)) {
+    throw new Error("You can only change your own Advanced Markets order");
+  }
+  const offer = await ctx.db.get(commitment.offerId);
+  if (!offer) throw new Error("Offer not found");
+  if (commitment.status === "cancelled") {
+    throw new Error("This order has already been cancelled");
+  }
+  if (commitment.status === "delivered") {
+    throw new Error("This order has already been delivered");
+  }
+  if (commitment.quantityDelivered > 0) {
+    throw new Error(
+      "Part of this order has already been delivered to you. Contact your community admin to settle it."
+    );
+  }
+  return { commitment, offer };
+}
+
+/**
+ * Cancel an order the farmer has not been paid anything for yet.
+ * Refuses once any milestone has released money — forfeitCommitment is the
+ * only way out from that point, and the error says so.
+ */
+export const cancelCommitment = mutation({
+  args: {
+    buyerId: v.id("users"),
+    commitmentId: v.id("advancePurchaseCommitments"),
+  },
+  handler: async (ctx, args) => {
+    await checkPilotMode(ctx);
+    const { commitment, offer } = await loadCommitmentForBuyer(ctx, args.buyerId, args.commitmentId);
+
+    if (commitment.releasedAmount > 0 || commitment.status !== "funded") {
+      throw new Error(
+        "Production has already started on this order, so it can no longer be cancelled for a full refund. " +
+          "You can forfeit it instead — the money already released to the farmer stays with them."
+      );
+    }
+
+    const result = await refundCommitmentToBuyer(ctx, commitment, offer, "buyer_cancelled");
+
+    await notifyUser(
+      ctx,
+      offer.farmerId,
+      "Advanced Markets order cancelled",
+      `A buyer cancelled their order of ${commitment.quantity} ${offer.unit} of "${offer.productName}". ` +
+        `That quantity is available to other buyers again.`,
+      offer.utid
+    );
+
+    return { success: true, ...result };
+  },
+});
+
+/**
+ * Walk away from an order that is already in production. The buyer gives up
+ * everything approved milestones have paid out to the farmer and takes back
+ * the rest.
+ */
+export const forfeitCommitment = mutation({
+  args: {
+    buyerId: v.id("users"),
+    commitmentId: v.id("advancePurchaseCommitments"),
+  },
+  handler: async (ctx, args) => {
+    await checkPilotMode(ctx);
+    const { commitment, offer } = await loadCommitmentForBuyer(ctx, args.buyerId, args.commitmentId);
+
+    if (!["funded", "in_production", "ready_for_delivery"].includes(commitment.status)) {
+      throw new Error("This order cannot be forfeited in its current state");
+    }
+
+    const result = await refundCommitmentToBuyer(ctx, commitment, offer, "buyer_forfeited");
+
+    await notifyUser(
+      ctx,
+      offer.farmerId,
+      "Advanced Markets order forfeited",
+      `A buyer forfeited their order of ${commitment.quantity} ${offer.unit} of "${offer.productName}". ` +
+        `The UGX ${Math.round(result.forfeitedToFarmer).toLocaleString()} already released for approved ` +
+        `milestones stays with you, and that quantity is available to other buyers again.`,
+      offer.utid
+    );
+
+    return { success: true, ...result };
+  },
+});
+
 export const listMyCommitments = query({
   args: { buyerId: v.id("users") },
   handler: async (ctx, args) => {

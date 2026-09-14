@@ -934,3 +934,304 @@ export async function exportFormSubmissionsToPDF(
   addPageNumbersIfNeeded(doc);
   void savePdfFromJsPDF(doc, `${filename}.pdf`);
 }
+
+// =====================================================================
+// Advanced Markets — buyer's order record
+// =====================================================================
+
+type CaptionedPhoto = {
+  url: string;
+  caption: string;
+  sub?: string;
+};
+
+/**
+ * Photo grid where every tile carries its own caption — used for milestone
+ * proof pictures, which are meaningless without the stage they belong to.
+ * Unlike renderPhotosAdaptivePaged the cell size is fixed so captions stay
+ * readable; it returns the Y it finished at so the caller can keep going.
+ */
+async function renderCaptionedPhotoGrid(params: {
+  doc: jsPDF;
+  photos: CaptionedPhoto[];
+  startY: number;
+  margin: number;
+  contentWidth: number;
+  pageHeight: number;
+  sectionTitle: string;
+  prepareContinuationPage: () => number;
+}): Promise<number> {
+  const { doc, photos, margin, contentWidth, pageHeight, sectionTitle, prepareContinuationPage } = params;
+  if (!photos.length) return params.startY;
+
+  const cols = 3;
+  const gap = 5;
+  const cellW = (contentWidth - gap * (cols - 1)) / cols;
+  const imgH = 42;
+  const capH = 9;
+  const rowH = imgH + capH + gap;
+
+  let y = addSectionTitle(doc, params.startY, `${sectionTitle} (${photos.length})`);
+  let col = 0;
+
+  for (const photo of photos) {
+    if (col === 0 && y + rowH > pageHeight - 15) {
+      y = addSectionTitle(doc, prepareContinuationPage(), `${sectionTitle} (cont.)`);
+    }
+
+    const x = margin + col * (cellW + gap);
+
+    doc.setDrawColor(200);
+    doc.rect(x, y, cellW, imgH);
+    try {
+      const base64 = await urlToBase64(photo.url);
+      if (!base64) throw new Error("Empty image");
+      const fitted = await cropBase64ToAspect(base64, cellW / imgH);
+      doc.addImage(fitted, imageFormatFromBase64(fitted), x, y, cellW, imgH);
+    } catch {
+      doc.setFontSize(7);
+      doc.setTextColor(140, 140, 140);
+      doc.text("Photo unavailable", x + cellW / 2, y + imgH / 2, { align: "center" });
+      doc.setTextColor(30, 30, 30);
+    }
+
+    doc.setFontSize(7);
+    (doc as any).setFont(undefined, "bold");
+    doc.text(photo.caption.slice(0, 60), x, y + imgH + 3.6, { maxWidth: cellW });
+    (doc as any).setFont(undefined, "normal");
+    if (photo.sub) {
+      doc.setTextColor(110, 110, 110);
+      doc.text(photo.sub.slice(0, 60), x, y + imgH + 7, { maxWidth: cellW });
+      doc.setTextColor(30, 30, 30);
+    }
+
+    col += 1;
+    if (col === cols) {
+      col = 0;
+      y += rowH;
+    }
+  }
+
+  return col === 0 ? y : y + rowH;
+}
+
+/** Milestone/offer dates arrive as ISO strings; commitment dates as epoch ms. */
+function formatLooseDate(value: unknown): string {
+  if (value == null || value === "") return "N/A";
+  if (typeof value === "number") return formatUgandaDate(value);
+  const parsed = Date.parse(String(value));
+  return Number.isNaN(parsed) ? String(value) : formatUgandaDate(parsed);
+}
+
+function milestoneStatusLabel(status: string): string {
+  switch (status) {
+    case "approved": return "Approved";
+    case "submitted": return "Awaiting review";
+    case "rejected": return "Rejected";
+    case "resubmission_required": return "Resubmission required";
+    default: return "Pending";
+  }
+}
+
+/**
+ * The buyer's downloadable record of one Advanced Markets order: what was
+ * bought, what it cost, how much has been released to the farmer, the product
+ * gallery, and every production milestone with the proof pictures the farmer
+ * submitted for it.
+ *
+ * Takes the shape advancePurchase.getCommitmentDetail returns.
+ */
+export async function exportAdvanceMarketCommitmentToPDF(
+  detail: any,
+  buyerName?: string
+): Promise<void> {
+  if (!detail) return;
+
+  const offer = detail.offer || {};
+  const milestones: any[] = detail.milestones || [];
+
+  const logoBase64 = await urlToBase64(TOOLBOX_LOGO_PATH);
+
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 10;
+  const contentWidth = pageWidth - margin * 2;
+
+  const newPage = (title: string) => {
+    doc.addPage();
+    addReportHeader(doc, title);
+    return 34;
+  };
+
+  await addWatermark(doc, logoBase64);
+  addReportHeader(
+    doc,
+    "Advanced Markets Order",
+    `${offer.productName || "Order"}  |  ${detail.utid || ""}`
+  );
+
+  // Order summary
+  const deliveryOption = (offer.deliveryOptions || []).find(
+    (o: any) => o.key === detail.deliveryOptionKey
+  );
+
+  const orderRows: Array<[string, string]> = [
+    ["Order UTID", String(detail.utid || "N/A")],
+    ["Buyer", buyerName || "N/A"],
+    ["Product", String(offer.productName || "N/A") + (offer.variety ? ` (${offer.variety})` : "")],
+    ["Quantity", `${detail.quantity} ${offer.unit || ""}`.trim()],
+    ["Unit price", `UGX ${Number(detail.unitPriceAtCommit || 0).toLocaleString()}`],
+    ["Order status", String(detail.status || "").replace(/_/g, " ")],
+    ["Committed on", formatLooseDate(detail.createdAt)],
+    ["Funded on", detail.fundedAt ? formatLooseDate(detail.fundedAt) : "N/A"],
+    ["Recurrence", String(offer.recurrence || "N/A").replace(/_/g, " ")],
+    ["Production location", String(offer.productionLocation || "N/A")],
+    ["Delivery location", String(offer.deliveryLocation || "N/A")],
+    ["Expected delivery", formatLooseDate(offer.expectedDeliveryDate)],
+    ["Delivery option", deliveryOption ? deliveryOption.label : "N/A"],
+    ["Delivered so far", `${detail.quantityDelivered || 0} ${offer.unit || ""}`.trim()],
+    [
+      "Insurance",
+      detail.insuranceOpted
+        ? `${offer.insuranceLabel || "Insured"} — UGX ${Number(detail.insuranceAmount || 0).toLocaleString()}`
+        : "Not taken",
+    ],
+  ];
+
+  autoTable(doc, {
+    startY: 32,
+    head: [["Order details", ""]],
+    body: orderRows,
+    theme: "grid",
+    styles: { fontSize: 8.5, cellPadding: 1.8 },
+    headStyles: { fillColor: [34, 100, 55], textColor: 255, fontSize: 9 },
+    columnStyles: { 0: { cellWidth: 48, fontStyle: "bold" }, 1: { cellWidth: contentWidth - 48 } },
+    margin: { left: margin, right: margin },
+  });
+
+  // Payment
+  const paymentRows: Array<[string, string]> = [
+    ["Produce value", `UGX ${Number((detail.unitPriceAtCommit || 0) * (detail.quantity || 0)).toLocaleString()}`],
+    ["Cash component", `UGX ${Number(detail.cashAmount || 0).toLocaleString()}`],
+    ["In-kind component", `UGX ${Number(detail.inKindAmount || 0).toLocaleString()}`],
+    ["Delivery fee", `UGX ${Number(detail.deliveryFeeAmount || 0).toLocaleString()}`],
+    ["Insurance", `UGX ${Number(detail.insuranceAmount || 0).toLocaleString()}`],
+    ["Total committed", `UGX ${Number(detail.totalAmount || 0).toLocaleString()}`],
+    ["Released to farmer", `UGX ${Number(detail.releasedAmount || 0).toLocaleString()}`],
+    [
+      "Still held",
+      `UGX ${Number(
+        detail.pendingAmount != null
+          ? detail.pendingAmount
+          : (detail.totalAmount || 0) - (detail.releasedAmount || 0)
+      ).toLocaleString()}`,
+    ],
+  ];
+
+  autoTable(doc, {
+    startY: autoTableEndY(doc) + 6,
+    head: [["Payment", "Amount"]],
+    body: paymentRows,
+    theme: "grid",
+    styles: { fontSize: 8.5, cellPadding: 1.8 },
+    headStyles: { fillColor: [34, 100, 55], textColor: 255, fontSize: 9 },
+    columnStyles: { 0: { cellWidth: 48, fontStyle: "bold" }, 1: { cellWidth: contentWidth - 48 } },
+    margin: { left: margin, right: margin },
+  });
+
+  // Whatever extra fields the community admin configured on the offer
+  const customFields: any[] = offer.customFieldValues || [];
+  if (customFields.length) {
+    autoTable(doc, {
+      startY: autoTableEndY(doc) + 6,
+      head: [["Offer details", ""]],
+      body: customFields.map((f: any) => [String(f.label || f.key), String(f.value ?? "-")]),
+      theme: "grid",
+      styles: { fontSize: 8.5, cellPadding: 1.8 },
+      headStyles: { fillColor: [34, 100, 55], textColor: 255, fontSize: 9 },
+      columnStyles: { 0: { cellWidth: 48, fontStyle: "bold" }, 1: { cellWidth: contentWidth - 48 } },
+      margin: { left: margin, right: margin },
+    });
+  }
+
+  // Milestone progress
+  if (milestones.length) {
+    const approvedCount = milestones.filter((m: any) => m.status === "approved").length;
+    autoTable(doc, {
+      startY: autoTableEndY(doc) + 6,
+      head: [["#", "Milestone", "Expected", "Release %", "Status", "Proofs"]],
+      body: milestones.map((m: any) => [
+        String(m.order),
+        String(m.name || ""),
+        formatLooseDate(m.expectedDate),
+        `${Number(m.releasePercent || 0)}%`,
+        milestoneStatusLabel(String(m.status || "")),
+        String((m.proofPictures || []).length),
+      ]),
+      foot: [["", `${approvedCount} of ${milestones.length} milestones approved`, "", "", "", ""]],
+      theme: "grid",
+      styles: { fontSize: 8.5, cellPadding: 1.8 },
+      headStyles: { fillColor: [34, 100, 55], textColor: 255, fontSize: 9 },
+      footStyles: { fillColor: [244, 247, 245], textColor: [34, 100, 55], fontStyle: "bold" },
+      margin: { left: margin, right: margin },
+    });
+  }
+
+  // Product gallery
+  const galleryPhotos: string[] = offer.photoUrls || [];
+  if (galleryPhotos.length) {
+    let y = autoTableEndY(doc) + 8;
+    if (y > pageHeight - 70) y = newPage("Advanced Markets Order — Product Photos");
+    await renderPhotosAdaptivePaged({
+      doc,
+      photos: galleryPhotos,
+      startY: y,
+      margin,
+      contentWidth,
+      pageHeight,
+      sectionTitle: "Product photos",
+      prepareContinuationPage: async () => newPage("Advanced Markets Order — Product Photos (cont.)"),
+    });
+  }
+
+  // Milestone proof pictures, flattened but captioned with their stage so the
+  // grid still reads as the production timeline.
+  const proofPhotos: CaptionedPhoto[] = [];
+  for (const m of milestones) {
+    const proofs: any[] = m.proofPictures || [];
+    proofs.forEach((p: any, index: number) => {
+      if (!p?.url) return;
+      const capturedOn = formatLooseDate(p.capturedAt || p.submittedAt);
+      const gps =
+        p.lat != null && p.lng != null
+          ? ` · ${Number(p.lat).toFixed(4)}, ${Number(p.lng).toFixed(4)}`
+          : "";
+      proofPhotos.push({
+        url: p.url,
+        caption: `${m.order}. ${m.name}${index > 0 ? " (earlier)" : ""}`,
+        sub: `${capturedOn}${gps}`,
+      });
+    });
+  }
+
+  if (proofPhotos.length) {
+    await renderCaptionedPhotoGrid({
+      doc,
+      photos: proofPhotos,
+      startY: newPage("Advanced Markets Order — Milestone Proof Pictures"),
+      margin,
+      contentWidth,
+      pageHeight,
+      sectionTitle: "Milestone proof pictures",
+      prepareContinuationPage: () => newPage("Advanced Markets Order — Milestone Proof Pictures (cont.)"),
+    });
+  }
+
+  addPageNumbersIfNeeded(doc);
+
+  const safeProduct = String(offer.productName || "Order")
+    .replace(/[^a-zA-Z0-9]+/g, "_")
+    .slice(0, 40);
+  await savePdfFromJsPDF(doc, `Advanced_Market_Order_${safeProduct}_${detail.utid || ""}.pdf`);
+}

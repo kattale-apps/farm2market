@@ -64,6 +64,19 @@ const REPURCHASE_LABELS: Record<string, string> = {
   maybe: "Undecided",
 };
 
+const STAGE_LABELS: Record<string, string> = {
+  new: "New", follow_up: "Following up", order: "Order placed",
+  completed: "Completed", lost: "Lost",
+};
+
+const TICKET_STATUS_LABELS: Record<string, string> = {
+  open: "Open", in_progress: "In progress", resolved: "Resolved",
+};
+
+const PROBABILITY_LABELS: Record<string, string> = {
+  high: "High chance", medium: "Medium chance", low: "Low chance",
+};
+
 const BAND_COLORS: Record<string, string> = {
   green: "#2e7d32",
   yellow: "#b8860b",
@@ -130,6 +143,7 @@ export function CrmSubmissionsPanel({
       "Submitted", "Client", "Phone", "Form", "District", "SubCounty",
       "Product", "Quantity", "Crop", "Planting month",
       "Answers", "Calls", "Latest outcome", "Health",
+      "Opportunities", "Issues",
     ];
     const lines = [header.map(csvCell).join(",")];
     for (const row of rows) {
@@ -148,6 +162,10 @@ export function CrmSubmissionsPanel({
         String(row.callCount),
         row.latestOutcome ? OUTCOME_LABELS[row.latestOutcome] || row.latestOutcome : "Not yet called",
         row.latestHealthScore != null ? String(row.latestHealthScore) : "",
+        (row.opportunities || [])
+          .map((o: any) => [o.productName, o.quantity, o.expectedPurchaseMonth].filter(Boolean).join(" "))
+          .join(" | "),
+        (row.tickets || []).map((t: any) => `${t.title} (${t.status})`).join(" | "),
       ].map(csvCell).join(","));
     }
     const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
@@ -233,7 +251,9 @@ export function CrmSubmissionsPanel({
       <div style={{ marginTop: "0.7rem", fontSize: "0.82rem", color: "#555" }}>
         {data === undefined
           ? "Loading submissions..."
-          : `${data.totalMatching} submission${data.totalMatching === 1 ? "" : "s"} · ${data.totalCalls} call${data.totalCalls === 1 ? "" : "s"} logged`}
+          : `${data.totalMatching} submission${data.totalMatching === 1 ? "" : "s"} · ${data.totalCalls} call${data.totalCalls === 1 ? "" : "s"} logged` +
+            (data.totalOpportunities ? ` · ${data.totalOpportunities} sales opportunit${data.totalOpportunities === 1 ? "y" : "ies"}` : "") +
+            (data.totalTickets ? ` · ${data.totalTickets} issue${data.totalTickets === 1 ? "" : "s"}` : "")}
         {data?.truncated && (
           <span style={{ color: "#92400e" }}> · showing the first {rows.length}, narrow the filters to see more</span>
         )}
@@ -273,6 +293,8 @@ export function CrmSubmissionsPanel({
                   <span style={{ fontSize: "0.74rem", color: "#999", display: "block" }}>
                     Submitted {formatDateTime(row.submittedAt)} · {row.callCount} call{row.callCount === 1 ? "" : "s"}
                     {row.callCount > 0 && row.calls?.[0] ? ` · last call ${formatDateTime(row.calls[0].createdAt)}` : ""}
+                    {row.opportunities?.length ? ` · ${row.opportunities.length} opportunity` : ""}
+                    {row.tickets?.length ? ` · ${row.tickets.length} issue` : ""}
                   </span>
                 </span>
                 <span style={{ textAlign: "right", whiteSpace: "nowrap", fontSize: "0.76rem" }}>
@@ -366,6 +388,54 @@ export function CrmSubmissionsPanel({
                       </div>
                     ))}
                   </div>
+
+                  {row.opportunities?.length > 0 && (
+                    <div style={{ marginTop: "0.85rem" }}>
+                      <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#374151", marginBottom: "0.35rem" }}>
+                        Sales opportunities ({row.opportunities.length})
+                      </div>
+                      {row.opportunities.map((opp: any) => (
+                        <div key={opp.opportunityId} style={{ border: "1px solid #d7ecdd", background: "#f4fbf6", borderRadius: 8, padding: "0.5rem 0.6rem", marginBottom: "0.4rem" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem", flexWrap: "wrap" }}>
+                            <span style={{ fontWeight: 700, fontSize: "0.8rem", color: "#1f7a3e" }}>
+                              {[opp.productName, opp.quantity].filter(Boolean).join(" · ") || "Opportunity"}
+                            </span>
+                            <span style={{ fontSize: "0.74rem", color: "#888" }}>{formatDateTime(opp.createdAt)}</span>
+                          </div>
+                          <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginTop: "0.3rem" }}>
+                            <Chip label={STAGE_LABELS[opp.stage] || opp.stage} />
+                            <Chip label={PROBABILITY_LABELS[opp.probability] || null} />
+                            <Chip label={opp.expectedPurchaseMonth ? `Expected ${opp.expectedPurchaseMonth}` : null} />
+                            <Chip label={opp.nextActionAt ? `Next action ${new Date(opp.nextActionAt).toLocaleDateString()}` : null} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {row.tickets?.length > 0 && (
+                    <div style={{ marginTop: "0.85rem" }}>
+                      <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#374151", marginBottom: "0.35rem" }}>
+                        Issues raised ({row.tickets.length})
+                      </div>
+                      {row.tickets.map((ticket: any) => (
+                        <div key={ticket.ticketId} style={{ border: "1px solid #fde68a", background: "#fffbeb", borderRadius: 8, padding: "0.5rem 0.6rem", marginBottom: "0.4rem" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem", flexWrap: "wrap" }}>
+                            <span style={{ fontWeight: 700, fontSize: "0.8rem", color: "#92400e" }}>{ticket.title}</span>
+                            <span style={{ fontSize: "0.74rem", color: "#888" }}>{formatDateTime(ticket.createdAt)}</span>
+                          </div>
+                          <div style={{ marginTop: "0.3rem" }}>
+                            <Chip label={TICKET_STATUS_LABELS[ticket.status] || ticket.status} tone="warn" />
+                          </div>
+                          {ticket.details && (
+                            <div style={{ marginTop: "0.35rem", fontSize: "0.79rem", color: "#444", fontStyle: "italic" }}>
+                              “{ticket.details.trim()}”
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

@@ -75,6 +75,44 @@ The required sequence is:
 - Note this required sequence to the owner up front when starting new feature work,
   not just at push time, so it's a default expectation rather than a last-minute check.
 
+### Rule 4c — Run the full local gate before any push that deploys
+CI runs no tests, no lint and no type-check; it only deploys (Rule 4, Part 2 §6).
+These checks are therefore the *only* gate this project has, and all of them must
+pass before pushing to `develop` or `main`, and before telling the owner a feature
+is done. `npm run verify` runs the first three in order; the commands are listed
+separately because when one fails you want to re-run just that one.
+
+1. `npm run typecheck` — both TypeScript projects:
+   - `tsc --noEmit -p tsconfig.json` for the Next app, and
+   - `tsc --noEmit -p convex/tsconfig.json` for the Convex functions.
+   Both are required. The app config does not cover `convex/`, and because
+   `convex/_generated/api.d.ts` is fully typed, the Convex pass is what catches a
+   query or mutation that does not exist, or whose args or return shape changed.
+2. `npm run build` — the Next production build. It catches what `tsc` does not:
+   bad imports, client/server boundary mistakes, and failures that only appear
+   when a route is compiled. It also prints per-route first-load JS, which is how
+   an accidentally heavyweight import (jsPDF, xlsx, recharts) gets spotted before
+   it reaches a buyer on a mobile connection.
+3. `npm test` — the unit suite (`tests/**/*.test.ts`).
+4. `npm run test:e2e` (Playwright) when the change touches a flow a spec covers.
+   It is not part of `npm run verify` because it needs a running app.
+
+Reporting rules, which matter as much as running the checks:
+- State which checks ran and passed when reporting a feature complete. "It builds"
+  is not the same claim as "the tests pass".
+- If a check could not be run, say so plainly instead of wording the summary so it
+  sounds like the whole gate passed.
+- A failing check is a blocker, not a warning. Never push past one to "fix it
+  after", because the push is the deploy.
+- Add a test alongside logic worth protecting, especially pure decision logic where
+  a wrong answer is silent — matching, normalisation, money splits, scoring. The
+  suite is thin (5 files) relative to ~70 Convex modules, so every addition counts.
+- For behaviour that depends on live data, a type-check and build prove nothing.
+  Verify against the deployment as well: Convex *queries* can be run read-only with
+  `npx convex run <module>:<fn> '<args>'` (add `--prod` for production) and
+  `npx convex data <table>` inspects rows. Never run a mutation against prod to
+  "test" it.
+
 ### Rule 5 — Six user categories + two admin tiers, never conflated
 The app has exactly **six end-user role categories** plus **two distinct
 administrative tiers**. They must never be conflated with each other in code, schema,
@@ -210,17 +248,28 @@ wallet/payments/admin code)
 15. Partially-implemented (BLOCKED) features must be fully on or fully off, never half-wired.
 
 ### 6. Testing / verification available locally
-- `npm run test` / `test:unit` — `tsx --test "tests/**/*.test.ts"` (4 unit test files;
-  thin relative to ~70 Convex modules).
+- `npm run verify` — the full pre-deploy gate: typecheck, build, unit tests. This is
+  what Rule 4c requires before any push that deploys.
+- `npm run typecheck` — `tsc --noEmit` against **both** `tsconfig.json` (the Next app)
+  and `convex/tsconfig.json` (the Convex functions). The app config excludes nothing,
+  but it is the Convex pass that validates function signatures against the generated
+  `convex/_generated/api.d.ts`.
+- `npm run test` / `test:unit` — `tsx --test "tests/**/*.test.ts"` (5 unit test files,
+  33 tests; still thin relative to ~70 Convex modules).
 - `npm run test:e2e` / `test:e2e:ui` / `test:e2e:debug` — Playwright (5 specs, mostly
-  QR-community flows).
+  QR-community flows). Needs a running app, so it is not in `npm run verify`.
 - `npm run lint` — `next lint`.
-- No dedicated `type-check` script currently exists in `package.json`.
-- **CI does not run any of the above before deploying** — see §1. This is why Rule 4's
-  manual verification step is mandatory, not optional, for every feature.
+- `npx convex run <module>:<fn> '<args>'` runs a deployed Convex function (`--prod`
+  targets production); `npx convex data <table>` lists rows. Both are the practical way
+  to verify data-dependent behaviour that a type-check cannot reach. Queries are
+  read-only and safe; mutations are not — never run one against prod to test it.
+- **CI does not run any of the above before deploying** — see §1. This is why Rules 4
+  and 4c make the local gate mandatory, not optional, for every feature.
 
 ---
 
-*Last written: 2026-09-12. Added Rule 7 (always design mobile-first) — does not weaken
-or replace any prior rule. Update Part 2 whenever it's found stale; update Part 1 only
-with explicit owner sign-off per Rule 6.*
+*Last written: 2026-09-14. Added Rule 4c (run the full local gate before any push that
+deploys) at the owner's request, and refreshed Part 2 §6 with the `typecheck`/`verify`
+scripts and current test counts. Does not weaken or replace any prior rule. Update
+Part 2 whenever it's found stale; update Part 1 only with explicit owner sign-off per
+Rule 6.*

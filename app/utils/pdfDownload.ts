@@ -75,6 +75,20 @@ export async function savePdfFromJsPDF(doc: any, filename: string): Promise<PdfS
     }
   }
 
+  // The plugin has to be registered natively, not just present in JavaScript.
+  // Every APK built before the plugin manifest was regenerated ships without
+  // Filesystem, and the bridge call simply rejects. Checking first means an out
+  // of date app says so, rather than reporting a save that never happened.
+  if (!Capacitor.isPluginAvailable("Filesystem")) {
+    return {
+      ok: false,
+      filename: safeFilename,
+      error:
+        "This version of the app cannot save files. Please update the app from the Play Store, " +
+        "or open the site in your phone's browser to download.",
+    };
+  }
+
   try {
     const pdfBlob: Blob = doc.output("blob");
     const base64 = await blobToBase64(pdfBlob);
@@ -106,17 +120,14 @@ export async function savePdfFromJsPDF(doc: any, filename: string): Promise<PdfS
 
     return { ok: true, method: "saved", filename: safeFilename, uri: saved.uri };
   } catch (error: any) {
-    // Last resort. It rarely works inside the Android WebView, but on any other
-    // native surface it might, and it is better than doing nothing silently.
-    try {
-      doc.save(safeFilename);
-      return { ok: true, method: "browser", filename: safeFilename };
-    } catch {
-      return {
-        ok: false,
-        filename: safeFilename,
-        error: error?.message || "Could not save the PDF on this device",
-      };
-    }
+    // Deliberately not falling back to doc.save() here. The Android WebView
+    // registers no DownloadListener, so a blob download does nothing and throws
+    // nothing — reporting success off the back of it is how a failed save came
+    // to look like a save that worked.
+    return {
+      ok: false,
+      filename: safeFilename,
+      error: error?.message || "Could not save the PDF on this device",
+    };
   }
 }

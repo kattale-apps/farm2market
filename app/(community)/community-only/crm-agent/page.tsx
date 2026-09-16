@@ -24,27 +24,16 @@ export default function CrmAgentPage() {
   const communityId =
     communityIdFromUrl ||
     (((currentUser as any)?.assignedCommunityIds?.[0] as Id<"communities"> | undefined) ?? null);
-  const allCommunities = useQuery(
-    api.communities.getActiveCommunities,
-    userId ? { userId } : "skip"
-  );
-
-  const crmEnabledForCommunity =
-    ((allCommunities || []).find((c: any) => {
-      const currentCommunityId = c?._id ?? c?.id;
-      return String(currentCommunityId ?? "") === String(communityId || "");
-    }) as any)?.crmEnabled === true;
-
   const queue = useQuery(
     (api as any).crmCalls.getCrmAgentQueue,
-    userId && communityId && crmEnabledForCommunity
+    userId && communityId
       ? { agentId: userId, communityId, includeUnassigned: true }
       : "skip"
   );
 
   const todaySummary = useQuery(
     (api as any).crmCalls.getCrmAgentTodaySummary,
-    userId && communityId && crmEnabledForCommunity ? { agentId: userId, communityId } : "skip"
+    userId && communityId ? { agentId: userId, communityId } : "skip"
   );
 
   const claimCrmLead = useMutation((api as any).crmCalls.claimCrmLead);
@@ -232,20 +221,6 @@ export default function CrmAgentPage() {
         <h2 style={{ marginTop: 0 }}>CRM Agent</h2>
         <p>Community not selected or session missing.</p>
         <Link href="/">Back to dashboard</Link>
-      </div>
-    );
-  }
-
-  const communitiesLoaded = allCommunities !== undefined;
-
-  if (communitiesLoaded && crmEnabledForCommunity !== true) {
-    return (
-      <div style={{ padding: "1.25rem", fontFamily: FONT }}>
-        <h2 style={{ marginTop: 0 }}>CRM Agent</h2>
-        <p>Community CRM is currently disabled for this community.</p>
-        <Link href={currentUser?.adminCategory === "community_crm" ? "/" : `/admin/community-dashboard`} style={{ color: BRAND, textDecoration: "none" }}>
-          &larr; Back
-        </Link>
       </div>
     );
   }

@@ -1,3 +1,4 @@
+import { ConvexError } from "convex/values";
 import { Id } from "./_generated/dataModel";
 
 export async function requireCrmSupervisorAccess(
@@ -7,7 +8,7 @@ export async function requireCrmSupervisorAccess(
 ) {
   const admin = await ctx.db.get(adminId);
   if (!admin || admin.role !== "admin") {
-    throw new Error("Unauthorized");
+    throw new ConvexError("Unauthorized");
   }
 
   const isSuperAdmin =
@@ -18,16 +19,12 @@ export async function requireCrmSupervisorAccess(
   }
 
   if (admin.adminCategory !== "community") {
-    throw new Error("Forbidden");
+    throw new ConvexError("Forbidden");
   }
 
   const community = await ctx.db.get(communityId);
   if (!community) {
-    throw new Error("Community not found");
-  }
-
-  if ((community as any).crmEnabled !== true) {
-    throw new Error("Community CRM is not enabled for this community");
+    throw new ConvexError("Community not found");
   }
 
   const assignedIds = Array.isArray(admin.assignedCommunityIds)
@@ -37,7 +34,7 @@ export async function requireCrmSupervisorAccess(
   const isAssigned = assignedIds.some((id: any) => String(id) === String(communityId));
 
   if (!isDirectAdmin && !isAssigned) {
-    throw new Error("Forbidden");
+    throw new ConvexError("Forbidden");
   }
 
   return { admin, accessRole: "supervisor" as const };
@@ -50,11 +47,7 @@ export async function requireCrmSupervisorOrAgentAccess(
 ) {
   const community = await ctx.db.get(communityId);
   if (!community) {
-    throw new Error("Community not found");
-  }
-
-  if ((community as any).crmEnabled !== true) {
-    throw new Error("Community CRM is not enabled for this community");
+    throw new ConvexError("Community not found");
   }
 
   try {
@@ -66,11 +59,11 @@ export async function requireCrmSupervisorOrAgentAccess(
 
   const user = await ctx.db.get(userId);
   if (!user || user.role !== "admin") {
-    throw new Error("Unauthorized");
+    throw new ConvexError("Unauthorized");
   }
 
   if (user.adminLevel !== "junior" || user.adminCategory !== "community_crm") {
-    throw new Error("Forbidden");
+    throw new ConvexError("Forbidden");
   }
 
   const assignedIds = Array.isArray(user.assignedCommunityIds)
@@ -79,7 +72,7 @@ export async function requireCrmSupervisorOrAgentAccess(
   const isAssignedToCommunity = assignedIds.some((id: any) => String(id) === String(communityId));
 
   if (!isAssignedToCommunity) {
-    throw new Error("Forbidden");
+    throw new ConvexError("Forbidden");
   }
 
   const crmAgent = await ctx.db
@@ -90,7 +83,7 @@ export async function requireCrmSupervisorOrAgentAccess(
     .first();
 
   if (!crmAgent || crmAgent.isActive !== true) {
-    throw new Error("Forbidden");
+    throw new ConvexError("Forbidden");
   }
 
   return { user, accessRole: "agent" as const };

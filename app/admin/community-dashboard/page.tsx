@@ -1762,7 +1762,7 @@ function FormDetailView({ formId, formName, isActive, onToggleActive, onDelete }
 /* ── Insights tab (per community) ── */
 const CHART_COLORS = ["#2e7d32","#1565c0","#ef6c00","#8e24aa","#c62828","#00838f","#6d4c41","#546e7a","#d4e157","#ff8a65"];
 
-function InsightsTab({ communityId, userId, crmEnabled }: { communityId: Id<"communities">; userId: Id<"users">; crmEnabled?: boolean }) {
+function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; userId: Id<"users"> }) {
   const forms = useQuery((api as any).forms.getCommunityForms, { communityId });
   const [selectedFormId, setSelectedFormId] = useState<string>("");
   const formResponses = useQuery(
@@ -2516,12 +2516,8 @@ function InsightsTab({ communityId, userId, crmEnabled }: { communityId: Id<"com
       <hr style={{ border: "none", borderTop: "2px solid #e0e0e0", margin: "1.5rem 0" }} />
 
       {/* ═══════════ SECTION 2: Call Centre Insights ═══════════ */}
-      {crmEnabled && (
-        <>
-          <CrmInsightsSection communityId={communityId} userId={userId} isMobile={isMobile} />
-          <hr style={{ border: "none", borderTop: "2px solid #e0e0e0", margin: "1.5rem 0" }} />
-        </>
-      )}
+      <CrmInsightsSection communityId={communityId} userId={userId} isMobile={isMobile} />
+      <hr style={{ border: "none", borderTop: "2px solid #e0e0e0", margin: "1.5rem 0" }} />
 
       {/* ═══════════ SECTION 3: Form Response Insights ═══════════ */}
       <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: "#1a237e", marginBottom: "0.75rem" }}>📋 Form Response Insights</h3>
@@ -2771,7 +2767,6 @@ export default function CommunityDashboardPage() {
   const activateImportedCommunityMember = useMutation(api.communityImports.activateImportedCommunityMember);
   const toggleCommunityMemberCountVisibility = useMutation(api.communities.toggleCommunityMemberCountVisibility);
   const toggleCommunityFertilizerPlannerVisibility = useMutation(api.communities.toggleCommunityFertilizerPlannerVisibility);
-  const toggleCommunityCrmEnabled = useMutation((api.communities as any).toggleCommunityCrmEnabled);
   const [togglingMemberCountByCommunity, setTogglingMemberCountByCommunity] = useState<Record<string, boolean>>({});
 
   const [pendingPage, setPendingPage] = useState(1);
@@ -3085,40 +3080,6 @@ export default function CommunityDashboardPage() {
       setMessage({
         type: "error",
         text: error?.message || "Failed to update fertilizer planner visibility",
-      });
-    } finally {
-      setTogglingMemberCountByCommunity((prev) => ({
-        ...prev,
-        [String(communityId)]: false,
-      }));
-    }
-  };
-
-  const handleToggleCommunityCrmEnabled = async (communityId: Id<"communities">, nextValue: boolean) => {
-    if (!userId) return;
-
-    setTogglingMemberCountByCommunity((prev) => ({
-      ...prev,
-      [String(communityId)]: true,
-    }));
-    setMessage(null);
-
-    try {
-      await toggleCommunityCrmEnabled({
-        adminId: userId,
-        communityId,
-        crmEnabled: nextValue,
-      });
-      setMessage({
-        type: "success",
-        text: nextValue
-          ? "Community CRM is now enabled for this community"
-          : "Community CRM is now disabled for this community",
-      });
-    } catch (error: any) {
-      setMessage({
-        type: "error",
-        text: error?.message || "Failed to update Community CRM setting",
       });
     } finally {
       setTogglingMemberCountByCommunity((prev) => ({
@@ -3580,29 +3541,29 @@ export default function CommunityDashboardPage() {
                         Show fertilizer planner to users
                       </label>
                     )}
-                    <label
+                    <span
                       style={{
                         display: "inline-flex",
                         alignItems: "center",
-                        gap: "0.5rem",
+                        gap: "0.4rem",
                         fontSize: "0.85rem",
-                        color: "#374151",
-                        fontWeight: 600,
+                        color: "#166534",
+                        fontWeight: 700,
                       }}
                     >
-                      <input
-                        type="checkbox"
-                        checked={community.crmEnabled === true}
-                        disabled={!!togglingMemberCountByCommunity[String(communityId)]}
-                        onChange={(e) => {
-                          handleToggleCommunityCrmEnabled(communityId as Id<"communities">, e.target.checked);
+                      <span
+                        style={{
+                          width: "8px",
+                          height: "8px",
+                          borderRadius: "50%",
+                          background: "#16a34a",
+                          display: "inline-block",
                         }}
-                        style={{ width: "16px", height: "16px", cursor: "pointer" }}
                       />
-                      Enable Community CRM
-                    </label>
+                      Community CRM: Live
+                    </span>
                     <span style={{ fontSize: "0.78rem", color: "#6b7280" }}>
-                      Pilot control: enable only for selected communities during rollout.
+                      Available to every community. Assign CRM agents from the Community CRM dashboard.
                     </span>
                     {togglingMemberCountByCommunity[String(communityId)] && (
                       <span style={{ fontSize: "0.8rem", color: "#666" }}>Saving...</span>
@@ -3628,16 +3589,14 @@ export default function CommunityDashboardPage() {
                         padding: "0.4rem 0.75rem",
                         borderRadius: "8px",
                         border: "1px solid #d1d5db",
-                        background: community.crmEnabled === true ? "#ffffff" : "#f3f4f6",
-                        color: community.crmEnabled === true ? "#1f2937" : "#9ca3af",
+                        background: "#ffffff",
+                        color: "#1f2937",
                         textDecoration: "none",
                         fontWeight: 600,
                         fontSize: "0.85rem",
-                        pointerEvents: community.crmEnabled === true ? "auto" : "none",
-                        opacity: community.crmEnabled === true ? 1 : 0.85,
                       }}
                     >
-                      {community.crmEnabled === true ? "Community CRM" : "Community CRM (disabled)"}
+                      Community CRM
                     </Link>
                   </div>
                 </div>
@@ -3703,7 +3662,7 @@ export default function CommunityDashboardPage() {
 
               {/* ── Insights Tab ── */}
               {getActiveTab(communityId) === "insights" && (
-                <InsightsTab communityId={communityId} userId={userId!} crmEnabled={community.crmEnabled === true} />
+                <InsightsTab communityId={communityId} userId={userId!} />
               )}
 
               {/* ── Fertilizer Tab ── */}

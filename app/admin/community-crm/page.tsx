@@ -100,85 +100,79 @@ export default function CommunityCrmPage() {
   const CROP_OPTIONS = ["Coffee", "Maize", "Beans", "Groundnuts", "Rice", "Tomatoes", "Pineapple", "Bananas", "Other"];
   const MONTH_OPTIONS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-  const crmEnabledForSelected =
-    ((communities || []).find((c: any) => {
-      const currentCommunityId = c?._id ?? c?.id;
-      return String(currentCommunityId ?? "") === String(selectedCommunityId || "");
-    }) as any)?.crmEnabled === true;
-
   const crmForms = useQuery(
     (api as any).crmForms.getCommunityCrmForms,
-    userId && selectedCommunityId && crmEnabledForSelected
+    userId && selectedCommunityId
       ? { requesterId: userId, communityId: selectedCommunityId }
       : "skip"
   );
 
   const todayPerformance = useQuery(
     (api as any).crmAnalytics.getCallCenterPerformanceToday,
-    userId && selectedCommunityId && crmEnabledForSelected
+    userId && selectedCommunityId
       ? { requesterId: userId, communityId: selectedCommunityId }
       : "skip"
   );
 
   const agentPerformance = useQuery(
     (api as any).crmAnalytics.getAgentPerformanceToday,
-    userId && selectedCommunityId && crmEnabledForSelected
+    userId && selectedCommunityId
       ? { requesterId: userId, communityId: selectedCommunityId }
       : "skip"
   );
 
   const crmHomeSummary = useQuery(
     (api as any).crmAnalytics.getCrmHomeSummary,
-    userId && selectedCommunityId && crmEnabledForSelected
+    userId && selectedCommunityId
       ? { requesterId: userId, communityId: selectedCommunityId }
       : "skip"
   );
 
   const crmAgents = useQuery(
     (api as any).crmAgents.listCrmAgents,
-    userId && selectedCommunityId && crmEnabledForSelected
+    userId && selectedCommunityId
       ? { requesterId: userId, communityId: selectedCommunityId }
       : "skip"
   );
 
   const todaysSubmittedForms = useQuery(
     (api as any).crmAnalytics.getTodaysSubmittedForms,
-    userId && selectedCommunityId && crmEnabledForSelected
+    userId && selectedCommunityId
       ? { requesterId: userId, communityId: selectedCommunityId }
       : "skip"
   );
 
   const followUpsDueDetails = useQuery(
     (api as any).crmAnalytics.getFollowUpsDueDetails,
-    userId && selectedCommunityId && crmEnabledForSelected
+    userId && selectedCommunityId
       ? { requesterId: userId, communityId: selectedCommunityId }
       : "skip"
   );
 
   const opportunityExportRows = useQuery(
     (api as any).crmAnalytics.getOpportunityExportRows,
-    userId && selectedCommunityId && crmEnabledForSelected
+    userId && selectedCommunityId
       ? { requesterId: userId, communityId: selectedCommunityId }
       : "skip"
   );
 
   const selectedCrmFormDetails = useQuery(
     (api as any).crmForms.getCrmFormDetails,
-    userId && selectedCrmFormId && crmEnabledForSelected
+    userId && selectedCrmFormId
       ? { requesterId: userId, crmFormId: selectedCrmFormId }
       : "skip"
   );
 
   const intakeCrmFormDetails = useQuery(
     (api as any).crmForms.getCrmFormDetails,
-    userId && intakeCrmFormId && crmEnabledForSelected
+    userId && intakeCrmFormId
       ? { requesterId: userId, crmFormId: intakeCrmFormId }
       : "skip"
   );
 
   const communityMembers = useQuery(
     (api as any).crmForms.getCommunityMembersForCrmIntake,
-    userId && selectedCommunityId && crmEnabledForSelected
+    userId && selectedCommunityId
       ? { requesterId: userId, communityId: selectedCommunityId }
       : "skip"
   );
@@ -295,7 +289,9 @@ export default function CommunityCrmPage() {
       setAgentEmail("");
       setAgentDisplayName("");
     } catch (error: any) {
-      setMessage(error?.message || "Failed to assign CRM agent");
+      // Convex redacts plain Error messages in production; the reason only
+      // survives on a ConvexError's `data`.
+      setMessage(error?.data ?? error?.message ?? "Failed to assign CRM agent");
     }
 
     setAssigningAgent(false);
@@ -780,7 +776,7 @@ export default function CommunityCrmPage() {
           </div>
         </div>
 
-        {selectedCommunityId && userId && crmEnabledForSelected && (
+        {selectedCommunityId && userId && (
           <CrmSubmissionsPanel
             communityId={selectedCommunityId}
             requesterId={userId}
@@ -788,44 +784,38 @@ export default function CommunityCrmPage() {
           />
         )}
 
-        {!crmEnabledForSelected && selectedCommunityId && (
-          <div style={{ marginTop: "0.9rem", border: "1px solid #fde68a", background: "#fffbeb", color: "#92400e", borderRadius: 10, padding: "0.8rem" }}>
-            Community CRM is disabled for this community. Enable it in Community Dashboard settings first.
-          </div>
-        )}
-
         <div style={{ marginTop: "0.75rem", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
           <button
             onClick={handleExportTodayCsv}
-            disabled={!todayPerformance || !selectedCommunity || !crmEnabledForSelected}
+            disabled={!todayPerformance || !selectedCommunity}
             style={{ minHeight: 40, padding: "0.45rem 0.85rem", borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", color: "#111827", fontWeight: 600, cursor: !todayPerformance || !selectedCommunity ? "not-allowed" : "pointer" }}
           >
             Export Today CSV
           </button>
           <button
             onClick={handleExportAgentsCsv}
-            disabled={!agentPerformance || agentPerformance.length === 0 || !selectedCommunity || !crmEnabledForSelected}
+            disabled={!agentPerformance || agentPerformance.length === 0 || !selectedCommunity}
             style={{ minHeight: 40, padding: "0.45rem 0.85rem", borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", color: "#111827", fontWeight: 600, cursor: !agentPerformance || agentPerformance.length === 0 || !selectedCommunity ? "not-allowed" : "pointer" }}
           >
             Export Agent CSV
           </button>
           <button
             onClick={handleExportFormsCsv}
-            disabled={!crmForms || crmForms.length === 0 || !selectedCommunity || !crmEnabledForSelected}
+            disabled={!crmForms || crmForms.length === 0 || !selectedCommunity}
             style={{ minHeight: 40, padding: "0.45rem 0.85rem", borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", color: "#111827", fontWeight: 600, cursor: !crmForms || crmForms.length === 0 || !selectedCommunity ? "not-allowed" : "pointer" }}
           >
             Export Forms CSV
           </button>
           <button
             onClick={handleExportOpportunitiesCsv}
-            disabled={!opportunityExportRows || opportunityExportRows.length === 0 || !selectedCommunity || !crmEnabledForSelected}
+            disabled={!opportunityExportRows || opportunityExportRows.length === 0 || !selectedCommunity}
             style={{ minHeight: 40, padding: "0.45rem 0.85rem", borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", color: "#111827", fontWeight: 600, cursor: !opportunityExportRows || opportunityExportRows.length === 0 || !selectedCommunity ? "not-allowed" : "pointer" }}
           >
             Export Opportunities CSV
           </button>
           <button
             onClick={handleExportSummaryPdf}
-            disabled={!selectedCommunity || !crmEnabledForSelected}
+            disabled={!selectedCommunity}
             style={{ minHeight: 40, padding: "0.45rem 0.85rem", borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", color: "#111827", fontWeight: 600, cursor: !selectedCommunity ? "not-allowed" : "pointer" }}
           >
             Export Summary PDF
@@ -866,7 +856,7 @@ export default function CommunityCrmPage() {
           <div style={{ marginTop: "0.75rem", display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
             <button
               onClick={handleCreateDefaultCrmForm}
-              disabled={busy || !selectedCommunityId || !crmEnabledForSelected}
+              disabled={busy || !selectedCommunityId}
               style={{ minHeight: 44, padding: "0.6rem 0.95rem", borderRadius: 8, border: "none", background: BRAND, color: "#fff", fontWeight: 700, cursor: busy ? "not-allowed" : "pointer" }}
             >
               {busy ? "Creating..." : "Create Default CRM Form"}
@@ -1084,7 +1074,6 @@ export default function CommunityCrmPage() {
                 onClick={handleSubmitIntake}
                 disabled={
                   submittingIntake ||
-                  !crmEnabledForSelected ||
                   (intakeMode === "existing" ? selectedMemberIds.size === 0 : !newClientName.trim() || !newClientPhone.trim())
                 }
                 style={{ minHeight: 44, padding: "0.6rem 0.95rem", borderRadius: 8, border: "none", background: BRAND, color: "#fff", fontWeight: 700, cursor: submittingIntake ? "not-allowed" : "pointer", marginTop: "0.4rem" }}
@@ -1154,7 +1143,7 @@ export default function CommunityCrmPage() {
 
               <button
                 onClick={handleAddField}
-                disabled={addingField || !newFieldLabel.trim() || !crmEnabledForSelected}
+                disabled={addingField || !newFieldLabel.trim()}
                 style={{ minHeight: 40, padding: "0.45rem 0.85rem", borderRadius: 8, border: "none", background: BRAND, color: "#fff", fontWeight: 700, cursor: addingField ? "not-allowed" : "pointer" }}
               >
                 {addingField ? "Adding..." : "Add Field"}
@@ -1175,7 +1164,7 @@ export default function CommunityCrmPage() {
                     </div>
                     <button
                       onClick={() => handleRemoveField(field._id)}
-                      disabled={removingFieldId === String(field._id) || !crmEnabledForSelected}
+                      disabled={removingFieldId === String(field._id)}
                       style={{ minHeight: 34, padding: "0.35rem 0.6rem", borderRadius: 7, border: "1px solid #fecaca", background: "#fff5f5", color: "#b91c1c", fontWeight: 600, cursor: removingFieldId === String(field._id) ? "not-allowed" : "pointer" }}
                     >
                       {removingFieldId === String(field._id) ? "Removing..." : "Remove"}
@@ -1191,12 +1180,15 @@ export default function CommunityCrmPage() {
           <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: "0.9rem" }}>
             <h3 style={{ marginTop: 0 }}>Assign CRM Agent</h3>
             <p style={{ color: "#666", fontSize: "0.88rem", marginTop: 0 }}>
-              Add an existing admin account as a call-center agent for this community.
+              Add an existing Community CRM admin account as a call-center agent for this
+              community. The account must already be created in Role Management with the
+              Community CRM category, assigned to this community, and its email ends in
+              <strong> .crm</strong>.
             </p>
             <input
               value={agentEmail}
               onChange={(e) => setAgentEmail(e.target.value)}
-              placeholder="Agent email"
+              placeholder="Agent email (e.g. agent@lumina.crm)"
               style={{ ...inputStyle, width: "100%", marginBottom: "0.5rem" }}
             />
             <input
@@ -1207,7 +1199,7 @@ export default function CommunityCrmPage() {
             />
             <button
               onClick={handleAssignAgentByEmail}
-              disabled={assigningAgent || !selectedCommunityId || !agentEmail.trim() || !crmEnabledForSelected}
+              disabled={assigningAgent || !selectedCommunityId || !agentEmail.trim()}
               style={{ minHeight: 44, padding: "0.6rem 0.95rem", borderRadius: 8, border: "none", background: BRAND, color: "#fff", fontWeight: 700, cursor: assigningAgent ? "not-allowed" : "pointer" }}
             >
               {assigningAgent ? "Assigning..." : "Assign Agent"}
@@ -1243,14 +1235,14 @@ export default function CommunityCrmPage() {
                 <div style={{ marginTop: "0.35rem", display: "flex", gap: "0.4rem" }}>
                   <button
                     onClick={() => handleToggleFormActive(form)}
-                    disabled={formActionBusyId === String(form._id) || !crmEnabledForSelected}
+                    disabled={formActionBusyId === String(form._id)}
                     style={{ minHeight: 30, padding: "0.3rem 0.6rem", borderRadius: 7, border: "1px solid #d1d5db", background: "#fff", color: "#374151", fontWeight: 600, fontSize: "0.78rem", cursor: formActionBusyId === String(form._id) ? "not-allowed" : "pointer" }}
                   >
                     {formActionBusyId === String(form._id) ? "Working..." : form.isActive ? "Deactivate" : "Activate"}
                   </button>
                   <button
                     onClick={() => handleDeleteForm(form)}
-                    disabled={formActionBusyId === String(form._id) || !crmEnabledForSelected}
+                    disabled={formActionBusyId === String(form._id)}
                     style={{ minHeight: 30, padding: "0.3rem 0.6rem", borderRadius: 7, border: "1px solid #fecaca", background: "#fff5f5", color: "#b91c1c", fontWeight: 600, fontSize: "0.78rem", cursor: formActionBusyId === String(form._id) ? "not-allowed" : "pointer" }}
                   >
                     Delete

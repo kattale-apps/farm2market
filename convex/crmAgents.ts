@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { getUgandaTime } from "./utils";
 import { requireCrmSupervisorAccess } from "./crmAuth";
@@ -15,18 +15,18 @@ export const assignCrmAgent = mutation({
 
     const user = await ctx.db.get(args.agentUserId);
     if (!user || user.role !== "admin") {
-      throw new Error("CRM agents must be admin users");
+      throw new ConvexError("CRM agents must be admin users");
     }
 
     if (user.adminLevel !== "junior" || user.adminCategory !== "community_crm") {
-      throw new Error("CRM agents must be Community CRM admins");
+      throw new ConvexError("CRM agents must be Community CRM admins");
     }
 
     const assignedIds = Array.isArray(user.assignedCommunityIds)
       ? user.assignedCommunityIds
       : [];
     if (!assignedIds.some((id: any) => String(id) === String(args.communityId))) {
-      throw new Error("CRM agent is not assigned to this community");
+      throw new ConvexError("CRM agent is not assigned to this community");
     }
 
     const now = getUgandaTime();
@@ -78,18 +78,24 @@ export const assignCrmAgentByEmail = mutation({
       .first();
 
     if (!user || user.role !== "admin") {
-      throw new Error("No admin user found with this email");
+      throw new ConvexError(
+        `No admin account exists for "${normalizedEmail}". Create a Community CRM admin for this community first (their email must end in .crm).`
+      );
     }
 
     if (user.adminLevel !== "junior" || user.adminCategory !== "community_crm") {
-      throw new Error("Only Community CRM admins can be assigned as CRM agents");
+      throw new ConvexError(
+        `"${normalizedEmail}" is an admin account, but not a Community CRM admin. Set its admin category to Community CRM in Role Management first.`
+      );
     }
 
     const assignedIds = Array.isArray(user.assignedCommunityIds)
       ? user.assignedCommunityIds
       : [];
     if (!assignedIds.some((id: any) => String(id) === String(args.communityId))) {
-      throw new Error("CRM agent email is not assigned to this community");
+      throw new ConvexError(
+        `"${normalizedEmail}" is not assigned to this community. Assign them to it in Role Management first.`
+      );
     }
 
     const now = getUgandaTime();

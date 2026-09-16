@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p convex/tsconfig.json",
+    "android:sync": "npx cap update android",
     "verify": "npm run typecheck && npm run build && npm run test",
     "convex:dev": "convex dev",
     "deploy:dev": "npx convex dev --once",

@@ -57,6 +57,7 @@ cd android
 ./gradlew assembleKyagalanyiRelease
 
 # Build all release APKs
+npm run android:sync   # regenerates capacitor.plugins.json; without it new native plugins are never registered
 ./gradlew assembleRelease
 ```
 

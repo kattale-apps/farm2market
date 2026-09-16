@@ -62,6 +62,13 @@ If you need transparency in specific areas, you can:
 
 4. **App Signing**
    - Your app is already configured for signing
+   - **First run `npm run android:sync`.** It regenerates
+     `android/app/src/main/assets/capacitor.plugins.json`, which is gitignored
+     because Capacitor generates it, and which is what registers the native
+     plugins with the bridge. Skipping it ships an APK where plugins added
+     since the last sync are compiled in but never registered, so every call
+     to them fails at runtime — that is how Filesystem and Share went missing
+     and PDF saving silently did nothing on Android.
    - Build release APK: `.\gradlew.bat assembleRelease`
    - Or use Android App Bundle: `.\gradlew.bat bundleRelease`
 

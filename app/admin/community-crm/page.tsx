@@ -747,6 +747,7 @@ export default function CommunityCrmPage() {
                     {row.formName} | {row.phoneNumber} | {row.district}{row.subCounty ? `, ${row.subCounty}` : ""}
                   </div>
                   <div style={{ fontSize: "0.78rem", color: "#999" }}>{new Date(row.submittedAt).toLocaleString()}</div>
+                  <IntakeAnswers purchase={row.purchase} answers={row.answers} />
                 </div>
               ))}
             </div>
@@ -1268,6 +1269,92 @@ export default function CommunityCrmPage() {
     </div>
   );
 }
+
+function IntakeAnswers({ purchase, answers }: { purchase?: any; answers?: any[] }) {
+  const [open, setOpen] = useState(false);
+
+  const purchaseEntries: Array<[string, string]> = [
+    ["Product", purchase?.productName],
+    ["Quantity", purchase?.purchaseQuantity],
+    ["Purchase date", purchase?.purchaseDate],
+    ["Parish", purchase?.parish],
+    ["Crop grown", purchase?.cropGrown],
+    ["Month of planting", purchase?.monthOfPlanting],
+    ["Past spray dates", (purchase?.pastSprayDates || []).join(", ")],
+    [
+      "Next spray / visit",
+      purchase?.upcomingSprayScheduleAt
+        ? new Date(purchase.upcomingSprayScheduleAt).toLocaleDateString()
+        : "",
+    ],
+  ]
+    .filter(([, value]) => Boolean(value))
+    .map(([label, value]) => [label, String(value)] as [string, string]);
+
+  const formAnswers = answers || [];
+  const total = purchaseEntries.length + formAnswers.length;
+
+  if (total === 0) {
+    return (
+      <div style={{ fontSize: "0.76rem", color: "#999", marginTop: "0.25rem" }}>
+        Nothing was captured at intake.
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginTop: "0.3rem" }}>
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        style={{
+          background: "none",
+          border: "none",
+          padding: 0,
+          color: BRAND,
+          fontWeight: 700,
+          fontSize: "0.78rem",
+          cursor: "pointer",
+        }}
+      >
+        {open ? "Hide" : "Show"} intake answers ({total})
+      </button>
+
+      {open && (
+        <div style={{ marginTop: "0.3rem" }}>
+          {purchaseEntries.map(([label, value]) => (
+            <div key={label} style={rowStyle}>
+              <span style={{ flex: "0 0 45%", color: "#666" }}>{label}</span>
+              <span style={{ flex: 1, fontWeight: 600, color: "#111" }}>{value}</span>
+            </div>
+          ))}
+          {formAnswers.map((answer: any) => (
+            <div key={answer.fieldId} style={rowStyle}>
+              <span style={{ flex: "0 0 45%", color: "#666" }}>{answer.label}</span>
+              <span
+                style={{
+                  flex: 1,
+                  fontWeight: 600,
+                  color: answer.value ? "#111" : "#bbb",
+                }}
+              >
+                {answer.value || "Not answered"}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const rowStyle: CSSProperties = {
+  display: "flex",
+  gap: "0.6rem",
+  padding: "0.2rem 0",
+  borderBottom: "1px solid #f5f5f5",
+  fontSize: "0.78rem",
+};
 
 function MetricCard({ label, value }: { label: string; value: number | undefined }) {
   return (

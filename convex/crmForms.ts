@@ -5,6 +5,7 @@ import { getUgandaTime } from "./utils";
 import {
   requireCrmSupervisorAccess,
   requireCrmSupervisorOrAgentAccess,
+  resolveCrmAgentDisplayName,
 } from "./crmAuth";
 import { getCommunityDefaultRole, ensureMandatoryRoleCommunityMembershipsForUser } from "./communities";
 
@@ -737,10 +738,13 @@ export const getLeadOpeningScript = query({
     const response = await ctx.db.get(lead.sourceCrmResponseId);
     const member = await ctx.db.get(lead.memberId);
     const community = await ctx.db.get(lead.communityId);
-    const requester = await ctx.db.get(args.requesterId);
-
-    const displayName =
-      requester?.alias || requester?.email || requester?.phoneNumber || "Agent";
+    // The agent introduces themselves by the display name their supervisor
+    // captured when assigning them, not by their account alias.
+    const displayName = await resolveCrmAgentDisplayName(
+      ctx,
+      args.requesterId,
+      lead.communityId
+    );
 
     const memberName =
       member?.verifiedName || (response as any)?.clientName || member?.alias || member?.email || member?.phoneNumber || "valued customer";

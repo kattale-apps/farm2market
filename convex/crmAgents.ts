@@ -29,6 +29,7 @@ export const assignCrmAgent = mutation({
       throw new ConvexError("CRM agent is not assigned to this community");
     }
 
+    const trimmedDisplayName = args.displayName?.trim() || undefined;
     const now = getUgandaTime();
     const existing = await ctx.db
       .query("crmAgents")
@@ -40,7 +41,7 @@ export const assignCrmAgent = mutation({
     if (existing) {
       await ctx.db.patch(existing._id, {
         isActive: true,
-        displayName: args.displayName,
+        displayName: trimmedDisplayName ?? existing.displayName,
         updatedAt: now,
       });
       return { agentId: existing._id, reactivated: true };
@@ -50,7 +51,7 @@ export const assignCrmAgent = mutation({
       communityId: args.communityId,
       agentUserId: args.agentUserId,
       createdByCommunityAdminId: args.supervisorId,
-      displayName: args.displayName,
+      displayName: trimmedDisplayName,
       isActive: true,
       createdAt: now,
       updatedAt: now,
@@ -98,6 +99,7 @@ export const assignCrmAgentByEmail = mutation({
       );
     }
 
+    const trimmedDisplayName = args.displayName?.trim() || undefined;
     const now = getUgandaTime();
     const existing = await ctx.db
       .query("crmAgents")
@@ -109,7 +111,7 @@ export const assignCrmAgentByEmail = mutation({
     if (existing) {
       await ctx.db.patch(existing._id, {
         isActive: true,
-        displayName: args.displayName,
+        displayName: trimmedDisplayName ?? existing.displayName,
         updatedAt: now,
       });
 
@@ -120,7 +122,7 @@ export const assignCrmAgentByEmail = mutation({
       communityId: args.communityId,
       agentUserId: user._id,
       createdByCommunityAdminId: args.supervisorId,
-      displayName: args.displayName,
+      displayName: trimmedDisplayName,
       isActive: true,
       createdAt: now,
       updatedAt: now,

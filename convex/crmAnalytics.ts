@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
-import { requireCrmSupervisorAccess } from "./crmAuth";
+import { requireCrmSupervisorAccess, resolveCrmAgentDisplayName } from "./crmAuth";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -122,10 +122,40 @@ export const getTodaysSubmittedForms = query({
       )
       .collect();
 
+    // Field definitions are per form and shared by every response to it, so
+    // each form's fields are fetched once rather than per row.
+    const fieldsByForm = new Map<string, any[]>();
+    const loadFields = async (crmFormId: any) => {
+      const key = String(crmFormId);
+      const cached = fieldsByForm.get(key);
+      if (cached) return cached;
+      const fields = await ctx.db
+        .query("crmFormFields")
+        .withIndex("by_form", (q: any) => q.eq("crmFormId", crmFormId))
+        .collect();
+      const sorted = fields.sort(
+        (a: any, b: any) => Number(a.order || 0) - Number(b.order || 0)
+      );
+      fieldsByForm.set(key, sorted);
+      return sorted;
+    };
+
     const rows = await Promise.all(
       responses.map(async (response: any) => {
         const form = (await ctx.db.get(response.crmFormId)) as any;
         const member = (await ctx.db.get(response.memberId)) as any;
+
+        // Whatever was answered at intake, so the supervisor can review a
+        // submission without opening the archive panel.
+        const fields = await loadFields(response.crmFormId);
+        const values = await ctx.db
+          .query("crmFormResponseValues")
+          .withIndex("by_response", (q: any) => q.eq("crmResponseId", response._id))
+          .collect();
+        const valueByField = new Map(
+          values.map((row: any) => [String(row.crmFieldId), row.value])
+        );
+
         return {
           responseId: String(response._id),
           formName: form?.name || "Unknown form",
@@ -134,6 +164,22 @@ export const getTodaysSubmittedForms = query({
           district: response.district || "-",
           subCounty: response.subCounty || "-",
           submittedAt: response.submittedAt,
+          purchase: {
+            productName: response.productName || null,
+            purchaseQuantity: response.purchaseQuantity || null,
+            purchaseDate: response.purchaseDate || null,
+            parish: response.parish || null,
+            cropGrown: response.cropGrown || null,
+            monthOfPlanting: response.monthOfPlanting || null,
+            pastSprayDates: response.pastSprayDates || [],
+            upcomingSprayScheduleAt: response.upcomingSprayScheduleAt || null,
+          },
+          answers: fields.map((field: any) => ({
+            fieldId: String(field._id),
+            label: field.label,
+            fieldType: field.fieldType,
+            value: valueByField.get(String(field._id)) ?? "",
+          })),
         };
       })
     );
@@ -225,10 +271,13 @@ export const getAgentPerformanceToday = query({
 
     const rows: Array<any> = [];
     for (const [agentId, callCount] of callsByAgent.entries()) {
-      const user = (await ctx.db.get(agentId as any)) as any;
       rows.push({
         agentId,
-        agentName: user?.alias || user?.email || "Unknown",
+        agentName: await resolveCrmAgentDisplayName(
+          ctx,
+          agentId as any,
+          args.communityId
+        ),
         calls: callCount,
         opportunities: Number(opportunitiesByAgent.get(agentId) || 0),
       });
@@ -536,11 +585,14 @@ export const getCrmSubmissions = query({
       );
       const calls = await Promise.all(
         sortedLogs.map(async (log: any) => {
-          const agent = await loadUser(log.agentId);
           return {
             callId: String(log._id),
             createdAt: log.createdAt,
-            agentName: agent?.alias || "Unknown agent",
+            agentName: await resolveCrmAgentDisplayName(
+              ctx,
+              log.agentId,
+              args.communityId
+            ),
             outcome: log.outcome,
             usageStatus: log.usageStatus ?? null,
             resultRating: log.resultRating ?? null,

@@ -1,7 +1,10 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { getUgandaTime } from "./utils";
-import { requireCrmSupervisorOrAgentAccess } from "./crmAuth";
+import {
+  requireCrmSupervisorOrAgentAccess,
+  resolveCrmAgentDisplayName,
+} from "./crmAuth";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -352,6 +355,11 @@ export const getCrmAgentTodaySummary = query({
     const overdue = myOpenLeads.filter((lead: any) => Number(lead.nextCallAt || 0) < now).length;
 
     return {
+      agentDisplayName: await resolveCrmAgentDisplayName(
+        ctx,
+        args.agentId,
+        args.communityId
+      ),
       callsToday: todayLogs.length,
       completedToday: todayLogs.filter((l: any) => l.outcome !== "no_answer").length,
       remainingOpen: myOpenLeads.length,

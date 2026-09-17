@@ -115,3 +115,27 @@ export async function isCrmAgentInCommunity(
 
   return Boolean(row?.isActive);
 }
+
+/**
+ * The name a CRM agent should be shown under, everywhere the community sees
+ * them: the display name their supervisor typed when assigning them, falling
+ * back to the account identifiers only when no display name was captured.
+ */
+export async function resolveCrmAgentDisplayName(
+  ctx: any,
+  agentUserId: Id<"users">,
+  communityId: Id<"communities">
+) {
+  const assignment = await ctx.db
+    .query("crmAgents")
+    .withIndex("by_community_agent", (q: any) =>
+      q.eq("communityId", communityId).eq("agentUserId", agentUserId)
+    )
+    .first();
+
+  const displayName = String(assignment?.displayName || "").trim();
+  if (displayName) return displayName;
+
+  const user = await ctx.db.get(agentUserId);
+  return user?.alias || user?.email || user?.phoneNumber || "Agent";
+}

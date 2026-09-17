@@ -92,10 +92,15 @@ export default function CrmAgentPage() {
     return (queue || []).filter((lead: any) => String(lead.formId) === activeFormId);
   }, [queue, activeFormId]);
 
+  // Prefer the display name the supervisor captured when assigning this agent,
+  // so the agent is greeted and introduces themselves by the same name the
+  // community admin dashboard shows.
   const greetingName = useMemo(() => {
+    const assignedName = String((todaySummary as any)?.agentDisplayName || "").trim();
+    if (assignedName) return assignedName;
     if (!currentUser) return "Agent";
     return currentUser.alias || (currentUser as any)?.email || "Agent";
-  }, [currentUser]);
+  }, [todaySummary, currentUser]);
 
   const completed = todaySummary?.completedToday || 0;
   const callsToday = todaySummary?.callsToday || 0;

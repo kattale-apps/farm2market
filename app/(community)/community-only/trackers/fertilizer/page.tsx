@@ -14,7 +14,6 @@ import { useOfflineQuery } from "@/app/hooks/useOfflineQuery";
 import { useStoredUser } from "@/app/hooks/useStoredUser";
 
 const FONT = '"Montserrat", sans-serif';
-const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
 
 export default function FertilizerPlannerPage() {
   const searchParams = useSearchParams();
@@ -27,7 +26,9 @@ export default function FertilizerPlannerPage() {
     communityId ? { communityId } : "skip"
   ) as any;
   const plannerAccessLoaded = communityInfo !== undefined;
-  const plannerVisible = communityInfo?.showFertilizerPlanner === true;
+  // The planner follows the community's Fertilizer module flag, which only a
+  // super admin can switch on for a community.
+  const plannerVisible = communityInfo?.fertilizerEnabled === true;
 
   useEffect(() => {
     if (plannerAccessLoaded && !plannerVisible && communityId) {
@@ -44,10 +45,10 @@ export default function FertilizerPlannerPage() {
     );
   }
 
-  if (communityId !== BIOFARM_COMMUNITY_ID) {
+  if (plannerAccessLoaded && !plannerVisible) {
     return (
       <div style={{ padding: "2rem", fontFamily: FONT, textAlign: "center" }}>
-        <p>This module is available only in Bio Farm Community.</p>
+        <p>This module is not enabled for this community.</p>
         <Link href={`/community-only/trackers?communityId=${communityId}`} style={{ color: "#2e7d32" }}>
           Back to Trackers
         </Link>
@@ -80,10 +81,6 @@ export default function FertilizerPlannerPage() {
     );
   }
 
-  if (!plannerVisible) {
-    return null;
-  }
-
   return (
     <div style={{ fontFamily: FONT, paddingBottom: "5rem", background: "#f5f7f5", minHeight: "100vh" }}>
       <div style={{
@@ -101,7 +98,9 @@ export default function FertilizerPlannerPage() {
           ←
         </Link>
         <div>
-          <h1 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700 }}>🌱 Bio Farm Fertilizer Planner</h1>
+          <h1 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700 }}>
+            🌱 {communityInfo?.name ? `${communityInfo.name} Fertilizer Planner` : "Fertilizer Planner"}
+          </h1>
           <p style={{ margin: 0, fontSize: "0.74rem", opacity: 0.9 }}>Plan spray days and keep application logs</p>
         </div>
       </div>

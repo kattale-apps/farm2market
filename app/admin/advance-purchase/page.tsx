@@ -29,7 +29,10 @@ export default function AdvancePurchaseAdminPage() {
   const userId = (user?.userId as Id<"users"> | undefined) ?? null;
   const [selectedCommunityId, setSelectedCommunityId] = useState<Id<"communities"> | null>(null);
 
-  const communities = useQuery(api.introspection.getCommunitiesForAdmin, userId ? { adminId: userId } : "skip");
+  const allCommunities = useQuery(api.introspection.getCommunitiesForAdmin, userId ? { adminId: userId } : "skip");
+  // Advanced Markets is an optional module: only communities a super admin has
+  // switched it on for can be configured here.
+  const communities = allCommunities?.filter((c: any) => c?.advancedMarketsEnabled === true);
 
   if (authStatus === "loading") return <div style={{ padding: "2rem", fontFamily: FONT }}>Loading...</div>;
   if (!user || user.role !== "admin") {
@@ -57,6 +60,13 @@ export default function AdvancePurchaseAdminPage() {
           <option key={c._id} value={c._id}>{c.name}</option>
         ))}
       </select>
+
+      {communities && communities.length === 0 && (
+        <p style={{ color: "#333", fontWeight: 600, fontSize: "0.88rem", textShadow: ON_PHOTO_SHADOW }}>
+          No community has the Advanced Markets module enabled yet. A super admin can enable it per
+          community from the Community Dashboard.
+        </p>
+      )}
 
       {selectedCommunityId && (
         <CommunityAdvancePurchasePanel adminId={userId!} communityId={selectedCommunityId} />

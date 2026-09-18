@@ -14,7 +14,6 @@ import { useStoredUser } from "@/app/hooks/useStoredUser";
 
 const BRAND = "#2e7d32";
 const FONT = '"Montserrat", sans-serif';
-const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
 
 const CATEGORY_COLORS: Record<string, string> = {
   revenue: "#2e7d32",
@@ -83,16 +82,17 @@ function MyInsightsPage() {
     (api as any).communities.getCommunityInfo,
     communityId ? { communityId } : "skip"
   ) as any;
-  const showFertilizerPlanner = communityInfo?.showFertilizerPlanner === true;
+  // Fertilizer planner visibility follows the community's Fertilizer module flag.
+  const showFertilizerPlanner = communityInfo?.fertilizerEnabled === true;
 
   const fertilizerPlans = useOfflineQuery(
     (api as any).fertilizerPlanner.getFarmerPlans,
-    userId && communityId === BIOFARM_COMMUNITY_ID && showFertilizerPlanner ? { farmerId: userId, communityId } : "skip"
+    userId && communityId && showFertilizerPlanner ? { farmerId: userId, communityId } : "skip"
   ) as any[] | undefined;
 
   const fertilizerInsights = useOfflineQuery(
     (api as any).fertilizerPlanner.getFertilizerInsightsData,
-    userId && communityId === BIOFARM_COMMUNITY_ID && showFertilizerPlanner ? { farmerId: userId, communityId } : "skip"
+    userId && communityId && showFertilizerPlanner ? { farmerId: userId, communityId } : "skip"
   ) as any;
 
   const safeInsights = Array.isArray(insights) ? insights : [];
@@ -226,7 +226,7 @@ function MyInsightsPage() {
 
       {/* Content */}
       <div style={{ padding: "1rem" }}>
-        {communityId === BIOFARM_COMMUNITY_ID && showFertilizerPlanner && (
+        {showFertilizerPlanner && (
           <div style={{ marginBottom: "1rem", display: "grid", gap: "0.75rem" }}>
             <div style={{ background: "#fff", border: "1px solid #d9ecd9", borderRadius: 12, padding: "0.85rem" }}>
               <h2 style={{ margin: 0, fontSize: "1rem", color: "#1b5e20" }}>🌱 Fertilizer Planner</h2>
@@ -358,7 +358,7 @@ function MyInsightsPage() {
           </div>
         )}
 
-        {communityId !== BIOFARM_COMMUNITY_ID && (
+        {!showFertilizerPlanner && (
           <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
             {safeInsights.map((insight: any) => (
             <div key={insight.formId} style={{

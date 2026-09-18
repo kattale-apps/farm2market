@@ -2766,7 +2766,7 @@ export default function CommunityDashboardPage() {
   const importCommunityMembersFromExcel = useMutation(api.communityImports.importCommunityMembersFromExcel);
   const activateImportedCommunityMember = useMutation(api.communityImports.activateImportedCommunityMember);
   const toggleCommunityMemberCountVisibility = useMutation(api.communities.toggleCommunityMemberCountVisibility);
-  const toggleCommunityFertilizerPlannerVisibility = useMutation(api.communities.toggleCommunityFertilizerPlannerVisibility);
+  const setCommunityModuleEnabled = useMutation(api.communities.setCommunityModuleEnabled);
   const [togglingMemberCountByCommunity, setTogglingMemberCountByCommunity] = useState<Record<string, boolean>>({});
 
   const [pendingPage, setPendingPage] = useState(1);
@@ -3055,7 +3055,11 @@ export default function CommunityDashboardPage() {
     }
   };
 
-  const handleToggleFertilizerPlannerVisibility = async (communityId: Id<"communities">, nextValue: boolean) => {
+  const handleToggleCommunityModule = async (
+    communityId: Id<"communities">,
+    moduleKey: "advancedMarkets" | "fertilizer",
+    nextValue: boolean
+  ) => {
     if (!userId) return;
 
     setTogglingMemberCountByCommunity((prev) => ({
@@ -3064,22 +3068,25 @@ export default function CommunityDashboardPage() {
     }));
     setMessage(null);
 
+    const moduleLabel = moduleKey === "advancedMarkets" ? "Advanced Markets" : "Fertilizer";
+
     try {
-      await toggleCommunityFertilizerPlannerVisibility({
+      await setCommunityModuleEnabled({
         adminId: userId,
         communityId,
-        showFertilizerPlanner: nextValue,
+        module: moduleKey,
+        enabled: nextValue,
       });
       setMessage({
         type: "success",
         text: nextValue
-          ? "Fertilizer planner is now visible to users in this community"
-          : "Fertilizer planner is now hidden from users in this community",
+          ? `${moduleLabel} is now available in this community's dashboard`
+          : `${moduleLabel} is now hidden from this community's dashboard`,
       });
     } catch (error: any) {
       setMessage({
         type: "error",
-        text: error?.message || "Failed to update fertilizer planner visibility",
+        text: error?.message || `Failed to update ${moduleLabel} availability`,
       });
     } finally {
       setTogglingMemberCountByCommunity((prev) => ({
@@ -3162,6 +3169,13 @@ export default function CommunityDashboardPage() {
       </div>
     );
   }
+
+  // Mirrors isSuperAdmin() in convex/communities.ts: legacy admins with no
+  // adminLevel are super admins only when they carry no admin category.
+  const isSuperAdminUser =
+    resolvedRole === "admin" &&
+    ((currentUser as any)?.adminLevel === "super" ||
+      ((currentUser as any)?.adminLevel === undefined && !resolvedAdminCategory));
 
   // Only super admins and community admins can access this page
   const isAllowedCommunityDashboardAdmin =
@@ -3328,6 +3342,25 @@ export default function CommunityDashboardPage() {
         ) : (
           userCommunities.map((community: any) => {
             const communityId = community?._id ?? community?.id;
+            // Advanced Markets and Fertilizer are optional modules: a super admin
+            // opens them per community, and they stay hidden everywhere else.
+            const advancedMarketsEnabled = community?.advancedMarketsEnabled === true;
+            const fertilizerEnabled = community?.fertilizerEnabled === true;
+            const canConfigureFertilizer =
+              isSuperAdminUser || resolvedAdminCategory === "community";
+            const visibleTabs: CommunityTab[] = [
+              "members",
+              "noticeboard",
+              "messages",
+              "forms",
+              "insights",
+              ...(fertilizerEnabled && canConfigureFertilizer ? (["fertilizer"] as CommunityTab[]) : []),
+              ...(advancedMarketsEnabled ? (["advancePurchase"] as CommunityTab[]) : []),
+            ];
+            // A tab that was open before the module was switched off falls back
+            // to Members rather than rendering a hidden module.
+            const storedTab = getActiveTab(communityId);
+            const activeTab: CommunityTab = visibleTabs.includes(storedTab) ? storedTab : "members";
             return (
               <div
                 key={communityId}
@@ -3518,28 +3551,59 @@ export default function CommunityDashboardPage() {
                       />
                       Show member count to users
                     </label>
-                    {communityId === BIOFARM_COMMUNITY_ID && (
-                      <label
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "0.5rem",
-                          fontSize: "0.85rem",
-                          color: "#374151",
-                          fontWeight: 600,
-                        }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={community.showFertilizerPlanner === true}
-                          disabled={!!togglingMemberCountByCommunity[String(communityId)]}
-                          onChange={(e) => {
-                            handleToggleFertilizerPlannerVisibility(communityId as Id<"communities">, e.target.checked);
+                    {isSuperAdminUser && (
+                      <>
+                        <label
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.5rem",
+                            fontSize: "0.85rem",
+                            color: "#374151",
+                            fontWeight: 600,
                           }}
-                          style={{ width: "16px", height: "16px", cursor: "pointer" }}
-                        />
-                        Show fertilizer planner to users
-                      </label>
+                        >
+                          <input
+                            type="checkbox"
+                            checked={advancedMarketsEnabled}
+                            disabled={!!togglingMemberCountByCommunity[String(communityId)]}
+                            onChange={(e) => {
+                              handleToggleCommunityModule(
+                                communityId as Id<"communities">,
+                                "advancedMarkets",
+                                e.target.checked
+                              );
+                            }}
+                            style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                          />
+                          Enable Advanced Markets module
+                        </label>
+                        <label
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.5rem",
+                            fontSize: "0.85rem",
+                            color: "#374151",
+                            fontWeight: 600,
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={fertilizerEnabled}
+                            disabled={!!togglingMemberCountByCommunity[String(communityId)]}
+                            onChange={(e) => {
+                              handleToggleCommunityModule(
+                                communityId as Id<"communities">,
+                                "fertilizer",
+                                e.target.checked
+                              );
+                            }}
+                            style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                          />
+                          Enable Fertilizer module (admin config + farmer planner)
+                        </label>
+                      </>
                     )}
                     <span
                       style={{
@@ -3610,14 +3674,8 @@ export default function CommunityDashboardPage() {
                 background: "#fafafa",
                 paddingBottom: isMobile ? "0.15rem" : 0,
               }}>
-                {((
-                  (currentUser as any)?.adminLevel === "super" ||
-                  (currentUser as any)?.adminLevel === undefined ||
-                  resolvedAdminCategory === "community"
-                    ? ["members", "noticeboard", "messages", "forms", "insights", "fertilizer", "advancePurchase"]
-                    : ["members", "noticeboard", "messages", "forms", "insights", "advancePurchase"]
-                ) as CommunityTab[]).map((tab) => {
-                  const active = getActiveTab(communityId) === tab;
+                {(visibleTabs).map((tab) => {
+                  const active = activeTab === tab;
                   const labels: Record<CommunityTab, string> = { members: "Members", noticeboard: "Noticeboard", messages: "Messages", forms: "Forms", insights: "📊 Insights", fertilizer: "🌱 Fertilizer", advancePurchase: "🌱 Advanced Markets" };
                   return (
                     <button
@@ -3646,39 +3704,39 @@ export default function CommunityDashboardPage() {
               </div>
 
               {/* ── Noticeboard Tab ── */}
-              {getActiveTab(communityId) === "noticeboard" && (
+              {activeTab === "noticeboard" && (
                 <NoticeboardTab communityId={communityId} userId={userId!} />
               )}
 
               {/* ── Messages Tab ── */}
-              {getActiveTab(communityId) === "messages" && (
+              {activeTab === "messages" && (
                 <MessagesTab communityId={communityId} userId={userId!} />
               )}
 
               {/* ── Forms & Templates Tab ── */}
-              {getActiveTab(communityId) === "forms" && (
+              {activeTab === "forms" && (
                 <FormsTab communityId={communityId} userId={userId!} />
               )}
 
               {/* ── Insights Tab ── */}
-              {getActiveTab(communityId) === "insights" && (
+              {activeTab === "insights" && (
                 <InsightsTab communityId={communityId} userId={userId!} />
               )}
 
               {/* ── Fertilizer Tab ── */}
-              {getActiveTab(communityId) === "fertilizer" && (
+              {activeTab === "fertilizer" && (
                 <AdminFertilizerConfig communityId={communityId} userId={userId!} />
               )}
 
               {/* ── Advanced Markets Tab ── */}
-              {getActiveTab(communityId) === "advancePurchase" && (
+              {activeTab === "advancePurchase" && (
                 <div style={{ padding: "1.5rem" }}>
                   <CommunityAdvancePurchasePanel adminId={userId!} communityId={communityId} />
                 </div>
               )}
 
               {/* ── Members Tab (existing content) ── */}
-              {getActiveTab(communityId) === "members" && (<>
+              {activeTab === "members" && (<>
 
               {/* Import Members From Excel */}
               <div style={{ padding: "1.5rem", borderBottom: "1px solid #eee", background: "#fafafa" }}>

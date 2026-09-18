@@ -397,6 +397,7 @@ export const enableCommunityFertilizer = mutation({
     // Update community
     await ctx.db.patch(communityId, {
       showFertilizerPlanner: enabled,
+      fertilizerEnabled: enabled,
     });
 
     return { success: true };

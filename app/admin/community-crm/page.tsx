@@ -227,6 +227,11 @@ export default function CommunityCrmPage() {
     [communities, selectedCommunityId]
   );
 
+  const crmHeading = useMemo(() => {
+    const communityName = String(selectedCommunity?.name ?? "").trim();
+    return communityName ? `${communityName} Success CRM` : "Success CRM";
+  }, [selectedCommunity]);
+
   const handleCreateDefaultCrmForm = async () => {
     if (!userId || !selectedCommunityId) return;
     setBusy(true);
@@ -709,7 +714,7 @@ export default function CommunityCrmPage() {
             <Link href="/admin/community-dashboard" style={{ color: BRAND, textDecoration: "none", fontSize: "0.9rem" }}>
               &larr; Back to Community Dashboard
             </Link>
-            <h1 style={{ margin: "0.4rem 0 0 0", fontSize: "clamp(1.25rem, 4vw, 1.8rem)" }}>Bio Farm Farmer Success CRM</h1>
+            <h1 style={{ margin: "0.4rem 0 0 0", fontSize: "clamp(1.25rem, 4vw, 1.8rem)" }}>{crmHeading}</h1>
             <p style={{ margin: "0.2rem 0 0 0", color: "#666" }}>Supervisor workspace</p>
           </div>
           {communities && communities.length > 0 && (

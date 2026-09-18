@@ -14,7 +14,6 @@ import { useStoredUser } from "@/app/hooks/useStoredUser";
 
 const BRAND = "#2e7d32";
 const FONT = '"Montserrat", sans-serif';
-const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
 
 const CATEGORY_LABELS: Record<string, string> = {
   revenue: "Revenue",
@@ -103,8 +102,8 @@ export default function TrackersHubPage() {
 
   const forms = Array.isArray(formsRaw) ? formsRaw : formsRaw === undefined ? undefined : null;
   const activeForms = (Array.isArray(forms) ? forms : []).filter((f: any) => f.isActive);
-  const isBioFarm = communityId === BIOFARM_COMMUNITY_ID;
-  const showFertilizerPlanner = communityInfo?.showFertilizerPlanner === true;
+  // Fertilizer planner visibility follows the community's Fertilizer module flag.
+  const showFertilizerPlanner = communityInfo?.fertilizerEnabled === true;
 
   if (!communityId) {
     return (
@@ -165,7 +164,7 @@ export default function TrackersHubPage() {
         )}
 
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-          {isBioFarm && showFertilizerPlanner && (
+          {showFertilizerPlanner && (
             <Link
               href={`/community-only/trackers/fertilizer?communityId=${communityId}`}
               style={{ textDecoration: "none", color: "inherit" }}

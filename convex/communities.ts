@@ -1051,15 +1051,19 @@ export const toggleCommunityCrmEnabled = mutation({
 });
 
 /**
- * Turn an optional community module ("Advanced Markets" or "Fertilizer") on or
- * off for a single community. Only super admins may change these flags, so a
+ * Turn an optional community module ("Advanced Markets", "Fertilizer" or
+ * "Cost Templates") on or off for a single community. Only super admins may change these flags, so a
  * junior community admin cannot open a module for their own community.
  */
 export const setCommunityModuleEnabled = mutation({
   args: {
     adminId: v.id("users"),
     communityId: v.id("communities"),
-    module: v.union(v.literal("advancedMarkets"), v.literal("fertilizer")),
+    module: v.union(
+      v.literal("advancedMarkets"),
+      v.literal("fertilizer"),
+      v.literal("costTemplates")
+    ),
     enabled: v.boolean(),
   },
   handler: async (ctx, args) => {
@@ -1077,14 +1081,16 @@ export const setCommunityModuleEnabled = mutation({
       throw new Error("Community not found");
     }
 
-    await ctx.db.patch(
-      args.communityId,
+    const patch =
       args.module === "advancedMarkets"
         ? { advancedMarketsEnabled: args.enabled }
-        // The Fertilizer module covers the farmer-facing planner too, so the
-        // legacy showFertilizerPlanner field is kept in step with it.
-        : { fertilizerEnabled: args.enabled, showFertilizerPlanner: args.enabled }
-    );
+        : args.module === "costTemplates"
+          ? { costTemplatesEnabled: args.enabled }
+          // The Fertilizer module covers the farmer-facing planner too, so the
+          // legacy showFertilizerPlanner field is kept in step with it.
+          : { fertilizerEnabled: args.enabled, showFertilizerPlanner: args.enabled };
+
+    await ctx.db.patch(args.communityId, patch);
 
     return {
       success: true,

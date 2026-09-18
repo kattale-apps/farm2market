@@ -10,7 +10,7 @@
 
 const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
 
-export type CommunityModule = "advancedMarkets" | "fertilizer";
+export type CommunityModule = "advancedMarkets" | "fertilizer" | "costTemplates";
 
 type CommunityLike = {
   _id?: unknown;
@@ -18,6 +18,7 @@ type CommunityLike = {
   name?: string;
   advancedMarketsEnabled?: boolean;
   fertilizerEnabled?: boolean;
+  costTemplatesEnabled?: boolean;
 };
 
 /**
@@ -46,9 +47,16 @@ export function isFertilizerModuleEnabled(community: CommunityLike | null | unde
   return community.fertilizerEnabled === true;
 }
 
+export function isCostTemplatesEnabled(community: CommunityLike | null | undefined): boolean {
+  if (!community) return false;
+  // Off everywhere until a super admin turns it on for a specific community.
+  return community.costTemplatesEnabled === true;
+}
+
 export function resolveCommunityModules(community: CommunityLike | null | undefined) {
   return {
     advancedMarketsEnabled: isAdvancedMarketsEnabled(community),
     fertilizerEnabled: isFertilizerModuleEnabled(community),
+    costTemplatesEnabled: isCostTemplatesEnabled(community),
   };
 }

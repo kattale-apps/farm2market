@@ -1568,24 +1568,6 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
             >
               Open Full Community Dashboard →
             </a>
-            {/* Cost Templates quick-link for Community Admin */}
-            <a
-              href="/admin/cost-calculator"
-              style={{
-                display: "inline-block",
-                marginLeft: "0.75rem",
-                padding: "0.6rem 1rem",
-                borderRadius: 8,
-                background: "linear-gradient(135deg, #f57f17 0%, #e65100 100%)",
-                color: "#fff",
-                textDecoration: "none",
-                fontSize: "0.95rem",
-                fontWeight: 600,
-                boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-              }}
-            >
-              🌾 Cost Templates →
-            </a>
           </div>
           <div style={farmCardStyle}>
             <div style={glassPanelStyle}>

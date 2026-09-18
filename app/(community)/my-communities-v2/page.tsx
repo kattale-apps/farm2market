@@ -27,12 +27,12 @@ export default function MyCommunitiesPage() {
 
       // Auto-redirect superadmin
       if (navContext.isSuperadmin && navContext.joinedCommunities.length === 0) {
-        router.push("/superadmin/dashboard");
+        router.push("/");
       }
       // Auto-redirect community admin with no joined communities
       else if (navContext.adminCommunities.length > 0 && navContext.joinedCommunities.length === 0) {
         const firstAdmin = navContext.adminCommunities[0];
-        router.push(`/community-admin/${firstAdmin.communityId}/dashboard`);
+        router.push(`/admin/community-dashboard?communityId=${firstAdmin.communityId}`);
       }
     }
   }, [navContext, router]);
@@ -92,7 +92,7 @@ export default function MyCommunitiesPage() {
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-8">
             <p className="text-sm text-blue-900">
               You are an admin of {adminCommunities.length} communit{adminCommunities.length === 1 ? 'y' : 'ies'}.{" "}
-              <a href="/community-admin/dashboard" className="font-bold underline hover:text-blue-700">
+              <a href="/admin/community-dashboard" className="font-bold underline hover:text-blue-700">
                 Go to admin dashboard
               </a>
             </p>

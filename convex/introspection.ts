@@ -2,6 +2,7 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
+import { resolveCommunityModules } from "./communityModules";
 
 /**
  * Admin-only: get communities visible to the admin
@@ -94,6 +95,7 @@ async function enrichWithStats(ctx: any, communities: any[]) {
         ...c,
         logoPath: resolvedLogo,
         memberCount: memberships.length,
+        ...resolveCommunityModules(c),
       };
     })
   );

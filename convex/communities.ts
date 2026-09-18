@@ -3,6 +3,7 @@ import { mutation, query, DatabaseReader } from "./_generated/server";
 import { generateUTID, getUgandaTime } from "./utils";
 import { verifyAdminRole } from "./auth";
 import { Id } from "./_generated/dataModel";
+import { resolveCommunityModules } from "./communityModules";
 
 const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
 
@@ -350,6 +351,7 @@ export const getCommunityInfo = query({
       name: community.name,
       logoUrl,
       showFertilizerPlanner: (community as any).showFertilizerPlanner,
+      ...resolveCommunityModules(community as any),
     };
   },
 });
@@ -609,6 +611,7 @@ export const getActiveCommunities = query({
           showMemberCount: (c as any).showMemberCount,
           showFertilizerPlanner: (c as any).showFertilizerPlanner,
           crmEnabled: (c as any).crmEnabled,
+          ...resolveCommunityModules(c as any),
           isMember,
           memberCount: memberships.length,
           roleBreakdown,
@@ -976,8 +979,11 @@ export const toggleCommunityFertilizerPlannerVisibility = mutation({
       }
     }
 
+    // The Fertilizer module flag is the single source of truth for planner
+    // visibility; the legacy field is kept in step for older readers.
     await ctx.db.patch(args.communityId, {
       showFertilizerPlanner: args.showFertilizerPlanner,
+      fertilizerEnabled: args.showFertilizerPlanner,
     });
 
     return {
@@ -1040,6 +1046,51 @@ export const toggleCommunityCrmEnabled = mutation({
       success: true,
       communityId: args.communityId,
       crmEnabled: args.crmEnabled,
+    };
+  },
+});
+
+/**
+ * Turn an optional community module ("Advanced Markets" or "Fertilizer") on or
+ * off for a single community. Only super admins may change these flags, so a
+ * junior community admin cannot open a module for their own community.
+ */
+export const setCommunityModuleEnabled = mutation({
+  args: {
+    adminId: v.id("users"),
+    communityId: v.id("communities"),
+    module: v.union(v.literal("advancedMarkets"), v.literal("fertilizer")),
+    enabled: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    const admin = await ctx.db.get(args.adminId);
+    if (!admin || admin.role !== "admin") {
+      throw new Error("Not authorized");
+    }
+
+    if (!isSuperAdmin(admin)) {
+      throw new Error("Only super admins can enable or disable community modules");
+    }
+
+    const community = await ctx.db.get(args.communityId);
+    if (!community) {
+      throw new Error("Community not found");
+    }
+
+    await ctx.db.patch(
+      args.communityId,
+      args.module === "advancedMarkets"
+        ? { advancedMarketsEnabled: args.enabled }
+        // The Fertilizer module covers the farmer-facing planner too, so the
+        // legacy showFertilizerPlanner field is kept in step with it.
+        : { fertilizerEnabled: args.enabled, showFertilizerPlanner: args.enabled }
+    );
+
+    return {
+      success: true,
+      communityId: args.communityId,
+      module: args.module,
+      enabled: args.enabled,
     };
   },
 });

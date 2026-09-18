@@ -321,7 +321,7 @@ export default function CreateCommunityPage() {
             {/* Quick Actions */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <button
-                onClick={() => router.push(`/community-admin/${successCommunityId}/dashboard`)}
+                onClick={() => router.push(`/admin/community-dashboard?communityId=${successCommunityId}`)}
                 className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg transition-colors text-center"
               >
                 → Go to Community Dashboard

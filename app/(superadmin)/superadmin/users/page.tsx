@@ -553,7 +553,7 @@ export default function SuperadminUsersPage() {
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1.5rem", flexWrap: "wrap" }}>
           <a
-            href="/farmer/dashboard"
+            href="/"
             style={{
               padding: "0.5rem 1rem",
               background: "#2e7d32",

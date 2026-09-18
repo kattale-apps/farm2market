@@ -31,9 +31,9 @@ export default function CommunitySwitcher({ currentCommunityId, variant = "dropd
 
   const handleSelectCommunity = (communityId: Id<"communities">, isAdmin: boolean) => {
     if (isAdmin) {
-      router.push(`/community-admin/${communityId}/dashboard`);
+      router.push(`/admin/community-dashboard?communityId=${communityId}`);
     } else {
-      router.push(`/community/${communityId}/messaging`);
+      router.push(`/community-only/messages?communityId=${communityId}`);
     }
     setIsOpen(false);
   };

@@ -133,7 +133,7 @@ export default function CreateQRCommunity() {
   };
 
   const handleDone = () => {
-    router.push("/superadmin");
+    router.push("/");
   };
 
   return (

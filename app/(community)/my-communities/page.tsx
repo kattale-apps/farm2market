@@ -343,7 +343,7 @@ export default function MyCommunities() {
 
   useEffect(() => {
     if (authStatus === "unauthenticated") {
-      router.push("/join/community");
+      router.push("/login");
     }
   }, [authStatus, router]);
 

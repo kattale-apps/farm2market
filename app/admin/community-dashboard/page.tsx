@@ -17,12 +17,13 @@ import { AdminFertilizerConfig } from "../../components/biofarm/AdminFertilizerC
 import { exportSubmissionsToPDF } from "../../utils/exportUtils";
 import SubmissionPhotoGallery from "../../components/SubmissionPhotoGallery";
 import { CommunityAdvancePurchasePanel } from "../../components/advancePurchase/CommunityAdvancePurchasePanel";
+import { CostTemplatesPanel } from "../../components/costTemplates/CostTemplatesPanel";
 import { GOODS_CATEGORIES, FARM_SERVICE_OPTIONS } from "../../utils/advancedMarketsOptions";
 import { tallyDistricts, buildDistrictMatcher } from "../../utils/districtNormalization";
 import { CrmInsightsSection } from "../../components/crm/CrmInsightsSection";
 
 /* ── Tab types for community cards ── */
-type CommunityTab = "members" | "noticeboard" | "messages" | "forms" | "insights" | "fertilizer" | "advancePurchase";
+type CommunityTab = "members" | "noticeboard" | "messages" | "forms" | "insights" | "fertilizer" | "costTemplates" | "advancePurchase";
 type MembersListTab = "approved" | "all" | "imported" | "activeFarmsee";
 
 const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
@@ -3057,7 +3058,7 @@ export default function CommunityDashboardPage() {
 
   const handleToggleCommunityModule = async (
     communityId: Id<"communities">,
-    moduleKey: "advancedMarkets" | "fertilizer",
+    moduleKey: "advancedMarkets" | "fertilizer" | "costTemplates",
     nextValue: boolean
   ) => {
     if (!userId) return;
@@ -3068,7 +3069,12 @@ export default function CommunityDashboardPage() {
     }));
     setMessage(null);
 
-    const moduleLabel = moduleKey === "advancedMarkets" ? "Advanced Markets" : "Fertilizer";
+    const moduleLabel =
+      moduleKey === "advancedMarkets"
+        ? "Advanced Markets"
+        : moduleKey === "costTemplates"
+          ? "Cost Templates"
+          : "Fertilizer";
 
     try {
       await setCommunityModuleEnabled({
@@ -3346,6 +3352,7 @@ export default function CommunityDashboardPage() {
             // opens them per community, and they stay hidden everywhere else.
             const advancedMarketsEnabled = community?.advancedMarketsEnabled === true;
             const fertilizerEnabled = community?.fertilizerEnabled === true;
+            const costTemplatesEnabled = community?.costTemplatesEnabled === true;
             const canConfigureFertilizer =
               isSuperAdminUser || resolvedAdminCategory === "community";
             const visibleTabs: CommunityTab[] = [
@@ -3355,6 +3362,7 @@ export default function CommunityDashboardPage() {
               "forms",
               "insights",
               ...(fertilizerEnabled && canConfigureFertilizer ? (["fertilizer"] as CommunityTab[]) : []),
+              ...(costTemplatesEnabled ? (["costTemplates"] as CommunityTab[]) : []),
               ...(advancedMarketsEnabled ? (["advancePurchase"] as CommunityTab[]) : []),
             ];
             // A tab that was open before the module was switched off falls back
@@ -3603,6 +3611,31 @@ export default function CommunityDashboardPage() {
                           />
                           Enable Fertilizer module (admin config + farmer planner)
                         </label>
+                        <label
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.5rem",
+                            fontSize: "0.85rem",
+                            color: "#374151",
+                            fontWeight: 600,
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={costTemplatesEnabled}
+                            disabled={!!togglingMemberCountByCommunity[String(communityId)]}
+                            onChange={(e) => {
+                              handleToggleCommunityModule(
+                                communityId as Id<"communities">,
+                                "costTemplates",
+                                e.target.checked
+                              );
+                            }}
+                            style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                          />
+                          Enable Cost Templates module
+                        </label>
                       </>
                     )}
                     <span
@@ -3676,7 +3709,7 @@ export default function CommunityDashboardPage() {
               }}>
                 {(visibleTabs).map((tab) => {
                   const active = activeTab === tab;
-                  const labels: Record<CommunityTab, string> = { members: "Members", noticeboard: "Noticeboard", messages: "Messages", forms: "Forms", insights: "📊 Insights", fertilizer: "🌱 Fertilizer", advancePurchase: "🌱 Advanced Markets" };
+                  const labels: Record<CommunityTab, string> = { members: "Members", noticeboard: "Noticeboard", messages: "Messages", forms: "Forms", insights: "📊 Insights", fertilizer: "🌱 Fertilizer", costTemplates: "🌾 Cost Templates", advancePurchase: "🌱 Advanced Markets" };
                   return (
                     <button
                       key={tab}
@@ -3726,6 +3759,17 @@ export default function CommunityDashboardPage() {
               {/* ── Fertilizer Tab ── */}
               {activeTab === "fertilizer" && (
                 <AdminFertilizerConfig communityId={communityId} userId={userId!} />
+              )}
+
+              {/* ── Cost Templates Tab ── */}
+              {activeTab === "costTemplates" && (
+                <div style={{ padding: "0.5rem" }}>
+                  <CostTemplatesPanel
+                    userId={userId!}
+                    communityId={communityId as Id<"communities">}
+                    embedded
+                  />
+                </div>
               )}
 
               {/* ── Advanced Markets Tab ── */}

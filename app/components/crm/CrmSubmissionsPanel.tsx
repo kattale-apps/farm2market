@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 
@@ -119,6 +119,11 @@ export function CrmSubmissionsPanel({
   const [outcome, setOutcome] = useState<string>("");
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [confirmingDelete, setConfirmingDelete] = useState<string>("");
+  const [deletingId, setDeletingId] = useState<string>("");
+  const [deleteError, setDeleteError] = useState<string>("");
+
+  const deleteCrmSubmission = useMutation((api as any).crmCalls.deleteCrmSubmission);
 
   const fromTs = useMemo(() => rangeToFrom(range), [range]);
 
@@ -136,6 +141,27 @@ export function CrmSubmissionsPanel({
 
   const toggle = (id: string) =>
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
+
+  // Deleting is permanent and takes the lead, its calls and anything raised on
+  // them with it, so it asks for a second click rather than a single one next
+  // to an expand toggle. The member account is deliberately left alone - they
+  // may belong to the community for reasons unrelated to this lead.
+  const handleDelete = async (responseId: string) => {
+    setDeletingId(responseId);
+    setDeleteError("");
+
+    try {
+      await deleteCrmSubmission({
+        responseId: responseId as Id<"crmFormResponses">,
+        requesterId,
+      });
+      setConfirmingDelete("");
+    } catch (error: any) {
+      setDeleteError(error?.message || "Failed to delete this submission");
+    }
+
+    setDeletingId("");
+  };
 
   const exportCsv = () => {
     if (!rows.length) return;
@@ -314,6 +340,45 @@ export function CrmSubmissionsPanel({
 
               {isOpen && (
                 <div style={{ padding: "0.75rem", borderTop: "1px solid #eee", background: "#fcfcfd" }}>
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.4rem", flexWrap: "wrap", marginBottom: "0.6rem" }}>
+                    {confirmingDelete === row.responseId ? (
+                      <>
+                        <span style={{ fontSize: "0.76rem", color: "#991b1b", alignSelf: "center", flex: "1 1 200px" }}>
+                          Delete this submission, its lead and {row.callCount} logged call
+                          {row.callCount === 1 ? "" : "s"}? This cannot be undone.
+                        </span>
+                        <button
+                          onClick={() => setConfirmingDelete("")}
+                          disabled={deletingId === row.responseId}
+                          style={{ padding: "0.3rem 0.7rem", borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => handleDelete(row.responseId)}
+                          disabled={deletingId === row.responseId}
+                          style={{ padding: "0.3rem 0.7rem", borderRadius: 8, border: "1px solid #b91c1c", background: "#b91c1c", color: "#fff", fontSize: "0.78rem", fontWeight: 700, cursor: deletingId === row.responseId ? "not-allowed" : "pointer" }}
+                        >
+                          {deletingId === row.responseId ? "Deleting..." : "Delete permanently"}
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setConfirmingDelete(row.responseId);
+                          setDeleteError("");
+                        }}
+                        style={{ padding: "0.3rem 0.7rem", borderRadius: 8, border: "1px solid #fca5a5", background: "#fff", color: "#b91c1c", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" }}
+                      >
+                        Delete lead
+                      </button>
+                    )}
+                  </div>
+                  {deleteError && confirmingDelete === row.responseId && (
+                    <p style={{ margin: "0 0 0.5rem 0", fontSize: "0.78rem", color: "#b91c1c", fontWeight: 600 }}>
+                      {deleteError}
+                    </p>
+                  )}
                   <DetailGrid
                     title="Purchase &amp; farm details"
                     entries={[

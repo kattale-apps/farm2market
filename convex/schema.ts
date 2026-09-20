@@ -2324,6 +2324,10 @@ export default defineSchema({
     memberId: v.id("users"),
     submittedByUserId: v.id("users"),
     sourceEventType: v.union(
+      v.literal("purchase_capture"),
+      // Retained only so rows written before the rename keep validating. It is
+      // a single community's brand name and nothing writes it any more - a
+      // tenant's name does not belong in a table every community shares.
       v.literal("biofarm_purchase"),
       v.literal("manual_entry"),
       v.literal("extension_capture")

@@ -11,12 +11,20 @@ import { Id } from "../../../convex/_generated/dataModel";
 import { useStoredUser } from "../../hooks/useStoredUser";
 import { savePdfFromJsPDF } from "../../utils/pdfDownload";
 import { CrmSubmissionsPanel } from "../../components/crm/CrmSubmissionsPanel";
+import {
+  ALLOWED_SCRIPT_TOKENS,
+  DEFAULT_CRM_FORM_FIELDS,
+  DEFAULT_OPENING_SCRIPT_TEMPLATE,
+} from "../../../convex/crmPresets";
 
 const FONT = '"Montserrat", sans-serif';
 const BRAND = "#1f7a3e";
 
-const defaultScript =
-  "Good morning, {{customer_gender_title}} {{customer_last_name}}. My name is {{agent_name}} calling from Bio Farm. You previously purchased our fertilizer on {{purchase_date}}. We are following up to find out how it has performed on your farm and whether you need any assistance.";
+// Imported rather than redeclared. This page used to hold its own copy of the
+// default script, identical to the backend's, with nothing keeping the two in
+// step - and both named a single community's brand in a default every
+// community on the platform receives.
+const defaultScript = DEFAULT_OPENING_SCRIPT_TEMPLATE;
 
 function csvEscape(value: unknown) {
   const text = String(value ?? "");
@@ -96,6 +104,7 @@ export default function CommunityCrmPage() {
   const [intakeUpcomingSprayDate, setIntakeUpcomingSprayDate] = useState("");
   const [intakeFieldValues, setIntakeFieldValues] = useState<Record<string, string>>({});
   const [submittingIntake, setSubmittingIntake] = useState(false);
+  const [backfillingNames, setBackfillingNames] = useState(false);
 
   const CROP_OPTIONS = ["Coffee", "Maize", "Beans", "Groundnuts", "Rice", "Tomatoes", "Pineapple", "Bananas", "Other"];
   const MONTH_OPTIONS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -194,6 +203,7 @@ export default function CommunityCrmPage() {
   const removeCrmFormField = useMutation((api as any).crmForms.removeCrmFormField);
   const assignCrmAgentByEmail = useMutation((api as any).crmAgents.assignCrmAgentByEmail);
   const submitCrmIntake = useMutation((api as any).crmForms.submitCrmIntake);
+  const backfillCrmMemberNames = useMutation((api as any).crmForms.backfillCrmMemberNames);
   const [formActionBusyId, setFormActionBusyId] = useState("");
 
   useEffect(() => {
@@ -248,22 +258,17 @@ export default function CommunityCrmPage() {
         openingScriptTemplate,
       });
 
-      const defaultFields = [
-        { fieldType: "select", label: "Did farmer use the fertilizer?", required: true, options: ["Yes", "Partly", "No", "Don't know"], presetKey: "usage_status" },
-        { fieldType: "select", label: "How would you rate the result?", required: true, options: ["Very good", "Good", "Average", "Poor", "Very poor"], presetKey: "result_rating" },
-        { fieldType: "select", label: "Any problem?", required: false, options: ["No problem", "Application problem", "Product problem", "Packaging problem", "Delivery problem", "Farmer needs technical advice", "Other"], presetKey: "issue_type" },
-        { fieldType: "select", label: "Wants to purchase more?", required: true, options: ["Yes", "Maybe", "No"], presetKey: "repurchase_intent" },
-        { fieldType: "text", label: "Notes", required: false, presetKey: "notes" },
-      ];
-
-      for (const field of defaultFields) {
+      // These questions ARE the call record: an agent answers them on every
+      // call and their answers drive the outcome columns, so the wording must
+      // suit whatever this community sells.
+      for (const field of DEFAULT_CRM_FORM_FIELDS) {
         await addCrmFormField({
           crmFormId: result.formId,
           adminId: userId,
           fieldType: field.fieldType,
           label: field.label,
           required: field.required,
-          options: field.options,
+          options: (field as any).options,
           presetKey: field.presetKey,
         });
       }
@@ -401,6 +406,7 @@ export default function CommunityCrmPage() {
     const list = communityMembers || [];
     if (!term) return list;
     return list.filter((m: any) =>
+      (m.displayName || "").toLowerCase().includes(term) ||
       (m.alias || "").toLowerCase().includes(term) ||
       (m.phoneNumber || "").toLowerCase().includes(term) ||
       (m.email || "").toLowerCase().includes(term) ||
@@ -435,6 +441,32 @@ export default function CommunityCrmPage() {
 
   const handleIntakeFieldChange = (crmFieldId: string, value: string) => {
     setIntakeFieldValues((prev) => ({ ...prev, [crmFieldId]: value }));
+  };
+
+  // One-off repair for members captured before intake started saving the name
+  // onto the account. Safe to run more than once: it only fills names that are
+  // missing and only clears snapshots that merely duplicate an alias.
+  const handleBackfillNames = async () => {
+    if (!userId || !selectedCommunityId) return;
+
+    setBackfillingNames(true);
+    setMessage("");
+
+    try {
+      const result = await backfillCrmMemberNames({
+        communityId: selectedCommunityId,
+        requesterId: userId,
+      });
+      setMessage(
+        `Checked ${result.scanned} submission${result.scanned === 1 ? "" : "s"}: ` +
+          `${result.namesRestored} member name${result.namesRestored === 1 ? "" : "s"} restored, ` +
+          `${result.aliasSnapshotsCleared} placeholder name${result.aliasSnapshotsCleared === 1 ? "" : "s"} cleared.`
+      );
+    } catch (error: any) {
+      setMessage(error?.message || "Failed to restore member names");
+    }
+
+    setBackfillingNames(false);
   };
 
   const handleSubmitIntake = async () => {
@@ -483,7 +515,9 @@ export default function CommunityCrmPage() {
         setMessage(
           result.wasNewClient
             ? "Lead captured and a new member account was created (login: their phone number)."
-            : "Lead captured. It will now appear in the agent call queue."
+            : result.reconciledExistingLead
+              ? "This phone number already belonged to a member with a lead waiting to be called, so that lead was updated instead of a duplicate being added."
+              : "Lead captured against the existing member with this phone number. It will now appear in the agent call queue."
         );
       } else {
         // Existing members already have their location on file, so each one is
@@ -857,7 +891,7 @@ export default function CommunityCrmPage() {
             style={{ ...inputStyle, width: "100%", marginTop: "0.7rem" }}
           />
           <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.45rem" }}>
-            Tokens: {"{{agent_name}}"}, {"{{customer_last_name}}"}, {"{{customer_gender_title}}"}, {"{{purchase_date}}"}, {"{{product_name}}"}, {"{{quantity}}"}, {"{{district}}"}, {"{{sub_county}}"}, {"{{parish}}"}, {"{{phone_number}}"}, {"{{crop_grown}}"}, {"{{month_of_planting}}"}
+            Tokens: {ALLOWED_SCRIPT_TOKENS.map((token) => `{{${token}}}`).join(", ")}
           </div>
           <div style={{ marginTop: "0.75rem", display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
             <button
@@ -866,6 +900,14 @@ export default function CommunityCrmPage() {
               style={{ minHeight: 44, padding: "0.6rem 0.95rem", borderRadius: 8, border: "none", background: BRAND, color: "#fff", fontWeight: 700, cursor: busy ? "not-allowed" : "pointer" }}
             >
               {busy ? "Creating..." : "Create Default CRM Form"}
+            </button>
+            <button
+              onClick={handleBackfillNames}
+              disabled={backfillingNames || !selectedCommunityId}
+              style={{ minHeight: 44, padding: "0.6rem 0.95rem", borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", color: "#111827", fontWeight: 600, cursor: backfillingNames ? "not-allowed" : "pointer" }}
+              title="Copies names captured at intake onto the member accounts they belong to, so the same person is no longer shown under an anonymous alias."
+            >
+              {backfillingNames ? "Restoring names..." : "Restore Member Names"}
             </button>
             {selectedCommunity && (
               <Link href={`/community-only/crm-agent?communityId=${selectedCommunity._id}`} style={{ minHeight: 44, display: "inline-flex", alignItems: "center", padding: "0.6rem 0.95rem", borderRadius: 8, border: "1px solid #d1d5db", textDecoration: "none", color: "#111827", fontWeight: 600 }}>
@@ -961,7 +1003,14 @@ export default function CommunityCrmPage() {
                           style={{ marginTop: "0.2rem" }}
                         />
                         <div>
-                          <div style={{ fontWeight: 600, fontSize: "0.88rem" }}>{m.alias}</div>
+                          <div style={{ fontWeight: 600, fontSize: "0.88rem" }}>
+                            {m.displayName || m.alias}
+                            {!m.hasVerifiedName && (
+                              <span style={{ marginLeft: "0.35rem", fontSize: "0.68rem", fontWeight: 700, color: "#92400e", background: "#fef3c7", padding: "0.1rem 0.35rem", borderRadius: 999 }}>
+                                NO NAME ON FILE
+                              </span>
+                            )}
+                          </div>
                           <div style={{ fontSize: "0.78rem", color: "#666" }}>{m.phoneNumber || m.email || "-"}</div>
                           <div style={{ fontSize: "0.78rem", color: "#1f7a3e" }}>{memberLocationLabel(m)}</div>
                         </div>

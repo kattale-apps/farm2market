@@ -8,6 +8,11 @@ import {
   resolveCrmAgentDisplayName,
 } from "./crmAuth";
 import { getCommunityDefaultRole, ensureMandatoryRoleCommunityMembershipsForUser } from "./communities";
+import {
+  ALLOWED_SCRIPT_TOKENS as SHARED_SCRIPT_TOKENS,
+  DEFAULT_OPENING_SCRIPT_TEMPLATE,
+  SCRIPT_TOKEN_FALLBACKS,
+} from "./crmPresets";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -63,6 +68,8 @@ async function resolveOrCreateClientMember(
 
   const now = getUgandaTime();
 
+  const capturedName = String(args.name || "").trim();
+
   if (existing) {
     const alreadyMember = await ctx.db
       .query("communityMemberships")
@@ -79,7 +86,22 @@ async function resolveOrCreateClientMember(
       });
     }
 
-    return { memberId: existing._id as Id<"users">, wasNewClient: false };
+    // Reconcile the two ways the same person reaches the CRM. Someone captured
+    // once as a "new client" and later picked from the "existing member" list
+    // is the same account, matched here on phone number - but until now the
+    // name typed at intake was written only onto that one submission, so the
+    // member itself kept its anonymous alias and every later lead showed
+    // `farmer_ab12cd` instead of who the agent is actually calling. Promoting
+    // the captured name onto the member fixes it everywhere at once.
+    if (capturedName && !existing.verifiedName) {
+      await ctx.db.patch(existing._id, { verifiedName: capturedName });
+    }
+
+    return {
+      memberId: existing._id as Id<"users">,
+      wasNewClient: false,
+      resolvedName: capturedName || existing.verifiedName || undefined,
+    };
   }
 
   const community = await ctx.db.get(args.communityId);
@@ -91,6 +113,10 @@ async function resolveOrCreateClientMember(
     phoneNumber: normalizedPhone,
     role,
     alias,
+    // The alias stays anonymized, but the name the supervisor typed is the
+    // whole point of the intake - it is stored on the member so it survives
+    // beyond the single submission that captured it.
+    verifiedName: capturedName || undefined,
     state: "active",
     createdAt: now,
     lastActiveAt: now,
@@ -107,29 +133,14 @@ async function resolveOrCreateClientMember(
 
   await ensureMandatoryRoleCommunityMembershipsForUser(ctx, memberId, role);
 
-  return { memberId: memberId as Id<"users">, wasNewClient: true };
+  return {
+    memberId: memberId as Id<"users">,
+    wasNewClient: true,
+    resolvedName: capturedName || undefined,
+  };
 }
 
-const DEFAULT_OPENING_SCRIPT_TEMPLATE =
-  "Good morning, {{customer_gender_title}} {{customer_last_name}}. My name is {{agent_name}} calling from Bio Farm. You previously purchased our fertilizer on {{purchase_date}}. We are following up to find out how it has performed on your farm and whether you need any assistance.";
-
-const ALLOWED_SCRIPT_TOKENS = new Set([
-  "agent_name",
-  "customer_full_name",
-  "customer_last_name",
-  "customer_gender_title",
-  "product_name",
-  "quantity",
-  "purchase_date",
-  "district",
-  "sub_county",
-  "parish",
-  "phone_number",
-  "crop_grown",
-  "month_of_planting",
-  "community_name",
-  "today_date",
-]);
+const ALLOWED_SCRIPT_TOKENS = new Set<string>(SHARED_SCRIPT_TOKENS);
 
 function assertValidFollowUpOffsetDays(days: number) {
   if (!Number.isInteger(days) || days < 0 || days > 365) {
@@ -154,9 +165,9 @@ function formatIsoDate(ts: number) {
 }
 
 function customerLastName(name: string | undefined) {
-  if (!name) return "valued customer";
+  if (!name) return SCRIPT_TOKEN_FALLBACKS.customer_name;
   const parts = name.split(" ").filter(Boolean);
-  if (parts.length === 0) return "valued customer";
+  if (parts.length === 0) return SCRIPT_TOKEN_FALLBACKS.customer_name;
   return parts[parts.length - 1];
 }
 
@@ -188,7 +199,42 @@ async function upsertLeadFromResponse(
       queueStatus: existing.queueStatus === "closed" ? "open" : existing.queueStatus,
       updatedAt: now,
     });
-    return existing._id as Id<"crmLeads">;
+    return { leadId: existing._id as Id<"crmLeads">, reconciled: false };
+  }
+
+  // Matching on the response id alone never matched anything: the response is
+  // inserted immediately before this runs, so every intake produced a fresh
+  // lead. Capturing the same person twice - typically once as a "new client"
+  // and again from the member list - left two rows in the agent queue for one
+  // phone number.
+  //
+  // An existing lead for the same member on the same form that nobody has
+  // called yet is that duplicate, so it is re-pointed at the newer submission
+  // rather than duplicated. A lead that HAS been called is left alone and a new
+  // one is created beside it, because that is a real second follow-up cycle
+  // with its own call history to preserve.
+  const memberLeads = await ctx.db
+    .query("crmLeads")
+    .withIndex("by_member_community", (q: any) =>
+      q.eq("communityId", args.communityId).eq("memberId", args.memberId)
+    )
+    .collect();
+
+  const uncalledDuplicate = memberLeads.find(
+    (lead: any) =>
+      String(lead.sourceCrmFormId) === String(args.crmFormId) &&
+      !lead.lastCallAt &&
+      lead.queueStatus !== "closed"
+  );
+
+  if (uncalledDuplicate) {
+    await ctx.db.patch(uncalledDuplicate._id, {
+      sourceCrmResponseId: args.responseId,
+      nextCallAt: args.autoNextCallAt,
+      queueStatus: "open",
+      updatedAt: now,
+    });
+    return { leadId: uncalledDuplicate._id as Id<"crmLeads">, reconciled: true };
   }
 
   const leadId = await ctx.db.insert("crmLeads", {
@@ -203,7 +249,7 @@ async function upsertLeadFromResponse(
     updatedAt: now,
   });
 
-  return leadId;
+  return { leadId: leadId as Id<"crmLeads">, reconciled: false };
 }
 
 export const createCrmForm = mutation({
@@ -482,6 +528,12 @@ export const getCommunityMembersForCrmIntake = query({
       members.push({
         userId: user._id,
         alias: user.alias || "Unknown",
+        // What a supervisor should actually see in the picker. Without it the
+        // list showed only anonymized aliases, so a member captured earlier by
+        // name was unrecognisable and unsearchable, and got re-added as a
+        // brand new client instead of being reused.
+        displayName: user.verifiedName || user.alias || "Unknown",
+        hasVerifiedName: Boolean(user.verifiedName),
         role: user.role || "farmer",
         email: user.email,
         phoneNumber: user.phoneNumber,
@@ -528,7 +580,7 @@ export const submitCrmFormResponse = mutation({
     memberId: v.id("users"),
     submittedByUserId: v.id("users"),
     sourceEventType: v.union(
-      v.literal("biofarm_purchase"),
+      v.literal("purchase_capture"),
       v.literal("manual_entry"),
       v.literal("extension_capture")
     ),
@@ -582,7 +634,7 @@ export const submitCrmFormResponse = mutation({
       });
     }
 
-    const leadId = await upsertLeadFromResponse(ctx, {
+    const lead = await upsertLeadFromResponse(ctx, {
       communityId: form.communityId,
       memberId: args.memberId,
       responseId,
@@ -592,7 +644,8 @@ export const submitCrmFormResponse = mutation({
 
     return {
       responseId,
-      leadId,
+      leadId: lead.leadId,
+      reconciledExistingLead: lead.reconciled,
       autoNextCallAt,
     };
   },
@@ -647,7 +700,12 @@ export const submitCrmIntake = mutation({
 
     let memberId: Id<"users">;
     let wasNewClient = false;
-    let resolvedClientName = args.newClient?.name;
+    // Only ever a real name. Falling back to the account alias here wrote
+    // `vendor_akkqf4` into the submission as though a human had given that
+    // name, and the agent queue then showed it as the person to ask for.
+    // Leaving it unset lets every reader fall back to the member's own alias,
+    // which at least reads as the placeholder it is.
+    let resolvedClientName: string | undefined;
 
     if (args.newClient) {
       const resolved = await resolveOrCreateClientMember(ctx, {
@@ -657,11 +715,12 @@ export const submitCrmIntake = mutation({
       });
       memberId = resolved.memberId;
       wasNewClient = resolved.wasNewClient;
+      resolvedClientName = resolved.resolvedName;
     } else {
       memberId = args.existingMemberId as Id<"users">;
       const member = await ctx.db.get(memberId);
       if (!member) throw new Error("Selected member not found");
-      resolvedClientName = member.verifiedName || member.alias;
+      resolvedClientName = member.verifiedName || undefined;
     }
 
     const now = getUgandaTime();
@@ -701,7 +760,7 @@ export const submitCrmIntake = mutation({
       });
     }
 
-    const leadId = await upsertLeadFromResponse(ctx, {
+    const lead = await upsertLeadFromResponse(ctx, {
       communityId: form.communityId,
       memberId,
       responseId,
@@ -711,7 +770,10 @@ export const submitCrmIntake = mutation({
 
     return {
       responseId,
-      leadId,
+      leadId: lead.leadId,
+      // True when this intake updated an existing uncalled lead for the same
+      // member instead of adding a second one to the queue.
+      reconciledExistingLead: lead.reconciled,
       memberId,
       wasNewClient,
       autoNextCallAt,
@@ -747,7 +809,7 @@ export const getLeadOpeningScript = query({
     );
 
     const memberName =
-      member?.verifiedName || (response as any)?.clientName || member?.alias || member?.email || member?.phoneNumber || "valued customer";
+      member?.verifiedName || (response as any)?.clientName || member?.alias || member?.email || member?.phoneNumber || SCRIPT_TOKEN_FALLBACKS.customer_name;
 
     const genderTitle =
       member?.sex === "M" ? "Mr" : member?.sex === "F" ? "Mrs" : "Mr/Mrs";
@@ -760,16 +822,16 @@ export const getLeadOpeningScript = query({
       customer_full_name: String(memberName),
       customer_last_name: customerLastName(String(memberName)),
       customer_gender_title: genderTitle,
-      product_name: String(response?.productName || "Bio Farm fertilizer"),
+      product_name: String(response?.productName || SCRIPT_TOKEN_FALLBACKS.product_name),
       quantity: String(response?.purchaseQuantity || "-"),
-      purchase_date: String(response?.purchaseDate || "your recent purchase"),
+      purchase_date: String(response?.purchaseDate || SCRIPT_TOKEN_FALLBACKS.purchase_date),
       district: String(response?.district || "-"),
       sub_county: String(response?.subCounty || "-"),
       parish: String((response as any)?.parish || "-"),
       phone_number: String(member?.phoneNumber || "-"),
       crop_grown: String((response as any)?.cropGrown || "-"),
       month_of_planting: String((response as any)?.monthOfPlanting || "-"),
-      community_name: String(community?.name || "Bio Farm"),
+      community_name: String(community?.name || SCRIPT_TOKEN_FALLBACKS.community_name),
       today_date: formatIsoDate(getUgandaTime()),
     });
 
@@ -790,6 +852,78 @@ export const getLeadOpeningScript = query({
         pastSprayDates: (response as any)?.pastSprayDates || [],
         upcomingSprayScheduleAt: (response as any)?.upcomingSprayScheduleAt || null,
       },
+    };
+  },
+});
+
+/**
+ * Promote names captured at intake onto the member accounts they belong to.
+ *
+ * Intake used to write the client's name only onto the submission, so a person
+ * captured by name once and then picked from the member list later showed up
+ * under their anonymized alias - the same human appearing twice in the queue,
+ * unrecognisable the second time. New intakes now set the member's name
+ * directly; this repairs the accounts captured before that.
+ *
+ * Only fills a name that is missing. An account whose name an agent already
+ * verified on a call is left exactly as it is, because that name was confirmed
+ * with the person themselves and outranks anything typed at intake.
+ */
+export const backfillCrmMemberNames = mutation({
+  args: {
+    communityId: v.id("communities"),
+    requesterId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    await requireCrmSupervisorAccess(ctx, args.requesterId, args.communityId);
+
+    const responses = await ctx.db
+      .query("crmFormResponses")
+      .withIndex("by_community_submitted", (q: any) =>
+        q.eq("communityId", args.communityId)
+      )
+      .collect();
+
+    // Oldest first, so the earliest captured name wins rather than whichever
+    // submission happens to be scanned last.
+    const ordered = [...responses].sort(
+      (a: any, b: any) => Number(a.submittedAt || 0) - Number(b.submittedAt || 0)
+    );
+
+    let namesRestored = 0;
+    let aliasSnapshotsCleared = 0;
+    const handled = new Set<string>();
+
+    for (const response of ordered) {
+      const memberKey = String(response.memberId);
+      const member = await ctx.db.get(response.memberId);
+      if (!member) continue;
+
+      const captured = String((response as any).clientName || "").trim();
+
+      // A submission whose clientName is just a copy of the account alias is
+      // the bug's other half: it looked like a real name everywhere it was
+      // displayed. Clearing it lets readers fall back to the alias knowingly.
+      if (captured && captured === String(member.alias || "")) {
+        await ctx.db.patch(response._id, { clientName: undefined });
+        aliasSnapshotsCleared++;
+        continue;
+      }
+
+      if (!captured || handled.has(memberKey)) continue;
+      handled.add(memberKey);
+
+      if (!member.verifiedName) {
+        await ctx.db.patch(response.memberId, { verifiedName: captured });
+        namesRestored++;
+      }
+    }
+
+    return {
+      success: true,
+      scanned: ordered.length,
+      namesRestored,
+      aliasSnapshotsCleared,
     };
   },
 });

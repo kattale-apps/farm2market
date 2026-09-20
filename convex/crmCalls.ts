@@ -2,9 +2,11 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { getUgandaTime } from "./utils";
 import {
+  requireCrmSupervisorAccess,
   requireCrmSupervisorOrAgentAccess,
   resolveCrmAgentDisplayName,
 } from "./crmAuth";
+import { PRESET_KEYS, literalForPresetAnswer } from "./crmPresets";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -21,6 +23,20 @@ function computeHealthScore(args: {
     | "other";
   repurchaseIntent?: "yes" | "no" | "maybe";
 }) {
+  // A call nobody recorded anything on has no health, and must not be scored
+  // as an average one. Previously the four inputs defaulted to optimistic
+  // values on the client, so an unanswered call banked a green 95 and dragged
+  // every community average up with it.
+  const hasAnySignal =
+    args.usageStatus !== undefined ||
+    args.resultRating !== undefined ||
+    args.issueType !== undefined ||
+    args.repurchaseIntent !== undefined;
+
+  if (!hasAnySignal) {
+    return { score: undefined, band: undefined };
+  }
+
   let score = 50;
 
   if (args.usageStatus === "yes") score += 15;
@@ -44,8 +60,39 @@ function computeHealthScore(args: {
     normalized >= 70 ? "green" : normalized >= 40 ? "yellow" : "red";
 
   return {
-    score: normalized,
-    band,
+    score: normalized as number | undefined,
+    band: band as "green" | "yellow" | "red" | undefined,
+  };
+}
+
+/**
+ * Reads the four structured outcome values off the answers the agent gave to
+ * the form's own questions.
+ *
+ * The form is the source of truth for a call. Where a supervisor tagged a
+ * question with a preset key, that question's answer decides the column, and
+ * the matching value passed separately is only a fallback for forms that have
+ * no such question. Anything the agent did not answer stays undefined rather
+ * than taking a default, so "not recorded" survives all the way into the
+ * database instead of being silently read as a good result.
+ */
+function derivePresetOutcomes(
+  answeredFields: Array<{ presetKey?: string; value: string }>
+) {
+  const byPreset = new Map<string, string>();
+  for (const field of answeredFields) {
+    const presetKey = String(field.presetKey || "");
+    const value = String(field.value || "").trim();
+    if (!presetKey || !value) continue;
+    const literal = literalForPresetAnswer(presetKey, value);
+    if (literal) byPreset.set(presetKey, literal);
+  }
+
+  return {
+    usageStatus: byPreset.get(PRESET_KEYS.usageStatus) as any,
+    resultRating: byPreset.get(PRESET_KEYS.resultRating) as any,
+    issueType: byPreset.get(PRESET_KEYS.issueType) as any,
+    repurchaseIntent: byPreset.get(PRESET_KEYS.repurchaseIntent) as any,
   };
 }
 
@@ -116,11 +163,50 @@ export const submitCrmCallOutcome = mutation({
       nextCallAt = now + defaultDays * DAY_MS;
     }
 
+    // Resolve the answers BEFORE writing the call log, because the answers are
+    // what the log's structured columns are derived from. Field definitions are
+    // verified to belong to the lead's own form so a caller cannot write values
+    // onto another community's questions, and the label is snapshotted so the
+    // answer stays readable if the question is later renamed or removed.
+    const resolvedAnswers: Array<{
+      crmFieldId: any;
+      label: string;
+      fieldType: string;
+      presetKey?: string;
+      value: string;
+    }> = [];
+
+    for (const answer of args.answers || []) {
+      if (!answer.value.trim()) continue;
+      const field = await ctx.db.get(answer.crmFieldId);
+      if (!field) continue;
+      if (String(field.crmFormId) !== String(lead.sourceCrmFormId)) {
+        throw new Error("Answer does not belong to this lead's form");
+      }
+      resolvedAnswers.push({
+        crmFieldId: answer.crmFieldId,
+        label: field.label,
+        fieldType: field.fieldType,
+        presetKey: (field as any).presetKey,
+        value: answer.value.trim(),
+      });
+    }
+
+    // The form's own questions win. The explicit arguments are kept only so a
+    // form with no preset-tagged questions still records something, and so
+    // older clients keep working; neither path invents a value the agent did
+    // not give.
+    const derived = derivePresetOutcomes(resolvedAnswers);
+    const usageStatus = derived.usageStatus ?? args.usageStatus;
+    const resultRating = derived.resultRating ?? args.resultRating;
+    const issueType = derived.issueType ?? args.issueType;
+    const repurchaseIntent = derived.repurchaseIntent ?? args.repurchaseIntent;
+
     const health = computeHealthScore({
-      usageStatus: args.usageStatus,
-      resultRating: args.resultRating,
-      issueType: args.issueType,
-      repurchaseIntent: args.repurchaseIntent,
+      usageStatus,
+      resultRating,
+      issueType,
+      repurchaseIntent,
     });
 
     const callLogId = await ctx.db.insert("crmCallLogs", {
@@ -128,10 +214,10 @@ export const submitCrmCallOutcome = mutation({
       communityId: lead.communityId,
       agentId: args.agentId,
       outcome: args.outcome,
-      usageStatus: args.usageStatus,
-      resultRating: args.resultRating,
-      issueType: args.issueType,
-      repurchaseIntent: args.repurchaseIntent,
+      usageStatus,
+      resultRating,
+      issueType,
+      repurchaseIntent,
       notes: args.notes,
       callbackDaysOverride: args.callbackDaysOverride,
       callbackDateOverride: args.callbackDateOverride,
@@ -141,25 +227,15 @@ export const submitCrmCallOutcome = mutation({
       createdAt: now,
     });
 
-    // Store the form answers against this specific call. Field definitions are
-    // verified to belong to the lead's own form so a caller cannot write values
-    // onto another community's questions, and the label is snapshotted so the
-    // answer stays readable if the question is later renamed or removed.
-    for (const answer of args.answers || []) {
-      if (!answer.value.trim()) continue;
-      const field = await ctx.db.get(answer.crmFieldId);
-      if (!field) continue;
-      if (String(field.crmFormId) !== String(lead.sourceCrmFormId)) {
-        throw new Error("Answer does not belong to this lead's form");
-      }
+    for (const answer of resolvedAnswers) {
       await ctx.db.insert("crmCallAnswers", {
         callLogId,
         leadId: args.leadId,
         communityId: lead.communityId,
         crmFieldId: answer.crmFieldId,
-        label: field.label,
-        fieldType: field.fieldType,
-        value: answer.value.trim(),
+        label: answer.label,
+        fieldType: answer.fieldType,
+        value: answer.value,
         createdAt: now,
       });
     }
@@ -181,18 +257,20 @@ export const submitCrmCallOutcome = mutation({
       lastOutcome: args.outcome,
       nextCallAt: nextCallAt ?? lead.nextCallAt,
       queueStatus,
-      latestHealthScore: health.score,
-      latestHealthBand: health.band,
+      // Only overwrite the lead's health when this call actually produced one.
+      // A later "no answer" must not erase what the last real conversation said.
+      latestHealthScore: health.score ?? lead.latestHealthScore,
+      latestHealthBand: health.band ?? lead.latestHealthBand,
       updatedAt: now,
     });
 
     let ticketId: string | undefined;
-    if (args.outcome === "problem" || (args.issueType && args.issueType !== "none")) {
+    if (args.outcome === "problem" || (issueType && issueType !== "none")) {
       const id = await ctx.db.insert("crmTickets", {
         leadId: args.leadId,
         communityId: lead.communityId,
         openedByAgentId: args.agentId,
-        title: "Farmer follow-up issue",
+        title: "Customer follow-up issue",
         details: args.notes,
         status: "open",
         createdAt: now,
@@ -201,11 +279,16 @@ export const submitCrmCallOutcome = mutation({
       ticketId = String(id);
     }
 
+    // An opportunity is a claim that a named person said they want to buy
+    // again, so it is only created when the call recorded that. It used to
+    // fire on a client-side default of "yes", which manufactured a pipeline
+    // entry for every call including ones nobody answered.
     let opportunityId: string | undefined;
     const shouldCreateOpportunity =
-      args.createOpportunity === true ||
-      args.outcome === "wants_more" ||
-      args.repurchaseIntent === "yes";
+      args.outcome !== "no_answer" &&
+      (args.createOpportunity === true ||
+        args.outcome === "wants_more" ||
+        repurchaseIntent === "yes");
 
     if (shouldCreateOpportunity) {
       const id = await ctx.db.insert("crmSalesOpportunities", {
@@ -227,6 +310,7 @@ export const submitCrmCallOutcome = mutation({
     return {
       callLogId,
       nextCallAt,
+      answersRecorded: resolvedAnswers.length,
       healthScore: health.score,
       healthBand: health.band,
       ticketId,
@@ -413,5 +497,175 @@ export const claimCrmLead = mutation({
     });
 
     return { success: true };
+  },
+});
+
+/**
+ * Permanently remove a lead and everything recorded against it.
+ *
+ * Supervisor-only, and deliberately a hard delete: the leads this exists for
+ * are duplicates and mis-captures that should not keep appearing in an agent's
+ * queue or skewing the community's counters, and a soft-deleted row would have
+ * to be filtered out of every existing query to achieve that.
+ *
+ * Every child row is removed explicitly. Convex has no cascading delete, so a
+ * missed table would leave call answers and sales opportunities pointing at a
+ * lead id that no longer resolves, which is exactly the kind of orphan the
+ * analytics queries silently count.
+ */
+export const deleteCrmLead = mutation({
+  args: {
+    leadId: v.id("crmLeads"),
+    requesterId: v.id("users"),
+    /**
+     * Also delete the intake submission the lead came from. Off by default so
+     * a supervisor can clear a bad call cycle while keeping the record that
+     * the purchase was captured.
+     */
+    deleteSubmission: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const lead = await ctx.db.get(args.leadId);
+    if (!lead) throw new Error("CRM lead not found");
+
+    // Supervisors only. An agent working the queue must not be able to delete
+    // a lead they simply do not want to call.
+    await requireCrmSupervisorAccess(ctx, args.requesterId, lead.communityId);
+
+    const callLogs = await ctx.db
+      .query("crmCallLogs")
+      .withIndex("by_lead", (q: any) => q.eq("leadId", args.leadId))
+      .collect();
+
+    const callAnswers = await ctx.db
+      .query("crmCallAnswers")
+      .withIndex("by_lead", (q: any) => q.eq("leadId", args.leadId))
+      .collect();
+
+    const tickets = await ctx.db
+      .query("crmTickets")
+      .withIndex("by_lead", (q: any) => q.eq("leadId", args.leadId))
+      .collect();
+
+    const opportunities = await ctx.db
+      .query("crmSalesOpportunities")
+      .withIndex("by_lead", (q: any) => q.eq("leadId", args.leadId))
+      .collect();
+
+    for (const row of callAnswers) await ctx.db.delete(row._id);
+    for (const row of callLogs) await ctx.db.delete(row._id);
+    for (const row of tickets) await ctx.db.delete(row._id);
+    for (const row of opportunities) await ctx.db.delete(row._id);
+
+    let deletedSubmission = false;
+    if (args.deleteSubmission) {
+      const responseId = lead.sourceCrmResponseId;
+
+      // Another lead may still point at this submission, so it is only removed
+      // once nothing else references it.
+      const otherLeads = await ctx.db
+        .query("crmLeads")
+        .withIndex("by_source_response", (q: any) =>
+          q.eq("sourceCrmResponseId", responseId)
+        )
+        .collect();
+      const stillReferenced = otherLeads.some(
+        (row: any) => String(row._id) !== String(args.leadId)
+      );
+
+      if (!stillReferenced) {
+        const values = await ctx.db
+          .query("crmFormResponseValues")
+          .withIndex("by_response", (q: any) => q.eq("crmResponseId", responseId))
+          .collect();
+        for (const row of values) await ctx.db.delete(row._id);
+        await ctx.db.delete(responseId);
+        deletedSubmission = true;
+      }
+    }
+
+    await ctx.db.delete(args.leadId);
+
+    // The member account is intentionally left in place. It may be a real
+    // farmer who belongs to the community for reasons that have nothing to do
+    // with this lead, and deleting it here would take their memberships and
+    // any other community data with it.
+    return {
+      success: true,
+      deletedCalls: callLogs.length,
+      deletedAnswers: callAnswers.length,
+      deletedTickets: tickets.length,
+      deletedOpportunities: opportunities.length,
+      deletedSubmission,
+    };
+  },
+});
+
+/**
+ * Delete a submission from the CRM archive together with the lead it created.
+ *
+ * The supervisor dashboard lists submissions rather than leads, so this is the
+ * shape the "Delete" button there needs; it resolves the lead itself instead of
+ * asking the UI to know about both ids.
+ */
+export const deleteCrmSubmission = mutation({
+  args: {
+    responseId: v.id("crmFormResponses"),
+    requesterId: v.id("users"),
+  },
+  handler: async (ctx, args): Promise<any> => {
+    const response = await ctx.db.get(args.responseId);
+    if (!response) throw new Error("CRM submission not found");
+
+    await requireCrmSupervisorAccess(ctx, args.requesterId, response.communityId);
+
+    const leads = await ctx.db
+      .query("crmLeads")
+      .withIndex("by_source_response", (q: any) =>
+        q.eq("sourceCrmResponseId", args.responseId)
+      )
+      .collect();
+
+    let deletedCalls = 0;
+    for (const lead of leads) {
+      const callLogs = await ctx.db
+        .query("crmCallLogs")
+        .withIndex("by_lead", (q: any) => q.eq("leadId", lead._id))
+        .collect();
+      const callAnswers = await ctx.db
+        .query("crmCallAnswers")
+        .withIndex("by_lead", (q: any) => q.eq("leadId", lead._id))
+        .collect();
+      const tickets = await ctx.db
+        .query("crmTickets")
+        .withIndex("by_lead", (q: any) => q.eq("leadId", lead._id))
+        .collect();
+      const opportunities = await ctx.db
+        .query("crmSalesOpportunities")
+        .withIndex("by_lead", (q: any) => q.eq("leadId", lead._id))
+        .collect();
+
+      for (const row of callAnswers) await ctx.db.delete(row._id);
+      for (const row of callLogs) await ctx.db.delete(row._id);
+      for (const row of tickets) await ctx.db.delete(row._id);
+      for (const row of opportunities) await ctx.db.delete(row._id);
+      await ctx.db.delete(lead._id);
+
+      deletedCalls += callLogs.length;
+    }
+
+    const values = await ctx.db
+      .query("crmFormResponseValues")
+      .withIndex("by_response", (q: any) => q.eq("crmResponseId", args.responseId))
+      .collect();
+    for (const row of values) await ctx.db.delete(row._id);
+
+    await ctx.db.delete(args.responseId);
+
+    return {
+      success: true,
+      deletedLeads: leads.length,
+      deletedCalls,
+    };
   },
 });

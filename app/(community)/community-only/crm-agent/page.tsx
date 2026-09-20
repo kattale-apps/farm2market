@@ -9,6 +9,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useStoredUser } from "@/app/hooks/useStoredUser";
+import { PRESET_KEYS, literalForPresetAnswer } from "@/convex/crmPresets";
 
 const FONT = '"Montserrat", sans-serif';
 const BRAND = "#156f44";
@@ -42,16 +43,21 @@ export default function CrmAgentPage() {
 
   const [activeLeadId, setActiveLeadId] = useState<string>("");
   const [submittingLeadId, setSubmittingLeadId] = useState<string>("");
-  const [outcome, setOutcome] = useState<"good_result" | "problem" | "wants_more" | "no_answer">("good_result");
-  const [usageStatus, setUsageStatus] = useState<"yes" | "partly" | "no" | "unknown">("yes");
-  const [resultRating, setResultRating] = useState<"very_good" | "good" | "average" | "poor" | "very_poor">("good");
-  const [issueType, setIssueType] = useState<"none" | "application_problem" | "product_problem" | "packaging_problem" | "delivery_problem" | "technical_advice" | "other">("none");
-  const [repurchaseIntent, setRepurchaseIntent] = useState<"yes" | "maybe" | "no">("yes");
+  // Every one of these starts empty on purpose. They used to default to the
+  // most positive answer, which meant an agent who submitted without touching
+  // them - including on a call nobody picked up - recorded a healthy, happy
+  // customer who wanted to buy again. Nothing here is recorded unless the
+  // agent actually selects it.
+  const [outcome, setOutcome] = useState<"" | "good_result" | "problem" | "wants_more" | "no_answer">("");
+  const [usageStatus, setUsageStatus] = useState<"" | "yes" | "partly" | "no" | "unknown">("");
+  const [resultRating, setResultRating] = useState<"" | "very_good" | "good" | "average" | "poor" | "very_poor">("");
+  const [issueType, setIssueType] = useState<"" | "none" | "application_problem" | "product_problem" | "packaging_problem" | "delivery_problem" | "technical_advice" | "other">("");
+  const [repurchaseIntent, setRepurchaseIntent] = useState<"" | "yes" | "maybe" | "no">("");
   const [notes, setNotes] = useState("");
   const [opportunityProductName, setOpportunityProductName] = useState("");
   const [opportunityQuantity, setOpportunityQuantity] = useState("");
   const [expectedPurchaseMonth, setExpectedPurchaseMonth] = useState("");
-  const [opportunityProbability, setOpportunityProbability] = useState<"high" | "medium" | "low">("high");
+  const [opportunityProbability, setOpportunityProbability] = useState<"" | "high" | "medium" | "low">("");
   const [opportunityNextActionDate, setOpportunityNextActionDate] = useState("");
   const [message, setMessage] = useState("");
   const [nameDrafts, setNameDrafts] = useState<Record<string, string>>({});
@@ -67,7 +73,13 @@ export default function CrmAgentPage() {
     (api as any).crmForms.getCrmFormDetails,
     userId && activeLead?.formId ? { requesterId: userId, crmFormId: activeLead.formId } : "skip"
   );
-  const callFields: any[] = activeLeadFormDetails?.fields || [];
+  // Memoized so it is the same array between renders: the preset lookup below
+  // is derived from it, and a fresh [] each render would rebuild that map
+  // constantly.
+  const callFields: any[] = useMemo(
+    () => activeLeadFormDetails?.fields || [],
+    [activeLeadFormDetails]
+  );
 
   // Group the queue by which intake form each lead came from - a supervisor
   // creates a form per campaign (e.g. a region-specific follow-up), adds
@@ -105,7 +117,42 @@ export default function CrmAgentPage() {
   const completed = todaySummary?.completedToday || 0;
   const callsToday = todaySummary?.callsToday || 0;
   const remaining = todaySummary?.remainingOpen || 0;
-  const shouldCaptureOpportunity = outcome === "wants_more" || repurchaseIntent === "yes";
+
+  // The form is the source of truth. Where the supervisor put a question on
+  // the form for one of the four standard outcomes, that question is the only
+  // place the agent answers it - the fixed dropdown below is hidden, so the
+  // same thing is never asked twice and there are never two answers to
+  // reconcile. The dropdown is still shown for forms that have no such
+  // question, so nothing is lost on an older form.
+  const presetFieldByKey = useMemo(() => {
+    const map = new Map<string, any>();
+    for (const field of callFields) {
+      const key = String(field.presetKey || "");
+      if (key && !map.has(key)) map.set(key, field);
+    }
+    return map;
+  }, [callFields]);
+
+  const formAnswersPreset = (presetKey: string) => presetFieldByKey.has(presetKey);
+
+  // What the call will actually record for a preset, reading the form answer
+  // first and falling back to the fixed dropdown.
+  const effectivePreset = (presetKey: string, fallback: string) => {
+    const field = presetFieldByKey.get(presetKey);
+    if (!field) return fallback;
+    const answer = (fieldAnswers[String(field._id)] || "").trim();
+    if (!answer) return "";
+    return literalForPresetAnswer(presetKey, answer) ?? "";
+  };
+
+  const effectiveRepurchase = effectivePreset(PRESET_KEYS.repurchaseIntent, repurchaseIntent);
+
+  // An unanswered call has no buyer on the other end, so it can never be a
+  // sales opportunity regardless of what the form says.
+  const shouldCaptureOpportunity =
+    outcome !== "" &&
+    outcome !== "no_answer" &&
+    (outcome === "wants_more" || effectiveRepurchase === "yes");
 
   const toTimestamp = (dateValue: string) => {
     if (!dateValue) return undefined;
@@ -115,18 +162,31 @@ export default function CrmAgentPage() {
   };
 
   const resetForm = () => {
-    setOutcome("good_result");
-    setUsageStatus("yes");
-    setResultRating("good");
-    setIssueType("none");
-    setRepurchaseIntent("yes");
+    setOutcome("");
+    setUsageStatus("");
+    setResultRating("");
+    setIssueType("");
+    setRepurchaseIntent("");
     setNotes("");
     setOpportunityProductName("");
     setOpportunityQuantity("");
     setExpectedPurchaseMonth("");
-    setOpportunityProbability("high");
+    setOpportunityProbability("");
     setOpportunityNextActionDate("");
     setFieldAnswers({});
+  };
+
+  // Opening a different lead must start from a blank form. All of this state
+  // is shared across the whole queue, so without this an agent who filled in
+  // part of one call, collapsed it, and opened the next lead carried the first
+  // farmer's answers into the second farmer's record.
+  const openLead = (leadId: string) => {
+    setActiveLeadId((current) => {
+      if (current === leadId) return "";
+      resetForm();
+      setMessage("");
+      return leadId;
+    });
   };
 
   const handleClaim = async (leadId: Id<"crmLeads">) => {
@@ -134,8 +194,12 @@ export default function CrmAgentPage() {
 
     try {
       await claimCrmLead({ leadId, agentId: userId });
-      setMessage("Lead claimed.");
+      // Claiming opens the call form too, so it goes through the same reset -
+      // otherwise claiming a lead mid-way through another one inherits that
+      // lead's half-filled answers.
+      if (String(leadId) !== activeLeadId) resetForm();
       setActiveLeadId(String(leadId));
+      setMessage("Lead claimed.");
     } catch (error: any) {
       setMessage(error?.message || "Failed to claim lead");
     }
@@ -168,8 +232,14 @@ export default function CrmAgentPage() {
     .map((field: any) => ({ crmFieldId: field._id, value: (fieldAnswers[String(field._id)] || "").trim() }))
     .filter((a) => a.value !== "");
 
+  // The form's questions cannot be validated until they have loaded. While the
+  // query is in flight `callFields` is empty, so this check would pass on a
+  // form full of required questions and the call would be saved with no
+  // answers at all.
+  const callFieldsLoading = Boolean(activeLead?.formId) && activeLeadFormDetails === undefined;
+
   // A call nobody answered has nothing to report, so required questions only
-  // bind when the agent actually spoke to the farmer.
+  // bind when the agent actually spoke to the customer.
   const missingRequired =
     outcome === "no_answer"
       ? []
@@ -180,6 +250,16 @@ export default function CrmAgentPage() {
   const handleSubmitCall = async (leadId: Id<"crmLeads">) => {
     if (!userId) return;
 
+    if (!outcome) {
+      setMessage("Please choose what happened on this call.");
+      return;
+    }
+
+    if (callFieldsLoading) {
+      setMessage("Still loading this form's questions, please wait.");
+      return;
+    }
+
     if (missingRequired.length > 0) {
       setMessage(`Please answer: ${missingRequired.map((f: any) => f.label).join(", ")}`);
       return;
@@ -189,24 +269,31 @@ export default function CrmAgentPage() {
     setMessage("");
 
     try {
-      await submitCrmCallOutcome({
+      // Only what the agent actually recorded is sent. An empty selection stays
+      // empty all the way to the database rather than being filled in with a
+      // default the agent never chose.
+      const result = await submitCrmCallOutcome({
         leadId,
         agentId: userId,
         outcome,
-        usageStatus,
-        resultRating,
-        issueType,
-        repurchaseIntent,
+        usageStatus: effectivePreset(PRESET_KEYS.usageStatus, usageStatus) || undefined,
+        resultRating: effectivePreset(PRESET_KEYS.resultRating, resultRating) || undefined,
+        issueType: effectivePreset(PRESET_KEYS.issueType, issueType) || undefined,
+        repurchaseIntent: effectiveRepurchase || undefined,
         notes: notes || undefined,
         createOpportunity: shouldCaptureOpportunity,
         opportunityProductName: shouldCaptureOpportunity ? (opportunityProductName || undefined) : undefined,
         opportunityQuantity: shouldCaptureOpportunity ? (opportunityQuantity || undefined) : undefined,
         expectedPurchaseMonth: shouldCaptureOpportunity ? (expectedPurchaseMonth || undefined) : undefined,
-        probability: shouldCaptureOpportunity ? opportunityProbability : undefined,
+        probability: shouldCaptureOpportunity ? (opportunityProbability || undefined) : undefined,
         opportunityNextActionAt: shouldCaptureOpportunity ? toTimestamp(opportunityNextActionDate) : undefined,
         answers: callAnswerPayload.length > 0 ? callAnswerPayload : undefined,
       });
-      setMessage("Call outcome saved.");
+      setMessage(
+        Number((result as any)?.answersRecorded || 0) > 0
+          ? "Call outcome saved."
+          : "Call saved with no answers recorded - it stays marked as unanswered."
+      );
       resetForm();
       setActiveLeadId("");
     } catch (error: any) {
@@ -327,7 +414,7 @@ export default function CrmAgentPage() {
                   {lead.district || "-"} {lead.subCounty ? `, ${lead.subCounty}` : ""} {lead.parish ? `, ${lead.parish}` : ""}
                 </div>
                 <div style={{ marginTop: "0.2rem", color: "#444", fontSize: "0.88rem" }}>
-                  {lead.productName || "Bio Farm"} {lead.purchaseQuantity ? `- ${lead.purchaseQuantity}` : ""}
+                  {lead.productName || "Product not recorded"} {lead.purchaseQuantity ? `- ${lead.purchaseQuantity}` : ""}
                 </div>
                 {(lead.cropGrown || lead.monthOfPlanting) && (
                   <div style={{ marginTop: "0.2rem", color: "#444", fontSize: "0.86rem" }}>
@@ -349,55 +436,84 @@ export default function CrmAgentPage() {
                   {canClaim && (
                     <button onClick={() => handleClaim(lead._id)} style={secondaryButtonStyle}>Claim Lead</button>
                   )}
-                  <button onClick={() => setActiveLeadId(isActive ? "" : String(lead._id))} style={primaryButtonStyle}>
+                  <button onClick={() => openLead(String(lead._id))} style={primaryButtonStyle}>
                     {isActive ? "Hide Call Form" : "Submit Call Form"}
                   </button>
                 </div>
 
                 {isActive && (
                   <div style={{ marginTop: "0.75rem", borderTop: "1px solid #eef2f7", paddingTop: "0.7rem" }}>
-                    <label style={labelStyle}>Outcome</label>
+                    <label style={labelStyle}>
+                      What happened on this call?<span style={{ color: "#b91c1c" }}> *</span>
+                    </label>
                     <select value={outcome} onChange={(e) => setOutcome(e.target.value as any)} style={inputStyle}>
+                      <option value="">Select...</option>
                       <option value="good_result">Good result</option>
                       <option value="problem">Problem</option>
                       <option value="wants_more">Wants more</option>
                       <option value="no_answer">No answer</option>
                     </select>
 
-                    <label style={labelStyle}>Used product?</label>
-                    <select value={usageStatus} onChange={(e) => setUsageStatus(e.target.value as any)} style={inputStyle}>
-                      <option value="yes">Yes</option>
-                      <option value="partly">Partly</option>
-                      <option value="no">No</option>
-                      <option value="unknown">Don&apos;t know</option>
-                    </select>
+                    {!formAnswersPreset(PRESET_KEYS.usageStatus) && (
+                      <>
+                        <label style={labelStyle}>Used product?</label>
+                        <select value={usageStatus} onChange={(e) => setUsageStatus(e.target.value as any)} style={inputStyle}>
+                          <option value="">Not recorded</option>
+                          <option value="yes">Yes</option>
+                          <option value="partly">Partly</option>
+                          <option value="no">No</option>
+                          <option value="unknown">Don&apos;t know</option>
+                        </select>
+                      </>
+                    )}
 
-                    <label style={labelStyle}>Result rating</label>
-                    <select value={resultRating} onChange={(e) => setResultRating(e.target.value as any)} style={inputStyle}>
-                      <option value="very_good">Very good</option>
-                      <option value="good">Good</option>
-                      <option value="average">Average</option>
-                      <option value="poor">Poor</option>
-                      <option value="very_poor">Very poor</option>
-                    </select>
+                    {!formAnswersPreset(PRESET_KEYS.resultRating) && (
+                      <>
+                        <label style={labelStyle}>Result rating</label>
+                        <select value={resultRating} onChange={(e) => setResultRating(e.target.value as any)} style={inputStyle}>
+                          <option value="">Not recorded</option>
+                          <option value="very_good">Very good</option>
+                          <option value="good">Good</option>
+                          <option value="average">Average</option>
+                          <option value="poor">Poor</option>
+                          <option value="very_poor">Very poor</option>
+                        </select>
+                      </>
+                    )}
 
-                    <label style={labelStyle}>Issue type</label>
-                    <select value={issueType} onChange={(e) => setIssueType(e.target.value as any)} style={inputStyle}>
-                      <option value="none">No problem</option>
-                      <option value="application_problem">Application problem</option>
-                      <option value="product_problem">Product problem</option>
-                      <option value="packaging_problem">Packaging problem</option>
-                      <option value="delivery_problem">Delivery problem</option>
-                      <option value="technical_advice">Needs technical advice</option>
-                      <option value="other">Other</option>
-                    </select>
+                    {!formAnswersPreset(PRESET_KEYS.issueType) && (
+                      <>
+                        <label style={labelStyle}>Issue type</label>
+                        <select value={issueType} onChange={(e) => setIssueType(e.target.value as any)} style={inputStyle}>
+                          <option value="">Not recorded</option>
+                          <option value="none">No problem</option>
+                          <option value="application_problem">Application problem</option>
+                          <option value="product_problem">Product problem</option>
+                          <option value="packaging_problem">Packaging problem</option>
+                          <option value="delivery_problem">Delivery problem</option>
+                          <option value="technical_advice">Needs technical advice</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </>
+                    )}
 
-                    <label style={labelStyle}>Repurchase intent</label>
-                    <select value={repurchaseIntent} onChange={(e) => setRepurchaseIntent(e.target.value as any)} style={inputStyle}>
-                      <option value="yes">Yes</option>
-                      <option value="maybe">Maybe</option>
-                      <option value="no">No</option>
-                    </select>
+                    {!formAnswersPreset(PRESET_KEYS.repurchaseIntent) && (
+                      <>
+                        <label style={labelStyle}>Repurchase intent</label>
+                        <select value={repurchaseIntent} onChange={(e) => setRepurchaseIntent(e.target.value as any)} style={inputStyle}>
+                          <option value="">Not recorded</option>
+                          <option value="yes">Yes</option>
+                          <option value="maybe">Maybe</option>
+                          <option value="no">No</option>
+                        </select>
+                      </>
+                    )}
+
+                    {callFieldsLoading && (
+                      <p style={{ marginTop: "0.6rem", marginBottom: 0, fontSize: "0.82rem", color: "#6b7280" }}>
+                        Loading this form&apos;s questions...
+                      </p>
+                    )}
 
                     {callFields.length > 0 && (
                       <div style={{ marginTop: "0.6rem", border: "1px solid #dcfce7", background: "#f0fdf4", borderRadius: 10, padding: "0.6rem" }}>
@@ -405,7 +521,7 @@ export default function CrmAgentPage() {
                           {activeLeadFormDetails?.form?.name || "Form"} questions
                         </div>
                         <div style={{ fontSize: "0.76rem", color: "#3f6212", marginBottom: "0.3rem" }}>
-                          Recorded against this call and used for stock and delivery planning.
+                          These answers are the record of this call. Anything left blank stays unanswered.
                         </div>
                         {callFields.map((field: any) => {
                           const key = String(field._id);
@@ -464,7 +580,7 @@ export default function CrmAgentPage() {
                         <input
                           value={opportunityProductName}
                           onChange={(e) => setOpportunityProductName(e.target.value)}
-                          placeholder={lead.productName || "e.g. Bio Fertilizer A"}
+                          placeholder={lead.productName || "Product name"}
                           style={inputStyle}
                         />
 
@@ -472,7 +588,7 @@ export default function CrmAgentPage() {
                         <input
                           value={opportunityQuantity}
                           onChange={(e) => setOpportunityQuantity(e.target.value)}
-                          placeholder="e.g. 20 litres"
+                          placeholder="Quantity"
                           style={inputStyle}
                         />
 
@@ -490,6 +606,7 @@ export default function CrmAgentPage() {
                           onChange={(e) => setOpportunityProbability(e.target.value as any)}
                           style={inputStyle}
                         >
+                          <option value="">Not recorded</option>
                           <option value="high">High</option>
                           <option value="medium">Medium</option>
                           <option value="low">Low</option>
@@ -507,10 +624,20 @@ export default function CrmAgentPage() {
 
                     <button
                       onClick={() => handleSubmitCall(lead._id)}
-                      disabled={submittingLeadId === String(lead._id)}
-                      style={{ ...primaryButtonStyle, width: "100%", marginTop: "0.55rem" }}
+                      disabled={submittingLeadId === String(lead._id) || callFieldsLoading || !outcome}
+                      style={{
+                        ...primaryButtonStyle,
+                        width: "100%",
+                        marginTop: "0.55rem",
+                        opacity: callFieldsLoading || !outcome ? 0.55 : 1,
+                        cursor: callFieldsLoading || !outcome ? "not-allowed" : "pointer",
+                      }}
                     >
-                      {submittingLeadId === String(lead._id) ? "Saving..." : "Save Call Outcome"}
+                      {submittingLeadId === String(lead._id)
+                        ? "Saving..."
+                        : callFieldsLoading
+                          ? "Loading questions..."
+                          : "Save Call Outcome"}
                     </button>
                   </div>
                 )}

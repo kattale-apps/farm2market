@@ -109,10 +109,14 @@ export function CrmSubmissionsPanel({
   communityId,
   requesterId,
   crmForms,
+  accentColor,
 }: {
   communityId: Id<"communities">;
   requesterId: Id<"users">;
   crmForms: Array<{ _id: string; name: string }>;
+  // Optional so callers that do not colour-code their sections keep the
+  // neutral grey card this panel has always had.
+  accentColor?: string;
 }) {
   const [range, setRange] = useState<RangeKey>("all");
   const [formId, setFormId] = useState<string>("");
@@ -209,9 +213,17 @@ export function CrmSubmissionsPanel({
   };
 
   return (
-    <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: "0.9rem", marginTop: "1rem" }}>
+    <div
+      style={{
+        border: `1px solid ${accentColor || "#e5e7eb"}`,
+        borderLeft: `${accentColor ? 6 : 1}px solid ${accentColor || "#e5e7eb"}`,
+        borderRadius: 12,
+        padding: "0.9rem",
+        marginTop: "1rem",
+      }}
+    >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-        <h3 style={{ margin: 0 }}>Submitted Forms &amp; Call Answers</h3>
+        <h3 style={{ margin: 0, color: accentColor }}>Submitted Forms &amp; Call Answers</h3>
         <button
           onClick={exportCsv}
           disabled={!rows.length}

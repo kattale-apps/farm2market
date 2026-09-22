@@ -15,7 +15,7 @@ import { useRouter } from "next/navigation";
 import { resolveCommunityLogo } from "../lib/communityLogos";
 import { useOfflineQuery } from "../hooks/useOfflineQuery";
 import { useOfflineMutation } from "../hooks/useOfflineMutation";
-import { menuAccentColor } from "../utils/menuAccentColors";
+import { menuRainbowColor } from "../utils/menuAccentColors";
 
 interface FarmerDashboardProps {
   userId: Id<"users">;
@@ -127,7 +127,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
     { key: "communities", label: "🌾 My Communities" },
     ...(effectiveRole === "farmer" ? [
       { key: "farmNeeds", label: "🧺 Farm Needs" },
-      { key: "farmToolbox", label: "🧰 Farm Toolbox" },
+      { key: "farmToolbox", label: "📒 Farm Record Book" },
       { key: "farmCalendar", label: "🗓️ Farm Calendar" },
       {
         key: "farm2market",
@@ -996,7 +996,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
           />
           <div
             className="f2m-dropdown"
-            style={{ padding: "0.4rem" }}
+            style={{ padding: "0.6rem" }}
           >
             {MORE_MENU_SECTIONS.map(({ key, label, disabled }, idx) => (
               <button
@@ -1009,16 +1009,20 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
                   justifyContent: "space-between",
                   alignItems: "center",
                   width: "100%",
-                  padding: "0.6rem 0.75rem",
-                  marginBottom: "0.25rem",
+                  // Thumb-sized rows with real space between them: these are
+                  // tapped on a phone, often outdoors, and the old 0.25rem gap
+                  // put two destinations within a finger's width of each other.
+                  minHeight: 52,
+                  padding: "0.85rem 0.9rem",
+                  marginBottom: "0.55rem",
                   background: isSectionOpen(key) ? "#e3f2fd" : "transparent",
                   border: "none",
-                  borderLeft: `4px solid ${menuAccentColor(idx)}`,
-                  borderRadius: "6px",
+                  borderLeft: `7px solid ${menuRainbowColor(idx)}`,
+                  borderRadius: "8px",
                   cursor: disabled ? "not-allowed" : "pointer",
                   opacity: disabled ? 0.6 : 1,
                   fontFamily: '"Montserrat", sans-serif',
-                  fontSize: "0.85rem",
+                  fontSize: "1rem",
                   fontWeight: 600,
                   color: "#2c2c2c",
                   textAlign: "left",

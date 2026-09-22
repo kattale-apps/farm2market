@@ -4534,7 +4534,7 @@ export default function CommunityDashboardPage() {
                             <p style={{ color: "#999" }}>Loading Active Farms members...</p>
                           ) : activeFarmseeMembers.length === 0 ? (
                             <p style={{ color: "#999" }}>
-                              No members with Farm Toolbox entries yet.
+                              No members with Farm Record Book entries yet.
                             </p>
                           ) : (
                             <>

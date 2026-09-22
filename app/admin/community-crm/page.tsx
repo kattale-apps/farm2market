@@ -36,6 +36,10 @@ const SECTION_COLORS = {
 // them from the page instead of competing with the colour-coded sections.
 const ADMIN_SECTION_BORDER = "#9ca3af";
 
+// The follow-up interval every new form starts on. It was an input on this
+// card; supervisors change it per form from the form list instead.
+const DEFAULT_FOLLOW_UP_OFFSET_DAYS = 7;
+
 function sectionStyle(color: string, marginTop: string): CSSProperties {
   return {
     marginTop,
@@ -94,9 +98,10 @@ export default function CommunityCrmPage() {
   );
 
   const [selectedCommunityId, setSelectedCommunityId] = useState<Id<"communities"> | null>(null);
-  const [name, setName] = useState("Purchase Follow-Up Form");
-  const [description, setDescription] = useState("Call center follow-up questionnaire for recent purchasers");
-  const [followUpOffsetDays, setFollowUpOffsetDays] = useState(7);
+  // Blank on purpose. These three used to arrive pre-filled, so a supervisor
+  // exploring the page could create a real form for the community with one
+  // stray click on a name they never chose.
+  const [name, setName] = useState("");
   const [openingScriptEnabled, setOpeningScriptEnabled] = useState(true);
   const [openingScriptTemplate, setOpeningScriptTemplate] = useState(defaultScript);
   const [busy, setBusy] = useState(false);
@@ -279,9 +284,8 @@ export default function CommunityCrmPage() {
       const result = await createCrmForm({
         adminId: userId,
         communityId: selectedCommunityId,
-        name,
-        description,
-        followUpOffsetDays,
+        name: name.trim(),
+        followUpOffsetDays: DEFAULT_FOLLOW_UP_OFFSET_DAYS,
         openingScriptEnabled,
         openingScriptTemplate,
       });
@@ -301,6 +305,8 @@ export default function CommunityCrmPage() {
         });
       }
 
+      // Cleared so the next click cannot repeat the form that was just made.
+      setName("");
       setMessage("CRM form created with default call-center fields.");
     } catch (error: any) {
       setMessage(error?.message || "Failed to create CRM form");
@@ -582,11 +588,13 @@ export default function CommunityCrmPage() {
               : "Lead captured against the existing member with this phone number. It will now appear in the agent call queue."
         );
       } else {
-        // Existing members already have their location on file, so each one is
-        // submitted individually with their own district/sub-county/parish
-        // rather than forcing a single shared location on the whole batch. The
-        // manually picked dropdowns above only act as a fallback for members
-        // who don't have a location saved yet.
+        // The agent is on the call and is being told where the client actually
+        // is, so what they pick is what gets captured. A member's saved
+        // location fills the gap only where the agent left the dropdown blank,
+        // and the member can correct either of them on their own profile when
+        // they first log in. Each member is still submitted individually so a
+        // batch does not overwrite the locations of members the agent did not
+        // ask about.
         const membersById = new Map<string, any>((communityMembers || []).map((m: any) => [String(m.userId), m]));
         const memberIds = Array.from(selectedMemberIds);
 
@@ -602,9 +610,9 @@ export default function CommunityCrmPage() {
               purchaseDate: intakePurchaseDate || undefined,
               productName: intakeProductName || undefined,
               purchaseQuantity: intakeQuantity || undefined,
-              district: member?.districtText || districtName || undefined,
-              subCounty: member?.subCountyText || subcountyName || undefined,
-              parish: member?.parishText || parishName || undefined,
+              district: districtName || member?.districtText || undefined,
+              subCounty: subcountyName || member?.subCountyText || undefined,
+              parish: parishName || member?.parishText || undefined,
               cropGrown: intakeCropGrown || undefined,
               monthOfPlanting: intakeMonthOfPlanting || undefined,
               pastSprayDates: pastSprayDates.length > 0 ? pastSprayDates : undefined,
@@ -804,13 +812,6 @@ export default function CommunityCrmPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#f3f7f4", padding: "1rem", fontFamily: FONT }}>
-      {/* rows={4} sets the desktop height; on a phone the script is long enough
-          that the same box needs twice the typing area to stay readable. */}
-      <style>{`
-        @media (max-width: 640px) {
-          .crm-opening-script { min-height: 9.6em; }
-        }
-      `}</style>
       <div style={{ maxWidth: 1200, margin: "0 auto", background: "#fff", borderRadius: 14, padding: "1rem", boxShadow: "0 8px 20px rgba(0,0,0,0.06)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
           <div>
@@ -938,37 +939,37 @@ export default function CommunityCrmPage() {
             Supervisor-configured form drives callback queue and script shown to agents.
           </p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "0.7rem" }}>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Form name" style={inputStyle} />
-            <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description" style={inputStyle} />
-            <input
-              value={followUpOffsetDays}
-              onChange={(e) => setFollowUpOffsetDays(Number(e.target.value || 0))}
-              type="number"
-              min={0}
-              max={365}
-              placeholder="Follow-up days"
-              style={inputStyle}
-            />
+            <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "0.85rem", fontWeight: 600, color: "#374151" }}>
+              Form name
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Purchase Follow-Up Form"
+                style={{ ...inputStyle, fontWeight: 400 }}
+              />
+            </label>
             <label style={{ display: "inline-flex", gap: "0.5rem", alignItems: "center", fontSize: "0.9rem" }}>
               <input type="checkbox" checked={openingScriptEnabled} onChange={(e) => setOpeningScriptEnabled(e.target.checked)} />
               Enable opening script
             </label>
           </div>
-          <textarea
-            className="crm-opening-script"
-            value={openingScriptTemplate}
-            onChange={(e) => setOpeningScriptTemplate(e.target.value)}
-            rows={4}
-            style={{ ...inputStyle, width: "100%", marginTop: "0.7rem" }}
-          />
+          <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: "#374151", marginTop: "0.7rem" }}>
+            Opening script
+            <textarea
+              value={openingScriptTemplate}
+              onChange={(e) => setOpeningScriptTemplate(e.target.value)}
+              rows={8}
+              style={{ ...inputStyle, width: "100%", marginTop: "0.25rem", fontWeight: 400 }}
+            />
+          </label>
           <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.45rem" }}>
             Tokens: {ALLOWED_SCRIPT_TOKENS.map((token) => `{{${token}}}`).join(", ")}
           </div>
           <div style={{ marginTop: "0.75rem", display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
             <button
               onClick={handleCreateDefaultCrmForm}
-              disabled={busy || !selectedCommunityId}
-              style={{ minHeight: 44, padding: "0.6rem 0.95rem", borderRadius: 8, border: "none", background: BRAND, color: "#fff", fontWeight: 700, cursor: busy ? "not-allowed" : "pointer" }}
+              disabled={busy || !selectedCommunityId || !name.trim()}
+              style={{ minHeight: 44, padding: "0.6rem 0.95rem", borderRadius: 8, border: "none", background: busy || !name.trim() ? "#9ca3af" : BRAND, color: "#fff", fontWeight: 700, cursor: busy || !name.trim() ? "not-allowed" : "pointer" }}
             >
               {busy ? "Creating..." : "Create Default CRM Form"}
             </button>
@@ -1099,7 +1100,7 @@ export default function CommunityCrmPage() {
 
               {intakeMode === "existing" && (
                 <p style={{ marginTop: 0, marginBottom: "0.4rem", fontSize: "0.8rem", color: "#666" }}>
-                  Selected members use their own saved location automatically. The dropdowns below only apply as a fallback for members without a location on file.
+                  The location you pick below is captured for every selected member, exactly as you enter it. Members you leave blank keep the location already on their account, and any member can correct it on their profile the first time they log in.
                 </p>
               )}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "0.55rem", marginBottom: "0.65rem" }}>

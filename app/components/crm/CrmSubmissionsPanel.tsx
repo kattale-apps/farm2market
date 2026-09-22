@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
@@ -14,6 +14,17 @@ import { Id } from "../../../convex/_generated/dataModel";
  */
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+// How many members to show per page. A supervisor reviewing one district wants
+// a short page they can read to the end; one exporting a whole season wants
+// everything on screen at once, so the size is theirs to pick. 0 means "all".
+const PAGE_SIZE_OPTIONS: Array<{ value: number; label: string }> = [
+  { value: 10, label: "10 per page" },
+  { value: 25, label: "25 per page" },
+  { value: 50, label: "50 per page" },
+  { value: 100, label: "100 per page" },
+  { value: 0, label: "Show all" },
+];
 
 type RangeKey = "today" | "7" | "30" | "90" | "all";
 
@@ -126,6 +137,8 @@ export function CrmSubmissionsPanel({
   const [confirmingDelete, setConfirmingDelete] = useState<string>("");
   const [deletingId, setDeletingId] = useState<string>("");
   const [deleteError, setDeleteError] = useState<string>("");
+  const [pageSize, setPageSize] = useState<number>(25);
+  const [page, setPage] = useState<number>(1);
 
   const deleteCrmSubmission = useMutation((api as any).crmCalls.deleteCrmSubmission);
 
@@ -142,6 +155,22 @@ export function CrmSubmissionsPanel({
   });
 
   const rows = data?.rows ?? [];
+
+  const pageCount = pageSize === 0 ? 1 : Math.max(1, Math.ceil(rows.length / pageSize));
+
+  // A filter that narrows the list can strand the viewer on a page that no
+  // longer exists, so the page is pulled back into range whenever it does.
+  useEffect(() => {
+    setPage(1);
+  }, [range, formId, outcome, search, pageSize]);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, pageCount));
+  }, [pageCount]);
+
+  const safePage = Math.min(page, pageCount);
+  const firstIndex = pageSize === 0 ? 0 : (safePage - 1) * pageSize;
+  const pagedRows = pageSize === 0 ? rows : rows.slice(firstIndex, firstIndex + pageSize);
 
   const toggle = (id: string) =>
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -286,6 +315,15 @@ export function CrmSubmissionsPanel({
             <option key={key} value={key}>{label}</option>
           ))}
         </select>
+        <select
+          value={pageSize}
+          onChange={(e) => setPageSize(Number(e.target.value))}
+          style={{ padding: "0.4rem 0.6rem", borderRadius: 8, border: "1px solid #ddd", fontSize: "0.82rem" }}
+        >
+          {PAGE_SIZE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
       </div>
 
       {/* Summary */}
@@ -308,7 +346,7 @@ export function CrmSubmissionsPanel({
 
       {/* Rows */}
       <div style={{ marginTop: "0.6rem" }}>
-        {rows.map((row: any) => {
+        {pagedRows.map((row: any) => {
           const isOpen = !!expanded[row.responseId];
           return (
             <div key={row.responseId} style={{ border: "1px solid #eee", borderRadius: 10, marginBottom: "0.5rem", overflow: "hidden" }}>
@@ -532,8 +570,57 @@ export function CrmSubmissionsPanel({
           );
         })}
       </div>
+
+      {rows.length > 0 && (
+        <div
+          style={{
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+            gap: "0.6rem", flexWrap: "wrap", marginTop: "0.6rem",
+          }}
+        >
+          <span style={{ fontSize: "0.8rem", color: "#555" }}>
+            {pageSize === 0
+              ? `Showing all ${rows.length} member${rows.length === 1 ? "" : "s"}`
+              : `Showing ${firstIndex + 1}-${firstIndex + pagedRows.length} of ${rows.length} member${rows.length === 1 ? "" : "s"}`}
+          </span>
+          {pageCount > 1 && (
+            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
+              <button
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                disabled={safePage <= 1}
+                style={pagerButtonStyle(safePage <= 1)}
+              >
+                Previous
+              </button>
+              <span style={{ fontSize: "0.8rem", color: "#555" }}>
+                Page {safePage} of {pageCount}
+              </span>
+              <button
+                onClick={() => setPage((current) => Math.min(pageCount, current + 1))}
+                disabled={safePage >= pageCount}
+                style={pagerButtonStyle(safePage >= pageCount)}
+              >
+                Next
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
+}
+
+function pagerButtonStyle(disabled: boolean) {
+  return {
+    padding: "0.3rem 0.7rem",
+    borderRadius: 8,
+    border: "1px solid #d1d5db",
+    background: disabled ? "#f5f5f5" : "#fff",
+    color: disabled ? "#aaa" : "#374151",
+    fontSize: "0.8rem",
+    fontWeight: 600,
+    cursor: disabled ? "not-allowed" : "pointer",
+  } as const;
 }
 
 function Chip({ label, tone }: { label: string | null; tone?: "warn" }) {

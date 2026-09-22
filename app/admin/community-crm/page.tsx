@@ -31,6 +31,11 @@ const SECTION_COLORS = {
   manageFields: "#7c3aed",  // violet
 } as const;
 
+// The administration cards below the rainbow sections are not part of that
+// teaching sequence, so they share one darker grey outline that still separates
+// them from the page instead of competing with the colour-coded sections.
+const ADMIN_SECTION_BORDER = "#9ca3af";
+
 function sectionStyle(color: string, marginTop: string): CSSProperties {
   return {
     marginTop,
@@ -226,6 +231,8 @@ export default function CommunityCrmPage() {
   const submitCrmIntake = useMutation((api as any).crmForms.submitCrmIntake);
   const backfillCrmMemberNames = useMutation((api as any).crmForms.backfillCrmMemberNames);
   const [formActionBusyId, setFormActionBusyId] = useState("");
+  // Shown inside the CRM Forms card, where the button that caused it is.
+  const [formsNotice, setFormsNotice] = useState<{ tone: "success" | "error" | "info"; text: string } | null>(null);
 
   useEffect(() => {
     if (!communities || communities.length === 0) return;
@@ -396,21 +403,55 @@ export default function CommunityCrmPage() {
     setFormActionBusyId("");
   };
 
+  // Deleting a form used to fail silently from the supervisor's point of view:
+  // the backend refused any form that had submissions, and the error landed in
+  // the message line at the top of the page, far from the button that was
+  // pressed. The result is now reported next to the form, and a form with
+  // history is deleted on a second confirmation that states what goes with it.
   const handleDeleteForm = async (form: any) => {
     if (!userId) return;
     if (!window.confirm(`Delete the form "${form.name}"? This cannot be undone.`)) return;
 
     setFormActionBusyId(String(form._id));
     setMessage("");
+    setFormsNotice(null);
     try {
-      await deleteCrmForm({
+      const result: any = await deleteCrmForm({
         crmFormId: form._id,
         adminId: userId,
       });
+
+      if (result?.requiresConfirmation) {
+        const parts = [
+          `${result.responseCount} submitted form(s)`,
+          `${result.leadCount} lead(s)`,
+          `${result.callCount} logged call(s)`,
+        ].join(", ");
+        const proceed = window.confirm(
+          `"${form.name}" has history attached: ${parts}.\n\n` +
+            "Deleting the form permanently deletes all of it, including the answers " +
+            "agents captured on those calls. There is no undo.\n\n" +
+            "Press OK to delete everything, or Cancel and use Deactivate to stop new " +
+            "submissions while keeping the records."
+        );
+        if (!proceed) {
+          setFormsNotice({ tone: "info", text: `"${form.name}" was not deleted.` });
+          setFormActionBusyId("");
+          return;
+        }
+
+        await deleteCrmForm({
+          crmFormId: form._id,
+          adminId: userId,
+          deleteResponses: true,
+        });
+      }
+
       if (selectedCrmFormId === form._id) setSelectedCrmFormId(null);
-      setMessage("Form deleted.");
+      if (intakeCrmFormId === form._id) setIntakeCrmFormId(null);
+      setFormsNotice({ tone: "success", text: `"${form.name}" deleted.` });
     } catch (error: any) {
-      setMessage(error?.message || "Failed to delete form");
+      setFormsNotice({ tone: "error", text: error?.message || "Failed to delete form" });
     }
     setFormActionBusyId("");
   };
@@ -1262,7 +1303,7 @@ export default function CommunityCrmPage() {
         </div>
 
         <div style={{ marginTop: "1.25rem", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "0.75rem" }}>
-          <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: "0.9rem" }}>
+          <div style={{ border: `1px solid ${ADMIN_SECTION_BORDER}`, borderRadius: 12, padding: "0.9rem" }}>
             <h3 style={{ marginTop: 0 }}>Assign CRM Agent</h3>
             <p style={{ color: "#666", fontSize: "0.88rem", marginTop: 0 }}>
               Add an existing Community CRM admin account as a call-center agent for this
@@ -1291,7 +1332,7 @@ export default function CommunityCrmPage() {
             </button>
           </div>
 
-          <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: "0.9rem" }}>
+          <div style={{ border: `1px solid ${ADMIN_SECTION_BORDER}`, borderRadius: 12, padding: "0.9rem" }}>
             <h3 style={{ marginTop: 0 }}>Agent Performance</h3>
             {!agentPerformance && <p style={{ color: "#777" }}>Loading...</p>}
             {(agentPerformance || []).length === 0 && <p style={{ color: "#777" }}>No calls logged yet.</p>}
@@ -1303,8 +1344,25 @@ export default function CommunityCrmPage() {
             ))}
           </div>
 
-          <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: "0.9rem" }}>
+          <div style={{ border: `1px solid ${ADMIN_SECTION_BORDER}`, borderRadius: 12, padding: "0.9rem" }}>
             <h3 style={{ marginTop: 0 }}>CRM Forms</h3>
+            {formsNotice && (
+              <p
+                style={{
+                  marginTop: 0,
+                  fontSize: "0.85rem",
+                  fontWeight: 600,
+                  color:
+                    formsNotice.tone === "error"
+                      ? "#b91c1c"
+                      : formsNotice.tone === "success"
+                        ? BRAND
+                        : "#555",
+                }}
+              >
+                {formsNotice.text}
+              </p>
+            )}
             {!crmForms && <p style={{ color: "#777" }}>Loading...</p>}
             {(crmForms || []).length === 0 && <p style={{ color: "#777" }}>No CRM forms yet.</p>}
             {(crmForms || []).map((form: any) => (
@@ -1337,7 +1395,7 @@ export default function CommunityCrmPage() {
             ))}
           </div>
 
-          <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: "0.9rem" }}>
+          <div style={{ border: `1px solid ${ADMIN_SECTION_BORDER}`, borderRadius: 12, padding: "0.9rem" }}>
             <h3 style={{ marginTop: 0 }}>Assigned CRM Agents</h3>
             {!crmAgents && <p style={{ color: "#777" }}>Loading...</p>}
             {(crmAgents || []).length === 0 && <p style={{ color: "#777" }}>No agents assigned yet.</p>}

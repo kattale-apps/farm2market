@@ -333,10 +333,32 @@ export const updateCrmForm = mutation({
   },
 });
 
+/**
+ * Delete a CRM form.
+ *
+ * A form with submissions used to be undeletable: the mutation threw and told
+ * the supervisor to deactivate it instead. That left the delete button on the
+ * dashboard looking broken, because every form that had ever been used refused
+ * to go. It now deletes them, but never on the strength of one click - the
+ * caller has to come back a second time with deleteResponses set, and the
+ * first call returns the exact counts so the confirmation can say what is
+ * about to be destroyed. Submitted intake answers and the call answers taken
+ * against them are the community's record of those conversations, so they are
+ * only removed when someone has been shown what they are giving up.
+ *
+ * Convex has no cascading delete, so every child row is swept explicitly. A
+ * missed table leaves call answers pointing at a field or lead id that no
+ * longer resolves, which the analytics queries go on counting.
+ */
 export const deleteCrmForm = mutation({
   args: {
     crmFormId: v.id("crmForms"),
     adminId: v.id("users"),
+    /**
+     * Destroy the form's submissions, leads and call history along with it.
+     * Omitted on the first call so the UI can report what would be lost.
+     */
+    deleteResponses: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const form = await ctx.db.get(args.crmFormId);
@@ -347,12 +369,73 @@ export const deleteCrmForm = mutation({
     const responses = await ctx.db
       .query("crmFormResponses")
       .withIndex("by_form", (q: any) => q.eq("crmFormId", args.crmFormId))
-      .first();
+      .collect();
 
-    if (responses) {
-      throw new Error(
-        "This form already has submitted responses and cannot be deleted. Deactivate it instead to stop new submissions."
-      );
+    const leads: any[] = [];
+    for (const response of responses) {
+      const responseLeads = await ctx.db
+        .query("crmLeads")
+        .withIndex("by_source_response", (q: any) =>
+          q.eq("sourceCrmResponseId", response._id)
+        )
+        .collect();
+      leads.push(...responseLeads);
+    }
+
+    let callCount = 0;
+    for (const lead of leads) {
+      const calls = await ctx.db
+        .query("crmCallLogs")
+        .withIndex("by_lead", (q: any) => q.eq("leadId", lead._id))
+        .collect();
+      callCount += calls.length;
+    }
+
+    // First pass: report, do not delete. The UI turns these counts into the
+    // second confirmation prompt.
+    if (responses.length > 0 && !args.deleteResponses) {
+      return {
+        success: false,
+        requiresConfirmation: true,
+        formName: form.name,
+        responseCount: responses.length,
+        leadCount: leads.length,
+        callCount,
+      };
+    }
+
+    for (const lead of leads) {
+      const callLogs = await ctx.db
+        .query("crmCallLogs")
+        .withIndex("by_lead", (q: any) => q.eq("leadId", lead._id))
+        .collect();
+      const callAnswers = await ctx.db
+        .query("crmCallAnswers")
+        .withIndex("by_lead", (q: any) => q.eq("leadId", lead._id))
+        .collect();
+      const tickets = await ctx.db
+        .query("crmTickets")
+        .withIndex("by_lead", (q: any) => q.eq("leadId", lead._id))
+        .collect();
+      const opportunities = await ctx.db
+        .query("crmSalesOpportunities")
+        .withIndex("by_lead", (q: any) => q.eq("leadId", lead._id))
+        .collect();
+
+      for (const row of callAnswers) await ctx.db.delete(row._id);
+      for (const row of callLogs) await ctx.db.delete(row._id);
+      for (const row of tickets) await ctx.db.delete(row._id);
+      for (const row of opportunities) await ctx.db.delete(row._id);
+      await ctx.db.delete(lead._id);
+    }
+
+    for (const response of responses) {
+      const values = await ctx.db
+        .query("crmFormResponseValues")
+        .withIndex("by_response", (q: any) => q.eq("crmResponseId", response._id))
+        .collect();
+      for (const row of values) await ctx.db.delete(row._id);
+      await ctx.db.delete(response._id);
     }
 
     const fields = await ctx.db
@@ -365,15 +448,30 @@ export const deleteCrmForm = mutation({
         .query("crmFormResponseValues")
         .withIndex("by_field", (q: any) => q.eq("crmFieldId", field._id))
         .collect();
-      for (const row of values) {
-        await ctx.db.delete(row._id);
-      }
+      for (const row of values) await ctx.db.delete(row._id);
+
+      // Call answers snapshot the field they were taken against. They belong
+      // to a lead that has just gone, but a call answer from a lead sourced
+      // elsewhere could still reference this field, so sweep by field too.
+      const answers = await ctx.db
+        .query("crmCallAnswers")
+        .withIndex("by_field", (q: any) => q.eq("crmFieldId", field._id))
+        .collect();
+      for (const row of answers) await ctx.db.delete(row._id);
+
       await ctx.db.delete(field._id);
     }
 
     await ctx.db.delete(args.crmFormId);
 
-    return { success: true };
+    return {
+      success: true,
+      requiresConfirmation: false,
+      formName: form.name,
+      responseCount: responses.length,
+      leadCount: leads.length,
+      callCount,
+    };
   },
 });
 

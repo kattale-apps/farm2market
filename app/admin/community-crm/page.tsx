@@ -20,6 +20,27 @@ import {
 const FONT = '"Montserrat", sans-serif';
 const BRAND = "#1f7a3e";
 
+// Each workspace section gets its own colour from a rainbow run so a trainee
+// can be pointed at "the blue section" rather than a heading buried in text.
+const SECTION_COLORS = {
+  todaysForms: "#dc2626",   // red
+  followUps: "#ea580c",     // orange
+  submissions: "#ca8a04",   // yellow
+  createForm: "#15803d",    // green
+  captureLead: "#1d4ed8",   // blue
+  manageFields: "#7c3aed",  // violet
+} as const;
+
+function sectionStyle(color: string, marginTop: string): CSSProperties {
+  return {
+    marginTop,
+    border: `1px solid ${color}`,
+    borderLeft: `6px solid ${color}`,
+    borderRadius: 12,
+    padding: "0.9rem",
+  };
+}
+
 // Imported rather than redeclared. This page used to hold its own copy of the
 // default script, identical to the backend's, with nothing keeping the two in
 // step - and both named a single community's brand in a default every
@@ -742,6 +763,13 @@ export default function CommunityCrmPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#f3f7f4", padding: "1rem", fontFamily: FONT }}>
+      {/* rows={4} sets the desktop height; on a phone the script is long enough
+          that the same box needs twice the typing area to stay readable. */}
+      <style>{`
+        @media (max-width: 640px) {
+          .crm-opening-script { min-height: 9.6em; }
+        }
+      `}</style>
       <div style={{ maxWidth: 1200, margin: "0 auto", background: "#fff", borderRadius: 14, padding: "1rem", boxShadow: "0 8px 20px rgba(0,0,0,0.06)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
           <div>
@@ -774,8 +802,8 @@ export default function CommunityCrmPage() {
         </div>
 
         <div style={{ marginTop: "1rem", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "0.75rem" }}>
-          <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: "0.9rem" }}>
-            <h3 style={{ marginTop: 0 }}>Today&apos;s Submitted Forms</h3>
+          <div style={sectionStyle(SECTION_COLORS.todaysForms, "0")}>
+            <h3 style={{ marginTop: 0, color: SECTION_COLORS.todaysForms }}>Today&apos;s Submitted Forms</h3>
             {!todaysSubmittedForms && <p style={{ color: "#777" }}>Loading...</p>}
             {(todaysSubmittedForms || []).length === 0 && <p style={{ color: "#777" }}>No forms submitted today yet.</p>}
             <div style={{ maxHeight: 260, overflowY: "auto" }}>
@@ -792,8 +820,8 @@ export default function CommunityCrmPage() {
             </div>
           </div>
 
-          <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: "0.9rem" }}>
-            <h3 style={{ marginTop: 0 }}>Follow-ups Due (Upcoming Calls &amp; Confirmed Visits)</h3>
+          <div style={sectionStyle(SECTION_COLORS.followUps, "0")}>
+            <h3 style={{ marginTop: 0, color: SECTION_COLORS.followUps }}>Follow-ups Due (Upcoming Calls &amp; Confirmed Visits)</h3>
             {!followUpsDueDetails && <p style={{ color: "#777" }}>Loading...</p>}
             {(followUpsDueDetails || []).length === 0 && <p style={{ color: "#777" }}>No follow-ups due.</p>}
             <div style={{ maxHeight: 260, overflowY: "auto" }}>
@@ -821,6 +849,7 @@ export default function CommunityCrmPage() {
             communityId={selectedCommunityId}
             requesterId={userId}
             crmForms={(crmForms || []) as any}
+            accentColor={SECTION_COLORS.submissions}
           />
         )}
 
@@ -862,8 +891,8 @@ export default function CommunityCrmPage() {
           </button>
         </div>
 
-        <div style={{ marginTop: "1.25rem", border: "1px solid #e5e7eb", borderRadius: 12, padding: "0.9rem" }}>
-          <h2 style={{ marginTop: 0, fontSize: "1.05rem" }}>Create CRM Form Type</h2>
+        <div style={sectionStyle(SECTION_COLORS.createForm, "1.25rem")}>
+          <h2 style={{ marginTop: 0, fontSize: "1.05rem", color: SECTION_COLORS.createForm }}>Create CRM Form Type</h2>
           <p style={{ marginTop: 0, color: "#666", fontSize: "0.9rem" }}>
             Supervisor-configured form drives callback queue and script shown to agents.
           </p>
@@ -885,6 +914,7 @@ export default function CommunityCrmPage() {
             </label>
           </div>
           <textarea
+            className="crm-opening-script"
             value={openingScriptTemplate}
             onChange={(e) => setOpeningScriptTemplate(e.target.value)}
             rows={4}
@@ -918,8 +948,8 @@ export default function CommunityCrmPage() {
           {message && <p style={{ marginBottom: 0, color: "#1f7a3e", fontWeight: 600 }}>{message}</p>}
         </div>
 
-        <div style={{ marginTop: "1rem", border: "1px solid #e5e7eb", borderRadius: 12, padding: "0.9rem" }}>
-          <h2 style={{ marginTop: 0, fontSize: "1.05rem" }}>Capture New Lead (Intake)</h2>
+        <div style={sectionStyle(SECTION_COLORS.captureLead, "1rem")}>
+          <h2 style={{ marginTop: 0, fontSize: "1.05rem", color: SECTION_COLORS.captureLead }}>Capture New Lead (Intake)</h2>
           <p style={{ marginTop: 0, color: "#666", fontSize: "0.9rem" }}>
             Add a client&apos;s contact and farm details to create a lead. New clients get a member account automatically (login: their phone number); agents fill in the rest of their profile once reached.
           </p>
@@ -1143,8 +1173,8 @@ export default function CommunityCrmPage() {
           )}
         </div>
 
-        <div style={{ marginTop: "1rem", border: "1px solid #e5e7eb", borderRadius: 12, padding: "0.9rem" }}>
-          <h2 style={{ marginTop: 0, fontSize: "1.05rem" }}>Manage CRM Form Fields</h2>
+        <div style={sectionStyle(SECTION_COLORS.manageFields, "1rem")}>
+          <h2 style={{ marginTop: 0, fontSize: "1.05rem", color: SECTION_COLORS.manageFields }}>Manage CRM Form Fields</h2>
           <p style={{ marginTop: 0, color: "#666", fontSize: "0.9rem" }}>
             Add or remove entry fields for a selected CRM form type.
           </p>

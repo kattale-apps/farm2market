@@ -77,7 +77,7 @@ function TemplatesTab({ userId, onSelectTemplate }: { userId: Id<"users">; onSel
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
           <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 700 }}>📋 Tracker Templates</h2>
           <button onClick={() => setShowCreateForm(!showCreateForm)}
-            style={{ padding: "0.4rem 0.85rem", background: BRAND, color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, fontSize: "0.8rem", cursor: "pointer", fontFamily: FONT }}>
+            style={{ minHeight: 44, padding: "0.6rem 1.1rem", background: BRAND, color: "#fff", border: "none", borderRadius: 10, fontWeight: 700, fontSize: "0.95rem", cursor: "pointer", fontFamily: FONT }}>
             {showCreateForm ? "Cancel" : "➕ Create"}
           </button>
         </div>
@@ -102,9 +102,9 @@ function TemplatesTab({ userId, onSelectTemplate }: { userId: Id<"users">; onSel
                     </div>
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: "0.35rem" }}>
+                <div style={{ display: "flex", gap: "0.5rem", flexShrink: 0 }}>
                   <button onClick={() => onSelectTemplate(tpl)}
-                    style={{ padding: "0.35rem 0.7rem", background: BRAND_BG, border: `1px solid #a5d6a7`, borderRadius: 6, fontSize: "0.75rem", cursor: "pointer", color: BRAND, fontFamily: FONT, fontWeight: 600 }}>
+                    style={{ minHeight: 44, padding: "0.55rem 1rem", background: BRAND_BG, border: `1px solid ${BRAND}`, borderRadius: 9, fontSize: "0.92rem", cursor: "pointer", color: BRAND, fontFamily: FONT, fontWeight: 700 }}>
                     ✏️ Log
                   </button>
                   {tpl.ownerType === "personal" && (
@@ -112,7 +112,7 @@ function TemplatesTab({ userId, onSelectTemplate }: { userId: Id<"users">; onSel
                       if (!confirm("Delete this template?")) return;
                       await deleteTemplate({ templateId: tpl._id, requestingUserId: userId });
                     }}
-                      style={{ padding: "0.35rem 0.5rem", background: "#ffebee", border: "1px solid #ef9a9a", borderRadius: 6, fontSize: "0.75rem", cursor: "pointer", color: "#c62828", fontFamily: FONT }}>
+                      style={{ minHeight: 44, minWidth: 44, padding: "0.55rem 0.75rem", background: "#ffebee", border: "1px solid #ef9a9a", borderRadius: 9, fontSize: "0.95rem", cursor: "pointer", color: "#c62828", fontFamily: FONT }}>
                       🗑
                     </button>
                   )}
@@ -774,7 +774,13 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem" }}>
         <button onClick={() => { setSelectedTemplate(null); setSuccessMsg(null); }}
-          style={{ background: "none", border: "none", fontSize: "1rem", cursor: "pointer", color: BRAND }}>← Back</button>
+          style={{
+            display: "inline-flex", alignItems: "center", gap: "0.35rem",
+            minHeight: 44, padding: "0.5rem 0.95rem",
+            background: BRAND_BG, border: `1px solid ${BRAND}`, borderRadius: 10,
+            fontSize: "0.95rem", fontWeight: 700, color: BRAND,
+            cursor: "pointer", fontFamily: FONT, flexShrink: 0,
+          }}>← Back</button>
         <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 700 }}>
           {isDefaultTemplate ? "🍃" : (selectedTemplate.emoji || "📋")} {getDisplayTemplateName(String(selectedTemplate.templateName || ""))}
         </h2>
@@ -1475,9 +1481,24 @@ export default function FarmToolboxPage() {
     <div style={{ fontFamily: FONT, minHeight: "100vh", background: "#f9fafb", paddingBottom: 80, width: "100%", overflowX: "hidden", boxSizing: "border-box" }}>
       <div style={{ background: BRAND, padding: "clamp(1rem,4vw,1.5rem)", color: "#fff" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          <Link href="/" style={{ color: "#fff", textDecoration: "none", fontSize: "1.2rem" }}>←</Link>
+          {/* A bare arrow on a coloured header does not read as something to
+              press, so this carries a border, a label and a full tap target. */}
+          <Link
+            href="/"
+            style={{
+              display: "inline-flex", alignItems: "center", gap: "0.3rem",
+              minHeight: 44, padding: "0.4rem 0.8rem", flexShrink: 0,
+              color: "#fff", textDecoration: "none",
+              fontSize: "0.95rem", fontWeight: 700,
+              background: "rgba(255,255,255,0.16)",
+              border: "1px solid rgba(255,255,255,0.75)",
+              borderRadius: 10,
+            }}
+          >
+            ← Back
+          </Link>
           <div>
-            <h1 style={{ margin: 0, fontSize: "clamp(1.1rem,4vw,1.4rem)", fontWeight: 700 }}>🧰 My Farm Toolbox</h1>
+            <h1 style={{ margin: 0, fontSize: "clamp(1.1rem,4vw,1.4rem)", fontWeight: 700 }}>📒 My Farm Record Book</h1>
             <p style={{ margin: 0, fontSize: "0.8rem", opacity: 0.85 }}>Track • Plan • Earn 🪙 FarmCoins</p>
           </div>
         </div>

@@ -13,6 +13,7 @@ import { BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, Cart
 import { CommunityQRCode } from "../../components/CommunityQRCode";
 import { CommunityMemberCard } from "../../components/CommunityMemberCard";
 import { resolveCommunityLogo } from "../../lib/communityLogos";
+import { menuRainbowColor } from "../../utils/menuAccentColors";
 import {
   CommunityOwnFormsPanel,
   SharedFormsFromOtherCommunitiesPanel,
@@ -2790,6 +2791,16 @@ export default function CommunityDashboardPage() {
   const [farmseeSelectedEntryIds, setFarmseeSelectedEntryIds] = useState<Set<string>>(new Set());
   const [farmseeBatchExporting, setFarmseeBatchExporting] = useState(false);
   const [farmseeAllExporting, setFarmseeAllExporting] = useState(false);
+  // Whether the tab strip still has tabs to the right, which decides the
+  // scroll hint. Recomputed on scroll and whenever the tab list changes.
+  const tabStripRef = useRef<HTMLDivElement | null>(null);
+  const [tabStripHasMore, setTabStripHasMore] = useState(false);
+  const measureTabStrip = useCallback(() => {
+    const el = tabStripRef.current;
+    if (!el) return;
+    setTabStripHasMore(el.scrollWidth - el.clientWidth - el.scrollLeft > 8);
+  }, []);
+  const handleTabStripScroll = measureTabStrip;
   const [farmseeSingleExportingId, setFarmseeSingleExportingId] = useState<string | null>(null);
   const [activeFarmseeSearchByCommunity, setActiveFarmseeSearchByCommunity] = useState<Record<string, string>>({});
 
@@ -2798,6 +2809,14 @@ export default function CommunityDashboardPage() {
   const getActiveTab = (cId: string): CommunityTab => activeTabs[cId] || "members";
   const setActiveTab = (cId: string, tab: CommunityTab) =>
     setActiveTabs((prev) => ({ ...prev, [cId]: tab }));
+
+  // The hint is re-measured once the strip is on screen, when the window
+  // changes width, and whenever switching tabs may have changed its width.
+  useEffect(() => {
+    measureTabStrip();
+    window.addEventListener("resize", measureTabStrip);
+    return () => window.removeEventListener("resize", measureTabStrip);
+  }, [measureTabStrip, activeTabs]);
   const [membersListTabs, setMembersListTabs] = useState<Record<string, MembersListTab>>({});
   const getMembersListTab = (cId: string): MembersListTab => membersListTabs[cId] || "approved";
   const setMembersListTab = (cId: string, tab: MembersListTab) =>
@@ -3731,41 +3750,79 @@ export default function CommunityDashboardPage() {
                 </div>
 
               {/* ── Tab Bar ── */}
-              <div style={{
-                display: "flex",
-                overflowX: isMobile ? "auto" : "visible",
-                WebkitOverflowScrolling: isMobile ? "touch" : undefined,
-                borderBottom: "2px solid #e0e0e0",
-                background: "#fafafa",
-                paddingBottom: isMobile ? "0.15rem" : 0,
-              }}>
-                {(visibleTabs).map((tab) => {
-                  const active = activeTab === tab;
-                  const labels: Record<CommunityTab, string> = { members: "Members", noticeboard: "Noticeboard", messages: "Messages", forms: "Forms", insights: "📊 Insights", fertilizer: "🌱 Fertilizer", costTemplates: "🌾 Cost Templates", advancePurchase: "🌱 Advanced Markets" };
-                  return (
-                    <button
-                      key={tab}
-                      onClick={() => setActiveTab(communityId, tab)}
-                      style={{
-                        flex: isMobile ? "0 0 auto" : 1,
-                        minWidth: isMobile ? "8.5rem" : 0,
-                        padding: "0.75rem 0.5rem",
-                        whiteSpace: "nowrap",
-                        border: "none",
-                        borderBottom: active ? "3px solid #2e7d32" : "3px solid transparent",
-                        background: active ? "#fff" : "transparent",
-                        color: active ? "#2e7d32" : "#666",
-                        fontWeight: active ? 700 : 500,
-                        fontSize: "0.9rem",
-                        cursor: "pointer",
-                        transition: "all 0.2s",
-                        fontFamily: '"Montserrat", sans-serif',
-                      }}
-                    >
-                      {labels[tab]}
-                    </button>
-                  );
-                })}
+              {/*
+                Coloured per tab so a tab can be pointed at by its colour, and
+                the strip says when it runs off the screen: on a phone the last
+                tabs sit past the right edge with nothing to show they exist,
+                so a fading edge and a ▶ appear until the strip is scrolled to
+                its end.
+              */}
+              <div style={{ position: "relative", borderBottom: "2px solid #e0e0e0", background: "#fafafa" }}>
+                <div
+                  ref={tabStripRef}
+                  onScroll={handleTabStripScroll}
+                  style={{
+                    display: "flex",
+                    gap: "0.4rem",
+                    overflowX: isMobile ? "auto" : "visible",
+                    WebkitOverflowScrolling: isMobile ? "touch" : undefined,
+                    padding: isMobile ? "0.45rem 0.5rem 0.3rem" : "0.45rem 0.5rem 0",
+                  }}
+                >
+                  {(visibleTabs).map((tab, idx) => {
+                    const active = activeTab === tab;
+                    const color = menuRainbowColor(idx);
+                    const labels: Record<CommunityTab, string> = { members: "Members", noticeboard: "Noticeboard", messages: "Messages", forms: "Forms", insights: "📊 Insights", fertilizer: "🌱 Fertilizer", costTemplates: "🌾 Cost Templates", advancePurchase: "🌱 Advanced Markets" };
+                    return (
+                      <button
+                        key={tab}
+                        onClick={() => setActiveTab(communityId, tab)}
+                        style={{
+                          flex: isMobile ? "0 0 auto" : 1,
+                          minWidth: isMobile ? "8.5rem" : 0,
+                          minHeight: 44,
+                          padding: "0.6rem 0.8rem",
+                          whiteSpace: "nowrap",
+                          border: `2px solid ${color}`,
+                          borderRadius: 10,
+                          background: active ? color : "#fff",
+                          color: active ? "#fff" : color,
+                          fontWeight: active ? 700 : 600,
+                          fontSize: "0.9rem",
+                          cursor: "pointer",
+                          transition: "all 0.2s",
+                          fontFamily: '"Montserrat", sans-serif',
+                        }}
+                      >
+                        {labels[tab]}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {tabStripHasMore && (
+                  <div
+                    aria-hidden
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      right: 0,
+                      bottom: 0,
+                      width: 44,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "flex-end",
+                      paddingRight: "0.25rem",
+                      pointerEvents: "none",
+                      background: "linear-gradient(to right, rgba(250,250,250,0), #fafafa 65%)",
+                      color: "#374151",
+                      fontSize: "1rem",
+                      fontWeight: 700,
+                    }}
+                  >
+                    ▶
+                  </div>
+                )}
               </div>
 
               {/* ── Noticeboard Tab ── */}

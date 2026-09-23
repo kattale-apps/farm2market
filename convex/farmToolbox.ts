@@ -385,8 +385,15 @@ export const ensureDefaultBioFarmCoffeeTreeTagTemplate = mutation({
   },
   handler: async (ctx, args) => {
     const communities = await ctx.db.query("communities").collect();
+    // The community is matched on its name with punctuation and spacing
+    // removed. It is registered as "BIO-FARM PURELY ORGANIC FERTILIZER", so a
+    // plain "bio farm" prefix test misses it on the hyphen and the move would
+    // quietly not happen.
     const bioFarmCommunity = communities.find((c: any) =>
-      String(c?.name ?? "").trim().toLowerCase().startsWith("bio farm")
+      String(c?.name ?? "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "")
+        .startsWith("biofarm")
     );
 
     const systemTemplates = await ctx.db

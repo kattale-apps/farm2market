@@ -2413,6 +2413,8 @@ export default defineSchema({
     sourceCrmFormId: v.id("crmForms"),
     assignedAgentId: v.optional(v.id("users")),
     claimedAt: v.optional(v.number()), // Set automatically when an agent claims this lead
+    // Set when a supervisor sends this lead to an agent for a callback; cleared on the next logged call.
+    callbackRequestedAt: v.optional(v.number()),
     queueStatus: v.union(
       v.literal("open"),
       v.literal("in_progress"),

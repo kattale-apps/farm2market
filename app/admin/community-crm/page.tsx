@@ -11,6 +11,7 @@ import { Id } from "../../../convex/_generated/dataModel";
 import { useStoredUser } from "../../hooks/useStoredUser";
 import { savePdfFromJsPDF } from "../../utils/pdfDownload";
 import { CrmSubmissionsPanel } from "../../components/crm/CrmSubmissionsPanel";
+import { IntakeAnswers } from "../../components/crm/IntakeAnswers";
 import {
   ALLOWED_SCRIPT_TOKENS,
   DEFAULT_CRM_FORM_FIELDS,
@@ -24,6 +25,7 @@ const BRAND = "#1f7a3e";
 // can be pointed at "the blue section" rather than a heading buried in text.
 const SECTION_COLORS = {
   todaysForms: "#dc2626",   // red
+  overdue: "#991b1b",       // dark red
   followUps: "#ea580c",     // orange
   submissions: "#ca8a04",   // yellow
   createForm: "#15803d",    // green
@@ -235,6 +237,12 @@ export default function CommunityCrmPage() {
   const assignCrmAgentByEmail = useMutation((api as any).crmAgents.assignCrmAgentByEmail);
   const submitCrmIntake = useMutation((api as any).crmForms.submitCrmIntake);
   const backfillCrmMemberNames = useMutation((api as any).crmForms.backfillCrmMemberNames);
+  const sendFollowUpsToAgent = useMutation((api as any).crmCalls.sendFollowUpsToAgent);
+  // Per follow-up section: which agent to send to, whether a send is running,
+  // and the result of the last send.
+  const [followUpAgentId, setFollowUpAgentId] = useState<Record<string, string>>({});
+  const [sendingFollowUps, setSendingFollowUps] = useState("");
+  const [followUpNotice, setFollowUpNotice] = useState<Record<string, string>>({});
   const [formActionBusyId, setFormActionBusyId] = useState("");
   // Shown inside the CRM Forms card, where the button that caused it is.
   const [formsNotice, setFormsNotice] = useState<{ tone: "success" | "error" | "info"; text: string } | null>(null);
@@ -796,6 +804,94 @@ export default function CommunityCrmPage() {
     }
   };
 
+  // Overdue follow-ups get their own section so they can be worked through as
+  // a batch; the orange section keeps the ones that are due but not yet late.
+  const overdueFollowUps = (followUpsDueDetails || []).filter((row: any) => row.isOverdue);
+  const upcomingFollowUps = (followUpsDueDetails || []).filter((row: any) => !row.isOverdue);
+
+  const activeAgents = (crmAgents || []).filter((agent: any) => agent.isActive);
+
+  const handleSendFollowUps = async (section: string, rows: any[]) => {
+    const agentId = followUpAgentId[section];
+    if (!userId || !selectedCommunityId || !agentId || rows.length === 0) return;
+    setSendingFollowUps(section);
+    setFollowUpNotice((prev) => ({ ...prev, [section]: "" }));
+    try {
+      const result = await sendFollowUpsToAgent({
+        requesterId: userId,
+        communityId: selectedCommunityId,
+        agentId,
+        leadIds: rows.map((row: any) => row.leadId),
+      });
+      setFollowUpNotice((prev) => ({
+        ...prev,
+        [section]: `Sent ${result.sent} contact(s) to ${result.agentName} for callback.`,
+      }));
+    } catch (error: any) {
+      setFollowUpNotice((prev) => ({ ...prev, [section]: error?.message || "Failed to send to agent" }));
+    }
+    setSendingFollowUps("");
+  };
+
+  const renderSendToAgent = (section: string, rows: any[]) => {
+    if (!followUpsDueDetails || rows.length === 0) return null;
+    const agentId = followUpAgentId[section] || "";
+    const disabled = !agentId || sendingFollowUps === section;
+    return (
+      <div style={{ marginBottom: "0.5rem" }}>
+        <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+          <select
+            value={agentId}
+            onChange={(e) => setFollowUpAgentId((prev) => ({ ...prev, [section]: e.target.value }))}
+            style={{ ...inputStyle, flex: "1 1 160px", minHeight: 38 }}
+          >
+            <option value="">{activeAgents.length === 0 ? "No active agents" : "Choose agent..."}</option>
+            {activeAgents.map((agent: any) => (
+              <option key={agent._id} value={agent.agentUserId}>
+                {agent.displayName || agent.userAlias || agent.userEmail || "Agent"}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => handleSendFollowUps(section, rows)}
+            disabled={disabled}
+            style={{ minHeight: 38, padding: "0.35rem 0.8rem", borderRadius: 8, border: "none", background: BRAND, color: "#fff", fontWeight: 700, fontSize: "0.82rem", opacity: disabled ? 0.55 : 1, cursor: disabled ? "not-allowed" : "pointer" }}
+          >
+            {sendingFollowUps === section ? "Sending..." : `Send ${rows.length} to agent`}
+          </button>
+        </div>
+        {followUpNotice[section] && (
+          <div style={{ marginTop: "0.3rem", fontSize: "0.8rem", fontWeight: 600, color: BRAND }}>{followUpNotice[section]}</div>
+        )}
+      </div>
+    );
+  };
+
+  const renderFollowUpRow = (row: any) => {
+    return (
+      <div key={row.leadId} style={{ padding: "0.45rem 0", borderBottom: "1px solid #f0f0f0" }}>
+        <div style={{ fontWeight: 700 }}>
+          {row.clientName} {row.isOverdue && <span style={{ color: "#b91c1c", fontWeight: 700, fontSize: "0.78rem" }}>OVERDUE</span>}
+        </div>
+        <div style={{ fontSize: "0.82rem", color: "#666" }}>
+          {row.formName} | {row.phoneNumber} | Next call: {new Date(row.nextCallAt).toLocaleDateString()}
+        </div>
+        {row.confirmedVisitAt && (
+          <div style={{ fontSize: "0.78rem", color: "#1f7a3e", fontWeight: 600 }}>
+            Confirmed visit: {new Date(row.confirmedVisitAt).toLocaleDateString()}
+          </div>
+        )}
+        {row.callbackRequestedAt && row.assignedAgentName && (
+          <div style={{ fontSize: "0.78rem", color: "#1d4ed8", fontWeight: 600 }}>
+            Sent to {row.assignedAgentName} for callback
+          </div>
+        )}
+        <IntakeAnswers purchase={row.purchase} answers={row.answers} />
+      </div>
+    );
+  };
+
   if (status === "loading") {
     return <div style={{ padding: "2rem", fontFamily: FONT }}>Loading...</div>;
   }
@@ -862,26 +958,23 @@ export default function CommunityCrmPage() {
             </div>
           </div>
 
+          <div style={sectionStyle(SECTION_COLORS.overdue, "0")}>
+            <h3 style={{ marginTop: 0, color: SECTION_COLORS.overdue }}>Overdue Follow-ups</h3>
+            {!followUpsDueDetails && <p style={{ color: "#777" }}>Loading...</p>}
+            {followUpsDueDetails && overdueFollowUps.length === 0 && <p style={{ color: "#777" }}>No overdue follow-ups.</p>}
+            {renderSendToAgent("overdue", overdueFollowUps)}
+            <div style={{ maxHeight: 520, overflowY: "auto" }}>
+              {overdueFollowUps.map(renderFollowUpRow)}
+            </div>
+          </div>
+
           <div style={sectionStyle(SECTION_COLORS.followUps, "0")}>
             <h3 style={{ marginTop: 0, color: SECTION_COLORS.followUps }}>Follow-ups Due (Upcoming Calls &amp; Confirmed Visits)</h3>
             {!followUpsDueDetails && <p style={{ color: "#777" }}>Loading...</p>}
-            {(followUpsDueDetails || []).length === 0 && <p style={{ color: "#777" }}>No follow-ups due.</p>}
-            <div style={{ maxHeight: 260, overflowY: "auto" }}>
-              {(followUpsDueDetails || []).map((row: any) => (
-                <div key={row.leadId} style={{ padding: "0.45rem 0", borderBottom: "1px solid #f0f0f0" }}>
-                  <div style={{ fontWeight: 700 }}>
-                    {row.clientName} {row.isOverdue && <span style={{ color: "#b91c1c", fontWeight: 700, fontSize: "0.78rem" }}>OVERDUE</span>}
-                  </div>
-                  <div style={{ fontSize: "0.82rem", color: "#666" }}>
-                    {row.formName} | {row.phoneNumber} | Next call: {new Date(row.nextCallAt).toLocaleDateString()}
-                  </div>
-                  {row.confirmedVisitAt && (
-                    <div style={{ fontSize: "0.78rem", color: "#1f7a3e", fontWeight: 600 }}>
-                      Confirmed visit: {new Date(row.confirmedVisitAt).toLocaleDateString()}
-                    </div>
-                  )}
-                </div>
-              ))}
+            {followUpsDueDetails && upcomingFollowUps.length === 0 && <p style={{ color: "#777" }}>No follow-ups due.</p>}
+            {renderSendToAgent("due", upcomingFollowUps)}
+            <div style={{ maxHeight: 520, overflowY: "auto" }}>
+              {upcomingFollowUps.map(renderFollowUpRow)}
             </div>
           </div>
         </div>
@@ -1412,92 +1505,6 @@ export default function CommunityCrmPage() {
     </div>
   );
 }
-
-function IntakeAnswers({ purchase, answers }: { purchase?: any; answers?: any[] }) {
-  const [open, setOpen] = useState(false);
-
-  const purchaseEntries: Array<[string, string]> = [
-    ["Product", purchase?.productName],
-    ["Quantity", purchase?.purchaseQuantity],
-    ["Purchase date", purchase?.purchaseDate],
-    ["Parish", purchase?.parish],
-    ["Crop grown", purchase?.cropGrown],
-    ["Month of planting", purchase?.monthOfPlanting],
-    ["Past spray dates", (purchase?.pastSprayDates || []).join(", ")],
-    [
-      "Next spray / visit",
-      purchase?.upcomingSprayScheduleAt
-        ? new Date(purchase.upcomingSprayScheduleAt).toLocaleDateString()
-        : "",
-    ],
-  ]
-    .filter(([, value]) => Boolean(value))
-    .map(([label, value]) => [label, String(value)] as [string, string]);
-
-  const formAnswers = answers || [];
-  const total = purchaseEntries.length + formAnswers.length;
-
-  if (total === 0) {
-    return (
-      <div style={{ fontSize: "0.76rem", color: "#999", marginTop: "0.25rem" }}>
-        Nothing was captured at intake.
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ marginTop: "0.3rem" }}>
-      <button
-        type="button"
-        onClick={() => setOpen((prev) => !prev)}
-        style={{
-          background: "none",
-          border: "none",
-          padding: 0,
-          color: BRAND,
-          fontWeight: 700,
-          fontSize: "0.78rem",
-          cursor: "pointer",
-        }}
-      >
-        {open ? "Hide" : "Show"} intake answers ({total})
-      </button>
-
-      {open && (
-        <div style={{ marginTop: "0.3rem" }}>
-          {purchaseEntries.map(([label, value]) => (
-            <div key={label} style={rowStyle}>
-              <span style={{ flex: "0 0 45%", color: "#666" }}>{label}</span>
-              <span style={{ flex: 1, fontWeight: 600, color: "#111" }}>{value}</span>
-            </div>
-          ))}
-          {formAnswers.map((answer: any) => (
-            <div key={answer.fieldId} style={rowStyle}>
-              <span style={{ flex: "0 0 45%", color: "#666" }}>{answer.label}</span>
-              <span
-                style={{
-                  flex: 1,
-                  fontWeight: 600,
-                  color: answer.value ? "#111" : "#bbb",
-                }}
-              >
-                {answer.value || "Not answered"}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-const rowStyle: CSSProperties = {
-  display: "flex",
-  gap: "0.6rem",
-  padding: "0.2rem 0",
-  borderBottom: "1px solid #f5f5f5",
-  fontSize: "0.78rem",
-};
 
 function MetricCard({ label, value }: { label: string; value: number | undefined }) {
   return (

@@ -937,6 +937,14 @@ export const getToolboxInsights = query({
     unitSurvival: Array<{ unitId: string; name: string; unitType: string; emoji: string | null; status: string; entryCount: number }>;
     recentEntries: Array<{ _id: string; templateName: string; templateEmoji: string | null; submittedAt: number; fieldCount: number }>;
     entriesByDay: Array<{ date: string; count: number }>;
+    /**
+     * Every entry this farmer has logged, reduced to the three things a chart
+     * needs. The Insights tab draws its own buckets from this - a day at a
+     * time over a week, a month at a time over half a year - so changing the
+     * period shown does not cost another round trip, and the whole history is
+     * there for a farmer looking back at a season that ended months ago.
+     */
+    entryLog: Array<{ submittedAt: number; templateId: string; templateName: string; templateEmoji: string | null }>;
   }> => {
     const now = Date.now();
     const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
@@ -1012,6 +1020,25 @@ export const getToolboxInsights = query({
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([date, count]) => ({ date, count }));
 
+    // Template names are resolved once per template rather than once per
+    // entry: a farmer logging daily against three templates would otherwise
+    // fetch the same three documents hundreds of times.
+    const templateInfo: Record<string, { name: string; emoji: string | null }> = {};
+    for (const templateId of Object.keys(templateCounts)) {
+      const tpl = (await ctx.db.get(templateId as any)) as any;
+      templateInfo[templateId] = {
+        name: tpl?.templateName ?? "Unknown",
+        emoji: tpl?.emoji ?? null,
+      };
+    }
+
+    const entryLog = allEntries.map((e) => ({
+      submittedAt: e.submittedAt,
+      templateId: e.templateId as string,
+      templateName: templateInfo[e.templateId]?.name ?? "Unknown",
+      templateEmoji: templateInfo[e.templateId]?.emoji ?? null,
+    }));
+
     return {
       totalEntriesThisMonth: thisMonthEntries.length,
       totalEntriesAllTime: allEntries.length,
@@ -1020,6 +1047,7 @@ export const getToolboxInsights = query({
       unitSurvival,
       recentEntries,
       entriesByDay,
+      entryLog,
     };
   },
 });

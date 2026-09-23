@@ -557,7 +557,7 @@ export async function exportSubmissionsToPDF(
     // Green header bar
     addReportHeader(
       doc,
-      "Traceability Report",
+      "Farm Record Book Submission",
       `${entry.templateDetails?.templateName || "Unknown Template"}  |  ${submittedDate}`
     );
 
@@ -720,7 +720,7 @@ export async function exportSubmissionsToPDF(
   }
 
   // ── BATCH: original multi-page layout ───────────────────────────────
-  addReportHeader(doc, "Traceability Report", "Readable export report");
+  addReportHeader(doc, "Farm Record Book Submissions", "Readable export report");
   await addWatermark(doc, logoBase64);
   let y = 38;
   doc.setFontSize(12);

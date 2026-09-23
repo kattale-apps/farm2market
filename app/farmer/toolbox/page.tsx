@@ -17,6 +17,34 @@ const BRAND_BG = "#e8f5e9";
 const GOLD = "#f9a825";
 const FONT = '"Montserrat", sans-serif';
 
+// Every button a farmer taps while logging an entry - Camera, Gallery, GPS,
+// and the actions on a submitted entry - shares this: a full 44px target,
+// readable type, and a 2px border so the control's edge is visible against
+// the card behind it. A 1px hairline on a pale fill disappeared in sunlight.
+const ACTION_BUTTON: React.CSSProperties = {
+  minHeight: 44,
+  padding: "0.6rem 1rem",
+  borderRadius: 10,
+  border: "2px solid #9ca3af",
+  background: "#f5f5f5",
+  color: "#374151",
+  fontFamily: FONT,
+  fontSize: "0.92rem",
+  fontWeight: 600,
+  cursor: "pointer",
+};
+
+// The Record Book's own tab strip, in the same rainbow run the farmer's menu
+// and the community CRM sections use.
+const TAB_COLORS = [
+  "#15803d", // green
+  "#ea580c", // orange
+  "#1d4ed8", // blue
+  "#7c3aed", // violet
+  "#0891b2", // cyan
+  "#be185d", // magenta
+];
+
 type Tab = "templates" | "log" | "units" | "insights" | "supply" | "ledger";
 
 const BIOFARM_TEMPLATE_NAME = "Bio Farm Coffee Tag";
@@ -261,8 +289,9 @@ function CreateTemplateForm({ userId, onDone }: { userId: Id<"users">; onDone: (
 }
 
 // ─── LOG ENTRY TAB ───────────────────────────────────────────────────────────
-function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
+function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate, onBackToTemplates }: {
   userId: Id<"users">; selectedTemplate: any | null; setSelectedTemplate: (t: any | null) => void;
+  onBackToTemplates: () => void;
 }) {
   const templates = useOfflineQuery(
     (api as any).farmToolbox.listTemplates,
@@ -407,7 +436,7 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
       const datePart = new Date().toISOString().split("T")[0];
       await exportSubmissionsToPDF(
         [fullEntry || entry],
-        `farm_toolbox_submission_${datePart}`
+        `farm_record_book_submission_${datePart}`
       );
     } catch {
       setError("Failed to export PDF. Please try again.");
@@ -424,7 +453,7 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
         entryIds: ids,
       });
       const datePart = new Date().toISOString().split("T")[0];
-      await exportSubmissionsToPDF(enriched || [], `farm_toolbox_submissions_${datePart}`);
+      await exportSubmissionsToPDF(enriched || [], `farm_record_book_submissions_${datePart}`);
     } catch {
       setError("Failed to export selected entries as PDF.");
     }
@@ -521,13 +550,8 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
               if (showBatchOptions) setSelectedEntryIds(new Set());
             }}
             style={{
-              padding: "0.3rem 0.6rem",
+              ...ACTION_BUTTON,
               background: "#fff",
-              border: "1px solid #d0d7de",
-              borderRadius: 6,
-              fontSize: "0.74rem",
-              cursor: "pointer",
-              fontFamily: FONT,
             }}
           >
             {showBatchOptions ? "Hide batch options" : "Show batch options"}
@@ -538,14 +562,11 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
               onClick={handleBatchExport}
               disabled={batchExporting || selectedEntryIds.size === 0}
               style={{
-                padding: "0.3rem 0.6rem",
+                ...ACTION_BUTTON,
                 background: selectedEntryIds.size === 0 ? "#e0e0e0" : BRAND,
                 color: selectedEntryIds.size === 0 ? "#777" : "#fff",
-                border: "none",
-                borderRadius: 6,
-                fontSize: "0.74rem",
+                border: `2px solid ${selectedEntryIds.size === 0 ? "#9ca3af" : BRAND}`,
                 cursor: selectedEntryIds.size === 0 || batchExporting ? "not-allowed" : "pointer",
-                fontFamily: FONT,
                 fontWeight: 700,
               }}
             >
@@ -589,14 +610,10 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
                       type="button"
                       onClick={() => setExpandedEntryId(isExpanded ? null : String(entry._id))}
                       style={{
-                        padding: "0.35rem 0.7rem",
+                        ...ACTION_BUTTON,
                         background: isExpanded ? "#eef7ee" : "#f5f5f5",
-                        border: "1px solid #d9d9d9",
-                        borderRadius: 6,
-                        fontSize: "0.74rem",
-                        cursor: "pointer",
-                        color: isExpanded ? BRAND : "#444",
-                        fontFamily: FONT,
+                        border: `2px solid ${isExpanded ? BRAND : "#9ca3af"}`,
+                        color: isExpanded ? BRAND : "#374151",
                         fontWeight: 700,
                       }}
                     >
@@ -607,14 +624,11 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
                       onClick={() => handleSingleExport(entry)}
                       disabled={singleExportingId === String(entry._id)}
                       style={{
-                        padding: "0.35rem 0.7rem",
+                        ...ACTION_BUTTON,
                         background: BRAND_BG,
-                        border: "1px solid #a5d6a7",
-                        borderRadius: 6,
-                        fontSize: "0.74rem",
+                        border: `2px solid ${BRAND}`,
                         cursor: singleExportingId === String(entry._id) ? "not-allowed" : "pointer",
                         color: BRAND,
-                        fontFamily: FONT,
                         fontWeight: 700,
                       }}
                     >
@@ -625,14 +639,12 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
                       onClick={() => handleDeleteEntry(String(entry._id))}
                       disabled={deletingEntryId === String(entry._id)}
                       style={{
-                        padding: "0.35rem 0.7rem",
+                        ...ACTION_BUTTON,
                         background: "#ffebee",
-                        border: "1px solid #ef9a9a",
-                        borderRadius: 6,
-                        fontSize: "0.74rem",
+                        border: "2px solid #c62828",
                         cursor: deletingEntryId === String(entry._id) ? "not-allowed" : "pointer",
                         color: "#c62828",
-                        fontFamily: FONT,
+                        fontWeight: 700,
                       }}
                     >
                       {deletingEntryId === String(entry._id) ? "Deleting…" : "🗑 Delete"}
@@ -773,7 +785,7 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem" }}>
-        <button onClick={() => { setSelectedTemplate(null); setSuccessMsg(null); }}
+        <button onClick={() => { setSuccessMsg(null); onBackToTemplates(); }}
           style={{
             display: "inline-flex", alignItems: "center", gap: "0.35rem",
             minHeight: 44, padding: "0.5rem 0.95rem",
@@ -873,11 +885,11 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePhotoUpload(f); }} />
                 <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                   <button type="button" onClick={() => cameraInputRef.current?.click()} disabled={photoUploading}
-                    style={{ padding: "0.5rem 0.8rem", background: "#f5f5f5", border: "1px solid #ddd", borderRadius: 8, cursor: "pointer", fontFamily: FONT, fontSize: "0.82rem" }}>
+                    style={ACTION_BUTTON}>
                     {photoUploading ? "Uploading…" : "📷 Camera"}
                   </button>
                   <button type="button" onClick={() => galleryInputRef.current?.click()} disabled={photoUploading}
-                    style={{ padding: "0.5rem 0.8rem", background: "#f5f5f5", border: "1px solid #ddd", borderRadius: 8, cursor: "pointer", fontFamily: FONT, fontSize: "0.82rem" }}>
+                    style={ACTION_BUTTON}>
                     {photoUploading ? "Uploading…" : "🖼 Gallery"}
                   </button>
                   <span style={{ fontSize: "0.75rem", color: photoStorageIds.length > 0 ? BRAND : "#666", alignSelf: "center" }}>
@@ -889,7 +901,7 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate }: {
               <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "0.45rem" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
                   <button onClick={() => void captureGPS()} disabled={gpsLoading}
-                  style={{ padding: "0.5rem 1rem", background: gps ? BRAND_BG : "#f5f5f5", border: `1px solid ${gps ? "#a5d6a7" : "#ddd"}`, borderRadius: 8, cursor: "pointer", fontFamily: FONT, fontSize: "0.82rem", color: gps ? BRAND : "#333" }}>
+                  style={{ ...ACTION_BUTTON, background: gps ? BRAND_BG : "#f5f5f5", border: `2px solid ${gps ? BRAND : "#9ca3af"}`, color: gps ? BRAND : "#333" }}>
                     {gpsLoading ? "Locating…" : gps ? `📍 ${gps.lat.toFixed(4)}, ${gps.lng.toFixed(4)}` : "📍 Capture GPS"}
                   </button>
                   {!gps && !isDefaultTemplate && (
@@ -1055,67 +1067,251 @@ function UnitsTab({ userId }: { userId: Id<"users"> }) {
 }
 
 // ─── INSIGHTS TAB ─────────────────────────────────────────────────────────────
+// ─── INSIGHTS HELPERS ────────────────────────────────────────────────────────
+// One hue, more-is-darker: the activity chart plots a single series, so colour
+// carries magnitude rather than identity and nothing here needs a legend.
+const CHART_INK = BRAND;
+const CHART_GRID = "#e5e7eb";
+
+type InsightRange = { key: string; label: string; days: number; bucket: "day" | "month" };
+
+const INSIGHT_RANGES: InsightRange[] = [
+  { key: "7d", label: "7 days", days: 7, bucket: "day" },
+  { key: "30d", label: "30 days", days: 30, bucket: "day" },
+  { key: "6m", label: "6 months", days: 182, bucket: "month" },
+  { key: "12m", label: "12 months", days: 365, bucket: "month" },
+];
+
+const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function startOfDay(ts: number) {
+  const d = new Date(ts);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+/**
+ * Every bucket in the range, including the empty ones. A farmer who logged
+ * nothing for a fortnight should see that gap in the chart — dropping the zero
+ * days would quietly close it up and make a patchy month look steady.
+ */
+function buildBuckets(range: InsightRange, now: number) {
+  const buckets: Array<{ key: string; label: string; fullLabel: string; from: number; to: number; count: number }> = [];
+
+  if (range.bucket === "day") {
+    const today = startOfDay(now);
+    for (let i = range.days - 1; i >= 0; i--) {
+      const from = today - i * 86400000;
+      const d = new Date(from);
+      buckets.push({
+        key: "d-" + from,
+        label: String(d.getDate()),
+        fullLabel: d.getDate() + " " + MONTH_SHORT[d.getMonth()] + " " + d.getFullYear(),
+        from,
+        to: from + 86400000,
+        count: 0,
+      });
+    }
+    return buckets;
+  }
+
+  const months = range.days > 200 ? 12 : 6;
+  const cursor = new Date(now);
+  for (let i = months - 1; i >= 0; i--) {
+    const from = new Date(cursor.getFullYear(), cursor.getMonth() - i, 1).getTime();
+    const to = new Date(cursor.getFullYear(), cursor.getMonth() - i + 1, 1).getTime();
+    const d = new Date(from);
+    buckets.push({
+      key: "m-" + from,
+      label: MONTH_SHORT[d.getMonth()],
+      fullLabel: MONTH_SHORT[d.getMonth()] + " " + d.getFullYear(),
+      from,
+      to,
+      count: 0,
+    });
+  }
+  return buckets;
+}
+
 function InsightsTab({ userId }: { userId: Id<"users"> }) {
   const insights = useOfflineQuery(
     (api as any).farmToolbox.getToolboxInsights,
     { farmerId: userId },
-    `toolbox_insights_${userId}`
+    "toolbox_insights_" + userId
   ) as any | undefined;
 
-  const entries = useOfflineQuery(
-    (api as any).farmToolbox.listEntries,
-    { farmerId: userId },
-    `toolbox_entries_${userId}`
-  ) as any[] | undefined;
+  const [rangeKey, setRangeKey] = useState<string>("30d");
+  const [pickedBucket, setPickedBucket] = useState<string | null>(null);
+
+  const range = INSIGHT_RANGES.find((r) => r.key === rangeKey) || INSIGHT_RANGES[1];
+  const entryLog: Array<{ submittedAt: number; templateId: string; templateName: string; templateEmoji: string | null }> =
+    insights?.entryLog ?? [];
+
+  const now = Date.now();
+  const buckets = buildBuckets(range, now);
+  const rangeFrom = buckets.length ? buckets[0].from : now;
+  const rangeTo = buckets.length ? buckets[buckets.length - 1].to : now;
+
+  for (const entry of entryLog) {
+    if (entry.submittedAt < rangeFrom || entry.submittedAt >= rangeTo) continue;
+    const bucket = buckets.find((b) => entry.submittedAt >= b.from && entry.submittedAt < b.to);
+    if (bucket) bucket.count += 1;
+  }
+
+  const maxCount = Math.max(1, ...buckets.map((b) => b.count));
+  const inRange = entryLog.filter((e) => e.submittedAt >= rangeFrom && e.submittedAt < rangeTo);
+  const activeBuckets = buckets.filter((b) => b.count > 0).length;
+
+  // What was logged in the chosen window, biggest first: this is the "how many
+  // trees did you tag" answer, one line per form the farmer fills in.
+  const perTemplate = Object.values(
+    inRange.reduce((acc: Record<string, { name: string; emoji: string | null; count: number }>, entry) => {
+      const key = entry.templateId;
+      if (!acc[key]) acc[key] = { name: entry.templateName, emoji: entry.templateEmoji, count: 0 };
+      acc[key].count += 1;
+      return acc;
+    }, {})
+  ).sort((a, b) => b.count - a.count);
+  const perTemplateMax = Math.max(1, ...perTemplate.map((t) => t.count));
+
+  const todayStart = startOfDay(now);
+  const monthStart = new Date(new Date(now).getFullYear(), new Date(now).getMonth(), 1).getTime();
+  const sixMonthsStart = new Date(new Date(now).getFullYear(), new Date(now).getMonth() - 5, 1).getTime();
+  const countFrom = (from: number) => entryLog.filter((e) => e.submittedAt >= from).length;
 
   if (insights === undefined) return <div style={{ textAlign: "center", padding: "2rem", color: "#888" }}>Loading insights…</div>;
 
   const activeUnits = (insights.unitSurvival ?? []).filter((u: any) => u.status === "active").length;
   const totalUnits = (insights.unitSurvival ?? []).length;
   const survivalPct = totalUnits > 0 ? Math.round((activeUnits / totalUnits) * 100) : 0;
-  const maxDay = Math.max(1, ...(insights.entriesByDay ?? []).map((d: any) => d.count));
+  const picked = buckets.find((b) => b.key === pickedBucket) || null;
+  const bucketNoun = range.bucket === "day" ? "day" : "month";
+
+  const cardStyle: React.CSSProperties = {
+    background: "#fff", borderRadius: 12, padding: "1rem",
+    boxShadow: "0 2px 6px rgba(0,0,0,0.07)", marginBottom: "1rem",
+  };
 
   return (
     <div>
-      {/* Summary cards */}
+      {/* Headline counts: the periods a farmer actually asks about */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1rem" }}>
         {[
-          { label: "Entries this month", value: insights.totalEntriesThisMonth, emoji: "📝" },
-          { label: "All-time entries", value: insights.totalEntriesAllTime, emoji: "📊" },
-          { label: "Active units", value: `${activeUnits} / ${totalUnits}`, emoji: "🌳" },
-          { label: "Top template", value: insights.topTemplateName ? `${insights.topTemplateEmoji ?? "📋"} ${insights.topTemplateName}` : "—", emoji: null },
+          { label: "Today", value: countFrom(todayStart) },
+          { label: "This month", value: countFrom(monthStart) },
+          { label: "Last 6 months", value: countFrom(sixMonthsStart) },
+          { label: "All time", value: insights.totalEntriesAllTime ?? entryLog.length },
         ].map((card) => (
           <div key={card.label} style={{ background: "#fff", borderRadius: 12, padding: "0.85rem 1rem", boxShadow: "0 2px 6px rgba(0,0,0,0.07)" }}>
-            <div style={{ fontSize: "0.72rem", color: "#888", marginBottom: "0.25rem" }}>{card.label}</div>
-            <div style={{ fontSize: "1.1rem", fontWeight: 700, color: BRAND }}>{card.emoji ? `${card.emoji} ` : ""}{card.value}</div>
+            <div style={{ fontSize: "0.75rem", color: "#666", marginBottom: "0.15rem" }}>{card.label}</div>
+            <div style={{ fontSize: "1.65rem", fontWeight: 700, color: "#1f2937", lineHeight: 1.1 }}>{card.value}</div>
+            <div style={{ fontSize: "0.7rem", color: "#888" }}>entries</div>
           </div>
         ))}
       </div>
 
-      {/* Unit survival bar */}
+      {/* Activity over time */}
+      <div style={cardStyle}>
+        <div style={{ fontWeight: 700, fontSize: "0.95rem", marginBottom: "0.2rem" }}>📅 When you logged entries</div>
+        <div style={{ fontSize: "0.75rem", color: "#888", marginBottom: "0.7rem" }}>
+          Tap a bar to see its date and count.
+        </div>
+
+        <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginBottom: "0.85rem" }}>
+          {INSIGHT_RANGES.map((r) => (
+            <button key={r.key} onClick={() => { setRangeKey(r.key); setPickedBucket(null); }}
+              style={{
+                minHeight: 38, padding: "0.35rem 0.75rem", borderRadius: 999,
+                border: "1px solid " + (rangeKey === r.key ? CHART_INK : "#d1d5db"),
+                background: rangeKey === r.key ? CHART_INK : "#fff",
+                color: rangeKey === r.key ? "#fff" : "#4b5563",
+                fontFamily: FONT, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer",
+              }}>
+              {r.label}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ fontSize: "0.82rem", color: "#374151", fontWeight: 600, minHeight: 20, marginBottom: "0.35rem" }}>
+          {picked
+            ? picked.fullLabel + " · " + picked.count + " " + (picked.count === 1 ? "entry" : "entries")
+            : inRange.length + " " + (inRange.length === 1 ? "entry" : "entries") + " over " + range.label +
+              ", on " + activeBuckets + " " + bucketNoun + (activeBuckets === 1 ? "" : "s")}
+        </div>
+
+        {/* Columns: one hue, 4px rounded cap, square on the baseline, 2px apart */}
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 132, borderBottom: "1px solid " + CHART_GRID, paddingBottom: 2 }}>
+          {buckets.map((b) => {
+            const isPicked = picked?.key === b.key;
+            const barHeight = b.count === 0 ? 3 : Math.max(6, Math.round((b.count / maxCount) * 120));
+            return (
+              <button
+                key={b.key}
+                onClick={() => setPickedBucket(isPicked ? null : b.key)}
+                title={b.fullLabel + ": " + b.count}
+                aria-label={b.fullLabel + ": " + b.count + " entries"}
+                style={{
+                  flex: 1, minWidth: 0, maxWidth: 24, height: "100%",
+                  display: "flex", flexDirection: "column", justifyContent: "flex-end",
+                  background: "none", border: "none", padding: 0, cursor: "pointer",
+                }}
+              >
+                <span style={{
+                  display: "block", height: barHeight,
+                  background: b.count === 0 ? CHART_GRID : CHART_INK,
+                  opacity: b.count === 0 ? 1 : isPicked ? 1 : 0.85,
+                  borderRadius: "4px 4px 0 0",
+                  outline: isPicked ? "2px solid " + CHART_INK : "none",
+                  outlineOffset: 1,
+                }} />
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Sparse axis labels — the tap readout carries the rest */}
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: "0.35rem", fontSize: "0.7rem", color: "#888" }}>
+          <span>{buckets[0]?.fullLabel}</span>
+          <span>{buckets[buckets.length - 1]?.fullLabel}</span>
+        </div>
+        <div style={{ fontSize: "0.7rem", color: "#888", marginTop: "0.2rem" }}>
+          Busiest {bucketNoun}: {maxCount} {maxCount === 1 ? "entry" : "entries"}
+        </div>
+      </div>
+
+      {/* What was logged, over the same window */}
+      {perTemplate.length > 0 && (
+        <div style={cardStyle}>
+          <div style={{ fontWeight: 700, fontSize: "0.95rem", marginBottom: "0.7rem" }}>
+            🏷 What you logged · {range.label}
+          </div>
+          {perTemplate.map((t) => (
+            <div key={t.name} style={{ marginBottom: "0.7rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", fontSize: "0.85rem", marginBottom: "0.25rem" }}>
+                <span style={{ color: "#374151", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {t.emoji ?? "📋"} {t.name}
+                </span>
+                <span style={{ fontWeight: 700, color: "#1f2937", flexShrink: 0 }}>{t.count}</span>
+              </div>
+              <div style={{ height: 10, background: "#f3f4f6", borderRadius: 5, overflow: "hidden" }}>
+                <div style={{ width: Math.round((t.count / perTemplateMax) * 100) + "%", height: "100%", background: CHART_INK, borderRadius: 5 }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Unit survival meter */}
       {totalUnits > 0 && (
-        <div style={{ background: "#fff", borderRadius: 12, padding: "1rem", boxShadow: "0 2px 6px rgba(0,0,0,0.07)", marginBottom: "1rem" }}>
+        <div style={cardStyle}>
           <div style={{ fontWeight: 700, fontSize: "0.9rem", marginBottom: "0.75rem" }}>🌳 Unit Survival</div>
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.4rem" }}>
             <div style={{ flex: 1, height: 14, borderRadius: 7, background: "#e0e0e0", overflow: "hidden" }}>
-              <div style={{ width: `${survivalPct}%`, height: "100%", background: BRAND, borderRadius: 7, transition: "width 0.4s" }} />
+              <div style={{ width: survivalPct + "%", height: "100%", background: BRAND, borderRadius: 7, transition: "width 0.4s" }} />
             </div>
             <span style={{ fontSize: "0.82rem", fontWeight: 700, color: BRAND, minWidth: 38 }}>{survivalPct}%</span>
           </div>
           <div style={{ fontSize: "0.75rem", color: "#888" }}>{activeUnits} active out of {totalUnits} total units</div>
-        </div>
-      )}
-
-      {/* 30-day activity chart (inline bars) */}
-      {(insights.entriesByDay ?? []).length > 0 && (
-        <div style={{ background: "#fff", borderRadius: 12, padding: "1rem", boxShadow: "0 2px 6px rgba(0,0,0,0.07)", marginBottom: "1rem" }}>
-          <div style={{ fontWeight: 700, fontSize: "0.9rem", marginBottom: "0.75rem" }}>📅 Last 30 days</div>
-          <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 48 }}>
-            {insights.entriesByDay.map((d: any) => (
-              <div key={d.date} title={`${d.date}: ${d.count}`}
-                style={{ flex: 1, height: `${Math.max(4, Math.round((d.count / maxDay) * 48))}px`, background: BRAND, borderRadius: 2, minWidth: 4, opacity: 0.85 }} />
-            ))}
-          </div>
         </div>
       )}
 
@@ -1132,7 +1328,7 @@ function InsightsTab({ userId }: { userId: Id<"users"> }) {
         </div>
       )}
 
-      {insights.totalEntriesAllTime === 0 && (
+      {(insights.totalEntriesAllTime ?? 0) === 0 && (
         <div style={{ textAlign: "center", padding: "2rem", color: "#888", fontSize: "0.9rem" }}>
           No data yet. Start logging entries to see insights here.
         </div>
@@ -1504,13 +1700,28 @@ export default function FarmToolboxPage() {
         </div>
       </div>
 
-      <div style={{ display: "flex", overflowX: "auto", background: "#fff", borderBottom: "1px solid #e0e0e0", padding: "0 0.25rem" }}>
-        {tabs.map((t) => (
-          <button key={t.id} onClick={() => { setActiveTab(t.id); if (t.id !== "log") setSelectedTemplate(null); }}
-            style={{ flexShrink: 0, padding: "0.7rem 0.85rem", border: "none", borderBottom: activeTab === t.id ? `3px solid ${BRAND}` : "3px solid transparent", background: "transparent", cursor: "pointer", fontFamily: FONT, fontSize: "0.78rem", fontWeight: activeTab === t.id ? 700 : 400, color: activeTab === t.id ? BRAND : "#666", whiteSpace: "nowrap" }}>
-            {t.emoji} {t.label}
-          </button>
-        ))}
+      <div style={{ display: "flex", gap: "0.45rem", overflowX: "auto", background: "#fff", borderBottom: "1px solid #e0e0e0", padding: "0.5rem 0.6rem" }}>
+        {tabs.map((t, idx) => {
+          // One rainbow colour per tab, carried by a full border rather than a
+          // hairline under the active one, so which section you are in - and
+          // which you are reaching for - is readable at a glance on a phone.
+          const color = TAB_COLORS[idx % TAB_COLORS.length];
+          const isActive = activeTab === t.id;
+          return (
+            <button key={t.id} onClick={() => { setActiveTab(t.id); if (t.id !== "log") setSelectedTemplate(null); }}
+              style={{
+                flexShrink: 0, minHeight: 44, padding: "0.55rem 0.9rem",
+                border: `2px solid ${color}`, borderRadius: 10,
+                background: isActive ? color : "#fff",
+                cursor: "pointer", fontFamily: FONT,
+                fontSize: "0.9rem", fontWeight: isActive ? 700 : 600,
+                color: isActive ? "#fff" : color,
+                whiteSpace: "nowrap",
+              }}>
+              {t.emoji} {t.label}
+            </button>
+          );
+        })}
       </div>
 
       <div style={{ padding: "clamp(1rem,4vw,1.25rem)", maxWidth: 680, margin: "0 auto", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
@@ -1526,7 +1737,14 @@ export default function FarmToolboxPage() {
         ) : activeTab === "templates" ? (
           <TemplatesTab userId={userId} onSelectTemplate={handleSelectTemplate} />
         ) : activeTab === "log" ? (
-          <LogEntryTab userId={userId} selectedTemplate={selectedTemplate} setSelectedTemplate={setSelectedTemplate} />
+          <LogEntryTab
+            userId={userId}
+            selectedTemplate={selectedTemplate}
+            setSelectedTemplate={setSelectedTemplate}
+            // Back out of a form and you are looking for another form, so it
+            // lands on the Templates list rather than an empty Log Entry tab.
+            onBackToTemplates={() => { setSelectedTemplate(null); setActiveTab("templates"); }}
+          />
         ) : activeTab === "units" ? (
           <UnitsTab userId={userId} />
         ) : activeTab === "insights" ? (

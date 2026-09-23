@@ -37,6 +37,27 @@ const ACTION_BUTTON: React.CSSProperties = {
 
 // The Record Book's own tab strip, in the same rainbow run the farmer's menu
 // and the community CRM sections use.
+/**
+ * A one-shot Convex query never settles while the client has no connection,
+ * so an export started on a phone that loses signal would sit on "Preparing…"
+ * with no error. A bounded wait turns that into something the farmer can act
+ * on.
+ */
+const EXPORT_QUERY_TIMEOUT_MS = 30000;
+
+function withQueryTimeout<T>(promise: Promise<T>, what: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`${what} timed out. Check your connection and try again.`)),
+      EXPORT_QUERY_TIMEOUT_MS
+    );
+    promise.then(
+      (value) => { clearTimeout(timer); resolve(value); },
+      (error) => { clearTimeout(timer); reject(error); }
+    );
+  });
+}
+
 const TAB_COLORS = [
   "#15803d", // green
   "#ea580c", // orange
@@ -432,9 +453,10 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate, onBackToTe
     const entryId = String(entry._id);
     setSingleExportingId(entryId);
     try {
-      const fullEntry = await convex.query((api as any).farmToolbox.getEntryById, {
-        entryId: entry._id,
-      });
+      const fullEntry = await withQueryTimeout(
+        convex.query((api as any).farmToolbox.getEntryById, { entryId: entry._id }),
+        "Preparing the entry"
+      );
       const datePart = new Date().toISOString().split("T")[0];
       await exportSubmissionsToPDF(
         [fullEntry || entry],
@@ -451,9 +473,10 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate, onBackToTe
     setBatchExporting(true);
     try {
       const ids = Array.from(selectedEntryIds).map((id) => id as Id<"farmTrackerEntries">);
-      const enriched = await convex.query((api as any).farmToolbox.getEntriesByIds, {
-        entryIds: ids,
-      });
+      const enriched = await withQueryTimeout(
+        convex.query((api as any).farmToolbox.getEntriesByIds, { entryIds: ids }),
+        "Preparing the selected entries"
+      );
       const datePart = new Date().toISOString().split("T")[0];
       await exportSubmissionsToPDF(enriched || [], `farm_record_book_submissions_${datePart}`);
     } catch {

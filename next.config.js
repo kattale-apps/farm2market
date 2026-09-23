@@ -27,11 +27,16 @@ const nextConfig = {
     NEXT_PUBLIC_APP_IS_PROD: process.env.VERCEL_ENV === 'production' ? 'true' : 'false',
   },
   images: {
+    // Community logos are served from Convex file storage, and the host is
+    // the deployment's own - dev and production differ. Naming a single
+    // deployment here meant next/image rejected every production logo URL,
+    // so the one page that renders logos through next/image showed a broken
+    // image while the plain <img> pages were fine. Any Convex deployment of
+    // this project is allowed rather than one name that has to be updated
+    // whenever a deployment is added.
     remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'adamant-armadillo-601.convex.cloud',
-      },
+      { protocol: 'https', hostname: '*.convex.cloud' },
+      { protocol: 'https', hostname: '*.convex.site' },
     ],
   },
   webpack: (config) => {

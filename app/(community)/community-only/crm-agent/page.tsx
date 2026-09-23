@@ -10,6 +10,7 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useStoredUser } from "@/app/hooks/useStoredUser";
 import { PRESET_KEYS, literalForPresetAnswer } from "@/convex/crmPresets";
+import { IntakeAnswers } from "@/app/components/crm/IntakeAnswers";
 
 const FONT = '"Montserrat", sans-serif';
 const BRAND = "#156f44";
@@ -385,6 +386,11 @@ export default function CrmAgentPage() {
             return (
               <div key={lead._id} style={{ background: "#fff", borderRadius: 12, border: "1px solid #e5e7eb", padding: "0.85rem" }}>
                 <div style={{ fontWeight: 700, fontSize: "1rem" }}>{idx + 1}. {lead.memberAlias || "Farmer"}</div>
+                {lead.callbackRequestedAt && (
+                  <div style={{ marginTop: "0.2rem", display: "inline-block", background: "#fff7ed", color: "#9a3412", border: "1px solid #fed7aa", borderRadius: 999, padding: "0.1rem 0.55rem", fontSize: "0.76rem", fontWeight: 700 }}>
+                    Callback requested by supervisor
+                  </div>
+                )}
                 {!lead.isNameVerified && (
                   <div style={{ marginTop: "0.35rem", display: "flex", gap: "0.4rem" }}>
                     <input
@@ -429,6 +435,20 @@ export default function CrmAgentPage() {
                 <div style={{ marginTop: "0.2rem", color: lead.isOverdue ? "#b91c1c" : "#166534", fontSize: "0.84rem", fontWeight: 600 }}>
                   {lead.isDueToday ? "Follow-up due today" : lead.isOverdue ? "Overdue" : "Scheduled"}
                 </div>
+
+                <IntakeAnswers
+                  purchase={{
+                    productName: lead.productName,
+                    purchaseQuantity: lead.purchaseQuantity,
+                    purchaseDate: lead.purchaseDate,
+                    parish: lead.parish,
+                    cropGrown: lead.cropGrown,
+                    monthOfPlanting: lead.monthOfPlanting,
+                    pastSprayDates: lead.pastSprayDates,
+                    upcomingSprayScheduleAt: lead.upcomingSprayScheduleAt,
+                  }}
+                  answers={lead.intakeAnswers}
+                />
 
                 <LeadOpeningScript leadId={lead._id} requesterId={userId} />
 

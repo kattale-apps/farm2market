@@ -16,3 +16,22 @@ export const MENU_ACCENT_COLORS: string[] = [
 export function menuAccentColor(index: number): string {
   return MENU_ACCENT_COLORS[index % MENU_ACCENT_COLORS.length];
 }
+
+// The farmer's "More" menu runs the same rainbow sequence the community CRM
+// sections use, so a farmer being shown the app can be pointed at "the orange
+// one" rather than a label they may not read easily. Red stays out for the
+// same reason as above: it belongs to Logout alone.
+export const MENU_RAINBOW_COLORS: string[] = [
+  "#1d4ed8", // blue
+  "#ea580c", // orange
+  "#7c3aed", // violet
+  "#0891b2", // cyan
+  "#15803d", // green
+  "#ca8a04", // yellow
+  "#4f46e5", // indigo
+  "#be185d", // magenta
+];
+
+export function menuRainbowColor(index: number): string {
+  return MENU_RAINBOW_COLORS[index % MENU_RAINBOW_COLORS.length];
+}

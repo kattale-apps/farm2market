@@ -7,6 +7,7 @@ import {
   resolveCrmAgentDisplayName,
 } from "./crmAuth";
 import { PRESET_KEYS, literalForPresetAnswer } from "./crmPresets";
+import { createIntakeAnswerLoader } from "./crmIntakeAnswers";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -359,19 +360,7 @@ export const getCrmAgentQueue = query({
       .collect();
     const formById = new Map(forms.map((f: any) => [String(f._id), f]));
 
-    const fieldsByForm = new Map<string, any[]>();
-    const loadFields = async (crmFormId: any) => {
-      const key = String(crmFormId);
-      const cached = fieldsByForm.get(key);
-      if (cached) return cached;
-      const fields = await ctx.db
-        .query("crmFormFields")
-        .withIndex("by_form", (q: any) => q.eq("crmFormId", crmFormId))
-        .collect();
-      const sorted = fields.sort((a: any, b: any) => Number(a.order || 0) - Number(b.order || 0));
-      fieldsByForm.set(key, sorted);
-      return sorted;
-    };
+    const loadIntakeAnswers = createIntakeAnswerLoader(ctx);
 
     const enriched = await Promise.all(
       filtered.map(async (lead: any) => {
@@ -381,14 +370,7 @@ export const getCrmAgentQueue = query({
 
         // The answers given on the form this lead was submitted on, so the
         // agent calling back sees what was captured the first time.
-        const fields = await loadFields(lead.sourceCrmFormId);
-        const values = response
-          ? await ctx.db
-              .query("crmFormResponseValues")
-              .withIndex("by_response", (q: any) => q.eq("crmResponseId", response._id))
-              .collect()
-          : [];
-        const valueByField = new Map(values.map((row: any) => [String(row.crmFieldId), row.value]));
+        const intakeAnswers = await loadIntakeAnswers(response?._id);
 
         return {
           ...lead,
@@ -409,12 +391,7 @@ export const getCrmAgentQueue = query({
           formName: form?.name || "Unassigned Form",
           isDueToday: new Date(lead.nextCallAt).toDateString() === new Date().toDateString(),
           isOverdue: lead.nextCallAt < getUgandaTime(),
-          intakeAnswers: fields.map((field: any) => ({
-            fieldId: String(field._id),
-            label: field.label,
-            fieldType: field.fieldType,
-            value: valueByField.get(String(field._id)) ?? "",
-          })),
+          intakeAnswers,
         };
       })
     );

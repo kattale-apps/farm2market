@@ -868,6 +868,10 @@ export default function CommunityCrmPage() {
     );
   };
 
+  // Lead call times are stored shifted to Uganda time (convex/utils
+  // getUgandaTime), so they read correctly as a UTC wall clock.
+  const formatLeadDate = (ts: number) => new Date(ts).toLocaleDateString(undefined, { timeZone: "UTC" });
+
   const renderFollowUpRow = (row: any) => {
     return (
       <div key={row.leadId} style={{ padding: "0.45rem 0", borderBottom: "1px solid #f0f0f0" }}>
@@ -875,7 +879,12 @@ export default function CommunityCrmPage() {
           {row.clientName} {row.isOverdue && <span style={{ color: "#b91c1c", fontWeight: 700, fontSize: "0.78rem" }}>OVERDUE</span>}
         </div>
         <div style={{ fontSize: "0.82rem", color: "#666" }}>
-          {row.formName} | {row.phoneNumber} | Next call: {new Date(row.nextCallAt).toLocaleDateString()}
+          {row.formName} | {row.phoneNumber} | Next call: {formatLeadDate(row.nextCallAt)}
+        </div>
+        <div style={{ fontSize: "0.78rem", color: row.lastCallAt ? "#4b5563" : "#b91c1c", fontWeight: 600 }}>
+          {row.lastCallAt
+            ? `Last called ${formatLeadDate(row.lastCallAt)}${row.lastOutcome === "no_answer" ? " (no answer)" : ""}`
+            : "Never called"}
         </div>
         {row.confirmedVisitAt && (
           <div style={{ fontSize: "0.78rem", color: "#1f7a3e", fontWeight: 600 }}>

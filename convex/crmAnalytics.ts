@@ -1,6 +1,8 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { requireCrmSupervisorAccess, resolveCrmAgentDisplayName } from "./crmAuth";
+import { createIntakeAnswerLoader } from "./crmIntakeAnswers";
+import { getUgandaTime } from "./utils";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -122,23 +124,7 @@ export const getTodaysSubmittedForms = query({
       )
       .collect();
 
-    // Field definitions are per form and shared by every response to it, so
-    // each form's fields are fetched once rather than per row.
-    const fieldsByForm = new Map<string, any[]>();
-    const loadFields = async (crmFormId: any) => {
-      const key = String(crmFormId);
-      const cached = fieldsByForm.get(key);
-      if (cached) return cached;
-      const fields = await ctx.db
-        .query("crmFormFields")
-        .withIndex("by_form", (q: any) => q.eq("crmFormId", crmFormId))
-        .collect();
-      const sorted = fields.sort(
-        (a: any, b: any) => Number(a.order || 0) - Number(b.order || 0)
-      );
-      fieldsByForm.set(key, sorted);
-      return sorted;
-    };
+    const loadIntakeAnswers = createIntakeAnswerLoader(ctx);
 
     const rows = await Promise.all(
       responses.map(async (response: any) => {
@@ -147,14 +133,7 @@ export const getTodaysSubmittedForms = query({
 
         // Whatever was answered at intake, so the supervisor can review a
         // submission without opening the archive panel.
-        const fields = await loadFields(response.crmFormId);
-        const values = await ctx.db
-          .query("crmFormResponseValues")
-          .withIndex("by_response", (q: any) => q.eq("crmResponseId", response._id))
-          .collect();
-        const valueByField = new Map(
-          values.map((row: any) => [String(row.crmFieldId), row.value])
-        );
+        const answers = await loadIntakeAnswers(response._id);
 
         return {
           responseId: String(response._id),
@@ -174,12 +153,7 @@ export const getTodaysSubmittedForms = query({
             pastSprayDates: response.pastSprayDates || [],
             upcomingSprayScheduleAt: response.upcomingSprayScheduleAt || null,
           },
-          answers: fields.map((field: any) => ({
-            fieldId: String(field._id),
-            label: field.label,
-            fieldType: field.fieldType,
-            value: valueByField.get(String(field._id)) ?? "",
-          })),
+          answers,
         };
       })
     );
@@ -203,28 +177,16 @@ export const getFollowUpsDueDetails = query({
       )
       .collect();
 
-    const now = Date.now();
+    // Lead call times are stored in Uganda time (see getUgandaTime), so "now"
+    // and "today" must be measured the same way or a lead flips to overdue
+    // three hours late here while the agent page already shows it overdue.
+    const now = getUgandaTime();
     const dayStart = startOfDayTs(now);
     const dayEnd = dayStart + DAY_MS;
 
     const due = leadsOpen.filter((l: any) => l.nextCallAt < dayEnd);
 
-    // Fields are shared by every lead on the same form, so fetch once per form.
-    const fieldsByForm = new Map<string, any[]>();
-    const loadFields = async (crmFormId: any) => {
-      const key = String(crmFormId);
-      const cached = fieldsByForm.get(key);
-      if (cached) return cached;
-      const fields = await ctx.db
-        .query("crmFormFields")
-        .withIndex("by_form", (q: any) => q.eq("crmFormId", crmFormId))
-        .collect();
-      const sorted = fields.sort(
-        (a: any, b: any) => Number(a.order || 0) - Number(b.order || 0)
-      );
-      fieldsByForm.set(key, sorted);
-      return sorted;
-    };
+    const loadIntakeAnswers = createIntakeAnswerLoader(ctx);
 
     const rows = await Promise.all(
       due.map(async (lead: any) => {
@@ -232,18 +194,9 @@ export const getFollowUpsDueDetails = query({
         const response = (await ctx.db.get(lead.sourceCrmResponseId)) as any;
         const form = (await ctx.db.get(lead.sourceCrmFormId)) as any;
 
-        // The form submitted at intake, so a supervisor logging this follow-up
-        // sees what was captured before without leaving the section.
-        const fields = await loadFields(lead.sourceCrmFormId);
-        const values = response
-          ? await ctx.db
-              .query("crmFormResponseValues")
-              .withIndex("by_response", (q: any) => q.eq("crmResponseId", response._id))
-              .collect()
-          : [];
-        const valueByField = new Map(
-          values.map((row: any) => [String(row.crmFieldId), row.value])
-        );
+        // What was captured at intake, so the supervisor sees it before
+        // sending the contact to an agent.
+        const answers = await loadIntakeAnswers(response?._id);
 
         return {
           leadId: String(lead._id),
@@ -258,6 +211,8 @@ export const getFollowUpsDueDetails = query({
             ? await resolveCrmAgentDisplayName(ctx, lead.assignedAgentId, args.communityId)
             : null,
           callbackRequestedAt: lead.callbackRequestedAt || null,
+          lastCallAt: lead.lastCallAt || null,
+          lastOutcome: lead.lastOutcome || null,
           purchase: {
             productName: response?.productName || null,
             purchaseQuantity: response?.purchaseQuantity || null,
@@ -268,12 +223,7 @@ export const getFollowUpsDueDetails = query({
             pastSprayDates: response?.pastSprayDates || [],
             upcomingSprayScheduleAt: response?.upcomingSprayScheduleAt || null,
           },
-          answers: fields.map((field: any) => ({
-            fieldId: String(field._id),
-            label: field.label,
-            fieldType: field.fieldType,
-            value: valueByField.get(String(field._id)) ?? "",
-          })),
+          answers,
         };
       })
     );
@@ -356,7 +306,10 @@ export const getCrmHomeSummary = query({
       )
       .collect();
 
-    const now = Date.now();
+    // Lead call times are stored in Uganda time (see getUgandaTime), so "now"
+    // and "today" must be measured the same way or a lead flips to overdue
+    // three hours late here while the agent page already shows it overdue.
+    const now = getUgandaTime();
     const dayStart = startOfDayTs(now);
     const dayEnd = dayStart + DAY_MS;
 

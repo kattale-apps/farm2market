@@ -13,6 +13,10 @@ import { BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, Cart
 import { CommunityQRCode } from "../../components/CommunityQRCode";
 import { CommunityMemberCard } from "../../components/CommunityMemberCard";
 import { resolveCommunityLogo } from "../../lib/communityLogos";
+import {
+  CommunityOwnFormsPanel,
+  SharedFormsFromOtherCommunitiesPanel,
+} from "../../components/community/CommunityRecordBookForms";
 import { AdminFertilizerConfig } from "../../components/biofarm/AdminFertilizerConfig";
 import { exportSubmissionsToPDF } from "../../utils/exportUtils";
 import SubmissionPhotoGallery from "../../components/SubmissionPhotoGallery";
@@ -4560,6 +4564,14 @@ export default function CommunityDashboardPage() {
 
                       {activeMembersTab === "activeFarmsee" && (
                         <>
+                          <CommunityOwnFormsPanel
+                            adminId={userId as Id<"users">}
+                            communityId={communityId as Id<"communities">}
+                          />
+                          <SharedFormsFromOtherCommunitiesPanel
+                            adminId={userId as Id<"users">}
+                            communityId={communityId as Id<"communities">}
+                          />
                           {activeFarmseeByCommunity === undefined ? (
                             <p style={{ color: "#999" }}>Loading Active Farms members...</p>
                           ) : activeFarmseeMembers.length === 0 ? (

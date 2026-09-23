@@ -121,6 +121,9 @@ export function exportToPDF(
 
   // Save PDF
   addPageNumbersIfNeeded(doc);
+  // Left fire-and-forget: this one is a synchronous helper with callers that
+  // do not await it, and making it async would turn a save failure into an
+  // unhandled rejection in each of them.
   void savePdfFromJsPDF(doc, `${filename}.pdf`);
 }
 
@@ -188,6 +191,56 @@ async function urlToBase64(url: string): Promise<string> {
 }
 
 /**
+ * Hand the finished document to the saver and report a failure.
+ *
+ * These calls used to be fire-and-forget, so when the save itself failed -
+ * a WebView that drops blob downloads, no room on the device - the caller's
+ * button simply reset and no file appeared, with nothing said. Awaiting it
+ * and throwing on failure lets the screen that asked for the export say so.
+ */
+async function savePdfOrThrow(doc: jsPDF, filename: string): Promise<void> {
+  const result: PdfSaveResult = await savePdfFromJsPDF(doc, `${filename}.pdf`);
+  if (!result.ok) {
+    throw new Error(result.error || "Could not save the PDF on this device");
+  }
+}
+
+/**
+ * Decode a data URL into an image, or give up.
+ *
+ * Both photo helpers below used to hand the browser a data URL and wait for
+ * onload or onerror, with nothing to wake them if neither ever fired. On a
+ * phone that is not hypothetical: a camera-resolution photo can stall in
+ * decode under memory pressure and fire neither event, and the export then
+ * hangs on "Exporting all..." with no error and no file - the state it was
+ * reported stuck in. A decode that has not finished in time is treated the
+ * same way as one that failed, and the photo is used as it came.
+ */
+const PHOTO_DECODE_TIMEOUT_MS = 10000;
+
+function decodeImage(base64: string): Promise<HTMLImageElement | null> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (value: HTMLImageElement | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(value);
+    };
+
+    const timer = setTimeout(() => finish(null), PHOTO_DECODE_TIMEOUT_MS);
+    const img = new Image();
+    img.onload = () => finish(img);
+    img.onerror = () => finish(null);
+    try {
+      img.src = base64;
+    } catch {
+      finish(null);
+    }
+  });
+}
+
+/**
  * Photos are embedded into the PDF as-is unless they are shrunk first, and the
  * originals are camera-resolution — a single gallery photo out of Convex
  * storage runs to well over 2 MB. A dozen of those made the export download
@@ -207,36 +260,29 @@ async function downscaleBase64(
 ): Promise<string> {
   if (!base64) return base64;
 
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => {
-      const iw = img.naturalWidth || img.width;
-      const ih = img.naturalHeight || img.height;
-      if (!iw || !ih) {
-        resolve(base64);
-        return;
-      }
+  const img = await decodeImage(base64);
+  if (!img) return base64;
 
-      const scale = Math.min(1, maxDimension / Math.max(iw, ih));
-      if (scale >= 1) {
-        resolve(base64);
-        return;
-      }
+  try {
+    const iw = img.naturalWidth || img.width;
+    const ih = img.naturalHeight || img.height;
+    if (!iw || !ih) return base64;
 
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.max(1, Math.round(iw * scale));
-      canvas.height = Math.max(1, Math.round(ih * scale));
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        resolve(base64);
-        return;
-      }
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL("image/jpeg", EMBEDDED_PHOTO_QUALITY));
-    };
-    img.onerror = () => resolve(base64);
-    img.src = base64;
-  });
+    const scale = Math.min(1, maxDimension / Math.max(iw, ih));
+    if (scale >= 1) return base64;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(iw * scale));
+    canvas.height = Math.max(1, Math.round(ih * scale));
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return base64;
+
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/jpeg", EMBEDDED_PHOTO_QUALITY);
+  } catch {
+    // Out of memory on a big photo, or a tainted canvas: keep the original.
+    return base64;
+  }
 }
 
 /**
@@ -246,48 +292,42 @@ async function downscaleBase64(
 async function cropBase64ToAspect(base64: string, targetAspect: number): Promise<string> {
   if (!base64 || !Number.isFinite(targetAspect) || targetAspect <= 0) return base64;
 
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => {
-      const iw = img.naturalWidth || img.width;
-      const ih = img.naturalHeight || img.height;
-      if (!iw || !ih) {
-        resolve(base64);
-        return;
-      }
+  const img = await decodeImage(base64);
+  if (!img) return base64;
 
-      const inputAspect = iw / ih;
-      let sx = 0;
-      let sy = 0;
-      let sw = iw;
-      let sh = ih;
+  try {
+    const iw = img.naturalWidth || img.width;
+    const ih = img.naturalHeight || img.height;
+    if (!iw || !ih) return base64;
 
-      if (inputAspect > targetAspect) {
-        // Input is wider than target: crop left and right.
-        sw = Math.round(ih * targetAspect);
-        sx = Math.max(0, Math.round((iw - sw) / 2));
-      } else if (inputAspect < targetAspect) {
-        // Input is taller than target: crop top and bottom.
-        sh = Math.round(iw / targetAspect);
-        sy = Math.max(0, Math.round((ih - sh) / 2));
-      }
+    const inputAspect = iw / ih;
+    let sx = 0;
+    let sy = 0;
+    let sw = iw;
+    let sh = ih;
 
-      const outputScale = Math.min(1, MAX_EMBEDDED_PHOTO_PX / Math.max(sw, sh));
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.max(1, Math.round(sw * outputScale));
-      canvas.height = Math.max(1, Math.round(sh * outputScale));
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        resolve(base64);
-        return;
-      }
+    if (inputAspect > targetAspect) {
+      // Input is wider than target: crop left and right.
+      sw = Math.round(ih * targetAspect);
+      sx = Math.max(0, Math.round((iw - sw) / 2));
+    } else if (inputAspect < targetAspect) {
+      // Input is taller than target: crop top and bottom.
+      sh = Math.round(iw / targetAspect);
+      sy = Math.max(0, Math.round((ih - sh) / 2));
+    }
 
-      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL("image/jpeg", EMBEDDED_PHOTO_QUALITY));
-    };
-    img.onerror = () => resolve(base64);
-    img.src = base64;
-  });
+    const outputScale = Math.min(1, MAX_EMBEDDED_PHOTO_PX / Math.max(sw, sh));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(sw * outputScale));
+    canvas.height = Math.max(1, Math.round(sh * outputScale));
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return base64;
+
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/jpeg", EMBEDDED_PHOTO_QUALITY);
+  } catch {
+    return base64;
+  }
 }
 
 function addReportHeader(doc: jsPDF, title: string, subtitle?: string) {
@@ -715,7 +755,7 @@ export async function exportSubmissionsToPDF(
     }
     doc.setTextColor(30, 30, 30);
 
-    void savePdfFromJsPDF(doc, `${filename}.pdf`);
+    await savePdfOrThrow(doc, filename);
     return;
   }
 
@@ -852,7 +892,7 @@ export async function exportSubmissionsToPDF(
   }
 
   addPageNumbersIfNeeded(doc);
-  void savePdfFromJsPDF(doc, `${filename}.pdf`);
+  await savePdfOrThrow(doc, filename);
 }
 
 /**
@@ -1000,7 +1040,7 @@ export async function exportFormSubmissionsToPDF(
   }
 
   addPageNumbersIfNeeded(doc);
-  void savePdfFromJsPDF(doc, `${filename}.pdf`);
+  await savePdfOrThrow(doc, filename);
 }
 
 // =====================================================================

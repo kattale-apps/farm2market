@@ -2815,6 +2815,9 @@ export default function CommunityDashboardPage() {
   const [farmseeSelectedEntryIds, setFarmseeSelectedEntryIds] = useState<Set<string>>(new Set());
   const [farmseeBatchExporting, setFarmseeBatchExporting] = useState(false);
   const [farmseeAllExporting, setFarmseeAllExporting] = useState(false);
+  // "Exporting all..." alone cannot be told apart from a stalled export, so
+  // the button counts the pages as they are written.
+  const [farmseeAllProgress, setFarmseeAllProgress] = useState("");
   // Whether the tab strip still has tabs to the right, which decides the
   // scroll hint. Recomputed on scroll and whenever the tab list changes.
   const tabStripRef = useRef<HTMLDivElement | null>(null);
@@ -3206,12 +3209,14 @@ export default function CommunityDashboardPage() {
       await exportSubmissionsToPDF(
         rows || [],
         `biofarm-${selectedFarmseeMember.alias || "member"}-all-entries-${datePart}`,
-        selectedFarmseeMember.alias
+        selectedFarmseeMember.alias,
+        (done, total) => setFarmseeAllProgress(`${done}/${total}`)
       );
     } catch (error: any) {
       setMessage({ type: "error", text: error?.message || "Failed to export all entries" });
     }
     setFarmseeAllExporting(false);
+    setFarmseeAllProgress("");
   };
 
   if (!userId) {
@@ -4984,7 +4989,9 @@ export default function CommunityDashboardPage() {
                   fontSize: "0.84rem",
                 }}
               >
-                {farmseeAllExporting ? "Exporting all..." : "Download All PDF"}
+                {farmseeAllExporting
+                  ? `Exporting${farmseeAllProgress ? ` ${farmseeAllProgress}` : ""}...`
+                  : "Download All PDF"}
               </button>
               <button
                 type="button"

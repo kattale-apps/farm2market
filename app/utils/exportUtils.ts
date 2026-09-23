@@ -567,45 +567,36 @@ async function addWatermark(doc: jsPDF, logoBase64: string): Promise<void> {
 }
 
 /**
- * Fetch and shrink every photo in the export once, before any page is drawn.
+ * How many photos a batch page is allowed to embed.
  *
- * The photos used to be fetched one at a time in the middle of laying out a
- * page, each with its own timeout, so a document of twenty submissions spent
- * minutes waiting on a phone before anything appeared. They are fetched a few
- * at a time here and reused wherever they appear; one that cannot be fetched
- * is simply missing from the map and its tile says so.
+ * The stored originals are camera-resolution - 2.5 to 3 MB each straight out
+ * of Convex storage. A farmer with fifteen submissions and two photos apiece
+ * is eighty megabytes of download, and over a hundred once it is base64, which
+ * is what an export on a phone cannot survive. Each photo is fetched, shrunk,
+ * drawn and released one at a time, and a page takes at most this many.
  */
-const PHOTO_FETCH_CONCURRENCY = 4;
+const MAX_BATCH_PHOTOS_PER_ENTRY = 2;
 
-async function prefetchEntryPhotos(entries: any[]): Promise<Map<string, string>> {
-  const urls: string[] = [];
-  for (const entry of entries) {
-    for (const url of (entry?.photoUrls || []) as string[]) {
-      if (url && !urls.includes(url)) urls.push(url);
-    }
+/**
+ * Fetch one photo, shrink it, and hand back the small version.
+ *
+ * Deliberately one at a time: an earlier version fetched every photo in the
+ * document up front and kept them all in a map, which made the peak memory the
+ * sum of every photo rather than the largest one.
+ */
+async function loadPhotoForEmbedding(url: string): Promise<string | null> {
+  try {
+    const fetched = await urlToBase64(url);
+    if (!fetched) return null;
+    return await downscaleBase64(fetched, BATCH_PHOTO_PX);
+  } catch {
+    return null;
   }
-
-  const cache = new Map<string, string>();
-  for (let i = 0; i < urls.length; i += PHOTO_FETCH_CONCURRENCY) {
-    const batch = urls.slice(i, i + PHOTO_FETCH_CONCURRENCY);
-    const results = await Promise.all(
-      batch.map(async (url) => {
-        try {
-          const fetched = await urlToBase64(url);
-          if (!fetched) return null;
-          return await downscaleBase64(fetched);
-        } catch {
-          return null;
-        }
-      })
-    );
-    results.forEach((value, idx) => {
-      if (value) cache.set(batch[idx], value);
-    });
-  }
-
-  return cache;
 }
+
+// A PDF tile in the batch layout is about 60 mm wide, which is ~700 px at 300
+// dpi. 900 keeps detail without carrying a camera frame into the document.
+const BATCH_PHOTO_PX = 900;
 
 /**
  * Export farm toolbox submissions to PDF.
@@ -615,7 +606,12 @@ async function prefetchEntryPhotos(entries: any[]): Promise<Map<string, string>>
 export async function exportSubmissionsToPDF(
   entries: any[],
   filename: string,
-  userAlias?: string
+  userAlias?: string,
+  /**
+   * Called as each submission's page is finished. A long export is otherwise
+   * a button that looks frozen, which is exactly how a slow one was read.
+   */
+  onProgress?: (done: number, total: number) => void
 ): Promise<void> {
   if (!entries.length) return;
 
@@ -814,11 +810,11 @@ export async function exportSubmissionsToPDF(
   // is asked for: a plain document, one page per submission, with the logo
   // drawn once per page at thumbnail size.
   const brandLogo = logoBase64 ? await downscaleBase64(logoBase64, 220) : "";
-  const photoCache = await prefetchEntryPhotos(entries);
 
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i];
     if (i > 0) doc.addPage();
+    onProgress?.(i, entries.length);
 
     const submittedDate = formatUgandaDate(entry.submittedAt || entry.createdAt);
     addReportHeader(
@@ -903,7 +899,9 @@ export async function exportSubmissionsToPDF(
     // Photos share the page rather than spilling onto new ones: whatever room
     // is left below the tables is divided between them, so a submission is
     // always exactly one page.
-    const photos: string[] = (entry.photoUrls || []).filter(Boolean);
+    const photos: string[] = (entry.photoUrls || [])
+      .filter(Boolean)
+      .slice(0, MAX_BATCH_PHOTOS_PER_ENTRY);
     if (photos.length) {
       y = addSectionTitle(doc, y, `Photos (${photos.length})`);
       const available = pageHeight - margin - 8 - y;
@@ -926,7 +924,9 @@ export async function exportSubmissionsToPDF(
           doc.setDrawColor(180);
           doc.rect(px, py, cell, cell);
 
-          const base64 = photoCache.get(photos[p]);
+          // Fetched here and dropped as soon as it is drawn, so only one
+          // camera-resolution photo is ever in memory.
+          const base64 = await loadPhotoForEmbedding(photos[p]);
           if (!base64) {
             doc.setFontSize(7);
             doc.setTextColor(120);
@@ -961,6 +961,7 @@ export async function exportSubmissionsToPDF(
     }
   }
 
+  onProgress?.(entries.length, entries.length);
   addPageNumbersIfNeeded(doc);
   await savePdfOrThrow(doc, filename);
 }

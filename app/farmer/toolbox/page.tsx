@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useConvex, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { isBioFarmCoffeeTagName } from "@/convex/communityModules";
 import { Id } from "@/convex/_generated/dataModel";
 import { useOfflineQuery } from "@/app/hooks/useOfflineQuery";
 import { useOfflineMutation } from "@/app/hooks/useOfflineMutation";
@@ -48,19 +49,20 @@ const TAB_COLORS = [
 type Tab = "templates" | "log" | "units" | "insights" | "supply" | "ledger";
 
 const BIOFARM_TEMPLATE_NAME = "Bio Farm Coffee Tag";
-const LEGACY_BIOFARM_TEMPLATE_NAME = "Bio Farm Coffee Tree Tag Form";
-const LEGACY_DEFAULT_BIOFARM_TEMPLATE_NAME = "Default Bio Farm Coffee Tree Tag Form";
 
+// Shared with the backend so "Bio Farm", "Bio-Farm" and "BIOFARM" are read as
+// the same community on both sides, under every spelling the form has had.
 function isBioFarmTemplateName(templateName: string) {
-  return (
-    templateName === BIOFARM_TEMPLATE_NAME ||
-    templateName === LEGACY_BIOFARM_TEMPLATE_NAME ||
-    templateName === LEGACY_DEFAULT_BIOFARM_TEMPLATE_NAME
-  );
+  return isBioFarmCoffeeTagName(templateName);
 }
 
 function isDefaultBioFarmTemplate(tpl: any | null) {
-  return !!tpl && tpl.ownerType === "system" && isBioFarmTemplateName(String(tpl.templateName || ""));
+  // The coffee tag moved from a platform-wide system template to Bio Farm's
+  // own community template. Both shapes are the mandatory form, so the icon
+  // and the "mandatory" label follow it across the move.
+  if (!tpl) return false;
+  const ownedByPlatformOrCommunity = tpl.ownerType === "system" || tpl.ownerType === "community";
+  return ownedByPlatformOrCommunity && isBioFarmTemplateName(String(tpl.templateName || ""));
 }
 
 function getDisplayTemplateName(templateName: string) {

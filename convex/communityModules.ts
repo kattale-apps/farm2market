@@ -23,15 +23,42 @@ type CommunityLike = {
 };
 
 /**
+ * "Bio Farm", "Bio-Farm" and "BIOFARM" are one community written three ways.
+ *
+ * Comparing the text as typed missed the real registration, "BIO-FARM PURELY
+ * ORGANIC FERTILIZER", on its hyphen. Every check for this community now goes
+ * through the same keyword test: case, spaces and punctuation are dropped and
+ * what remains has to begin with "biofarm".
+ */
+export function isBioFarmName(value: string | undefined | null): boolean {
+  return normalizeCommunityKey(value).startsWith("biofarm");
+}
+
+export function normalizeCommunityKey(value: string | undefined | null): string {
+  return String(value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/**
  * Bio Farm is the only community that had Advanced Markets in active use
  * before these flags existed, so it stays switched on by default. Matching on
  * the name as well as the id keeps that true on deployments where the
  * community document has a different id.
  */
-function isBioFarmCommunity(community: CommunityLike): boolean {
+export function isBioFarmCommunity(community: CommunityLike): boolean {
   const id = String(community?._id ?? community?.id ?? "");
   if (id === BIOFARM_COMMUNITY_ID) return true;
-  return String(community?.name ?? "").trim().toLowerCase().startsWith("bio farm");
+  return isBioFarmName(community?.name);
+}
+
+/**
+ * The mandatory Bio Farm coffee tagging form, under any of the names it has
+ * carried: "Bio Farm Coffee Tag", the older "Bio Farm Coffee Tree Tag Form"
+ * and "Default Bio Farm Coffee Tree Tag Form", and any of those written with
+ * a hyphen or different casing.
+ */
+export function isBioFarmCoffeeTagName(templateName: string | undefined | null): boolean {
+  const key = normalizeCommunityKey(templateName);
+  return key.includes("biofarm") && key.includes("coffee") && key.includes("tag");
 }
 
 export function isAdvancedMarketsEnabled(community: CommunityLike | null | undefined): boolean {

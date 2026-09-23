@@ -209,19 +209,71 @@ export const getFollowUpsDueDetails = query({
 
     const due = leadsOpen.filter((l: any) => l.nextCallAt < dayEnd);
 
+    // Fields are shared by every lead on the same form, so fetch once per form.
+    const fieldsByForm = new Map<string, any[]>();
+    const loadFields = async (crmFormId: any) => {
+      const key = String(crmFormId);
+      const cached = fieldsByForm.get(key);
+      if (cached) return cached;
+      const fields = await ctx.db
+        .query("crmFormFields")
+        .withIndex("by_form", (q: any) => q.eq("crmFormId", crmFormId))
+        .collect();
+      const sorted = fields.sort(
+        (a: any, b: any) => Number(a.order || 0) - Number(b.order || 0)
+      );
+      fieldsByForm.set(key, sorted);
+      return sorted;
+    };
+
     const rows = await Promise.all(
       due.map(async (lead: any) => {
         const member = (await ctx.db.get(lead.memberId)) as any;
         const response = (await ctx.db.get(lead.sourceCrmResponseId)) as any;
         const form = (await ctx.db.get(lead.sourceCrmFormId)) as any;
+
+        // The form submitted at intake, so a supervisor logging this follow-up
+        // sees what was captured before without leaving the section.
+        const fields = await loadFields(lead.sourceCrmFormId);
+        const values = response
+          ? await ctx.db
+              .query("crmFormResponseValues")
+              .withIndex("by_response", (q: any) => q.eq("crmResponseId", response._id))
+              .collect()
+          : [];
+        const valueByField = new Map(
+          values.map((row: any) => [String(row.crmFieldId), row.value])
+        );
+
         return {
           leadId: String(lead._id),
+          formId: String(lead.sourceCrmFormId),
           clientName: response?.clientName || member?.alias || "Unknown",
           phoneNumber: member?.phoneNumber || "-",
           formName: form?.name || "Unknown form",
           nextCallAt: lead.nextCallAt,
           isOverdue: lead.nextCallAt < now,
           confirmedVisitAt: response?.upcomingSprayScheduleAt || null,
+          assignedAgentName: lead.assignedAgentId
+            ? await resolveCrmAgentDisplayName(ctx, lead.assignedAgentId, args.communityId)
+            : null,
+          callbackRequestedAt: lead.callbackRequestedAt || null,
+          purchase: {
+            productName: response?.productName || null,
+            purchaseQuantity: response?.purchaseQuantity || null,
+            purchaseDate: response?.purchaseDate || null,
+            parish: response?.parish || null,
+            cropGrown: response?.cropGrown || null,
+            monthOfPlanting: response?.monthOfPlanting || null,
+            pastSprayDates: response?.pastSprayDates || [],
+            upcomingSprayScheduleAt: response?.upcomingSprayScheduleAt || null,
+          },
+          answers: fields.map((field: any) => ({
+            fieldId: String(field._id),
+            label: field.label,
+            fieldType: field.fieldType,
+            value: valueByField.get(String(field._id)) ?? "",
+          })),
         };
       })
     );

@@ -261,6 +261,8 @@ export const submitCrmCallOutcome = mutation({
       // A later "no answer" must not erase what the last real conversation said.
       latestHealthScore: health.score ?? lead.latestHealthScore,
       latestHealthBand: health.band ?? lead.latestHealthBand,
+      // The callback a supervisor asked for has now been made.
+      callbackRequestedAt: undefined,
       updatedAt: now,
     });
 
@@ -357,11 +359,37 @@ export const getCrmAgentQueue = query({
       .collect();
     const formById = new Map(forms.map((f: any) => [String(f._id), f]));
 
+    const fieldsByForm = new Map<string, any[]>();
+    const loadFields = async (crmFormId: any) => {
+      const key = String(crmFormId);
+      const cached = fieldsByForm.get(key);
+      if (cached) return cached;
+      const fields = await ctx.db
+        .query("crmFormFields")
+        .withIndex("by_form", (q: any) => q.eq("crmFormId", crmFormId))
+        .collect();
+      const sorted = fields.sort((a: any, b: any) => Number(a.order || 0) - Number(b.order || 0));
+      fieldsByForm.set(key, sorted);
+      return sorted;
+    };
+
     const enriched = await Promise.all(
       filtered.map(async (lead: any) => {
         const member = (await ctx.db.get(lead.memberId)) as any;
         const response = (await ctx.db.get(lead.sourceCrmResponseId)) as any;
         const form = formById.get(String(lead.sourceCrmFormId));
+
+        // The answers given on the form this lead was submitted on, so the
+        // agent calling back sees what was captured the first time.
+        const fields = await loadFields(lead.sourceCrmFormId);
+        const values = response
+          ? await ctx.db
+              .query("crmFormResponseValues")
+              .withIndex("by_response", (q: any) => q.eq("crmResponseId", response._id))
+              .collect()
+          : [];
+        const valueByField = new Map(values.map((row: any) => [String(row.crmFieldId), row.value]));
+
         return {
           ...lead,
           memberAlias: member?.verifiedName || response?.clientName || member?.alias,
@@ -381,11 +409,23 @@ export const getCrmAgentQueue = query({
           formName: form?.name || "Unassigned Form",
           isDueToday: new Date(lead.nextCallAt).toDateString() === new Date().toDateString(),
           isOverdue: lead.nextCallAt < getUgandaTime(),
+          intakeAnswers: fields.map((field: any) => ({
+            fieldId: String(field._id),
+            label: field.label,
+            fieldType: field.fieldType,
+            value: valueByField.get(String(field._id)) ?? "",
+          })),
         };
       })
     );
 
-    return enriched.sort((a: any, b: any) => Number(a.nextCallAt) - Number(b.nextCallAt));
+    // Callbacks a supervisor sent go first; otherwise soonest call first.
+    return enriched.sort((a: any, b: any) => {
+      const aCallback = a.callbackRequestedAt ? 0 : 1;
+      const bCallback = b.callbackRequestedAt ? 0 : 1;
+      if (aCallback !== bCallback) return aCallback - bCallback;
+      return Number(a.nextCallAt) - Number(b.nextCallAt);
+    });
   },
 });
 
@@ -471,6 +511,55 @@ export const setCrmMemberVerifiedName = mutation({
     await ctx.db.patch(lead.memberId, { verifiedName: name });
 
     return { success: true };
+  },
+});
+
+/**
+ * Supervisor hands a batch of due or overdue follow-ups to one agent to call
+ * back. Each lead is assigned to that agent (taking it from anyone else who
+ * held it) and flagged, so it sits at the top of the agent's Call Now queue
+ * with the form it was originally submitted on. The supervisor does not log
+ * the call; the agent does, and that call clears the flag.
+ */
+export const sendFollowUpsToAgent = mutation({
+  args: {
+    requesterId: v.id("users"),
+    communityId: v.id("communities"),
+    agentId: v.id("users"),
+    leadIds: v.array(v.id("crmLeads")),
+  },
+  handler: async (ctx, args) => {
+    await requireCrmSupervisorAccess(ctx, args.requesterId, args.communityId);
+
+    const assignment = await ctx.db
+      .query("crmAgents")
+      .withIndex("by_community_agent", (q: any) =>
+        q.eq("communityId", args.communityId).eq("agentUserId", args.agentId)
+      )
+      .first();
+    if (!assignment || !assignment.isActive) {
+      throw new Error("That agent is not an active CRM agent for this community");
+    }
+
+    const now = getUgandaTime();
+    let sent = 0;
+    for (const leadId of args.leadIds) {
+      const lead = await ctx.db.get(leadId);
+      if (!lead || String(lead.communityId) !== String(args.communityId)) continue;
+      // A closed lead has nothing left to follow up.
+      if (lead.queueStatus !== "open" && lead.queueStatus !== "in_progress") continue;
+      await ctx.db.patch(leadId, {
+        assignedAgentId: args.agentId,
+        callbackRequestedAt: now,
+        updatedAt: now,
+      });
+      sent += 1;
+    }
+
+    return {
+      sent,
+      agentName: await resolveCrmAgentDisplayName(ctx, args.agentId, args.communityId),
+    };
   },
 });
 

@@ -12,11 +12,9 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { getUgandaTime, generateUTID } from "./utils";
-import { isActiveFarmsEnabled } from "./communityModules";
+import { isActiveFarmsEnabled, isBioFarmCoffeeTagName, isBioFarmName } from "./communityModules";
 
 const BIOFARM_TEMPLATE_NAME = "Bio Farm Coffee Tag";
-const LEGACY_BIOFARM_TEMPLATE_NAME = "Bio Farm Coffee Tree Tag Form";
-const LEGACY_DEFAULT_BIOFARM_TEMPLATE_NAME = "Default Bio Farm Coffee Tree Tag Form";
 const DEFAULT_TREE_TAG_PHOTO_FIELD = "Tree Tag Pic";
 const DEFAULT_COFFEE_PHOTO_FIELD = "Coffee Tree Pic";
 const LEGACY_COFFEE_PHOTO_FIELD = "Coffee Pic";
@@ -27,11 +25,9 @@ const DEFAULT_GPS_FIELD = "GPS";
 const BIO_FORM_ONLY_FOR_NEW_FARMERS_LIVE_AT_MS = Date.parse("2026-05-27T00:00:00+03:00");
 
 function isBioFarmTemplateName(templateName: string) {
-  return (
-    templateName === BIOFARM_TEMPLATE_NAME ||
-    templateName === LEGACY_BIOFARM_TEMPLATE_NAME ||
-    templateName === LEGACY_DEFAULT_BIOFARM_TEMPLATE_NAME
-  );
+  // "Bio Farm", "Bio-Farm" and "BIOFARM" are the same community, so the form
+  // is recognised by its keywords rather than by three exact spellings.
+  return isBioFarmCoffeeTagName(templateName);
 }
 
 function isDefaultBioFarmCoffeeTagTemplate(template: any) {
@@ -385,16 +381,9 @@ export const ensureDefaultBioFarmCoffeeTreeTagTemplate = mutation({
   },
   handler: async (ctx, args) => {
     const communities = await ctx.db.query("communities").collect();
-    // The community is matched on its name with punctuation and spacing
-    // removed. It is registered as "BIO-FARM PURELY ORGANIC FERTILIZER", so a
-    // plain "bio farm" prefix test misses it on the hyphen and the move would
-    // quietly not happen.
-    const bioFarmCommunity = communities.find((c: any) =>
-      String(c?.name ?? "")
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, "")
-        .startsWith("biofarm")
-    );
+    // One shared keyword rule: it is registered as "BIO-FARM PURELY ORGANIC
+    // FERTILIZER", which a plain "bio farm" test misses on the hyphen.
+    const bioFarmCommunity = communities.find((c: any) => isBioFarmName(c?.name));
 
     const systemTemplates = await ctx.db
       .query("farmTrackerTemplates")

@@ -1974,6 +1974,25 @@ export default defineSchema({
    * - ownerType "personal" = Farmer's own template
    * - Farmers can delete their own personal templates
    */
+  /**
+   * Which shared forms a community has opted in to seeing.
+   *
+   * Sharing is two-sided: the community that owns a template decides whether
+   * its records may leave (entriesVisibleToOtherCommunities), and the
+   * community receiving them decides which of those forms it actually wants
+   * in its Active Farms view. A row here is one receiving community saying
+   * yes to one form; no row means no, so nothing arrives unasked.
+   */
+  communityTemplateSubscriptions: defineTable({
+    communityId: v.id("communities"),
+    templateId: v.id("farmTrackerTemplates"),
+    enabledByAdminId: v.id("users"),
+    createdAt: v.number(),
+  })
+    .index("by_community", ["communityId"])
+    .index("by_template", ["templateId"])
+    .index("by_community_template", ["communityId", "templateId"]),
+
   farmTrackerTemplates: defineTable({
     ownerId: v.id("users"),
     ownerType: v.union(v.literal("system"), v.literal("community"), v.literal("personal")),

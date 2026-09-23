@@ -36,8 +36,14 @@ function isBioFarmTemplateName(templateName: string) {
 
 function isDefaultBioFarmCoffeeTagTemplate(template: any) {
   const templateName = String(template?.templateName || "");
+  // Both shapes count: the system template it shipped as, and the Bio Farm
+  // community template it is moved to. The guard that stops this form being
+  // deleted and the checks that treat it as the mandatory form have to keep
+  // recognising it across that move.
+  const ownedByPlatformOrCommunity =
+    template?.ownerType === "system" || template?.ownerType === "community";
   return (
-    template?.ownerType === "system" &&
+    ownedByPlatformOrCommunity &&
     !template?.isDeleted &&
     isBioFarmTemplateName(templateName)
   );
@@ -198,6 +204,15 @@ async function filterEntriesVisibleToCommunity(
     templates.set(key, await ctx.db.get(entry.templateId));
   }
 
+  // Sharing is two-sided. The owning community opens a form up, and this
+  // community has to have asked for it: a form nobody here subscribed to
+  // stays out of this view even when its owner shares it freely.
+  const subscriptions = await ctx.db
+    .query("communityTemplateSubscriptions")
+    .withIndex("by_community", (q: any) => q.eq("communityId", communityId))
+    .collect();
+  const subscribed = new Set(subscriptions.map((row: any) => String(row.templateId)));
+
   return entries.filter((entry: any) => {
     const template = templates.get(String(entry.templateId));
     // A template that no longer resolves cannot be shown to be shareable, so
@@ -205,7 +220,10 @@ async function filterEntriesVisibleToCommunity(
     if (!template) return false;
     if (template.ownerType !== "community") return true;
     if (String(template.communityId ?? "") === String(communityId)) return true;
-    return template.entriesVisibleToOtherCommunities === true;
+    return (
+      template.entriesVisibleToOtherCommunities === true &&
+      subscribed.has(String(entry.templateId))
+    );
   });
 }
 
@@ -287,13 +305,45 @@ export const listTemplates = query({
       .collect();
     results.push(...systemTemplates.filter((t) => t.isActive && !t.isDeleted));
 
-    // Community templates
-    if (args.communityId) {
+    // Community templates, for every community this farmer belongs to.
+    //
+    // This used to depend on the caller passing a communityId, and no caller
+    // ever did - so a community's own form reached nobody. Membership is
+    // resolved here instead, from both membership tables: communityMembers is
+    // the current one and carries an approval status, while older joins (and
+    // the automatic Bio Farm join made at signup) live in the legacy
+    // communityMemberships table.
+    const communityIds = new Set<string>();
+    if (args.communityId) communityIds.add(String(args.communityId));
+
+    const approvedMemberships = await ctx.db
+      .query("communityMembers")
+      .withIndex("by_farmer", (q: any) => q.eq("farmerId", args.farmerId))
+      .collect();
+    for (const membership of approvedMemberships) {
+      if ((membership as any).status === "APPROVED") {
+        communityIds.add(String((membership as any).communityId));
+      }
+    }
+
+    const legacyMemberships = await ctx.db
+      .query("communityMemberships")
+      .withIndex("by_user", (q: any) => q.eq("userId", args.farmerId))
+      .collect();
+    for (const membership of legacyMemberships) {
+      communityIds.add(String((membership as any).communityId));
+    }
+
+    for (const communityId of communityIds) {
       const communityTemplates = await ctx.db
         .query("farmTrackerTemplates")
-        .withIndex("by_community", (q: any) => q.eq("communityId", args.communityId))
+        .withIndex("by_community", (q: any) => q.eq("communityId", communityId as Id<"communities">))
         .collect();
-      results.push(...communityTemplates.filter((t) => t.isActive && !t.isDeleted));
+      results.push(
+        ...communityTemplates.filter(
+          (t: any) => t.ownerType === "community" && t.isActive && !t.isDeleted
+        )
+      );
     }
 
     // Personal templates
@@ -314,34 +364,78 @@ export const listTemplates = query({
   },
 });
 
-/** Ensure the mandatory Bio Farm default template exists (idempotent). */
+/**
+ * Ensure the mandatory Bio Farm default template exists, and that it belongs
+ * to the Bio Farm community rather than the platform.
+ *
+ * It shipped as a system template, which is why every farmer on the platform
+ * saw it. It is Bio Farm's own form, so it is moved to them - and because the
+ * move is a patch on the same document, every entry ever logged against it
+ * keeps pointing at the same template id. No record is copied, rewritten or
+ * orphaned; its fields are left exactly as they are.
+ *
+ * The community is found by name rather than by a pasted id, the same rule
+ * communityModules uses, so this works on any deployment. If a deployment has
+ * no Bio Farm community, the template stays a system template and nothing
+ * changes - the form keeps working for everyone, as it does today.
+ */
 export const ensureDefaultBioFarmCoffeeTreeTagTemplate = mutation({
   args: {
     requestingUserId: v.id("users"),
   },
   handler: async (ctx, args) => {
-    const existingSystemTemplates = await ctx.db
+    const communities = await ctx.db.query("communities").collect();
+    const bioFarmCommunity = communities.find((c: any) =>
+      String(c?.name ?? "").trim().toLowerCase().startsWith("bio farm")
+    );
+
+    const systemTemplates = await ctx.db
       .query("farmTrackerTemplates")
       .withIndex("by_owner_type", (q: any) => q.eq("ownerType", "system"))
       .collect();
 
-    const existingDefault = existingSystemTemplates.find((tpl: any) =>
-      isDefaultBioFarmCoffeeTagTemplate(tpl)
-    );
+    const communityTemplates = bioFarmCommunity
+      ? await ctx.db
+          .query("farmTrackerTemplates")
+          .withIndex("by_community", (q: any) => q.eq("communityId", bioFarmCommunity._id))
+          .collect()
+      : [];
+
+    const existingDefault =
+      communityTemplates.find((tpl: any) => isDefaultBioFarmCoffeeTagTemplate(tpl)) ||
+      systemTemplates.find((tpl: any) => isDefaultBioFarmCoffeeTagTemplate(tpl));
+
     if (existingDefault) {
-      await ctx.db.patch(existingDefault._id, {
+      const updates: any = {
         templateName: BIOFARM_TEMPLATE_NAME,
         emoji: "🍃",
         fields: buildDefaultBioFarmTemplateFields(),
         updatedAt: getUgandaTime(),
-      });
-      return { templateId: existingDefault._id, created: false };
+      };
+
+      // The move itself: same document, same id, same fields, same entries.
+      if (bioFarmCommunity && (existingDefault as any).ownerType !== "community") {
+        updates.ownerType = "community";
+        updates.communityId = bioFarmCommunity._id;
+        // Bio Farm's records stay readable by the communities their farmers
+        // also belong to, which is how this form behaved as a system template.
+        updates.entriesVisibleToOtherCommunities = true;
+      }
+
+      await ctx.db.patch(existingDefault._id, updates);
+      return {
+        templateId: existingDefault._id,
+        created: false,
+        movedToCommunity: !!updates.ownerType,
+      };
     }
 
     const now = getUgandaTime();
     const templateId = await ctx.db.insert("farmTrackerTemplates", {
       ownerId: args.requestingUserId,
-      ownerType: "system",
+      ownerType: bioFarmCommunity ? ("community" as const) : ("system" as const),
+      ...(bioFarmCommunity ? { communityId: bioFarmCommunity._id } : {}),
+      entriesVisibleToOtherCommunities: true,
       category: "crop",
       templateName: BIOFARM_TEMPLATE_NAME,
       emoji: "🍃",
@@ -353,7 +447,7 @@ export const ensureDefaultBioFarmCoffeeTreeTagTemplate = mutation({
       updatedAt: now,
     });
 
-    return { templateId, created: true };
+    return { templateId, created: true, movedToCommunity: false };
   },
 });
 
@@ -387,6 +481,8 @@ export const createTemplate = mutation({
     })),
   },
   handler: async (ctx, args): Promise<Id<"farmTrackerTemplates">> => {
+    await assertMayOwnTemplate(ctx, args.ownerId, args.ownerType, args.communityId);
+
     const now = getUgandaTime();
 
     const templateName = args.templateName.trim();
@@ -439,6 +535,137 @@ export const createTemplate = mutation({
 });
 
 /** Soft-delete a personal template (farmer deletes their own) */
+/**
+ * Who may own a tracker template.
+ *
+ * createTemplate accepted any ownerType from any caller, so a farmer could
+ * have created a platform-wide system template, or a community template for a
+ * community they have nothing to do with. Each kind now has to be earned:
+ * a personal template belongs to the caller, a community template to that
+ * community's own admin, and a system template to a super admin.
+ */
+async function assertMayOwnTemplate(
+  ctx: any,
+  callerId: Id<"users">,
+  ownerType: "system" | "community" | "personal",
+  communityId: Id<"communities"> | undefined
+) {
+  if (ownerType === "personal") return;
+
+  const caller = await ctx.db.get(callerId);
+  if (!caller || caller.role !== "admin") {
+    throw new Error("Only an admin can create community or system templates");
+  }
+
+  const isSuper = caller.adminLevel === "super" || caller.adminLevel === undefined;
+
+  if (ownerType === "system") {
+    if (!isSuper) throw new Error("Only a super admin can create a system template");
+    return;
+  }
+
+  if (!communityId) {
+    throw new Error("A community template needs a community");
+  }
+  await assertCommunityAdminForTemplateSharing(ctx, callerId, communityId);
+}
+
+/**
+ * Edit a community's own tracker form.
+ *
+ * Entries keep their own copy of every field name and value they were saved
+ * with, so renaming or removing a field here never rewrites a record that has
+ * already been logged - past submissions stay readable exactly as they were
+ * captured, and only future entries follow the new shape.
+ */
+export const updateTemplate = mutation({
+  args: {
+    requestingUserId: v.id("users"),
+    templateId: v.id("farmTrackerTemplates"),
+    templateName: v.optional(v.string()),
+    emoji: v.optional(v.string()),
+    description: v.optional(v.string()),
+    category: v.optional(v.union(v.literal("crop"), v.literal("livestock"), v.literal("general"))),
+    isActive: v.optional(v.boolean()),
+    fields: v.optional(v.array(v.object({
+      name: v.string(),
+      fieldType: v.union(
+        v.literal("text"),
+        v.literal("number"),
+        v.literal("date"),
+        v.literal("select"),
+        v.literal("yesno"),
+        v.literal("photo"),
+        v.literal("rating"),
+        v.literal("gps")
+      ),
+      options: v.optional(v.array(v.string())),
+      unit: v.optional(v.string()),
+      required: v.boolean(),
+      emoji: v.optional(v.string()),
+      order: v.number(),
+    }))),
+  },
+  handler: async (ctx, args) => {
+    const template = await ctx.db.get(args.templateId);
+    if (!template) throw new Error("Template not found");
+
+    const ownerType = (template as any).ownerType;
+    if (ownerType === "personal") {
+      if (String((template as any).ownerId) !== String(args.requestingUserId)) {
+        throw new Error("Not authorised - you can only edit your own template");
+      }
+    } else {
+      await assertMayOwnTemplate(
+        ctx,
+        args.requestingUserId,
+        ownerType,
+        (template as any).communityId as Id<"communities"> | undefined
+      );
+    }
+
+    // The Bio Farm Coffee Tag's own fields are fixed: they are what every
+    // existing coffee record was captured against, and the export reads them
+    // by name. Its name, emoji and description stay editable.
+    if (isDefaultBioFarmCoffeeTagTemplate(template) && args.fields) {
+      throw new Error("The Bio Farm Coffee Tag's fields cannot be changed");
+    }
+
+    const updates: any = { updatedAt: getUgandaTime() };
+
+    if (args.templateName !== undefined) {
+      const trimmed = args.templateName.trim();
+      if (!trimmed) throw new Error("Template name is required");
+      updates.templateName = trimmed;
+    }
+    if (args.emoji !== undefined) updates.emoji = args.emoji;
+    if (args.description !== undefined) updates.description = args.description;
+    if (args.category !== undefined) updates.category = args.category;
+    if (args.isActive !== undefined) updates.isActive = args.isActive;
+
+    if (args.fields !== undefined) {
+      if (args.fields.length === 0) throw new Error("Add at least one field");
+      updates.fields = args.fields.map((field, idx) => {
+        const cleanedName = field.name.trim();
+        if (!cleanedName) throw new Error(`Field #${idx + 1} is missing a name`);
+        const cleanedOptions = (field.options || []).map((opt) => opt.trim()).filter(Boolean);
+        if (field.fieldType === "select" && cleanedOptions.length === 0) {
+          throw new Error(`Select field "${cleanedName}" requires at least one option`);
+        }
+        return {
+          ...field,
+          name: cleanedName,
+          options: field.fieldType === "select" ? cleanedOptions : undefined,
+          order: idx,
+        };
+      });
+    }
+
+    await ctx.db.patch(args.templateId, updates);
+    return { success: true };
+  },
+});
+
 export const deleteTemplate = mutation({
   args: {
     templateId: v.id("farmTrackerTemplates"),
@@ -450,7 +677,13 @@ export const deleteTemplate = mutation({
     if (isDefaultBioFarmCoffeeTagTemplate(template)) {
       throw new Error("Bio Farm Coffee Tag cannot be deleted");
     }
-    if (template.ownerId !== args.requestingUserId || template.ownerType !== "personal") {
+    if (template.ownerType === "community") {
+      await assertCommunityAdminForTemplateSharing(
+        ctx,
+        args.requestingUserId,
+        (template as any).communityId as Id<"communities">
+      );
+    } else if (template.ownerId !== args.requestingUserId || template.ownerType !== "personal") {
       throw new Error("Not authorised — can only delete your own personal templates");
     }
     const now = getUgandaTime();
@@ -721,6 +954,113 @@ export const setTemplateEntrySharing = mutation({
     });
 
     return { success: true, visibleToOtherCommunities: args.visibleToOtherCommunities };
+  },
+});
+
+/**
+ * The shared forms this community could take, and whether it has said yes.
+ *
+ * Only forms another community owns AND has opened up appear here. Each admin
+ * still only ever sees their OWN community's members - subscribing to a form
+ * adds the records their own members logged on it, never another community's
+ * members.
+ */
+export const listSharedTemplatesForCommunity = query({
+  args: {
+    adminId: v.id("users"),
+    communityId: v.id("communities"),
+  },
+  handler: async (ctx, args) => {
+    await assertCommunityAdminForTemplateSharing(ctx, args.adminId, args.communityId);
+
+    const subscriptions = await ctx.db
+      .query("communityTemplateSubscriptions")
+      .withIndex("by_community", (q: any) => q.eq("communityId", args.communityId))
+      .collect();
+    const subscribed = new Set(subscriptions.map((row: any) => String(row.templateId)));
+
+    const shared = await ctx.db
+      .query("farmTrackerTemplates")
+      .withIndex("by_owner_type", (q: any) => q.eq("ownerType", "community"))
+      .collect();
+
+    const offers = shared.filter(
+      (t: any) =>
+        !t.isDeleted &&
+        t.entriesVisibleToOtherCommunities === true &&
+        String(t.communityId ?? "") !== String(args.communityId)
+    );
+
+    const communityNames = new Map<string, string>();
+    const results = [];
+    for (const template of offers) {
+      const key = String((template as any).communityId);
+      if (!communityNames.has(key)) {
+        const owner = await ctx.db.get((template as any).communityId);
+        communityNames.set(key, (owner as any)?.name || "Another community");
+      }
+      results.push({
+        templateId: template._id as Id<"farmTrackerTemplates">,
+        templateName: (template as any).templateName,
+        emoji: (template as any).emoji,
+        ownerCommunityId: (template as any).communityId as Id<"communities">,
+        ownerCommunityName: communityNames.get(key) as string,
+        fieldCount: ((template as any).fields || []).length,
+        subscribed: subscribed.has(String(template._id)),
+      });
+    }
+
+    return results.sort((a, b) =>
+      a.ownerCommunityName.localeCompare(b.ownerCommunityName) ||
+      a.templateName.localeCompare(b.templateName)
+    );
+  },
+});
+
+/** Take, or stop taking, one shared form's records into this community's Active Farms. */
+export const setSharedTemplateSubscription = mutation({
+  args: {
+    adminId: v.id("users"),
+    communityId: v.id("communities"),
+    templateId: v.id("farmTrackerTemplates"),
+    subscribed: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    await assertCommunityAdminForTemplateSharing(ctx, args.adminId, args.communityId);
+
+    const template = await ctx.db.get(args.templateId);
+    if (!template) throw new Error("Template not found");
+
+    if ((template as any).ownerType !== "community") {
+      throw new Error("Only a community's own form can be subscribed to");
+    }
+    if (String((template as any).communityId ?? "") === String(args.communityId)) {
+      throw new Error("This community already owns that form");
+    }
+    // A community cannot help itself to a form that was never opened up.
+    if ((template as any).entriesVisibleToOtherCommunities !== true) {
+      throw new Error("That form is not shared by the community that owns it");
+    }
+
+    const existing = await ctx.db
+      .query("communityTemplateSubscriptions")
+      .withIndex("by_community_template", (q: any) =>
+        q.eq("communityId", args.communityId).eq("templateId", args.templateId)
+      )
+      .first();
+
+    if (args.subscribed && !existing) {
+      await ctx.db.insert("communityTemplateSubscriptions", {
+        communityId: args.communityId,
+        templateId: args.templateId,
+        enabledByAdminId: args.adminId,
+        createdAt: getUgandaTime(),
+      });
+    } else if (!args.subscribed && existing) {
+      await ctx.db.delete(existing._id);
+    }
+
+    return { success: true, subscribed: args.subscribed };
   },
 });
 

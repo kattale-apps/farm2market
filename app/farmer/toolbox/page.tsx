@@ -60,7 +60,12 @@ function isBioFarmTemplateName(templateName: string) {
 }
 
 function isDefaultBioFarmTemplate(tpl: any | null) {
-  return !!tpl && tpl.ownerType === "system" && isBioFarmTemplateName(String(tpl.templateName || ""));
+  // The coffee tag moved from a platform-wide system template to Bio Farm's
+  // own community template. Both shapes are the mandatory form, so the icon
+  // and the "mandatory" label follow it across the move.
+  if (!tpl) return false;
+  const ownedByPlatformOrCommunity = tpl.ownerType === "system" || tpl.ownerType === "community";
+  return ownedByPlatformOrCommunity && isBioFarmTemplateName(String(tpl.templateName || ""));
 }
 
 function getDisplayTemplateName(templateName: string) {

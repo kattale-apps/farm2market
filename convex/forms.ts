@@ -2,22 +2,18 @@
 import { internalQuery, mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { generateUTID, getUgandaTime } from "./utils";
+import { isActiveFarmsEnabled } from "./communityModules";
 
 function buildFormQrSlug(formId: Id<"communityForms">) {
   return `form-${String(formId).slice(0, 12)}`;
 }
 
-const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
 
 async function assertBioFarmAdminCommunityAccess(
   ctx: any,
   adminId: Id<"users">,
   communityId: Id<"communities">
 ) {
-  if (String(communityId) !== BIOFARM_COMMUNITY_ID) {
-    throw new Error("Active Farms is available only for Bio Farm community");
-  }
-
   const adminUser = await ctx.db.get(adminId);
   if (!adminUser || adminUser.role !== "admin") {
     throw new Error("Not authorized");
@@ -26,6 +22,13 @@ async function assertBioFarmAdminCommunityAccess(
   const community = await ctx.db.get(communityId);
   if (!community) {
     throw new Error("Community not found");
+  }
+
+  // Which communities may be read here is a per-community setting now, not a
+  // literal id: every community's Active Farms list is built from its own
+  // approved members and their own entries.
+  if (!isActiveFarmsEnabled(community as any)) {
+    throw new Error("Active Farms is not enabled for this community");
   }
 
   const isSuperAdmin =
@@ -1630,10 +1633,9 @@ export const getBioFarmActiveFarmseeMembersByCommunityIds = query({
     const results = await Promise.all(
       args.communityIds.map(async (communityId) => {
         try {
-          if (String(communityId) !== BIOFARM_COMMUNITY_ID) {
-            return { communityId, members: [] };
-          }
-
+          // The access check below decides whether this community may be read;
+          // a community with Active Farms off throws and is reported as an
+          // empty list by the catch, exactly as an unauthorised one is.
           await assertBioFarmAdminCommunityAccess(ctx, args.adminId, communityId);
 
           const memberships = await ctx.db

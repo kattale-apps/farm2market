@@ -1062,7 +1062,8 @@ export const setCommunityModuleEnabled = mutation({
     module: v.union(
       v.literal("advancedMarkets"),
       v.literal("fertilizer"),
-      v.literal("costTemplates")
+      v.literal("costTemplates"),
+      v.literal("activeFarms")
     ),
     enabled: v.boolean(),
   },
@@ -1084,7 +1085,9 @@ export const setCommunityModuleEnabled = mutation({
     const patch =
       args.module === "advancedMarkets"
         ? { advancedMarketsEnabled: args.enabled }
-        : args.module === "costTemplates"
+        : args.module === "activeFarms"
+          ? { activeFarmsEnabled: args.enabled }
+          : args.module === "costTemplates"
           ? { costTemplatesEnabled: args.enabled }
           // The Fertilizer module covers the farmer-facing planner too, so the
           // legacy showFertilizerPlanner field is kept in step with it.

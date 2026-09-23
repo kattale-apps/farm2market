@@ -1015,10 +1015,13 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
                   minHeight: 52,
                   padding: "0.85rem 0.9rem",
                   marginBottom: "0.55rem",
-                  background: isSectionOpen(key) ? "#e3f2fd" : "transparent",
-                  border: "none",
+                  background: isSectionOpen(key) ? "#e3f2fd" : "#fff",
+                  // A bar on one edge alone left the rest of the row floating
+                  // against the panel, so each entry is now outlined in full
+                  // and the thicker left edge still carries the colour order.
+                  border: `2px solid ${menuRainbowColor(idx)}`,
                   borderLeft: `7px solid ${menuRainbowColor(idx)}`,
-                  borderRadius: "8px",
+                  borderRadius: "10px",
                   cursor: disabled ? "not-allowed" : "pointer",
                   opacity: disabled ? 0.6 : 1,
                   fontFamily: '"Montserrat", sans-serif',

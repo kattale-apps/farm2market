@@ -26,7 +26,6 @@ import { CrmInsightsSection } from "../../components/crm/CrmInsightsSection";
 type CommunityTab = "members" | "noticeboard" | "messages" | "forms" | "insights" | "fertilizer" | "costTemplates" | "advancePurchase";
 type MembersListTab = "approved" | "all" | "imported" | "activeFarmsee";
 
-const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
 
 /**
  * Real-world member spreadsheets rarely use the exact camelCase column names
@@ -3058,7 +3057,7 @@ export default function CommunityDashboardPage() {
 
   const handleToggleCommunityModule = async (
     communityId: Id<"communities">,
-    moduleKey: "advancedMarkets" | "fertilizer" | "costTemplates",
+    moduleKey: "advancedMarkets" | "fertilizer" | "costTemplates" | "activeFarms",
     nextValue: boolean
   ) => {
     if (!userId) return;
@@ -3351,6 +3350,10 @@ export default function CommunityDashboardPage() {
             // Advanced Markets and Fertilizer are optional modules: a super admin
             // opens them per community, and they stay hidden everywhere else.
             const advancedMarketsEnabled = community?.advancedMarketsEnabled === true;
+            // getActiveCommunities resolves the module flags before returning
+            // them, so an unset value has already been defaulted - on for Bio
+            // Farm, off elsewhere until a super admin switches it on.
+            const activeFarmsEnabled = community?.activeFarmsEnabled === true;
             const fertilizerEnabled = community?.fertilizerEnabled === true;
             const costTemplatesEnabled = community?.costTemplatesEnabled === true;
             const canConfigureFertilizer =
@@ -3635,6 +3638,31 @@ export default function CommunityDashboardPage() {
                             style={{ width: "16px", height: "16px", cursor: "pointer" }}
                           />
                           Enable Cost Templates module
+                        </label>
+                        <label
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.5rem",
+                            fontSize: "0.85rem",
+                            color: "#374151",
+                            fontWeight: 600,
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={activeFarmsEnabled}
+                            disabled={!!togglingMemberCountByCommunity[String(communityId)]}
+                            onChange={(e) => {
+                              handleToggleCommunityModule(
+                                communityId as Id<"communities">,
+                                "activeFarms",
+                                e.target.checked
+                              );
+                            }}
+                            style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                          />
+                          Enable Active Farms module (members&apos; Farm Record Book entries)
                         </label>
                       </>
                     )}
@@ -4181,7 +4209,9 @@ export default function CommunityDashboardPage() {
                     (activeFarmseeByCommunity || []).find(
                       (c: any) => String(c.communityId) === String(communityId)
                     )?.members || [];
-                  const isBioFarmCommunity = String(communityId) === BIOFARM_COMMUNITY_ID;
+                  // The Active Farms tab follows the community's own module
+                  // flag rather than one hard-coded community id.
+                  const activeFarmsOn = (community as any)?.activeFarmsEnabled === true;
                   const activeMembersTab = getMembersListTab(communityId);
                   const activeFarmseeSearch = getActiveFarmseeSearch(String(communityId)).trim().toLowerCase();
                   const filteredActiveFarmseeMembers = activeFarmseeSearch
@@ -4211,7 +4241,7 @@ export default function CommunityDashboardPage() {
                     imported: "Imported Members",
                     activeFarmsee: "Active Farms",
                   };
-                  const membersTabs = (isBioFarmCommunity
+                  const membersTabs = (activeFarmsOn
                     ? ["approved", "all", "imported", "activeFarmsee"]
                     : ["approved", "all", "imported"]) as MembersListTab[];
 

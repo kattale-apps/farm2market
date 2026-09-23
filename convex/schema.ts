@@ -874,6 +874,7 @@ export default defineSchema({
     advancedMarketsEnabled: v.optional(v.boolean()), // SuperAdmin flag: show the Advanced Markets module in this community's dashboard
     fertilizerEnabled: v.optional(v.boolean()), // SuperAdmin flag: show the Fertilizer module in this community's dashboard
     costTemplatesEnabled: v.optional(v.boolean()), // SuperAdmin flag: show the Cost Templates module in this community's dashboard
+    activeFarmsEnabled: v.optional(v.boolean()), // SuperAdmin flag: show the Active Farms module (members' Farm Record Book entries) in this community's dashboard
   })
     .index("by_active", ["isGlobal", "geoLocked"])
     .index("by_created_by", ["createdBy"]),

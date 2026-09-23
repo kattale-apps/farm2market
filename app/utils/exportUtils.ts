@@ -540,6 +540,10 @@ const TOOLBOX_SITE_URL  = "https://www.farm2marketuganda.com";
  */
 async function addWatermark(doc: jsPDF, logoBase64: string): Promise<void> {
   if (!logoBase64) return;
+  // The tile is drawn at 48 mm, so the full-resolution source is wasted: it is
+  // embedded once per tile, about 25 times on a page. Shrinking it first keeps
+  // the same picture for a fraction of the memory.
+  const tile = await downscaleBase64(logoBase64, 320);
   const pw = doc.internal.pageSize.getWidth();
   const ph = doc.internal.pageSize.getHeight();
   try {
@@ -553,13 +557,54 @@ async function addWatermark(doc: jsPDF, logoBase64: string): Promise<void> {
     const gapY = 26;
     for (let y = -tileH * 0.5; y < ph + tileH; y += tileH + gapY) {
       for (let x = -tileW * 0.5; x < pw + tileW; x += tileW + gapX) {
-        doc.addImage(logoBase64, "JPEG", x, y, tileW, tileH);
+        doc.addImage(tile, "JPEG", x, y, tileW, tileH);
       }
     }
     doc.restoreGraphicsState();
   } catch {
     // GState not available in this build — skip watermark rather than crash
   }
+}
+
+/**
+ * Fetch and shrink every photo in the export once, before any page is drawn.
+ *
+ * The photos used to be fetched one at a time in the middle of laying out a
+ * page, each with its own timeout, so a document of twenty submissions spent
+ * minutes waiting on a phone before anything appeared. They are fetched a few
+ * at a time here and reused wherever they appear; one that cannot be fetched
+ * is simply missing from the map and its tile says so.
+ */
+const PHOTO_FETCH_CONCURRENCY = 4;
+
+async function prefetchEntryPhotos(entries: any[]): Promise<Map<string, string>> {
+  const urls: string[] = [];
+  for (const entry of entries) {
+    for (const url of (entry?.photoUrls || []) as string[]) {
+      if (url && !urls.includes(url)) urls.push(url);
+    }
+  }
+
+  const cache = new Map<string, string>();
+  for (let i = 0; i < urls.length; i += PHOTO_FETCH_CONCURRENCY) {
+    const batch = urls.slice(i, i + PHOTO_FETCH_CONCURRENCY);
+    const results = await Promise.all(
+      batch.map(async (url) => {
+        try {
+          const fetched = await urlToBase64(url);
+          if (!fetched) return null;
+          return await downscaleBase64(fetched);
+        } catch {
+          return null;
+        }
+      })
+    );
+    results.forEach((value, idx) => {
+      if (value) cache.set(batch[idx], value);
+    });
+  }
+
+  return cache;
 }
 
 /**
@@ -759,23 +804,21 @@ export async function exportSubmissionsToPDF(
     return;
   }
 
-  // ── BATCH: original multi-page layout ───────────────────────────────
-  addReportHeader(doc, "Farm Record Book Submissions", "Readable export report");
-  await addWatermark(doc, logoBase64);
-  let y = 38;
-  doc.setFontSize(12);
-  doc.text(`Total Submissions: ${entries.length}`, margin, y);
-  y += 8;
-  doc.text(`Generated: ${formatUgandaDateTime(getUgandaTime())}`, margin, y);
-  if (userAlias) {
-    y += 8;
-    doc.text(`User: ${userAlias}`, margin, y);
-  }
+  // ── BATCH: one page per submission ──────────────────────────────────
+  //
+  // This used to tile the 170 KB brand logo about 25 times across every page
+  // and then start a fresh page whenever the photos did not fit. A farmer with
+  // twenty submissions therefore asked a phone to embed five hundred
+  // full-resolution copies of the same image, which exhausted memory and left
+  // the export running forever on "Exporting all...". The batch is now what it
+  // is asked for: a plain document, one page per submission, with the logo
+  // drawn once per page at thumbnail size.
+  const brandLogo = logoBase64 ? await downscaleBase64(logoBase64, 220) : "";
+  const photoCache = await prefetchEntryPhotos(entries);
 
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i];
-    doc.addPage();
-    await addWatermark(doc, logoBase64);
+    if (i > 0) doc.addPage();
 
     const submittedDate = formatUgandaDate(entry.submittedAt || entry.createdAt);
     addReportHeader(
@@ -784,11 +827,17 @@ export async function exportSubmissionsToPDF(
       `${entry.templateDetails?.templateName || "Unknown Template"} - ${submittedDate}`
     );
 
-    y = 34;
+    if (brandLogo) {
+      // One image per page instead of a tiled wash of them.
+      try { doc.addImage(brandLogo, "JPEG", pageWidth - margin - 16, 6, 16, 16); } catch { /* decorative */ }
+    }
+
+    let y = 34;
     y = addSectionTitle(doc, y, "Submission Details");
     const detailsRows: string[][] = [
       ["Template", entry.templateDetails?.templateName || "Unknown Template"],
       ["Submitted", submittedDate],
+      ["User", userAlias || "N/A"],
       ["Unit", entry.unitDetails?.name || entry.unitDetails?.unitType || "N/A"],
       ["Farm address", formatFarmAddress(entry.farmAddress) || "N/A"],
       [
@@ -797,7 +846,7 @@ export async function exportSubmissionsToPDF(
           ? `${Number(entry.gpsLat).toFixed(5)}, ${Number(entry.gpsLng).toFixed(5)}`
           : "N/A",
       ],
-      ["Notes", entry.notes || "N/A"],
+      ["Notes", String(entry.notes || "N/A").slice(0, 200)],
     ];
 
     autoTable(doc, {
@@ -806,18 +855,17 @@ export async function exportSubmissionsToPDF(
       head: [["Field", "Value"]],
       body: detailsRows,
       theme: "grid",
-      styles: { fontSize: 10, cellPadding: 2.2, overflow: "linebreak", valign: "top" },
-      headStyles: { fillColor: [46, 125, 50], textColor: 255, fontSize: 10.5 },
+      styles: { fontSize: 9.5, cellPadding: 2, overflow: "linebreak", valign: "top" },
+      headStyles: { fillColor: [46, 125, 50], textColor: 255, fontSize: 10 },
       columnStyles: {
-        0: { cellWidth: 48, fontStyle: "bold", fillColor: [247, 250, 248] },
-        1: { cellWidth: contentWidth - 48 },
+        0: { cellWidth: 44, fontStyle: "bold", fillColor: [247, 250, 248] },
+        1: { cellWidth: contentWidth - 44 },
       },
       didParseCell: (data: any) => {
         if (data.section !== "body") return;
         const row = detailsRows[data.row.index];
         if (!row) return;
-        const isGpsRow = isFarmToolboxGpsField(row[0]);
-        if (!isGpsRow) return;
+        if (!isFarmToolboxGpsField(row[0])) return;
         if (data.column.index === 1) {
           data.cell.styles.fillColor = [255, 246, 179];
           data.cell.styles.textColor = [34, 100, 55];
@@ -833,7 +881,6 @@ export async function exportSubmissionsToPDF(
       String(fv.fieldName || "Field"),
       fv.value == null || fv.value === "" ? "-" : String(fv.value),
     ]);
-
     if (!fieldRows.length) fieldRows.push(["No fields", "No values recorded"]);
 
     autoTable(doc, {
@@ -842,52 +889,75 @@ export async function exportSubmissionsToPDF(
       head: [["Field", "Response"]],
       body: fieldRows,
       theme: "striped",
-      styles: { fontSize: 10, cellPadding: 2.1, overflow: "linebreak", valign: "top" },
-      headStyles: { fillColor: [62, 140, 76], textColor: 255, fontSize: 10.5 },
+      styles: { fontSize: 9.5, cellPadding: 2, overflow: "linebreak", valign: "top" },
+      headStyles: { fillColor: [62, 140, 76], textColor: 255, fontSize: 10 },
       alternateRowStyles: { fillColor: [249, 251, 250] },
       columnStyles: {
-        0: { cellWidth: 56, fontStyle: "bold" },
-        1: { cellWidth: contentWidth - 56 },
+        0: { cellWidth: 52, fontStyle: "bold" },
+        1: { cellWidth: contentWidth - 52 },
       },
     });
 
-    y = autoTableEndY(doc) + 6;
+    y = autoTableEndY(doc) + 5;
+
+    // Photos share the page rather than spilling onto new ones: whatever room
+    // is left below the tables is divided between them, so a submission is
+    // always exactly one page.
     const photos: string[] = (entry.photoUrls || []).filter(Boolean);
     if (photos.length) {
-      await renderPhotosAdaptivePaged({
-        doc,
-        photos,
-        startY: y,
-        margin,
-        contentWidth,
-        pageHeight,
-        sectionTitle: "Photos",
-        prepareContinuationPage: async () => {
-          doc.addPage();
-          await addWatermark(doc, logoBase64);
-          addReportHeader(doc, `Submission ${i + 1} Photos (cont.)`);
-          return 34;
-        },
-      });
+      y = addSectionTitle(doc, y, `Photos (${photos.length})`);
+      const available = pageHeight - margin - 8 - y;
+      if (available > 16) {
+        const gap = 4;
+        const perRow = Math.min(photos.length, photos.length > 2 ? 3 : 2);
+        const cell = Math.min(
+          (contentWidth - gap * (perRow - 1)) / perRow,
+          available
+        );
+        const startX = margin;
 
-      // QR + link on last photo page of each submission
-      const qrS = 22;
-      const qrXb = pageWidth - margin - qrS;
-      const qrYb = pageHeight - margin - qrS;
-      if (qrBase64) {
-        try { doc.addImage(qrBase64, "PNG", qrXb, qrYb, qrS, qrS); } catch { /* decorative */ }
+        for (let p = 0; p < photos.length; p++) {
+          const col = p % perRow;
+          const row = Math.floor(p / perRow);
+          const px = startX + col * (cell + gap);
+          const py = y + row * (cell + gap);
+          if (py + cell > pageHeight - margin - 6) break; // keep to one page
+
+          doc.setDrawColor(180);
+          doc.rect(px, py, cell, cell);
+
+          const base64 = photoCache.get(photos[p]);
+          if (!base64) {
+            doc.setFontSize(7);
+            doc.setTextColor(120);
+            doc.text("Photo unavailable", px + cell / 2, py + cell / 2, { align: "center" });
+            doc.setTextColor(30, 30, 30);
+            continue;
+          }
+
+          try {
+            const props = (doc as any).getImageProperties(base64);
+            const iw = Number(props?.width || 1);
+            const ih = Number(props?.height || 1);
+            const scale = Math.min(cell / iw, cell / ih);
+            const drawW = iw * scale;
+            const drawH = ih * scale;
+            doc.addImage(
+              base64,
+              imageFormatFromBase64(base64),
+              px + (cell - drawW) / 2,
+              py + (cell - drawH) / 2,
+              drawW,
+              drawH
+            );
+          } catch {
+            doc.setFontSize(7);
+            doc.setTextColor(120);
+            doc.text("Photo unavailable", px + cell / 2, py + cell / 2, { align: "center" });
+            doc.setTextColor(30, 30, 30);
+          }
+        }
       }
-      doc.setFontSize(7);
-      doc.setTextColor(34, 100, 55);
-      const ad = doc as any;
-      if (typeof ad.textWithLink === "function") {
-        ad.textWithLink(TOOLBOX_SITE_URL, margin, pageHeight - margin - 1, {
-          url: TOOLBOX_SITE_URL,
-        });
-      } else {
-        doc.text(TOOLBOX_SITE_URL, margin, pageHeight - margin - 1);
-      }
-      doc.setTextColor(30, 30, 30);
     }
   }
 

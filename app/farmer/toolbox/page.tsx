@@ -17,6 +17,23 @@ const BRAND_BG = "#e8f5e9";
 const GOLD = "#f9a825";
 const FONT = '"Montserrat", sans-serif';
 
+// Every button a farmer taps while logging an entry - Camera, Gallery, GPS,
+// and the actions on a submitted entry - shares this: a full 44px target,
+// readable type, and a 2px border so the control's edge is visible against
+// the card behind it. A 1px hairline on a pale fill disappeared in sunlight.
+const ACTION_BUTTON: React.CSSProperties = {
+  minHeight: 44,
+  padding: "0.6rem 1rem",
+  borderRadius: 10,
+  border: "2px solid #9ca3af",
+  background: "#f5f5f5",
+  color: "#374151",
+  fontFamily: FONT,
+  fontSize: "0.92rem",
+  fontWeight: 600,
+  cursor: "pointer",
+};
+
 // The Record Book's own tab strip, in the same rainbow run the farmer's menu
 // and the community CRM sections use.
 const TAB_COLORS = [
@@ -533,13 +550,8 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate, onBackToTe
               if (showBatchOptions) setSelectedEntryIds(new Set());
             }}
             style={{
-              padding: "0.3rem 0.6rem",
+              ...ACTION_BUTTON,
               background: "#fff",
-              border: "1px solid #d0d7de",
-              borderRadius: 6,
-              fontSize: "0.74rem",
-              cursor: "pointer",
-              fontFamily: FONT,
             }}
           >
             {showBatchOptions ? "Hide batch options" : "Show batch options"}
@@ -550,14 +562,11 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate, onBackToTe
               onClick={handleBatchExport}
               disabled={batchExporting || selectedEntryIds.size === 0}
               style={{
-                padding: "0.3rem 0.6rem",
+                ...ACTION_BUTTON,
                 background: selectedEntryIds.size === 0 ? "#e0e0e0" : BRAND,
                 color: selectedEntryIds.size === 0 ? "#777" : "#fff",
-                border: "none",
-                borderRadius: 6,
-                fontSize: "0.74rem",
+                border: `2px solid ${selectedEntryIds.size === 0 ? "#9ca3af" : BRAND}`,
                 cursor: selectedEntryIds.size === 0 || batchExporting ? "not-allowed" : "pointer",
-                fontFamily: FONT,
                 fontWeight: 700,
               }}
             >
@@ -601,14 +610,10 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate, onBackToTe
                       type="button"
                       onClick={() => setExpandedEntryId(isExpanded ? null : String(entry._id))}
                       style={{
-                        padding: "0.35rem 0.7rem",
+                        ...ACTION_BUTTON,
                         background: isExpanded ? "#eef7ee" : "#f5f5f5",
-                        border: "1px solid #d9d9d9",
-                        borderRadius: 6,
-                        fontSize: "0.74rem",
-                        cursor: "pointer",
-                        color: isExpanded ? BRAND : "#444",
-                        fontFamily: FONT,
+                        border: `2px solid ${isExpanded ? BRAND : "#9ca3af"}`,
+                        color: isExpanded ? BRAND : "#374151",
                         fontWeight: 700,
                       }}
                     >
@@ -619,14 +624,11 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate, onBackToTe
                       onClick={() => handleSingleExport(entry)}
                       disabled={singleExportingId === String(entry._id)}
                       style={{
-                        padding: "0.35rem 0.7rem",
+                        ...ACTION_BUTTON,
                         background: BRAND_BG,
-                        border: "1px solid #a5d6a7",
-                        borderRadius: 6,
-                        fontSize: "0.74rem",
+                        border: `2px solid ${BRAND}`,
                         cursor: singleExportingId === String(entry._id) ? "not-allowed" : "pointer",
                         color: BRAND,
-                        fontFamily: FONT,
                         fontWeight: 700,
                       }}
                     >
@@ -637,14 +639,12 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate, onBackToTe
                       onClick={() => handleDeleteEntry(String(entry._id))}
                       disabled={deletingEntryId === String(entry._id)}
                       style={{
-                        padding: "0.35rem 0.7rem",
+                        ...ACTION_BUTTON,
                         background: "#ffebee",
-                        border: "1px solid #ef9a9a",
-                        borderRadius: 6,
-                        fontSize: "0.74rem",
+                        border: "2px solid #c62828",
                         cursor: deletingEntryId === String(entry._id) ? "not-allowed" : "pointer",
                         color: "#c62828",
-                        fontFamily: FONT,
+                        fontWeight: 700,
                       }}
                     >
                       {deletingEntryId === String(entry._id) ? "Deleting…" : "🗑 Delete"}
@@ -885,11 +885,11 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate, onBackToTe
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePhotoUpload(f); }} />
                 <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                   <button type="button" onClick={() => cameraInputRef.current?.click()} disabled={photoUploading}
-                    style={{ padding: "0.5rem 0.8rem", background: "#f5f5f5", border: "1px solid #ddd", borderRadius: 8, cursor: "pointer", fontFamily: FONT, fontSize: "0.82rem" }}>
+                    style={ACTION_BUTTON}>
                     {photoUploading ? "Uploading…" : "📷 Camera"}
                   </button>
                   <button type="button" onClick={() => galleryInputRef.current?.click()} disabled={photoUploading}
-                    style={{ padding: "0.5rem 0.8rem", background: "#f5f5f5", border: "1px solid #ddd", borderRadius: 8, cursor: "pointer", fontFamily: FONT, fontSize: "0.82rem" }}>
+                    style={ACTION_BUTTON}>
                     {photoUploading ? "Uploading…" : "🖼 Gallery"}
                   </button>
                   <span style={{ fontSize: "0.75rem", color: photoStorageIds.length > 0 ? BRAND : "#666", alignSelf: "center" }}>
@@ -901,7 +901,7 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate, onBackToTe
               <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "0.45rem" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
                   <button onClick={() => void captureGPS()} disabled={gpsLoading}
-                  style={{ padding: "0.5rem 1rem", background: gps ? BRAND_BG : "#f5f5f5", border: `1px solid ${gps ? "#a5d6a7" : "#ddd"}`, borderRadius: 8, cursor: "pointer", fontFamily: FONT, fontSize: "0.82rem", color: gps ? BRAND : "#333" }}>
+                  style={{ ...ACTION_BUTTON, background: gps ? BRAND_BG : "#f5f5f5", border: `2px solid ${gps ? BRAND : "#9ca3af"}`, color: gps ? BRAND : "#333" }}>
                     {gpsLoading ? "Locating…" : gps ? `📍 ${gps.lat.toFixed(4)}, ${gps.lng.toFixed(4)}` : "📍 Capture GPS"}
                   </button>
                   {!gps && !isDefaultTemplate && (

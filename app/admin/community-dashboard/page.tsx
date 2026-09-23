@@ -2694,6 +2694,30 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
   );
 }
 
+/**
+ * Wait for a one-shot Convex query, but not forever.
+ *
+ * convex.query() resolves when the client has a live connection. On a phone
+ * that drops to no signal mid-export it simply never settles - no error, no
+ * rejection - and the button it was started from sits on "Exporting all..."
+ * with nothing to say why. A bounded wait turns that into a message the
+ * person can act on.
+ */
+const EXPORT_QUERY_TIMEOUT_MS = 30000;
+
+function withQueryTimeout<T>(promise: Promise<T>, what: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`${what} timed out. Check your connection and try again.`)),
+      EXPORT_QUERY_TIMEOUT_MS
+    );
+    promise.then(
+      (value) => { clearTimeout(timer); resolve(value); },
+      (error) => { clearTimeout(timer); reject(error); }
+    );
+  });
+}
+
 export default function CommunityDashboardPage() {
   const FIXED_PAGE_SIZE = 20;
   const convex = useConvex();
@@ -3128,12 +3152,12 @@ export default function CommunityDashboardPage() {
     if (!userId || !selectedFarmseeMember) return;
     setFarmseeSingleExportingId(String(submissionId));
     try {
-      const rows = await convex.query((api as any).farmToolbox.getBioFarmMemberEntriesForExport, {
+      const rows = await withQueryTimeout(convex.query((api as any).farmToolbox.getBioFarmMemberEntriesForExport, {
         adminId: userId,
         communityId: selectedFarmseeMember.communityId,
         memberId: selectedFarmseeMember.memberId,
         submissionIds: [submissionId],
-      });
+      }), "Preparing the entry");
       const datePart = new Date().toISOString().split("T")[0];
       await exportSubmissionsToPDF(
         rows || [],
@@ -3151,12 +3175,12 @@ export default function CommunityDashboardPage() {
     if (farmseeSelectedEntryIds.size === 0) return;
     setFarmseeBatchExporting(true);
     try {
-      const rows = await convex.query((api as any).farmToolbox.getBioFarmMemberEntriesForExport, {
+      const rows = await withQueryTimeout(convex.query((api as any).farmToolbox.getBioFarmMemberEntriesForExport, {
         adminId: userId,
         communityId: selectedFarmseeMember.communityId,
         memberId: selectedFarmseeMember.memberId,
         submissionIds: Array.from(farmseeSelectedEntryIds) as Id<"farmTrackerEntries">[],
-      });
+      }), "Preparing the selected entries");
       const datePart = new Date().toISOString().split("T")[0];
       await exportSubmissionsToPDF(
         rows || [],
@@ -3173,11 +3197,11 @@ export default function CommunityDashboardPage() {
     if (!userId || !selectedFarmseeMember) return;
     setFarmseeAllExporting(true);
     try {
-      const rows = await convex.query((api as any).farmToolbox.getBioFarmMemberEntriesForExport, {
+      const rows = await withQueryTimeout(convex.query((api as any).farmToolbox.getBioFarmMemberEntriesForExport, {
         adminId: userId,
         communityId: selectedFarmseeMember.communityId,
         memberId: selectedFarmseeMember.memberId,
-      });
+      }), "Preparing all entries");
       const datePart = new Date().toISOString().split("T")[0];
       await exportSubmissionsToPDF(
         rows || [],

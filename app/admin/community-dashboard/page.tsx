@@ -3780,7 +3780,13 @@ export default function CommunityDashboardPage() {
 
               {/* ── Forms & Templates Tab ── */}
               {activeTab === "forms" && (
-                <FormsTab communityId={communityId} userId={userId!} />
+                <>
+                  <CommunityOwnFormsPanel
+                    adminId={userId as Id<"users">}
+                    communityId={communityId as Id<"communities">}
+                  />
+                  <FormsTab communityId={communityId} userId={userId!} />
+                </>
               )}
 
               {/* ── Insights Tab ── */}
@@ -4564,10 +4570,6 @@ export default function CommunityDashboardPage() {
 
                       {activeMembersTab === "activeFarmsee" && (
                         <>
-                          <CommunityOwnFormsPanel
-                            adminId={userId as Id<"users">}
-                            communityId={communityId as Id<"communities">}
-                          />
                           <SharedFormsFromOtherCommunitiesPanel
                             adminId={userId as Id<"users">}
                             communityId={communityId as Id<"communities">}

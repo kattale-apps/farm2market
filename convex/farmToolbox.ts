@@ -165,6 +165,80 @@ async function assertBioFarmMemberEligibility(
   return true;
 }
 
+/**
+ * Which of a farmer's Record Book entries one community's admin may read.
+ *
+ * An entry carries no community of its own - only the template it was logged
+ * against - so the template decides. A farmer often belongs to more than one
+ * community, and without this every admin who shares a member would see every
+ * entry that member has ever logged, including the ones made on another
+ * community's own form.
+ *
+ * - A community template belongs to the community that created it: its entries
+ *   are always readable there, and readable elsewhere only once that
+ *   community's admin turns entriesVisibleToOtherCommunities on.
+ * - System templates ship with the platform and belong to no community, so
+ *   they stay readable wherever the farmer is a member.
+ * - Personal templates are the farmer's own and are shown to the communities
+ *   the farmer belongs to, as they were before this gate.
+ */
+async function filterEntriesVisibleToCommunity(
+  ctx: any,
+  entries: any[],
+  communityId: Id<"communities">
+): Promise<any[]> {
+  if (!entries.length) return entries;
+
+  // Each template is resolved once, not once per entry: a farmer logging
+  // daily against one template would otherwise fetch it hundreds of times.
+  const templates = new Map<string, any>();
+  for (const entry of entries) {
+    const key = String(entry.templateId);
+    if (templates.has(key)) continue;
+    templates.set(key, await ctx.db.get(entry.templateId));
+  }
+
+  return entries.filter((entry: any) => {
+    const template = templates.get(String(entry.templateId));
+    // A template that no longer resolves cannot be shown to be shareable, so
+    // it is treated as private rather than exposed by default.
+    if (!template) return false;
+    if (template.ownerType !== "community") return true;
+    if (String(template.communityId ?? "") === String(communityId)) return true;
+    return template.entriesVisibleToOtherCommunities === true;
+  });
+}
+
+async function assertCommunityAdminForTemplateSharing(
+  ctx: any,
+  adminId: Id<"users">,
+  communityId: Id<"communities">
+) {
+  const adminUser = await ctx.db.get(adminId);
+  if (!adminUser || adminUser.role !== "admin") {
+    throw new Error("Not authorized");
+  }
+
+  const community = await ctx.db.get(communityId);
+  if (!community) {
+    throw new Error("Community not found");
+  }
+
+  // Sharing a template's records outward is the owning community's decision,
+  // so a super admin or that community's own admin may make it - not the
+  // admin of some other community that would be receiving the records.
+  const isSuper = adminUser.adminLevel === "super" || adminUser.adminLevel === undefined;
+  if (isSuper) return { adminUser, community };
+
+  const assigned = ((adminUser as any).assignedCommunityIds || []).map((id: any) => String(id));
+  const isDirectAdmin = String((community as any).communityAdminId || "") === String(adminId);
+  if (!assigned.includes(String(communityId)) && !isDirectAdmin) {
+    throw new Error("Not authorized for this community");
+  }
+
+  return { adminUser, community };
+}
+
 async function enrichTrackerEntriesForAdmin(ctx: any, entries: any[]) {
   if (!entries.length) return [];
 
@@ -471,11 +545,17 @@ export const getBioFarmActiveFarmseeMembersByCommunityIds = query({
 
           const members = await Promise.all(
             approvedMemberIds.map(async (memberId) => {
-              const entries = await ctx.db
+              const allEntries = await ctx.db
                 .query("farmTrackerEntries")
                 .withIndex("by_farmer", (q: any) => q.eq("farmerId", memberId as Id<"users">))
                 .order("desc")
                 .collect();
+
+              // A member may belong to several communities. Only the entries
+              // this community is allowed to read are counted here, so a
+              // private form from another community never shows up in the
+              // count or in the latest photos.
+              const entries = await filterEntriesVisibleToCommunity(ctx, allEntries, communityId);
 
               if (!entries.length) return null;
 
@@ -535,11 +615,13 @@ export const getBioFarmMemberEntriesForAdmin = query({
     await assertBioFarmAdminCommunityAccess(ctx, args.adminId, args.communityId);
     await assertBioFarmMemberEligibility(ctx, args.communityId, args.memberId);
 
-    const entries = await ctx.db
+    const allEntries = await ctx.db
       .query("farmTrackerEntries")
       .withIndex("by_farmer", (q: any) => q.eq("farmerId", args.memberId))
       .order("desc")
       .collect();
+
+    const entries = await filterEntriesVisibleToCommunity(ctx, allEntries, args.communityId);
 
     return await enrichTrackerEntriesForAdmin(ctx, entries);
   },
@@ -572,7 +654,73 @@ export const getBioFarmMemberEntriesForExport = query({
     }
 
     const scoped = entries.filter((entry: any) => String(entry.farmerId) === String(args.memberId));
-    return await enrichTrackerEntriesForAdmin(ctx, scoped);
+    const visible = await filterEntriesVisibleToCommunity(ctx, scoped, args.communityId);
+    return await enrichTrackerEntriesForAdmin(ctx, visible);
+  },
+});
+
+/**
+ * The tracker templates this community owns, with their sharing state, for the
+ * community's own admin to manage.
+ */
+export const listCommunityTrackerTemplates = query({
+  args: {
+    adminId: v.id("users"),
+    communityId: v.id("communities"),
+  },
+  handler: async (ctx, args) => {
+    await assertCommunityAdminForTemplateSharing(ctx, args.adminId, args.communityId);
+
+    const templates = await ctx.db
+      .query("farmTrackerTemplates")
+      .withIndex("by_community", (q: any) => q.eq("communityId", args.communityId))
+      .collect();
+
+    return templates
+      .filter((t: any) => t.ownerType === "community" && !t.isDeleted)
+      .map((t: any) => ({
+        templateId: t._id as Id<"farmTrackerTemplates">,
+        templateName: t.templateName,
+        emoji: t.emoji,
+        category: t.category,
+        isActive: t.isActive,
+        fieldCount: (t.fields || []).length,
+        entriesVisibleToOtherCommunities: t.entriesVisibleToOtherCommunities === true,
+      }));
+  },
+});
+
+/**
+ * Open or close a community template's records to the other communities its
+ * farmers belong to. Off is the default, and only the owning community's admin
+ * (or a super admin) may change it.
+ */
+export const setTemplateEntrySharing = mutation({
+  args: {
+    adminId: v.id("users"),
+    templateId: v.id("farmTrackerTemplates"),
+    visibleToOtherCommunities: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    const template = await ctx.db.get(args.templateId);
+    if (!template) throw new Error("Template not found");
+
+    if ((template as any).ownerType !== "community" || !(template as any).communityId) {
+      throw new Error("Only a community's own template can be shared");
+    }
+
+    await assertCommunityAdminForTemplateSharing(
+      ctx,
+      args.adminId,
+      (template as any).communityId as Id<"communities">
+    );
+
+    await ctx.db.patch(args.templateId, {
+      entriesVisibleToOtherCommunities: args.visibleToOtherCommunities,
+      updatedAt: getUgandaTime(),
+    });
+
+    return { success: true, visibleToOtherCommunities: args.visibleToOtherCommunities };
   },
 });
 

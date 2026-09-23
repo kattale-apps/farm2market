@@ -2002,6 +2002,14 @@ export default defineSchema({
       order: v.number(),
     })),
     isActive: v.boolean(),
+    /**
+     * Community-owned templates only: whether entries logged against this
+     * template may be read by the admins of OTHER communities the farmer
+     * belongs to, in their Active Farms view. Unset means no - a community's
+     * own form and the records made on it stay inside that community until
+     * its admin decides otherwise.
+     */
+    entriesVisibleToOtherCommunities: v.optional(v.boolean()),
     isDeleted: v.optional(v.boolean()),
     deletedAt: v.optional(v.number()),
     createdAt: v.number(),

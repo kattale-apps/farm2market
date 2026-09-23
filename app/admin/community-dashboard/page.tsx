@@ -4560,6 +4560,10 @@ export default function CommunityDashboardPage() {
 
                       {activeMembersTab === "activeFarmsee" && (
                         <>
+                          <CommunityTemplateSharingPanel
+                            adminId={userId as Id<"users">}
+                            communityId={communityId as Id<"communities">}
+                          />
                           {activeFarmseeByCommunity === undefined ? (
                             <p style={{ color: "#999" }}>Loading Active Farms members...</p>
                           ) : activeFarmseeMembers.length === 0 ? (
@@ -5164,6 +5168,115 @@ export default function CommunityDashboardPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Sharing control for a community's own Record Book templates.
+ *
+ * A farmer can belong to several communities, so entries logged on this
+ * community's form would otherwise be readable by every other community that
+ * farmer joined. They are private by default; this is where the community's
+ * own admin opens a template's records to the others.
+ *
+ * The panel renders nothing when the community has no templates of its own,
+ * which is every community that only uses the platform's system templates.
+ */
+function CommunityTemplateSharingPanel({
+  adminId,
+  communityId,
+}: {
+  adminId: Id<"users">;
+  communityId: Id<"communities">;
+}) {
+  const templates = useQuery(
+    (api as any).farmToolbox.listCommunityTrackerTemplates,
+    adminId && communityId ? { adminId, communityId } : "skip"
+  ) as any[] | undefined;
+
+  const setSharing = useMutation((api as any).farmToolbox.setTemplateEntrySharing);
+  const [busyTemplateId, setBusyTemplateId] = useState<string>("");
+  const [error, setError] = useState<string>("");
+
+  if (!templates || templates.length === 0) return null;
+
+  const handleToggle = async (templateId: string, next: boolean) => {
+    setBusyTemplateId(templateId);
+    setError("");
+    try {
+      await setSharing({
+        adminId,
+        templateId: templateId as Id<"farmTrackerTemplates">,
+        visibleToOtherCommunities: next,
+      });
+    } catch (err: any) {
+      setError(err?.message || "Could not change this template's sharing");
+    }
+    setBusyTemplateId("");
+  };
+
+  return (
+    <div
+      style={{
+        border: "1px solid #d1d5db",
+        borderRadius: 10,
+        padding: "0.9rem",
+        marginBottom: "1rem",
+        background: "#fbfbfb",
+      }}
+    >
+      <div style={{ fontWeight: 700, fontSize: "0.92rem", marginBottom: "0.2rem" }}>
+        Your community&apos;s own forms
+      </div>
+      <p style={{ margin: "0 0 0.7rem", fontSize: "0.8rem", color: "#666" }}>
+        Records logged on these forms stay inside this community. Tick a form to let the
+        other communities your farmers belong to see those records in their own Active
+        Farms view.
+      </p>
+
+      {error && (
+        <p style={{ margin: "0 0 0.5rem", fontSize: "0.8rem", color: "#b91c1c", fontWeight: 600 }}>
+          {error}
+        </p>
+      )}
+
+      {templates.map((template: any) => (
+        <label
+          key={String(template.templateId)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.6rem",
+            padding: "0.5rem 0",
+            borderBottom: "1px solid #f0f0f0",
+            fontSize: "0.85rem",
+            cursor: busyTemplateId === String(template.templateId) ? "wait" : "pointer",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={template.entriesVisibleToOtherCommunities}
+            disabled={busyTemplateId === String(template.templateId)}
+            onChange={(e) => void handleToggle(String(template.templateId), e.target.checked)}
+            style={{ width: 16, height: 16, cursor: "pointer" }}
+          />
+          <span style={{ flex: 1, minWidth: 0 }}>
+            {template.emoji || "📋"} {template.templateName}
+            <span style={{ color: "#888", fontSize: "0.78rem" }}> · {template.fieldCount} fields</span>
+          </span>
+          <span
+            style={{
+              fontSize: "0.75rem",
+              fontWeight: 700,
+              color: template.entriesVisibleToOtherCommunities ? "#15803d" : "#6b7280",
+              flexShrink: 0,
+            }}
+          >
+            {template.entriesVisibleToOtherCommunities ? "Shared" : "This community only"}
+          </span>
+        </label>
+      ))}
     </div>
   );
 }

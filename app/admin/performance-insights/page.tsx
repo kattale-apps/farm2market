@@ -12,6 +12,7 @@ import {
 } from "recharts";
 import { savePdfFromJsPDF } from "../../utils/pdfDownload";
 import { useStoredUser } from "../../hooks/useStoredUser";
+import { inUgandaTime } from "../../utils/timeUtils";
 
 const BRAND = "#2e7d32";
 const FONT = '"Montserrat", sans-serif';
@@ -88,7 +89,7 @@ export default function PerformanceInsightsPage() {
       doc.setFontSize(10);
       doc.setTextColor(100, 100, 100);
       doc.text("Know Your Numbers — Farm2Market Uganda", 14, 28);
-      doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 34);
+      doc.text(`Generated: ${new Date().toLocaleDateString(undefined, inUgandaTime())}`, 14, 34);
 
       let yPos = 44;
 

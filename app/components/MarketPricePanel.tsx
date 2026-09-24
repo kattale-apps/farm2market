@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { useRouter } from "next/navigation";
+import { inUgandaTime } from "../utils/timeUtils";
 
 interface MarketPricePanelProps {
   /** Compact layout for mobile placement below login form */
@@ -246,11 +247,11 @@ export default function MarketPricePanel({ mobileMode = false }: MarketPricePane
             <p style={headingStyle}>🌿 Live Market Prices</p>
             {dateKey && (
               <p style={subheadingStyle}>
-                Updated {new Date(dateKey).toLocaleDateString("en-UG", {
+                Updated {new Date(dateKey).toLocaleDateString("en-UG", inUgandaTime({
                   day: "numeric",
                   month: "short",
                   year: "numeric",
-                })}
+                }))}
               </p>
             )}
           </div>

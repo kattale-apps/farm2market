@@ -5,6 +5,7 @@ import { useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { GeneralCameraCapture } from "../GeneralCameraCapture";
+import { inUgandaTime } from "../../utils/timeUtils";
 
 interface Props {
   farmerId: Id<"users">;
@@ -87,7 +88,7 @@ export function MilestoneEvidenceCapture({ farmerId, milestoneId, onSubmitted }:
           <p style={{ fontSize: "0.8rem", color: "#555", margin: "0 0 0.5rem" }}>
             📍 {pendingCapture.lat != null ? `${pendingCapture.lat.toFixed(5)}, ${pendingCapture.lng!.toFixed(5)}` : "No GPS captured"}
             {"  ·  "}
-            🕒 {new Date(pendingCapture.capturedAt).toLocaleString()}
+            🕒 {new Date(pendingCapture.capturedAt).toLocaleString(undefined, inUgandaTime())}
           </p>
           <div style={{ display: "flex", gap: "0.5rem" }}>
             <button

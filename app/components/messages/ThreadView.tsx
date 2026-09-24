@@ -4,6 +4,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { useState, useEffect, useRef } from "react";
+import { fromStoredUgandaTime, inUgandaTime } from "../../utils/timeUtils";
 
 interface ThreadViewProps {
   userId: Id<"users">;
@@ -156,7 +157,7 @@ export function ThreadView({ userId, utid, onClose }: ThreadViewProps) {
                 </div>
                 <div style={{ fontSize: "0.95rem", lineHeight: "1.4" }}>{msg.message}</div>
                 <div style={{ fontSize: "0.75rem", marginTop: "0.25rem", opacity: msg.isFromMe ? 0.8 : 0.6 }}>
-                  {new Date(msg.createdAt).toLocaleString()}
+                  {new Date(fromStoredUgandaTime(msg.createdAt)).toLocaleString(undefined, inUgandaTime())}
                 </div>
               </div>
             </div>

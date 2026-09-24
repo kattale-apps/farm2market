@@ -10,38 +10,42 @@ import { Id } from "@/convex/_generated/dataModel";
 import CommunityTabBar from "@/app/components/CommunityTabBar";
 import { useOfflineQuery } from "@/app/hooks/useOfflineQuery";
 import { useStoredUser } from "@/app/hooks/useStoredUser";
+import { fromStoredUgandaTime, getUgandaTime, inUgandaTime } from "../../../utils/timeUtils";
 
 const COMMUNITY_TAB_BAR_HEIGHT = 84;
 
+// Message times are stored shifted to Uganda time, so their UTC fields are
+// the Uganda calendar date; "today" is read the same way so days group by
+// Uganda midnight on any device.
 function formatMessageDayLabel(timestamp: number) {
   const messageDate = new Date(timestamp);
-  const today = new Date();
-  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-  const startOfMessageDay = new Date(
-    messageDate.getFullYear(),
-    messageDate.getMonth(),
-    messageDate.getDate(),
-  ).getTime();
+  const today = new Date(getUgandaTime());
+  const startOfToday = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+  const startOfMessageDay = Date.UTC(
+    messageDate.getUTCFullYear(),
+    messageDate.getUTCMonth(),
+    messageDate.getUTCDate(),
+  );
   const diffDays = Math.round((startOfToday - startOfMessageDay) / 86400000);
 
   if (diffDays === 0) return "Today";
   if (diffDays === 1) return "Yesterday";
 
-  return messageDate.toLocaleDateString([], {
+  return new Date(fromStoredUgandaTime(timestamp)).toLocaleDateString([], inUgandaTime({
     weekday: "short",
     month: "short",
     day: "numeric",
-    year: messageDate.getFullYear() === today.getFullYear() ? undefined : "numeric",
-  });
+    year: messageDate.getUTCFullYear() === today.getUTCFullYear() ? undefined : "numeric",
+  }));
 }
 
 function formatMessageTimestamp(timestamp: number) {
-  return new Date(timestamp).toLocaleString([], {
+  return new Date(fromStoredUgandaTime(timestamp)).toLocaleString([], inUgandaTime({
     month: "short",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-  });
+  }));
 }
 
 function groupMessagesByDay(messages: any[]) {
@@ -514,7 +518,7 @@ function MessagesList({ communityId, userId, onReply }: { communityId: Id<"commu
 
                       <div className="mt-3 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
                         <span className="text-[11px] uppercase tracking-[0.14em] text-slate-400">
-                          {new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          {new Date(fromStoredUgandaTime(message.createdAt)).toLocaleTimeString([], inUgandaTime({ hour: "2-digit", minute: "2-digit" }))}
                         </span>
                         <button
                           onClick={() => onReply(message)}

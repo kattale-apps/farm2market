@@ -6,7 +6,7 @@ import { Id } from "../../convex/_generated/dataModel";
 import { CreateListing } from "./CreateListing";
 import { useEffect, useMemo, useState } from "react";
 import { exportToExcel, exportToPDF, formatUTIDDataForExport } from "../utils/exportUtils";
-import { formatUgandaDateTime, getUgandaTime } from "../utils/timeUtils";
+import { formatUgandaDateTime, getUgandaTime, fromStoredUgandaTime, inUgandaTime } from "../utils/timeUtils";
 import { useOfflineQuery } from "../hooks/useOfflineQuery";
 import { useOfflineMutation } from "../hooks/useOfflineMutation";
 import { savePdfFromJsPDF } from "../utils/pdfDownload";
@@ -293,7 +293,7 @@ export function Farm2MarketContent({ userId, userRole, isMobile }: Farm2MarketCo
       doc.setFontSize(10);
       doc.setTextColor(100, 100, 100);
       doc.text("Know Your Numbers — Farm2Market Uganda", 14, 28);
-      doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 34);
+      doc.text(`Generated: ${new Date().toLocaleDateString(undefined, inUgandaTime())}`, 14, 34);
 
       let y = 44;
       const allListings = listings?.listings || [];
@@ -807,7 +807,7 @@ export function Farm2MarketContent({ userId, userRole, isMobile }: Farm2MarketCo
                     </div>
                     <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.25rem" }}>UTID: {neg.negotiationUtid}</div>
                     <div style={{ fontSize: "0.85rem", color: "#666" }}>Delivery: {neg.deliveryStatus || "Pending"}</div>
-                    {neg.deliveryDeadline && <div style={{ fontSize: "0.85rem", color: "#666" }}>Delivery deadline: {new Date(neg.deliveryDeadline).toLocaleString()}</div>}
+                    {neg.deliveryDeadline && <div style={{ fontSize: "0.85rem", color: "#666" }}>Delivery deadline: {new Date(fromStoredUgandaTime(neg.deliveryDeadline)).toLocaleString(undefined, inUgandaTime())}</div>}
                   </div>
                 ))}
               </div>

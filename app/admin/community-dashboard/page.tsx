@@ -26,6 +26,7 @@ import { CostTemplatesPanel } from "../../components/costTemplates/CostTemplates
 import { GOODS_CATEGORIES, FARM_SERVICE_OPTIONS } from "../../utils/advancedMarketsOptions";
 import { tallyDistricts, buildDistrictMatcher } from "../../utils/districtNormalization";
 import { CrmInsightsSection } from "../../components/crm/CrmInsightsSection";
+import { fromStoredUgandaTime, inUgandaTime } from "../../utils/timeUtils";
 
 /* ── Tab types for community cards ── */
 type CommunityTab = "members" | "noticeboard" | "messages" | "forms" | "insights" | "fertilizer" | "costTemplates" | "advancePurchase";
@@ -248,7 +249,7 @@ function NoticeboardTab({ communityId, userId }: { communityId: Id<"communities"
                 <p style={{ margin: 0, fontSize: "0.9rem", color: "#333" }}>{post.text}</p>
               )}
               <div style={{ marginTop: "0.35rem", fontSize: "0.75rem", color: "#999" }}>
-                {post.createdAt ? new Date(post.createdAt).toLocaleString() : ""}
+                {post.createdAt ? new Date(fromStoredUgandaTime(post.createdAt)).toLocaleString(undefined, inUgandaTime()) : ""}
               </div>
             </div>
           ))}
@@ -584,7 +585,7 @@ function MessagesTab({ communityId, userId }: { communityId: Id<"communities">; 
                       opacity: 0.7,
                       textAlign: "right",
                     }}>
-                      {m.createdAt ? new Date(m.createdAt).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
+                      {m.createdAt ? new Date(fromStoredUgandaTime(m.createdAt)).toLocaleString([], inUgandaTime({ month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })) : ""}
                     </div>
                   </div>
                 </div>
@@ -2088,13 +2089,13 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
       const row: Record<string, string> = isExtensionWork
         ? {
             "Extension Worker": r.member?.phoneNumber || "—",
-            "Submitted": new Date(r.createdAt).toLocaleString(),
+            "Submitted": new Date(fromStoredUgandaTime(r.createdAt)).toLocaleString(undefined, inUgandaTime()),
           }
         : {
             "Member": r.member?.alias || "Unknown",
             "Email": r.member?.email || "—",
             "Phone": r.member?.phoneNumber || "—",
-            "Submitted": new Date(r.createdAt).toLocaleString(),
+            "Submitted": new Date(fromStoredUgandaTime(r.createdAt)).toLocaleString(undefined, inUgandaTime()),
           };
       fields.forEach((f: any) => {
         const v = (r.values || []).find((rv: any) => String(rv.fieldId) === String(f._id));
@@ -2171,7 +2172,7 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
       "Farm Size (Acres)": m.farmer?.farmSizeAcres ?? "—",
       "Supply Chain Role": m.farmer?.supplyChainRole || "—",
       "Status": m.status,
-      "Joined": m.joinedAt ? new Date(m.joinedAt).toLocaleDateString() : "—",
+      "Joined": m.joinedAt ? new Date(m.joinedAt).toLocaleDateString(undefined, inUgandaTime()) : "—",
     }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "Members");
@@ -2588,7 +2589,7 @@ function InsightsTab({ communityId, userId }: { communityId: Id<"communities">; 
                 )}
                 {responses.length > 0 && (
                   <div style={{ flex: "1 1 140px", background: "#f3e5f5", padding: "0.75rem", borderRadius: "8px", textAlign: "center" }}>
-                    <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "#6a1b9a" }}>{new Date(responses[0].createdAt).toLocaleDateString()}</div>
+                    <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "#6a1b9a" }}>{new Date(fromStoredUgandaTime(responses[0].createdAt)).toLocaleDateString(undefined, inUgandaTime())}</div>
                     <div style={{ fontSize: "0.78rem", color: "#555" }}>Latest Response</div>
                   </div>
                 )}
@@ -2990,12 +2991,12 @@ export default function CommunityDashboardPage() {
         "Application Id": application?._id || "",
         "Application Status": item.status || application?.status || "",
         "Application Created": application?.createdAt
-          ? new Date(application.createdAt).toLocaleString()
+          ? new Date(application.createdAt).toLocaleString(undefined, inUgandaTime())
           : "",
         "Application Updated": application?.updatedAt
-          ? new Date(application.updatedAt).toLocaleString()
+          ? new Date(application.updatedAt).toLocaleString(undefined, inUgandaTime())
           : "",
-        "Member Since": item.joinedAt ? new Date(item.joinedAt).toLocaleString() : "",
+        "Member Since": item.joinedAt ? new Date(item.joinedAt).toLocaleString(undefined, inUgandaTime()) : "",
       };
 
       // ✅ SECURITY: Only export profile onboarding fields from farmer record
@@ -4208,7 +4209,7 @@ export default function CommunityDashboardPage() {
                                 <td style={{ padding: "0.5rem" }}>{app.form?.section1?.farmName || "-"}</td>
                                 <td style={{ padding: "0.5rem" }}>{app.form?.section1?.phoneNumber || app.farmer?.phoneNumber || "-"}</td>
                                 <td style={{ padding: "0.5rem" }}>{app.form?.section1?.districtSubCounty || app.farmer?.districtText || "-"}</td>
-                                <td style={{ padding: "0.5rem" }}>{app.createdAt ? new Date(app.createdAt).toLocaleString() : "-"}</td>
+                                <td style={{ padding: "0.5rem" }}>{app.createdAt ? new Date(app.createdAt).toLocaleString(undefined, inUgandaTime()) : "-"}</td>
                                 <td style={{ padding: "0.5rem", display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
                                   <button
                                     onClick={() => setSelectedApplicationId(app.id as any)}
@@ -4457,7 +4458,7 @@ export default function CommunityDashboardPage() {
                                         <td style={{ padding: "0.5rem" }}>{member.form?.section1?.farmName || "-"}</td>
                                         <td style={{ padding: "0.5rem" }}>{member.form?.section1?.phoneNumber || member.farmer?.phoneNumber || "-"}</td>
                                         <td style={{ padding: "0.5rem" }}>{member.form?.section1?.districtSubCounty || member.farmer?.districtText || "-"}</td>
-                                        <td style={{ padding: "0.5rem" }}>{member.joinedAt ? new Date(member.joinedAt).toLocaleString() : "-"}</td>
+                                        <td style={{ padding: "0.5rem" }}>{member.joinedAt ? new Date(member.joinedAt).toLocaleString(undefined, inUgandaTime()) : "-"}</td>
                                         <td style={{ padding: "0.5rem" }}>
                                           <button
                                             onClick={async () => {
@@ -5095,7 +5096,7 @@ export default function CommunityDashboardPage() {
                       </div>
                       <div style={{ marginTop: "0.6rem", fontSize: "0.84rem", color: "#475569" }}>
                         <div><strong>Template:</strong> {entry.templateDetails?.templateName || "Tracker Entry"}</div>
-                        <div><strong>Submitted:</strong> {submittedAt ? new Date(submittedAt).toLocaleString() : "-"}</div>
+                        <div><strong>Submitted:</strong> {submittedAt ? new Date(fromStoredUgandaTime(submittedAt)).toLocaleString(undefined, inUgandaTime()) : "-"}</div>
                         <div>{fieldCount} field(s) filled · {photoCount} photo(s)</div>
                         {(dateField || tagField) && (
                           <div>

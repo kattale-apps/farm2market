@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
+import { fromStoredUgandaTime, getUgandaTime, inUgandaTime } from "../../utils/timeUtils";
 
 /**
  * The reviewable archive of CRM submissions: each intake form with the answers
@@ -94,9 +95,11 @@ const BAND_COLORS: Record<string, string> = {
   red: "#c62828",
 };
 
+// Uganda midnight, in the same shifted clock CRM times are stored in
+// (getUgandaTime), so "Today" means today in Uganda on any device.
 function startOfToday(): number {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
+  const d = new Date(getUgandaTime());
+  d.setUTCHours(0, 0, 0, 0);
   return d.getTime();
 }
 
@@ -108,7 +111,7 @@ function rangeToFrom(range: RangeKey): number | undefined {
 
 function formatDateTime(ts: number | null | undefined): string {
   if (!ts) return "-";
-  return new Date(Number(ts)).toLocaleString();
+  return new Date(fromStoredUgandaTime(Number(ts))).toLocaleString(undefined, inUgandaTime());
 }
 
 function csvCell(value: unknown): string {
@@ -471,7 +474,7 @@ export function CrmSubmissionsPanel({
                     {row.callCount === 0 && (
                       <div style={{ fontSize: "0.8rem", color: "#999" }}>
                         No calls logged yet
-                        {row.nextCallAt ? ` · next call due ${new Date(row.nextCallAt).toLocaleDateString()}` : ""}.
+                        {row.nextCallAt ? ` · next call due ${new Date(fromStoredUgandaTime(row.nextCallAt)).toLocaleDateString(undefined, inUgandaTime())}` : ""}.
                       </div>
                     )}
                     {(row.calls || []).map((call: any) => (
@@ -534,7 +537,7 @@ export function CrmSubmissionsPanel({
                             <Chip label={STAGE_LABELS[opp.stage] || opp.stage} />
                             <Chip label={PROBABILITY_LABELS[opp.probability] || null} />
                             <Chip label={opp.expectedPurchaseMonth ? `Expected ${opp.expectedPurchaseMonth}` : null} />
-                            <Chip label={opp.nextActionAt ? `Next action ${new Date(opp.nextActionAt).toLocaleDateString()}` : null} />
+                            <Chip label={opp.nextActionAt ? `Next action ${new Date(opp.nextActionAt).toLocaleDateString(undefined, inUgandaTime())}` : null} />
                           </div>
                         </div>
                       ))}

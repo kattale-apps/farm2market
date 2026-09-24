@@ -9,6 +9,7 @@ import { Id } from "@/convex/_generated/dataModel";
 import { useSearchParams } from "next/navigation";
 import CommunitySwitcher from "@/app/components/CommunitySwitcher";
 import { useStoredUser } from "@/app/hooks/useStoredUser";
+import { fromStoredUgandaTime, inUgandaTime } from "../../../utils/timeUtils";
 
 export default function MemberMessagingFeed() {
   const searchParams = useSearchParams();
@@ -251,7 +252,7 @@ export default function MemberMessagingFeed() {
                   )}
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-sm text-gray-900">Admin</p>
-                    <p className="text-xs text-gray-500">{new Date(post.createdAt).toLocaleDateString()}</p>
+                    <p className="text-xs text-gray-500">{new Date(fromStoredUgandaTime(post.createdAt)).toLocaleDateString(undefined, inUgandaTime())}</p>
                   </div>
                 </div>
               </div>
@@ -317,7 +318,7 @@ export default function MemberMessagingFeed() {
                             </div>
                           )
                         )}
-                        <p className="text-xs text-gray-500 mt-1">{new Date(reply.createdAt).toLocaleTimeString()}</p>
+                        <p className="text-xs text-gray-500 mt-1">{new Date(fromStoredUgandaTime(reply.createdAt)).toLocaleTimeString(undefined, inUgandaTime())}</p>
                       </div>
                     </div>
                   ))

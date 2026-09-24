@@ -5,6 +5,7 @@ import { Id } from "@/convex/_generated/dataModel";
 import { api } from "@/convex/_generated/api";
 import { useOfflineQuery } from "@/app/hooks/useOfflineQuery";
 import { YieldGuaranteeBadge } from "./YieldGuaranteeBadge";
+import { inUgandaTime } from "../../utils/timeUtils";
 
 const CROP_EMOJI: Record<string, string> = {
   Maize: "🌽",
@@ -102,7 +103,7 @@ export function FertilizerPlanOutput({
                 flexWrap: "wrap",
               }}>
                 <span style={{ fontSize: "0.8rem", color: "#333" }}>
-                  {statusEmoji} {new Date(`${item.date}T00:00:00Z`).toLocaleDateString("en-UG", { day: "numeric", month: "short" })}
+                  {statusEmoji} {new Date(`${item.date}T00:00:00Z`).toLocaleDateString("en-UG", inUgandaTime({ day: "numeric", month: "short" }))}
                 </span>
                 {canLog && applicationFormId && (
                   <Link

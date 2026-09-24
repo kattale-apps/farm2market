@@ -10,6 +10,7 @@ import { MilestoneEvidenceCapture } from "../../../../components/advancePurchase
 import { EditOfferGallery } from "../../../../components/advancePurchase/EditOfferGallery";
 import { EditOfferDetails } from "../../../../components/advancePurchase/EditOfferDetails";
 import SubmissionPhotoGallery from "../../../../components/SubmissionPhotoGallery";
+import { fromStoredUgandaTime, inUgandaTime } from "../../../../utils/timeUtils";
 
 const FONT = '"Montserrat", sans-serif';
 
@@ -73,7 +74,7 @@ export default function FarmerOfferProgressPage() {
         {milestones.map((m: any) => (
           <div key={m._id} style={{ padding: "0.5rem 0", borderBottom: "1px solid #f0f0f0" }}>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span>{m.name}{m.expectedDate ? ` · due ${new Date(m.expectedDate).toLocaleDateString()}` : ""}</span>
+              <span>{m.name}{m.expectedDate ? ` · due ${new Date(fromStoredUgandaTime(m.expectedDate)).toLocaleDateString(undefined, inUgandaTime())}` : ""}</span>
               <span style={{
                 fontSize: "0.78rem",
                 fontWeight: 700,
@@ -114,7 +115,7 @@ export default function FarmerOfferProgressPage() {
             Stage {currentMilestone.order} of {milestones.length} · {currentMilestone.name}
           </h3>
           <p style={{ fontSize: "0.82rem", color: "#666", marginBottom: "0.75rem" }}>
-            {currentMilestone.expectedDate ? `Due ${new Date(currentMilestone.expectedDate).toLocaleDateString()} · ` : ""}
+            {currentMilestone.expectedDate ? `Due ${new Date(fromStoredUgandaTime(currentMilestone.expectedDate)).toLocaleDateString(undefined, inUgandaTime())} · ` : ""}
             Timestamp captured automatically.
           </p>
           <MilestoneEvidenceCapture

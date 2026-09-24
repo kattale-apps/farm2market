@@ -8,6 +8,7 @@ import { Id } from "../../../convex/_generated/dataModel";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useStoredUser } from "../../hooks/useStoredUser";
+import { fromStoredUgandaTime, inUgandaTime } from "../../utils/timeUtils";
 
 type ViewMode = "actions" | "deliveries" | "inventory";
 
@@ -300,7 +301,7 @@ export default function StoreAdminAuditPage() {
                         </td>
                         <td style={{ padding: "0.75rem", color: "#666" }}>{entry.reason}</td>
                         <td style={{ padding: "0.75rem", color: "#666" }}>
-                          {new Date(entry.timestamp).toLocaleString()}
+                          {new Date(fromStoredUgandaTime(entry.timestamp)).toLocaleString(undefined, inUgandaTime())}
                         </td>
                       </tr>
                     ))}

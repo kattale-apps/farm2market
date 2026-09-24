@@ -9,6 +9,7 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import CommunitySwitcher from "@/app/components/CommunitySwitcher";
 import { useStoredUser } from "@/app/hooks/useStoredUser";
+import { fromStoredUgandaTime, inUgandaTime } from "../../../utils/timeUtils";
 
 export default function MessagingDashboard() {
   const searchParams = useSearchParams();
@@ -317,7 +318,7 @@ export default function MessagingDashboard() {
                 <div key={post._id} className="border-b pb-6 last:border-b-0">
                   {/* Noticeboard Post */}
                   <div className="mb-4">
-                    <div className="text-sm text-gray-500 mb-2">Your post • {new Date(post.createdAt).toLocaleDateString()}</div>
+                    <div className="text-sm text-gray-500 mb-2">Your post • {new Date(fromStoredUgandaTime(post.createdAt)).toLocaleDateString(undefined, inUgandaTime())}</div>
                     {post.imageStorageId && (
                       <div className="mb-3 bg-gray-100 rounded-lg overflow-hidden max-h-64">
                         {/* Image would be rendered here with proper URL */}
@@ -341,7 +342,7 @@ export default function MessagingDashboard() {
                         <div key={reply._id} className="mb-3 pb-3 border-b border-gray-100 last:border-b-0">
                           <div className="flex justify-between items-start">
                             <div className="text-xs font-semibold text-gray-700">Member</div>
-                            <div className="text-xs text-gray-500">{new Date(reply.createdAt).toLocaleDateString()}</div>
+                            <div className="text-xs text-gray-500">{new Date(fromStoredUgandaTime(reply.createdAt)).toLocaleDateString(undefined, inUgandaTime())}</div>
                           </div>
                           <p className="text-sm text-gray-800 mt-1">{reply.text}</p>
                           {reply.imageStorageId && (

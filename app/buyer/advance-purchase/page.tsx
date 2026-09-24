@@ -5,6 +5,7 @@ import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import Link from "next/link";
 import { useStoredUser } from "../../hooks/useStoredUser";
+import { inUgandaTime } from "../../utils/timeUtils";
 
 const FONT = '"Montserrat", sans-serif';
 
@@ -242,7 +243,7 @@ export default function AdvancePurchaseMarketPage() {
             </div>
             <div style={{ fontSize: "0.85rem", color: "#666" }}>
               Total value UGX {offer.totalValue.toLocaleString()}
-              {offer.expectedDeliveryDate ? ` · delivery ~${new Date(offer.expectedDeliveryDate).toLocaleDateString()}` : ""}
+              {offer.expectedDeliveryDate ? ` · delivery ~${new Date(offer.expectedDeliveryDate).toLocaleDateString(undefined, inUgandaTime())}` : ""}
             </div>
 
             {/* The icons, not the words, are what make this readable to someone

@@ -3,6 +3,7 @@ import { mutation, query } from "./_generated/server";
 import { verifyAdminRole } from "./auth";
 import { Id } from "./_generated/dataModel";
 import { filterCommunityForms } from "./types/communityForms";
+import { ugandaTimeToInstant } from "./utils";
 
 // Community constants for sync operations
 export const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
@@ -253,8 +254,9 @@ export const getCommunityMemberExportData = query({
           .filter((m: any) => !pendingImportedUserIds.has(String(m.userId)))
           .map((m: any) => ({
             status: "APPROVED",
-            joinedAt: m.joinedAt,
-            updatedAt: m.joinedAt,
+            // Memberships store getUgandaTime(); applications store real instants.
+            joinedAt: ugandaTimeToInstant(m.joinedAt),
+            updatedAt: ugandaTimeToInstant(m.joinedAt),
             applicationId: undefined,
             farmerId: m.userId,
           }));
@@ -574,8 +576,9 @@ export const getCommunityMembersByCommunityIds = query({
                 .filter((m: any) => !pendingImportedUserIds.has(String(m.userId)))
                 .map((m: any) => ({
                   status: "APPROVED",
-                  joinedAt: m.joinedAt,
-                  updatedAt: m.joinedAt,
+                  // Memberships store getUgandaTime(); applications store real instants.
+                  joinedAt: ugandaTimeToInstant(m.joinedAt),
+                  updatedAt: ugandaTimeToInstant(m.joinedAt),
                   applicationId: undefined,
                   farmerId: m.userId,
                 }));

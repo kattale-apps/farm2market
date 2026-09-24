@@ -40,6 +40,84 @@ function normalizePhoneNumber(phone: string): string {
   return cleaned;
 }
 
+/**
+ * Every spelling one phone number is stored under. CRM-created accounts hold
+ * the normalized 256XXXXXXXXX form, but older sign-ups kept what was typed
+ * (0XXXXXXXXX, +256XXXXXXXXX), and a lookup on the normalized form alone
+ * missed them - so intake created a second account for a number already on
+ * file.
+ */
+function phoneLookupVariants(phone: string): string[] {
+  const normalized = normalizePhoneNumber(phone);
+  const local = normalized.substring(3);
+  return Array.from(new Set([normalized, `+${normalized}`, `0${local}`, local]));
+}
+
+async function findUsersByPhone(ctx: any, phone: string) {
+  const found = new Map<string, any>();
+  for (const variant of phoneLookupVariants(phone)) {
+    const rows = await ctx.db
+      .query("users")
+      .withIndex("by_phone", (q: any) => q.eq("phoneNumber", variant))
+      .collect();
+    for (const row of rows) found.set(String(row._id), row);
+  }
+  return Array.from(found.values());
+}
+
+/**
+ * The one CRM contact a phone number has in a community: the lead already
+ * held by any of the accounts on that number. A phone number is a single
+ * contact to the agents calling it, so every intake for it lands on this lead.
+ * Should older data still hold several, the one still in the queue wins, then
+ * the most recently called, then the oldest.
+ */
+async function findExistingLeadForMembers(
+  ctx: any,
+  communityId: Id<"communities">,
+  memberIds: Id<"users">[]
+) {
+  const leads: any[] = [];
+  for (const memberId of memberIds) {
+    const rows = await ctx.db
+      .query("crmLeads")
+      .withIndex("by_member_community", (q: any) =>
+        q.eq("communityId", communityId).eq("memberId", memberId)
+      )
+      .collect();
+    leads.push(...rows);
+  }
+  if (leads.length === 0) return null;
+
+  const isClosed = (lead: any) => (lead.queueStatus === "closed" ? 1 : 0);
+  leads.sort(
+    (a, b) =>
+      isClosed(a) - isClosed(b) ||
+      Number(b.lastCallAt || 0) - Number(a.lastCallAt || 0) ||
+      Number(a.createdAt || 0) - Number(b.createdAt || 0)
+  );
+  return leads[0];
+}
+
+/**
+ * The account an intake for this member should be filed against. When another
+ * account on the same phone number already has the community's lead, that
+ * account is used, so picking the "other" account from the member list does
+ * not start a second contact for one number.
+ */
+async function resolveCanonicalCrmMemberId(
+  ctx: any,
+  communityId: Id<"communities">,
+  member: any
+): Promise<Id<"users">> {
+  if (!member?.phoneNumber) return member._id;
+  const siblings = await findUsersByPhone(ctx, member.phoneNumber);
+  const ids = siblings.map((s: any) => s._id as Id<"users">);
+  if (!ids.some((id) => String(id) === String(member._id))) ids.push(member._id);
+  const lead = await findExistingLeadForMembers(ctx, communityId, ids);
+  return (lead ? lead.memberId : member._id) as Id<"users">;
+}
+
 function generateAlias(role: string): string {
   const random = Math.random().toString(36).substring(2, 8);
   return `${role}_${random}`;
@@ -61,10 +139,40 @@ async function resolveOrCreateClientMember(
 ) {
   const normalizedPhone = normalizePhoneNumber(args.phoneNumber);
 
-  const existing = await ctx.db
-    .query("users")
-    .withIndex("by_phone", (q: any) => q.eq("phoneNumber", normalizedPhone))
-    .first();
+  // Several accounts can share a number. The one already holding this
+  // community's lead is the contact; failing that, one already in the
+  // community, then the oldest.
+  const candidates = await findUsersByPhone(ctx, args.phoneNumber);
+  let existing: any = null;
+  if (candidates.length > 0) {
+    const lead = await findExistingLeadForMembers(
+      ctx,
+      args.communityId,
+      candidates.map((c: any) => c._id)
+    );
+    if (lead) {
+      existing = candidates.find((c: any) => String(c._id) === String(lead.memberId));
+    }
+    if (!existing) {
+      for (const candidate of candidates) {
+        const membership = await ctx.db
+          .query("communityMemberships")
+          .withIndex("by_community_user", (q: any) =>
+            q.eq("communityId", args.communityId).eq("userId", candidate._id)
+          )
+          .first();
+        if (membership) {
+          existing = candidate;
+          break;
+        }
+      }
+    }
+    if (!existing) {
+      existing = [...candidates].sort(
+        (a: any, b: any) => Number(a._creationTime) - Number(b._creationTime)
+      )[0];
+    }
+  }
 
   const now = getUgandaTime();
 
@@ -202,39 +310,30 @@ async function upsertLeadFromResponse(
     return { leadId: existing._id as Id<"crmLeads">, reconciled: false };
   }
 
-  // Matching on the response id alone never matched anything: the response is
-  // inserted immediately before this runs, so every intake produced a fresh
-  // lead. Capturing the same person twice - typically once as a "new client"
-  // and again from the member list - left two rows in the agent queue for one
-  // phone number.
+  // One contact per phone number per community. Callers have already resolved
+  // memberId to the account holding that contact's lead, so any lead this
+  // member has - whatever its form, whether or not it has been called, even if
+  // closed - is the same contact and is updated rather than duplicated. Its
+  // call logs, answers and tickets hang off the lead id and carry on intact.
   //
-  // An existing lead for the same member on the same form that nobody has
-  // called yet is that duplicate, so it is re-pointed at the newer submission
-  // rather than duplicated. A lead that HAS been called is left alone and a new
-  // one is created beside it, because that is a real second follow-up cycle
-  // with its own call history to preserve.
-  const memberLeads = await ctx.db
-    .query("crmLeads")
-    .withIndex("by_member_community", (q: any) =>
-      q.eq("communityId", args.communityId).eq("memberId", args.memberId)
-    )
-    .collect();
+  // A lead already waiting in the queue keeps the sooner of its due date and
+  // this intake's; a finished or closed one returns to the queue on this
+  // intake's schedule.
+  const existingLead = await findExistingLeadForMembers(ctx, args.communityId, [args.memberId]);
 
-  const uncalledDuplicate = memberLeads.find(
-    (lead: any) =>
-      String(lead.sourceCrmFormId) === String(args.crmFormId) &&
-      !lead.lastCallAt &&
-      lead.queueStatus !== "closed"
-  );
-
-  if (uncalledDuplicate) {
-    await ctx.db.patch(uncalledDuplicate._id, {
+  if (existingLead) {
+    const inQueue =
+      existingLead.queueStatus === "open" || existingLead.queueStatus === "in_progress";
+    await ctx.db.patch(existingLead._id, {
       sourceCrmResponseId: args.responseId,
-      nextCallAt: args.autoNextCallAt,
-      queueStatus: "open",
+      sourceCrmFormId: args.crmFormId,
+      nextCallAt: inQueue
+        ? Math.min(Number(existingLead.nextCallAt), args.autoNextCallAt)
+        : args.autoNextCallAt,
+      queueStatus: inQueue ? existingLead.queueStatus : "open",
       updatedAt: now,
     });
-    return { leadId: uncalledDuplicate._id as Id<"crmLeads">, reconciled: true };
+    return { leadId: existingLead._id as Id<"crmLeads">, reconciled: true };
   }
 
   const leadId = await ctx.db.insert("crmLeads", {
@@ -701,13 +800,18 @@ export const submitCrmFormResponse = mutation({
 
     await requireCrmSupervisorOrAgentAccess(ctx, args.submittedByUserId, form.communityId);
 
+    const member = await ctx.db.get(args.memberId);
+    const memberId = member
+      ? await resolveCanonicalCrmMemberId(ctx, form.communityId, member)
+      : args.memberId;
+
     const now = getUgandaTime();
     const autoNextCallAt = now + Number(form.followUpOffsetDays || 0) * DAY_MS;
 
     const responseId = await ctx.db.insert("crmFormResponses", {
       crmFormId: args.crmFormId,
       communityId: form.communityId,
-      memberId: args.memberId,
+      memberId,
       submittedByUserId: args.submittedByUserId,
       sourceEventType: args.sourceEventType,
       sourceEventId: args.sourceEventId,
@@ -734,7 +838,7 @@ export const submitCrmFormResponse = mutation({
 
     const lead = await upsertLeadFromResponse(ctx, {
       communityId: form.communityId,
-      memberId: args.memberId,
+      memberId,
       responseId,
       crmFormId: args.crmFormId,
       autoNextCallAt,
@@ -815,10 +919,12 @@ export const submitCrmIntake = mutation({
       wasNewClient = resolved.wasNewClient;
       resolvedClientName = resolved.resolvedName;
     } else {
-      memberId = args.existingMemberId as Id<"users">;
-      const member = await ctx.db.get(memberId);
+      const member = await ctx.db.get(args.existingMemberId as Id<"users">);
       if (!member) throw new Error("Selected member not found");
-      resolvedClientName = member.verifiedName || undefined;
+      memberId = await resolveCanonicalCrmMemberId(ctx, form.communityId, member);
+      const canonical =
+        String(memberId) === String(member._id) ? member : await ctx.db.get(memberId);
+      resolvedClientName = canonical?.verifiedName || member.verifiedName || undefined;
     }
 
     const now = getUgandaTime();

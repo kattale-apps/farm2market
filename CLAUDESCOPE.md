@@ -161,6 +161,29 @@ desktop-first layout that gets awkwardly squeezed onto mobile is not acceptable.
 building or reviewing any UI, check the smallest supported width first and treat larger
 breakpoints as progressive enhancement, not the default.
 
+### Rule 8 — Always use Uganda time (UTC+3)
+The app runs in Uganda, so every time a user sees and every "today", "due" or
+"overdue" decision must be in Uganda time (Africa/Kampala, UTC+3), whatever timezone
+the server or the viewer's device is in.
+- **Know which clock a value is on before using it.** Most modules store
+  `getUgandaTime()` from `convex/utils.ts`, which is the real instant + 3 hours; some
+  store a real instant (`Date.now()`, `_creationTime`, a date picked in the browser).
+  Never compare or merge values from the two clocks without converting one of them.
+- **New backend writes use `getUgandaTime()`**, matching the rest of the table they go
+  into. Do not add a `Date.now()` writer to a table whose other writers use
+  `getUgandaTime()`; that mix is what made times display 3 hours off.
+- **Display through the helpers in `app/utils/timeUtils.ts`.** Pass `inUgandaTime()`
+  as the options to every `toLocaleString` / `toLocaleDateString` /
+  `toLocaleTimeString`. Wrap a `getUgandaTime()` value in `fromStoredUgandaTime()`
+  first. Never format a date with the device's default timezone.
+- **Day boundaries are Uganda midnight.** In the backend, take the UTC midnight of a
+  `getUgandaTime()` value (`setUTCHours(0, 0, 0, 0)`), not `setHours` on `Date.now()`.
+- **A query that returns rows from both clocks** converts them to one clock
+  (`ugandaTimeToInstant` in `convex/utils.ts`) before returning them.
+- Known exceptions still on mixed clocks (left as-is at the owner's request, 2026-09-24):
+  storage-fee day counts, buyer ETA/overdue, and delivery-deadline red flags. Fixing
+  these changes charges and alerts, so it needs owner sign-off under Rule 1.
+
 ---
 
 ## Part 2 — Codebase Map (refresh as it drifts)
@@ -268,8 +291,8 @@ wallet/payments/admin code)
 
 ---
 
-*Last written: 2026-09-14. Added Rule 4c (run the full local gate before any push that
-deploys) at the owner's request, and refreshed Part 2 §6 with the `typecheck`/`verify`
-scripts and current test counts. Does not weaken or replace any prior rule. Update
-Part 2 whenever it's found stale; update Part 1 only with explicit owner sign-off per
-Rule 6.*
+*Last written: 2026-09-24. Added Rule 8 (always use Uganda time, UTC+3) at the owner's
+request, after a CRM overdue mismatch traced to mixed clocks. Does not weaken or replace
+any prior rule. Previous revision (2026-09-14) added Rule 4c and refreshed Part 2 §6.
+Update Part 2 whenever it's found stale; update Part 1 only with explicit owner sign-off
+per Rule 6.*

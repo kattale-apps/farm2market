@@ -594,7 +594,7 @@ export default function CommunityCrmPage() {
           result.wasNewClient
             ? "Lead captured and a new member account was created (login: their phone number)."
             : result.reconciledExistingLead
-              ? "This phone number already belonged to a member with a lead waiting to be called, so that lead was updated instead of a duplicate being added."
+              ? "This phone number is already a contact in the CRM, so the intake was added to that contact instead of creating a duplicate."
               : "Lead captured against the existing member with this phone number. It will now appear in the agent call queue."
         );
       } else {
@@ -609,11 +609,12 @@ export default function CommunityCrmPage() {
         const memberIds = Array.from(selectedMemberIds);
 
         let succeeded = 0;
+        let merged = 0;
         let failed = 0;
         for (const memberId of memberIds) {
           const member = membersById.get(String(memberId));
           try {
-            await submitCrmIntake({
+            const result = await submitCrmIntake({
               crmFormId: intakeCrmFormId,
               adminId: userId,
               existingMemberId: memberId,
@@ -629,16 +630,22 @@ export default function CommunityCrmPage() {
               upcomingSprayScheduleAt,
               responses,
             });
+            if (result.reconciledExistingLead) merged++;
             succeeded++;
           } catch {
             failed++;
           }
         }
 
+        // A phone number is one contact, so members already in the CRM (or
+        // sharing a number with someone who is) update that contact instead.
+        const mergedNote = merged > 0
+          ? ` ${merged} ${merged === 1 ? "was" : "were"} already a contact by phone number and updated instead of duplicated.`
+          : "";
         setMessage(
           failed === 0
-            ? `${succeeded} member${succeeded === 1 ? "" : "s"} added to the call queue.`
-            : `${succeeded} member${succeeded === 1 ? "" : "s"} added to the call queue; ${failed} failed.`
+            ? `${succeeded} member${succeeded === 1 ? "" : "s"} added to the call queue.${mergedNote}`
+            : `${succeeded} member${succeeded === 1 ? "" : "s"} added to the call queue; ${failed} failed.${mergedNote}`
         );
       }
 

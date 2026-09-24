@@ -389,7 +389,9 @@ export const getCrmAgentQueue = query({
           purchaseDate: response?.purchaseDate,
           formId: lead.sourceCrmFormId,
           formName: form?.name || "Unassigned Form",
-          isDueToday: new Date(lead.nextCallAt).toDateString() === new Date().toDateString(),
+          isDueToday:
+            new Date(lead.nextCallAt).toISOString().slice(0, 10) ===
+            new Date(getUgandaTime()).toISOString().slice(0, 10),
           isOverdue: lead.nextCallAt < getUgandaTime(),
           intakeAnswers,
         };
@@ -414,10 +416,12 @@ export const getCrmAgentTodaySummary = query({
   handler: async (ctx, args) => {
     await requireCrmSupervisorOrAgentAccess(ctx, args.agentId, args.communityId);
 
-    const dayStart = new Date();
-    dayStart.setHours(0, 0, 0, 0);
-    const dayStartTs = dayStart.getTime();
+    // CRM times are stored with getUgandaTime(), so "today" is Uganda's day:
+    // UTC midnight of a shifted timestamp is Uganda midnight.
     const now = getUgandaTime();
+    const dayStart = new Date(now);
+    dayStart.setUTCHours(0, 0, 0, 0);
+    const dayStartTs = dayStart.getTime();
 
     const logs = await ctx.db
       .query("crmCallLogs")
@@ -449,7 +453,7 @@ export const getCrmAgentTodaySummary = query({
 
     const dueToday = myOpenLeads.filter((lead: any) => {
       const d = new Date(lead.nextCallAt);
-      d.setHours(0, 0, 0, 0);
+      d.setUTCHours(0, 0, 0, 0);
       return d.getTime() === dayStartTs;
     }).length;
 

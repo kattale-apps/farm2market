@@ -20,7 +20,7 @@ function groupByLead<T extends { leadId: unknown }>(items: T[]): Map<string, T[]
 
 function startOfDayTs(ts: number) {
   const d = new Date(ts);
-  d.setHours(0, 0, 0, 0);
+  d.setUTCHours(0, 0, 0, 0); // ts is Uganda-shifted, so UTC midnight is Uganda midnight
   return d.getTime();
 }
 
@@ -32,7 +32,7 @@ export const getCallCenterPerformanceToday = query({
   handler: async (ctx, args) => {
     await requireCrmSupervisorAccess(ctx, args.requesterId, args.communityId);
 
-    const now = Date.now();
+    const now = getUgandaTime(); // CRM times are stored with getUgandaTime()
     const dayStart = startOfDayTs(now);
 
     const logs = await ctx.db
@@ -115,7 +115,7 @@ export const getTodaysSubmittedForms = query({
   handler: async (ctx, args) => {
     await requireCrmSupervisorAccess(ctx, args.requesterId, args.communityId);
 
-    const dayStart = startOfDayTs(Date.now());
+    const dayStart = startOfDayTs(getUgandaTime());
 
     const responses = await ctx.db
       .query("crmFormResponses")
@@ -240,7 +240,7 @@ export const getAgentPerformanceToday = query({
   handler: async (ctx, args) => {
     await requireCrmSupervisorAccess(ctx, args.requesterId, args.communityId);
 
-    const now = Date.now();
+    const now = getUgandaTime(); // CRM times are stored with getUgandaTime()
     const dayStart = startOfDayTs(now);
 
     const logs = await ctx.db

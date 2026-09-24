@@ -17,6 +17,7 @@ import {
   DEFAULT_CRM_FORM_FIELDS,
   DEFAULT_OPENING_SCRIPT_TEMPLATE,
 } from "../../../convex/crmPresets";
+import { fromStoredUgandaTime, inUgandaTime } from "../../utils/timeUtils";
 
 const FONT = '"Montserrat", sans-serif';
 const BRAND = "#1f7a3e";
@@ -868,9 +869,9 @@ export default function CommunityCrmPage() {
     );
   };
 
-  // Lead call times are stored shifted to Uganda time (convex/utils
-  // getUgandaTime), so they read correctly as a UTC wall clock.
-  const formatLeadDate = (ts: number) => new Date(ts).toLocaleDateString(undefined, { timeZone: "UTC" });
+  // Lead call times are stored shifted to Uganda time (getUgandaTime).
+  const formatLeadDate = (ts: number) =>
+    new Date(fromStoredUgandaTime(ts)).toLocaleDateString(undefined, inUgandaTime());
 
   const renderFollowUpRow = (row: any) => {
     return (
@@ -888,7 +889,7 @@ export default function CommunityCrmPage() {
         </div>
         {row.confirmedVisitAt && (
           <div style={{ fontSize: "0.78rem", color: "#1f7a3e", fontWeight: 600 }}>
-            Confirmed visit: {new Date(row.confirmedVisitAt).toLocaleDateString()}
+            Confirmed visit: {new Date(row.confirmedVisitAt).toLocaleDateString(undefined, inUgandaTime())}
           </div>
         )}
         {row.callbackRequestedAt && row.assignedAgentName && (

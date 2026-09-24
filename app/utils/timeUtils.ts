@@ -12,6 +12,27 @@ export function getUgandaTime(): number {
   return Date.now() + ugandaOffset;
 }
 
+export const UGANDA_TIME_ZONE = "Africa/Kampala";
+
+/**
+ * The backend records times two ways. Most modules store getUgandaTime()
+ * (the real instant plus 3 hours); others store a real instant (Date.now(),
+ * _creationTime, a date picked in the browser). A shifted value must be
+ * converted back before display, or it reads 3 hours late.
+ */
+export function fromStoredUgandaTime(timestamp: number): number {
+  return timestamp - 3 * 60 * 60 * 1000;
+}
+
+/**
+ * toLocale* options that display in Uganda time (UTC+3) whatever timezone
+ * the viewer's device is set to. Pass a real instant, converting shifted
+ * values with fromStoredUgandaTime first.
+ */
+export function inUgandaTime(options: Intl.DateTimeFormatOptions = {}): Intl.DateTimeFormatOptions {
+  return { ...options, timeZone: UGANDA_TIME_ZONE };
+}
+
 /**
  * Format a timestamp to Uganda timezone string
  * @param timestamp - Timestamp in milliseconds (stored as Uganda time, i.e., UTC+3)

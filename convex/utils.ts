@@ -23,6 +23,15 @@ export function getUgandaTime(): number {
 }
 
 /**
+ * Converts a getUgandaTime() value (real instant + 3h) back to a real instant.
+ * Used where a query merges rows stored that way with rows stored as real
+ * instants, so everything it returns is on one clock.
+ */
+export function ugandaTimeToInstant(ugandaTime: number | undefined): number | undefined {
+  return ugandaTime === undefined || ugandaTime === null ? ugandaTime : ugandaTime - 3 * 60 * 60 * 1000;
+}
+
+/**
  * Generate a human-readable UTID (Unique Transaction ID)
  * Format: YYYYMMDD-HHMMSS-ROLE-RANDOM
  * Example: 20240315-143022-trader-a3k9x2

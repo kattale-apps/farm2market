@@ -10,6 +10,7 @@ import CommunityTabBar from "@/app/components/CommunityTabBar";
 import { useSearchParams } from "next/navigation";
 import { useOfflineQuery } from "@/app/hooks/useOfflineQuery";
 import { useStoredUser } from "@/app/hooks/useStoredUser";
+import { fromStoredUgandaTime, inUgandaTime } from "../../../utils/timeUtils";
 
 function QuotaWidget({ communityId }: { communityId: Id<"communities"> }) {
   const quotaStatus = useOfflineQuery(api.noticeboard.getAdminNoticeboardQuotaStatus, {
@@ -134,7 +135,7 @@ function PostCard({
     if (hrs < 24) return `${hrs}h ago`;
     const days = Math.floor(hrs / 24);
     if (days < 30) return `${days}d ago`;
-    return new Date(ts).toLocaleDateString();
+    return new Date(fromStoredUgandaTime(ts)).toLocaleDateString(undefined, inUgandaTime());
   };
 
   return (

@@ -8,6 +8,7 @@ import { Id } from "../../../convex/_generated/dataModel";
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useStoredUser } from "../../hooks/useStoredUser";
+import { fromStoredUgandaTime, inUgandaTime } from "../../utils/timeUtils";
 
 const BRAND = "#2e7d32";
 const FONT = '"Montserrat", sans-serif';
@@ -603,7 +604,7 @@ export default function BusinessTrackersPage() {
                                     );
                                   })}
                                   <td style={{ padding: "0.4rem 0.6rem", whiteSpace: "nowrap" }}>
-                                    {new Date(resp.createdAt).toLocaleDateString()}
+                                    {new Date(fromStoredUgandaTime(resp.createdAt)).toLocaleDateString(undefined, inUgandaTime())}
                                   </td>
                                 </tr>
                               );

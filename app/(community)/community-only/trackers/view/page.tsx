@@ -14,6 +14,7 @@ import { exportFormSubmissionsToPDF } from "@/app/utils/exportUtils";
 import SubmissionPhotoGallery from "@/app/components/SubmissionPhotoGallery";
 import { useStoredUser } from "@/app/hooks/useStoredUser";
 import { offlineDb } from "@/app/lib/offlineDb";
+import { fromStoredUgandaTime, inUgandaTime } from "../../../../utils/timeUtils";
 
 const BRAND = "#2e7d32";
 const FONT = '"Montserrat", sans-serif';
@@ -302,7 +303,7 @@ export default function TrackerViewPage() {
                     color: "#888",
                     whiteSpace: "nowrap",
                   }}>
-                    {new Date(sub.createdAt).toLocaleDateString()}
+                    {new Date(fromStoredUgandaTime(sub.createdAt)).toLocaleDateString(undefined, inUgandaTime())}
                   </span>
                 </div>
 

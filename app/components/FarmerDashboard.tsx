@@ -8,7 +8,7 @@ import { CreateListing } from "./CreateListing";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { exportToExcel, exportToPDF, formatUTIDDataForExport } from "../utils/exportUtils";
-import { formatUgandaDateTime, getUgandaTime } from "../utils/timeUtils";
+import { formatUgandaDateTime, getUgandaTime, inUgandaTime } from "../utils/timeUtils";
 import { ContactUs } from "./ContactUs";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -439,7 +439,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
       doc.setFontSize(10);
       doc.setTextColor(100, 100, 100);
       doc.text("Know Your Numbers — Farm2Market Uganda", 14, 28);
-      doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 34);
+      doc.text(`Generated: ${new Date().toLocaleDateString(undefined, inUgandaTime())}`, 14, 34);
 
       let y = 44;
 

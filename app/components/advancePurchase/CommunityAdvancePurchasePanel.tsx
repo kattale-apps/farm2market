@@ -5,6 +5,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { GOODS_CATEGORIES, FARM_SERVICE_OPTIONS } from "../../utils/advancedMarketsOptions";
+import { inUgandaTime } from "../../utils/timeUtils";
 
 const FONT = '"Montserrat", sans-serif';
 const BRAND = "#2e7d32";
@@ -327,7 +328,7 @@ function EvidenceReview({ adminId, communityId }: { adminId: Id<"users">; commun
               <div style={{ fontWeight: 700 }}>{e.offer?.productName} — {e.milestone?.name}</div>
               <img src={e.url} alt="Proof" style={{ width: "100%", maxWidth: 320, borderRadius: 8, margin: "0.5rem 0" }} />
               <p style={{ fontSize: "0.8rem", color: "#666" }}>
-                {e.lat != null ? `📍 ${e.lat.toFixed(5)}, ${e.lng.toFixed(5)}` : "No GPS"} · 🕒 {new Date(e.capturedAt).toLocaleString()}
+                {e.lat != null ? `📍 ${e.lat.toFixed(5)}, ${e.lng.toFixed(5)}` : "No GPS"} · 🕒 {new Date(e.capturedAt).toLocaleString(undefined, inUgandaTime())}
               </p>
               <textarea
                 placeholder="Notes (optional)"

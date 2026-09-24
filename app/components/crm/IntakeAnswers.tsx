@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type CSSProperties } from "react";
+import { inUgandaTime } from "../../utils/timeUtils";
 
 const BRAND = "#1f7a3e";
 
@@ -18,7 +19,7 @@ export function IntakeAnswers({ purchase, answers }: { purchase?: any; answers?:
     [
       "Next spray / visit",
       purchase?.upcomingSprayScheduleAt
-        ? new Date(purchase.upcomingSprayScheduleAt).toLocaleDateString()
+        ? new Date(purchase.upcomingSprayScheduleAt).toLocaleDateString(undefined, inUgandaTime())
         : "",
     ],
   ]

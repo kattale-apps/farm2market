@@ -9,6 +9,7 @@ import { Id } from "@/convex/_generated/dataModel";
 import { useStoredUser } from "@/app/hooks/useStoredUser";
 import { QrCodeDisplay } from "@/app/components/qr/QrCodeDisplay";
 import { QrNav } from "../QrNav";
+import { inUgandaTime } from "../../../../utils/timeUtils";
 
 /** epoch ms -> "YYYY-MM-DDTHH:mm" in the browser's local time, for a datetime-local input. */
 function toDatetimeLocalValue(ms: number | undefined): string {
@@ -274,7 +275,7 @@ export default function QrCodeDetailPage({ params }: { params: { id: string } })
                 <tbody>
                   {submissionsResult.submissions.map((row) => (
                     <tr key={row.submissionId}>
-                      <td style={tdStyle}>{new Date(row.createdAt).toLocaleString()}</td>
+                      <td style={tdStyle}>{new Date(row.createdAt).toLocaleString(undefined, inUgandaTime())}</td>
                       {row.values.map((v) => (
                         <td key={v.fieldId} style={tdStyle}>{v.value}</td>
                       ))}

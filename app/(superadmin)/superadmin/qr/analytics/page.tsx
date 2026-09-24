@@ -10,6 +10,7 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Toolti
 import { useStoredUser } from "@/app/hooks/useStoredUser";
 import { QrNav } from "../QrNav";
 import { sectionStyle, sectionHeading, inputStyle, labelStyle } from "../qrUiStyles";
+import { inUgandaTime } from "../../../../utils/timeUtils";
 
 export default function QrAnalyticsPage() {
   const { user } = useStoredUser();
@@ -121,7 +122,7 @@ export default function QrAnalyticsPage() {
                 {overview.recentActivity.map((event, i) => (
                   <li key={i} style={{ padding: "0.4rem 0", borderBottom: "1px solid #f2f2f2", display: "flex", justifyContent: "space-between" }}>
                     <span>{eventLabel(event.type)} — {event.code}</span>
-                    <span style={{ color: "#999" }}>{new Date(event.createdAt).toLocaleString()}</span>
+                    <span style={{ color: "#999" }}>{new Date(event.createdAt).toLocaleString(undefined, inUgandaTime())}</span>
                   </li>
                 ))}
               </ul>

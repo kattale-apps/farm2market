@@ -3,6 +3,7 @@
 import React, { useRef, useState, useCallback } from "react";
 import { validateImageFile, fileToBase64DataUrl } from "../utils/imageValidation";
 import { getCurrentLocation } from "../utils/gps";
+import { inUgandaTime } from "../utils/timeUtils";
 
 interface GeneralCameraCaptureProps {
   onCapture: (jsonValue: string) => void;
@@ -143,7 +144,7 @@ export function GeneralCameraCapture({ onCapture }: GeneralCameraCaptureProps) {
 
       // 3. Stamp metadata on the image
       const gpsText = latitude !== null ? `GPS: ${latitude.toFixed(5)}, ${longitude!.toFixed(5)}` : "GPS: unavailable";
-      const stampText = `${gpsText} | ${capturedAt.toLocaleString()}`;
+      const stampText = `${gpsText} | ${capturedAt.toLocaleString(undefined, inUgandaTime())}`;
       const fontSize = Math.max(14, Math.round(canvas.width * 0.02));
       ctx.font = `${fontSize}px Arial`;
       const textWidth = ctx.measureText(stampText).width;

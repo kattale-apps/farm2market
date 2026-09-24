@@ -9,6 +9,7 @@ import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import * as XLSX from "xlsx";
 import { useStoredUser } from "../../hooks/useStoredUser";
+import { fromStoredUgandaTime, inUgandaTime } from "../../utils/timeUtils";
 
 export default function FinanceDashboardPage() {
   const { user, status: authStatus } = useStoredUser();
@@ -220,7 +221,7 @@ export default function FinanceDashboardPage() {
       BatchUTID: entry.batchUtid || "",
       Reason: entry.reason || "",
       UTID: entry.utid,
-      CreatedAt: entry.createdAt ? new Date(entry.createdAt).toLocaleString() : "",
+      CreatedAt: entry.createdAt ? new Date(fromStoredUgandaTime(entry.createdAt)).toLocaleString(undefined, inUgandaTime()) : "",
     }));
 
     const pricingRows = farmcoinHistory.map((entry: any) => ({
@@ -229,7 +230,7 @@ export default function FinanceDashboardPage() {
       NewValue: entry.newValue,
       Reason: entry.reason,
       UTID: entry.utid,
-      CreatedAt: entry.createdAt ? new Date(entry.createdAt).toLocaleString() : "",
+      CreatedAt: entry.createdAt ? new Date(fromStoredUgandaTime(entry.createdAt)).toLocaleString(undefined, inUgandaTime()) : "",
     }));
 
     const wb = XLSX.utils.book_new();
@@ -246,7 +247,7 @@ export default function FinanceDashboardPage() {
         ListingId: entry.listingId || "",
         BatchUTID: entry.batchUtid || "",
         UTID: entry.utid,
-        CreatedAt: entry.createdAt ? new Date(entry.createdAt).toLocaleString() : "",
+        CreatedAt: entry.createdAt ? new Date(fromStoredUgandaTime(entry.createdAt)).toLocaleString(undefined, inUgandaTime()) : "",
       }));
     const sentifyWs = XLSX.utils.json_to_sheet(sentifyRows);
     XLSX.utils.book_append_sheet(wb, ledgerWs, "FarmCoin Ledger");
@@ -944,7 +945,7 @@ export default function FinanceDashboardPage() {
                               <td style={{ padding: "0.75rem", color: "#666" }}>{entry.reason || "-"}</td>
                               <td style={{ padding: "0.75rem", fontFamily: "monospace" }}>{entry.utid}</td>
                               <td style={{ padding: "0.75rem", color: "#666" }}>
-                                {entry.createdAt ? new Date(entry.createdAt).toLocaleString() : ""}
+                                {entry.createdAt ? new Date(fromStoredUgandaTime(entry.createdAt)).toLocaleString(undefined, inUgandaTime()) : ""}
                               </td>
                             </tr>
                           ))}
@@ -1042,7 +1043,7 @@ export default function FinanceDashboardPage() {
                               </td>
                               <td style={{ padding: "0.75rem", fontFamily: "monospace" }}>{entry.utid}</td>
                               <td style={{ padding: "0.75rem", color: "#666" }}>
-                                {entry.createdAt ? new Date(entry.createdAt).toLocaleString() : ""}
+                                {entry.createdAt ? new Date(fromStoredUgandaTime(entry.createdAt)).toLocaleString(undefined, inUgandaTime()) : ""}
                               </td>
                             </tr>
                           ))}
@@ -1157,7 +1158,7 @@ export default function FinanceDashboardPage() {
                           {formatUGX(entry.commission)}
                         </td>
                         <td style={{ padding: "0.75rem", color: "#666" }}>
-                          {new Date(entry.timestamp).toLocaleDateString()}
+                          {new Date(fromStoredUgandaTime(entry.timestamp)).toLocaleDateString(undefined, inUgandaTime())}
                         </td>
                       </tr>
                     ))}
@@ -1313,7 +1314,7 @@ export default function FinanceDashboardPage() {
                             {entry.utid}
                           </td>
                           <td style={{ padding: "0.6rem", color: "#888", fontSize: "0.75rem" }}>
-                            {new Date(entry.createdAt).toLocaleDateString()}
+                            {new Date(fromStoredUgandaTime(entry.createdAt)).toLocaleDateString(undefined, inUgandaTime())}
                           </td>
                         </tr>
                       ))}

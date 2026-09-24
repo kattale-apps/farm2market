@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { resolveCommunityModules } from "./communityModules";
+import { ugandaTimeToInstant } from "./utils";
 
 /**
  * Admin-only: get communities visible to the admin
@@ -150,8 +151,10 @@ export const getCommunityMembers = query({
           farmerId: m.userId,
           status: "APPROVED",
           applicationId: undefined,
-          joinedAt: m.joinedAt,
-          updatedAt: m.joinedAt,
+          // Memberships store getUgandaTime(); the application rows these
+          // stand in for store real instants, so return one clock.
+          joinedAt: ugandaTimeToInstant(m.joinedAt),
+          updatedAt: ugandaTimeToInstant(m.joinedAt),
         }));
       } else {
         const apps = await ctx.db

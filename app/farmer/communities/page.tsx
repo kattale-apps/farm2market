@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { resolveCommunityLogo } from "../../lib/communityLogos";
 import { useStoredUser } from "../../hooks/useStoredUser";
+import { inUgandaTime } from "../../utils/timeUtils";
 
 export default function FarmerCommunitiesPage() {
   // Inject responsive styles for communities (client-side only)
@@ -478,7 +479,7 @@ export default function FarmerCommunitiesPage() {
                           Status: {latestApplicationStatus?.status || "DRAFT"}
                         </div>
                         <div style={{ fontSize: "0.85rem", color: "#777", marginTop: 4 }}>
-                          Last updated: {latestForm.updatedAt ? new Date(latestForm.updatedAt).toLocaleString() : "-"}
+                          Last updated: {latestForm.updatedAt ? new Date(latestForm.updatedAt).toLocaleString(undefined, inUgandaTime()) : "-"}
                         </div>
                         <button
                           onClick={(e) => {

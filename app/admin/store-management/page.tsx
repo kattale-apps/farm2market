@@ -6,6 +6,7 @@ import { Id } from "../../../convex/_generated/dataModel";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useStoredUser } from "../../hooks/useStoredUser";
+import { fromStoredUgandaTime, inUgandaTime } from "../../utils/timeUtils";
 
 type Tab = "stores" | "audit";
 type ViewMode = "actions" | "deliveries" | "inventory";
@@ -578,7 +579,7 @@ function AuditTab({ userId }: { userId: Id<"users"> }) {
                           <td style={{ padding: "0.6rem", fontFamily: "monospace", fontSize: "0.78rem" }}>{u.utid || "—"}</td>
                           <td style={{ padding: "0.6rem", fontFamily: "monospace", fontSize: "0.78rem" }}>{u.targetUtid || "—"}</td>
                           <td style={{ padding: "0.6rem", maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis" }}>{u.reason || "—"}</td>
-                          <td style={{ padding: "0.6rem", whiteSpace: "nowrap" }}>{new Date(u.timestamp).toLocaleString()}</td>
+                          <td style={{ padding: "0.6rem", whiteSpace: "nowrap" }}>{new Date(fromStoredUgandaTime(u.timestamp)).toLocaleString(undefined, inUgandaTime())}</td>
                         </tr>
                       ))}
                     </tbody>

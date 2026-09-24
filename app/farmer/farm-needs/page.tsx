@@ -10,6 +10,7 @@ import { useStoredUser } from "../../hooks/useStoredUser";
 import { useSearchParams } from "next/navigation";
 import { GeneralCameraCapture } from "../../components/GeneralCameraCapture";
 import { FarmCoinReward, FarmCoinVideoPreloader } from "../../components/FarmCoinAnimation";
+import { fromStoredUgandaTime, inUgandaTime } from "../../utils/timeUtils";
 
 const BRAND = "#2e7d32";
 const BRAND_BG = "#e8f5e9";
@@ -393,7 +394,7 @@ export default function FarmNeedsPage() {
                     {response.formName}
                   </div>
                   <div style={{ color: "#666", fontSize: "0.85rem", marginBottom: "0.5rem" }}>
-                    {response.communityName} • {new Date(response.submittedAt).toLocaleDateString()}
+                    {response.communityName} • {new Date(fromStoredUgandaTime(response.submittedAt)).toLocaleDateString(undefined, inUgandaTime())}
                   </div>
                   {(response.fieldResponses || []).map((fr: any, idx: number) => (
                     <div key={idx} style={{ display: "grid", gridTemplateColumns: "minmax(90px, 40%) 1fr", gap: "0.4rem", padding: "0.25rem 0", borderTop: "1px dashed #e0e0e0" }}>

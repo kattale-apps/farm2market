@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type CSSProperties } from "react";
+import { inUgandaTime } from "../../utils/timeUtils";
 
 const BRAND = "#1f7a3e";
 
@@ -18,14 +19,15 @@ export function IntakeAnswers({ purchase, answers }: { purchase?: any; answers?:
     [
       "Next spray / visit",
       purchase?.upcomingSprayScheduleAt
-        ? new Date(purchase.upcomingSprayScheduleAt).toLocaleDateString()
+        ? new Date(purchase.upcomingSprayScheduleAt).toLocaleDateString(undefined, inUgandaTime())
         : "",
     ],
   ]
     .filter(([, value]) => Boolean(value))
     .map(([label, value]) => [label, String(value)] as [string, string]);
 
-  const formAnswers = answers || [];
+  // Only what was actually stored counts as an answer; a blank is not one.
+  const formAnswers = (answers || []).filter((answer: any) => String(answer?.value ?? "").trim() !== "");
   const total = purchaseEntries.length + formAnswers.length;
 
   if (total === 0) {
@@ -69,10 +71,10 @@ export function IntakeAnswers({ purchase, answers }: { purchase?: any; answers?:
                 style={{
                   flex: 1,
                   fontWeight: 600,
-                  color: answer.value ? "#111" : "#bbb",
+                  color: "#111",
                 }}
               >
-                {answer.value || "Not answered"}
+                {answer.value}
               </span>
             </div>
           ))}

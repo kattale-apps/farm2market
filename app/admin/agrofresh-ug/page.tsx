@@ -12,6 +12,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { savePdfFromJsPDF } from "../../utils/pdfDownload";
 import { useStoredUser } from "../../hooks/useStoredUser";
+import { inUgandaTime } from "../../utils/timeUtils";
 
 type StatusFilter = "PENDING" | "APPROVED" | "REJECTED" | "REVOKED" | "all";
 
@@ -105,7 +106,7 @@ export default function AgroFreshUGAdminPage() {
       farmName: item.form?.section1?.farmName || "-",
       phone: item.form?.section1?.phoneNumber || item.farmer?.phoneNumber || "-",
       district: item.form?.section1?.districtSubCounty || item.farmer?.districtText || "-",
-      createdAt: item.createdAt ? new Date(item.createdAt).toLocaleString() : "-",
+      createdAt: item.createdAt ? new Date(item.createdAt).toLocaleString(undefined, inUgandaTime()) : "-",
     }));
   }, [applications]);
 

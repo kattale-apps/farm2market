@@ -7,6 +7,7 @@ import { useOfflineQuery } from "@/app/hooks/useOfflineQuery";
 import { useOfflineMutation } from "@/app/hooks/useOfflineMutation";
 import Link from "next/link";
 import { useStoredUser } from "@/app/hooks/useStoredUser";
+import { inUgandaTime } from "../../utils/timeUtils";
 
 const BRAND = "#2e7d32";
 const BRAND_BG = "#e8f5e9";
@@ -17,7 +18,7 @@ type TaskStatus = "upcoming" | "done" | "skipped";
 type Recurrence = "none" | "daily" | "weekly" | "monthly";
 
 function formatDate(ts: number) {
-  return new Date(ts).toLocaleDateString("en-UG", { day: "numeric", month: "short", year: "numeric" });
+  return new Date(ts).toLocaleDateString("en-UG", inUgandaTime({ day: "numeric", month: "short", year: "numeric" }));
 }
 function isoDate(ts: number) {
   return new Date(ts).toISOString().split("T")[0];

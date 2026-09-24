@@ -12,6 +12,7 @@ import { exportSubmissionsToPDF } from "@/app/utils/exportUtils";
 import { getCurrentLocation } from "@/app/utils/gps";
 import SubmissionPhotoGallery from "@/app/components/SubmissionPhotoGallery";
 import { useStoredUser } from "@/app/hooks/useStoredUser";
+import { fromStoredUgandaTime, inUgandaTime } from "../../utils/timeUtils";
 
 const BRAND = "#2e7d32";
 const BRAND_BG = "#e8f5e9";
@@ -607,7 +608,7 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate, onBackToTe
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
           {entries.map((entry: any) => {
-            const submittedAt = new Date(entry.submittedAt ?? entry.createdAt).toLocaleString();
+            const submittedAt = new Date(fromStoredUgandaTime(entry.submittedAt ?? entry.createdAt)).toLocaleString(undefined, inUgandaTime());
             const previewFields = (entry.fieldValues ?? []).slice(0, 3);
             const isExpanded = expandedEntryId === String(entry._id);
             const isSelected = selectedEntryIds.has(String(entry._id));
@@ -1347,7 +1348,7 @@ function InsightsTab({ userId }: { userId: Id<"users"> }) {
           {insights.recentEntries.map((e: any) => (
             <div key={e._id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.45rem 0", borderBottom: "1px solid #f0f0f0" }}>
               <span style={{ fontSize: "0.85rem" }}>{e.templateEmoji ?? "📋"} {e.templateName}</span>
-              <span style={{ fontSize: "0.75rem", color: "#888" }}>{new Date(e.submittedAt).toLocaleDateString("en-UG")}</span>
+              <span style={{ fontSize: "0.75rem", color: "#888" }}>{new Date(fromStoredUgandaTime(e.submittedAt)).toLocaleDateString("en-UG", inUgandaTime())}</span>
             </div>
           ))}
         </div>
@@ -1491,7 +1492,7 @@ function SuppliesTab({ userId }: { userId: Id<"users"> }) {
                 <div style={{ fontWeight: 700, fontSize: "0.9rem", marginBottom: "0.2rem" }}>{cat?.emoji ?? "📦"} {s.item}</div>
                 <div style={{ fontSize: "0.78rem", color: "#666" }}>{s.quantity} {s.unit} × UGX {(s.unitCost ?? 0).toLocaleString()} = <strong>UGX {(s.totalCost ?? 0).toLocaleString()}</strong></div>
                 {s.supplier && <div style={{ fontSize: "0.75rem", color: "#888", marginTop: "0.15rem" }}>Supplier: {s.supplier}</div>}
-                <div style={{ fontSize: "0.72rem", color: "#aaa", marginTop: "0.15rem" }}>{new Date(s.purchasedAt).toLocaleDateString("en-UG")}</div>
+                <div style={{ fontSize: "0.72rem", color: "#aaa", marginTop: "0.15rem" }}>{new Date(s.purchasedAt).toLocaleDateString("en-UG", inUgandaTime())}</div>
               </div>
               <button onClick={() => deleteSupply({ entryId: s._id, farmerId: userId })}
                 style={{ background: "none", border: "none", cursor: "pointer", fontSize: "1rem", padding: "0 0.25rem", color: "#c62828", flexShrink: 0 }}>🗑️</button>
@@ -1633,7 +1634,7 @@ function FarmLedgerTab({ userId }: { userId: Id<"users"> }) {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 700, fontSize: "0.9rem", marginBottom: "0.15rem" }}>{cat?.emoji ?? "📋"} {e.description}</div>
                 <div style={{ fontSize: "0.78rem", color: e.type === "income" ? "#2e7d32" : "#c62828", fontWeight: 700 }}>{e.type === "income" ? "+" : "−"} UGX {(e.amount ?? 0).toLocaleString()}</div>
-                <div style={{ fontSize: "0.72rem", color: "#aaa", marginTop: "0.1rem" }}>{new Date(e.entryDate).toLocaleDateString("en-UG")}</div>
+                <div style={{ fontSize: "0.72rem", color: "#aaa", marginTop: "0.1rem" }}>{new Date(e.entryDate).toLocaleDateString("en-UG", inUgandaTime())}</div>
               </div>
               <button onClick={() => deleteEntry({ entryId: e._id, farmerId: userId })}
                 style={{ background: "none", border: "none", cursor: "pointer", fontSize: "1rem", padding: "0 0.25rem", color: "#c62828", flexShrink: 0 }}>🗑️</button>

@@ -11,6 +11,8 @@ import { Id } from "@/convex/_generated/dataModel";
 import { useStoredUser } from "@/app/hooks/useStoredUser";
 import { PRESET_KEYS, literalForPresetAnswer } from "@/convex/crmPresets";
 import { IntakeAnswers } from "@/app/components/crm/IntakeAnswers";
+import { LastCallAnswers } from "@/app/components/crm/LastCallAnswers";
+import { inUgandaTime } from "../../../utils/timeUtils";
 
 const FONT = '"Montserrat", sans-serif';
 const BRAND = "#156f44";
@@ -429,7 +431,7 @@ export default function CrmAgentPage() {
                 )}
                 {lead.upcomingSprayScheduleAt && (
                   <div style={{ marginTop: "0.2rem", color: "#7c2d12", fontSize: "0.82rem" }}>
-                    Upcoming spray: {new Date(lead.upcomingSprayScheduleAt).toLocaleDateString()}
+                    Upcoming spray: {new Date(lead.upcomingSprayScheduleAt).toLocaleDateString(undefined, inUgandaTime())}
                   </div>
                 )}
                 <div style={{ marginTop: "0.2rem", color: lead.isOverdue ? "#b91c1c" : "#166534", fontSize: "0.84rem", fontWeight: 600 }}>
@@ -449,6 +451,7 @@ export default function CrmAgentPage() {
                   }}
                   answers={lead.intakeAnswers}
                 />
+                <LastCallAnswers lastCall={lead.lastCall} />
 
                 <LeadOpeningScript leadId={lead._id} requesterId={userId} />
 

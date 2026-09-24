@@ -9,6 +9,7 @@ import { useState, useEffect } from "react";
 import jsPDF from "jspdf";
 import Link from "next/link";
 import { useStoredUser } from "../../hooks/useStoredUser";
+import { inUgandaTime } from "../../utils/timeUtils";
 
 export default function DeliveryVerificationPage() {
   const { user, status: authStatus } = useStoredUser();
@@ -42,7 +43,7 @@ export default function DeliveryVerificationPage() {
     
     doc.setFontSize(12);
     doc.text(`UTID: ${lockUtid}`, 20, 35);
-    doc.text(`Date: ${new Date().toLocaleString()}`, 20, 45);
+    doc.text(`Date: ${new Date().toLocaleString(undefined, inUgandaTime())}`, 20, 45);
     
     if (comment) {
       doc.text("Comments:", 20, 60);

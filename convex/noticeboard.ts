@@ -248,7 +248,7 @@ export const sendNoticeboardTextMessage = mutation({
       userId: resolvedUserId,
       text: args.text.trim(),
       replyToPostId: args.replyToPostId || undefined,
-      createdAt: Date.now(),
+      createdAt: getUgandaTime(), // same clock as every other communityMessages row
     });
 
     return messageId;
@@ -314,7 +314,7 @@ export const sendImageMessage = mutation({
       imageStorageId: args.imageStorageId,
       text: args.caption?.trim() || undefined,
       replyToPostId: args.replyToPostId || undefined,
-      createdAt: Date.now(),
+      createdAt: getUgandaTime(), // same clock as every other communityMessages row
     });
 
     return messageId;

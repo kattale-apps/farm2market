@@ -9,6 +9,7 @@ import * as XLSX from "xlsx";
 import { formatUgandaDate } from "../utils/dateUtils";
 import { NotificationMailbox } from "./NotificationMailbox";
 import { resolveCommunityLogo } from "../lib/communityLogos";
+import { fromStoredUgandaTime, inUgandaTime } from "../utils/timeUtils";
 const REGION_GROUPS: { label: string; districts: string[] }[] = [
   {
     label: "Central (Buganda)",
@@ -557,9 +558,9 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
       IsVerifiedTrader: member.isVerifiedTrader ? "Yes" : "No",
       VerificationStatus: member.verificationStatus ?? "",
       VerifiedBy: member.verifiedBy ?? "",
-      VerifiedAt: member.verifiedAt ? formatUgandaDate(member.verifiedAt) : "",
-      CreatedAt: member.createdAt ? formatUgandaDate(member.createdAt) : "",
-      LastActiveAt: member.lastActiveAt ? formatUgandaDate(member.lastActiveAt) : "",
+      VerifiedAt: member.verifiedAt ? formatUgandaDate(fromStoredUgandaTime(member.verifiedAt)) : "",
+      CreatedAt: member.createdAt ? formatUgandaDate(fromStoredUgandaTime(member.createdAt)) : "",
+      LastActiveAt: member.lastActiveAt ? formatUgandaDate(fromStoredUgandaTime(member.lastActiveAt)) : "",
       Communities: (member.communityNames || []).join(", "),
       CommunityIds: (member.communityIds || []).join(", "),
     }));
@@ -865,7 +866,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                           </div>
                           <div style={{ fontSize: "0.9rem" }}>{msg.message}</div>
                           <div style={{ fontSize: "0.7rem", color: "#999" }}>
-                            {new Date(msg.createdAt).toLocaleString()}
+                            {new Date(fromStoredUgandaTime(msg.createdAt)).toLocaleString(undefined, inUgandaTime())}
                           </div>
                         </div>
                       ))
@@ -2815,9 +2816,9 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                     { label: "Verified Trader", value: selectedMember.isVerifiedTrader ? "Yes" : "No" },
                     { label: "Verification Status", value: selectedMember.verificationStatus },
                     { label: "Verified By", value: selectedMember.verifiedBy },
-                    { label: "Verified At", value: selectedMember.verifiedAt ? formatUgandaDate(selectedMember.verifiedAt) : "-" },
-                    { label: "Created At", value: selectedMember.createdAt ? formatUgandaDate(selectedMember.createdAt) : "-" },
-                    { label: "Last Active", value: selectedMember.lastActiveAt ? formatUgandaDate(selectedMember.lastActiveAt) : "-" },
+                    { label: "Verified At", value: selectedMember.verifiedAt ? formatUgandaDate(fromStoredUgandaTime(selectedMember.verifiedAt)) : "-" },
+                    { label: "Created At", value: selectedMember.createdAt ? formatUgandaDate(fromStoredUgandaTime(selectedMember.createdAt)) : "-" },
+                    { label: "Last Active", value: selectedMember.lastActiveAt ? formatUgandaDate(fromStoredUgandaTime(selectedMember.lastActiveAt)) : "-" },
                     { label: "Communities", value: (selectedMember.communityNames || []).join(", ") || "-" },
                     { label: "Community IDs", value: (selectedMember.communityIds || []).join(", ") || "-" },
                   ].map((item) => (

@@ -48,3 +48,41 @@ export function createIntakeAnswerLoader(ctx: any) {
       .map(({ order: _order, ...answer }) => answer);
   };
 }
+
+/**
+ * The most recent call logged on a lead and what was recorded on it, read
+ * straight from crmCallLogs/crmCallAnswers. Answer labels are the snapshot
+ * taken when the call was saved, so they read as the agent saw them even if
+ * the question was renamed since. Returns null when no call has been logged.
+ */
+export async function loadLastCall(
+  ctx: any,
+  leadId: any,
+  resolveAgentName: (agentId: any) => Promise<string>
+) {
+  const logs = await ctx.db
+    .query("crmCallLogs")
+    .withIndex("by_lead", (q: any) => q.eq("leadId", leadId))
+    .collect();
+  if (logs.length === 0) return null;
+
+  const last = logs.reduce((latest: any, row: any) =>
+    Number(row.createdAt || 0) > Number(latest.createdAt || 0) ? row : latest
+  );
+
+  const answers = await ctx.db
+    .query("crmCallAnswers")
+    .withIndex("by_call", (q: any) => q.eq("callLogId", last._id))
+    .collect();
+
+  return {
+    callId: String(last._id),
+    createdAt: last.createdAt,
+    outcome: last.outcome,
+    notes: last.notes || null,
+    agentName: await resolveAgentName(last.agentId),
+    answers: answers
+      .filter((row: any) => String(row.value ?? "").trim() !== "")
+      .map((row: any) => ({ answerId: String(row._id), label: row.label, value: row.value })),
+  };
+}

@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { requireCrmSupervisorAccess, resolveCrmAgentDisplayName } from "./crmAuth";
-import { createIntakeAnswerLoader } from "./crmIntakeAnswers";
+import { createIntakeAnswerLoader, loadLastCall } from "./crmIntakeAnswers";
 import { getUgandaTime } from "./utils";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -197,6 +197,9 @@ export const getFollowUpsDueDetails = query({
         // What was captured at intake, so the supervisor sees it before
         // sending the contact to an agent.
         const answers = await loadIntakeAnswers(response?._id);
+        const lastCall = await loadLastCall(ctx, lead._id, (agentId) =>
+          resolveCrmAgentDisplayName(ctx, agentId, args.communityId)
+        );
 
         return {
           leadId: String(lead._id),
@@ -213,6 +216,7 @@ export const getFollowUpsDueDetails = query({
           callbackRequestedAt: lead.callbackRequestedAt || null,
           lastCallAt: lead.lastCallAt || null,
           lastOutcome: lead.lastOutcome || null,
+          lastCall,
           purchase: {
             productName: response?.productName || null,
             purchaseQuantity: response?.purchaseQuantity || null,

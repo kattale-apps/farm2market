@@ -7,7 +7,7 @@ import {
   resolveCrmAgentDisplayName,
 } from "./crmAuth";
 import { PRESET_KEYS, literalForPresetAnswer } from "./crmPresets";
-import { createIntakeAnswerLoader } from "./crmIntakeAnswers";
+import { createIntakeAnswerLoader, loadLastCall } from "./crmIntakeAnswers";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -371,6 +371,10 @@ export const getCrmAgentQueue = query({
         // The answers given on the form this lead was submitted on, so the
         // agent calling back sees what was captured the first time.
         const intakeAnswers = await loadIntakeAnswers(response?._id);
+        // What the farmer said on the previous call, for the agent calling back.
+        const lastCall = await loadLastCall(ctx, lead._id, (agentId) =>
+          resolveCrmAgentDisplayName(ctx, agentId, args.communityId)
+        );
 
         return {
           ...lead,
@@ -394,6 +398,7 @@ export const getCrmAgentQueue = query({
             new Date(getUgandaTime()).toISOString().slice(0, 10),
           isOverdue: lead.nextCallAt < getUgandaTime(),
           intakeAnswers,
+          lastCall,
         };
       })
     );

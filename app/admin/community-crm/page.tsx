@@ -12,6 +12,7 @@ import { useStoredUser } from "../../hooks/useStoredUser";
 import { savePdfFromJsPDF } from "../../utils/pdfDownload";
 import { CrmSubmissionsPanel } from "../../components/crm/CrmSubmissionsPanel";
 import { IntakeAnswers } from "../../components/crm/IntakeAnswers";
+import { LastCallAnswers } from "../../components/crm/LastCallAnswers";
 import {
   ALLOWED_SCRIPT_TOKENS,
   DEFAULT_CRM_FORM_FIELDS,
@@ -898,6 +899,7 @@ export default function CommunityCrmPage() {
           </div>
         )}
         <IntakeAnswers purchase={row.purchase} answers={row.answers} />
+        <LastCallAnswers lastCall={row.lastCall} />
       </div>
     );
   };

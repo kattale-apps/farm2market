@@ -61,3 +61,52 @@ test("a value whose question was removed is kept, not dropped", async () => {
     { fieldId: "gone", label: "Removed question", fieldType: "text", value: "2 litres" },
   ]);
 });
+
+import { loadLastCall } from "../convex/crmIntakeAnswers";
+
+function fakeCallCtx(logs: any[], answers: any[]) {
+  return {
+    db: {
+      query: (table: string) => ({
+        withIndex: (_index: string, build: (q: any) => any) => {
+          let key: string | undefined;
+          build({ eq: (_f: string, v: string) => { key = v; return {}; } });
+          const rows = table === "crmCallLogs"
+            ? logs.filter((row) => row.leadId === key)
+            : answers.filter((row) => row.callLogId === key);
+          return { collect: async () => rows };
+        },
+      }),
+    },
+  };
+}
+
+test("last call is the newest log, with its stored answers and notes", async () => {
+  const ctx = fakeCallCtx(
+    [
+      { _id: "c1", leadId: "L1", createdAt: 100, outcome: "no_answer", agentId: "a1" },
+      { _id: "c2", leadId: "L1", createdAt: 300, outcome: "problem", agentId: "a2", notes: "Leaves yellowing" },
+      { _id: "c3", leadId: "L2", createdAt: 999, outcome: "good_result", agentId: "a1" },
+    ],
+    [
+      { _id: "x1", callLogId: "c2", label: "Any problem?", value: "Product problem" },
+      { _id: "x2", callLogId: "c2", label: "Notes", value: "  " },
+      { _id: "x3", callLogId: "c1", label: "Any problem?", value: "No" },
+    ]
+  );
+
+  const last = await loadLastCall(ctx, "L1", async (id) => `Agent ${id}`);
+
+  assert.deepEqual(last, {
+    callId: "c2",
+    createdAt: 300,
+    outcome: "problem",
+    notes: "Leaves yellowing",
+    agentName: "Agent a2",
+    answers: [{ answerId: "x1", label: "Any problem?", value: "Product problem" }],
+  });
+});
+
+test("a lead never called has no last call", async () => {
+  assert.equal(await loadLastCall(fakeCallCtx([], []), "L1", async () => "x"), null);
+});

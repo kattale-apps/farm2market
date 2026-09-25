@@ -176,6 +176,8 @@ export const SYMPTOMS = [
   { key: "less_milk_eggs", label: "Less milk or fewer eggs", emoji: "🥛", group: "livestock" },
   { key: "weight_loss", label: "Thin / losing weight", emoji: "📉", group: "livestock" },
   { key: "sudden_deaths", label: "Sudden deaths in herd or flock", emoji: "⚠️", group: "livestock" },
+  { key: "red_purple_skin", label: "Red or purple skin or ears", emoji: "🟥", group: "livestock" },
+  { key: "nervous_signs", label: "Twisted neck, shaking or circling", emoji: "🌀", group: "livestock" },
 ] as const;
 
 export const SYMPTOM_KEYS: string[] = SYMPTOMS.map((s) => s.key);

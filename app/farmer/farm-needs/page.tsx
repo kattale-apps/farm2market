@@ -134,6 +134,12 @@ export default function FarmNeedsPage() {
     userId ? { farmerId: userId } : "skip"
   );
 
+  // Crop check (Diagnostics) is reachable here as well as inside each community.
+  const checkCommunities = useOfflineQuery(
+    api.diagnosticsFarmer.listMyCheckCommunities,
+    userId ? { userId } : "skip"
+  );
+
   const submitResponse = useOfflineMutation(api.farmNeeds.submitFarmNeedsResponse);
 
   const activeForms = useMemo(() => {
@@ -266,6 +272,46 @@ export default function FarmNeedsPage() {
             {message.text}
           </div>
         )}
+
+        {Array.isArray(checkCommunities) && checkCommunities.map((c) => (
+          <Link
+            key={c.communityId}
+            href={`/community-only/diagnose?communityId=${c.communityId}&from=farm-needs`}
+            style={{ textDecoration: "none", color: "inherit", display: "block", marginBottom: "0.75rem" }}
+          >
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.75rem",
+              padding: "1rem",
+              background: "#fff",
+              borderRadius: "12px",
+              border: `2px solid ${BRAND}`,
+            }}>
+              <div style={{
+                width: 52,
+                height: 52,
+                borderRadius: 12,
+                background: BRAND_BG,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "1.7rem",
+                flexShrink: 0,
+              }}>
+                🔬
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: "1.05rem", fontWeight: 700, color: "#1a1a1a" }}>Check my crop</div>
+                <div style={{ fontSize: "0.8rem", color: "#666" }}>
+                  Find pests and diseases, and what to do
+                  {checkCommunities.length > 1 ? ` · ${c.name}` : ""}
+                </div>
+              </div>
+              <span style={{ fontSize: "1.2rem", color: "#ccc" }}>→</span>
+            </div>
+          </Link>
+        ))}
 
         {/* Tabs */}
         <div style={{

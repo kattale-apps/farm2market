@@ -66,4 +66,13 @@ crons.interval(
   api.exchangeRates.fetchLatestRates,
 );
 
+// Diagnostics: weekly iNaturalist photo import into the review queue.
+// Does nothing unless a super admin has switched the import on.
+// Mondays 01:00 UTC = 04:00 Uganda time.
+crons.weekly(
+  "diagnostics photo import",
+  { dayOfWeek: "monday", hourUTC: 1, minuteUTC: 0 },
+  internal.diagnosticsImport.runScheduledImport,
+);
+
 export default crons;

@@ -875,6 +875,7 @@ export default defineSchema({
     fertilizerEnabled: v.optional(v.boolean()), // SuperAdmin flag: show the Fertilizer module in this community's dashboard
     costTemplatesEnabled: v.optional(v.boolean()), // SuperAdmin flag: show the Cost Templates module in this community's dashboard
     activeFarmsEnabled: v.optional(v.boolean()), // SuperAdmin flag: show the Active Farms module (members' Farm Record Book entries) in this community's dashboard
+    diagnosticsEnabled: v.optional(v.boolean()), // SuperAdmin flag: give this community access to the shared pest & disease Diagnostics library
   })
     .index("by_active", ["isGlobal", "geoLocked"])
     .index("by_created_by", ["createdBy"]),
@@ -2975,4 +2976,168 @@ export default defineSchema({
     fetchedAt: v.number(),
     source: v.string(),
   }).index("by_base", ["baseCurrency"]),
+
+  // ── Diagnostics library (shared by communities with diagnosticsEnabled) ──
+  // Nothing here is ever hard-deleted: a super admin "removes" by status, so
+  // sources and history stay on record. See convex/diagnosticsRules.ts.
+  diagnosticConditions: defineTable({
+    name: v.string(),
+    scientificName: v.optional(v.string()),
+    kind: v.union(v.literal("pest"), v.literal("disease"), v.literal("deficiency"), v.literal("other")),
+    hosts: v.array(v.string()), // Crop keys from DIAGNOSTIC_HOSTS
+    symptoms: v.string(),
+    symptomTags: v.optional(v.array(v.string())), // Keys from SYMPTOMS; what the farmer check matches against
+    lastImportAt: v.optional(v.number()), // getUgandaTime() of the last weekly photo import for this entry
+    sourceName: v.string(),
+    sourceUrl: v.optional(v.string()),
+    status: v.union(v.literal("pending_review"), v.literal("active"), v.literal("rejected"), v.literal("removed")),
+    addedBy: v.id("users"),
+    addedByCommunityId: v.optional(v.id("communities")), // Unset when a super admin adds it as the platform
+    addedAt: v.number(), // getUgandaTime()
+    reviewedBy: v.optional(v.id("users")),
+    reviewedAt: v.optional(v.number()),
+    reviewNote: v.optional(v.string()),
+    removedBy: v.optional(v.id("users")),
+    removedAt: v.optional(v.number()),
+    removalReason: v.optional(v.string()),
+    openFlagCount: v.optional(v.number()), // Open flags, one per community; drives the "being reviewed" badge
+  }).index("by_status", ["status"]),
+
+  diagnosticImages: defineTable({
+    conditionId: v.id("diagnosticConditions"),
+    storageId: v.id("_storage"),
+    thumbStorageId: v.optional(v.id("_storage")),
+    caption: v.optional(v.string()),
+    sourceName: v.string(),
+    sourceUrl: v.optional(v.string()),
+    licence: v.string(), // e.g. "CC BY 4.0", "Public domain", "Contributed by community"
+    externalRef: v.optional(v.string()), // e.g. "inat:photo:123" for imported photos; stops importing the same photo twice
+    status: v.union(v.literal("pending_review"), v.literal("active"), v.literal("rejected"), v.literal("removed")),
+    addedBy: v.id("users"),
+    addedByCommunityId: v.optional(v.id("communities")), // Unset when a super admin adds it as the platform
+    addedAt: v.number(), // getUgandaTime()
+    reviewedBy: v.optional(v.id("users")),
+    reviewedAt: v.optional(v.number()),
+    reviewNote: v.optional(v.string()),
+    removedBy: v.optional(v.id("users")),
+    removedAt: v.optional(v.number()),
+    removalReason: v.optional(v.string()),
+    openFlagCount: v.optional(v.number()), // Open flags, one per community; drives the "being reviewed" badge
+  })
+    .index("by_condition", ["conditionId"])
+    .index("by_status", ["status"])
+    .index("by_external_ref", ["externalRef"]),
+
+  diagnosticTreatments: defineTable({
+    conditionId: v.id("diagnosticConditions"),
+    kind: v.union(v.literal("cultural"), v.literal("organic"), v.literal("chemical")),
+    text: v.string(),
+    sourceName: v.string(),
+    sourceUrl: v.optional(v.string()),
+    status: v.union(v.literal("pending_review"), v.literal("active"), v.literal("rejected"), v.literal("removed")),
+    addedBy: v.id("users"),
+    addedByCommunityId: v.optional(v.id("communities")), // Unset when a super admin adds it as the platform
+    addedAt: v.number(), // getUgandaTime()
+    reviewedBy: v.optional(v.id("users")),
+    reviewedAt: v.optional(v.number()),
+    reviewNote: v.optional(v.string()),
+    removedBy: v.optional(v.id("users")),
+    removedAt: v.optional(v.number()),
+    removalReason: v.optional(v.string()),
+    openFlagCount: v.optional(v.number()), // Open flags, one per community; drives the "being reviewed" badge
+  })
+    .index("by_condition", ["conditionId"])
+    .index("by_status", ["status"]),
+
+  diagnosticFlags: defineTable({
+    itemType: v.union(v.literal("condition"), v.literal("image"), v.literal("treatment")),
+    itemId: v.string(),
+    conditionId: v.id("diagnosticConditions"),
+    flagKey: v.string(), // One open flag per community per item (flagKey() in diagnosticsRules)
+    reason: v.string(),
+    note: v.optional(v.string()),
+    flaggedBy: v.id("users"),
+    flaggedByCommunityId: v.optional(v.id("communities")),
+    createdAt: v.number(), // getUgandaTime()
+    status: v.union(v.literal("open"), v.literal("dismissed"), v.literal("actioned")),
+    resolvedBy: v.optional(v.id("users")),
+    resolvedAt: v.optional(v.number()),
+    resolutionNote: v.optional(v.string()),
+  })
+    .index("by_status", ["status"])
+    .index("by_item_status", ["itemId", "status"]),
+
+  // A farmer's crop check. Matching runs on the phone (it works offline), so
+  // results are saved as the farmer saw them; the server re-checks the ranking.
+  diagnosticReports: defineTable({
+    farmerId: v.id("users"),
+    communityId: v.id("communities"),
+    clientId: v.string(), // Made on the phone; stops an offline retry saving twice
+    host: v.string(),
+    symptomTags: v.array(v.string()),
+    photoStorageId: v.optional(v.id("_storage")),
+    results: v.array(v.object({ conditionId: v.id("diagnosticConditions"), percent: v.number() })),
+    healthLevel: v.union(v.literal("healthy"), v.literal("possible"), v.literal("likely"), v.literal("unsure")),
+    method: v.literal("symptoms"), // Paid photo matching will add another method later
+    checkedAt: v.number(), // getUgandaTime() when the farmer did the check (may be before it synced)
+    savedAt: v.number(), // getUgandaTime()
+    feedback: v.optional(v.union(v.literal("right"), v.literal("wrong"), v.literal("unsure"))),
+    // Paid AI photo check (only when the community switched it on). The model
+    // may only pick library entries; treatments still come from the library.
+    aiStatus: v.optional(v.union(v.literal("queued"), v.literal("done"), v.literal("failed"))),
+    aiResults: v.optional(v.array(v.object({ conditionId: v.id("diagnosticConditions"), percent: v.number() }))),
+    aiHealthLevel: v.optional(v.union(v.literal("healthy"), v.literal("possible"), v.literal("likely"), v.literal("unsure"))),
+    aiPhotoUsable: v.optional(v.boolean()),
+    aiNote: v.optional(v.string()),
+    aiModel: v.optional(v.string()),
+    aiInputTokens: v.optional(v.number()),
+    aiOutputTokens: v.optional(v.number()),
+    aiCheckedAt: v.optional(v.number()), // getUgandaTime()
+  })
+    .index("by_farmer_saved", ["farmerId", "savedAt"])
+    .index("by_farmer_client", ["farmerId", "clientId"])
+    .index("by_community_saved", ["communityId", "savedAt"]),
+
+  // Single row: the weekly photo import. actorId is the super admin who
+  // switched it on; imported photos are recorded as added by them.
+  diagnosticImportSettings: defineTable({
+    enabled: v.boolean(),
+    actorId: v.id("users"),
+    entriesPerRun: v.number(),
+    lastRunAt: v.optional(v.number()), // getUgandaTime()
+    lastRunSummary: v.optional(v.string()),
+    updatedAt: v.number(), // getUgandaTime()
+  }),
+
+  // Per-community opt-in for the paid AI photo check. A community admin
+  // switches it on; a super admin sets the monthly cap.
+  diagnosticAiSettings: defineTable({
+    communityId: v.id("communities"),
+    enabled: v.boolean(),
+    monthlyCap: v.number(),
+    updatedBy: v.id("users"),
+    updatedAt: v.number(), // getUgandaTime()
+  }).index("by_community", ["communityId"]),
+
+  // AI photo checks used per community per Uganda month ("2026-09"), with tokens for cost.
+  diagnosticAiUsage: defineTable({
+    communityId: v.id("communities"),
+    month: v.string(),
+    checks: v.number(),
+    inputTokens: v.number(),
+    outputTokens: v.number(),
+  }).index("by_community_month", ["communityId", "month"]),
+
+  diagnosticAuditLog: defineTable({
+    action: v.string(), // added | approved | rejected | flagged | flag_dismissed | removed | restored | module_enabled | module_disabled
+    itemType: v.optional(v.string()),
+    itemId: v.optional(v.string()),
+    conditionId: v.optional(v.id("diagnosticConditions")),
+    actorId: v.id("users"),
+    actorCommunityId: v.optional(v.id("communities")),
+    note: v.optional(v.string()),
+    at: v.number(), // getUgandaTime()
+  })
+    .index("by_at", ["at"])
+    .index("by_condition", ["conditionId"]),
 });

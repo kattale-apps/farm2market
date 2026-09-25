@@ -1063,7 +1063,8 @@ export const setCommunityModuleEnabled = mutation({
       v.literal("advancedMarkets"),
       v.literal("fertilizer"),
       v.literal("costTemplates"),
-      v.literal("activeFarms")
+      v.literal("activeFarms"),
+      v.literal("diagnostics")
     ),
     enabled: v.boolean(),
   },
@@ -1080,6 +1081,19 @@ export const setCommunityModuleEnabled = mutation({
     const community = await ctx.db.get(args.communityId);
     if (!community) {
       throw new Error("Community not found");
+    }
+
+    if (args.module === "diagnostics") {
+      await ctx.db.patch(args.communityId, { diagnosticsEnabled: args.enabled });
+      // Every change to who can reach the diagnostics library is logged.
+      await ctx.db.insert("diagnosticAuditLog", {
+        action: args.enabled ? "module_enabled" : "module_disabled",
+        actorId: args.adminId,
+        actorCommunityId: args.communityId,
+        note: community.name,
+        at: getUgandaTime(),
+      });
+      return { success: true, communityId: args.communityId, module: args.module, enabled: args.enabled };
     }
 
     const patch =

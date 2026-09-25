@@ -164,6 +164,45 @@ export default function TrackersHubPage() {
         )}
 
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+          {communityInfo?.diagnosticsEnabled === true && user?.role === "farmer" && (
+            <Link
+              href={`/community-only/diagnose?communityId=${communityId}`}
+              style={{ textDecoration: "none", color: "inherit" }}
+            >
+              <div style={{
+                padding: "1rem",
+                borderRadius: 12,
+                background: "#fff",
+                border: `2px solid ${BRAND}`,
+                boxShadow: "0 2px 6px rgba(0,0,0,0.06)",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                  <div style={{
+                    width: 52,
+                    height: 52,
+                    borderRadius: 12,
+                    background: "#e8f5e9",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "1.7rem",
+                    flexShrink: 0,
+                  }}>
+                    🔬
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700, color: "#1a1a1a" }}>
+                      Check my crop
+                    </h3>
+                    <p style={{ margin: "0.15rem 0 0 0", fontSize: "0.8rem", color: "#666" }}>
+                      Find pests and diseases, and what to do
+                    </p>
+                  </div>
+                  <span style={{ fontSize: "1.2rem", color: "#ccc" }}>→</span>
+                </div>
+              </div>
+            </Link>
+          )}
           {showFertilizerPlanner && (
             <Link
               href={`/community-only/trackers/fertilizer?communityId=${communityId}`}

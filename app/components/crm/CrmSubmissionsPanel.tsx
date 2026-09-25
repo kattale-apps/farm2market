@@ -5,6 +5,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { fromStoredUgandaTime, getUgandaTime, inUgandaTime } from "../../utils/timeUtils";
+import { LeadDetailsEditor } from "./LeadDetailsEditor";
 
 /**
  * The reviewable archive of CRM submissions: each intake form with the answers
@@ -140,6 +141,7 @@ export function CrmSubmissionsPanel({
   const [confirmingDelete, setConfirmingDelete] = useState<string>("");
   const [deletingId, setDeletingId] = useState<string>("");
   const [deleteError, setDeleteError] = useState<string>("");
+  const [editingId, setEditingId] = useState<string>("");
   const [pageSize, setPageSize] = useState<number>(25);
   const [page, setPage] = useState<number>(1);
 
@@ -416,6 +418,15 @@ export function CrmSubmissionsPanel({
                         </button>
                       </>
                     ) : (
+                      <>
+                      {editingId !== row.responseId && (
+                        <button
+                          onClick={() => setEditingId(row.responseId)}
+                          style={{ padding: "0.3rem 0.7rem", borderRadius: 8, border: "1px solid #1f7a3e", background: "#fff", color: "#1f7a3e", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" }}
+                        >
+                          Edit details
+                        </button>
+                      )}
                       <button
                         onClick={() => {
                           setConfirmingDelete(row.responseId);
@@ -425,6 +436,7 @@ export function CrmSubmissionsPanel({
                       >
                         Delete lead
                       </button>
+                      </>
                     )}
                   </div>
                   {deleteError && confirmingDelete === row.responseId && (
@@ -432,8 +444,15 @@ export function CrmSubmissionsPanel({
                       {deleteError}
                     </p>
                   )}
+                  {editingId === row.responseId ? (
+                    <LeadDetailsEditor
+                      row={row}
+                      requesterId={requesterId}
+                      onDone={() => setEditingId("")}
+                    />
+                  ) : (
                   <DetailGrid
-                    title="Purchase &amp; farm details"
+                    title="Lead details"
                     entries={[
                       ["Product", row.purchase?.productName],
                       ["Quantity", row.purchase?.purchaseQuantity],
@@ -446,6 +465,7 @@ export function CrmSubmissionsPanel({
                       ["Captured by", row.submittedByName],
                     ]}
                   />
+                  )}
 
                   <div style={{ marginTop: "0.8rem" }}>
                     <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#374151", marginBottom: "0.35rem" }}>

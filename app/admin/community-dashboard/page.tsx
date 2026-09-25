@@ -23,13 +23,14 @@ import { exportSubmissionsToPDF } from "../../utils/exportUtils";
 import SubmissionPhotoGallery from "../../components/SubmissionPhotoGallery";
 import { CommunityAdvancePurchasePanel } from "../../components/advancePurchase/CommunityAdvancePurchasePanel";
 import { CostTemplatesPanel } from "../../components/costTemplates/CostTemplatesPanel";
+import { DiagnosticsLibraryPanel } from "../../components/diagnostics/DiagnosticsLibraryPanel";
 import { GOODS_CATEGORIES, FARM_SERVICE_OPTIONS } from "../../utils/advancedMarketsOptions";
 import { tallyDistricts, buildDistrictMatcher } from "../../utils/districtNormalization";
 import { CrmInsightsSection } from "../../components/crm/CrmInsightsSection";
 import { fromStoredUgandaTime, inUgandaTime } from "../../utils/timeUtils";
 
 /* ── Tab types for community cards ── */
-type CommunityTab = "members" | "noticeboard" | "messages" | "forms" | "insights" | "fertilizer" | "costTemplates" | "advancePurchase";
+type CommunityTab = "members" | "noticeboard" | "messages" | "forms" | "insights" | "fertilizer" | "costTemplates" | "advancePurchase" | "diagnostics";
 type MembersListTab = "approved" | "all" | "imported" | "activeFarmsee";
 
 
@@ -3108,7 +3109,7 @@ export default function CommunityDashboardPage() {
 
   const handleToggleCommunityModule = async (
     communityId: Id<"communities">,
-    moduleKey: "advancedMarkets" | "fertilizer" | "costTemplates" | "activeFarms",
+    moduleKey: "advancedMarkets" | "fertilizer" | "costTemplates" | "activeFarms" | "diagnostics",
     nextValue: boolean
   ) => {
     if (!userId) return;
@@ -3124,7 +3125,9 @@ export default function CommunityDashboardPage() {
         ? "Advanced Markets"
         : moduleKey === "costTemplates"
           ? "Cost Templates"
-          : "Fertilizer";
+          : moduleKey === "diagnostics"
+            ? "Diagnostics"
+            : "Fertilizer";
 
     try {
       await setCommunityModuleEnabled({
@@ -3409,6 +3412,7 @@ export default function CommunityDashboardPage() {
             const activeFarmsEnabled = community?.activeFarmsEnabled === true;
             const fertilizerEnabled = community?.fertilizerEnabled === true;
             const costTemplatesEnabled = community?.costTemplatesEnabled === true;
+            const diagnosticsEnabled = community?.diagnosticsEnabled === true;
             const canConfigureFertilizer =
               isSuperAdminUser || resolvedAdminCategory === "community";
             const visibleTabs: CommunityTab[] = [
@@ -3420,6 +3424,7 @@ export default function CommunityDashboardPage() {
               ...(fertilizerEnabled && canConfigureFertilizer ? (["fertilizer"] as CommunityTab[]) : []),
               ...(costTemplatesEnabled ? (["costTemplates"] as CommunityTab[]) : []),
               ...(advancedMarketsEnabled ? (["advancePurchase"] as CommunityTab[]) : []),
+              ...(diagnosticsEnabled && canConfigureFertilizer ? (["diagnostics"] as CommunityTab[]) : []),
             ];
             // A tab that was open before the module was switched off falls back
             // to Members rather than rendering a hidden module.
@@ -3717,6 +3722,31 @@ export default function CommunityDashboardPage() {
                           />
                           Enable Active Farms module (members&apos; Farm Record Book entries)
                         </label>
+                        <label
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.5rem",
+                            fontSize: "0.85rem",
+                            color: "#374151",
+                            fontWeight: 600,
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={diagnosticsEnabled}
+                            disabled={!!togglingMemberCountByCommunity[String(communityId)]}
+                            onChange={(e) => {
+                              handleToggleCommunityModule(
+                                communityId as Id<"communities">,
+                                "diagnostics",
+                                e.target.checked
+                              );
+                            }}
+                            style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                          />
+                          Enable Diagnostics (shared pest &amp; disease library)
+                        </label>
                       </>
                     )}
                     <span
@@ -3802,7 +3832,7 @@ export default function CommunityDashboardPage() {
                   {(visibleTabs).map((tab, idx) => {
                     const active = activeTab === tab;
                     const color = menuRainbowColor(idx);
-                    const labels: Record<CommunityTab, string> = { members: "Members", noticeboard: "Noticeboard", messages: "Messages", forms: "Forms", insights: "📊 Insights", fertilizer: "🌱 Fertilizer", costTemplates: "🌾 Cost Templates", advancePurchase: "🌱 Advanced Markets" };
+                    const labels: Record<CommunityTab, string> = { members: "Members", noticeboard: "Noticeboard", messages: "Messages", forms: "Forms", insights: "📊 Insights", fertilizer: "🌱 Fertilizer", costTemplates: "🌾 Cost Templates", advancePurchase: "🌱 Advanced Markets", diagnostics: "🔬 Diagnostics" };
                     return (
                       <button
                         key={tab}
@@ -3895,6 +3925,15 @@ export default function CommunityDashboardPage() {
                     embedded
                   />
                 </div>
+              )}
+
+              {/* ── Diagnostics Tab ── */}
+              {activeTab === "diagnostics" && (
+                <DiagnosticsLibraryPanel
+                  userId={userId!}
+                  communityId={communityId as Id<"communities">}
+                  isSuperAdmin={isSuperAdminUser}
+                />
               )}
 
               {/* ── Advanced Markets Tab ── */}

@@ -875,6 +875,7 @@ export default defineSchema({
     fertilizerEnabled: v.optional(v.boolean()), // SuperAdmin flag: show the Fertilizer module in this community's dashboard
     costTemplatesEnabled: v.optional(v.boolean()), // SuperAdmin flag: show the Cost Templates module in this community's dashboard
     activeFarmsEnabled: v.optional(v.boolean()), // SuperAdmin flag: show the Active Farms module (members' Farm Record Book entries) in this community's dashboard
+    diagnosticsEnabled: v.optional(v.boolean()), // SuperAdmin flag: give this community access to the shared pest & disease Diagnostics library
   })
     .index("by_active", ["isGlobal", "geoLocked"])
     .index("by_created_by", ["createdBy"]),
@@ -2975,4 +2976,103 @@ export default defineSchema({
     fetchedAt: v.number(),
     source: v.string(),
   }).index("by_base", ["baseCurrency"]),
+
+  // ── Diagnostics library (shared by communities with diagnosticsEnabled) ──
+  // Nothing here is ever hard-deleted: a super admin "removes" by status, so
+  // sources and history stay on record. See convex/diagnosticsRules.ts.
+  diagnosticConditions: defineTable({
+    name: v.string(),
+    scientificName: v.optional(v.string()),
+    kind: v.union(v.literal("pest"), v.literal("disease"), v.literal("deficiency"), v.literal("other")),
+    hosts: v.array(v.string()), // Crop keys from DIAGNOSTIC_HOSTS
+    symptoms: v.string(),
+    sourceName: v.string(),
+    sourceUrl: v.optional(v.string()),
+    status: v.union(v.literal("pending_review"), v.literal("active"), v.literal("rejected"), v.literal("removed")),
+    addedBy: v.id("users"),
+    addedByCommunityId: v.optional(v.id("communities")), // Unset when a super admin adds it as the platform
+    addedAt: v.number(), // getUgandaTime()
+    reviewedBy: v.optional(v.id("users")),
+    reviewedAt: v.optional(v.number()),
+    reviewNote: v.optional(v.string()),
+    removedBy: v.optional(v.id("users")),
+    removedAt: v.optional(v.number()),
+    removalReason: v.optional(v.string()),
+    openFlagCount: v.optional(v.number()), // Open flags, one per community; drives the "being reviewed" badge
+  }).index("by_status", ["status"]),
+
+  diagnosticImages: defineTable({
+    conditionId: v.id("diagnosticConditions"),
+    storageId: v.id("_storage"),
+    thumbStorageId: v.optional(v.id("_storage")),
+    caption: v.optional(v.string()),
+    sourceName: v.string(),
+    sourceUrl: v.optional(v.string()),
+    licence: v.string(), // e.g. "CC BY 4.0", "Public domain", "Contributed by community"
+    status: v.union(v.literal("pending_review"), v.literal("active"), v.literal("rejected"), v.literal("removed")),
+    addedBy: v.id("users"),
+    addedByCommunityId: v.optional(v.id("communities")), // Unset when a super admin adds it as the platform
+    addedAt: v.number(), // getUgandaTime()
+    reviewedBy: v.optional(v.id("users")),
+    reviewedAt: v.optional(v.number()),
+    reviewNote: v.optional(v.string()),
+    removedBy: v.optional(v.id("users")),
+    removedAt: v.optional(v.number()),
+    removalReason: v.optional(v.string()),
+    openFlagCount: v.optional(v.number()), // Open flags, one per community; drives the "being reviewed" badge
+  })
+    .index("by_condition", ["conditionId"])
+    .index("by_status", ["status"]),
+
+  diagnosticTreatments: defineTable({
+    conditionId: v.id("diagnosticConditions"),
+    kind: v.union(v.literal("cultural"), v.literal("organic"), v.literal("chemical")),
+    text: v.string(),
+    sourceName: v.string(),
+    sourceUrl: v.optional(v.string()),
+    status: v.union(v.literal("pending_review"), v.literal("active"), v.literal("rejected"), v.literal("removed")),
+    addedBy: v.id("users"),
+    addedByCommunityId: v.optional(v.id("communities")), // Unset when a super admin adds it as the platform
+    addedAt: v.number(), // getUgandaTime()
+    reviewedBy: v.optional(v.id("users")),
+    reviewedAt: v.optional(v.number()),
+    reviewNote: v.optional(v.string()),
+    removedBy: v.optional(v.id("users")),
+    removedAt: v.optional(v.number()),
+    removalReason: v.optional(v.string()),
+    openFlagCount: v.optional(v.number()), // Open flags, one per community; drives the "being reviewed" badge
+  })
+    .index("by_condition", ["conditionId"])
+    .index("by_status", ["status"]),
+
+  diagnosticFlags: defineTable({
+    itemType: v.union(v.literal("condition"), v.literal("image"), v.literal("treatment")),
+    itemId: v.string(),
+    conditionId: v.id("diagnosticConditions"),
+    flagKey: v.string(), // One open flag per community per item (flagKey() in diagnosticsRules)
+    reason: v.string(),
+    note: v.optional(v.string()),
+    flaggedBy: v.id("users"),
+    flaggedByCommunityId: v.optional(v.id("communities")),
+    createdAt: v.number(), // getUgandaTime()
+    status: v.union(v.literal("open"), v.literal("dismissed"), v.literal("actioned")),
+    resolvedBy: v.optional(v.id("users")),
+    resolvedAt: v.optional(v.number()),
+    resolutionNote: v.optional(v.string()),
+  })
+    .index("by_status", ["status"])
+    .index("by_item_status", ["itemId", "status"]),
+
+  diagnosticAuditLog: defineTable({
+    action: v.string(), // added | approved | rejected | flagged | flag_dismissed | removed | restored | module_enabled | module_disabled
+    itemType: v.optional(v.string()),
+    itemId: v.optional(v.string()),
+    conditionId: v.optional(v.id("diagnosticConditions")),
+    actorId: v.id("users"),
+    actorCommunityId: v.optional(v.id("communities")),
+    note: v.optional(v.string()),
+    at: v.number(), // getUgandaTime()
+  })
+    .index("by_at", ["at"])
+    .index("by_condition", ["conditionId"]),
 });

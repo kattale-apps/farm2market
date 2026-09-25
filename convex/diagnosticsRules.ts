@@ -138,6 +138,12 @@ export const SYMPTOMS = [
   { key: "root_rot", label: "Roots or tubers rotting", emoji: "🟫" },
   { key: "fruit_damage", label: "Cobs, fruit or pods damaged", emoji: "🌽" },
   { key: "insects_seen", label: "Insects or worms seen", emoji: "🐛" },
+  // Added for nutrient deficiencies.
+  { key: "leaf_pale", label: "Pale, light green leaves", emoji: "🟩" },
+  { key: "veins_green", label: "Yellow leaf with green veins", emoji: "🥬" },
+  { key: "leaf_purple", label: "Purple, bronze or very dark leaves", emoji: "🟣" },
+  { key: "edges_brown", label: "Brown, burnt leaf edges or tips", emoji: "🤎" },
+  { key: "buds_dying", label: "Buds or new shoots dying", emoji: "🔻" },
 ] as const;
 
 export const SYMPTOM_KEYS: string[] = SYMPTOMS.map((s) => s.key);

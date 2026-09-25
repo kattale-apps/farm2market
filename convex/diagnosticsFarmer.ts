@@ -231,3 +231,25 @@ export const setReportFeedback = mutation({
     return { success: true };
   },
 });
+
+/**
+ * The communities where this member can use the crop check, for entry points
+ * outside a community (the farmer dashboard's Farm Needs page).
+ */
+export const listMyCheckCommunities = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const memberships = await ctx.db
+      .query("communityMemberships")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .take(50);
+    const result: { communityId: Id<"communities">; name: string }[] = [];
+    for (const m of memberships) {
+      const community = await ctx.db.get(m.communityId);
+      if (community && isDiagnosticsEnabled(community as any)) {
+        result.push({ communityId: community._id, name: community.name });
+      }
+    }
+    return result;
+  },
+});

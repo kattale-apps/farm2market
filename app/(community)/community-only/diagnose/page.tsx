@@ -27,8 +27,10 @@ import { compressImage, uploadToConvex } from "@/app/utils/imageCompress";
 import { formatUgandaDateTime, getUgandaTime } from "@/app/utils/timeUtils";
 import {
   DIAGNOSTIC_HOSTS,
-  SYMPTOMS,
   healthLevel as scoreHealth,
+  hostsInGroup,
+  symptomsInGroup,
+  type HostGroup,
   rankMatches,
   type HealthLevel,
 } from "@/convex/diagnosticsRules";
@@ -39,10 +41,10 @@ const FONT = '"Montserrat", sans-serif';
 type Step = "crop" | "photo" | "symptoms" | "result";
 
 const HEALTH: Record<HealthLevel, { emoji: string; title: string; hint: string; bg: string; color: string }> = {
-  healthy: { emoji: "✅", title: "Looks healthy", hint: "Keep checking your crop every week.", bg: "#dcfce7", color: "#166534" },
+  healthy: { emoji: "✅", title: "Looks healthy", hint: "Keep checking every week.", bg: "#dcfce7", color: "#166534" },
   likely: { emoji: "🔴", title: "Likely problem", hint: "Look at the photos below. If they match, follow the advice.", bg: "#fee2e2", color: "#991b1b" },
   possible: { emoji: "🟠", title: "Possible problem", hint: "Compare the photos below with your crop.", bg: "#ffedd5", color: "#9a3412" },
-  unsure: { emoji: "❔", title: "Not sure", hint: "Show your crop to your agent or extension officer.", bg: "#fef9c3", color: "#854d0e" },
+  unsure: { emoji: "❔", title: "Not sure", hint: "Show it to your agent or extension officer.", bg: "#fef9c3", color: "#854d0e" },
 };
 
 const TREATMENT_GROUPS = [
@@ -245,6 +247,11 @@ function AiPhotoCheck({
 export default function CropCheckPage() {
   const searchParams = useSearchParams();
   const communityId = searchParams.get("communityId") as Id<"communities"> | null;
+  // ?kind=animals opens the livestock check; anything else is the crop check.
+  const group: HostGroup = searchParams.get("kind") === "animals" ? "livestock" : "crop";
+  const isAnimals = group === "livestock";
+  const groupHosts = hostsInGroup(group);
+  const groupHostKeys = new Set<string>(groupHosts.map((h) => h.key));
   const { user, status: authStatus } = useStoredUser();
   const userId = (user?.userId || null) as Id<"users"> | null;
   const { isOnline } = useNetwork();
@@ -468,7 +475,7 @@ export default function CropCheckPage() {
     <div style={{ fontFamily: FONT, paddingBottom: "6rem", background: "#f9fafb", minHeight: "100vh" }}>
       <div style={{ background: "linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%)", padding: "1rem", color: "#fff" }}>
         <Link href={back} style={{ color: "#fff", textDecoration: "none", fontSize: "0.9rem" }}>← Back</Link>
-        <h1 style={{ margin: "0.4rem 0 0", fontSize: "1.35rem" }}>🔬 Check my crop</h1>
+        <h1 style={{ margin: "0.4rem 0 0", fontSize: "1.35rem" }}>{isAnimals ? "🐄 Check my animals" : "🌱 Check my crops"}</h1>
         {!isOnline && (
           <div style={{ marginTop: 6, fontSize: "0.85rem", background: "rgba(255,255,255,0.15)", borderRadius: 8, padding: "4px 8px", display: "inline-block" }}>
             📴 No network - the check still works
@@ -492,9 +499,9 @@ export default function CropCheckPage() {
           </div>
         ) : step === "crop" ? (
           <>
-            <h2 style={{ fontSize: "1.15rem", margin: "0 0 0.75rem" }}>1. Which crop?</h2>
+            <h2 style={{ fontSize: "1.15rem", margin: "0 0 0.75rem" }}>{isAnimals ? "1. Which animal?" : "1. Which crop?"}</h2>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
-              {DIAGNOSTIC_HOSTS.map((h) => (
+              {groupHosts.map((h) => (
                 <button
                   key={h.key}
                   onClick={() => {
@@ -511,18 +518,32 @@ export default function CropCheckPage() {
           </>
         ) : step === "photo" ? (
           <>
-            <h2 style={{ fontSize: "1.15rem", margin: "0 0 0.75rem" }}>2. Take a photo of the sick part</h2>
-            <label style={{ ...bigTile(false), minHeight: 160, marginBottom: 10 }}>
-              <span style={{ fontSize: "3rem" }}>📷</span>
-              Take photo
-              <input
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={(e) => onPhoto(e.target.files?.[0])}
-                style={{ display: "none" }}
-              />
-            </label>
+            <h2 style={{ fontSize: "1.15rem", margin: "0 0 0.75rem" }}>
+              {isAnimals ? "2. Take a photo of the sick animal" : "2. Take a photo of the sick part"}
+            </h2>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+              <label style={{ ...bigTile(false), minHeight: 140 }}>
+                <span style={{ fontSize: "2.6rem" }}>📷</span>
+                Take photo
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={(e) => onPhoto(e.target.files?.[0])}
+                  style={{ display: "none" }}
+                />
+              </label>
+              <label style={{ ...bigTile(false), minHeight: 140 }}>
+                <span style={{ fontSize: "2.6rem" }}>🖼️</span>
+                From gallery
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => onPhoto(e.target.files?.[0])}
+                  style={{ display: "none" }}
+                />
+              </label>
+            </div>
             <button onClick={() => setStep("symptoms")} style={secondaryButton}>
               Skip photo →
             </button>
@@ -536,7 +557,7 @@ export default function CropCheckPage() {
               <img src={photoUrl} alt="Your crop" style={{ width: "100%", maxHeight: 200, objectFit: "cover", borderRadius: 12, marginBottom: 10 }} />
             )}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8, marginBottom: 12 }}>
-              {SYMPTOMS.map((s) => {
+              {symptomsInGroup(group).map((s) => {
                 const on = symptoms.includes(s.key);
                 return (
                   <button
@@ -637,15 +658,15 @@ export default function CropCheckPage() {
             )}
 
             <button onClick={reset} style={primaryButton}>
-              🔁 Check another crop
+              {isAnimals ? "🔁 Check another animal" : "🔁 Check another crop"}
             </button>
           </>
         )}
 
-        {step === "crop" && Array.isArray(history) && history.length > 0 && (
+        {step === "crop" && Array.isArray(history) && history.some((h) => groupHostKeys.has(h.host)) && (
           <div style={{ marginTop: 20 }}>
             <h3 style={{ fontSize: "1rem", margin: "0 0 0.5rem" }}>My checks</h3>
-            {history.map((h) => {
+            {history.filter((h) => groupHostKeys.has(h.host)).map((h) => {
               const hostInfo = DIAGNOSTIC_HOSTS.find((x) => x.key === h.host);
               return (
                 <div key={h._id} style={{ background: "#fff", borderRadius: 12, padding: "0.6rem 0.8rem", marginBottom: 6, display: "flex", gap: 10, alignItems: "center" }}>

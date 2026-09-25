@@ -164,9 +164,14 @@ export default function TrackersHubPage() {
         )}
 
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-          {communityInfo?.diagnosticsEnabled === true && user?.role === "farmer" && (
+          {communityInfo?.diagnosticsEnabled === true && user?.role === "farmer" &&
+            ([
+              { kind: "crops", emoji: "🌱", title: "Check my crops", hint: "Find pests, diseases and missing nutrients" },
+              { kind: "animals", emoji: "🐄", title: "Check my animals", hint: "Find animal diseases and pests" },
+            ] as const).map((check) => (
             <Link
-              href={`/community-only/diagnose?communityId=${communityId}`}
+              key={check.kind}
+              href={`/community-only/diagnose?communityId=${communityId}&kind=${check.kind}`}
               style={{ textDecoration: "none", color: "inherit" }}
             >
               <div style={{
@@ -188,21 +193,21 @@ export default function TrackersHubPage() {
                     fontSize: "1.7rem",
                     flexShrink: 0,
                   }}>
-                    🔬
+                    {check.emoji}
                   </div>
                   <div style={{ flex: 1 }}>
                     <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700, color: "#1a1a1a" }}>
-                      Check my crop
+                      {check.title}
                     </h3>
                     <p style={{ margin: "0.15rem 0 0 0", fontSize: "0.8rem", color: "#666" }}>
-                      Find pests and diseases, and what to do
+                      {check.hint}
                     </p>
                   </div>
                   <span style={{ fontSize: "1.2rem", color: "#ccc" }}>→</span>
                 </div>
               </div>
             </Link>
-          )}
+          ))}
           {showFertilizerPlanner && (
             <Link
               href={`/community-only/trackers/fertilizer?communityId=${communityId}`}

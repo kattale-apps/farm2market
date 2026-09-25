@@ -3,6 +3,11 @@ import assert from "node:assert/strict";
 
 import {
   aiHealthLevel,
+  DIAGNOSTIC_HOSTS,
+  hostGroup,
+  hostsInGroup,
+  SYMPTOMS,
+  symptomsInGroup,
   canFlag,
   canRemove,
   cleanAiMatches,
@@ -171,4 +176,25 @@ test("the usage month follows the Uganda calendar", () => {
   // 30 Sep 2026 23:30 in Kampala, stored as a getUgandaTime() value
   assert.equal(ugandaMonthKey(Date.UTC(2026, 8, 30, 23, 30)), "2026-09");
   assert.equal(ugandaMonthKey(Date.UTC(2026, 9, 1, 0, 5)), "2026-10");
+});
+
+// ─── Crops and animals ─────────────────────────────────────────────────────
+
+test("every crop, animal and symptom has a group, and stored keys are unique", () => {
+  const hostKeys = DIAGNOSTIC_HOSTS.map((h) => h.key);
+  const symptomKeys = SYMPTOMS.map((sym) => sym.key);
+  assert.equal(new Set(hostKeys).size, hostKeys.length);
+  assert.equal(new Set(symptomKeys).size, symptomKeys.length);
+  for (const h of DIAGNOSTIC_HOSTS) assert.ok(h.group === "crop" || h.group === "livestock", h.key);
+  for (const sym of SYMPTOMS) assert.ok(sym.group === "crop" || sym.group === "livestock", sym.key);
+});
+
+test("the animal check has animals and animal signs, the crop check keeps its own", () => {
+  assert.ok(hostsInGroup("livestock").some((h) => h.key === "cattle"));
+  assert.ok(!hostsInGroup("livestock").some((h) => h.key === "maize"));
+  assert.ok(symptomsInGroup("livestock").some((sym) => sym.key === "not_eating"));
+  assert.ok(!symptomsInGroup("livestock").some((sym) => sym.key === "leaf_yellow"));
+  assert.equal(hostGroup("goats"), "livestock");
+  assert.equal(hostGroup("cassava"), "crop");
+  assert.equal(hostGroup("unicorn"), undefined);
 });

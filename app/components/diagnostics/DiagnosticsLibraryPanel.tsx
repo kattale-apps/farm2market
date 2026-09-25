@@ -1144,12 +1144,47 @@ const ACTION_LABEL: Record<string, string> = {
 };
 
 function AuditLog({ base }: { base: Base }) {
-  const rows = useQuery(api.diagnostics.listAuditLog, base);
-  if (rows === undefined) return <p style={{ color: "#6b7280" }}>Loading…</p>;
-  if (rows.length === 0) return <p style={{ color: "#6b7280", fontSize: "0.9rem" }}>No activity yet.</p>;
+  // Each "Load older" adds a page that starts before the last entry shown.
+  const [cursors, setCursors] = useState<number[]>([]);
   return (
     <div>
-      {rows.map((r) => (
+      <AuditLogPage base={base} isLast={cursors.length === 0} onMore={(at) => setCursors([at])} />
+      {cursors.map((before, i) => (
+        <AuditLogPage
+          key={before}
+          base={base}
+          before={before}
+          isLast={i === cursors.length - 1}
+          onMore={(at) => setCursors((prev) => [...prev, at])}
+        />
+      ))}
+    </div>
+  );
+}
+
+function AuditLogPage({
+  base,
+  before,
+  isLast,
+  onMore,
+}: {
+  base: Base;
+  before?: number;
+  isLast: boolean;
+  onMore: (at: number) => void;
+}) {
+  const data = useQuery(api.diagnostics.listAuditLog, { ...base, before });
+  if (data === undefined) return <p style={{ color: "#6b7280" }}>Loading…</p>;
+  if (data.rows.length === 0 && before === undefined) {
+    return <p style={{ color: "#6b7280", fontSize: "0.9rem" }}>No activity yet.</p>;
+  }
+  const last = data.rows[data.rows.length - 1];
+  return (
+    <>
+      {before === undefined && !data.isFullHistory && (
+        <p style={{ fontSize: "0.78rem", color: "#6b7280", margin: "0 0 8px" }}>Showing the most recent activity.</p>
+      )}
+      {data.rows.map((r) => (
         <div key={r._id} style={{ ...cardStyle, padding: "0.55rem 0.75rem" }}>
           <div style={{ fontSize: "0.85rem" }}>
             <strong>{r.actorName}</strong> ({r.actorCommunityName}) {ACTION_LABEL[r.action] ?? r.action}{" "}
@@ -1159,7 +1194,12 @@ function AuditLog({ base }: { base: Base }) {
           <div style={{ fontSize: "0.72rem", color: "#6b7280" }}>{formatUgandaDateTime(r.at)}</div>
         </div>
       ))}
-    </div>
+      {isLast && data.hasMore && last && (
+        <button onClick={() => onMore(last.at)} style={{ ...buttonStyle(), width: "100%" }}>
+          Load older
+        </button>
+      )}
+    </>
   );
 }
 

@@ -31,10 +31,13 @@ import {
 const LIBRARY_READ_LIMIT = 500;
 const PHOTOS_PER_CONDITION = 2;
 
-/** Null when the user cannot use the check in this community. */
+/**
+ * Null when the user cannot use the check in this community. For now the
+ * crop check is for farmers only, like the Farm Needs tab it sits in.
+ */
 async function farmerAccess(ctx: QueryCtx, userId: Id<"users">, communityId: Id<"communities">) {
   const [user, community] = await Promise.all([ctx.db.get(userId), ctx.db.get(communityId)]);
-  if (!user || !community || !isDiagnosticsEnabled(community as any)) return null;
+  if (!user || user.role !== "farmer" || !community || !isDiagnosticsEnabled(community as any)) return null;
   const membership = await ctx.db
     .query("communityMemberships")
     .withIndex("by_community_user", (q) => q.eq("communityId", communityId).eq("userId", userId))
@@ -246,6 +249,8 @@ export const setReportFeedback = mutation({
 export const listMyCheckCommunities = query({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user || user.role !== "farmer") return [];
     const memberships = await ctx.db
       .query("communityMemberships")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))

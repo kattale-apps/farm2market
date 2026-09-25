@@ -164,7 +164,7 @@ export default function TrackersHubPage() {
         )}
 
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-          {communityInfo?.diagnosticsEnabled === true && (
+          {communityInfo?.diagnosticsEnabled === true && user?.role === "farmer" && (
             <Link
               href={`/community-only/diagnose?communityId=${communityId}`}
               style={{ textDecoration: "none", color: "inherit" }}

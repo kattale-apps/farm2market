@@ -371,32 +371,50 @@ export const listOpenFlags = query({
   },
 });
 
+/** Community admins see only the most recent activity; super admins can page back through all of it. */
+const COMMUNITY_ADMIN_LOG_ROWS = 20;
+const SUPER_ADMIN_LOG_PAGE = 50;
+
 export const listAuditLog = query({
   args: {
     adminId: v.id("users"),
     communityId: v.optional(v.id("communities")),
     conditionId: v.optional(v.id("diagnosticConditions")),
+    before: v.optional(v.number()), // super admin paging: entries older than this "at"
   },
   handler: async (ctx, args) => {
-    await requireLibraryAccess(ctx, args.adminId, args.communityId);
+    const access = await requireLibraryAccess(ctx, args.adminId, args.communityId);
+    const limit = access.isSuperAdmin ? SUPER_ADMIN_LOG_PAGE : COMMUNITY_ADMIN_LOG_ROWS;
+    const before = access.isSuperAdmin ? args.before : undefined;
     const conditionId = args.conditionId;
-    const rows = conditionId
+    // One entry's history is short, so it is not paged.
+    const fetched = conditionId
       ? await ctx.db
           .query("diagnosticAuditLog")
           .withIndex("by_condition", (q) => q.eq("conditionId", conditionId))
           .order("desc")
-          .take(50)
-      : await ctx.db.query("diagnosticAuditLog").withIndex("by_at").order("desc").take(50);
+          .take(limit + 1)
+      : await ctx.db
+          .query("diagnosticAuditLog")
+          .withIndex("by_at", (q) => (before !== undefined ? q.lt("at", before) : q))
+          .order("desc")
+          .take(limit + 1);
+    const hasMore = access.isSuperAdmin && fetched.length > limit;
+    const rows = fetched.slice(0, limit);
     const names = await describeActors(
       ctx,
       rows.map((r) => r.actorId),
       rows.map((r) => r.actorCommunityId).filter((id): id is Id<"communities"> => !!id)
     );
-    return rows.map((r) => ({
-      ...r,
-      actorName: names.userName(r.actorId),
-      actorCommunityName: names.communityName(r.actorCommunityId),
-    }));
+    return {
+      rows: rows.map((r) => ({
+        ...r,
+        actorName: names.userName(r.actorId),
+        actorCommunityName: names.communityName(r.actorCommunityId),
+      })),
+      hasMore,
+      isFullHistory: access.isSuperAdmin,
+    };
   },
 });
 

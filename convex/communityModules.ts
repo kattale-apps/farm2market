@@ -10,7 +10,7 @@
 
 const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
 
-export type CommunityModule = "advancedMarkets" | "fertilizer" | "costTemplates" | "activeFarms";
+export type CommunityModule = "advancedMarkets" | "fertilizer" | "costTemplates" | "activeFarms" | "diagnostics";
 
 type CommunityLike = {
   _id?: unknown;
@@ -20,6 +20,7 @@ type CommunityLike = {
   fertilizerEnabled?: boolean;
   costTemplatesEnabled?: boolean;
   activeFarmsEnabled?: boolean;
+  diagnosticsEnabled?: boolean;
 };
 
 /**
@@ -101,11 +102,21 @@ export function isActiveFarmsEnabled(community: CommunityLike | null | undefined
   return isBioFarmCommunity(community);
 }
 
+/**
+ * Diagnostics - the shared pest & disease library. Off everywhere until a
+ * super admin turns it on for a specific community.
+ */
+export function isDiagnosticsEnabled(community: CommunityLike | null | undefined): boolean {
+  if (!community) return false;
+  return community.diagnosticsEnabled === true;
+}
+
 export function resolveCommunityModules(community: CommunityLike | null | undefined) {
   return {
     advancedMarketsEnabled: isAdvancedMarketsEnabled(community),
     fertilizerEnabled: isFertilizerModuleEnabled(community),
     costTemplatesEnabled: isCostTemplatesEnabled(community),
     activeFarmsEnabled: isActiveFarmsEnabled(community),
+    diagnosticsEnabled: isDiagnosticsEnabled(community),
   };
 }

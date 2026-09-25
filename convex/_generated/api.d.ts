@@ -41,6 +41,7 @@ import type * as crmPresets from "../crmPresets.js";
 import type * as crons from "../crons.js";
 import type * as demoData from "../demoData.js";
 import type * as diagnostics from "../diagnostics.js";
+import type * as diagnosticsAi from "../diagnosticsAi.js";
 import type * as diagnosticsFarmer from "../diagnosticsFarmer.js";
 import type * as diagnosticsImport from "../diagnosticsImport.js";
 import type * as diagnosticsRules from "../diagnosticsRules.js";
@@ -158,6 +159,7 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   demoData: typeof demoData;
   diagnostics: typeof diagnostics;
+  diagnosticsAi: typeof diagnosticsAi;
   diagnosticsFarmer: typeof diagnosticsFarmer;
   diagnosticsImport: typeof diagnosticsImport;
   diagnosticsRules: typeof diagnosticsRules;

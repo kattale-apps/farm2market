@@ -103,8 +103,8 @@ export const runImportNow = mutation({
 /** Called by the weekly cron; does nothing unless a super admin switched the import on. */
 export const runScheduledImport = internalAction({
   args: {},
-  handler: async (ctx) => {
-    const settings = await ctx.runQuery(internal.diagnosticsImport.readSettings, {});
+  handler: async (ctx): Promise<void> => {
+    const settings: Doc<"diagnosticImportSettings"> | null = await ctx.runQuery(internal.diagnosticsImport.readSettings, {});
     if (!settings?.enabled) return;
     await ctx.runAction(internal.diagnosticsImport.runImport, { actorId: settings.actorId });
   },
@@ -219,14 +219,26 @@ export const saveImportedPhoto = internalMutation({
 });
 
 export const finishRun = internalMutation({
-  args: { conditionIds: v.array(v.id("diagnosticConditions")), summary: v.string() },
+  args: { conditionIds: v.array(v.id("diagnosticConditions")), summary: v.string(), actorId: v.id("users") },
   handler: async (ctx, args) => {
     const now = getUgandaTime();
     for (const id of args.conditionIds) {
       if (await ctx.db.get(id)) await ctx.db.patch(id, { lastImportAt: now });
     }
     const settings = await ctx.db.query("diagnosticImportSettings").first();
-    if (settings) await ctx.db.patch(settings._id, { lastRunAt: now, lastRunSummary: args.summary });
+    if (settings) {
+      await ctx.db.patch(settings._id, { lastRunAt: now, lastRunSummary: args.summary });
+    } else {
+      // "Run now" before the weekly import was ever switched on: keep the result, leave it off.
+      await ctx.db.insert("diagnosticImportSettings", {
+        enabled: false,
+        actorId: args.actorId,
+        entriesPerRun: DEFAULT_ENTRIES_PER_RUN,
+        lastRunAt: now,
+        lastRunSummary: args.summary,
+        updatedAt: now,
+      });
+    }
   },
 });
 
@@ -242,9 +254,9 @@ async function fetchImage(url: string): Promise<Blob | null> {
 
 export const runImport = internalAction({
   args: { actorId: v.id("users") },
-  handler: async (ctx, args) => {
-    const settings = await ctx.runQuery(internal.diagnosticsImport.readSettings, {});
-    const entries = await ctx.runQuery(internal.diagnosticsImport.pickEntries, {
+  handler: async (ctx, args): Promise<void> => {
+    const settings: Doc<"diagnosticImportSettings"> | null = await ctx.runQuery(internal.diagnosticsImport.readSettings, {});
+    const entries: { conditionId: Id<"diagnosticConditions">; scientificName: string; needed: number }[] = await ctx.runQuery(internal.diagnosticsImport.pickEntries, {
       limit: settings?.entriesPerRun ?? DEFAULT_ENTRIES_PER_RUN,
     });
 
@@ -314,6 +326,7 @@ export const runImport = internalAction({
 
     await ctx.runMutation(internal.diagnosticsImport.finishRun, {
       conditionIds: entries.map((e) => e.conditionId),
+      actorId: args.actorId,
       summary:
         entries.length === 0
           ? "Nothing to import: no entries with a scientific name need photos"

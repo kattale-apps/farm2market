@@ -23,7 +23,7 @@ const BRAND = "#166534";
 const BRAND_BG = "#f0fdf4";
 const FONT = '"Montserrat", sans-serif';
 
-type View = "library" | "review" | "flags" | "checks" | "import" | "log" | "addCondition";
+type View = "library" | "review" | "flags" | "checks" | "ai" | "import" | "log" | "addCondition";
 type ItemType = "condition" | "image" | "treatment";
 type Status = "pending_review" | "active" | "rejected" | "removed";
 
@@ -298,6 +298,7 @@ export function DiagnosticsLibraryPanel({
     { key: "review", label: `✅ Review${reviewQueue?.length ? ` (${reviewQueue.length})` : ""}` },
     { key: "flags", label: `🚩 Flags${openFlags?.length ? ` (${openFlags.length})` : ""}` },
     { key: "checks", label: "🌾 Farmer checks" },
+    { key: "ai", label: "🤖 AI photo check" },
     ...(isSuperAdmin ? [{ key: "import" as View, label: "🌐 Import" }] : []),
     { key: "log", label: "🕘 Log" },
   ];
@@ -369,6 +370,8 @@ export function DiagnosticsLibraryPanel({
         <FlagList base={base} rows={openFlags} isSuperAdmin={isSuperAdmin} run={run} onOpen={setOpenConditionId} />
       ) : view === "checks" ? (
         <FarmerChecks base={base} />
+      ) : view === "ai" ? (
+        <AiSettingsPanel base={base} run={run} />
       ) : view === "import" && isSuperAdmin ? (
         <ImportSettings adminId={userId} run={run} />
       ) : (
@@ -1135,6 +1138,9 @@ const ACTION_LABEL: Record<string, string> = {
   imported: "imported",
   import_enabled: "switched on the weekly photo import",
   import_disabled: "switched off the weekly photo import",
+  ai_enabled: "switched on the AI photo check for",
+  ai_disabled: "switched off the AI photo check for",
+  ai_cap_changed: "changed the AI photo check limit for",
 };
 
 function AuditLog({ base }: { base: Base }) {
@@ -1277,6 +1283,12 @@ function FarmerChecks({ base }: { base: Base }) {
                   {r.farmerName} · {hostLabel(r.host)}
                   {r.feedback ? ` · farmer said: ${r.feedback === "right" ? "👍 right" : r.feedback === "wrong" ? "👎 wrong" : "🤷 unsure"}` : ""}
                 </div>
+                {r.ai && (
+                  <div style={{ fontSize: "0.75rem", color: "#3730a3", marginTop: 2 }}>
+                    🤖 {r.ai.name ? `${r.ai.name} (${r.ai.percent}%)` : "Photo not clear"}
+                    {r.ai.note ? ` - ${r.ai.note}` : ""}
+                  </div>
+                )}
                 {r.symptomTags.length > 0 && (
                   <div style={{ fontSize: "0.72rem", color: "#6b7280", marginTop: 2 }}>{r.symptomTags.map(symptomLabel).join(" · ")}</div>
                 )}
@@ -1329,6 +1341,82 @@ function ImportSettings({ adminId, run }: { adminId: Id<"users">; run: Run }) {
           ? `Last run ${formatUgandaDateTime(settings.lastRunAt)}: ${settings.lastRunSummary ?? ""}`
           : "Not run yet."}
       </div>
+    </div>
+  );
+}
+
+/** The community's paid AI photo check: on/off (community's choice), monthly limit (super admin) and spend. */
+function AiSettingsPanel({ base, run }: { base: Base; run: Run }) {
+  const settings = useQuery(api.diagnosticsAi.getAiSettings, base);
+  const setEnabled = useMutation(api.diagnosticsAi.setAiEnabled);
+  const setCap = useMutation(api.diagnosticsAi.setAiMonthlyCap);
+  const [capDraft, setCapDraft] = useState<string>("");
+  if (settings === undefined) return <p style={{ color: "#6b7280" }}>Loading…</p>;
+
+  const usedPct = settings.monthlyCap > 0 ? Math.min(100, Math.round((100 * settings.checksThisMonth) / settings.monthlyCap)) : 100;
+  return (
+    <div style={cardStyle}>
+      <h3 style={{ margin: "0 0 0.4rem", fontSize: "1rem" }}>🤖 AI photo check</h3>
+      <p style={{ fontSize: "0.85rem", color: "#374151", margin: "0 0 0.6rem" }}>
+        When a farmer adds a photo to a crop check, AI compares it with the approved library for that crop and shows how
+        well it matches. It only picks library entries, so the advice farmers see still comes from the library. The free
+        symptom check keeps working either way. Each photo check costs roughly US$0.02-0.03 and is charged to the
+        community - never to farmers.
+      </p>
+      {!settings.keyConfigured && (
+        <div style={{ background: "#fef3c7", color: "#92400e", borderRadius: 8, padding: "6px 10px", fontSize: "0.82rem", marginBottom: 10 }}>
+          Not available yet: the platform AI key has not been set up. Ask the super admin.
+        </div>
+      )}
+      <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.9rem", fontWeight: 600, marginBottom: 10 }}>
+        <input
+          type="checkbox"
+          checked={settings.enabled}
+          onChange={(e) => {
+            const enabled = e.target.checked;
+            run(() => setEnabled({ ...base, enabled }), enabled ? "AI photo check switched on" : "AI photo check switched off");
+          }}
+          style={{ width: 18, height: 18 }}
+        />
+        Use the AI photo check in this community
+      </label>
+
+      <div style={{ fontSize: "0.85rem", marginBottom: 4 }}>
+        This month ({settings.month}): <strong>{settings.checksThisMonth}</strong> of {settings.monthlyCap} checks · about{" "}
+        <strong>US${settings.estimatedUsdThisMonth.toFixed(2)}</strong>
+      </div>
+      <div style={{ height: 8, background: "#f3f4f6", borderRadius: 999, overflow: "hidden", marginBottom: 10 }}>
+        <div style={{ width: `${usedPct}%`, height: "100%", background: usedPct >= 100 ? "#991b1b" : BRAND }} />
+      </div>
+      {settings.checksThisMonth >= settings.monthlyCap && settings.enabled && (
+        <div style={{ fontSize: "0.8rem", color: "#991b1b", marginBottom: 8 }}>Limit reached: farmers get the free symptom check until next month.</div>
+      )}
+
+      {settings.canEditCap && (
+        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ fontSize: "0.85rem" }}>Monthly limit:</span>
+          <input
+            type="number"
+            min={0}
+            inputMode="numeric"
+            placeholder={String(settings.monthlyCap)}
+            value={capDraft}
+            onChange={(e) => setCapDraft(e.target.value)}
+            style={{ ...inputStyle, width: 110 }}
+          />
+          <button
+            onClick={async () => {
+              const n = Number(capDraft);
+              if (!Number.isFinite(n) || capDraft.trim() === "") return;
+              if (await run(() => setCap({ ...base, monthlyCap: n }), "Monthly limit saved")) setCapDraft("");
+            }}
+            style={buttonStyle(true)}
+          >
+            Save limit
+          </button>
+        </div>
+      )}
+      <div style={{ fontSize: "0.72rem", color: "#9ca3af", marginTop: 8 }}>Model: {settings.model}</div>
     </div>
   );
 }

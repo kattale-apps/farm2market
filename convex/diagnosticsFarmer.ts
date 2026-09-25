@@ -17,6 +17,7 @@ import type { QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { getUgandaTime } from "./utils";
 import { isDiagnosticsEnabled } from "./communityModules";
+import { isAiAvailable } from "./diagnosticsAi";
 import {
   DAILY_REPORT_LIMIT,
   healthLevel,
@@ -97,6 +98,8 @@ export const getCheckLibrary = query({
     return {
       enabled: true as const,
       communityName: access.community.name,
+      // Whether a photo will also get the community's paid AI check.
+      aiAvailable: await isAiAvailable(ctx, args.communityId),
       conditions: conditions
         .filter((c) => (c.symptomTags?.length ?? 0) > 0)
         .map((c) => ({
@@ -199,7 +202,7 @@ export const listMyReports = query({
       .take(20);
     const names = new Map<string, string>();
     for (const r of reports) {
-      for (const res of r.results) {
+      for (const res of [...r.results, ...(r.aiResults ?? [])]) {
         const key = String(res.conditionId);
         if (!names.has(key)) names.set(key, (await ctx.db.get(res.conditionId))?.name ?? "Unknown");
       }
@@ -212,6 +215,10 @@ export const listMyReports = query({
         healthLevel: r.healthLevel,
         checkedAt: r.checkedAt,
         feedback: r.feedback,
+        aiTopMatch:
+          r.aiStatus === "done" && r.aiResults?.[0]
+            ? { name: names.get(String(r.aiResults[0].conditionId)) ?? null, percent: r.aiResults[0].percent }
+            : null,
         topMatch: r.results[0] ? { name: names.get(String(r.results[0].conditionId)), percent: r.results[0].percent } : null,
       }));
   },

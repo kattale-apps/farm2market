@@ -2,8 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  aiHealthLevel,
   canFlag,
   canRemove,
+  cleanAiMatches,
+  ugandaMonthKey,
   CONFIDENT_MATCH_PERCENT,
   healthLevel,
   isValidSymptom,
@@ -130,4 +133,42 @@ test("the scorecard says healthy, likely, possible or unsure", () => {
 test("only known symptom keys are accepted", () => {
   assert.equal(isValidSymptom("wilting"), true);
   assert.equal(isValidSymptom("sad plant"), false);
+});
+
+// ─── AI photo check ────────────────────────────────────────────────────────
+
+test("AI matches outside the library are dropped, and percentages clamped and ranked", () => {
+  const out = cleanAiMatches(
+    [
+      { id: "made-up", percent: 99 },
+      { id: "a", percent: 40 },
+      { id: "b", percent: 140 },
+      { id: "a", percent: 90 },
+      { id: "c", percent: 0 },
+    ],
+    ["a", "b", "c"]
+  );
+  assert.deepEqual(out, [
+    { id: "b", percent: 100 },
+    { id: "a", percent: 40 },
+  ]);
+});
+
+test("an unusable photo is always 'not sure'", () => {
+  assert.equal(aiHealthLevel({ photoUsable: false, looksHealthy: true, matches: [{ id: "a", percent: 95 }] }), "unsure");
+});
+
+test("the AI scorecard uses the same thresholds, and healthy needs no real match", () => {
+  const m = (percent: number) => [{ id: "a", percent }];
+  assert.equal(aiHealthLevel({ photoUsable: true, looksHealthy: false, matches: m(STRONG_MATCH_PERCENT) }), "likely");
+  assert.equal(aiHealthLevel({ photoUsable: true, looksHealthy: false, matches: m(CONFIDENT_MATCH_PERCENT) }), "possible");
+  assert.equal(aiHealthLevel({ photoUsable: true, looksHealthy: true, matches: m(10) }), "healthy");
+  assert.equal(aiHealthLevel({ photoUsable: true, looksHealthy: true, matches: m(STRONG_MATCH_PERCENT) }), "likely");
+  assert.equal(aiHealthLevel({ photoUsable: true, looksHealthy: false, matches: [] }), "unsure");
+});
+
+test("the usage month follows the Uganda calendar", () => {
+  // 30 Sep 2026 23:30 in Kampala, stored as a getUgandaTime() value
+  assert.equal(ugandaMonthKey(Date.UTC(2026, 8, 30, 23, 30)), "2026-09");
+  assert.equal(ugandaMonthKey(Date.UTC(2026, 9, 1, 0, 5)), "2026-10");
 });

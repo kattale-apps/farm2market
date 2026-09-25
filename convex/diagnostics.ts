@@ -54,7 +54,7 @@ type Access = DiagnosticActor & {
  * community they administer that has Diagnostics switched on, and everything
  * they do is recorded against that community.
  */
-async function requireLibraryAccess(
+export async function requireLibraryAccess(
   ctx: QueryCtx | MutationCtx,
   adminId: Id<"users">,
   communityId: Id<"communities"> | undefined
@@ -805,6 +805,12 @@ export const listCommunityChecks = query({
             ? { name: await nameOf(r.results[0].conditionId), percent: r.results[0].percent }
             : null,
           feedback: r.feedback,
+          ai:
+            r.aiStatus === "done" && r.aiResults?.[0]
+              ? { name: await nameOf(r.aiResults[0].conditionId), percent: r.aiResults[0].percent, note: r.aiNote }
+              : r.aiStatus === "done" && r.aiPhotoUsable === false
+                ? { name: null, percent: 0, note: r.aiNote }
+                : null,
           checkedAt: r.checkedAt,
           photoUrl: r.photoStorageId ? await ctx.storage.getUrl(r.photoStorageId) : null,
         };

@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import CommunityTabBar from "@/app/components/CommunityTabBar";
@@ -111,6 +111,137 @@ const secondaryButton: React.CSSProperties = {
   border: "2px solid #d1d5db",
 };
 
+type LibraryCondition = {
+  id: string;
+  name: string;
+  underReview: boolean;
+  sourceName: string;
+  treatments: { kind: string; text: string; sourceName: string; sourceUrl?: string }[];
+  photos: { thumbUrl: string; sourceName: string; licence: string }[];
+};
+
+function MatchCard({
+  condition,
+  percent,
+  highlight,
+  caption,
+}: {
+  condition: LibraryCondition;
+  percent: number;
+  highlight: boolean;
+  caption: string;
+}) {
+  return (
+    <div style={{ background: "#fff", borderRadius: 14, padding: "0.9rem", marginBottom: 10, border: highlight ? `2px solid ${BRAND}` : "1px solid #e5e7eb" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+        <strong style={{ fontSize: "1.05rem" }}>{condition.name}</strong>
+        <span style={{ fontSize: "1.2rem", fontWeight: 800, color: BRAND }}>{percent}%</span>
+      </div>
+      <div style={{ height: 10, background: "#e5e7eb", borderRadius: 999, margin: "6px 0 2px", overflow: "hidden" }}>
+        <div style={{ width: `${percent}%`, height: "100%", background: BRAND }} />
+      </div>
+      <div style={{ fontSize: "0.72rem", color: "#6b7280", marginBottom: 8 }}>{caption}</div>
+      {condition.underReview && (
+        <div style={{ fontSize: "0.8rem", color: "#9a3412", marginBottom: 6 }}>⚠ This entry is being reviewed</div>
+      )}
+
+      {condition.photos.length > 0 && (
+        <>
+          <div style={{ fontSize: "0.85rem", fontWeight: 600, marginBottom: 4 }}>Does it look like this?</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 6, marginBottom: 8 }}>
+            {condition.photos.map((p) => (
+              <figure key={p.thumbUrl} style={{ margin: 0 }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={p.thumbUrl} alt={condition.name} loading="lazy" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 10 }} />
+                <figcaption style={{ fontSize: "0.65rem", color: "#6b7280" }}>
+                  {p.sourceName} · {p.licence}
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+        </>
+      )}
+
+      {TREATMENT_GROUPS.map((g) => {
+        const items = condition.treatments.filter((t) => t.kind === g.kind);
+        if (items.length === 0) return null;
+        return (
+          <div key={g.kind} style={{ marginTop: 6 }}>
+            <div style={{ fontSize: "0.9rem", fontWeight: 700 }}>
+              {g.emoji} {g.label}
+            </div>
+            {items.map((t, idx) => (
+              <div key={idx} style={{ fontSize: "0.9rem", margin: "2px 0 4px" }}>
+                {t.text}
+                <div style={{ fontSize: "0.68rem", color: "#6b7280" }}>
+                  Source:{" "}
+                  {t.sourceUrl ? (
+                    <a href={t.sourceUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#1d4ed8" }}>
+                      {t.sourceName}
+                    </a>
+                  ) : (
+                    t.sourceName
+                  )}
+                </div>
+              </div>
+            ))}
+            {g.kind === "chemical" && (
+              <div style={{ fontSize: "0.8rem", background: "#fef3c7", color: "#92400e", borderRadius: 8, padding: "4px 8px" }}>
+                ⚠️ Ask your agent or agro-dealer before buying. Wear protection and follow the label.
+              </div>
+            )}
+          </div>
+        );
+      })}
+      <div style={{ fontSize: "0.68rem", color: "#6b7280", marginTop: 6 }}>
+        About this: {condition.sourceName}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The community's paid AI photo check. It runs on the server after the check
+ * is saved; the result appears here when ready. Matches are library entries,
+ * so the advice shown is the library's.
+ */
+function AiPhotoCheck({
+  userId,
+  reportId,
+  conditions,
+}: {
+  userId: Id<"users">;
+  reportId: Id<"diagnosticReports">;
+  conditions: LibraryCondition[];
+}) {
+  const ai = useQuery(api.diagnosticsAi.getReportAi, { userId, reportId });
+  if (!ai || !ai.aiStatus || ai.aiStatus === "failed") return null;
+
+  return (
+    <div style={{ background: "#eef2ff", borderRadius: 16, padding: "0.9rem", margin: "12px 0" }}>
+      <div style={{ fontSize: "1.05rem", fontWeight: 800, color: "#3730a3", marginBottom: 6 }}>🤖 Photo check</div>
+      {ai.aiStatus === "queued" ? (
+        <div style={{ fontSize: "0.95rem", color: "#3730a3" }}>Checking your photo…</div>
+      ) : ai.aiPhotoUsable === false ? (
+        <div style={{ fontSize: "0.95rem" }}>📷 The photo is not clear. Take a closer photo of the sick part, in daylight.</div>
+      ) : (
+        <>
+          {ai.aiHealthLevel && (
+            <div style={{ fontSize: "0.95rem", fontWeight: 700, color: HEALTH[ai.aiHealthLevel].color, marginBottom: 8 }}>
+              {HEALTH[ai.aiHealthLevel].emoji} {HEALTH[ai.aiHealthLevel].title}
+            </div>
+          )}
+          {ai.aiResults.map((r, i) => {
+            const condition = conditions.find((c) => c.id === r.id);
+            if (!condition) return null;
+            return <MatchCard key={r.id} condition={condition} percent={r.percent} highlight={i === 0} caption="match with your photo" />;
+          })}
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function CropCheckPage() {
   const searchParams = useSearchParams();
   const communityId = searchParams.get("communityId") as Id<"communities"> | null;
@@ -130,6 +261,7 @@ export default function CropCheckPage() {
   const generateUploadUrl = useMutation(api.files.generateUploadUrl);
   const saveReport = useMutation(api.diagnosticsFarmer.saveReport);
   const setFeedback = useMutation(api.diagnosticsFarmer.setReportFeedback);
+  const requestAiCheck = useMutation(api.diagnosticsAi.requestAiCheck);
 
   const [step, setStep] = useState<Step>("crop");
   const [host, setHost] = useState<string>("");
@@ -149,7 +281,7 @@ export default function CropCheckPage() {
       if (draft.photo) {
         photoStorageId = (await uploadToConvex(await generateUploadUrl(), draft.photo)) as Id<"_storage">;
       }
-      return await saveReport({
+      const saved = await saveReport({
         userId: draft.userId as Id<"users">,
         communityId: draft.communityId as Id<"communities">,
         clientId: draft.clientId,
@@ -158,8 +290,17 @@ export default function CropCheckPage() {
         photoStorageId,
         checkedAt: draft.checkedAt,
       });
+      if (photoStorageId) {
+        // The server only queues it when the community switched AI on and is under its monthly limit.
+        try {
+          await requestAiCheck({ userId: draft.userId as Id<"users">, reportId: saved.reportId });
+        } catch {
+          // The symptom result stands on its own.
+        }
+      }
+      return saved;
     },
-    [generateUploadUrl, saveReport]
+    [generateUploadUrl, saveReport, requestAiCheck]
   );
 
   const refreshUnsent = useCallback(async () => {
@@ -446,72 +587,12 @@ export default function CropCheckPage() {
 
             {level !== "healthy" &&
               results.map((r, i) => (
-                <div key={r.id} style={{ background: "#fff", borderRadius: 14, padding: "0.9rem", marginBottom: 10, border: i === 0 ? `2px solid ${BRAND}` : "1px solid #e5e7eb" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-                    <strong style={{ fontSize: "1.05rem" }}>{r.condition.name}</strong>
-                    <span style={{ fontSize: "1.2rem", fontWeight: 800, color: BRAND }}>{r.percent}%</span>
-                  </div>
-                  <div style={{ height: 10, background: "#e5e7eb", borderRadius: 999, margin: "6px 0 2px", overflow: "hidden" }}>
-                    <div style={{ width: `${r.percent}%`, height: "100%", background: BRAND }} />
-                  </div>
-                  <div style={{ fontSize: "0.72rem", color: "#6b7280", marginBottom: 8 }}>match with the signs you tapped</div>
-                  {r.condition.underReview && (
-                    <div style={{ fontSize: "0.8rem", color: "#9a3412", marginBottom: 6 }}>⚠ This entry is being reviewed</div>
-                  )}
-
-                  {r.condition.photos.length > 0 && (
-                    <>
-                      <div style={{ fontSize: "0.85rem", fontWeight: 600, marginBottom: 4 }}>Does it look like this?</div>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 6, marginBottom: 8 }}>
-                        {r.condition.photos.map((p) => (
-                          <figure key={p.thumbUrl} style={{ margin: 0 }}>
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={p.thumbUrl} alt={r.condition.name} loading="lazy" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 10 }} />
-                            <figcaption style={{ fontSize: "0.65rem", color: "#6b7280" }}>
-                              {p.sourceName} · {p.licence}
-                            </figcaption>
-                          </figure>
-                        ))}
-                      </div>
-                    </>
-                  )}
-
-                  {TREATMENT_GROUPS.map((g) => {
-                    const items = r.condition.treatments.filter((t) => t.kind === g.kind);
-                    if (items.length === 0) return null;
-                    return (
-                      <div key={g.kind} style={{ marginTop: 6 }}>
-                        <div style={{ fontSize: "0.9rem", fontWeight: 700 }}>
-                          {g.emoji} {g.label}
-                        </div>
-                        {items.map((t, idx) => (
-                          <div key={idx} style={{ fontSize: "0.9rem", margin: "2px 0 4px" }}>
-                            {t.text}
-                            <div style={{ fontSize: "0.68rem", color: "#6b7280" }}>
-                              Source:{" "}
-                              {t.sourceUrl ? (
-                                <a href={t.sourceUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#1d4ed8" }}>
-                                  {t.sourceName}
-                                </a>
-                              ) : (
-                                t.sourceName
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                        {g.kind === "chemical" && (
-                          <div style={{ fontSize: "0.8rem", background: "#fef3c7", color: "#92400e", borderRadius: 8, padding: "4px 8px" }}>
-                            ⚠️ Ask your agent or agro-dealer before buying. Wear protection and follow the label.
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                  <div style={{ fontSize: "0.68rem", color: "#6b7280", marginTop: 6 }}>
-                    About this: {r.condition.sourceName}
-                  </div>
-                </div>
+                <MatchCard key={r.id} condition={r.condition} percent={r.percent} highlight={i === 0} caption="match with the signs you tapped" />
               ))}
+
+            {reportId && photo && library.aiAvailable && (
+              <AiPhotoCheck userId={userId} reportId={reportId} conditions={hostConditions} />
+            )}
 
             <div style={{ fontSize: "0.85rem", color: "#4b5563", textAlign: "center", margin: "8px 0 12px" }}>
               {saveState === "saving" && "Saving…"}
@@ -573,6 +654,11 @@ export default function CropCheckPage() {
                     <div style={{ fontSize: "0.9rem", fontWeight: 600 }}>
                       {hostInfo?.emoji} {hostInfo?.label ?? h.host} · {h.topMatch && h.healthLevel !== "unsure" ? `${h.topMatch.name} (${h.topMatch.percent}%)` : HEALTH[h.healthLevel].title}
                     </div>
+                    {h.aiTopMatch?.name && (
+                      <div style={{ fontSize: "0.78rem", color: "#3730a3" }}>
+                        🤖 {h.aiTopMatch.name} ({h.aiTopMatch.percent}%)
+                      </div>
+                    )}
                     <div style={{ fontSize: "0.72rem", color: "#6b7280" }}>{formatUgandaDateTime(h.checkedAt)}</div>
                   </div>
                 </div>

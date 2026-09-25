@@ -1105,7 +1105,7 @@ export default function CommunityCrmPage() {
         <div style={sectionStyle(SECTION_COLORS.captureLead, "1rem")}>
           <h2 style={{ marginTop: 0, fontSize: "1.05rem", color: SECTION_COLORS.captureLead }}>Capture New Lead (Intake)</h2>
           <p style={{ marginTop: 0, color: "#666", fontSize: "0.9rem" }}>
-            Add a client&apos;s contact and farm details to create a lead. New clients get a member account automatically (login: their phone number); agents fill in the rest of their profile once reached.
+            Add a client&apos;s contact, location and product details to create a lead. New clients get a member account automatically (login: their phone number); agents fill in the rest of their profile once reached.
           </p>
 
           <select

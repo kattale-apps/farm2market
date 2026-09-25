@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { getUgandaTime } from "./utils";
@@ -1129,5 +1129,105 @@ export const backfillCrmMemberNames = mutation({
       namesRestored,
       aliasSnapshotsCleared,
     };
+  },
+});
+
+/**
+ * Correct the details captured on a CRM submission after intake: the client's
+ * name, phone number, location, product and the farm-only fields.
+ *
+ * Everything except the phone number lives on the submission and changes only
+ * this lead. The phone number lives on the member's account and is their
+ * login, so it is changed there - and refused when another account already
+ * holds that number, since one phone number is one contact.
+ *
+ * Each argument left out is left as it is; an empty string clears the field.
+ */
+export const updateCrmSubmissionDetails = mutation({
+  args: {
+    responseId: v.id("crmFormResponses"),
+    requesterId: v.id("users"),
+    clientName: v.optional(v.string()),
+    phoneNumber: v.optional(v.string()),
+    district: v.optional(v.string()),
+    subCounty: v.optional(v.string()),
+    parish: v.optional(v.string()),
+    productName: v.optional(v.string()),
+    purchaseQuantity: v.optional(v.string()),
+    purchaseDate: v.optional(v.string()),
+    cropGrown: v.optional(v.string()),
+    monthOfPlanting: v.optional(v.string()),
+    pastSprayDates: v.optional(v.array(v.string())),
+    // null clears the appointment; leaving it out keeps it.
+    upcomingSprayScheduleAt: v.optional(v.union(v.number(), v.null())),
+  },
+  handler: async (ctx, args) => {
+    const response = await ctx.db.get(args.responseId);
+    if (!response) throw new Error("CRM submission not found");
+
+    await requireCrmSupervisorAccess(ctx, args.requesterId, response.communityId);
+
+    const text = (value: string | undefined) => {
+      const trimmed = String(value ?? "").trim();
+      return trimmed.length > 0 ? trimmed : undefined;
+    };
+
+    const patch: Record<string, any> = {};
+    const textFields = [
+      "clientName", "district", "subCounty", "parish", "productName",
+      "purchaseQuantity", "purchaseDate", "cropGrown", "monthOfPlanting",
+    ] as const;
+    for (const field of textFields) {
+      if (args[field] !== undefined) patch[field] = text(args[field]);
+    }
+    if (args.pastSprayDates !== undefined) {
+      const dates = args.pastSprayDates.map((d) => d.trim()).filter(Boolean);
+      patch.pastSprayDates = dates.length > 0 ? dates : undefined;
+    }
+    if (args.upcomingSprayScheduleAt !== undefined) {
+      patch.upcomingSprayScheduleAt = args.upcomingSprayScheduleAt ?? undefined;
+    }
+
+    let phoneChanged = false;
+    if (args.phoneNumber !== undefined) {
+      const member = await ctx.db.get(response.memberId);
+      if (!member) throw new ConvexError("This lead's member account no longer exists");
+
+      const newPhone = normalizePhoneNumber(args.phoneNumber);
+      const oldPhone = member.phoneNumber ? normalizePhoneNumber(member.phoneNumber) : "";
+
+      if (newPhone !== oldPhone) {
+        if (!/^256\d{9}$/.test(newPhone)) {
+          throw new ConvexError("Enter a valid Ugandan phone number, e.g. 0772123456");
+        }
+        if (member.role === "admin") {
+          throw new ConvexError("This account is an administrator; its phone number cannot be changed from the CRM");
+        }
+
+        const holders = await findUsersByPhone(ctx, newPhone);
+        if (holders.some((u: any) => String(u._id) !== String(member._id))) {
+          throw new ConvexError(
+            "Another account already uses this phone number. One phone number is one contact, so it cannot be given to this lead as well."
+          );
+        }
+
+        const memberPatch: Record<string, any> = { phoneNumber: newPhone };
+        // CRM-created accounts sign in with their phone number as the password.
+        // Keep that true after the number changes; a password the member chose
+        // themselves is left alone.
+        if (oldPhone && member.passwordHash === simpleHash(oldPhone)) {
+          memberPatch.passwordHash = simpleHash(newPhone);
+        }
+        await ctx.db.patch(member._id, memberPatch);
+        phoneChanged = true;
+      }
+    }
+
+    if (Object.keys(patch).length > 0 || phoneChanged) {
+      patch.updatedAt = getUgandaTime();
+      await ctx.db.patch(args.responseId, patch);
+    }
+
+    return { success: true, phoneChanged };
   },
 });

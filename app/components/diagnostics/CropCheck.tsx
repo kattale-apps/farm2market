@@ -127,11 +127,13 @@ function MatchCard({
   percent,
   highlight,
   caption,
+  forAnimals,
 }: {
   condition: LibraryCondition;
   percent: number;
   highlight: boolean;
   caption: string;
+  forAnimals: boolean;
 }) {
   return (
     <div style={{ background: "#fff", borderRadius: 14, padding: "0.9rem", marginBottom: 10, border: highlight ? `2px solid ${BRAND}` : "1px solid #e5e7eb" }}>
@@ -170,7 +172,7 @@ function MatchCard({
         return (
           <div key={g.kind} style={{ marginTop: 6 }}>
             <div style={{ fontSize: "0.9rem", fontWeight: 700 }}>
-              {g.emoji} {g.label}
+              {g.emoji} {forAnimals && g.kind === "chemical" ? "Medicines & sprays" : g.label}
             </div>
             {items.map((t, idx) => (
               <div key={idx} style={{ fontSize: "0.9rem", margin: "2px 0 4px" }}>
@@ -189,7 +191,9 @@ function MatchCard({
             ))}
             {g.kind === "chemical" && (
               <div style={{ fontSize: "0.8rem", background: "#fef3c7", color: "#92400e", borderRadius: 8, padding: "4px 8px" }}>
-                ⚠️ Ask your agent or agro-dealer before buying. Wear protection and follow the label.
+                {forAnimals
+                  ? "⚠️ Ask a vet before buying or giving any medicine. Follow the label."
+                  : "⚠️ Ask your agent or agro-dealer before buying. Wear protection and follow the label."}
               </div>
             )}
           </div>
@@ -211,10 +215,12 @@ function AiPhotoCheck({
   userId,
   reportId,
   conditions,
+  forAnimals,
 }: {
   userId: Id<"users">;
   reportId: Id<"diagnosticReports">;
   conditions: LibraryCondition[];
+  forAnimals: boolean;
 }) {
   const ai = useQuery(api.diagnosticsAi.getReportAi, { userId, reportId });
   if (!ai || !ai.aiStatus || ai.aiStatus === "failed") return null;
@@ -236,7 +242,7 @@ function AiPhotoCheck({
           {ai.aiResults.map((r, i) => {
             const condition = conditions.find((c) => c.id === r.id);
             if (!condition) return null;
-            return <MatchCard key={r.id} condition={condition} percent={r.percent} highlight={i === 0} caption="match with your photo" />;
+            return <MatchCard key={r.id} condition={condition} percent={r.percent} highlight={i === 0} caption="match with your photo" forAnimals={forAnimals} />;
           })}
         </>
       )}
@@ -605,11 +611,11 @@ export default function CropCheck({
 
             {level !== "healthy" &&
               results.map((r, i) => (
-                <MatchCard key={r.id} condition={r.condition} percent={r.percent} highlight={i === 0} caption="match with the signs you tapped" />
+                <MatchCard key={r.id} condition={r.condition} percent={r.percent} highlight={i === 0} caption="match with the signs you tapped" forAnimals={isAnimals} />
               ))}
 
             {reportId && photo && library.aiAvailable && (
-              <AiPhotoCheck userId={userId} reportId={reportId} conditions={hostConditions} />
+              <AiPhotoCheck userId={userId} reportId={reportId} conditions={hostConditions} forAnimals={isAnimals} />
             )}
 
             <div style={{ fontSize: "0.85rem", color: "#4b5563", textAlign: "center", margin: "8px 0 12px" }}>

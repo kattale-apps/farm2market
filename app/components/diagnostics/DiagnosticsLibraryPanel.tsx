@@ -717,6 +717,12 @@ function AddTreatmentForm({
           </button>
         ))}
       </div>
+      {form.kind === "chemical" && (
+        <p style={{ fontSize: "0.78rem", color: "#92400e", background: "#fef3c7", borderRadius: 6, padding: 6, margin: "0 0 8px" }}>
+          Name the active ingredient, not a brand. Brands are only shown to farmers once a verified pesticide supplier
+          sells them in the community.
+        </p>
+      )}
       <div style={{ display: "grid", gap: 8 }}>
         <textarea placeholder="What should the farmer do? Keep it short." value={form.text} onChange={(e) => set({ text: e.target.value })} rows={3} style={inputStyle} />
         <input placeholder="Source name" value={form.sourceName} onChange={(e) => set({ sourceName: e.target.value })} style={inputStyle} />

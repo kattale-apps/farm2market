@@ -2986,6 +2986,7 @@ export default defineSchema({
     kind: v.union(v.literal("pest"), v.literal("disease"), v.literal("deficiency"), v.literal("other")),
     hosts: v.array(v.string()), // Crop keys from DIAGNOSTIC_HOSTS
     symptoms: v.string(),
+    symptomTags: v.optional(v.array(v.string())), // Keys from SYMPTOMS; what the farmer check matches against
     sourceName: v.string(),
     sourceUrl: v.optional(v.string()),
     status: v.union(v.literal("pending_review"), v.literal("active"), v.literal("rejected"), v.literal("removed")),
@@ -3062,6 +3063,26 @@ export default defineSchema({
   })
     .index("by_status", ["status"])
     .index("by_item_status", ["itemId", "status"]),
+
+  // A farmer's crop check. Matching runs on the phone (it works offline), so
+  // results are saved as the farmer saw them; the server re-checks the ranking.
+  diagnosticReports: defineTable({
+    farmerId: v.id("users"),
+    communityId: v.id("communities"),
+    clientId: v.string(), // Made on the phone; stops an offline retry saving twice
+    host: v.string(),
+    symptomTags: v.array(v.string()),
+    photoStorageId: v.optional(v.id("_storage")),
+    results: v.array(v.object({ conditionId: v.id("diagnosticConditions"), percent: v.number() })),
+    healthLevel: v.union(v.literal("healthy"), v.literal("possible"), v.literal("likely"), v.literal("unsure")),
+    method: v.literal("symptoms"), // Paid photo matching will add another method later
+    checkedAt: v.number(), // getUgandaTime() when the farmer did the check (may be before it synced)
+    savedAt: v.number(), // getUgandaTime()
+    feedback: v.optional(v.union(v.literal("right"), v.literal("wrong"), v.literal("unsure"))),
+  })
+    .index("by_farmer_saved", ["farmerId", "savedAt"])
+    .index("by_farmer_client", ["farmerId", "clientId"])
+    .index("by_community_saved", ["communityId", "savedAt"]),
 
   diagnosticAuditLog: defineTable({
     action: v.string(), // added | approved | rejected | flagged | flag_dismissed | removed | restored | module_enabled | module_disabled

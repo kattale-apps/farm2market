@@ -23,6 +23,7 @@ import {
   canReview,
   flagKey,
   isValidHost,
+  isValidSymptom,
   MAX_DIAGNOSTIC_IMAGE_BYTES,
   normalizeSourceUrl,
   type DiagnosticActor,
@@ -130,6 +131,12 @@ function optionalText(value: string | undefined, max = 500): string | undefined 
   return trimmed.slice(0, max);
 }
 
+function cleanSymptomTags(tags: string[]): string[] {
+  const unique = Array.from(new Set(tags));
+  if (!unique.every(isValidSymptom)) throw new Error("Unknown symptom");
+  return unique;
+}
+
 function contributionFields(access: Access) {
   return {
     status: "pending_review" as const,
@@ -197,6 +204,7 @@ export const listConditions = query({
         hosts: c.hosts,
         status: c.status,
         openFlagCount: c.openFlagCount ?? 0,
+        symptomTagCount: c.symptomTags?.length ?? 0,
       }));
   },
 });
@@ -403,11 +411,13 @@ export const addCondition = mutation({
     kind: v.union(v.literal("pest"), v.literal("disease"), v.literal("deficiency"), v.literal("other")),
     hosts: v.array(v.string()),
     symptoms: v.string(),
+    symptomTags: v.optional(v.array(v.string())),
     sourceName: v.string(),
     sourceUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const access = await requireLibraryAccess(ctx, args.adminId, args.communityId);
+    const symptomTags = cleanSymptomTags(args.symptomTags ?? []);
     const hosts = Array.from(new Set(args.hosts));
     if (hosts.length === 0) throw new Error("Pick at least one crop");
     if (!hosts.every(isValidHost)) throw new Error("Unknown crop");
@@ -418,6 +428,7 @@ export const addCondition = mutation({
       kind: args.kind,
       hosts,
       symptoms: requireText(args.symptoms, "Symptoms"),
+      symptomTags,
       sourceName: requireText(args.sourceName, "Source", 200),
       sourceUrl: normalizeSourceUrl(args.sourceUrl),
       ...contributionFields(access),
@@ -689,6 +700,41 @@ export const restoreItem = mutation({
       itemType: args.itemType,
       itemId: args.itemId,
       conditionId: conditionIdOf(args.itemType, item),
+    });
+    return { success: true };
+  },
+});
+
+/**
+ * Set the symptoms the farmer check matches an entry on. A super admin can do
+ * this at any time (entries added before tags existed need it); a community
+ * admin only while the entry is still waiting for review, after which they
+ * flag it instead. Every change is logged with the old and new lists.
+ */
+export const setSymptomTags = mutation({
+  args: {
+    adminId: v.id("users"),
+    communityId: v.optional(v.id("communities")),
+    conditionId: v.id("diagnosticConditions"),
+    symptomTags: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const access = await requireLibraryAccess(ctx, args.adminId, args.communityId);
+    const condition = await ctx.db.get(args.conditionId);
+    if (!condition || condition.status === "removed" || condition.status === "rejected") {
+      throw new Error("This pest/disease is no longer in the library");
+    }
+    if (!access.isSuperAdmin && condition.status !== "pending_review") {
+      throw new Error("Approved entries can only be changed by a super admin. Flag it instead.");
+    }
+    const symptomTags = cleanSymptomTags(args.symptomTags);
+    await ctx.db.patch(args.conditionId, { symptomTags });
+    await log(ctx, access, {
+      action: "symptoms_changed",
+      itemType: "condition",
+      itemId: String(args.conditionId),
+      conditionId: args.conditionId,
+      note: `${(condition.symptomTags ?? []).join(", ") || "none"} → ${symptomTags.join(", ") || "none"}`,
     });
     return { success: true };
   },

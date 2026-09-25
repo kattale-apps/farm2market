@@ -32,18 +32,26 @@ const LIBRARY_READ_LIMIT = 500;
 const PHOTOS_PER_CONDITION = 2;
 
 /**
- * Null when the user cannot use the check in this community. For now the
- * crop check is for farmers only, like the Farm Needs tab it sits in.
+ * Any farmer can use the crop and animal checks (owner's decision,
+ * 2026-09-25); only the library admin screens and contributions are limited
+ * to communities with Diagnostics switched on. Null for non-farmers.
  */
-async function farmerAccess(ctx: QueryCtx, userId: Id<"users">, communityId: Id<"communities">) {
-  const [user, community] = await Promise.all([ctx.db.get(userId), ctx.db.get(communityId)]);
-  if (!user || user.role !== "farmer" || !community || !isDiagnosticsEnabled(community as any)) return null;
+async function requireFarmer(ctx: QueryCtx, userId: Id<"users">) {
+  const user = await ctx.db.get(userId);
+  if (!user || user.role !== "farmer") return null;
+  return user;
+}
+
+/**
+ * A check may be recorded against a community only by a member of it, so
+ * nobody can add checks to another community's figures.
+ */
+async function isMember(ctx: QueryCtx, userId: Id<"users">, communityId: Id<"communities">) {
   const membership = await ctx.db
     .query("communityMemberships")
     .withIndex("by_community_user", (q) => q.eq("communityId", communityId).eq("userId", userId))
     .first();
-  if (!membership) return null;
-  return { user, community };
+  return !!membership;
 }
 
 async function activeConditions(ctx: QueryCtx): Promise<Doc<"diagnosticConditions">[]> {
@@ -59,10 +67,17 @@ async function activeConditions(ctx: QueryCtx): Promise<Doc<"diagnosticCondition
  * included, and at most two small thumbnails per entry.
  */
 export const getCheckLibrary = query({
-  args: { userId: v.id("users"), communityId: v.id("communities") },
+  args: { userId: v.id("users"), communityId: v.optional(v.id("communities")) },
   handler: async (ctx, args) => {
-    const access = await farmerAccess(ctx, args.userId, args.communityId);
-    if (!access) return { enabled: false as const };
+    const farmer = await requireFarmer(ctx, args.userId);
+    if (!farmer) return { enabled: false as const };
+    // The paid AI photo check belongs to a community that switched it on.
+    const community = args.communityId ? await ctx.db.get(args.communityId) : null;
+    const aiAvailable =
+      !!community &&
+      isDiagnosticsEnabled(community as any) &&
+      (await isMember(ctx, args.userId, community._id)) &&
+      (await isAiAvailable(ctx, community._id));
 
     const conditions = await activeConditions(ctx);
     const activeIds = new Set(conditions.map((c) => String(c._id)));
@@ -100,9 +115,9 @@ export const getCheckLibrary = query({
 
     return {
       enabled: true as const,
-      communityName: access.community.name,
+      communityName: community?.name ?? null,
       // Whether a photo will also get the community's paid AI check.
-      aiAvailable: await isAiAvailable(ctx, args.communityId),
+      aiAvailable,
       conditions: conditions
         .filter((c) => (c.symptomTags?.length ?? 0) > 0)
         .map((c) => ({
@@ -132,7 +147,7 @@ function ugandaDayStart(): number {
 export const saveReport = mutation({
   args: {
     userId: v.id("users"),
-    communityId: v.id("communities"),
+    communityId: v.optional(v.id("communities")),
     clientId: v.string(),
     host: v.string(),
     symptomTags: v.array(v.string()),
@@ -140,8 +155,10 @@ export const saveReport = mutation({
     checkedAt: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const access = await farmerAccess(ctx, args.userId, args.communityId);
-    if (!access) throw new Error("Crop check is not available in this community");
+    const farmer = await requireFarmer(ctx, args.userId);
+    if (!farmer) throw new Error("Crop and animal checks are for farmers");
+    const communityId =
+      args.communityId && (await isMember(ctx, args.userId, args.communityId)) ? args.communityId : undefined;
     if (!isValidHost(args.host)) throw new Error("Unknown crop");
     const symptomTags = Array.from(new Set(args.symptomTags));
     if (!symptomTags.every(isValidSymptom)) throw new Error("Unknown symptom");
@@ -178,7 +195,7 @@ export const saveReport = mutation({
 
     const reportId = await ctx.db.insert("diagnosticReports", {
       farmerId: args.userId,
-      communityId: args.communityId,
+      communityId,
       clientId,
       host: args.host,
       symptomTags,
@@ -193,11 +210,12 @@ export const saveReport = mutation({
   },
 });
 
+/** The farmer's own recent checks, wherever they did them. */
 export const listMyReports = query({
-  args: { userId: v.id("users"), communityId: v.id("communities") },
+  args: { userId: v.id("users"), communityId: v.optional(v.id("communities")) },
   handler: async (ctx, args) => {
-    const access = await farmerAccess(ctx, args.userId, args.communityId);
-    if (!access) return [];
+    const farmer = await requireFarmer(ctx, args.userId);
+    if (!farmer) return [];
     const reports = await ctx.db
       .query("diagnosticReports")
       .withIndex("by_farmer_saved", (q) => q.eq("farmerId", args.userId))
@@ -210,9 +228,7 @@ export const listMyReports = query({
         if (!names.has(key)) names.set(key, (await ctx.db.get(res.conditionId))?.name ?? "Unknown");
       }
     }
-    return reports
-      .filter((r) => String(r.communityId) === String(args.communityId))
-      .map((r) => ({
+    return reports.map((r) => ({
         _id: r._id,
         host: r.host,
         healthLevel: r.healthLevel,

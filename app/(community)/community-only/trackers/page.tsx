@@ -164,7 +164,8 @@ export default function TrackersHubPage() {
         )}
 
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-          {communityInfo?.diagnosticsEnabled === true && user?.role === "farmer" &&
+          {/* Any farmer can use the checks; the library itself is only for Diagnostics communities. */}
+          {user?.role === "farmer" &&
             ([
               { kind: "crops", emoji: "🌱", title: "Check my crops", hint: "Find pests, diseases and missing nutrients" },
               { kind: "animals", emoji: "🐄", title: "Check my animals", hint: "Find animal diseases and pests" },

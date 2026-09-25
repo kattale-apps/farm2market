@@ -23,7 +23,7 @@ const BRAND = "#166534";
 const BRAND_BG = "#f0fdf4";
 const FONT = '"Montserrat", sans-serif';
 
-type View = "library" | "review" | "flags" | "checks" | "log" | "addCondition";
+type View = "library" | "review" | "flags" | "checks" | "import" | "log" | "addCondition";
 type ItemType = "condition" | "image" | "treatment";
 type Status = "pending_review" | "active" | "rejected" | "removed";
 
@@ -298,6 +298,7 @@ export function DiagnosticsLibraryPanel({
     { key: "review", label: `✅ Review${reviewQueue?.length ? ` (${reviewQueue.length})` : ""}` },
     { key: "flags", label: `🚩 Flags${openFlags?.length ? ` (${openFlags.length})` : ""}` },
     { key: "checks", label: "🌾 Farmer checks" },
+    ...(isSuperAdmin ? [{ key: "import" as View, label: "🌐 Import" }] : []),
     { key: "log", label: "🕘 Log" },
   ];
 
@@ -368,6 +369,8 @@ export function DiagnosticsLibraryPanel({
         <FlagList base={base} rows={openFlags} isSuperAdmin={isSuperAdmin} run={run} onOpen={setOpenConditionId} />
       ) : view === "checks" ? (
         <FarmerChecks base={base} />
+      ) : view === "import" && isSuperAdmin ? (
+        <ImportSettings adminId={userId} run={run} />
       ) : (
         <AuditLog base={base} />
       )}
@@ -1129,6 +1132,9 @@ const ACTION_LABEL: Record<string, string> = {
   module_enabled: "enabled Diagnostics for",
   module_disabled: "disabled Diagnostics for",
   symptoms_changed: "changed symptoms on",
+  imported: "imported",
+  import_enabled: "switched on the weekly photo import",
+  import_disabled: "switched off the weekly photo import",
 };
 
 function AuditLog({ base }: { base: Base }) {
@@ -1280,6 +1286,49 @@ function FarmerChecks({ base }: { base: Base }) {
           ))}
         </>
       )}
+    </div>
+  );
+}
+
+/** Super admin only: the weekly iNaturalist photo import. */
+function ImportSettings({ adminId, run }: { adminId: Id<"users">; run: Run }) {
+  const settings = useQuery(api.diagnosticsImport.getImportSettings, { adminId });
+  const setEnabled = useMutation(api.diagnosticsImport.setImportEnabled);
+  const runNow = useMutation(api.diagnosticsImport.runImportNow);
+  if (settings === undefined) return <p style={{ color: "#6b7280" }}>Loading…</p>;
+
+  return (
+    <div style={cardStyle}>
+      <h3 style={{ margin: "0 0 0.4rem", fontSize: "1rem" }}>Weekly photo import</h3>
+      <p style={{ fontSize: "0.85rem", color: "#374151", margin: "0 0 0.6rem" }}>
+        Every Monday morning, entries with a scientific name and fewer than 4 photos get up to 2 research-grade photos
+        from iNaturalist. Only openly licensed photos (CC0, CC BY, CC BY-SA) are taken, each credited to its
+        photographer with a link to the observation. They go to the review queue like any other contribution.
+        Entries without a scientific name (such as nutrient deficiencies) are skipped.
+      </p>
+      <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.9rem", fontWeight: 600, marginBottom: 10 }}>
+        <input
+          type="checkbox"
+          checked={settings.enabled}
+          onChange={(e) => {
+            const enabled = e.target.checked;
+            run(() => setEnabled({ adminId, enabled }), enabled ? "Weekly import switched on" : "Weekly import switched off");
+          }}
+          style={{ width: 18, height: 18 }}
+        />
+        Import photos every week
+      </label>
+      <button
+        onClick={() => run(() => runNow({ adminId }), "Import started. New photos will appear in the review queue shortly.")}
+        style={buttonStyle()}
+      >
+        ▶ Run now
+      </button>
+      <div style={{ fontSize: "0.78rem", color: "#4b5563", marginTop: 10 }}>
+        {settings.lastRunAt
+          ? `Last run ${formatUgandaDateTime(settings.lastRunAt)}: ${settings.lastRunSummary ?? ""}`
+          : "Not run yet."}
+      </div>
     </div>
   );
 }

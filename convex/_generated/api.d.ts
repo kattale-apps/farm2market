@@ -42,6 +42,7 @@ import type * as crons from "../crons.js";
 import type * as demoData from "../demoData.js";
 import type * as diagnostics from "../diagnostics.js";
 import type * as diagnosticsFarmer from "../diagnosticsFarmer.js";
+import type * as diagnosticsImport from "../diagnosticsImport.js";
 import type * as diagnosticsRules from "../diagnosticsRules.js";
 import type * as errors from "../errors.js";
 import type * as errors_index from "../errors/index.js";
@@ -158,6 +159,7 @@ declare const fullApi: ApiFromModules<{
   demoData: typeof demoData;
   diagnostics: typeof diagnostics;
   diagnosticsFarmer: typeof diagnosticsFarmer;
+  diagnosticsImport: typeof diagnosticsImport;
   diagnosticsRules: typeof diagnosticsRules;
   errors: typeof errors;
   "errors/index": typeof errors_index;

@@ -2987,6 +2987,7 @@ export default defineSchema({
     hosts: v.array(v.string()), // Crop keys from DIAGNOSTIC_HOSTS
     symptoms: v.string(),
     symptomTags: v.optional(v.array(v.string())), // Keys from SYMPTOMS; what the farmer check matches against
+    lastImportAt: v.optional(v.number()), // getUgandaTime() of the last weekly photo import for this entry
     sourceName: v.string(),
     sourceUrl: v.optional(v.string()),
     status: v.union(v.literal("pending_review"), v.literal("active"), v.literal("rejected"), v.literal("removed")),
@@ -3010,6 +3011,7 @@ export default defineSchema({
     sourceName: v.string(),
     sourceUrl: v.optional(v.string()),
     licence: v.string(), // e.g. "CC BY 4.0", "Public domain", "Contributed by community"
+    externalRef: v.optional(v.string()), // e.g. "inat:photo:123" for imported photos; stops importing the same photo twice
     status: v.union(v.literal("pending_review"), v.literal("active"), v.literal("rejected"), v.literal("removed")),
     addedBy: v.id("users"),
     addedByCommunityId: v.optional(v.id("communities")), // Unset when a super admin adds it as the platform
@@ -3023,7 +3025,8 @@ export default defineSchema({
     openFlagCount: v.optional(v.number()), // Open flags, one per community; drives the "being reviewed" badge
   })
     .index("by_condition", ["conditionId"])
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"])
+    .index("by_external_ref", ["externalRef"]),
 
   diagnosticTreatments: defineTable({
     conditionId: v.id("diagnosticConditions"),
@@ -3083,6 +3086,17 @@ export default defineSchema({
     .index("by_farmer_saved", ["farmerId", "savedAt"])
     .index("by_farmer_client", ["farmerId", "clientId"])
     .index("by_community_saved", ["communityId", "savedAt"]),
+
+  // Single row: the weekly photo import. actorId is the super admin who
+  // switched it on; imported photos are recorded as added by them.
+  diagnosticImportSettings: defineTable({
+    enabled: v.boolean(),
+    actorId: v.id("users"),
+    entriesPerRun: v.number(),
+    lastRunAt: v.optional(v.number()), // getUgandaTime()
+    lastRunSummary: v.optional(v.string()),
+    updatedAt: v.number(), // getUgandaTime()
+  }),
 
   diagnosticAuditLog: defineTable({
     action: v.string(), // added | approved | rejected | flagged | flag_dismissed | removed | restored | module_enabled | module_disabled

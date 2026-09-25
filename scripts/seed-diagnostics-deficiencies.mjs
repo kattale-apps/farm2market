@@ -11,8 +11,16 @@
  * they are logged and must be approved like any other contribution. Entries
  * whose name already exists are skipped, so the script is safe to re-run.
  *
+ * Every entry also gets the Bio Farm treatment: the platform's official
+ * fertilizer partner, recommended on all nutrient deficiencies for now (owner's
+ * decision, 2026-09-25), described in the manufacturer's own words.
+ *
  * Usage:
- *   node scripts/seed-diagnostics-deficiencies.mjs --url <CONVEX_URL> --admin <superAdminUserId>
+ *   node scripts/seed-diagnostics-deficiencies.mjs --url <CONVEX_URL> --admin <superAdminUserId> [--approve]
+ *
+ * --approve  approves everything still waiting for review on these entries
+ *            (entry, photos, treatments) as that super admin, so farmers see
+ *            them. Each approval is written to the audit log.
  */
 
 import { readFile } from "node:fs/promises";
@@ -32,6 +40,15 @@ const TREATMENT_SOURCE = {
 const PHOTO_SOURCE = {
   sourceName: "Deficiency Chart of Micronutrients (supplied by farm2market super admin; original publisher not identified)",
   licence: "Unverified - supplied by admin",
+};
+const BIO_FARM_TREATMENT = {
+  kind: "organic",
+  text:
+    "Bio-Farm Organic Liquid Fertilizer (official partner): a foliar spray with 20 kinds of natural amino acids and NPK, " +
+    "made with nanotechnology to help the crop take up nutrients. Mix 50 ml in 20 litres of water and spray in the early morning. " +
+    "Use it together with adding the missing nutrient.",
+  sourceName: "Unode Agro - Bio-Farm Organic Liquid Fertilizer",
+  sourceUrl: "https://www.unodeagro.com/biofarm",
 };
 const ALL_CROPS = ["maize", "cassava", "banana", "coffee", "beans"];
 
@@ -182,6 +199,36 @@ async function main() {
       ...TREATMENT_SOURCE,
     });
     console.log(`added ${d.name}`);
+  }
+
+  // Bio Farm treatment and (optionally) approval, for every deficiency entry.
+  const wanted = new Set(DEFICIENCIES.map((d) => d.name.toLowerCase()));
+  const entries = [];
+  for (const status of ["pending_review", "active"]) {
+    const rows = await client.query(api.diagnostics.listConditions, { adminId, status });
+    rows.filter((r) => wanted.has(r.name.toLowerCase())).forEach((r) => entries.push(r));
+  }
+  for (const entry of entries) {
+    let detail = await client.query(api.diagnostics.getCondition, { adminId, conditionId: entry._id });
+    if (!detail) continue;
+    const hasBioFarm = detail.treatments.some(
+      (t) => t.sourceUrl === BIO_FARM_TREATMENT.sourceUrl && t.status !== "removed" && t.status !== "rejected"
+    );
+    if (!hasBioFarm) {
+      await client.mutation(api.diagnostics.addTreatment, { adminId, conditionId: entry._id, ...BIO_FARM_TREATMENT });
+      console.log(`bio farm  ${entry.name}`);
+      detail = await client.query(api.diagnostics.getCondition, { adminId, conditionId: entry._id });
+    }
+    if (!process.argv.includes("--approve") || !detail) continue;
+    const pending = [
+      ...(detail.condition.status === "pending_review" ? [{ itemType: "condition", itemId: String(detail.condition._id) }] : []),
+      ...detail.images.filter((i) => i.status === "pending_review").map((i) => ({ itemType: "image", itemId: String(i._id) })),
+      ...detail.treatments.filter((t) => t.status === "pending_review").map((t) => ({ itemType: "treatment", itemId: String(t._id) })),
+    ];
+    for (const item of pending) {
+      await client.mutation(api.diagnostics.reviewItem, { adminId, ...item, decision: "approve", note: "Deficiency chart go-live" });
+    }
+    if (pending.length) console.log(`approved  ${entry.name} (${pending.length} items)`);
   }
 }
 

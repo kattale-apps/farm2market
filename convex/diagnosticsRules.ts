@@ -14,19 +14,35 @@
 export type DiagnosticStatus = "pending_review" | "active" | "rejected" | "removed";
 export type DiagnosticItemType = "condition" | "image" | "treatment";
 
+export type HostGroup = "crop" | "livestock";
+
 /**
- * Crops the library starts with. Livestock comes later, and more crops can be
- * added here without a schema change because hosts are stored as plain text.
+ * Crops and animals the library covers. More can be added here without a
+ * schema change because hosts are stored as plain text. Keys are stored, so
+ * never rename one.
  */
 export const DIAGNOSTIC_HOSTS = [
-  { key: "maize", label: "Maize", emoji: "🌽" },
-  { key: "cassava", label: "Cassava", emoji: "🌿" },
-  { key: "banana", label: "Banana", emoji: "🍌" },
-  { key: "coffee", label: "Coffee", emoji: "☕" },
-  { key: "beans", label: "Beans", emoji: "🫘" },
+  { key: "maize", label: "Maize", emoji: "🌽", group: "crop" },
+  { key: "cassava", label: "Cassava", emoji: "🌿", group: "crop" },
+  { key: "banana", label: "Banana", emoji: "🍌", group: "crop" },
+  { key: "coffee", label: "Coffee", emoji: "☕", group: "crop" },
+  { key: "beans", label: "Beans", emoji: "🫘", group: "crop" },
+  { key: "cattle", label: "Cattle", emoji: "🐄", group: "livestock" },
+  { key: "goats", label: "Goats", emoji: "🐐", group: "livestock" },
+  { key: "sheep", label: "Sheep", emoji: "🐑", group: "livestock" },
+  { key: "pigs", label: "Pigs", emoji: "🐖", group: "livestock" },
+  { key: "chickens", label: "Chickens", emoji: "🐔", group: "livestock" },
 ] as const;
 
 export const DIAGNOSTIC_HOST_KEYS: string[] = DIAGNOSTIC_HOSTS.map((h) => h.key);
+
+export function hostsInGroup(group: HostGroup) {
+  return DIAGNOSTIC_HOSTS.filter((h) => h.group === group);
+}
+
+export function hostGroup(key: string): HostGroup | undefined {
+  return DIAGNOSTIC_HOSTS.find((h) => h.key === key)?.group;
+}
 
 export const FLAG_REASONS = [
   { key: "wrong_match", label: "Wrong pest/disease" },
@@ -124,29 +140,51 @@ export function flagKey(actor: DiagnosticActor, communityId: string | undefined)
  * Keys are stored, so never rename one - add a new key instead.
  */
 export const SYMPTOMS = [
-  { key: "leaf_yellow", label: "Yellow leaves", emoji: "🟡" },
-  { key: "leaf_spots", label: "Spots on leaves", emoji: "🟤" },
-  { key: "leaf_holes", label: "Holes in leaves", emoji: "🕳️" },
-  { key: "leaf_curl", label: "Curled leaves", emoji: "🌀" },
-  { key: "leaf_mosaic", label: "Patchy light & dark leaves", emoji: "🧩" },
-  { key: "leaf_streaks", label: "Lines or streaks on leaves", emoji: "〰️" },
-  { key: "white_powder", label: "White powder or mould", emoji: "⚪" },
-  { key: "dry_leaves", label: "Dry or burnt leaves", emoji: "🍂" },
-  { key: "wilting", label: "Plant drooping / wilting", emoji: "🥀" },
-  { key: "stunted", label: "Plant small / not growing", emoji: "📏" },
-  { key: "stem_damage", label: "Stem damaged or rotting", emoji: "🪵" },
-  { key: "root_rot", label: "Roots or tubers rotting", emoji: "🟫" },
-  { key: "fruit_damage", label: "Cobs, fruit or pods damaged", emoji: "🌽" },
-  { key: "insects_seen", label: "Insects or worms seen", emoji: "🐛" },
+  { key: "leaf_yellow", label: "Yellow leaves", emoji: "🟡", group: "crop" },
+  { key: "leaf_spots", label: "Spots on leaves", emoji: "🟤", group: "crop" },
+  { key: "leaf_holes", label: "Holes in leaves", emoji: "🕳️", group: "crop" },
+  { key: "leaf_curl", label: "Curled leaves", emoji: "🌀", group: "crop" },
+  { key: "leaf_mosaic", label: "Patchy light & dark leaves", emoji: "🧩", group: "crop" },
+  { key: "leaf_streaks", label: "Lines or streaks on leaves", emoji: "〰️", group: "crop" },
+  { key: "white_powder", label: "White powder or mould", emoji: "⚪", group: "crop" },
+  { key: "dry_leaves", label: "Dry or burnt leaves", emoji: "🍂", group: "crop" },
+  { key: "wilting", label: "Plant drooping / wilting", emoji: "🥀", group: "crop" },
+  { key: "stunted", label: "Plant small / not growing", emoji: "📏", group: "crop" },
+  { key: "stem_damage", label: "Stem damaged or rotting", emoji: "🪵", group: "crop" },
+  { key: "root_rot", label: "Roots or tubers rotting", emoji: "🟫", group: "crop" },
+  { key: "fruit_damage", label: "Cobs, fruit or pods damaged", emoji: "🌽", group: "crop" },
+  { key: "insects_seen", label: "Insects or worms seen", emoji: "🐛", group: "crop" },
   // Added for nutrient deficiencies.
-  { key: "leaf_pale", label: "Pale, light green leaves", emoji: "🟩" },
-  { key: "veins_green", label: "Yellow leaf with green veins", emoji: "🥬" },
-  { key: "leaf_purple", label: "Purple, bronze or very dark leaves", emoji: "🟣" },
-  { key: "edges_brown", label: "Brown, burnt leaf edges or tips", emoji: "🤎" },
-  { key: "buds_dying", label: "Buds or new shoots dying", emoji: "🔻" },
+  { key: "leaf_pale", label: "Pale, light green leaves", emoji: "🟩", group: "crop" },
+  { key: "veins_green", label: "Yellow leaf with green veins", emoji: "🥬", group: "crop" },
+  { key: "leaf_purple", label: "Purple, bronze or very dark leaves", emoji: "🟣", group: "crop" },
+  { key: "edges_brown", label: "Brown, burnt leaf edges or tips", emoji: "🤎", group: "crop" },
+  { key: "buds_dying", label: "Buds or new shoots dying", emoji: "🔻", group: "crop" },
+  // Livestock (the "Check my animals" flow).
+  { key: "not_eating", label: "Not eating", emoji: "🍽️", group: "livestock" },
+  { key: "weak_lying", label: "Weak or lying down", emoji: "🛌", group: "livestock" },
+  { key: "fever", label: "Hot body / fever", emoji: "🌡️", group: "livestock" },
+  { key: "diarrhoea", label: "Diarrhoea", emoji: "💩", group: "livestock" },
+  { key: "coughing", label: "Coughing or hard breathing", emoji: "😮‍💨", group: "livestock" },
+  { key: "discharge", label: "Discharge from nose or eyes", emoji: "💧", group: "livestock" },
+  { key: "skin_sores", label: "Sores, wounds or lumps on skin", emoji: "🩹", group: "livestock" },
+  { key: "hair_feather_loss", label: "Hair or feathers falling out", emoji: "🪶", group: "livestock" },
+  { key: "ticks_lice", label: "Ticks, lice or mites seen", emoji: "🕷️", group: "livestock" },
+  { key: "limping", label: "Limping or swollen feet", emoji: "🦶", group: "livestock" },
+  { key: "swelling", label: "Swelling on body or neck", emoji: "🔴", group: "livestock" },
+  { key: "mouth_sores", label: "Mouth sores or drooling", emoji: "👄", group: "livestock" },
+  { key: "less_milk_eggs", label: "Less milk or fewer eggs", emoji: "🥛", group: "livestock" },
+  { key: "weight_loss", label: "Thin / losing weight", emoji: "📉", group: "livestock" },
+  { key: "sudden_deaths", label: "Sudden deaths in herd or flock", emoji: "⚠️", group: "livestock" },
+  { key: "red_purple_skin", label: "Red or purple skin or ears", emoji: "🟥", group: "livestock" },
+  { key: "nervous_signs", label: "Twisted neck, shaking or circling", emoji: "🌀", group: "livestock" },
 ] as const;
 
 export const SYMPTOM_KEYS: string[] = SYMPTOMS.map((s) => s.key);
+
+export function symptomsInGroup(group: HostGroup) {
+  return SYMPTOMS.filter((sym) => sym.group === group);
+}
 
 export function isValidSymptom(key: string): boolean {
   return SYMPTOM_KEYS.includes(key);

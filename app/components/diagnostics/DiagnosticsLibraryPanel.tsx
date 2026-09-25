@@ -15,7 +15,7 @@ import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { DIAGNOSTIC_HOSTS, FLAG_REASONS, SYMPTOMS, isUnderReview } from "@/convex/diagnosticsRules";
+import { DIAGNOSTIC_HOSTS, FLAG_REASONS, SYMPTOMS, hostGroup, isUnderReview } from "@/convex/diagnosticsRules";
 import { compressImage, uploadToConvex } from "@/app/utils/imageCompress";
 import { formatUgandaDateTime } from "@/app/utils/timeUtils";
 
@@ -239,10 +239,25 @@ function PhotoFields({
   );
 }
 
-function SymptomPicker({ value, onChange }: { value: string[]; onChange: (next: string[]) => void }) {
+/**
+ * Symptom tiles for the crops/animals the entry covers: leaf symptoms for
+ * crops, animal symptoms for livestock. With no host picked yet, all show.
+ */
+function SymptomPicker({
+  value,
+  onChange,
+  hosts,
+}: {
+  value: string[];
+  onChange: (next: string[]) => void;
+  hosts: string[];
+}) {
+  const groups = new Set(hosts.map(hostGroup).filter(Boolean));
+  // Keep already-picked symptoms visible so they can be unticked.
+  const shown = SYMPTOMS.filter((sym) => groups.size === 0 || groups.has(sym.group) || value.includes(sym.key));
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 6 }}>
-      {SYMPTOMS.map((sym) => {
+      {shown.map((sym) => {
         const on = value.includes(sym.key);
         return (
           <button
@@ -520,7 +535,7 @@ function AddConditionForm({
   return (
     <div style={cardStyle}>
       <h3 style={{ margin: "0 0 0.6rem", fontSize: "1rem" }}>Add a pest or disease</h3>
-      <label style={{ fontSize: "0.8rem", fontWeight: 600 }}>Crops affected</label>
+      <label style={{ fontSize: "0.8rem", fontWeight: 600 }}>Crops or animals affected</label>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", margin: "4px 0 10px" }}>
         {DIAGNOSTIC_HOSTS.map((h) => {
           const on = form.hosts.includes(h.key);
@@ -545,8 +560,8 @@ function AddConditionForm({
           <option value="deficiency">Nutrient deficiency</option>
           <option value="other">Other</option>
         </select>
-        <label style={{ fontSize: "0.8rem", fontWeight: 600 }}>Symptoms farmers will tap (used for matching)</label>
-        <SymptomPicker value={symptomTags} onChange={setSymptomTags} />
+        <label style={{ fontSize: "0.8rem", fontWeight: 600 }}>Signs farmers will tap (used for matching)</label>
+        <SymptomPicker value={symptomTags} onChange={setSymptomTags} hosts={form.hosts} />
         <textarea
           placeholder="Describe what the farmer sees"
           value={form.symptoms}
@@ -624,6 +639,7 @@ function ConditionDetail({
           base={base}
           conditionId={conditionId}
           tags={condition.symptomTags ?? []}
+          hosts={condition.hosts}
           canEdit={
             condition.status !== "removed" &&
             condition.status !== "rejected" &&
@@ -866,12 +882,14 @@ function SymptomTagsEditor({
   base,
   conditionId,
   tags,
+  hosts,
   canEdit,
   run,
 }: {
   base: Base;
   conditionId: Id<"diagnosticConditions">;
   tags: string[];
+  hosts: string[];
   canEdit: boolean;
   run: Run;
 }) {
@@ -882,7 +900,7 @@ function SymptomTagsEditor({
   if (editing) {
     return (
       <div style={{ marginTop: 8 }}>
-        <SymptomPicker value={draft} onChange={setDraft} />
+        <SymptomPicker value={draft} onChange={setDraft} hosts={hosts} />
         <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
           <button
             onClick={async () => {

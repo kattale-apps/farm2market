@@ -203,6 +203,49 @@ export function healthLevel(selected: string[], results: MatchResult[]): HealthL
   return "unsure";
 }
 
+// ─── Paid AI photo check (community opt-in) ────────────────────────────────
+
+/** Default monthly AI photo checks per community until a super admin changes it. */
+export const DEFAULT_AI_MONTHLY_CAP = 100;
+
+/**
+ * Scorecard colour for an AI photo check. A photo the model could not use is
+ * "unsure" whatever it matched; otherwise the same thresholds as the symptom
+ * check apply, and "healthy" needs the model to say so with no real match.
+ */
+export function aiHealthLevel(ai: { photoUsable: boolean; looksHealthy: boolean; matches: MatchResult[] }): HealthLevel {
+  if (!ai.photoUsable) return "unsure";
+  const best = ai.matches[0]?.percent ?? 0;
+  if (best >= STRONG_MATCH_PERCENT) return "likely";
+  if (best >= CONFIDENT_MATCH_PERCENT) return "possible";
+  return ai.looksHealthy ? "healthy" : "unsure";
+}
+
+/**
+ * Keep only matches the model was allowed to pick (library ids for this
+ * crop), clamp the percentages, drop duplicates and rank them. The model can
+ * never introduce a pest, disease or treatment that is not in the library.
+ */
+export function cleanAiMatches(raw: { id: string; percent: number }[], allowedIds: string[], limit = 3): MatchResult[] {
+  const allowed = new Set(allowedIds);
+  const seen = new Set<string>();
+  const out: MatchResult[] = [];
+  for (const m of raw) {
+    if (!allowed.has(m.id) || seen.has(m.id)) continue;
+    const percent = Math.max(0, Math.min(100, Math.round(Number(m.percent) || 0)));
+    if (percent <= 0) continue;
+    seen.add(m.id);
+    out.push({ id: m.id, percent });
+  }
+  return out.sort((a, b) => b.percent - a.percent).slice(0, limit);
+}
+
+/** Uganda calendar month key ("2026-09") for a getUgandaTime() value. */
+export function ugandaMonthKey(ugandaTime: number): string {
+  const d = new Date(ugandaTime);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
 /** Sources are shown to farmers, so only real web links are accepted. */
 export function normalizeSourceUrl(url: string | undefined): string | undefined {
   const trimmed = (url ?? "").trim();

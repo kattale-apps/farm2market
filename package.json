@@ -23,6 +23,7 @@
     "test:pdf-gps": "tsx --test tests/pdf-gps-utils.test.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.128.0",
     "@capacitor/android": "^8.0.0",
     "@capacitor/cli": "^8.0.0",
     "@capacitor/core": "^8.0.0",

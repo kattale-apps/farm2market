@@ -3082,6 +3082,17 @@ export default defineSchema({
     checkedAt: v.number(), // getUgandaTime() when the farmer did the check (may be before it synced)
     savedAt: v.number(), // getUgandaTime()
     feedback: v.optional(v.union(v.literal("right"), v.literal("wrong"), v.literal("unsure"))),
+    // Paid AI photo check (only when the community switched it on). The model
+    // may only pick library entries; treatments still come from the library.
+    aiStatus: v.optional(v.union(v.literal("queued"), v.literal("done"), v.literal("failed"))),
+    aiResults: v.optional(v.array(v.object({ conditionId: v.id("diagnosticConditions"), percent: v.number() }))),
+    aiHealthLevel: v.optional(v.union(v.literal("healthy"), v.literal("possible"), v.literal("likely"), v.literal("unsure"))),
+    aiPhotoUsable: v.optional(v.boolean()),
+    aiNote: v.optional(v.string()),
+    aiModel: v.optional(v.string()),
+    aiInputTokens: v.optional(v.number()),
+    aiOutputTokens: v.optional(v.number()),
+    aiCheckedAt: v.optional(v.number()), // getUgandaTime()
   })
     .index("by_farmer_saved", ["farmerId", "savedAt"])
     .index("by_farmer_client", ["farmerId", "clientId"])
@@ -3097,6 +3108,25 @@ export default defineSchema({
     lastRunSummary: v.optional(v.string()),
     updatedAt: v.number(), // getUgandaTime()
   }),
+
+  // Per-community opt-in for the paid AI photo check. A community admin
+  // switches it on; a super admin sets the monthly cap.
+  diagnosticAiSettings: defineTable({
+    communityId: v.id("communities"),
+    enabled: v.boolean(),
+    monthlyCap: v.number(),
+    updatedBy: v.id("users"),
+    updatedAt: v.number(), // getUgandaTime()
+  }).index("by_community", ["communityId"]),
+
+  // AI photo checks used per community per Uganda month ("2026-09"), with tokens for cost.
+  diagnosticAiUsage: defineTable({
+    communityId: v.id("communities"),
+    month: v.string(),
+    checks: v.number(),
+    inputTokens: v.number(),
+    outputTokens: v.number(),
+  }).index("by_community_month", ["communityId", "month"]),
 
   diagnosticAuditLog: defineTable({
     action: v.string(), // added | approved | rejected | flagged | flag_dismissed | removed | restored | module_enabled | module_disabled

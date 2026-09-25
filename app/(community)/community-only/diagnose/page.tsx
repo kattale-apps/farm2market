@@ -318,7 +318,10 @@ export default function CropCheckPage() {
     );
   }
 
-  const back = `/community-only/trackers?communityId=${communityId}`;
+  const back =
+    searchParams.get("from") === "farm-needs"
+      ? "/farmer/farm-needs"
+      : `/community-only/trackers?communityId=${communityId}`;
 
   return (
     <div style={{ fontFamily: FONT, paddingBottom: "6rem", background: "#f9fafb", minHeight: "100vh" }}>

@@ -739,3 +739,88 @@ export const setSymptomTags = mutation({
     return { success: true };
   },
 });
+
+/**
+ * Farmer crop checks in one community: counts for the chosen period and the
+ * latest checks. A community admin only reaches their own community through
+ * requireLibraryAccess; a super admin sees whichever community they open.
+ */
+export const listCommunityChecks = query({
+  args: {
+    adminId: v.id("users"),
+    communityId: v.id("communities"),
+    days: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await requireLibraryAccess(ctx, args.adminId, args.communityId);
+    const days = Math.min(Math.max(Math.round(args.days ?? 30), 1), 365);
+    const since = getUgandaTime() - days * 24 * 60 * 60 * 1000;
+
+    const reports = await ctx.db
+      .query("diagnosticReports")
+      .withIndex("by_community_saved", (q) => q.eq("communityId", args.communityId).gte("savedAt", since))
+      .order("desc")
+      .take(1000);
+
+    const conditionNames = new Map<string, string>();
+    const nameOf = async (id: Id<"diagnosticConditions">) => {
+      const key = String(id);
+      if (!conditionNames.has(key)) conditionNames.set(key, (await ctx.db.get(id))?.name ?? "Unknown");
+      return conditionNames.get(key)!;
+    };
+
+    const byLevel: Record<string, number> = { healthy: 0, possible: 0, likely: 0, unsure: 0 };
+    const byHost: Record<string, number> = {};
+    const feedback: Record<string, number> = { right: 0, wrong: 0, unsure: 0 };
+    const problemCounts = new Map<string, number>();
+    const farmers = new Set<string>();
+    for (const r of reports) {
+      byLevel[r.healthLevel] = (byLevel[r.healthLevel] ?? 0) + 1;
+      byHost[r.host] = (byHost[r.host] ?? 0) + 1;
+      if (r.feedback) feedback[r.feedback] = (feedback[r.feedback] ?? 0) + 1;
+      farmers.add(String(r.farmerId));
+      // Only count a problem when the check named one with some confidence.
+      if ((r.healthLevel === "likely" || r.healthLevel === "possible") && r.results[0]) {
+        const key = String(r.results[0].conditionId);
+        problemCounts.set(key, (problemCounts.get(key) ?? 0) + 1);
+      }
+    }
+    const topProblems = await Promise.all(
+      Array.from(problemCounts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(async ([id, count]) => ({ name: await nameOf(id as Id<"diagnosticConditions">), count }))
+    );
+
+    const latest = await Promise.all(
+      reports.slice(0, 20).map(async (r) => {
+        const farmer = (await ctx.db.get(r.farmerId)) as any;
+        return {
+          _id: r._id,
+          farmerName: farmer?.verifiedName || farmer?.alias || "Farmer",
+          host: r.host,
+          healthLevel: r.healthLevel,
+          symptomTags: r.symptomTags,
+          topMatch: r.results[0]
+            ? { name: await nameOf(r.results[0].conditionId), percent: r.results[0].percent }
+            : null,
+          feedback: r.feedback,
+          checkedAt: r.checkedAt,
+          photoUrl: r.photoStorageId ? await ctx.storage.getUrl(r.photoStorageId) : null,
+        };
+      })
+    );
+
+    return {
+      days,
+      total: reports.length,
+      capped: reports.length >= 1000,
+      farmerCount: farmers.size,
+      byLevel,
+      byHost,
+      feedback,
+      topProblems,
+      latest,
+    };
+  },
+});

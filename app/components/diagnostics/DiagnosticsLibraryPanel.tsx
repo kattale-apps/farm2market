@@ -23,7 +23,7 @@ const BRAND = "#166534";
 const BRAND_BG = "#f0fdf4";
 const FONT = '"Montserrat", sans-serif';
 
-type View = "library" | "review" | "flags" | "log" | "addCondition";
+type View = "library" | "review" | "flags" | "checks" | "log" | "addCondition";
 type ItemType = "condition" | "image" | "treatment";
 type Status = "pending_review" | "active" | "rejected" | "removed";
 
@@ -297,6 +297,7 @@ export function DiagnosticsLibraryPanel({
     { key: "library", label: "📚 Library" },
     { key: "review", label: `✅ Review${reviewQueue?.length ? ` (${reviewQueue.length})` : ""}` },
     { key: "flags", label: `🚩 Flags${openFlags?.length ? ` (${openFlags.length})` : ""}` },
+    { key: "checks", label: "🌾 Farmer checks" },
     { key: "log", label: "🕘 Log" },
   ];
 
@@ -365,6 +366,8 @@ export function DiagnosticsLibraryPanel({
         <ReviewQueue base={base} rows={reviewQueue} run={run} onOpen={setOpenConditionId} />
       ) : view === "flags" ? (
         <FlagList base={base} rows={openFlags} isSuperAdmin={isSuperAdmin} run={run} onOpen={setOpenConditionId} />
+      ) : view === "checks" ? (
+        <FarmerChecks base={base} />
       ) : (
         <AuditLog base={base} />
       )}
@@ -1144,6 +1147,139 @@ function AuditLog({ base }: { base: Base }) {
           <div style={{ fontSize: "0.72rem", color: "#6b7280" }}>{formatUgandaDateTime(r.at)}</div>
         </div>
       ))}
+    </div>
+  );
+}
+
+const LEVEL_LABEL: Record<string, { emoji: string; label: string; color: string }> = {
+  likely: { emoji: "🔴", label: "Likely problem", color: "#991b1b" },
+  possible: { emoji: "🟠", label: "Possible problem", color: "#9a3412" },
+  unsure: { emoji: "❔", label: "Not sure", color: "#854d0e" },
+  healthy: { emoji: "✅", label: "Healthy", color: "#166534" },
+};
+
+function StatTile({ value, label }: { value: number | string; label: string }) {
+  return (
+    <div style={{ ...cardStyle, marginBottom: 0, textAlign: "center", padding: "0.6rem" }}>
+      <div style={{ fontSize: "1.4rem", fontWeight: 800 }}>{value}</div>
+      <div style={{ fontSize: "0.72rem", color: "#4b5563" }}>{label}</div>
+    </div>
+  );
+}
+
+/** How this community's farmers are using the crop check, and what they are finding. */
+function FarmerChecks({ base }: { base: Base }) {
+  const [days, setDays] = useState(30);
+  const data = useQuery(api.diagnostics.listCommunityChecks, { ...base, days });
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+        {[7, 30, 90].map((d) => (
+          <button key={d} onClick={() => setDays(d)} style={buttonStyle(days === d)}>
+            {d} days
+          </button>
+        ))}
+      </div>
+
+      {data === undefined ? (
+        <p style={{ color: "#6b7280" }}>Loading…</p>
+      ) : data.total === 0 ? (
+        <p style={{ color: "#6b7280", fontSize: "0.9rem" }}>No crop checks in the last {data.days} days.</p>
+      ) : (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 8, marginBottom: 10 }}>
+            <StatTile value={data.capped ? `${data.total}+` : data.total} label="checks" />
+            <StatTile value={data.farmerCount} label="farmers" />
+            <StatTile value={data.byLevel.likely + data.byLevel.possible} label="found a problem" />
+            <StatTile
+              value={data.feedback.right + data.feedback.wrong > 0 ? `${Math.round((100 * data.feedback.right) / (data.feedback.right + data.feedback.wrong))}%` : "-"}
+              label={`said right (${data.feedback.right + data.feedback.wrong} answers)`}
+            />
+          </div>
+
+          <div style={cardStyle}>
+            <strong style={{ fontSize: "0.9rem" }}>Results</strong>
+            {(["likely", "possible", "unsure", "healthy"] as const).map((k) => {
+              const n = data.byLevel[k] ?? 0;
+              const pct = data.total ? Math.round((100 * n) / data.total) : 0;
+              return (
+                <div key={k} style={{ marginTop: 6 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.82rem" }}>
+                    <span>
+                      {LEVEL_LABEL[k].emoji} {LEVEL_LABEL[k].label}
+                    </span>
+                    <span>
+                      {n} ({pct}%)
+                    </span>
+                  </div>
+                  <div style={{ height: 8, background: "#f3f4f6", borderRadius: 999, overflow: "hidden" }}>
+                    <div style={{ width: `${pct}%`, height: "100%", background: LEVEL_LABEL[k].color }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 8 }}>
+            <div style={cardStyle}>
+              <strong style={{ fontSize: "0.9rem" }}>Most found problems</strong>
+              {data.topProblems.length === 0 ? (
+                <p style={{ fontSize: "0.82rem", color: "#6b7280", margin: "6px 0 0" }}>None named with confidence yet.</p>
+              ) : (
+                data.topProblems.map((p) => (
+                  <div key={p.name} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", marginTop: 6 }}>
+                    <span>{p.name}</span>
+                    <strong>{p.count}</strong>
+                  </div>
+                ))
+              )}
+            </div>
+            <div style={cardStyle}>
+              <strong style={{ fontSize: "0.9rem" }}>Checks by crop</strong>
+              {Object.entries(data.byHost)
+                .sort((a, b) => b[1] - a[1])
+                .map(([h, n]) => (
+                  <div key={h} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", marginTop: 6 }}>
+                    <span>
+                      {hostEmoji(h)} {hostLabel(h)}
+                    </span>
+                    <strong>{n}</strong>
+                  </div>
+                ))}
+            </div>
+          </div>
+
+          <h4 style={{ margin: "12px 0 6px" }}>Latest checks</h4>
+          {data.latest.map((r) => (
+            <div key={r._id} style={{ ...cardStyle, display: "flex", gap: 10 }}>
+              {r.photoUrl ? (
+                <a href={r.photoUrl} target="_blank" rel="noopener noreferrer" style={{ flexShrink: 0 }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={r.photoUrl} alt="Farmer photo" loading="lazy" style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 8 }} />
+                </a>
+              ) : (
+                <div style={{ width: 64, height: 64, borderRadius: 8, background: "#f3f4f6", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.6rem", flexShrink: 0 }}>
+                  {hostEmoji(r.host)}
+                </div>
+              )}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: "0.88rem", fontWeight: 600 }}>
+                  {LEVEL_LABEL[r.healthLevel].emoji} {r.topMatch && r.healthLevel !== "unsure" && r.healthLevel !== "healthy" ? `${r.topMatch.name} (${r.topMatch.percent}%)` : LEVEL_LABEL[r.healthLevel].label}
+                </div>
+                <div style={{ fontSize: "0.75rem", color: "#4b5563" }}>
+                  {r.farmerName} · {hostLabel(r.host)}
+                  {r.feedback ? ` · farmer said: ${r.feedback === "right" ? "👍 right" : r.feedback === "wrong" ? "👎 wrong" : "🤷 unsure"}` : ""}
+                </div>
+                {r.symptomTags.length > 0 && (
+                  <div style={{ fontSize: "0.72rem", color: "#6b7280", marginTop: 2 }}>{r.symptomTags.map(symptomLabel).join(" · ")}</div>
+                )}
+                <div style={{ fontSize: "0.7rem", color: "#9ca3af" }}>{formatUgandaDateTime(r.checkedAt)}</div>
+              </div>
+            </div>
+          ))}
+        </>
+      )}
     </div>
   );
 }

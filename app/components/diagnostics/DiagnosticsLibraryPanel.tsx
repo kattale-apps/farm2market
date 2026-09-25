@@ -15,7 +15,7 @@ import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { DIAGNOSTIC_HOSTS, FLAG_REASONS, isUnderReview } from "@/convex/diagnosticsRules";
+import { DIAGNOSTIC_HOSTS, FLAG_REASONS, SYMPTOMS, isUnderReview } from "@/convex/diagnosticsRules";
 import { compressImage, uploadToConvex } from "@/app/utils/imageCompress";
 import { formatUgandaDateTime } from "@/app/utils/timeUtils";
 
@@ -102,6 +102,167 @@ function SourceLine({ name, url, licence }: { name: string; url?: string; licenc
     </div>
   );
 }
+
+const MAX_PHOTOS_PER_BATCH = 6;
+
+type PhotoSource = { sourceName: string; sourceUrl: string; licence: string };
+
+/** Shrinks and uploads each photo, then adds it to the entry. Returns how many were added. */
+function usePhotoUploader(base: Base) {
+  const generateUploadUrl = useMutation(api.files.generateUploadUrl);
+  const addImage = useMutation(api.diagnostics.addImage);
+  return async (
+    conditionId: Id<"diagnosticConditions">,
+    files: File[],
+    source: PhotoSource,
+    onAdded?: (count: number) => void
+  ) => {
+    let added = 0;
+    for (const file of files) {
+      // Full photo ~800px and a ~240px thumbnail keep uploads small on slow networks.
+      const [full, thumb] = await Promise.all([compressImage(file, 800, 0.75), compressImage(file, 240, 0.7)]);
+      const storageId = await uploadToConvex(await generateUploadUrl(), full);
+      const thumbStorageId = await uploadToConvex(await generateUploadUrl(), thumb);
+      await addImage({
+        ...base,
+        conditionId,
+        storageId: storageId as Id<"_storage">,
+        thumbStorageId: thumbStorageId as Id<"_storage">,
+        sourceName: source.sourceName,
+        sourceUrl: source.sourceUrl || undefined,
+        licence: source.licence,
+      });
+      added++;
+      onAdded?.(added);
+    }
+    return added;
+  };
+}
+
+function PhotoFields({
+  files,
+  onFiles,
+  source,
+  onSource,
+}: {
+  files: File[];
+  onFiles: (files: File[]) => void;
+  source: PhotoSource;
+  onSource: (patch: Partial<PhotoSource>) => void;
+}) {
+  const [previews, setPreviews] = useState<string[]>([]);
+  const pick = (list: FileList | null) => {
+    const next = [...files, ...Array.from(list ?? [])].slice(0, MAX_PHOTOS_PER_BATCH);
+    previews.forEach((u) => URL.revokeObjectURL(u));
+    setPreviews(next.map((f) => URL.createObjectURL(f)));
+    onFiles(next);
+  };
+  const removeAt = (i: number) => {
+    URL.revokeObjectURL(previews[i]);
+    setPreviews(previews.filter((_, idx) => idx !== i));
+    onFiles(files.filter((_, idx) => idx !== i));
+  };
+  return (
+    <div style={{ display: "grid", gap: 8 }}>
+      <label style={{ ...buttonStyle(), textAlign: "center", display: "block" }}>
+        📷 Add photos ({files.length}/{MAX_PHOTOS_PER_BATCH})
+        <input
+          type="file"
+          accept="image/*"
+          multiple
+          onChange={(e) => {
+            pick(e.target.files);
+            e.target.value = "";
+          }}
+          style={{ display: "none" }}
+        />
+      </label>
+      {files.length > 0 && (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(80px, 1fr))", gap: 6 }}>
+            {previews.map((url, i) => (
+              <div key={url} style={{ position: "relative" }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={url} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 6 }} />
+                <button
+                  type="button"
+                  onClick={() => removeAt(i)}
+                  aria-label="Remove photo"
+                  style={{
+                    position: "absolute",
+                    top: 2,
+                    right: 2,
+                    width: 28,
+                    height: 28,
+                    borderRadius: 999,
+                    border: "none",
+                    background: "rgba(0,0,0,0.6)",
+                    color: "#fff",
+                    cursor: "pointer",
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize: "0.75rem", color: "#4b5563" }}>Source for these photos:</div>
+          <input
+            placeholder="Source name (or your community for own photos)"
+            value={source.sourceName}
+            onChange={(e) => onSource({ sourceName: e.target.value })}
+            style={inputStyle}
+          />
+          <input
+            placeholder="Source link https://… (optional)"
+            value={source.sourceUrl}
+            onChange={(e) => onSource({ sourceUrl: e.target.value })}
+            style={inputStyle}
+            inputMode="url"
+          />
+          <input
+            placeholder="Licence (e.g. CC BY 4.0, Own photo)"
+            value={source.licence}
+            onChange={(e) => onSource({ licence: e.target.value })}
+            style={inputStyle}
+            list="diagnostic-licences"
+          />
+          <datalist id="diagnostic-licences">
+            <option value="Own photo" />
+            <option value="CC BY 4.0" />
+            <option value="CC BY-SA 4.0" />
+            <option value="CC0 / Public domain" />
+          </datalist>
+        </>
+      )}
+    </div>
+  );
+}
+
+function SymptomPicker({ value, onChange }: { value: string[]; onChange: (next: string[]) => void }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 6 }}>
+      {SYMPTOMS.map((sym) => {
+        const on = value.includes(sym.key);
+        return (
+          <button
+            key={sym.key}
+            type="button"
+            onClick={() => onChange(on ? value.filter((k) => k !== sym.key) : [...value, sym.key])}
+            style={{ ...buttonStyle(on), textAlign: "left", fontWeight: 500 }}
+          >
+            {sym.emoji} {sym.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+const symptomLabel = (key: string) => {
+  const sym = SYMPTOMS.find((x) => x.key === key);
+  return sym ? `${sym.emoji} ${sym.label}` : key;
+};
 
 export function DiagnosticsLibraryPanel({
   userId,
@@ -285,6 +446,11 @@ function LibraryList({
               {c.kind} · {c.hosts.map((h) => `${hostEmoji(h)} ${hostLabel(h)}`).join("  ")}
               {c.scientificName ? ` · ${c.scientificName}` : ""}
             </div>
+            {c.symptomTagCount === 0 && (
+              <div style={{ fontSize: "0.72rem", color: "#9a3412", marginTop: 4 }}>
+                ⚠ No symptoms picked - farmers cannot match this yet
+              </div>
+            )}
           </button>
         ))
       )}
@@ -302,6 +468,10 @@ function AddConditionForm({
   onDone: (id?: Id<"diagnosticConditions">) => void;
 }) {
   const addCondition = useMutation(api.diagnostics.addCondition);
+  const uploadPhotos = usePhotoUploader(base);
+  const [symptomTags, setSymptomTags] = useState<string[]>([]);
+  const [files, setFiles] = useState<File[]>([]);
+  const [photoSource, setPhotoSource] = useState<PhotoSource>({ sourceName: "", sourceUrl: "", licence: "" });
   const [form, setForm] = useState({
     name: "",
     scientificName: "",
@@ -318,8 +488,22 @@ function AddConditionForm({
     setSaving(true);
     let newId: Id<"diagnosticConditions"> | undefined;
     const ok = await run(async () => {
-      newId = await addCondition({ ...base, ...form });
-    }, "Added. It will be used once another admin approves it.");
+      if (files.length > 0 && (!photoSource.sourceName.trim() || !photoSource.licence.trim())) {
+        throw new Error("Add a source name and licence for the photos");
+      }
+      newId = await addCondition({ ...base, ...form, symptomTags });
+      if (files.length > 0) {
+        let added = 0;
+        try {
+          await uploadPhotos(newId, files, photoSource, (n) => (added = n));
+        } catch (error: any) {
+          // The entry is already saved, so point the admin at it rather than letting them add it twice.
+          throw new Error(
+            `Entry saved with ${added} of ${files.length} photos (${error?.message || "upload failed"}). Open it to add the rest.`
+          );
+        }
+      }
+    }, `Added${files.length ? ` with ${files.length} photo${files.length > 1 ? "s" : ""}` : ""}. It will be used once another admin approves it.`);
     setSaving(false);
     if (ok) onDone(newId);
   };
@@ -352,8 +536,10 @@ function AddConditionForm({
           <option value="deficiency">Nutrient deficiency</option>
           <option value="other">Other</option>
         </select>
+        <label style={{ fontSize: "0.8rem", fontWeight: 600 }}>Symptoms farmers will tap (used for matching)</label>
+        <SymptomPicker value={symptomTags} onChange={setSymptomTags} />
         <textarea
-          placeholder="What the farmer sees (symptoms)"
+          placeholder="Describe what the farmer sees"
           value={form.symptoms}
           onChange={(e) => set({ symptoms: e.target.value })}
           rows={4}
@@ -361,10 +547,17 @@ function AddConditionForm({
         />
         <input placeholder="Source name (e.g. FAO, NARO)" value={form.sourceName} onChange={(e) => set({ sourceName: e.target.value })} style={inputStyle} />
         <input placeholder="Source link https://… (optional)" value={form.sourceUrl} onChange={(e) => set({ sourceUrl: e.target.value })} style={inputStyle} inputMode="url" />
+        <label style={{ fontSize: "0.8rem", fontWeight: 600, marginTop: 4 }}>Photos (optional, up to {MAX_PHOTOS_PER_BATCH})</label>
+        <PhotoFields
+          files={files}
+          onFiles={setFiles}
+          source={photoSource}
+          onSource={(p) => setPhotoSource((prev) => ({ ...prev, ...p }))}
+        />
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
         <button onClick={submit} disabled={saving} style={buttonStyle(true)}>
-          {saving ? "Saving…" : "Submit for review"}
+          {saving ? (files.length ? "Uploading…" : "Saving…") : "Submit for review"}
         </button>
         <button onClick={() => onDone()} style={buttonStyle()}>
           Cancel
@@ -418,6 +611,17 @@ function ConditionDetail({
           {condition.hosts.map((h) => `${hostEmoji(h)} ${hostLabel(h)}`).join("  ")}
         </div>
         <p style={{ fontSize: "0.9rem", margin: 0, whiteSpace: "pre-wrap" }}>{condition.symptoms}</p>
+        <SymptomTagsEditor
+          base={base}
+          conditionId={conditionId}
+          tags={condition.symptomTags ?? []}
+          canEdit={
+            condition.status !== "removed" &&
+            condition.status !== "rejected" &&
+            (viewer.isSuperAdmin || condition.status === "pending_review")
+          }
+          run={run}
+        />
         <SourceLine name={condition.sourceName} url={condition.sourceUrl} />
         <Attribution row={condition} />
         {condition.removalReason && <p style={{ fontSize: "0.8rem", color: "#991b1b" }}>Removed: {condition.removalReason}</p>}
@@ -614,65 +818,104 @@ function AddImageForm({
   run: Run;
   onDone: () => void;
 }) {
-  const generateUploadUrl = useMutation(api.files.generateUploadUrl);
-  const addImage = useMutation(api.diagnostics.addImage);
-  const [file, setFile] = useState<File | null>(null);
-  const [form, setForm] = useState({ caption: "", sourceName: "", sourceUrl: "", licence: "" });
+  const uploadPhotos = usePhotoUploader(base);
+  const [files, setFiles] = useState<File[]>([]);
+  const [source, setSource] = useState<PhotoSource>({ sourceName: "", sourceUrl: "", licence: "" });
   const [saving, setSaving] = useState(false);
-  const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
 
   const submit = async () => {
-    if (!file) return;
+    if (files.length === 0) return;
     setSaving(true);
     const ok = await run(async () => {
-      // Full photo ~800px and a ~240px thumbnail keep uploads small on slow networks.
-      const [full, thumb] = await Promise.all([compressImage(file, 800, 0.75), compressImage(file, 240, 0.7)]);
-      const storageId = await uploadToConvex(await generateUploadUrl(), full);
-      const thumbStorageId = await uploadToConvex(await generateUploadUrl(), thumb);
-      await addImage({
-        ...base,
-        conditionId,
-        storageId: storageId as Id<"_storage">,
-        thumbStorageId: thumbStorageId as Id<"_storage">,
-        caption: form.caption || undefined,
-        sourceName: form.sourceName,
-        sourceUrl: form.sourceUrl || undefined,
-        licence: form.licence,
-      });
-    }, "Photo added. It will be used once another admin approves it.");
+      let added = 0;
+      try {
+        await uploadPhotos(conditionId, files, source, (n) => (added = n));
+      } catch (error: any) {
+        throw new Error(`${added} of ${files.length} photos added. ${error?.message || "Upload failed"}`);
+      }
+    }, `${files.length} photo${files.length > 1 ? "s" : ""} added. They will be used once another admin approves them.`);
     setSaving(false);
     if (ok) onDone();
   };
 
   return (
     <div style={cardStyle}>
-      <div style={{ display: "grid", gap: 8 }}>
-        <input type="file" accept="image/*" capture="environment" onChange={(e) => setFile(e.target.files?.[0] ?? null)} style={inputStyle} />
-        <input placeholder="Caption (e.g. early leaf damage)" value={form.caption} onChange={(e) => set({ caption: e.target.value })} style={inputStyle} />
-        <input placeholder="Source name (or your community for own photos)" value={form.sourceName} onChange={(e) => set({ sourceName: e.target.value })} style={inputStyle} />
-        <input placeholder="Source link https://… (optional)" value={form.sourceUrl} onChange={(e) => set({ sourceUrl: e.target.value })} style={inputStyle} inputMode="url" />
-        <input
-          placeholder="Licence (e.g. CC BY 4.0, Own photo)"
-          value={form.licence}
-          onChange={(e) => set({ licence: e.target.value })}
-          style={inputStyle}
-          list="diagnostic-licences"
-        />
-        <datalist id="diagnostic-licences">
-          <option value="Own photo" />
-          <option value="CC BY 4.0" />
-          <option value="CC BY-SA 4.0" />
-          <option value="CC0 / Public domain" />
-        </datalist>
-      </div>
+      <PhotoFields files={files} onFiles={setFiles} source={source} onSource={(p) => setSource((prev) => ({ ...prev, ...p }))} />
       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-        <button onClick={submit} disabled={!file || saving} style={buttonStyle(true)}>
-          {saving ? "Uploading…" : "Submit photo"}
+        <button onClick={submit} disabled={files.length === 0 || saving} style={buttonStyle(true)}>
+          {saving ? "Uploading…" : files.length > 1 ? `Submit ${files.length} photos` : "Submit photo"}
         </button>
         <button onClick={onDone} style={buttonStyle()}>
           Cancel
         </button>
       </div>
+    </div>
+  );
+}
+
+function SymptomTagsEditor({
+  base,
+  conditionId,
+  tags,
+  canEdit,
+  run,
+}: {
+  base: Base;
+  conditionId: Id<"diagnosticConditions">;
+  tags: string[];
+  canEdit: boolean;
+  run: Run;
+}) {
+  const setSymptomTags = useMutation(api.diagnostics.setSymptomTags);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<string[]>(tags);
+
+  if (editing) {
+    return (
+      <div style={{ marginTop: 8 }}>
+        <SymptomPicker value={draft} onChange={setDraft} />
+        <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+          <button
+            onClick={async () => {
+              if (await run(() => setSymptomTags({ ...base, conditionId, symptomTags: draft }), "Symptoms saved")) {
+                setEditing(false);
+              }
+            }}
+            style={buttonStyle(true)}
+          >
+            Save symptoms
+          </button>
+          <button onClick={() => setEditing(false)} style={buttonStyle()}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div style={{ marginTop: 8 }}>
+      {tags.length === 0 ? (
+        <div style={{ fontSize: "0.78rem", color: "#9a3412" }}>⚠ No symptoms picked - farmers cannot match this yet</div>
+      ) : (
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+          {tags.map((t) => (
+            <span key={t} style={{ fontSize: "0.75rem", padding: "2px 8px", borderRadius: 999, background: BRAND_BG, color: BRAND }}>
+              {symptomLabel(t)}
+            </span>
+          ))}
+        </div>
+      )}
+      {canEdit && (
+        <button
+          onClick={() => {
+            setDraft(tags);
+            setEditing(true);
+          }}
+          style={{ ...buttonStyle(), marginTop: 6 }}
+        >
+          ✏️ Symptoms
+        </button>
+      )}
     </div>
   );
 }
@@ -882,6 +1125,7 @@ const ACTION_LABEL: Record<string, string> = {
   restored: "restored",
   module_enabled: "enabled Diagnostics for",
   module_disabled: "disabled Diagnostics for",
+  symptoms_changed: "changed symptoms on",
 };
 
 function AuditLog({ base }: { base: Base }) {

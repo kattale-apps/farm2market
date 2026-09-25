@@ -4,6 +4,12 @@ import assert from "node:assert/strict";
 import {
   canFlag,
   canRemove,
+  CONFIDENT_MATCH_PERCENT,
+  healthLevel,
+  isValidSymptom,
+  rankMatches,
+  STRONG_MATCH_PERCENT,
+  symptomMatchPercent,
   canReview,
   flagKey,
   isFarmerVisible,
@@ -80,4 +86,48 @@ test("only known crops are accepted", () => {
   assert.equal(isValidHost("maize"), true);
   assert.equal(isValidHost("Maize"), false);
   assert.equal(isValidHost("tobacco"), false);
+});
+
+// ─── Farmer check matching ─────────────────────────────────────────────────
+
+test("identical symptom lists are a 100% match and disjoint ones 0%", () => {
+  assert.equal(symptomMatchPercent(["leaf_holes", "insects_seen"], ["insects_seen", "leaf_holes"]), 100);
+  assert.equal(symptomMatchPercent(["wilting"], ["leaf_holes"]), 0);
+});
+
+test("an entry with no symptom tags never matches", () => {
+  assert.equal(symptomMatchPercent(["wilting"], undefined), 0);
+  assert.equal(symptomMatchPercent(["wilting"], []), 0);
+});
+
+test("partial overlap scores between the two", () => {
+  // 1 of 1 picked is shared, 1 of 4 tags matched: F1 = 0.4
+  assert.equal(symptomMatchPercent(["wilting"], ["wilting", "leaf_yellow", "stunted", "root_rot"]), 40);
+});
+
+test("matches are ranked strongest first, capped, and zero matches dropped", () => {
+  const results = rankMatches(
+    [
+      { id: "a", symptomTags: ["wilting", "leaf_yellow"] },
+      { id: "b", symptomTags: ["wilting"] },
+      { id: "c", symptomTags: ["leaf_holes"] },
+      { id: "d", symptomTags: [] },
+    ],
+    ["wilting"],
+    2
+  );
+  assert.deepEqual(results.map((r) => r.id), ["b", "a"]);
+});
+
+test("the scorecard says healthy, likely, possible or unsure", () => {
+  assert.equal(healthLevel([], []), "healthy");
+  assert.equal(healthLevel(["wilting"], [{ id: "a", percent: STRONG_MATCH_PERCENT }]), "likely");
+  assert.equal(healthLevel(["wilting"], [{ id: "a", percent: CONFIDENT_MATCH_PERCENT }]), "possible");
+  assert.equal(healthLevel(["wilting"], [{ id: "a", percent: CONFIDENT_MATCH_PERCENT - 1 }]), "unsure");
+  assert.equal(healthLevel(["wilting"], []), "unsure");
+});
+
+test("only known symptom keys are accepted", () => {
+  assert.equal(isValidSymptom("wilting"), true);
+  assert.equal(isValidSymptom("sad plant"), false);
 });

@@ -115,6 +115,88 @@ export function flagKey(actor: DiagnosticActor, communityId: string | undefined)
   return actor.isSuperAdmin || !communityId ? `user:${actor.userId}` : `community:${communityId}`;
 }
 
+// ─── Farmer check (free, symptom based) ─────────────────────────────────────
+
+/**
+ * Picture-first symptom list. Admins tag each pest/disease with the symptoms
+ * it causes; a farmer taps what they see; the phone ranks the library by how
+ * well the two lists overlap. This works offline and costs nothing to run.
+ * Keys are stored, so never rename one - add a new key instead.
+ */
+export const SYMPTOMS = [
+  { key: "leaf_yellow", label: "Yellow leaves", emoji: "🟡" },
+  { key: "leaf_spots", label: "Spots on leaves", emoji: "🟤" },
+  { key: "leaf_holes", label: "Holes in leaves", emoji: "🕳️" },
+  { key: "leaf_curl", label: "Curled leaves", emoji: "🌀" },
+  { key: "leaf_mosaic", label: "Patchy light & dark leaves", emoji: "🧩" },
+  { key: "leaf_streaks", label: "Lines or streaks on leaves", emoji: "〰️" },
+  { key: "white_powder", label: "White powder or mould", emoji: "⚪" },
+  { key: "dry_leaves", label: "Dry or burnt leaves", emoji: "🍂" },
+  { key: "wilting", label: "Plant drooping / wilting", emoji: "🥀" },
+  { key: "stunted", label: "Plant small / not growing", emoji: "📏" },
+  { key: "stem_damage", label: "Stem damaged or rotting", emoji: "🪵" },
+  { key: "root_rot", label: "Roots or tubers rotting", emoji: "🟫" },
+  { key: "fruit_damage", label: "Cobs, fruit or pods damaged", emoji: "🌽" },
+  { key: "insects_seen", label: "Insects or worms seen", emoji: "🐛" },
+] as const;
+
+export const SYMPTOM_KEYS: string[] = SYMPTOMS.map((s) => s.key);
+
+export function isValidSymptom(key: string): boolean {
+  return SYMPTOM_KEYS.includes(key);
+}
+
+/** Farmer checks saved per person per Uganda day, to keep storage and writes light. */
+export const DAILY_REPORT_LIMIT = 20;
+
+/** Below this, the result says "Not sure - show your agent" instead of naming a match. */
+export const CONFIDENT_MATCH_PERCENT = 35;
+export const STRONG_MATCH_PERCENT = 60;
+
+export type MatchCandidate = { id: string; symptomTags?: string[] };
+export type MatchResult = { id: string; percent: number };
+export type HealthLevel = "healthy" | "possible" | "likely" | "unsure";
+
+/**
+ * Overlap between what the farmer saw and what an entry causes, as a
+ * percentage (the F1 score of the two tag lists). It is a match strength,
+ * not a medical probability, and the screens say so.
+ */
+export function symptomMatchPercent(selected: string[], conditionTags: string[] | undefined): number {
+  const tags = new Set(conditionTags ?? []);
+  const picked = new Set(selected);
+  if (tags.size === 0 || picked.size === 0) return 0;
+  let shared = 0;
+  picked.forEach((key) => {
+    if (tags.has(key)) shared++;
+  });
+  if (shared === 0) return 0;
+  const precision = shared / picked.size;
+  const recall = shared / tags.size;
+  return Math.round((200 * precision * recall) / (precision + recall));
+}
+
+/** Top matches, strongest first. Entries with no overlap are left out. */
+export function rankMatches(candidates: MatchCandidate[], selected: string[], limit = 3): MatchResult[] {
+  return candidates
+    .map((c) => ({ id: c.id, percent: symptomMatchPercent(selected, c.symptomTags) }))
+    .filter((r) => r.percent > 0)
+    .sort((a, b) => b.percent - a.percent || a.id.localeCompare(b.id))
+    .slice(0, limit);
+}
+
+/**
+ * The scorecard colour. Tapping no symptoms means the farmer says the crop
+ * looks fine. A weak best match is reported as "unsure" rather than guessing.
+ */
+export function healthLevel(selected: string[], results: MatchResult[]): HealthLevel {
+  if (selected.length === 0) return "healthy";
+  const best = results[0]?.percent ?? 0;
+  if (best >= STRONG_MATCH_PERCENT) return "likely";
+  if (best >= CONFIDENT_MATCH_PERCENT) return "possible";
+  return "unsure";
+}
+
 /** Sources are shown to farmers, so only real web links are accepted. */
 export function normalizeSourceUrl(url: string | undefined): string | undefined {
   const trimmed = (url ?? "").trim();

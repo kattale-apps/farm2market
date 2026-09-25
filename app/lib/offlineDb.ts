@@ -29,10 +29,28 @@ export interface PendingMutationEntry {
   meta?: Record<string, any>; // e.g. { expectedCoins: 5 }
 }
 
+/**
+ * A crop check done without network. It holds the photo itself, which the
+ * generic pendingMutations queue cannot, and is sent by the Diagnostics page
+ * once the phone is back online.
+ */
+export interface DiagnosticDraftEntry {
+  clientId: string;
+  userId: string;
+  communityId: string;
+  host: string;
+  symptomTags: string[];
+  checkedAt: number; // getUgandaTime() on the phone
+  photo?: Blob;
+  status: "pending" | "failed";
+  errorMsg?: string;
+}
+
 class FarmCoinOfflineDB extends Dexie {
   queryCache!: Table<QueryCacheEntry, string>;
   formDrafts!: Table<FormDraftEntry, number>;
   pendingMutations!: Table<PendingMutationEntry, number>;
+  diagnosticDrafts!: Table<DiagnosticDraftEntry, string>;
 
   constructor() {
     super("FarmCoinOfflineDB");
@@ -40,6 +58,10 @@ class FarmCoinOfflineDB extends Dexie {
       queryCache: "key",
       formDrafts: "++id, compositeKey, userId, formType",
       pendingMutations: "++id, status, timestamp",
+    });
+    // Version 2 only adds a table; data saved under version 1 is kept.
+    this.version(2).stores({
+      diagnosticDrafts: "clientId, userId, status",
     });
   }
 }

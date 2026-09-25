@@ -3071,7 +3071,7 @@ export default defineSchema({
   // results are saved as the farmer saw them; the server re-checks the ranking.
   diagnosticReports: defineTable({
     farmerId: v.id("users"),
-    communityId: v.id("communities"),
+    communityId: v.optional(v.id("communities")), // Set when the check was done from a community; any farmer can check without one
     clientId: v.string(), // Made on the phone; stops an offline retry saving twice
     host: v.string(),
     symptomTags: v.array(v.string()),

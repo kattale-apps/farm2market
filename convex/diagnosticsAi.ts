@@ -173,6 +173,8 @@ export const requestAiCheck = mutation({
     if (!report || String(report.farmerId) !== String(args.userId)) throw new Error("Check not found");
     if (!report.photoStorageId) return { queued: false, reason: "no_photo" as const };
     if (report.aiStatus) return { queued: report.aiStatus !== "failed", reason: "already" as const };
+    // Only a community that switched the AI check on pays for it.
+    if (!report.communityId) return { queued: false, reason: "not_available" as const };
 
     const community = await ctx.db.get(report.communityId);
     if (!community || !isDiagnosticsEnabled(community as any)) return { queued: false, reason: "not_available" as const };
@@ -263,11 +265,12 @@ export const saveAiResult = internalMutation({
       aiOutputTokens: args.outputTokens,
       aiCheckedAt: now,
     });
-    if (args.inputTokens || args.outputTokens) {
+    const communityId = report.communityId;
+    if (communityId && (args.inputTokens || args.outputTokens)) {
       const month = ugandaMonthKey(now);
       const usage = await ctx.db
         .query("diagnosticAiUsage")
-        .withIndex("by_community_month", (q) => q.eq("communityId", report.communityId).eq("month", month))
+        .withIndex("by_community_month", (q) => q.eq("communityId", communityId).eq("month", month))
         .first();
       if (usage) {
         await ctx.db.patch(usage._id, {
@@ -282,7 +285,7 @@ export const saveAiResult = internalMutation({
 type AiInput = {
   photoUrl: string | null;
   host: string;
-  communityId: Id<"communities">;
+  communityId: Id<"communities"> | undefined;
   candidates: { id: string; name: string; kind: string; symptoms: string }[];
 };
 

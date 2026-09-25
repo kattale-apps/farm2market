@@ -4,8 +4,7 @@
  * Farm Needs (farmer dashboard).
  *
  * For now this page is only the two Diagnostics checks - "Check my crops" and
- * "Check my animals" - for each of the farmer's communities that has
- * Diagnostics switched on. The Farm Needs forms that used to be listed here
+ * "Check my animals" - which any farmer can use. The Farm Needs forms that used to be listed here
  * were removed from this page at the owner's request (2026-09-25; no
  * community had any); their backend and admin page are unchanged.
  */
@@ -33,6 +32,11 @@ export default function FarmNeedsPage() {
     api.diagnosticsFarmer.listMyCheckCommunities,
     userId ? { userId } : "skip"
   );
+
+  // Checks from here are recorded in the farmer's Diagnostics community when
+  // they have one (so its admins see them and its AI photo check can run);
+  // otherwise they are the farmer's own.
+  const recordIn = Array.isArray(checkCommunities) && checkCommunities.length > 0 ? checkCommunities[0].communityId : null;
 
   if (authStatus === "loading") {
     return (
@@ -76,61 +80,51 @@ export default function FarmNeedsPage() {
       </div>
 
       <div style={{ padding: "1rem", maxWidth: "640px", margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
-        {checkCommunities === undefined ? (
-          <p style={{ textAlign: "center", color: "#666" }}>Loading…</p>
-        ) : !Array.isArray(checkCommunities) || checkCommunities.length === 0 ? (
+        {user?.role !== "farmer" ? (
           <div style={{ padding: "1.5rem", background: "#fff", borderRadius: "12px", textAlign: "center", border: "1px solid #e0e0e0" }}>
             <p style={{ fontSize: "2rem", margin: "0 0 0.5rem" }}>🔬</p>
-            <p style={{ margin: 0, fontSize: "1rem", color: "#333" }}>Crop and animal checks are not switched on in your community yet.</p>
-            <p style={{ margin: "0.4rem 0 0", fontSize: "0.85rem", color: "#888" }}>Ask your community admin.</p>
+            <p style={{ margin: 0, fontSize: "1rem", color: "#333" }}>Crop and animal checks are for farmer accounts.</p>
           </div>
         ) : (
-          checkCommunities.map((c) => (
-            <div key={c.communityId} style={{ marginBottom: "1rem" }}>
-              {checkCommunities.length > 1 && (
-                <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#555", margin: "0 0 0.4rem 0.2rem" }}>{c.name}</div>
-              )}
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                {CHECKS.map((check) => (
-                  <Link
-                    key={check.kind}
-                    href={`/community-only/diagnose?communityId=${c.communityId}&kind=${check.kind}&from=farm-needs`}
-                    style={{ textDecoration: "none", color: "inherit" }}
-                  >
-                    <div style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.9rem",
-                      padding: "1.1rem 1rem",
-                      background: "#fff",
-                      borderRadius: "14px",
-                      border: `2px solid ${BRAND}`,
-                      minHeight: 76,
-                    }}>
-                      <div style={{
-                        width: 58,
-                        height: 58,
-                        borderRadius: 14,
-                        background: BRAND_BG,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: "2rem",
-                        flexShrink: 0,
-                      }}>
-                        {check.emoji}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "#1a1a1a" }}>{check.title}</div>
-                        <div style={{ fontSize: "0.82rem", color: "#666" }}>{check.hint}</div>
-                      </div>
-                      <span style={{ fontSize: "1.3rem", color: "#bbb" }}>→</span>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          ))
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+            {CHECKS.map((check) => (
+              <Link
+                key={check.kind}
+                href={`/farmer/diagnose?kind=${check.kind}${recordIn ? `&communityId=${recordIn}` : ""}`}
+                style={{ textDecoration: "none", color: "inherit" }}
+              >
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.9rem",
+                  padding: "1.1rem 1rem",
+                  background: "#fff",
+                  borderRadius: "14px",
+                  border: `2px solid ${BRAND}`,
+                  minHeight: 76,
+                }}>
+                  <div style={{
+                    width: 58,
+                    height: 58,
+                    borderRadius: 14,
+                    background: BRAND_BG,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "2rem",
+                    flexShrink: 0,
+                  }}>
+                    {check.emoji}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "#1a1a1a" }}>{check.title}</div>
+                    <div style={{ fontSize: "0.82rem", color: "#666" }}>{check.hint}</div>
+                  </div>
+                  <span style={{ fontSize: "1.3rem", color: "#bbb" }}>→</span>
+                </div>
+              </Link>
+            ))}
+          </div>
         )}
       </div>
     </div>

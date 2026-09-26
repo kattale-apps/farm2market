@@ -75,4 +75,11 @@ crons.weekly(
   internal.diagnosticsImport.runScheduledImport,
 );
 
+// Export Markets price ticker: the ICO monthly composite price, once a day.
+crons.interval(
+  "refresh ICO composite coffee price",
+  { hours: 24 },
+  internal.exportPrices.refreshIcoComposite,
+);
+
 export default crons;

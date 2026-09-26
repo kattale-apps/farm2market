@@ -1064,7 +1064,8 @@ export const setCommunityModuleEnabled = mutation({
       v.literal("fertilizer"),
       v.literal("costTemplates"),
       v.literal("activeFarms"),
-      v.literal("diagnostics")
+      v.literal("diagnostics"),
+      v.literal("exportMarkets")
     ),
     enabled: v.boolean(),
   },
@@ -1090,6 +1091,18 @@ export const setCommunityModuleEnabled = mutation({
         action: args.enabled ? "module_enabled" : "module_disabled",
         actorId: args.adminId,
         actorCommunityId: args.communityId,
+        note: community.name,
+        at: getUgandaTime(),
+      });
+      return { success: true, communityId: args.communityId, module: args.module, enabled: args.enabled };
+    }
+
+    if (args.module === "exportMarkets") {
+      await ctx.db.patch(args.communityId, { exportMarketsEnabled: args.enabled });
+      await ctx.db.insert("exportAuditLog", {
+        action: args.enabled ? "module_enabled" : "module_disabled",
+        actorId: args.adminId,
+        targetId: String(args.communityId),
         note: community.name,
         at: getUgandaTime(),
       });
@@ -1159,6 +1172,11 @@ export const joinCommunityByQr = mutation({
     }
 
     // QR join is now allowed for ALL communities (qrEnabled gate removed)
+
+    // Exporter communities are invite-only: an admin adds verified traders.
+    if ((community as any).exportMarketsEnabled === true) {
+      throw new Error("Exporter communities are invite-only. An admin adds verified traders.");
+    }
 
     let userId: Id<"users"> | undefined;
   let wasNewUser = false;
@@ -1648,6 +1666,12 @@ export const joinCommunity = mutation({
 
     if (isVendorOnlyCommunity((community as any).communityType) && user.role !== "vendor") {
       throw new Error("Only vendors can join this community");
+    }
+
+    // Exporter communities are invite-only: an admin adds verified traders
+    // (exportMarkets.addTraderToExportCommunity).
+    if (community.exportMarketsEnabled === true) {
+      throw new Error("Exporter communities are invite-only. An admin adds verified traders.");
     }
 
     // Check if already a member

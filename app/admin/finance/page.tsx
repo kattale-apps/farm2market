@@ -10,6 +10,7 @@ import Link from "next/link";
 import * as XLSX from "xlsx";
 import { useStoredUser } from "../../hooks/useStoredUser";
 import { fromStoredUgandaTime, inUgandaTime } from "../../utils/timeUtils";
+import { ExportFeesPanel } from "../../components/exportMarkets/ExportFeesPanel";
 
 export default function FinanceDashboardPage() {
   const { user, status: authStatus } = useStoredUser();
@@ -293,6 +294,8 @@ export default function FinanceDashboardPage() {
           {message.text}
         </div>
       )}
+
+      {isSuperAdmin && userId && <ExportFeesPanel adminId={userId as Id<"users">} />}
 
       <div style={{
         padding: "1.5rem",

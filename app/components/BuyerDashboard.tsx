@@ -1070,6 +1070,33 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       {moreSlot && createPortal(moreContent, moreSlot)}
       {profileExtraSlot && createPortal(<UserProfileCard userId={userId} />, profileExtraSlot)}
 
+      {/* Export Markets quick link - bean to cup, next to Advanced Markets
+          (seedling to harvest); the page explains the difference. */}
+      <Link href="/buyer/export-markets" style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "0.75rem",
+        padding: "1rem 1.25rem",
+        background: "#efebe9",
+        border: "3px solid #000",
+        borderRadius: "14px",
+        textDecoration: "none",
+        color: "#4e342e",
+        fontFamily: '"Montserrat", sans-serif',
+        fontWeight: 700,
+        fontSize: "clamp(0.9rem,2.5vw,1rem)",
+        boxShadow: "0 0 0 1px #000, 0 0 18px 3px rgba(109,76,65,0.55), 0 2px 8px rgba(0,0,0,0.25)",
+        marginBottom: "1rem",
+      }}>
+        <span style={{ fontSize: "1.8rem", flexShrink: 0, lineHeight: 1 }}>☕</span>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ whiteSpace: "nowrap" }}>EXPORT MARKETS</div>
+          <div style={{ fontSize: "0.78rem", fontWeight: 500, color: "#6d4c41" }}>
+            Bean to cup: ready green coffee in export volumes
+          </div>
+        </div>
+      </Link>
+
       {/* Advanced Markets quick link */}
       <Link href="/buyer/advance-purchase" style={{
         display: "flex",

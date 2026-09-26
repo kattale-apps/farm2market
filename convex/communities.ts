@@ -605,6 +605,7 @@ export const getActiveCommunities = query({
           logoPath: resolvedLogo,
           communityAdminId: (c as any).communityAdminId,
           communityType: (c as any).communityType,
+          qrSlug: (c as any).qrSlug,
           autoJoinRoleMembers: !!(c as any).autoJoinRoleMembers,
           isGlobal: c.isGlobal,
           geoLocked: c.geoLocked,

@@ -3428,30 +3428,61 @@ export default function CommunityDashboardPage() {
             <p style={{ color: "#999" }}>No communities found.</p>
           </div>
         ) : !selectedCommunity ? (
+          // The communities landing page (merged with the old Community
+          // Overview on the admin dashboard): one card per community.
           <div>
-            <h2 style={{ fontSize: "1.15rem", fontWeight: 700, margin: "0 0 0.75rem", color: "#263238" }}>Choose a community</h2>
-            <div role="tablist" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 260px), 1fr))", gap: "0.85rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", marginBottom: "1rem" }}>
+              <h2 style={{ fontSize: "1.2rem", fontWeight: 800, margin: 0, color: "#263238" }}>
+                Communities <span style={{ fontWeight: 600, color: "#78909c", fontSize: "0.95rem" }}>({userCommunities.length})</span>
+              </h2>
+              {isSuperAdminUser && (
+                <a
+                  href="/admin/communities"
+                  style={{
+                    padding: "0.5rem 1rem",
+                    borderRadius: 999,
+                    background: "#1e88e5",
+                    color: "#fff",
+                    textDecoration: "none",
+                    fontWeight: 700,
+                    fontSize: "0.85rem",
+                  }}
+                >
+                  Open full community manager
+                </a>
+              )}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 290px), 1fr))", gap: "1rem" }}>
               {userCommunities.map((c: any, idx: number) => {
                 const id = String(c?._id ?? c?.id);
                 const colour = menuRainbowColor(idx);
+                const logo = getCommunityLogo(c);
                 const modules = [
                   c?.advancedMarketsEnabled && "Advanced Markets",
                   c?.exportMarketsEnabled && "Export Markets",
                   c?.diagnosticsEnabled && "Diagnostics",
                   c?.fertilizerEnabled && "Fertilizer",
                   c?.costTemplatesEnabled && "Cost Templates",
-                ].filter(Boolean);
+                  c?.activeFarmsEnabled && "Active Farms",
+                ].filter(Boolean) as string[];
+                const roles = Object.entries((c?.roleBreakdown ?? {}) as Record<string, number>).filter(([, n]) => n > 0);
                 return (
-                  <button
+                  <div
                     key={id}
-                    role="tab"
+                    role="button"
+                    tabIndex={0}
                     onClick={() => selectCommunity(id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        selectCommunity(id);
+                      }
+                    }}
                     style={{
-                      textAlign: "left",
                       display: "flex",
-                      gap: "0.75rem",
-                      alignItems: "center",
-                      padding: "0.9rem 1rem",
+                      flexDirection: "column",
+                      gap: "0.7rem",
+                      padding: "1rem",
                       borderRadius: 14,
                       border: `2px solid ${colour}`,
                       borderLeft: `8px solid ${colour}`,
@@ -3461,20 +3492,73 @@ export default function CommunityDashboardPage() {
                       boxShadow: "0 3px 10px rgba(0,0,0,0.06)",
                     }}
                   >
-                    {getCommunityLogo(c) ? (
-                      <img src={getCommunityLogo(c)!} alt="" style={{ width: 44, height: 44, objectFit: "contain", borderRadius: 10, flexShrink: 0 }} />
-                    ) : (
-                      <span style={{ width: 44, height: 44, borderRadius: 999, background: colour, color: "#fff", display: "grid", placeItems: "center", fontWeight: 800, flexShrink: 0 }}>
-                        {String(c?.name ?? "?").charAt(0).toUpperCase()}
-                      </span>
+                    <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
+                      {logo ? (
+                        <img src={logo} alt="" style={{ width: 52, height: 52, objectFit: "contain", borderRadius: 12, flexShrink: 0, background: "#fff" }} />
+                      ) : (
+                        <span style={{ width: 52, height: 52, borderRadius: 999, background: colour, color: "#fff", display: "grid", placeItems: "center", fontWeight: 800, fontSize: "1.2rem", flexShrink: 0 }}>
+                          {String(c?.name ?? "?").charAt(0).toUpperCase()}
+                        </span>
+                      )}
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 800, color: "#263238", fontSize: "0.98rem", lineHeight: 1.25 }}>{c?.name}</div>
+                        <div style={{ fontSize: "0.76rem", color: "#78909c" }}>
+                          {c?.qrSlug ? "QR community" : "Application-based"} · {c?.isGlobal ? "Global" : c?.geoLocked ? "Geo-locked" : "Local"}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: "0.4rem", flexWrap: "wrap" }}>
+                      <span style={{ fontSize: "1.6rem", fontWeight: 800, color: colour }}>{c?.memberCount ?? 0}</span>
+                      <span style={{ fontSize: "0.8rem", color: "#607d8b" }}>members</span>
+                      {roles.length > 0 && (
+                        <span style={{ fontSize: "0.75rem", color: "#78909c" }}>
+                          · {roles.map(([r, n]) => `${n} ${r}${n === 1 ? "" : "s"}`).join(", ")}
+                        </span>
+                      )}
+                    </div>
+                    {modules.length > 0 && (
+                      <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
+                        {modules.map((m) => (
+                          <span key={m} style={{ fontSize: "0.72rem", fontWeight: 700, padding: "0.15rem 0.5rem", borderRadius: 999, background: "#eef2f7", color: "#37474f" }}>
+                            {m}
+                          </span>
+                        ))}
+                      </div>
                     )}
-                    <span style={{ minWidth: 0 }}>
-                      <span style={{ display: "block", fontWeight: 800, color: "#263238", fontSize: "0.95rem" }}>{c?.name}</span>
-                      <span style={{ display: "block", fontSize: "0.78rem", color: "#607d8b" }}>
-                        {c?.memberCount ?? 0} members{modules.length ? ` · ${modules.join(", ")}` : ""}
+                    <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "auto" }}>
+                      <span
+                        style={{
+                          padding: "0.45rem 0.85rem",
+                          borderRadius: 8,
+                          background: colour,
+                          color: "#fff",
+                          fontWeight: 700,
+                          fontSize: "0.82rem",
+                        }}
+                      >
+                        Open dashboard →
                       </span>
-                    </span>
-                  </button>
+                      {c?.qrSlug && (
+                        <a
+                          href={`/join/community/${c.qrSlug}`}
+                          target="_blank"
+                          rel="noopener"
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            padding: "0.45rem 0.85rem",
+                            borderRadius: 8,
+                            background: "#f5f5f5",
+                            color: "#455a64",
+                            textDecoration: "none",
+                            fontWeight: 700,
+                            fontSize: "0.82rem",
+                          }}
+                        >
+                          Join Link ↗
+                        </a>
+                      )}
+                    </div>
+                  </div>
                 );
               })}
             </div>
@@ -3518,13 +3602,15 @@ export default function CommunityDashboardPage() {
                   onClick={() => selectCommunity(null)}
                   style={{
                     marginBottom: "0.9rem",
-                    padding: "0.5rem 1rem",
+                    padding: "0.55rem 1.1rem",
                     borderRadius: 999,
-                    border: "1px solid #cfd8dc",
-                    background: "#fff",
+                    border: "none",
+                    background: "linear-gradient(135deg, #1e88e5 0%, #1565c0 100%)",
+                    color: "#fff",
                     fontWeight: 700,
                     cursor: "pointer",
                     fontFamily: '"Montserrat", sans-serif',
+                    boxShadow: "0 4px 10px rgba(21,101,192,0.35)",
                   }}
                 >
                   ← All communities

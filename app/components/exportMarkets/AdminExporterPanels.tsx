@@ -67,7 +67,8 @@ export function Applications({ adminId, today, setMsg, communityId }: P) {
               <StatusPill state={r.profile.status} />
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "0.3rem", margin: "0.6rem 0", fontSize: "0.82rem" }}>
-              <div>Admitted as exporter: <b>{r.checks.admittedAsExporter ? "Yes" : "No"}</b></div>
+              <div>Verified by super admin: <b>{r.checks.platformVerified ? "Yes" : "No"}</b></div>
+              <div>Export Markets activated: <b>{r.checks.admittedAsExporter ? "Yes" : "No"}</b></div>
               <div>Verification fee: <StatusPill state={r.fee.state} /></div>
               {r.documents.map((d) => (
                 <div key={d.label}>
@@ -185,7 +186,10 @@ export function Documents({ adminId, today, setMsg, communityId }: P) {
 export function Members({ adminId, today, communities, setMsg }: P & { communities: { _id: Id<"communities">; name: string }[] }) {
   const [communityId, setCommunityId] = useState<Id<"communities"> | "">(communities[0]?._id ?? "");
   const [search, setSearch] = useState("");
-  const members = useQuery(api.exportMarkets.listExportCommunityMembers, communityId ? { adminId, communityId, today } : "skip");
+  const memberData = useQuery(api.exportMarkets.listExportCommunityMembers, communityId ? { adminId, communityId, today } : "skip");
+  const members = memberData?.members;
+  const canVerify = memberData?.canVerify ?? false;
+  const setVerification = useMutation(api.farmcoin.setTraderVerificationStatus);
   const candidates = useQuery(
     api.exportMarkets.listVerifiedTradersToAdd,
     communityId ? { adminId, communityId, search: search || undefined } : "skip"
@@ -210,8 +214,8 @@ export function Members({ adminId, today, communities, setMsg }: P & { communiti
       <div style={card}>
         <h2 style={{ marginTop: 0, fontSize: "1.05rem" }}>Traders in this community</h2>
         <p style={{ fontSize: "0.82rem", color: "#555", marginTop: 0 }}>
-          Traders can join this community themselves. Admit a trader as an exporter to open the export dashboard for them; revoking keeps
-          them in the community.
+          Traders can join this community themselves. A super admin verifies each trader; the community admin then activates Export
+          Markets for them. Revoking keeps them in the community.
         </p>
         {members === undefined ? (
           "Loading..."
@@ -224,10 +228,18 @@ export function Members({ adminId, today, communities, setMsg }: P & { communiti
               <div key={m.userId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", borderTop: "1px solid #eee", padding: "0.6rem 0", flexWrap: "wrap" }}>
                 <div style={{ fontSize: "0.88rem" }}>
                   <b>{m.legalName ?? m.alias}</b> {m.legalName ? `(alias ${m.alias})` : ""}{" "}
-                  <StatusPill state={m.admitted ? "approved" : "pending"} />
+                  {!m.platformVerified ? (
+                    <span style={{ fontSize: "0.72rem", fontWeight: 700, padding: "0.12rem 0.5rem", borderRadius: 999, background: "#fff8e1", color: "#ef6c00" }}>
+                      Needs super admin verification
+                    </span>
+                  ) : m.admitted ? (
+                    <span style={{ fontSize: "0.72rem", fontWeight: 700, padding: "0.12rem 0.5rem", borderRadius: 999, background: "#e8f5e9", color: "#2e7d32" }}>Export active</span>
+                  ) : (
+                    <span style={{ fontSize: "0.72rem", fontWeight: 700, padding: "0.12rem 0.5rem", borderRadius: 999, background: "#e3f2fd", color: "#1565c0" }}>Verified · ready to activate</span>
+                  )}
                   <div style={{ fontSize: "0.78rem", color: "#666" }}>
                     {[m.phoneNumber, m.email].filter(Boolean).join(" · ")}
-                    {m.platformVerified ? " · platform-verified trader" : ""}
+
                   </div>
                   {m.admitted && (
                     <div style={{ fontSize: "0.78rem", color: "#666" }}>
@@ -235,7 +247,29 @@ export function Members({ adminId, today, communities, setMsg }: P & { communiti
                     </div>
                   )}
                 </div>
-                {m.admitted ? (
+                {!m.platformVerified ? (
+                  canVerify ? (
+                    <button
+                      style={{ ...button("primary", busy === m.userId), fontSize: "0.78rem" }}
+                      disabled={busy === m.userId}
+                      onClick={async () => {
+                        setBusy(m.userId);
+                        try {
+                          await setVerification({ adminId, traderId: m.userId, status: "verified" });
+                          setMsg({ tone: "success", text: `${m.alias} verified. You can now activate Export Markets for them.` });
+                        } catch (e) {
+                          setMsg({ tone: "error", text: errorText(e) });
+                        } finally {
+                          setBusy(null);
+                        }
+                      }}
+                    >
+                      Verify trader (super admin)
+                    </button>
+                  ) : (
+                    <span style={{ fontSize: "0.78rem", color: "#607d8b", maxWidth: 220 }}>Waiting for a super admin to verify this trader</span>
+                  )
+                ) : m.admitted ? (
                   <button
                     style={{ ...button("danger", busy === m.userId), fontSize: "0.78rem" }}
                     disabled={busy === m.userId}
@@ -253,7 +287,7 @@ export function Members({ adminId, today, communities, setMsg }: P & { communiti
                       }
                     }}
                   >
-                    Revoke exporter access
+                    Deactivate Export Markets
                   </button>
                 ) : (
                   <button
@@ -264,7 +298,7 @@ export function Members({ adminId, today, communities, setMsg }: P & { communiti
                       setBusy(m.userId);
                       try {
                         await add({ adminId, communityId, traderId: m.userId });
-                        setMsg({ tone: "success", text: `${m.alias} admitted as an exporter. Export Markets is now open on their dashboard.` });
+                        setMsg({ tone: "success", text: `Export Markets activated for ${m.alias}. It is now open on their dashboard.` });
                       } catch (e) {
                         setMsg({ tone: "error", text: errorText(e) });
                       } finally {
@@ -272,7 +306,7 @@ export function Members({ adminId, today, communities, setMsg }: P & { communiti
                       }
                     }}
                   >
-                    Admit as exporter
+                    Activate Export Markets
                   </button>
                 )}
               </div>
@@ -281,12 +315,12 @@ export function Members({ adminId, today, communities, setMsg }: P & { communiti
       </div>
 
       <div style={card}>
-        <h2 style={{ marginTop: 0, fontSize: "1.05rem" }}>Add and admit a trader who has not joined</h2>
+        <h2 style={{ marginTop: 0, fontSize: "1.05rem" }}>Add a verified trader who has not joined</h2>
         <input style={{ ...input, marginBottom: "0.5rem" }} placeholder="Search alias, business name, phone or email" value={search} onChange={(e) => setSearch(e.target.value)} />
         {candidates === undefined ? (
           "Loading..."
         ) : candidates.length === 0 ? (
-          <p style={{ fontSize: "0.88rem" }}>No matching traders.</p>
+          <p style={{ fontSize: "0.88rem" }}>No matching verified traders.</p>
         ) : (
           candidates.map((c) => (
             <div key={c.userId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", borderTop: "1px solid #eee", padding: "0.5rem 0", flexWrap: "wrap" }}>
@@ -302,7 +336,7 @@ export function Members({ adminId, today, communities, setMsg }: P & { communiti
                   setBusy(c.userId);
                   try {
                     await add({ adminId, communityId, traderId: c.userId });
-                    setMsg({ tone: "success", text: `${c.businessName ?? c.alias} added and admitted as an exporter.` });
+                    setMsg({ tone: "success", text: `${c.businessName ?? c.alias} added, with Export Markets activated.` });
                   } catch (e) {
                     setMsg({ tone: "error", text: errorText(e) });
                   } finally {

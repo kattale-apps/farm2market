@@ -13,6 +13,7 @@ import { getCurrentLocation } from "@/app/utils/gps";
 import SubmissionPhotoGallery from "@/app/components/SubmissionPhotoGallery";
 import { useStoredUser } from "@/app/hooks/useStoredUser";
 import { fromStoredUgandaTime, inUgandaTime } from "../../utils/timeUtils";
+import { FarmCoinIcon } from "@/app/components/icons/Brand";
 
 const BRAND = "#2e7d32";
 const BRAND_BG = "#e8f5e9";
@@ -134,7 +135,7 @@ function TemplatesTab({ userId, onSelectTemplate }: { userId: Id<"users">; onSel
           </button>
         </div>
         <p style={{ margin: "0 0 1rem", fontSize: "0.82rem", color: "#666" }}>
-          Choose a template to log your farm data. Earn 🪙 1 FarmCoin per field filled in.
+          Choose a template to log your farm data. Earn <FarmCoinIcon size={16} /> 1 FarmCoin per field filled in.
         </p>
         {showCreateForm && <CreateTemplateForm userId={userId} onDone={() => setShowCreateForm(false)} />}
         {templates === undefined ? (
@@ -175,7 +176,7 @@ function TemplatesTab({ userId, onSelectTemplate }: { userId: Id<"users">; onSel
         )}
       </div>
       <div style={{ background: "#fff8e1", border: "1px solid " + GOLD, borderRadius: 12, padding: "1rem", display: "flex", gap: "0.75rem", alignItems: "flex-start" }}>
-        <span style={{ fontSize: "1.5rem" }}>🪙</span>
+        <FarmCoinIcon size={32} />
         <div>
           <div style={{ fontWeight: 700, fontSize: "0.88rem", color: "#e65100" }}>Earn FarmCoins!</div>
           <div style={{ fontSize: "0.78rem", color: "#555", marginTop: "0.2rem" }}>
@@ -765,7 +766,7 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate, onBackToTe
         localStorage.setItem(addressStorageKey, JSON.stringify(submissionAddress));
       }
       const filled = fvArray.filter((fv) => fv.value.trim()).length;
-      setSuccessMsg(`✅ Entry saved! You earned 🪙 ${filled} FarmCoin${filled !== 1 ? "s" : ""}!`);
+      setSuccessMsg(`✅ Entry saved! You earned ${filled} FarmCoin${filled !== 1 ? "s" : ""}!`);
       setFieldValues(getAutoDateFieldValues(selectedTemplate));
       setNotes("");
       setGps(null);
@@ -964,7 +965,7 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate, onBackToTe
 
         <button onClick={handleSubmit} disabled={submitting}
           style={{ width: "100%", padding: "0.85rem", background: BRAND, color: "#fff", border: "none", borderRadius: 10, fontWeight: 700, fontSize: "0.95rem", cursor: submitting ? "not-allowed" : "pointer", fontFamily: FONT, opacity: submitting ? 0.7 : 1 }}>
-          {submitting ? "Submitting…" : "💾 Submit Entry · Earn 🪙 FarmCoins"}
+          {submitting ? "Submitting…" : <>💾 Submit Entry · Earn <FarmCoinIcon size={18} /> FarmCoins</>}
         </button>
       </div>
 
@@ -1721,7 +1722,7 @@ export default function FarmToolboxPage() {
           </Link>
           <div>
             <h1 style={{ margin: 0, fontSize: "clamp(1.1rem,4vw,1.4rem)", fontWeight: 700 }}>📒 My Farm Record Book</h1>
-            <p style={{ margin: 0, fontSize: "0.8rem", opacity: 0.85 }}>Track • Plan • Earn 🪙 FarmCoins</p>
+            <p style={{ margin: 0, fontSize: "0.8rem", opacity: 0.85 }}>Track • Plan • Earn <FarmCoinIcon size={16} /> FarmCoins</p>
           </div>
         </div>
       </div>

@@ -7,6 +7,7 @@ import { Id } from "../../../convex/_generated/dataModel";
 import { Farm2MarketContent } from "../../components/Farm2MarketContent";
 import Link from "next/link";
 import { useStoredUser } from "../../hooks/useStoredUser";
+import { FarmCoinIcon } from "../../components/icons/Brand";
 
 const BRAND = "#2e7d32";
 const FONT = '"Montserrat", sans-serif';
@@ -111,7 +112,7 @@ export default function Farm2MarketPage() {
             {/* Progress bar */}
             <div style={{ marginBottom: "0.75rem" }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", color: "#888", marginBottom: "0.3rem", fontFamily: FONT }}>
-                <span>🪙 Your balance</span>
+                <span><FarmCoinIcon size={18} /> Your balance</span>
                 <span>{farm2MarketAccess.balance} / {farm2MarketAccess.requiredBalance}</span>
               </div>
               <div style={{ height: 10, background: "#f0f0f0", borderRadius: 8, overflow: "hidden" }}>

@@ -17,6 +17,7 @@ import { FarmCoinReward, FarmCoinVideoPreloader } from "@/app/components/FarmCoi
 import { useStoredUser } from "@/app/hooks/useStoredUser";
 import { getCurrentLocation } from "@/app/utils/gps";
 import { getEffectivePaymentAmount, getPaymentEntryConfig } from "@/utils/extensionWorkForm";
+import { FarmCoinIcon } from "@/app/components/icons/Brand";
 
 const BRAND = "#2e7d32";
 const BRAND_LIGHT = "#43a047";
@@ -633,7 +634,7 @@ export default function TrackerFillPage() {
             <p style={{ margin: 0, fontSize: "0.72rem", opacity: 0.85 }}>{saving ? "💾 Saving..." : "✓ Auto-saved"}</p>
           </div>
           <div style={{ background: GOLD_LIGHT, color: "#f57f17", borderRadius: 20, padding: "4px 12px", fontSize: "0.8rem", fontWeight: 700, display: "flex", alignItems: "center", gap: 4, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>
-            🪙 {filledFields}
+            <FarmCoinIcon size={18} /> {filledFields}
           </div>
         </div>
         <div style={{ background: "rgba(255,255,255,0.2)", borderRadius: 6, height: 8, overflow: "hidden" }}>
@@ -641,7 +642,7 @@ export default function TrackerFillPage() {
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.7rem", marginTop: 4, opacity: 0.85 }}>
           <span>{filledFields} / {totalFields} fields</span>
-          <span>🪙 {filledFields} coins pending</span>
+          <span><FarmCoinIcon size={18} /> {filledFields} coins pending</span>
         </div>
       </div>
 
@@ -744,7 +745,7 @@ export default function TrackerFillPage() {
                     {field.required && <span style={{ color: "#d32f2f", marginLeft: 4 }}>*</span>}
                     {field.isCalculated && <span style={{ marginLeft: 8, fontSize: "0.6rem", color: "#1976d2", fontWeight: 500, background: "#e3f2fd", padding: "2px 6px", borderRadius: 4 }}>Auto</span>}
                   </label>
-                  {hasValue && !field.isCalculated && <span style={{ fontSize: "0.85rem", opacity: 0.6 }}>🪙</span>}
+                  {hasValue && !field.isCalculated && <span style={{ opacity: 0.6 }}><FarmCoinIcon size={14} /></span>}
                 </div>
                 {field.helpText && <p style={{ margin: "0 0 6px 36px", fontSize: "0.72rem", color: "#888" }}>{field.helpText}</p>}
                 <FieldInput field={field} value={fieldValues[String(field._id)] || ""} onChange={(val) => handleFieldChange(String(field._id), val)} isSingleView={false} />
@@ -766,7 +767,7 @@ export default function TrackerFillPage() {
                 Field {currentFieldIndex + 1} of {totalFields}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 4, color: fieldValues[String(currentField._id)]?.trim() ? GOLD : "#ccc", fontSize: "1.2rem", transition: "color 0.3s" }}>
-                🪙<span style={{ fontSize: "0.75rem", fontWeight: 600 }}>{fieldValues[String(currentField._id)]?.trim() ? "+1" : ""}</span>
+                <FarmCoinIcon size={18} /><span style={{ fontSize: "0.75rem", fontWeight: 600 }}>{fieldValues[String(currentField._id)]?.trim() ? "+1" : ""}</span>
               </div>
             </div>
             <h2 style={{ fontSize: "1.25rem", fontWeight: 700, color: "#222", margin: "0 0 6px 0", fontFamily: FONT }}>
@@ -792,7 +793,7 @@ export default function TrackerFillPage() {
               </button>
             ) : (
               <button onClick={handleSubmit} disabled={submitting} style={{ flex: 2, padding: "16px", background: submitting ? "#999" : `linear-gradient(135deg, ${GOLD}, #f57f17)`, color: "#fff", border: "none", borderRadius: 14, fontSize: "1.05rem", fontWeight: 700, cursor: submitting ? "not-allowed" : "pointer", fontFamily: FONT, boxShadow: "0 4px 12px rgba(249,168,37,0.4)", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                {submitting ? "⏳" : `🌱 Submit & Earn ${filledFields} 🪙`}
+                {submitting ? "⏳" : <>🌱 Submit &amp; Earn {filledFields} <FarmCoinIcon size={18} /></>}
               </button>
             )}
           </div>

@@ -45,8 +45,9 @@ const TABS: { key: Tab; label: string; needs: string }[] = [
 
 /** Each checklist item and where the trader goes to act on it. */
 const CHECKS: { key: string; text: string; tab?: Tab; who?: string }[] = [
+  { key: "platformVerified", text: "Trader account verified by a super admin", who: "A super admin does this." },
   { key: "joinedExportCommunity", text: "Joined an exporter community", who: "Join one from Communities (menu: Join A Community)." },
-  { key: "admittedAsExporter", text: "Admitted as an exporter by the community admin", who: "Your community admin does this after you join." },
+  { key: "admittedAsExporter", text: "Export Markets activated by the community admin", who: "Your community admin does this after you join." },
   { key: "profileSaved", text: "Company profile saved", tab: "profile" },
   { key: "requiredDocsUploaded", text: "Required documents uploaded", tab: "documents" },
   { key: "feeOk", text: "Verification fee paid", tab: "documents" },
@@ -81,7 +82,7 @@ export default function ExporterWorkspacePage() {
   if (!user || user.role !== "trader" || !userId) {
     return <div style={{ padding: "2rem", fontFamily: FONT }}>Export Markets is available to trader accounts.</div>;
   }
-  const member = !!ws && ws.checks.admittedAsExporter;
+  const member = !!ws && ws.checks.platformVerified && ws.checks.admittedAsExporter;
 
   return (
     <div style={{ padding: "1rem", maxWidth: 900, margin: "0 auto", fontFamily: FONT }}>
@@ -122,13 +123,13 @@ export default function ExporterWorkspacePage() {
             <Notice tone="info">
               {ws.pendingCommunities.length > 0 ? (
                 <>
-                  You have joined <b>{ws.pendingCommunities.map((c) => c.name).join(", ")}</b>. Its community admin will admit you as an exporter;
-                  saving and uploading open then. Meanwhile you can explore every tab.
+                  You have joined <b>{ws.pendingCommunities.map((c) => c.name).join(", ")}</b>. Once a super admin has verified your trader account,
+                  the community admin activates Export Markets for you and saving and uploading open. Meanwhile you can explore every tab.
                 </>
               ) : (
                 <>
-                  You can explore every tab now. To start, join an exporter community from Communities; its admin then admits you as an
-                  exporter and saving and uploading open.
+                  You can explore every tab now. To start, join an exporter community from Communities. A super admin verifies your trader
+                  account and the community admin activates Export Markets for you; saving and uploading open then.
                 </>
               )}
             </Notice>

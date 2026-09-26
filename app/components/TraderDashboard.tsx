@@ -792,7 +792,9 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
             <div style={{ fontSize: "0.78rem", fontWeight: 500, color: "#0277bd" }}>
               {exportAccess.hasModule
                 ? `Exporter profile, documents and verification (${exportAccess.communityNames.join(", ")})`
-                : `Awaiting admission as an exporter in ${exportAccess.communityNames.join(", ")}`}
+                : exportAccess.awaiting === "verification"
+                  ? `Awaiting super admin verification (${exportAccess.communityNames.join(", ")})`
+                  : `Awaiting activation by the community admin (${exportAccess.communityNames.join(", ")})`}
             </div>
           </div>
         </a>

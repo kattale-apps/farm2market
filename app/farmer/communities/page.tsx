@@ -141,7 +141,7 @@ export default function FarmerCommunitiesPage() {
         type: "success",
         text:
           userRole === "trader" && community.exportMarketsEnabled === true
-            ? "Joined! This is an exporter community: its admin will admit you as an exporter, then Export Markets opens on your dashboard."
+            ? "Joined! This is an exporter community: once a super admin verifies your trader account, the community admin activates Export Markets on your dashboard."
             : "Successfully joined the community!",
       });
     } catch (error: any) {

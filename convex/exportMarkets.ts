@@ -378,8 +378,9 @@ export async function exporterReadiness(ctx: Ctx, user: Doc<"users">, today: str
   const requiredDocsVerified = required.every((s) => s.state === "verified" || s.state === "expiring");
   const requiredDocsUploaded = required.every((s) => s.state !== "missing" && s.state !== "rejected" && s.state !== "expired");
   const fee = feeState(profile, today);
-  // Two separate gates: a super admin verifies the trader (platform-wide),
-  // and the community admin activates Export Markets for them (admission).
+  // Two-step verification: (1) the community admin accepts the trader,
+  // which opens the export dashboard; (2) a super admin verifies the trader
+  // (full verification, with the badge). Going live to buyers needs both.
   const platformVerified = isVerifiedTrader(user);
   const joinedExportCommunity = joined.length > 0;
   const admittedAsExporter = user.role === "trader" && communities.length > 0;
@@ -429,13 +430,13 @@ export const getMyExportAccess = query({
     if (!user || user.role !== "trader") return { hasModule: false, pending: false, awaiting: null, communityNames: [] as string[] };
     const admitted = await exportCommunitiesForMember(ctx, user._id);
     const joined = await exportCommunitiesForMember(ctx, user._id, { admittedOnly: false });
-    const verified = isVerifiedTrader(user);
-    const hasModule = verified && admitted.length > 0;
+    // The dashboard opens on community admin acceptance (step 1);
+    // super admin verification (step 2) follows.
+    const hasModule = admitted.length > 0;
     return {
       hasModule,
-      // Joined an exporter community but not live yet: say what it waits for.
       pending: !hasModule && joined.length > 0,
-      awaiting: hasModule ? null : !verified ? ("verification" as const) : admitted.length === 0 ? ("admission" as const) : null,
+      awaiting: hasModule ? (isVerifiedTrader(user) ? null : ("verification" as const)) : joined.length > 0 ? ("admission" as const) : null,
       communityNames: (admitted.length ? admitted : joined).map((c) => c.name),
     };
   },
@@ -518,10 +519,9 @@ export const saveExporterProfile = mutation({
   handler: async (ctx, args) => {
     const user = await ctx.db.get(args.userId);
     if (!user || user.role !== "trader") throw new Error("Only trader accounts can become exporters");
-    if (!isVerifiedTrader(user)) throw new Error("A super admin must verify your trader account first");
     const communities = await exportCommunitiesForMember(ctx, user._id);
     if (!communities.some((c) => c._id === args.communityId)) {
-      throw new Error("Your community admin must activate Export Markets for you first");
+      throw new Error("Your community admin must accept you for Export Markets first");
     }
 
     const clean = (s: string | undefined) => (s ?? "").trim();
@@ -758,8 +758,7 @@ export const submitExporterProfile = mutation({
     if (!r.profile) throw new Error("Save your exporter profile first");
     if (r.profile.status === "approved") throw new Error("Your exporter profile is already approved");
     if (r.profile.status === "suspended") throw new Error("Your exporter profile is suspended. Contact an admin.");
-    if (!r.checks.platformVerified) throw new Error("A super admin must verify your trader account first");
-    if (!r.checks.admittedAsExporter) throw new Error("Your community admin must activate Export Markets for you first");
+    if (!r.checks.admittedAsExporter) throw new Error("Your community admin must accept you for Export Markets first");
     // Submission is ongoing: the exporter can submit early and keep adding
     // documents; admins review each one as it arrives. Approval still needs
     // every required document verified and the fee paid.
@@ -827,7 +826,7 @@ export const listExportCommunityMembers = query({
   },
 });
 
-/** Super-admin-verified traders who are not yet members of this exporter community. */
+/** Traders who are not yet members of this exporter community (to add and accept directly). */
 export const listVerifiedTradersToAdd = query({
   args: { adminId: v.id("users"), communityId: v.id("communities"), search: v.optional(v.string()) },
   handler: async (ctx, args) => {
@@ -839,7 +838,7 @@ export const listVerifiedTradersToAdd = query({
     const term = (args.search ?? "").trim().toLowerCase();
     const result = [];
     for (const t of traders) {
-      if (t.state !== "active" || !isVerifiedTrader(t)) continue;
+      if (t.state !== "active") continue;
       const membership = await ctx.db
         .query("communityMemberships")
         .withIndex("by_community_user", (q) => q.eq("communityId", args.communityId).eq("userId", t._id))
@@ -872,9 +871,8 @@ export const addTraderToExportCommunity = mutation({
     if (!trader || trader.role !== "trader" || trader.state !== "active") {
       throw new Error("Only active trader accounts can be admitted as exporters");
     }
-    // The community admin only activates the export dashboard; verifying
-    // the trader is for super admins.
-    if (!isVerifiedTrader(trader)) throw new Error("A super admin must verify this trader first (Finance: Trader Verification Status)");
+    // Step 1 of 2: acceptance opens the export dashboard. Super admin
+    // verification (step 2) is separate and can come before or after.
     // Admit a trader who already joined, or add and admit one in a single step.
     const now = getUgandaTime();
     const existing = await ctx.db
@@ -1114,8 +1112,7 @@ export const reviewExporterProfile = mutation({
     let status: Doc<"exporterProfiles">["status"];
     if (args.decision === "approve" || args.decision === "reinstate") {
       const r = await exporterReadiness(ctx, user, todayUganda());
-      if (!r.checks.platformVerified) throw new Error("A super admin must verify this trader first (Finance: Trader Verification Status)");
-      if (!r.checks.admittedAsExporter) throw new Error("Activate Export Markets for the trader first");
+      if (!r.checks.admittedAsExporter) throw new Error("Accept the trader for Export Markets first");
       if (!r.checks.requiredDocsVerified) throw new Error("Verify every required document first");
       if (!r.checks.feeOk) throw new Error("The verification fee is not paid");
       if (args.decision === "reinstate" && profile.status !== "suspended") throw new Error("Only a suspended exporter can be reinstated");

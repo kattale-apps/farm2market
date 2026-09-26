@@ -9,11 +9,11 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { useStoredUser } from "../../../hooks/useStoredUser";
-import { ugandaDateFromInstant } from "../../../../convex/exportMarketsShared";
+import { productFormLabel, ugandaDateFromInstant } from "../../../../convex/exportMarketsShared";
 import {
   FONT,
   ON_PHOTO_SHADOW,
-  EXPORT_BROWN,
+  EXPORT_HEADING,
   card,
   input,
   label,
@@ -22,6 +22,7 @@ import {
   TraceBadges,
   Stars,
   errorText,
+  PageHeader,
 } from "../../../components/exportMarkets/ui";
 import { PriceTicker } from "../../../components/exportMarkets/PriceTicker";
 
@@ -45,12 +46,13 @@ export default function ExportLotPage() {
 
   return (
     <div style={{ padding: "1rem", maxWidth: 900, margin: "0 auto", fontFamily: FONT }}>
-      <Link href="/buyer/export-markets" style={{ color: "#0d47a1", fontWeight: 700, fontSize: "0.9rem", textDecoration: "none", textShadow: ON_PHOTO_SHADOW }}>
-        ← All lots
-      </Link>
-      <h1 style={{ fontSize: "1.4rem", fontWeight: 800, margin: "0.75rem 0 0.5rem", color: EXPORT_BROWN, textShadow: ON_PHOTO_SHADOW }}>
-        {lot.coffeeType} {lot.grade} · lot {lot.lotCode}
-      </h1>
+      <PageHeader
+        title={`${lot.coffeeType} ${lot.grade} · lot ${lot.lotCode}`}
+        backHref="/buyer/export-markets"
+        backLabel="← All lots"
+        iconSrc="/icons/coffee-bean.svg"
+        subtitle={`${productFormLabel(lot.productForm)} · ${lot.processing} · crop ${lot.cropYear} · ${lot.originDistrict}`}
+      />
       <PriceTicker />
 
       <div style={card}>
@@ -60,7 +62,7 @@ export default function ExportLotPage() {
             {lot.photoUrls.length > 1 && (
               <div style={{ display: "flex", gap: "0.3rem", marginTop: "0.3rem", overflowX: "auto" }}>
                 {lot.photoUrls.map((u, i) => (
-                  <button key={i} onClick={() => setPhoto(i)} style={{ padding: 0, border: i === photo ? "2px solid #5d4037" : "2px solid transparent", borderRadius: 6, background: "none", cursor: "pointer" }}>
+                  <button key={i} onClick={() => setPhoto(i)} style={{ padding: 0, border: i === photo ? "2px solid #01579b" : "2px solid transparent", borderRadius: 6, background: "none", cursor: "pointer" }}>
                     <img src={u} alt="" style={{ width: 64, height: 48, objectFit: "cover", borderRadius: 4, display: "block" }} />
                   </button>
                 ))}

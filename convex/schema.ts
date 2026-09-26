@@ -3181,6 +3181,7 @@ export default defineSchema({
     exporterLicenceNumber: v.optional(v.string()),
     physicalAddress: v.string(),
     preferredPorts: v.array(v.string()), // short list, e.g. ["Mombasa", "Dar es Salaam"]
+    productForms: v.optional(v.array(v.string())), // green | roasted | packaged (absent = green only)
     contactPerson: v.string(),
     contactPhone: v.string(),
     contactEmail: v.optional(v.string()),
@@ -3218,6 +3219,7 @@ export default defineSchema({
     appliesTo: v.union(v.literal("exporter"), v.literal("buyer")),
     required: v.boolean(),
     hasExpiry: v.boolean(),
+    productForms: v.optional(v.array(v.string())), // only for exporters selling these forms
     isActive: v.boolean(),
     order: v.number(),
     createdAt: v.number(),
@@ -3303,6 +3305,8 @@ export default defineSchema({
     exporterId: v.id("users"),
     communityId: v.id("communities"), // exporter community (review scope)
     lotCode: v.string(), // public, anonymous code, e.g. "EXL-7Q4K2"
+    crop: v.optional(v.string()), // EXPORT_CROPS key; absent = coffee
+    productForm: v.optional(v.string()), // green | roasted | packaged; absent = green
     coffeeType: v.string(), // Arabica | Robusta
     grade: v.string(), // e.g. "Screen 18", "Bugisu AA", "Drugar"
     processing: v.string(),

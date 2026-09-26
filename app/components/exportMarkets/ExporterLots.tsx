@@ -9,6 +9,9 @@ import type { FunctionReturnType } from "convex/server";
 import { formatUgandaDateTime } from "../../utils/timeUtils";
 import {
   COFFEE_TYPES,
+  DEFAULT_EXPORT_CROP,
+  PRODUCT_FORMS,
+  productFormLabel,
   DEFAULT_BAG_WEIGHT_KG,
   INCOTERMS,
   PROCESSING_METHODS,
@@ -31,14 +34,25 @@ import { PhotoSetCapture, CapturedPhoto } from "./PhotoSetCapture";
 type Msg = { tone: "error" | "success" | "info"; text: string } | null;
 type LotDetail = FunctionReturnType<typeof api.exportLots.getMyLot>;
 
-export function ExporterLots({ userId, isActiveExporter }: { userId: Id<"users">; isActiveExporter: boolean }) {
-  const lots = useQuery(api.exportLots.listMyLots, { userId });
+export function ExporterLots({
+  userId,
+  isActiveExporter,
+  crop = DEFAULT_EXPORT_CROP,
+  productForms = ["green"],
+}: {
+  userId: Id<"users">;
+  isActiveExporter: boolean;
+  crop?: string;
+  productForms?: string[];
+}) {
+  const allLots = useQuery(api.exportLots.listMyLots, { userId });
+  const lots = allLots?.filter((l) => (l.crop ?? DEFAULT_EXPORT_CROP) === crop);
   const [openLotId, setOpenLotId] = useState<Id<"exportLots"> | null>(null);
   const [creating, setCreating] = useState(false);
   const [msg, setMsg] = useState<Msg>(null);
 
   if (openLotId) {
-    return <LotWorkspace userId={userId} lotId={openLotId} onBack={() => setOpenLotId(null)} isActiveExporter={isActiveExporter} />;
+    return <LotWorkspace userId={userId} lotId={openLotId} onBack={() => setOpenLotId(null)} isActiveExporter={isActiveExporter} crop={crop} productForms={productForms} />;
   }
 
   return (
@@ -50,6 +64,8 @@ export function ExporterLots({ userId, isActiveExporter }: { userId: Id<"users">
       {creating ? (
         <LotForm
           userId={userId}
+          crop={crop}
+          productForms={productForms}
           onDone={(lotId) => {
             setCreating(false);
             if (lotId) {
@@ -77,7 +93,9 @@ export function ExporterLots({ userId, isActiveExporter }: { userId: Id<"users">
             {lot.coverUrl ? (
               <img src={lot.coverUrl} alt="" style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 8, flexShrink: 0 }} />
             ) : (
-              <div style={{ width: 72, height: 72, borderRadius: 8, background: "#efebe9", display: "grid", placeItems: "center", fontSize: "1.8rem", flexShrink: 0 }}>☕</div>
+              <div style={{ width: 72, height: 72, borderRadius: 8, background: "#e1f5fe", display: "grid", placeItems: "center", flexShrink: 0 }}>
+                <img src="/icons/coffee-bean.svg" alt="" width={40} height={40} />
+              </div>
             )}
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem", flexWrap: "wrap" }}>
@@ -118,9 +136,22 @@ type LotFormValues = {
   warehouseLocation: string;
   incoterms: string[];
   sampleAvailable: boolean;
+  productForm: string;
 };
 
-function LotForm({ userId, lot, onDone }: { userId: Id<"users">; lot?: LotDetail["lot"]; onDone: (lotId?: Id<"exportLots">) => void }) {
+function LotForm({
+  userId,
+  lot,
+  onDone,
+  crop,
+  productForms,
+}: {
+  userId: Id<"users">;
+  lot?: LotDetail["lot"];
+  onDone: (lotId?: Id<"exportLots">) => void;
+  crop: string;
+  productForms: string[];
+}) {
   const save = useMutation(api.exportLots.saveLot);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -143,6 +174,7 @@ function LotForm({ userId, lot, onDone }: { userId: Id<"users">; lot?: LotDetail
     warehouseLocation: lot?.warehouseLocation ?? "",
     incoterms: lot?.incoterms ?? ["FOB"],
     sampleAvailable: lot?.sampleAvailable ?? true,
+    productForm: lot?.productForm ?? productForms[0] ?? "green",
   });
   const set = (k: keyof LotFormValues) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
   const text = (k: keyof LotFormValues, t: string, ph = "", req = false) => (
@@ -160,7 +192,17 @@ function LotForm({ userId, lot, onDone }: { userId: Id<"users">; lot?: LotDetail
     <div style={card}>
       <h2 style={{ marginTop: 0, fontSize: "1.1rem" }}>{lot ? `Edit ${lot.lotCode}` : "New export lot"}</h2>
       {error && <Notice tone="error">{error}</Notice>}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "0.6rem" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "0.85rem" }}>
+        <div>
+          <label style={label}>Product *</label>
+          <select style={input} value={f.productForm} onChange={set("productForm")}>
+            {PRODUCT_FORMS.filter((pf) => productForms.includes(pf.key) || pf.key === f.productForm).map((pf) => (
+              <option key={pf.key} value={pf.key}>
+                {pf.label}
+              </option>
+            ))}
+          </select>
+        </div>
         <div>
           <label style={label}>Coffee type *</label>
           <select style={input} value={f.coffeeType} onChange={set("coffeeType")}>
@@ -226,6 +268,8 @@ function LotForm({ userId, lot, onDone }: { userId: Id<"users">; lot?: LotDetail
               const r = await save({
                 userId,
                 lotId: lot?._id,
+                crop: lot?.crop ?? crop,
+                productForm: f.productForm,
                 coffeeType: f.coffeeType,
                 grade: f.grade,
                 processing: f.processing,
@@ -263,7 +307,21 @@ function LotForm({ userId, lot, onDone }: { userId: Id<"users">; lot?: LotDetail
   );
 }
 
-function LotWorkspace({ userId, lotId, onBack, isActiveExporter }: { userId: Id<"users">; lotId: Id<"exportLots">; onBack: () => void; isActiveExporter: boolean }) {
+function LotWorkspace({
+  userId,
+  lotId,
+  onBack,
+  isActiveExporter,
+  crop,
+  productForms,
+}: {
+  userId: Id<"users">;
+  lotId: Id<"exportLots">;
+  onBack: () => void;
+  isActiveExporter: boolean;
+  crop: string;
+  productForms: string[];
+}) {
   const data = useQuery(api.exportLots.getMyLot, { userId, lotId });
   const setStatus = useMutation(api.exportLots.setLotStatus);
   const [editing, setEditing] = useState(false);
@@ -292,7 +350,7 @@ function LotWorkspace({ userId, lotId, onBack, isActiveExporter }: { userId: Id<
       </button>
       {msg && <Notice tone={msg.tone}>{msg.text}</Notice>}
       {editing ? (
-        <LotForm userId={userId} lot={lot} onDone={() => setEditing(false)} />
+        <LotForm userId={userId} lot={lot} onDone={() => setEditing(false)} crop={crop} productForms={productForms} />
       ) : (
         <div style={card}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem", flexWrap: "wrap" }}>
@@ -302,7 +360,7 @@ function LotWorkspace({ userId, lotId, onBack, isActiveExporter }: { userId: Id<
             <StatusPill state={lot.status === "listed" ? "approved" : lot.status === "draft" ? "draft" : lot.status === "sold_out" ? "paid" : "suspended"} />
           </div>
           <div style={{ fontSize: "0.88rem", lineHeight: 1.7, marginTop: "0.4rem" }}>
-            {lot.availableBags} of {lot.bags} bags × {lot.bagWeightKg} kg available · min {lot.minOrderBags} bags · {lot.processing} · crop {lot.cropYear}
+            {productFormLabel(lot.productForm)} · {lot.availableBags} of {lot.bags} bags × {lot.bagWeightKg} kg available · min {lot.minOrderBags} bags · {lot.processing} · crop {lot.cropYear}
             <br />
             Origin {lot.originDistrict}
             {lot.originRegion ? `, ${lot.originRegion}` : ""} · warehouse {lot.warehouseLocation} · {lot.incoterms.join(", ")}

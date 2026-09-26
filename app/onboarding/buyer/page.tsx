@@ -257,8 +257,8 @@ export default function BuyerOnboardingPage() {
           </div>
 
           {!isUganda && (
-            <div style={{ marginBottom: "2rem", background: "#efebe9", padding: "1.5rem", borderRadius: "8px", border: "1px solid #d7ccc8" }}>
-              <h2 style={{ fontSize: "clamp(1.2rem, 3vw, 1.5rem)", marginBottom: "0.5rem", color: "#5d4037", fontFamily: '"Montserrat", sans-serif', fontWeight: "600" }}>
+            <div style={{ marginBottom: "2rem", background: "#e1f5fe", padding: "1.5rem", borderRadius: "8px", border: "1px solid #81d4fa" }}>
+              <h2 style={{ fontSize: "clamp(1.2rem, 3vw, 1.5rem)", marginBottom: "0.5rem", color: "#01579b", fontFamily: '"Montserrat", sans-serif', fontWeight: "600" }}>
                 🏛️ Company details
               </h2>
               <p style={{ fontSize: "0.85rem", color: "#777", marginBottom: "1rem" }}>

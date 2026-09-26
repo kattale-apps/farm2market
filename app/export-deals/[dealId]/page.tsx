@@ -15,7 +15,7 @@ import { INCOTERMS, PAYMENT_TERMS, ugandaDateFromInstant } from "../../../convex
 import {
   FONT,
   ON_PHOTO_SHADOW,
-  EXPORT_BROWN,
+  EXPORT_HEADING,
   card,
   input,
   label,
@@ -29,6 +29,7 @@ import {
   formatUsd,
   dataUrlToBlob,
   uploadToConvex,
+  PageHeader,
 } from "../../components/exportMarkets/ui";
 import { PhotoSetCapture, CapturedPhoto } from "../../components/exportMarkets/PhotoSetCapture";
 
@@ -59,12 +60,7 @@ export default function ExportDealPage() {
 
   return (
     <div style={{ padding: "1rem", maxWidth: 900, margin: "0 auto", fontFamily: FONT }}>
-      <Link href={back} style={{ color: "#0d47a1", fontWeight: 700, fontSize: "0.9rem", textDecoration: "none", textShadow: ON_PHOTO_SHADOW }}>
-        ← Back to Export Markets
-      </Link>
-      <h1 style={{ fontSize: "1.35rem", fontWeight: 800, margin: "0.75rem 0 0.25rem", color: EXPORT_BROWN, textShadow: ON_PHOTO_SHADOW }}>
-        ☕ Deal {deal.dealCode}
-      </h1>
+      <PageHeader title={`Deal ${deal.dealCode}`} backHref={back} backLabel="← Back to Export Markets" />
       {msg && <Notice tone={msg.tone}>{msg.text}</Notice>}
 
       <div style={card}>
@@ -676,7 +672,7 @@ function FeesStep({ data, userId, setMsg }: P) {
           {balance < myFee && (
             <div style={{ marginTop: "0.4rem" }}>
               <Link
-                href={role === "buyer" ? `/?deposit=${Math.ceil(myFee - balance)}&returnTo=/export-deals/${deal._id}` : "/trader/export"}
+                href={role === "buyer" ? `/?deposit=${Math.ceil(myFee - balance)}&returnTo=/export-deals/${deal._id}` : "/?wallet=open"}
                 style={{ color: "#0d47a1", fontWeight: 700 }}
               >
                 Top up your wallet

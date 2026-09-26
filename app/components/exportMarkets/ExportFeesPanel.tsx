@@ -5,7 +5,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { formatUgandaDateTime } from "../../utils/timeUtils";
-import { card, input, label, button, Notice, formatUgx, EXPORT_BROWN } from "./ui";
+import { card, input, label, button, Notice, formatUgx, EXPORT_HEADING } from "./ui";
 
 /**
  * Finance tab: Export Markets platform fees (super admins only).
@@ -52,7 +52,7 @@ export function ExportFeesPanel({ adminId }: { adminId: Id<"users"> }) {
 
   return (
     <div style={{ ...card, padding: "1.5rem", marginBottom: "2rem" }}>
-      <h2 style={{ fontSize: "1.3rem", margin: "0 0 0.25rem", color: EXPORT_BROWN }}>☕ Export Markets fees</h2>
+      <h2 style={{ fontSize: "1.3rem", margin: "0 0 0.25rem", color: EXPORT_HEADING }}>🚢 Export Markets fees</h2>
       <p style={{ fontSize: "0.85rem", color: "#555", marginTop: 0 }}>
         Exporters pay the success fee once contract terms are agreed, and buyer and exporter names are revealed only after
         the platform fees are paid. Fees are collected in UGX through the wallet. Set any fee to 0 to switch it off.
@@ -121,8 +121,8 @@ export function ExportFeesPanel({ adminId }: { adminId: Id<"users"> }) {
         <>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "0.5rem", marginBottom: "0.75rem" }}>
             {(["verification", "success", "buyer", "sample"] as const).map((k) => (
-              <div key={k} style={{ background: "#efebe9", borderRadius: 8, padding: "0.6rem" }}>
-                <div style={{ fontSize: "0.75rem", color: "#5d4037", fontWeight: 700, textTransform: "capitalize" }}>{k} fees</div>
+              <div key={k} style={{ background: "#e1f5fe", borderRadius: 8, padding: "0.6rem" }}>
+                <div style={{ fontSize: "0.75rem", color: "#01579b", fontWeight: 700, textTransform: "capitalize" }}>{k} fees</div>
                 <div style={{ fontWeight: 800 }}>{formatUgx(ledger.totals[k])}</div>
               </div>
             ))}

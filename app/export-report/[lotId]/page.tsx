@@ -3,7 +3,6 @@
 export const dynamic = "force-dynamic";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery } from "convex/react";
 import jsPDF from "jspdf";
@@ -13,7 +12,7 @@ import type { FunctionReturnType } from "convex/server";
 import { useStoredUser } from "../../hooks/useStoredUser";
 import { formatUgandaDateTime, inUgandaTime } from "../../utils/timeUtils";
 import { savePdfFromJsPDF } from "../../utils/pdfDownload";
-import { FONT, ON_PHOTO_SHADOW, EXPORT_BROWN, card, button, Notice, TraceBadges } from "../../components/exportMarkets/ui";
+import { FONT, card, button, Notice, TraceBadges, PageHeader } from "../../components/exportMarkets/ui";
 
 type Report = NonNullable<FunctionReturnType<typeof api.exportLots.getTraceabilityReport>>;
 
@@ -51,12 +50,12 @@ export default function TraceabilityReportPage() {
   const r = report;
   return (
     <div style={{ padding: "1rem", maxWidth: 900, margin: "0 auto", fontFamily: FONT }}>
-      <Link href={dealId ? `/export-deals/${dealId}` : "/trader/export"} style={{ color: "#0d47a1", fontWeight: 700, fontSize: "0.9rem", textDecoration: "none", textShadow: ON_PHOTO_SHADOW }}>
-        ← Back
-      </Link>
-      <h1 style={{ fontSize: "1.35rem", fontWeight: 800, margin: "0.75rem 0 0.25rem", color: EXPORT_BROWN, textShadow: ON_PHOTO_SHADOW }}>
-        Traceability report · Lot {r.lot.lotCode}
-      </h1>
+      <PageHeader
+        title={`Traceability report · Lot ${r.lot.lotCode}`}
+        backHref={dealId ? `/export-deals/${dealId}` : "/trader/export"}
+        backLabel="← Back"
+        iconSrc="/icons/coffee-bean.svg"
+      />
       {error && <Notice tone="error">{error}</Notice>}
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1rem" }}>
         <button

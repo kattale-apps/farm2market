@@ -1089,6 +1089,7 @@ export const listMyDeals = query({
 export const listDealsForAdmin = query({
   args: {
     adminId: v.id("users"),
+    communityId: v.optional(v.id("communities")),
     status: v.union(v.literal("enquiry"), v.literal("quoted"), v.literal("in_progress"), v.literal("completed"), v.literal("declined"), v.literal("cancelled")),
   },
   handler: async (ctx, args) => {
@@ -1102,6 +1103,7 @@ export const listDealsForAdmin = query({
         deals.push(...(await ctx.db.query("exportDeals").withIndex("by_exporterCommunityId_and_status", (q) => q.eq("exporterCommunityId", c._id).eq("status", args.status)).take(200)));
       }
     }
+    if (args.communityId) deals = deals.filter((d) => d.exporterCommunityId === args.communityId);
     const result = [];
     for (const d of deals) {
       const lot = await ctx.db.get(d.lotId);
@@ -1124,10 +1126,11 @@ export const listDealsForAdmin = query({
 
 /** Everything waiting on an admin: deal documents, sample desk tasks and buyer KYC. */
 export const listAdminDealTasks = query({
-  args: { adminId: v.id("users") },
+  args: { adminId: v.id("users"), communityId: v.optional(v.id("communities")) },
   handler: async (ctx, args) => {
     const admin = await requireAdmin(ctx, args.adminId);
     const canSee = async (deal: Doc<"exportDeals">) => {
+      if (args.communityId && deal.exporterCommunityId !== args.communityId) return false;
       if (isSuperAdmin(admin)) return true;
       const c = await ctx.db.get(deal.exporterCommunityId);
       return !!c && adminManagesCommunity(admin, c);

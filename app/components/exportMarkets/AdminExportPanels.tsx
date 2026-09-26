@@ -10,16 +10,16 @@ import { INCOTERMS, PipelineStep, ugandaDateFromInstant } from "../../../convex/
 import { card, input, label, button, Notice, StatusPill, errorText, formatUsd } from "./ui";
 
 type Msg = { tone: "error" | "success" | "info"; text: string } | null;
-type P = { adminId: Id<"users">; setMsg: (m: Msg) => void };
+type P = { adminId: Id<"users">; setMsg: (m: Msg) => void; communityId?: Id<"communities"> };
 
 // ------------------------------------------------------------------
 // Deals: tasks waiting on an admin, and the deal list
 // ------------------------------------------------------------------
 
-export function AdminDealsPanel({ adminId, setMsg }: P) {
-  const tasks = useQuery(api.exportDeals.listAdminDealTasks, { adminId });
+export function AdminDealsPanel({ adminId, setMsg, communityId }: P) {
+  const tasks = useQuery(api.exportDeals.listAdminDealTasks, { adminId, communityId });
   const [status, setStatus] = useState<"enquiry" | "quoted" | "in_progress" | "completed" | "declined" | "cancelled">("in_progress");
-  const deals = useQuery(api.exportDeals.listDealsForAdmin, { adminId, status });
+  const deals = useQuery(api.exportDeals.listDealsForAdmin, { adminId, status, communityId });
   const reviewKyc = useMutation(api.exportDeals.reviewBuyerKyc);
   const reviewDoc = useMutation(api.exportDeals.reviewDealDocument);
   const [notes, setNotes] = useState<Record<string, string>>({});
@@ -161,8 +161,8 @@ export function AdminDealsPanel({ adminId, setMsg }: P) {
 // Trace evidence review
 // ------------------------------------------------------------------
 
-export function AdminTracePanel({ adminId, setMsg }: P) {
-  const items = useQuery(api.exportLots.listTraceEvidenceForReview, { adminId });
+export function AdminTracePanel({ adminId, setMsg, communityId }: P) {
+  const items = useQuery(api.exportLots.listTraceEvidenceForReview, { adminId, communityId });
   const review = useMutation(api.exportLots.reviewTraceEvidence);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);

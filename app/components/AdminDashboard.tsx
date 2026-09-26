@@ -119,6 +119,9 @@ const glassPanelStyle: React.CSSProperties = {
   boxSizing: "border-box",
 };
 
+// Border colours for the community cards, cycled so neighbours differ.
+const COMMUNITY_CARD_COLOURS = ["#1e88e5", "#43a047", "#fb8c00", "#8e24aa", "#00897b", "#e53935", "#3949ab", "#c0ca33"];
+
 const utilityCardStyle: React.CSSProperties = {
   background: "#ffffff",
   border: "1px solid #e0e0e0",
@@ -2081,23 +2084,38 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
       )}
 
       {isSuperAdmin && showCommunityManager && (
-        <div style={{ marginTop: "1.5rem" }}>
+        // Opens as its own full page over the dashboard, instead of below it,
+        // so nothing has to be scrolled to reach it.
+        <div
+          role="dialog"
+          aria-label="Community Management"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1000,
+            overflowY: "auto",
+            background: "#f4f7fb",
+            padding: "clamp(0.75rem, 3vw, 2rem)",
+          }}
+        >
+          <div style={{ maxWidth: 1200, margin: "0 auto" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", marginBottom: "1rem" }}>
-            <h2 style={{ margin: 0 }}>Community Management</h2>
             <button
               type="button"
               onClick={() => setShowCommunityManager(false)}
               style={{
-                padding: "0.4rem 0.8rem",
-                borderRadius: 6,
-                border: "1px solid #ddd",
-                background: "#fff",
-                fontWeight: 600,
+                padding: "0.5rem 1rem",
+                borderRadius: 999,
+                border: "none",
+                background: "#111827",
+                color: "#fff",
+                fontWeight: 700,
                 cursor: "pointer",
               }}
             >
-              Close
+              ← Back to dashboard
             </button>
+            <h2 style={{ margin: 0, flex: 1 }}>Community Management</h2>
           </div>
 
           <div style={{ marginBottom: "0.75rem" }}>
@@ -2151,14 +2169,16 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
             <div style={{ marginBottom: "1.75rem" }}>
               <h3 style={{ marginBottom: "0.75rem", fontSize: "1.1rem", fontWeight: 700 }}>Community Overview</h3>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 280px), 1fr))", gap: "1rem" }}>
-                {communities.map((c: any) => (
+                {communities.map((c: any, idx: number) => (
                   <div
                     key={c._id}
                     style={{
                       background: "#fff",
                       borderRadius: "12px",
                       padding: "1rem",
-                      border: "1px solid #e0e0e0",
+                      // A colour boundary per community so the cards read as separate.
+                      border: `2px solid ${COMMUNITY_CARD_COLOURS[idx % COMMUNITY_CARD_COLOURS.length]}`,
+                      borderLeft: `8px solid ${COMMUNITY_CARD_COLOURS[idx % COMMUNITY_CARD_COLOURS.length]}`,
                       boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
                     }}
                   >
@@ -2871,6 +2891,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           )}
         </div>
       </div>
+    </div>
     </div>
   )}
 

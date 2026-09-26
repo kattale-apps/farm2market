@@ -8,8 +8,8 @@ import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { useStoredUser } from "../../hooks/useStoredUser";
-import { COFFEE_TYPES, ugandaDateFromInstant } from "../../../convex/exportMarketsShared";
-import { FONT, ON_PHOTO_SHADOW, EXPORT_BROWN, card, button, input, MarketsHelper, TraceBadges, Stars } from "../../components/exportMarkets/ui";
+import { COFFEE_TYPES, DEFAULT_EXPORT_CROP, PRODUCT_FORMS, productFormLabel, ugandaDateFromInstant } from "../../../convex/exportMarketsShared";
+import { FONT, ON_PHOTO_SHADOW, EXPORT_HEADING, card, button, input, MarketsHelper, TraceBadges, Stars, PageHeader, CropTabs, COFFEE_BEAN_ICON } from "../../components/exportMarkets/ui";
 import { PriceTicker } from "../../components/exportMarkets/PriceTicker";
 import { DealsList } from "../../components/exportMarkets/DealsList";
 
@@ -22,8 +22,10 @@ export default function BuyerExportMarketsPage() {
   const userId = (user?.userId as Id<"users"> | undefined) ?? null;
   const [today] = useState(() => ugandaDateFromInstant(Date.now()));
   const [coffeeType, setCoffeeType] = useState("");
+  const [crop, setCrop] = useState<string>(DEFAULT_EXPORT_CROP);
+  const [productForm, setProductForm] = useState("");
   const [tab, setTab] = useState<"lots" | "deals">("lots");
-  const lots = useQuery(api.exportLots.listCatalogue, { today, coffeeType: coffeeType || undefined });
+  const lots = useQuery(api.exportLots.listCatalogue, { today, crop, coffeeType: coffeeType || undefined, productForm: productForm || undefined });
   const [showHelp, setShowHelp] = useState(false);
 
   if (status === "loading") return <div style={{ padding: "2rem", fontFamily: FONT }}>Loading...</div>;
@@ -31,15 +33,17 @@ export default function BuyerExportMarketsPage() {
 
   return (
     <div style={{ padding: "1rem", maxWidth: 960, margin: "0 auto", fontFamily: FONT }}>
-      <Link href="/" style={{ color: "#0d47a1", fontWeight: 700, fontSize: "0.9rem", textDecoration: "none", textShadow: ON_PHOTO_SHADOW }}>
-        ← Back to Dashboard
-      </Link>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", margin: "0.75rem 0 0.5rem" }}>
-        <h1 style={{ fontSize: "1.45rem", fontWeight: 800, margin: 0, color: EXPORT_BROWN, textShadow: ON_PHOTO_SHADOW }}>☕ Export Markets</h1>
-        <button style={{ ...button("secondary"), fontSize: "0.8rem" }} onClick={() => setShowHelp(!showHelp)}>
-          {showHelp ? "Hide" : "Export vs Advanced Markets?"}
-        </button>
-      </div>
+      <PageHeader
+        title="Export Markets"
+        backHref="/"
+        subtitle="Buy ready export lots from verified exporters: price on request, platform-handled samples, and shipment tracked step by step."
+        right={
+          <button style={button("secondary")} onClick={() => setShowHelp(!showHelp)}>
+            {showHelp ? "Hide help" : "Export vs Advanced Markets?"}
+          </button>
+        }
+      />
+      <CropTabs value={crop} onChange={setCrop} />
       {showHelp && (
         <>
           <MarketsHelper highlight="export" />
@@ -72,12 +76,22 @@ export default function BuyerExportMarketsPage() {
         <DealsList userId={userId!} viewer="buyer" />
       ) : (
         <>
-          <select style={{ ...input, maxWidth: 220, marginBottom: "0.75rem" }} value={coffeeType} onChange={(e) => setCoffeeType(e.target.value)}>
-            <option value="">All coffee</option>
-            {COFFEE_TYPES.map((c) => (
-              <option key={c}>{c}</option>
-            ))}
-          </select>
+          <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap", marginBottom: "1rem" }}>
+            <select style={{ ...input, maxWidth: 220 }} value={coffeeType} onChange={(e) => setCoffeeType(e.target.value)}>
+              <option value="">All coffee</option>
+              {COFFEE_TYPES.map((c) => (
+                <option key={c}>{c}</option>
+              ))}
+            </select>
+            <select style={{ ...input, maxWidth: 260 }} value={productForm} onChange={(e) => setProductForm(e.target.value)}>
+              <option value="">Green, roasted and packaged</option>
+              {PRODUCT_FORMS.map((pf) => (
+                <option key={pf.key} value={pf.key}>
+                  {pf.label}
+                </option>
+              ))}
+            </select>
+          </div>
           {lots === undefined ? (
             <div style={card}>Loading lots...</div>
           ) : lots.length === 0 ? (
@@ -89,11 +103,14 @@ export default function BuyerExportMarketsPage() {
                   {lot.coverUrl ? (
                     <img src={lot.coverUrl} alt="" style={{ width: "100%", height: 140, objectFit: "cover", borderRadius: 8 }} />
                   ) : (
-                    <div style={{ height: 80, borderRadius: 8, background: "#efebe9", display: "grid", placeItems: "center", fontSize: "2rem" }}>☕</div>
+                    <div style={{ height: 110, borderRadius: 10, background: "#e1f5fe", display: "grid", placeItems: "center" }}>
+                      <img src={COFFEE_BEAN_ICON} alt="" width={56} height={56} />
+                    </div>
                   )}
                   <div style={{ fontWeight: 800, marginTop: "0.5rem" }}>
                     {lot.coffeeType} {lot.grade}
                   </div>
+                  <div style={{ fontSize: "0.8rem", color: "#0277bd", fontWeight: 700 }}>{productFormLabel(lot.productForm)}</div>
                   <div style={{ fontSize: "0.8rem", color: "#555" }}>
                     Lot {lot.lotCode} · {lot.processing} · {lot.cropYear} · {lot.originDistrict}
                   </div>
@@ -105,7 +122,7 @@ export default function BuyerExportMarketsPage() {
                     {lot.exporter.onTimeShipmentRate != null && ` · ${lot.exporter.onTimeShipmentRate}% on time`}
                   </div>
                   <TraceBadges traceLevel={lot.traceLevel} eudrReady={lot.eudrReady} />
-                  <div style={{ fontSize: "0.8rem", fontWeight: 700, color: EXPORT_BROWN, marginTop: "0.4rem" }}>Price on request →</div>
+                  <div style={{ fontSize: "0.8rem", fontWeight: 700, color: EXPORT_HEADING, marginTop: "0.4rem" }}>Price on request →</div>
                 </Link>
               ))}
             </div>

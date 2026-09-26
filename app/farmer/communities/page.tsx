@@ -118,7 +118,7 @@ export default function FarmerCommunitiesPage() {
     return sorted[0]?._id ?? null;
   };
 
-  const handleJoinCommunity = async (community: { id: Id<"communities">; name: string; description?: string }) => {
+  const handleJoinCommunity = async (community: { id: Id<"communities">; name: string; description?: string; exportMarketsEnabled?: boolean }) => {
     if (!userId) return;
     console.log("[DEBUG] join community click:", community);
     setLoadingAction(`join-${community.id}`);
@@ -137,7 +137,13 @@ export default function FarmerCommunitiesPage() {
       }
 
       await joinCommunity({ farmerId: userId, communityId: community.id });
-      setMessage({ type: "success", text: "Successfully joined the community!" });
+      setMessage({
+        type: "success",
+        text:
+          userRole === "trader" && community.exportMarketsEnabled === true
+            ? "Joined! This is an exporter community: its admin will admit you as an exporter, then Export Markets opens on your dashboard."
+            : "Successfully joined the community!",
+      });
     } catch (error: any) {
       // ConvexError carries a readable reason in .data (production hides .message).
       setMessage({ type: "error", text: (typeof error?.data === "string" && error.data) || error.message || "Failed to join community" });
@@ -551,15 +557,11 @@ export default function FarmerCommunitiesPage() {
                       !community.isMember ? (
                         getCommunityStatus(community) === "PENDING" && isAgroFreshCommunity(community) ? (
                           <div style={{ color: "#b45309", fontWeight: 600 }}>Pending approval</div>
-                        ) : userRole === "trader" && (community as any).exportMarketsEnabled === true ? (
-                          <div style={{ flex: 1, padding: "0.75rem 1rem", borderRadius: 8, background: "#e1f5fe", color: "#01579b", fontWeight: 600, fontSize: "0.88rem", textAlign: "center" }}>
-                            🚢 Exporter community: traders are added by the community admin
-                          </div>
                         ) : (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleJoinCommunity({ id: community.id, name: community.name });
+                              handleJoinCommunity({ id: community.id, name: community.name, exportMarketsEnabled: community.exportMarketsEnabled });
                             }}
                             disabled={loadingAction === `join-${community.id}`}
                             style={{

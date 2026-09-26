@@ -96,13 +96,32 @@ export async function exportCommunitiesForAdmin(ctx: Ctx, admin: Doc<"users">): 
 }
 
 /** Export communities a user belongs to. */
-export async function exportCommunitiesForMember(ctx: Ctx, userId: Id<"users">): Promise<Doc<"communities">[]> {
+/**
+ * Admitted as an exporter in this membership. Memberships created by the
+ * older "add trader" flow carry communityRole "Exporter" and count too.
+ */
+export function isAdmittedExporter(m: Doc<"communityMemberships">): boolean {
+  return m.exportAdmitted === true || (m.exportAdmitted === undefined && m.communityRole === "Exporter");
+}
+
+/**
+ * Exporter communities a user belongs to. By default only those where the
+ * community admin has admitted them as an exporter; with `admittedOnly:
+ * false`, every exporter community they have joined.
+ */
+export async function exportCommunitiesForMember(
+  ctx: Ctx,
+  userId: Id<"users">,
+  opts: { admittedOnly?: boolean } = {}
+): Promise<Doc<"communities">[]> {
+  const admittedOnly = opts.admittedOnly ?? true;
   const memberships = await ctx.db
     .query("communityMemberships")
     .withIndex("by_user", (q) => q.eq("userId", userId))
     .take(200);
   const result: Doc<"communities">[] = [];
   for (const m of memberships) {
+    if (admittedOnly && !isAdmittedExporter(m)) continue;
     const c = await ctx.db.get(m.communityId);
     if (c && c.exportMarketsEnabled === true) result.push(c);
   }
@@ -349,6 +368,7 @@ export function feeState(profile: Doc<"exporterProfiles"> | null, today: string)
  */
 export async function exporterReadiness(ctx: Ctx, user: Doc<"users">, today: string) {
   const communities = await exportCommunitiesForMember(ctx, user._id);
+  const joined = await exportCommunitiesForMember(ctx, user._id, { admittedOnly: false });
   const profile = await ctx.db
     .query("exporterProfiles")
     .withIndex("by_userId", (q) => q.eq("userId", user._id))
@@ -358,8 +378,8 @@ export async function exporterReadiness(ctx: Ctx, user: Doc<"users">, today: str
   const requiredDocsVerified = required.every((s) => s.state === "verified" || s.state === "expiring");
   const requiredDocsUploaded = required.every((s) => s.state !== "missing" && s.state !== "rejected" && s.state !== "expired");
   const fee = feeState(profile, today);
-  const verifiedTrader = isVerifiedTrader(user);
-  const inExportCommunity = communities.length > 0;
+  const joinedExportCommunity = joined.length > 0;
+  const admittedAsExporter = user.role === "trader" && communities.length > 0;
   const approved = profile?.status === "approved";
   return {
     communities,
@@ -367,8 +387,8 @@ export async function exporterReadiness(ctx: Ctx, user: Doc<"users">, today: str
     slots,
     fee,
     checks: {
-      verifiedTrader,
-      inExportCommunity,
+      joinedExportCommunity,
+      admittedAsExporter,
       profileSaved: !!profile,
       requiredDocsUploaded,
       requiredDocsVerified,
@@ -376,7 +396,9 @@ export async function exporterReadiness(ctx: Ctx, user: Doc<"users">, today: str
       approved,
     },
     isActiveExporter:
-      verifiedTrader && inExportCommunity && approved && requiredDocsVerified && fee.ok,
+      admittedAsExporter && approved && requiredDocsVerified && fee.ok,
+    // Joined an exporter community but not yet admitted as an exporter.
+    pendingCommunities: joined.filter((c) => !communities.some((a) => a._id === c._id)),
   };
 }
 
@@ -400,11 +422,14 @@ export const getMyExportAccess = query({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
     const user = await ctx.db.get(args.userId);
-    if (!user || user.role !== "trader") return { hasModule: false, communityNames: [] as string[] };
-    const communities = await exportCommunitiesForMember(ctx, user._id);
+    if (!user || user.role !== "trader") return { hasModule: false, pending: false, communityNames: [] as string[] };
+    const admitted = await exportCommunitiesForMember(ctx, user._id);
+    const joined = await exportCommunitiesForMember(ctx, user._id, { admittedOnly: false });
     return {
-      hasModule: communities.length > 0 && isVerifiedTrader(user),
-      communityNames: communities.map((c) => c.name),
+      hasModule: admitted.length > 0,
+      // Joined an exporter community, waiting for the admin to admit them.
+      pending: admitted.length === 0 && joined.length > 0,
+      communityNames: (admitted.length ? admitted : joined).map((c) => c.name),
     };
   },
 });
@@ -447,6 +472,7 @@ export const getMyExporterWorkspace = query({
       checks: r.checks,
       isActiveExporter: r.isActiveExporter,
       communities: r.communities.map((c) => ({ _id: c._id, name: c.name })),
+      pendingCommunities: r.pendingCommunities.map((c) => ({ _id: c._id, name: c.name })),
       profile: r.profile,
       fee: {
         ...r.fee,
@@ -485,10 +511,9 @@ export const saveExporterProfile = mutation({
   handler: async (ctx, args) => {
     const user = await ctx.db.get(args.userId);
     if (!user || user.role !== "trader") throw new Error("Only trader accounts can become exporters");
-    if (!isVerifiedTrader(user)) throw new Error("Your trader account must be verified by a super admin first");
     const communities = await exportCommunitiesForMember(ctx, user._id);
     if (!communities.some((c) => c._id === args.communityId)) {
-      throw new Error("You must be a member of this exporter community");
+      throw new Error("Your community admin must admit you as an exporter first");
     }
 
     const clean = (s: string | undefined) => (s ?? "").trim();
@@ -725,8 +750,7 @@ export const submitExporterProfile = mutation({
     if (!r.profile) throw new Error("Save your exporter profile first");
     if (r.profile.status === "approved") throw new Error("Your exporter profile is already approved");
     if (r.profile.status === "suspended") throw new Error("Your exporter profile is suspended. Contact an admin.");
-    if (!r.checks.verifiedTrader) throw new Error("Your trader account must be verified by a super admin first");
-    if (!r.checks.inExportCommunity) throw new Error("You must be a member of an exporter community");
+    if (!r.checks.admittedAsExporter) throw new Error("Your community admin must admit you as an exporter first");
     // Submission is ongoing: the exporter can submit early and keep adding
     // documents; admins review each one as it arrives. Approval still needs
     // every required document verified and the fee paid.
@@ -779,7 +803,10 @@ export const listExportCommunityMembers = query({
       members.push({
         userId: u._id,
         alias: u.alias,
-        verifiedTrader: r.checks.verifiedTrader,
+        admitted: isAdmittedExporter(m),
+        platformVerified: isVerifiedTrader(u),
+        phoneNumber: u.phoneNumber ?? null,
+        email: u.email ?? null,
         joinedAt: m.joinedAt,
         profileStatus: r.profile?.status ?? null,
         legalName: r.profile?.legalName ?? null,
@@ -791,7 +818,7 @@ export const listExportCommunityMembers = query({
   },
 });
 
-/** Verified traders who are not yet in this exporter community. */
+/** Traders who are not yet members of this exporter community (to add and admit directly). */
 export const listVerifiedTradersToAdd = query({
   args: { adminId: v.id("users"), communityId: v.id("communities"), search: v.optional(v.string()) },
   handler: async (ctx, args) => {
@@ -803,7 +830,7 @@ export const listVerifiedTradersToAdd = query({
     const term = (args.search ?? "").trim().toLowerCase();
     const result = [];
     for (const t of traders) {
-      if (!isVerifiedTrader(t) || t.state !== "active") continue;
+      if (t.state !== "active") continue;
       const membership = await ctx.db
         .query("communityMemberships")
         .withIndex("by_community_user", (q) => q.eq("communityId", args.communityId).eq("userId", t._id))
@@ -833,25 +860,33 @@ export const addTraderToExportCommunity = mutation({
   handler: async (ctx, args) => {
     const { community } = await requireExportCommunityAdmin(ctx, args.adminId, args.communityId);
     const trader = await ctx.db.get(args.traderId);
-    if (!trader || !isVerifiedTrader(trader)) {
-      throw new Error("Only traders verified by a super admin can join an exporter community");
+    if (!trader || trader.role !== "trader" || trader.state !== "active") {
+      throw new Error("Only active trader accounts can be admitted as exporters");
     }
+    // Admit a trader who already joined, or add and admit one in a single step.
+    const now = getUgandaTime();
     const existing = await ctx.db
       .query("communityMemberships")
       .withIndex("by_community_user", (q) => q.eq("communityId", args.communityId).eq("userId", args.traderId))
       .first();
-    if (existing) throw new Error("This trader is already a member");
-    await ctx.db.insert("communityMemberships", {
-      communityId: args.communityId,
-      userId: args.traderId,
-      joinedAt: getUgandaTime(),
-      communityRole: "Exporter",
-    });
+    if (existing) {
+      if (isAdmittedExporter(existing)) throw new Error("This trader is already admitted as an exporter");
+      await ctx.db.patch(existing._id, { exportAdmitted: true, exportAdmittedBy: args.adminId, exportAdmittedAt: now });
+    } else {
+      await ctx.db.insert("communityMemberships", {
+        communityId: args.communityId,
+        userId: args.traderId,
+        joinedAt: now,
+        exportAdmitted: true,
+        exportAdmittedBy: args.adminId,
+        exportAdmittedAt: now,
+      });
+    }
     await notify(
       ctx,
       args.traderId,
       "Export Markets unlocked",
-      `You were added to ${community.name}. Open Export Markets on your dashboard to set up your exporter profile and documents.`
+      `You were admitted as an exporter in ${community.name}. Open Export Markets on your dashboard to set up your exporter profile and documents.`
     );
     await audit(ctx, "member_added", args.adminId, { targetUserId: args.traderId, targetId: String(args.communityId) });
     return { success: true };
@@ -866,8 +901,12 @@ export const removeTraderFromExportCommunity = mutation({
       .query("communityMemberships")
       .withIndex("by_community_user", (q) => q.eq("communityId", args.communityId).eq("userId", args.traderId))
       .first();
-    if (!membership) throw new Error("This trader is not a member");
-    await ctx.db.delete(membership._id);
+    if (!membership || !isAdmittedExporter(membership)) throw new Error("This trader is not admitted as an exporter");
+    // Revoking export access keeps the trader a member of the community.
+    await ctx.db.patch(membership._id, {
+      exportAdmitted: false,
+      communityRole: membership.communityRole === "Exporter" ? undefined : membership.communityRole,
+    });
     const profile = await ctx.db
       .query("exporterProfiles")
       .withIndex("by_userId", (q) => q.eq("userId", args.traderId))
@@ -875,7 +914,7 @@ export const removeTraderFromExportCommunity = mutation({
     if (profile && profile.communityId === args.communityId && profile.status === "approved") {
       await ctx.db.patch(profile._id, { status: "suspended", reviewNotes: args.reason, updatedAt: getUgandaTime() });
     }
-    await notify(ctx, args.traderId, "Removed from exporter community", `You were removed from ${community.name}. ${args.reason}`);
+    await notify(ctx, args.traderId, "Export access removed", `Your exporter access in ${community.name} was removed. ${args.reason}`);
     await audit(ctx, "member_removed", args.adminId, { targetUserId: args.traderId, note: args.reason });
     return { success: true };
   },
@@ -1063,8 +1102,7 @@ export const reviewExporterProfile = mutation({
     let status: Doc<"exporterProfiles">["status"];
     if (args.decision === "approve" || args.decision === "reinstate") {
       const r = await exporterReadiness(ctx, user, todayUganda());
-      if (!r.checks.verifiedTrader) throw new Error("The trader account is not verified by a super admin");
-      if (!r.checks.inExportCommunity) throw new Error("The trader is not in an exporter community");
+      if (!r.checks.admittedAsExporter) throw new Error("Admit the trader as an exporter first");
       if (!r.checks.requiredDocsVerified) throw new Error("Verify every required document first");
       if (!r.checks.feeOk) throw new Error("The verification fee is not paid");
       if (args.decision === "reinstate" && profile.status !== "suspended") throw new Error("Only a suspended exporter can be reinstated");

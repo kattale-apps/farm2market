@@ -129,7 +129,8 @@ export default defineSchema({
       v.literal("profit_credit"),
       v.literal("profit_withdrawal"),
       v.literal("incoming_purchase"), // Created when trader makes offer on unit(s) - not inventory, just a pending purchase record
-      v.literal("trader_commission_deduction") // Trader commission deducted from wallet
+      v.literal("trader_commission_deduction"), // Trader commission deducted from wallet
+      v.literal("export_fee_payment") // Export Markets platform fee (verification, success, sample) paid from the wallet
     ),
     amount: v.number(), // Amount in UGX
     balanceAfter: v.number(), // Running balance after this entry
@@ -876,6 +877,7 @@ export default defineSchema({
     costTemplatesEnabled: v.optional(v.boolean()), // SuperAdmin flag: show the Cost Templates module in this community's dashboard
     activeFarmsEnabled: v.optional(v.boolean()), // SuperAdmin flag: show the Active Farms module (members' Farm Record Book entries) in this community's dashboard
     diagnosticsEnabled: v.optional(v.boolean()), // SuperAdmin flag: give this community access to the shared pest & disease Diagnostics library
+    exportMarketsEnabled: v.optional(v.boolean()), // SuperAdmin flag: this is an exporter community - its verified-trader members get the Export Markets module
   })
     .index("by_active", ["isGlobal", "geoLocked"])
     .index("by_created_by", ["createdBy"]),
@@ -1801,10 +1803,34 @@ export default defineSchema({
     userId: v.id("users"),
     businessName: v.string(),
     region: v.optional(v.string()),
-    districtId: v.optional(v.id("districts")),
-    subcountyId: v.optional(v.id("subcounties")),
+    districtId: v.optional(v.id("districts")), // Ugandan buyers only
+    subcountyId: v.optional(v.id("subcounties")), // Ugandan buyers only
     onboardingCompleted: v.boolean(),
     createdAt: v.number(),
+    // Where the buyer is based. Profiles created before international
+    // onboarding existed have no countryCode and are Ugandan.
+    countryCode: v.optional(v.string()), // ISO 3166-1 alpha-2, e.g. "UG", "DE"
+    countryName: v.optional(v.string()),
+    city: v.optional(v.string()),
+    addressLine: v.optional(v.string()),
+    postalCode: v.optional(v.string()),
+    // Company details captured at onboarding. KYC documents come later, once
+    // an export offer has been accepted (exportDocuments, ownerKind "buyer").
+    companyRegistrationNumber: v.optional(v.string()),
+    taxId: v.optional(v.string()), // VAT / tax number in the buyer's country
+    eoriNumber: v.optional(v.string()), // EU importers
+    contactPerson: v.optional(v.string()),
+    contactPhone: v.optional(v.string()),
+    website: v.optional(v.string()),
+    kycStatus: v.optional(v.union(
+      v.literal("not_started"),
+      v.literal("submitted"),
+      v.literal("approved"),
+      v.literal("rejected")
+    )),
+    kycReviewedBy: v.optional(v.id("users")),
+    kycReviewedAt: v.optional(v.number()),
+    kycReviewNotes: v.optional(v.string()),
   })
     .index("by_userId", ["userId"]),
 
@@ -3140,4 +3166,416 @@ export default defineSchema({
   })
     .index("by_at", ["at"])
     .index("by_condition", ["conditionId"]),
+  // -- Export Markets ("bean to cup") ----------------------------------
+  // Verified traders who belong to a community with exportMarketsEnabled
+  // become exporters once their profile, documents and verification fee
+  // are approved. Kept apart from the local trader flow (traderInventory,
+  // 100kg blocks, purchase windows), which is untouched.
+
+  exporterProfiles: defineTable({
+    userId: v.id("users"),
+    communityId: v.id("communities"), // The exporter community whose admins review this exporter
+    legalName: v.string(),
+    tradingName: v.optional(v.string()),
+    tin: v.string(),
+    exporterLicenceNumber: v.optional(v.string()),
+    physicalAddress: v.string(),
+    preferredPorts: v.array(v.string()), // short list, e.g. ["Mombasa", "Dar es Salaam"]
+    productForms: v.optional(v.array(v.string())), // green | roasted | packaged (absent = green only)
+    contactPerson: v.string(),
+    contactPhone: v.string(),
+    contactEmail: v.optional(v.string()),
+    status: v.union(
+      v.literal("draft"),
+      v.literal("submitted"),
+      v.literal("approved"),
+      v.literal("rejected"),
+      v.literal("suspended")
+    ),
+    submittedAt: v.optional(v.number()),
+    reviewedBy: v.optional(v.id("users")),
+    reviewedAt: v.optional(v.number()),
+    reviewNotes: v.optional(v.string()),
+    // Verification fee (paid from the wallet, renewed yearly)
+    verificationFeeStatus: v.union(v.literal("unpaid"), v.literal("paid"), v.literal("waived")),
+    verificationFeePaidUgx: v.optional(v.number()),
+    verificationFeePaidAt: v.optional(v.number()),
+    verificationFeeUtid: v.optional(v.string()),
+    verificationFeeValidUntil: v.optional(v.string()), // YYYY-MM-DD, Uganda date
+    // Verification fee credited against future success fees (UGX left to use)
+    successFeeCreditUgx: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_status", ["status"])
+    .index("by_communityId_and_status", ["communityId", "status"]),
+
+  // Admin-managed list of document types for the vault.
+  exportDocumentTypes: defineTable({
+    key: v.string(),
+    label: v.string(),
+    description: v.optional(v.string()),
+    appliesTo: v.union(v.literal("exporter"), v.literal("buyer")),
+    required: v.boolean(),
+    hasExpiry: v.boolean(),
+    productForms: v.optional(v.array(v.string())), // only for exporters selling these forms
+    isActive: v.boolean(),
+    order: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_key", ["key"])
+    .index("by_appliesTo_and_order", ["appliesTo", "order"]),
+
+  // The document vault: one row per uploaded file.
+  exportDocuments: defineTable({
+    ownerId: v.id("users"),
+    ownerKind: v.union(v.literal("exporter"), v.literal("buyer")),
+    communityId: v.optional(v.id("communities")), // exporter community, for community-admin review scope
+    documentTypeKey: v.string(),
+    documentTypeLabel: v.string(),
+    documentNumber: v.optional(v.string()),
+    issueDate: v.optional(v.string()), // YYYY-MM-DD
+    expiryDate: v.optional(v.string()), // YYYY-MM-DD, Uganda date
+    storageId: v.id("_storage"),
+    fileName: v.string(),
+    contentType: v.optional(v.string()),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("verified"),
+      v.literal("rejected"),
+      v.literal("replaced")
+    ),
+    reviewedBy: v.optional(v.id("users")),
+    reviewedAt: v.optional(v.number()),
+    reviewNotes: v.optional(v.string()),
+    uploadedAt: v.number(),
+  })
+    .index("by_ownerId", ["ownerId"])
+    .index("by_ownerId_and_documentTypeKey", ["ownerId", "documentTypeKey"])
+    .index("by_status", ["status"])
+    .index("by_communityId_and_status", ["communityId", "status"]),
+
+  // Singleton: platform fees for Export Markets, set by super admins in Finance.
+  exportFeeSettings: defineTable({
+    exporterVerificationFeeUgx: v.number(),
+    verificationFeeValidityDays: v.number(),
+    creditVerificationFeeAgainstSuccessFee: v.boolean(),
+    successFeeMode: v.union(v.literal("percent"), v.literal("per_bag")),
+    successFeePercent: v.number(), // % of USD contract value
+    successFeePerBagUsd: v.number(),
+    buyerFeePercent: v.number(), // 0 = no buyer fee
+    sampleHandlingFeeUgx: v.number(), // 0 = no sample fee
+    updatedBy: v.id("users"),
+    updatedAt: v.number(),
+  }),
+
+  // Every export platform fee charged, for Finance reporting.
+  exportFeeCharges: defineTable({
+    userId: v.id("users"),
+    kind: v.union(
+      v.literal("verification"),
+      v.literal("success"),
+      v.literal("buyer"),
+      v.literal("sample")
+    ),
+    amountUgx: v.number(),
+    creditAppliedUgx: v.optional(v.number()),
+    utid: v.string(),
+    note: v.optional(v.string()),
+    chargedAt: v.number(), // getUgandaTime()
+  })
+    .index("by_chargedAt", ["chargedAt"])
+    .index("by_userId", ["userId"]),
+
+  exportAuditLog: defineTable({
+    action: v.string(), // document_verified | document_rejected | exporter_approved | exporter_rejected | exporter_suspended | member_added | member_removed | fee_paid | fees_updated | doc_type_saved
+    actorId: v.id("users"),
+    targetUserId: v.optional(v.id("users")),
+    targetId: v.optional(v.string()),
+    note: v.optional(v.string()),
+    at: v.number(), // getUgandaTime()
+  })
+    .index("by_at", ["at"])
+    .index("by_targetUserId", ["targetUserId"]),
+  // -- Export Markets phase 2: lots and trace map -----------------------
+
+  exportLots: defineTable({
+    exporterId: v.id("users"),
+    communityId: v.id("communities"), // exporter community (review scope)
+    lotCode: v.string(), // public, anonymous code, e.g. "EXL-7Q4K2"
+    crop: v.optional(v.string()), // EXPORT_CROPS key; absent = coffee
+    productForm: v.optional(v.string()), // green | roasted | packaged; absent = green
+    coffeeType: v.string(), // Arabica | Robusta
+    grade: v.string(), // e.g. "Screen 18", "Bugisu AA", "Drugar"
+    processing: v.string(),
+    cropYear: v.string(), // e.g. "2025/26"
+    originDistrict: v.string(),
+    originRegion: v.optional(v.string()),
+    bags: v.number(),
+    bagWeightKg: v.number(),
+    availableBags: v.number(), // reduced when contract terms are agreed
+    minOrderBags: v.number(),
+    moisturePercent: v.optional(v.number()),
+    defects: v.optional(v.string()), // e.g. "12 defects per 300 g"
+    screenSize: v.optional(v.string()),
+    cupScore: v.optional(v.number()),
+    certifications: v.array(v.string()),
+    description: v.optional(v.string()),
+    photoStorageIds: v.array(v.id("_storage")), // at most 8
+    warehouseLocation: v.string(),
+    incoterms: v.array(v.string()), // Incoterms the exporter offers
+    sampleAvailable: v.boolean(),
+    status: v.union(
+      v.literal("draft"),
+      v.literal("listed"),
+      v.literal("sold_out"),
+      v.literal("withdrawn")
+    ),
+    // Denormalised from sources and trace stages (recomputeLotSummary)
+    traceLevel: v.union(v.literal("platform_traced"), v.literal("partly_declared"), v.literal("declared")),
+    eudrReady: v.boolean(),
+    traceStagesApproved: v.number(),
+    traceStagesTotal: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_exporterId", ["exporterId"])
+    .index("by_status", ["status"])
+    .index("by_lotCode", ["lotCode"]),
+
+  // Where a lot's coffee came from.
+  exportLotSources: defineTable({
+    lotId: v.id("exportLots"),
+    kind: v.union(v.literal("platform_purchase"), v.literal("advance_commitment"), v.literal("declared")),
+    kilos: v.number(),
+    inventoryId: v.optional(v.id("traderInventory")), // platform_purchase
+    commitmentId: v.optional(v.id("advancePurchaseCommitments")), // advance_commitment
+    // declared (off-platform) farm
+    farmerName: v.optional(v.string()),
+    village: v.optional(v.string()),
+    district: v.optional(v.string()),
+    lat: v.optional(v.number()),
+    lng: v.optional(v.number()),
+    areaHa: v.optional(v.number()),
+    polygonGeoJson: v.optional(v.string()), // GeoJSON Polygon geometry, for plots over 4 ha
+    createdAt: v.number(),
+  })
+    .index("by_lotId", ["lotId"])
+    .index("by_inventoryId", ["inventoryId"])
+    .index("by_commitmentId", ["commitmentId"]),
+
+  exportTraceStages: defineTable({
+    lotId: v.id("exportLots"),
+    order: v.number(),
+    key: v.string(),
+    name: v.string(),
+    scope: v.union(v.literal("farm"), v.literal("exporter")),
+    status: v.union(v.literal("pending"), v.literal("submitted"), v.literal("approved"), v.literal("rejected")),
+    updatedAt: v.number(),
+  }).index("by_lotId_and_order", ["lotId", "order"]),
+
+  exportTraceEvidence: defineTable({
+    stageId: v.id("exportTraceStages"),
+    lotId: v.id("exportLots"),
+    submittedBy: v.id("users"),
+    photos: v.array(v.object({
+      storageId: v.id("_storage"),
+      lat: v.optional(v.number()),
+      lng: v.optional(v.number()),
+      accuracy: v.optional(v.number()),
+      capturedAt: v.string(), // ISO 8601
+    })),
+    weightInKg: v.optional(v.number()),
+    weightOutKg: v.optional(v.number()),
+    notes: v.optional(v.string()),
+    status: v.union(v.literal("pending"), v.literal("approved"), v.literal("rejected")),
+    reviewedBy: v.optional(v.id("users")),
+    reviewNotes: v.optional(v.string()),
+    submittedAt: v.number(),
+    reviewedAt: v.optional(v.number()),
+  })
+    .index("by_stageId", ["stageId"])
+    .index("by_lotId", ["lotId"])
+    .index("by_status", ["status"]),
+
+  // -- Export Markets phases 3-4: deals and the order pipeline ----------
+
+  exportPipelineTemplates: defineTable({
+    incoterm: v.string(),
+    steps: v.array(v.object({ // bounded: at most 30 steps
+      key: v.string(),
+      name: v.string(),
+      actor: v.union(v.literal("buyer"), v.literal("exporter"), v.literal("admin"), v.literal("platform")),
+      kind: v.union(v.literal("system"), v.literal("documents"), v.literal("confirm")),
+      system: v.boolean(),
+      requiredDocuments: v.array(v.string()),
+      description: v.optional(v.string()),
+    })),
+    updatedBy: v.id("users"),
+    updatedAt: v.number(),
+  }).index("by_incoterm", ["incoterm"]),
+
+  exportDeals: defineTable({
+    dealCode: v.string(), // e.g. "EXD-8H2MQ"
+    lotId: v.id("exportLots"),
+    exporterId: v.id("users"),
+    buyerId: v.id("users"),
+    exporterCommunityId: v.id("communities"),
+    status: v.union(
+      v.literal("enquiry"), // buyer asked, waiting for the exporter
+      v.literal("quoted"), // exporter quoted, waiting for the buyer
+      v.literal("in_progress"), // offer accepted, pipeline running
+      v.literal("completed"),
+      v.literal("declined"),
+      v.literal("cancelled")
+    ),
+    lastOfferBy: v.union(v.literal("buyer"), v.literal("exporter")),
+    bags: v.number(),
+    incoterm: v.string(),
+    destinationPort: v.optional(v.string()),
+    shipmentPeriod: v.optional(v.string()),
+    buyerTargetPriceUsdPerKg: v.optional(v.number()),
+    quotedPriceUsdPerKg: v.optional(v.number()),
+    quoteValidUntil: v.optional(v.string()), // YYYY-MM-DD
+    agreedPriceUsdPerKg: v.optional(v.number()),
+    currentStepKey: v.string(),
+    // Sample desk (the platform collects from the exporter and ships)
+    sample: v.optional(v.object({
+      status: v.union(
+        v.literal("awaiting_buyer"), // buyer confirms the request (and pays any sample fee)
+        v.literal("awaiting_exporter"), // exporter prepares the sample
+        v.literal("ready"), // ready for platform collection
+        v.literal("collected"),
+        v.literal("dispatched"),
+        v.literal("approved"),
+        v.literal("rejected")
+      ),
+      shippingAddress: v.optional(v.string()), // visible to admins only
+      courier: v.optional(v.string()),
+      trackingNumber: v.optional(v.string()),
+      feeUgx: v.optional(v.number()),
+      buyerNotes: v.optional(v.string()),
+      round: v.number(),
+      updatedAt: v.number(),
+    })),
+    // Contract terms
+    contract: v.optional(v.object({
+      priceUsdPerKg: v.number(),
+      bags: v.number(),
+      bagWeightKg: v.number(),
+      incoterm: v.string(),
+      port: v.string(),
+      shipmentWindowStart: v.string(), // YYYY-MM-DD
+      shipmentWindowEnd: v.string(),
+      paymentTerms: v.string(),
+      otherTerms: v.optional(v.string()),
+      proposedBy: v.union(v.literal("buyer"), v.literal("exporter")),
+      exporterAgreedAt: v.optional(v.number()),
+      buyerAgreedAt: v.optional(v.number()),
+    })),
+    contractValueUsd: v.optional(v.number()),
+    bagsReserved: v.optional(v.number()),
+    fxUgxPerUsd: v.optional(v.number()),
+    exporterFeeUgx: v.optional(v.number()), // after credit
+    exporterFeeCreditUgx: v.optional(v.number()),
+    buyerFeeUgx: v.optional(v.number()),
+    exporterFeePaidAt: v.optional(v.number()),
+    buyerFeePaidAt: v.optional(v.number()),
+    disclosedAt: v.optional(v.number()),
+    // Payment security (USD recorded against the contract)
+    paymentMethod: v.optional(v.string()),
+    paymentAmountUsd: v.optional(v.number()),
+    paymentReference: v.optional(v.string()),
+    // Shipment
+    containerNumber: v.optional(v.string()),
+    sealNumber: v.optional(v.string()),
+    vessel: v.optional(v.string()),
+    blNumber: v.optional(v.string()),
+    etd: v.optional(v.string()),
+    eta: v.optional(v.string()),
+    shippedOn: v.optional(v.string()), // YYYY-MM-DD, for on-time record
+    cancelledBy: v.optional(v.id("users")),
+    cancelReason: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_buyerId", ["buyerId"])
+    .index("by_exporterId", ["exporterId"])
+    .index("by_lotId", ["lotId"])
+    .index("by_status", ["status"])
+    .index("by_exporterCommunityId_and_status", ["exporterCommunityId", "status"])
+    .index("by_dealCode", ["dealCode"]),
+
+  exportDealSteps: defineTable({
+    dealId: v.id("exportDeals"),
+    order: v.number(),
+    key: v.string(),
+    name: v.string(),
+    actor: v.union(v.literal("buyer"), v.literal("exporter"), v.literal("admin"), v.literal("platform")),
+    kind: v.union(v.literal("system"), v.literal("documents"), v.literal("confirm")),
+    system: v.boolean(),
+    requiredDocuments: v.array(v.string()),
+    description: v.optional(v.string()),
+    status: v.union(v.literal("pending"), v.literal("active"), v.literal("done")),
+    completedAt: v.optional(v.number()),
+    completedBy: v.optional(v.id("users")),
+  }).index("by_dealId_and_order", ["dealId", "order"]),
+
+  exportDealDocuments: defineTable({
+    dealId: v.id("exportDeals"),
+    stepKey: v.string(),
+    label: v.string(),
+    uploadedBy: v.id("users"),
+    uploaderRole: v.union(v.literal("buyer"), v.literal("exporter"), v.literal("admin")),
+    storageId: v.id("_storage"),
+    fileName: v.string(),
+    contentType: v.optional(v.string()),
+    lat: v.optional(v.number()),
+    lng: v.optional(v.number()),
+    capturedAt: v.optional(v.string()),
+    status: v.union(v.literal("pending"), v.literal("accepted"), v.literal("rejected")),
+    reviewedBy: v.optional(v.id("users")),
+    reviewNotes: v.optional(v.string()),
+    uploadedAt: v.number(),
+  })
+    .index("by_dealId", ["dealId"])
+    .index("by_status", ["status"]),
+
+  exportDealMessages: defineTable({
+    dealId: v.id("exportDeals"),
+    senderId: v.id("users"),
+    senderRole: v.union(v.literal("buyer"), v.literal("exporter"), v.literal("admin")),
+    body: v.string(), // stored already masked while identities are hidden
+    masked: v.boolean(),
+    createdAt: v.number(),
+  }).index("by_dealId", ["dealId"]),
+
+  exportRatings: defineTable({
+    dealId: v.id("exportDeals"),
+    exporterId: v.id("users"),
+    buyerId: v.id("users"),
+    overall: v.number(), // 1-5
+    quality: v.number(),
+    documents: v.number(),
+    communication: v.number(),
+    comment: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_exporterId", ["exporterId"])
+    .index("by_dealId", ["dealId"]),
+
+  // Coffee reference prices for the ticker (free sources + admin entries).
+  coffeeReferencePrices: defineTable({
+    key: v.string(), // ico_composite_monthly | arabica | robusta
+    label: v.string(),
+    value: v.number(),
+    unit: v.string(), // "US cents/lb"
+    asOf: v.string(), // "August 2026" or YYYY-MM-DD
+    source: v.string(),
+    sourceUrl: v.optional(v.string()),
+    enteredBy: v.optional(v.id("users")),
+    updatedAt: v.number(),
+  }).index("by_key", ["key"]),
 });

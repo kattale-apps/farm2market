@@ -8,6 +8,7 @@ import { Id } from "../../../convex/_generated/dataModel";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useStoredUser } from "../../hooks/useStoredUser";
+import { COUNTRIES, UGANDA_COUNTRY_CODE } from "../../../convex/exportMarketsShared";
 
 const REGION_GROUPS = [
   { key: "central_buganda", label: "Central (Buganda)", districts: ["Kampala","Wakiso","Mukono","Buikwe","Kayunga","Luweero","Nakaseke","Nakasongola","Mityana","Kiboga","Mpigi","Butambala","Gomba","Masaka","Lwengo","Kalungu","Bukomansimbi","Sembabule","Lyantonde","Rakai","Kyotera","Mubende","Kassanda"] },
@@ -49,6 +50,23 @@ export default function BuyerOnboardingPage() {
   const userId = (user?.userId as Id<"users"> | undefined) ?? null;
 
   const [businessName, setBusinessName] = useState("");
+  // Buyers can be anywhere. Uganda keeps the district picker; everywhere else
+  // gives a city and address plus company details.
+  const [countryCode, setCountryCode] = useState(UGANDA_COUNTRY_CODE);
+  const isUganda = countryCode === UGANDA_COUNTRY_CODE;
+  const [intl, setIntl] = useState({
+    city: "",
+    addressLine: "",
+    postalCode: "",
+    contactPerson: "",
+    contactPhone: "",
+    companyRegistrationNumber: "",
+    taxId: "",
+    eoriNumber: "",
+    website: "",
+  });
+  const setIntlField = (k: keyof typeof intl) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setIntl((f) => ({ ...f, [k]: e.target.value }));
 
   const districts = useQuery(api.locations.getActiveDistricts, {});
   const sortedDistricts = (districts ?? []).slice().sort((a, b) => a.name.localeCompare(b.name));
@@ -84,17 +102,40 @@ export default function BuyerOnboardingPage() {
     e.preventDefault();
     if (!userId) { setMessage({ type: "error", text: "Please log in first" }); return; }
     if (!businessName.trim()) { setMessage({ type: "error", text: "Please enter your business/buying name" }); return; }
-    if (!selectedDistrictId) { setMessage({ type: "error", text: "Please select your location" }); return; }
+    if (isUganda && !selectedDistrictId) { setMessage({ type: "error", text: "Please select your location" }); return; }
+    if (!isUganda && (!intl.city.trim() || !intl.addressLine.trim() || !intl.contactPerson.trim())) {
+      setMessage({ type: "error", text: "Please enter your city, business address and contact person" });
+      return;
+    }
 
     setLoading(true); setMessage(null);
     try {
-      await completeOnboarding({
-        userId,
-        businessName: businessName.trim(),
-        region: selectedRegion?.label || undefined,
-        districtId: selectedDistrictId as Id<"districts">,
-        subcountyId: selectedSubcountyId ? (selectedSubcountyId as Id<"subcounties">) : undefined,
-      });
+      const optional = (s: string) => s.trim() || undefined;
+      await completeOnboarding(
+        isUganda
+          ? {
+              userId,
+              businessName: businessName.trim(),
+              countryCode,
+              region: selectedRegion?.label || undefined,
+              districtId: selectedDistrictId as Id<"districts">,
+              subcountyId: selectedSubcountyId ? (selectedSubcountyId as Id<"subcounties">) : undefined,
+            }
+          : {
+              userId,
+              businessName: businessName.trim(),
+              countryCode,
+              city: intl.city.trim(),
+              addressLine: intl.addressLine.trim(),
+              postalCode: optional(intl.postalCode),
+              contactPerson: intl.contactPerson.trim(),
+              contactPhone: optional(intl.contactPhone),
+              companyRegistrationNumber: optional(intl.companyRegistrationNumber),
+              taxId: optional(intl.taxId),
+              eoriNumber: optional(intl.eoriNumber),
+              website: optional(intl.website),
+            }
+      );
       setMessage({ type: "success", text: "Onboarding complete!" });
       setTimeout(() => router.push("/"), 1500);
     } catch (error: any) {
@@ -123,7 +164,7 @@ export default function BuyerOnboardingPage() {
           lineHeight: "1.6", background: "#e3f2fd", padding: "1rem", borderRadius: "8px",
           border: "1px solid #bbdefb"
         }}>
-          Tell us your business name and location so farmers and traders can find you.
+          Tell us your business name and location so farmers, traders and exporters can find you. Buyers from any country are welcome.
         </p>
 
         {message && (
@@ -160,8 +201,17 @@ export default function BuyerOnboardingPage() {
             <h2 style={{ fontSize: "clamp(1.2rem, 3vw, 1.5rem)", marginBottom: "0.5rem", color: "#7b1fa2", fontFamily: '"Montserrat", sans-serif', fontWeight: "600" }}>
               📍 Location
             </h2>
-            <p style={{ fontSize: "0.85rem", color: "#777", marginBottom: "1rem" }}>Where do you mainly buy from?</p>
+            <p style={{ fontSize: "0.85rem", color: "#777", marginBottom: "1rem" }}>Where is your business based?</p>
 
+            <div style={{ marginBottom: "1rem" }}>
+              <label style={labelStyle}>Country *</label>
+              <select value={countryCode} onChange={(e) => setCountryCode(e.target.value)} style={inputStyle}>
+                {COUNTRIES.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
+              </select>
+            </div>
+
+            {isUganda ? (
+            <>
             <div style={{ marginBottom: "1rem" }}>
               <label style={labelStyle}>Region</label>
               <select value={selectedRegionKey} onChange={(e) => setSelectedRegionKey(e.target.value)} style={inputStyle}>
@@ -172,7 +222,7 @@ export default function BuyerOnboardingPage() {
 
             <div style={{ marginBottom: "1rem" }}>
               <label style={labelStyle}>District *</label>
-              <select value={selectedDistrictId} onChange={(e) => setSelectedDistrictId(e.target.value as any)} disabled={!selectedRegionKey} required
+              <select value={selectedDistrictId} onChange={(e) => setSelectedDistrictId(e.target.value as any)} disabled={!selectedRegionKey} required={isUganda}
                 style={{ ...inputStyle, background: selectedRegionKey ? "#fff" : "#f5f5f5" }}>
                 <option value="">{selectedRegionKey ? "Select District" : "Select Region first"}</option>
                 {filteredDistricts.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
@@ -187,7 +237,59 @@ export default function BuyerOnboardingPage() {
                 {(subcounties ?? []).map((sc: any) => <option key={sc.id} value={sc.id}>{sc.name}</option>)}
               </select>
             </div>
+            </>
+            ) : (
+            <>
+              <div style={{ marginBottom: "1rem" }}>
+                <label style={labelStyle}>City *</label>
+                <input style={inputStyle} value={intl.city} onChange={setIntlField("city")} />
+              </div>
+              <div style={{ marginBottom: "1rem" }}>
+                <label style={labelStyle}>Business address *</label>
+                <input style={inputStyle} value={intl.addressLine} onChange={setIntlField("addressLine")} placeholder="Street and number" />
+              </div>
+              <div style={{ marginBottom: "1rem" }}>
+                <label style={labelStyle}>Postal code</label>
+                <input style={inputStyle} value={intl.postalCode} onChange={setIntlField("postalCode")} />
+              </div>
+            </>
+            )}
           </div>
+
+          {!isUganda && (
+            <div style={{ marginBottom: "2rem", background: "#e1f5fe", padding: "1.5rem", borderRadius: "8px", border: "1px solid #81d4fa" }}>
+              <h2 style={{ fontSize: "clamp(1.2rem, 3vw, 1.5rem)", marginBottom: "0.5rem", color: "#01579b", fontFamily: '"Montserrat", sans-serif', fontWeight: "600" }}>
+                🏛️ Company details
+              </h2>
+              <p style={{ fontSize: "0.85rem", color: "#777", marginBottom: "1rem" }}>
+                Used to verify you before an export deal. You upload KYC documents later, once an exporter accepts your offer.
+              </p>
+              <div style={{ marginBottom: "1rem" }}>
+                <label style={labelStyle}>Contact person *</label>
+                <input style={inputStyle} value={intl.contactPerson} onChange={setIntlField("contactPerson")} />
+              </div>
+              <div style={{ marginBottom: "1rem" }}>
+                <label style={labelStyle}>Contact phone (with country code)</label>
+                <input style={inputStyle} value={intl.contactPhone} onChange={setIntlField("contactPhone")} placeholder="+49 ..." />
+              </div>
+              <div style={{ marginBottom: "1rem" }}>
+                <label style={labelStyle}>Company registration number</label>
+                <input style={inputStyle} value={intl.companyRegistrationNumber} onChange={setIntlField("companyRegistrationNumber")} />
+              </div>
+              <div style={{ marginBottom: "1rem" }}>
+                <label style={labelStyle}>Tax / VAT number</label>
+                <input style={inputStyle} value={intl.taxId} onChange={setIntlField("taxId")} />
+              </div>
+              <div style={{ marginBottom: "1rem" }}>
+                <label style={labelStyle}>EORI number (EU importers)</label>
+                <input style={inputStyle} value={intl.eoriNumber} onChange={setIntlField("eoriNumber")} />
+              </div>
+              <div style={{ marginBottom: "1rem" }}>
+                <label style={labelStyle}>Website</label>
+                <input style={inputStyle} value={intl.website} onChange={setIntlField("website")} />
+              </div>
+            </div>
+          )}
 
           <button
             type="submit"

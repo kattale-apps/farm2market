@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Coffee beans">
+  <title>Coffee beans</title>
+  <defs>
+    <linearGradient id="beanA" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8d5a3b"/>
+      <stop offset="1" stop-color="#4e2c1a"/>
+    </linearGradient>
+    <linearGradient id="beanB" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#a1683f"/>
+      <stop offset="1" stop-color="#5d3520"/>
+    </linearGradient>
+  </defs>
+  <!-- back bean -->
+  <g transform="rotate(-35 40 26)">
+    <ellipse cx="40" cy="26" rx="13" ry="18" fill="url(#beanA)"/>
+    <path d="M40 9c-5 6-5 12 0 17s5 11 0 17" fill="none" stroke="#e8c9a8" stroke-width="2.6" stroke-linecap="round"/>
+    <ellipse cx="35" cy="17" rx="3" ry="6" fill="#ffffff" opacity="0.18"/>
+  </g>
+  <!-- front bean -->
+  <g transform="rotate(25 24 40)">
+    <ellipse cx="24" cy="40" rx="14" ry="19" fill="url(#beanB)"/>
+    <path d="M24 22c-5.5 6-5.5 12 0 18s5.5 12 0 18" fill="none" stroke="#f1d7b8" stroke-width="2.8" stroke-linecap="round"/>
+    <ellipse cx="18.5" cy="31" rx="3.2" ry="6.5" fill="#ffffff" opacity="0.2"/>
+  </g>
+</svg>

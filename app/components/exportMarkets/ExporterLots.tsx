@@ -15,6 +15,8 @@ import {
   DEFAULT_BAG_WEIGHT_KG,
   INCOTERMS,
   PROCESSING_METHODS,
+  TRACE_STAGES,
+  EUDR_POLYGON_THRESHOLD_HA,
 } from "../../../convex/exportMarketsShared";
 import {
   FONT,
@@ -145,12 +147,17 @@ function LotForm({
   onDone,
   crop,
   productForms,
+  practice,
+  example,
 }: {
-  userId: Id<"users">;
+  userId?: Id<"users">;
   lot?: LotDetail["lot"];
   onDone: (lotId?: Id<"exportLots">) => void;
   crop: string;
   productForms: string[];
+  /** Try-out mode: the form works, but nothing is saved. */
+  practice?: boolean;
+  example?: Partial<LotFormValues>;
 }) {
   const save = useMutation(api.exportLots.saveLot);
   const [busy, setBusy] = useState(false);
@@ -175,7 +182,9 @@ function LotForm({
     incoterms: lot?.incoterms ?? ["FOB"],
     sampleAvailable: lot?.sampleAvailable ?? true,
     productForm: lot?.productForm ?? productForms[0] ?? "green",
+    ...(example ?? {}),
   });
+  const [practiceResult, setPracticeResult] = useState<string[] | null>(null);
   const set = (k: keyof LotFormValues) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
   const text = (k: keyof LotFormValues, t: string, ph = "", req = false) => (
     <div>
@@ -262,6 +271,22 @@ function LotForm({
           style={button("primary", busy)}
           disabled={busy}
           onClick={async () => {
+            if (practice) {
+              // Same checks the real save makes, without saving.
+              const problems: string[] = [];
+              if (!f.grade.trim()) problems.push("Grade is required");
+              if (!f.cropYear.trim()) problems.push("Crop year is required");
+              if (!f.originDistrict.trim()) problems.push("Origin district is required");
+              if (!f.warehouseLocation.trim()) problems.push("Warehouse location is required");
+              if (!Number.isInteger(Number(f.bags)) || Number(f.bags) <= 0) problems.push("Bags must be a whole number above 0");
+              if (!Number.isInteger(Number(f.minOrderBags)) || Number(f.minOrderBags) < 1 || Number(f.minOrderBags) > Number(f.bags)) {
+                problems.push("Minimum order must be between 1 bag and the lot size");
+              }
+              if (f.incoterms.length === 0) problems.push("Offer at least one Incoterm");
+              setPracticeResult(problems);
+              return;
+            }
+            if (!userId) return;
             setBusy(true);
             setError(null);
             try {
@@ -297,12 +322,33 @@ function LotForm({
             }
           }}
         >
-          Save lot
+          {practice ? "Check my practice lot" : "Save lot"}
         </button>
-        <button style={button("secondary", busy)} disabled={busy} onClick={() => onDone()}>
-          Cancel
-        </button>
+        {!practice && (
+          <button style={button("secondary", busy)} disabled={busy} onClick={() => onDone()}>
+            Cancel
+          </button>
+        )}
       </div>
+      {practiceResult && (
+        <div style={{ marginTop: "0.75rem" }}>
+          {practiceResult.length === 0 ? (
+            <Notice tone="success">
+              This lot would be accepted. {Number(f.bags) * Number(f.bagWeightKg || 0) > 0 && `That is ${(Number(f.bags) * Number(f.bagWeightKg)).toLocaleString()} kg. `}
+              Save your company profile to create real lots.
+            </Notice>
+          ) : (
+            <Notice tone="error">
+              <b>Fix before saving:</b>
+              <ul style={{ margin: "0.3rem 0 0", paddingLeft: "1.2rem" }}>
+                {practiceResult.map((p) => (
+                  <li key={p}>{p}</li>
+                ))}
+              </ul>
+            </Notice>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -698,6 +744,190 @@ function EvidenceForm({ userId, lotId, stageKey, onDone, setMsg }: { userId: Id<
           Cancel
         </button>
       </div>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------
+// Practice lot: an interactive template to explore before the company
+// profile is saved. Everything works locally; nothing is saved.
+// ------------------------------------------------------------------
+
+const PRACTICE_EXAMPLE = {
+  coffeeType: "Robusta",
+  grade: "Screen 15",
+  processing: "Natural",
+  cropYear: "2025/26",
+  originDistrict: "Masaka",
+  originRegion: "Central",
+  bags: "320",
+  bagWeightKg: "60",
+  minOrderBags: "20",
+  moisturePercent: "12.5",
+  defects: "12 per 300 g",
+  screenSize: "15+",
+  cupScore: "",
+  certifications: "",
+  description: "Example lot: change anything to see how a lot is described.",
+  warehouseLocation: "Kampala bonded warehouse",
+  incoterms: ["FOB"],
+};
+
+type PracticeSource = { kind: string; name: string; district: string; kilos: number; lat?: number; lng?: number; areaHa?: number; polygon: boolean };
+
+export function PracticeLot({ crop, productForms, onGoToProfile }: { crop: string; productForms: string[]; onGoToProfile: () => void }) {
+  const [section, setSection] = useState<"details" | "sources" | "trace">("details");
+  return (
+    <div>
+      <div style={{ ...card, background: "#fffde7", borderColor: "#fff176" }}>
+        <b>Practice lot</b>: try every part of creating a lot below. It behaves like the real thing, but nothing is saved.
+        <div style={{ marginTop: "0.6rem" }}>
+          <button style={button("primary")} onClick={onGoToProfile}>
+            Save my company profile to start for real
+          </button>
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1rem" }}>
+        {([
+          ["details", "1. Lot details"],
+          ["sources", "2. Where it came from"],
+          ["trace", "3. Trace map"],
+        ] as const).map(([key, text]) => (
+          <button key={key} style={button(section === key ? "primary" : "secondary")} onClick={() => setSection(key)}>
+            {text}
+          </button>
+        ))}
+      </div>
+      {section === "details" && (
+        <LotForm practice example={PRACTICE_EXAMPLE} crop={crop} productForms={productForms.length ? productForms : ["green"]} onDone={() => undefined} />
+      )}
+      {section === "sources" && <PracticeSources />}
+      {section === "trace" && <PracticeTrace />}
+    </div>
+  );
+}
+
+function PracticeSources() {
+  const [sources, setSources] = useState<PracticeSource[]>([
+    { kind: "Platform purchase", name: "Farmer (from your platform purchases)", district: "Masaka", kilos: 1200, lat: -0.34, lng: 31.73, areaHa: 1.2, polygon: false },
+  ]);
+  const [f, setF] = useState({ name: "", district: "", kilos: "", lat: "", lng: "", areaHa: "", polygon: false });
+  const num = (x: string) => (x.trim() === "" ? undefined : Number(x));
+  const issue = (s: PracticeSource) =>
+    s.lat === undefined || s.lng === undefined
+      ? "no GPS location"
+      : s.areaHa !== undefined && s.areaHa > EUDR_POLYGON_THRESHOLD_HA && !s.polygon
+        ? `over ${EUDR_POLYGON_THRESHOLD_HA} ha without a boundary polygon`
+        : null;
+  const allOk = sources.length > 0 && sources.every((s) => !issue(s));
+  return (
+    <div style={card}>
+      <h3 style={{ marginTop: 0, fontSize: "1.05rem" }}>Where the coffee came from</h3>
+      <p style={{ fontSize: "0.85rem", color: "#546e7a", marginTop: 0 }}>
+        Add farms to see how the traceability report judges them. Every farm needs a GPS location, and farms over {EUDR_POLYGON_THRESHOLD_HA} ha
+        need a boundary polygon, for the report to count as EUDR-compliant.
+      </p>
+      <Notice tone={allOk ? "success" : "error"}>{allOk ? "These sources would make the report EUDR-compliant." : "The report would say: Not EUDR compliant."}</Notice>
+      {sources.map((s, i) => (
+        <div key={i} style={{ borderTop: "1px solid #e1f5fe", padding: "0.5rem 0", fontSize: "0.88rem", display: "flex", justifyContent: "space-between", gap: "0.5rem" }}>
+          <span style={{ color: issue(s) ? "#c62828" : "#263238" }}>
+            <b>{s.kind}</b> · {s.name} · {s.district} · {s.kilos} kg · {s.lat !== undefined ? `${s.lat}, ${s.lng}` : "no GPS"}
+            {s.areaHa !== undefined ? ` · ${s.areaHa} ha` : ""}
+            {issue(s) ? ` · ${issue(s)}` : " · OK"}
+          </span>
+          <button style={{ ...button("danger"), padding: "0.2rem 0.6rem", minHeight: 0, fontSize: "0.75rem" }} onClick={() => setSources(sources.filter((_, j) => j !== i))}>
+            Remove
+          </button>
+        </div>
+      ))}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "0.5rem", marginTop: "0.6rem" }}>
+        <input style={input} placeholder="Farm name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+        <input style={input} placeholder="District" value={f.district} onChange={(e) => setF({ ...f, district: e.target.value })} />
+        <input style={input} placeholder="Kilos" value={f.kilos} onChange={(e) => setF({ ...f, kilos: e.target.value })} />
+        <input style={input} placeholder="Latitude" value={f.lat} onChange={(e) => setF({ ...f, lat: e.target.value })} />
+        <input style={input} placeholder="Longitude" value={f.lng} onChange={(e) => setF({ ...f, lng: e.target.value })} />
+        <input style={input} placeholder="Farm size (ha)" value={f.areaHa} onChange={(e) => setF({ ...f, areaHa: e.target.value })} />
+      </div>
+      <label style={{ display: "flex", gap: "0.4rem", alignItems: "center", fontSize: "0.85rem", margin: "0.5rem 0" }}>
+        <input type="checkbox" checked={f.polygon} onChange={(e) => setF({ ...f, polygon: e.target.checked })} />I have a boundary polygon for this farm
+      </label>
+      <button
+        style={button("secondary")}
+        onClick={() => {
+          setSources([
+            ...sources,
+            { kind: "Declared farm", name: f.name || "Unnamed farm", district: f.district || "-", kilos: Number(f.kilos) || 0, lat: num(f.lat), lng: num(f.lng), areaHa: num(f.areaHa), polygon: f.polygon },
+          ]);
+          setF({ name: "", district: "", kilos: "", lat: "", lng: "", areaHa: "", polygon: false });
+        }}
+      >
+        Add practice farm
+      </button>
+    </div>
+  );
+}
+
+function PracticeTrace() {
+  const [open, setOpen] = useState<string | null>(TRACE_STAGES[0].key);
+  const [done, setDone] = useState<Record<string, { photos: number; wIn?: string; wOut?: string }>>({});
+  const [photos, setPhotos] = useState<CapturedPhoto[]>([]);
+  const [wIn, setWIn] = useState("");
+  const [wOut, setWOut] = useState("");
+  return (
+    <div style={card}>
+      <h3 style={{ marginTop: 0, fontSize: "1.05rem" }}>Trace map: the coffee journey</h3>
+      <p style={{ fontSize: "0.85rem", color: "#546e7a", marginTop: 0 }}>
+        Open a stage, take or choose a photo (GPS and time are stamped automatically) and add weights. In a real lot each stage is sent for
+        verification: farm stages to the farmer&apos;s community admin, the rest to your exporter community admin.
+      </p>
+      <ol style={{ listStyle: "none", padding: 0, margin: 0 }}>
+        {TRACE_STAGES.map((st, idx) => {
+          const d = done[st.key];
+          return (
+            <li key={st.key} style={{ borderLeft: `3px solid ${d ? "#0288d1" : "#cfd8dc"}`, padding: "0.35rem 0 0.8rem 0.8rem" }}>
+              <button
+                onClick={() => setOpen(open === st.key ? null : st.key)}
+                style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: FONT, textAlign: "left", width: "100%" }}
+              >
+                <b>
+                  {idx + 1}. {st.name}
+                </b>{" "}
+                <span style={{ fontSize: "0.75rem", color: "#78909c" }}>({st.scope === "farm" ? "farm stage" : "exporter stage"})</span>{" "}
+                <StatusPill state={d ? "pending" : "missing"} />
+              </button>
+              <div style={{ fontSize: "0.8rem", color: "#607d8b" }}>{st.hint}</div>
+              {d && (
+                <div style={{ fontSize: "0.8rem", color: "#0277bd" }}>
+                  Practice evidence: {d.photos} photo{d.photos === 1 ? "" : "s"}
+                  {d.wIn ? ` · in ${d.wIn} kg` : ""}
+                  {d.wOut ? ` · out ${d.wOut} kg` : ""}. In a real lot this would now await verification.
+                </div>
+              )}
+              {open === st.key && (
+                <div style={{ marginTop: "0.5rem", background: "#fafafa", border: "1px solid #eceff1", borderRadius: 8, padding: "0.75rem" }}>
+                  <PhotoSetCapture photos={photos} onChange={setPhotos} max={3} />
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "0.5rem", marginTop: "0.5rem" }}>
+                    <input style={input} placeholder="Weight in (kg)" value={wIn} onChange={(e) => setWIn(e.target.value)} />
+                    <input style={input} placeholder="Weight out (kg)" value={wOut} onChange={(e) => setWOut(e.target.value)} />
+                  </div>
+                  <button
+                    style={{ ...button("primary"), marginTop: "0.5rem" }}
+                    onClick={() => {
+                      setDone({ ...done, [st.key]: { photos: photos.length, wIn: wIn || undefined, wOut: wOut || undefined } });
+                      setPhotos([]);
+                      setWIn("");
+                      setWOut("");
+                      setOpen(TRACE_STAGES[idx + 1]?.key ?? null);
+                    }}
+                  >
+                    Try submitting this stage
+                  </button>
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ol>
     </div>
   );
 }

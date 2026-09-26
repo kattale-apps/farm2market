@@ -97,7 +97,8 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
     setMoreSlot(document.getElementById("dashboard-more-slot"));
   }, []);
   const MORE_MENU_SECTIONS: Array<{ key: string; label: string }> = [
-    { key: "wallet", label: "💰 Wallet (Sentify & deposits)" },
+    { key: "wallet", label: "💰 Wallet (deposits)" },
+    { key: "sentify", label: "🪙 Sentify rewards cash-out" },
     {
       key: "farmcoinTokens",
       label: typeof farmcoinSummary?.balance === "number"
@@ -121,7 +122,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
   // A handful of sections only exist in the DOM for one of the two view modes
   // (Simple vs Pro) — switch the view automatically so the menu always finds
   // the section it just opened, instead of silently doing nothing.
-  const SIMPLE_VIEW_ONLY_KEYS = ["openListings", "todayActivity", "buyOffers", "deliveryConfirmations"];
+  const SIMPLE_VIEW_ONLY_KEYS = ["openListings", "todayActivity", "buyOffers", "deliveryConfirmations", "wallet", "sentify"];
   const PRO_VIEW_ONLY_KEYS = ["createListing", "listingsNegotiations"];
   const openSectionFromMenu = (key: string) => {
     if (SIMPLE_VIEW_ONLY_KEYS.includes(key)) {
@@ -153,19 +154,23 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (new URLSearchParams(window.location.search).get("wallet") === "open") {
+      setProView(false);
       setOpenSections((prev) => ({ ...prev, wallet: true }));
-      setTimeout(() => document.getElementById("section-wallet")?.scrollIntoView({ behavior: "smooth", block: "start" }), 300);
+      setTimeout(() => document.getElementById("section-walletDeposit")?.scrollIntoView({ behavior: "smooth", block: "start" }), 300);
     }
   }, []);
   const openWallet = () => {
     const next = !isSectionOpen("wallet");
+    setProView(false);
     setOpenSections((prev) => ({ ...prev, wallet: next }));
     if (next) {
-      setTimeout(() => {
-        const el = document.getElementById("section-wallet") ?? document.getElementById("section-walletDepositPro");
-        el?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 50);
+      setTimeout(() => document.getElementById("section-walletDeposit")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
     }
+  };
+  const openSentify = () => {
+    const next = !isSectionOpen("sentify");
+    setOpenSections((prev) => ({ ...prev, sentify: next }));
+    if (next) setTimeout(() => document.getElementById("section-sentify")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   };
   const renderHideControl = (key: string) => (
     <button type="button" onClick={() => toggleSection(key)} style={hideSectionButtonStyle}>▲ Hide</button>
@@ -819,21 +824,6 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
         >
           💰 {isSectionOpen("wallet") ? "Hide wallet" : "Wallet"}
         </button>
-        <button
-          onClick={() => setProView(!proView)}
-          style={{
-            padding: "0.5rem 1rem",
-            background: proView ? "#1976d2" : "#f5f5f5",
-            color: proView ? "#fff" : "#333",
-            border: "1px solid #ddd",
-            borderRadius: "6px",
-            cursor: "pointer",
-            fontSize: "0.9rem",
-            fontWeight: "600"
-          }}
-        >
-          {proView ? "Simple View" : "Pro View"}
-        </button>
       </div>
 
       {!proView ? (
@@ -899,8 +889,8 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
           )}
 
           {/* Sentify Wallet */}
-          {isSectionOpen("wallet") && (
-          <div id="section-wallet" style={{
+          {isSectionOpen("sentify") && (
+          <div id="section-sentify" style={{
             marginBottom: "1.5rem",
             padding: "clamp(1rem, 3vw, 1.5rem)",
             background: "#fff",
@@ -1822,6 +1812,23 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
             }}>
               Deposit Funds via Pesapal
             </h3>
+            <button
+              type="button"
+              onClick={openSentify}
+              style={{
+                marginBottom: "1rem",
+                padding: "0.45rem 0.9rem",
+                borderRadius: 999,
+                border: "1px solid #ffe082",
+                background: isSectionOpen("sentify") ? "#fff8e1" : "#fff",
+                color: "#8d6e00",
+                fontWeight: 700,
+                fontSize: "0.82rem",
+                cursor: "pointer",
+              }}
+            >
+              🪙 {isSectionOpen("sentify") ? "Hide Sentify rewards cash-out" : "Sentify rewards cash-out (FarmCoin to mobile money)"}
+            </button>
             <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
               <div>
                 <label style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.9rem", color: "#666" }}>

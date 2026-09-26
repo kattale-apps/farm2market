@@ -28,7 +28,7 @@ import {
   uploadToConvex,
   errorText,
 } from "../../components/exportMarkets/ui";
-import { ExporterLots } from "../../components/exportMarkets/ExporterLots";
+import { ExporterLots, PracticeLot } from "../../components/exportMarkets/ExporterLots";
 import { DealsList } from "../../components/exportMarkets/DealsList";
 import { PriceTicker } from "../../components/exportMarkets/PriceTicker";
 
@@ -63,8 +63,17 @@ export default function ExporterWorkspacePage() {
   const [tab, setTab] = useState<Tab>("overview");
   const [crop, setCrop] = useState<string>(DEFAULT_EXPORT_CROP);
 
+  // Tab history, so "Back" returns to wherever the trader came from.
+  const [history, setHistory] = useState<Tab[]>([]);
   const go = (t: Tab) => {
+    if (t !== tab) setHistory((h) => [...h, tab]);
     setTab(t);
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  const back = () => {
+    const prev = history[history.length - 1] ?? "overview";
+    setHistory((h) => h.slice(0, -1));
+    setTab(prev);
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -94,8 +103,15 @@ export default function ExporterWorkspacePage() {
           </button>
         ))}
       </div>
-      <div style={{ background: EXPORT_SKY, border: `1px solid ${EXPORT_SKY_BORDER}`, borderRadius: 12, padding: "0.7rem 0.9rem", marginBottom: "1.25rem", fontSize: "0.88rem", color: EXPORT_HEADING }}>
-        <b>This tab:</b> {TABS.find((t) => t.key === tab)?.needs}
+      <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap", marginBottom: "1.25rem" }}>
+        {tab !== "overview" && (
+          <button style={button("secondary")} onClick={back}>
+            ← Back
+          </button>
+        )}
+        <div style={{ flex: 1, minWidth: 220, background: EXPORT_SKY, border: `1px solid ${EXPORT_SKY_BORDER}`, borderRadius: 12, padding: "0.7rem 0.9rem", fontSize: "0.88rem", color: EXPORT_HEADING }}>
+          <b>This tab:</b> {TABS.find((t) => t.key === tab)?.needs}
+        </div>
       </div>
 
       {ws === undefined ? (
@@ -125,20 +141,7 @@ export default function ExporterWorkspacePage() {
             (ws.profile ? (
               <ExporterLots userId={userId} isActiveExporter={ws.isActiveExporter} crop={crop} productForms={ws.profile.productForms ?? ["green"]} />
             ) : (
-              <div style={card}>
-                <h2 style={{ marginTop: 0, fontSize: "1.1rem" }}>Lots and the trace map</h2>
-                <p>Once your company profile is saved you can create lots here. For each lot you will give:</p>
-                <ul style={{ lineHeight: 1.8 }}>
-                  <li>Coffee type, grade, processing, crop year, origin, bags and bag weight, moisture, screen size, defects and cup score.</li>
-                  <li>Whether it is green beans, roasted or packaged for consumption.</li>
-                  <li>Photos, the warehouse and the Incoterms you offer. Prices are given on request.</li>
-                  <li>Where the coffee came from: your platform purchases, Advanced Markets commitments, or declared farms with GPS locations.</li>
-                  <li>Proof photos with GPS and time, and weights, at each stage from harvest to export bagging.</li>
-                </ul>
-                <button style={button("primary")} onClick={() => go("profile")}>
-                  Go to company profile
-                </button>
-              </div>
+              <PracticeLot crop={crop} productForms={["green", "roasted", "packaged"]} onGoToProfile={() => go("profile")} />
             ))}
           {tab === "deals" && <DealsList userId={userId} viewer="exporter" />}
         </>

@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { mutation, query, DatabaseReader } from "./_generated/server";
 import { generateUTID, getUgandaTime } from "./utils";
 import { verifyAdminRole } from "./auth";
@@ -1174,10 +1174,6 @@ export const joinCommunityByQr = mutation({
 
     // QR join is now allowed for ALL communities (qrEnabled gate removed)
 
-    // Exporter communities are invite-only: an admin adds verified traders.
-    if ((community as any).exportMarketsEnabled === true) {
-      throw new Error("Exporter communities are invite-only. An admin adds verified traders.");
-    }
 
     let userId: Id<"users"> | undefined;
   let wasNewUser = false;
@@ -1191,6 +1187,11 @@ export const joinCommunityByQr = mutation({
       }
       if (isVendorOnlyCommunity((community as any).communityType) && user.role !== "vendor") {
         throw new Error("Only vendors can join this community");
+      }
+      // In an exporter community, traders are added by an admin (that is
+      // what makes them exporters); everyone else joins as usual.
+      if ((community as any).exportMarketsEnabled === true && user.role === "trader") {
+        throw new ConvexError("Traders are added to this exporter community by an admin. Contact the community admin to be added.");
       }
     } else {
       // Need to create or find user
@@ -1669,10 +1670,13 @@ export const joinCommunity = mutation({
       throw new Error("Only vendors can join this community");
     }
 
-    // Exporter communities are invite-only: an admin adds verified traders
-    // (exportMarkets.addTraderToExportCommunity).
-    if (community.exportMarketsEnabled === true) {
-      throw new Error("Exporter communities are invite-only. An admin adds verified traders.");
+    // In an exporter community, traders are added by an admin
+    // (exportMarkets.addTraderToExportCommunity), which is what makes them
+    // exporters. Farmers, buyers and others still join as usual. ConvexError
+    // so the reason reaches the user on production, where plain errors are
+    // shown only as "Server Error".
+    if (community.exportMarketsEnabled === true && user.role === "trader") {
+      throw new ConvexError("Traders are added to this exporter community by an admin. Contact the community admin to be added.");
     }
 
     // Check if already a member

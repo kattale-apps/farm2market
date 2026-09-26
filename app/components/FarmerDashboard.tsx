@@ -16,6 +16,7 @@ import { resolveCommunityLogo } from "../lib/communityLogos";
 import { useOfflineQuery } from "../hooks/useOfflineQuery";
 import { useOfflineMutation } from "../hooks/useOfflineMutation";
 import { menuRainbowColor } from "../utils/menuAccentColors";
+import { FarmCoinIcon } from "./icons/Brand";
 
 interface FarmerDashboardProps {
   userId: Id<"users">;
@@ -116,13 +117,11 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
     setMoreSlot(document.getElementById("dashboard-more-slot"));
   }, []);
   const farm2MarketLocked = !!farm2MarketAccess && !farm2MarketAccess.allowed;
-  const MORE_MENU_SECTIONS: Array<{ key: string; label: string; disabled?: boolean }> = [
+  const MORE_MENU_SECTIONS: Array<{ key: string; label: React.ReactNode; disabled?: boolean }> = [
     { key: "profile", label: "👤 Profile" },
     {
       key: "farmcoinRewards",
-      label: typeof farmerFarmcoinBalance === "number"
-        ? `🪙 FarmCoin Rewards (${farmerFarmcoinBalance})`
-        : "🪙 FarmCoin Rewards",
+      label: <><FarmCoinIcon size={18} /> FarmCoin Rewards{typeof farmerFarmcoinBalance === "number" ? ` (${farmerFarmcoinBalance})` : ""}</>,
     },
     { key: "communities", label: "🌾 My Communities" },
     ...(effectiveRole === "farmer" ? [
@@ -132,7 +131,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
       {
         key: "farm2market",
         label: farm2MarketLocked
-          ? `🔒 Farm 2 Market (🪙 ${farm2MarketAccess?.balance ?? 0}/${farm2MarketAccess?.requiredBalance ?? 0})`
+          ? <>🔒 Farm 2 Market (<FarmCoinIcon size={16} /> {farm2MarketAccess?.balance ?? 0}/{farm2MarketAccess?.requiredBalance ?? 0})</>
           : "🛒 Farm 2 Market",
         disabled: farm2MarketLocked,
       },
@@ -1094,7 +1093,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
             color: "#2c2c2c",
             fontFamily: '"Montserrat", sans-serif',
           }}>
-            🪙 FarmCoin Rewards
+            <FarmCoinIcon size={22} /> FarmCoin Rewards
           </h3>
           <div style={{
             background: "linear-gradient(135deg, #fff8e1, #ffecb3)",

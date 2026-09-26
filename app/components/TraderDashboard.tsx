@@ -15,6 +15,7 @@ import { ContactUs } from "./ContactUs";
 import { savePdfFromJsPDF } from "../utils/pdfDownload";
 import { useRouter } from "next/navigation";
 import { menuAccentColor } from "../utils/menuAccentColors";
+import { VerifiedBadge, FarmCoinIcon } from "./icons/Brand";
 
 interface TraderDashboardProps {
   userId: Id<"users">;
@@ -96,14 +97,12 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
     setMsgSlot(document.getElementById("dashboard-msg-slot"));
     setMoreSlot(document.getElementById("dashboard-more-slot"));
   }, []);
-  const MORE_MENU_SECTIONS: Array<{ key: string; label: string }> = [
+  const MORE_MENU_SECTIONS: Array<{ key: string; label: React.ReactNode }> = [
     { key: "wallet", label: "💰 Wallet (deposits)" },
-    { key: "sentify", label: "🪙 Sentify rewards cash-out" },
+    { key: "sentify", label: <><FarmCoinIcon size={18} /> Sentify rewards cash-out</> },
     {
       key: "farmcoinTokens",
-      label: typeof farmcoinSummary?.balance === "number"
-        ? `🪙 FarmCoin Rewards (${farmcoinSummary.balance})`
-        : "🪙 FarmCoin Rewards",
+      label: <><FarmCoinIcon size={18} /> FarmCoin Rewards{typeof farmcoinSummary?.balance === "number" ? ` (${farmcoinSummary.balance})` : ""}</>,
     },
     { key: "deliveryConfirmations", label: "🚚 Delivery Confirmations" },
     { key: "openListings", label: "📋 Open Listings" },
@@ -653,7 +652,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
 
   const titleContent = (
     <h2 style={{
-      fontSize: "clamp(1.05rem, 4vw, 1.4rem)",
+      fontSize: "clamp(0.98rem, 4vw, 1.4rem)",
       margin: 0,
       color: "#fff",
       fontFamily: '"Montserrat", sans-serif',
@@ -662,22 +661,12 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
       whiteSpace: "nowrap",
       display: "flex",
       alignItems: "center",
-      gap: "0.6rem",
+      gap: "0.4rem",
+      minWidth: 0,
     }}>
       Hello, {userRole === "transporter" ? "Transporter 🚛" : "Trader 🚚"}
       {(user as any)?.isVerifiedTrader && (user as any)?.verificationStatus === "verified" && (
-        <span style={{
-          padding: "0.25rem 0.6rem",
-          borderRadius: "999px",
-          fontSize: "0.75rem",
-          fontWeight: "600",
-          background: "#e8f5e9",
-          color: "#2e7d32",
-          border: "1px solid #81c784",
-          whiteSpace: "nowrap",
-        }}>
-          Verified
-        </span>
+        <VerifiedBadge size={26} title="Verified trader" />
       )}
     </h2>
   );
@@ -888,91 +877,6 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
           </div>
           )}
 
-          {/* Sentify Wallet */}
-          {isSectionOpen("sentify") && (
-          <div id="section-sentify" style={{
-            marginBottom: "1.5rem",
-            padding: "clamp(1rem, 3vw, 1.5rem)",
-            background: "#fff",
-            borderRadius: "12px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-            border: "1px solid #e0e0e0"
-          }}>
-            <h3 style={{
-              marginTop: 0,
-              marginBottom: "0.75rem",
-              fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)",
-              color: "#2c2c2c",
-              fontFamily: '"Montserrat", sans-serif',
-              fontWeight: "600",
-              letterSpacing: "-0.01em"
-            }}>
-              Sentify Wallet
-            </h3>
-            <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.75rem" }}>
-              Sentify is to turn your FarmCoin into cash via mobile money.
-            </div>
-            <div style={{ marginBottom: "0.75rem" }}>
-              <div style={{ color: "#666", fontSize: "0.9rem" }}>Balance</div>
-              <div style={{ fontSize: "1.5rem", fontWeight: "600", color: "#2e7d32" }}>
-                {sentifySummary?.balance ?? 0} Token(s)
-              </div>
-              {sentifySummary && (
-                <div style={{ fontSize: "0.8rem", color: "#64748b" }}>
-                  Cash-out rate: UGX {sentifySummary.cashoutRate} per token
-                </div>
-              )}
-            </div>
-            <div style={{ display: "grid", gap: "0.6rem", maxWidth: 520 }}>
-              <select
-                value={sentifyReceiptUtid}
-                onChange={(e) => setSentifyReceiptUtid(e.target.value)}
-                style={{ padding: "0.6rem", borderRadius: 8, border: "1px solid #ddd" }}
-              >
-                <option value="">Select receipt to cash out</option>
-                {(sentifyReceipts || []).map((receipt: any) => (
-                  <option key={receipt.utid} value={receipt.utid}>
-                    {receipt.utid} • {receipt.delta} token(s)
-                  </option>
-                ))}
-              </select>
-              <input
-                type="tel"
-                placeholder="Mobile money phone number"
-                value={sentifyPhone}
-                onChange={(e) => setSentifyPhone(e.target.value)}
-                style={{ padding: "0.6rem", borderRadius: 8, border: "1px solid #ddd" }}
-              />
-              <button
-                type="button"
-                onClick={handleSentifyCashout}
-                style={{
-                  padding: "0.6rem 1rem",
-                  borderRadius: 8,
-                  border: "none",
-                  background: "#1976d2",
-                  color: "#fff",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
-              >
-                Sentify Cash-out
-              </button>
-              {sentifyMessage && (
-                <div style={{
-                  padding: "0.6rem",
-                  borderRadius: "6px",
-                  fontSize: "0.85rem",
-                  background: sentifyMessage.type === "success" ? "#e8f5e9" : "#ffebee",
-                  color: sentifyMessage.type === "success" ? "#2e7d32" : "#c62828",
-                  border: `1px solid ${sentifyMessage.type === "success" ? "#c8e6c9" : "#ffcdd2"}`
-                }}>
-                  {sentifyMessage.text}
-                </div>
-              )}
-            </div>
-          </div>
-          )}
 
           {/* Delivery Confirmation (Trader) */}
           {isSectionOpen("deliveryConfirmations") && (
@@ -1812,23 +1716,6 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
             }}>
               Deposit Funds via Pesapal
             </h3>
-            <button
-              type="button"
-              onClick={openSentify}
-              style={{
-                marginBottom: "1rem",
-                padding: "0.45rem 0.9rem",
-                borderRadius: 999,
-                border: "1px solid #ffe082",
-                background: isSectionOpen("sentify") ? "#fff8e1" : "#fff",
-                color: "#8d6e00",
-                fontWeight: 700,
-                fontSize: "0.82rem",
-                cursor: "pointer",
-              }}
-            >
-              🪙 {isSectionOpen("sentify") ? "Hide Sentify rewards cash-out" : "Sentify rewards cash-out (FarmCoin to mobile money)"}
-            </button>
             <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
               <div>
                 <label style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.9rem", color: "#666" }}>
@@ -1935,6 +1822,115 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
                 </div>
               </div>
             )}
+            {/* Sentify is a silent, system-generated rewards wallet (FarmCoin to
+                mobile money), not a deposit wallet: a quiet link at the bottom. */}
+            <div style={{ marginTop: "1.25rem", paddingTop: "0.75rem", borderTop: "1px dashed #e0e0e0", textAlign: "right" }}>
+              <button
+                type="button"
+                onClick={openSentify}
+                style={{
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  color: "#8d6e00",
+                  fontWeight: 600,
+                  fontSize: "0.8rem",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.35rem",
+                }}
+              >
+                <FarmCoinIcon size={18} />
+                {isSectionOpen("sentify") ? "Hide Sentify rewards" : "Sentify rewards cash-out"}
+              </button>
+            </div>
+          </div>
+          )}
+
+          {/* Sentify Wallet */}
+          {isSectionOpen("sentify") && (
+          <div id="section-sentify" style={{
+            marginBottom: "1.5rem",
+            padding: "clamp(1rem, 3vw, 1.5rem)",
+            background: "#fff",
+            borderRadius: "12px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+            border: "1px solid #e0e0e0"
+          }}>
+            <h3 style={{
+              marginTop: 0,
+              marginBottom: "0.75rem",
+              fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)",
+              color: "#2c2c2c",
+              fontFamily: '"Montserrat", sans-serif',
+              fontWeight: "600",
+              letterSpacing: "-0.01em"
+            }}>
+              Sentify Wallet
+            </h3>
+            <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.75rem" }}>
+              Sentify is to turn your FarmCoin into cash via mobile money.
+            </div>
+            <div style={{ marginBottom: "0.75rem" }}>
+              <div style={{ color: "#666", fontSize: "0.9rem" }}>Balance</div>
+              <div style={{ fontSize: "1.5rem", fontWeight: "600", color: "#2e7d32" }}>
+                {sentifySummary?.balance ?? 0} Token(s)
+              </div>
+              {sentifySummary && (
+                <div style={{ fontSize: "0.8rem", color: "#64748b" }}>
+                  Cash-out rate: UGX {sentifySummary.cashoutRate} per token
+                </div>
+              )}
+            </div>
+            <div style={{ display: "grid", gap: "0.6rem", maxWidth: 520 }}>
+              <select
+                value={sentifyReceiptUtid}
+                onChange={(e) => setSentifyReceiptUtid(e.target.value)}
+                style={{ padding: "0.6rem", borderRadius: 8, border: "1px solid #ddd" }}
+              >
+                <option value="">Select receipt to cash out</option>
+                {(sentifyReceipts || []).map((receipt: any) => (
+                  <option key={receipt.utid} value={receipt.utid}>
+                    {receipt.utid} • {receipt.delta} token(s)
+                  </option>
+                ))}
+              </select>
+              <input
+                type="tel"
+                placeholder="Mobile money phone number"
+                value={sentifyPhone}
+                onChange={(e) => setSentifyPhone(e.target.value)}
+                style={{ padding: "0.6rem", borderRadius: 8, border: "1px solid #ddd" }}
+              />
+              <button
+                type="button"
+                onClick={handleSentifyCashout}
+                style={{
+                  padding: "0.6rem 1rem",
+                  borderRadius: 8,
+                  border: "none",
+                  background: "#1976d2",
+                  color: "#fff",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Sentify Cash-out
+              </button>
+              {sentifyMessage && (
+                <div style={{
+                  padding: "0.6rem",
+                  borderRadius: "6px",
+                  fontSize: "0.85rem",
+                  background: sentifyMessage.type === "success" ? "#e8f5e9" : "#ffebee",
+                  color: sentifyMessage.type === "success" ? "#2e7d32" : "#c62828",
+                  border: `1px solid ${sentifyMessage.type === "success" ? "#c8e6c9" : "#ffcdd2"}`
+                }}>
+                  {sentifyMessage.text}
+                </div>
+              )}
+            </div>
           </div>
           )}
         </>

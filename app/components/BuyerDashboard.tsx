@@ -17,6 +17,7 @@ import { savePdfFromJsPDF } from "../utils/pdfDownload";
 import { menuAccentColor } from "../utils/menuAccentColors";
 import { IS_PRODUCTION_DEPLOYMENT } from "../utils/env";
 import { InfoTip } from "./exportMarkets/ui";
+import { VerifiedBadge, FarmCoinIcon } from "./icons/Brand";
 
 interface BuyerDashboardProps {
   userId: Id<"users">;
@@ -166,13 +167,11 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
     setMoreSlot(document.getElementById("dashboard-more-slot"));
     setProfileExtraSlot(document.getElementById("dashboard-profile-extra-slot"));
   }, []);
-  const RAW_MORE_MENU_SECTIONS: Array<{ key: string; label: string }> = [
+  const RAW_MORE_MENU_SECTIONS: Array<{ key: string; label: React.ReactNode }> = [
     { key: "communities", label: "🌾 My Communities" },
     {
       key: "rewards",
-      label: typeof (buyerFarmcoinBalance as any)?.balance === "number"
-        ? `🪙 FarmCoin Rewards (${(buyerFarmcoinBalance as any).balance})`
-        : "🪙 FarmCoin Rewards",
+      label: <><FarmCoinIcon size={18} /> FarmCoin Rewards{typeof (buyerFarmcoinBalance as any)?.balance === "number" ? ` (${(buyerFarmcoinBalance as any).balance})` : ""}</>,
     },
     { key: "feesInfo", label: "💰 Service Fee & Kilo-Shaving Info" },
     { key: "traderOrders", label: "📦 Trader Listing Orders" },
@@ -187,15 +186,15 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
     { key: "walletReport", label: "📄 Wallet Report" },
     { key: "marketPrices", label: "📑 Market Price Reports" },
   ];
-  // These sections depend on other roles (trader/vendor/store) that are
-  // locked out of signup on the production deployment (see app/login/page.tsx),
-  // so on production they're shown but inert — fully active on the develop
-  // preview and locally so this area can keep being built out.
-  const MORE_MENU_SECTIONS: Array<{ key: string; label: string; disabled?: boolean }> = RAW_MORE_MENU_SECTIONS.map((section) => (
-    IS_PRODUCTION_DEPLOYMENT ? { ...section, label: `🔐 ${section.label}`, disabled: true } : section
+  // Traders can sign up on production now, so their sections are open there.
+  // Vendor and store signup is still closed on production, so the vendor
+  // shop stays shown but inert there; everything is active on develop.
+  const PRODUCTION_LOCKED_SECTIONS = new Set(["vendorStore"]);
+  const MORE_MENU_SECTIONS: Array<{ key: string; label: React.ReactNode; disabled?: boolean }> = RAW_MORE_MENU_SECTIONS.map((section) => (
+    IS_PRODUCTION_DEPLOYMENT && PRODUCTION_LOCKED_SECTIONS.has(section.key) ? { ...section, label: <>🔐 {section.label}</>, disabled: true } : section
   ));
   const openSectionFromMenu = (key: string) => {
-    if (IS_PRODUCTION_DEPLOYMENT) return;
+    if (IS_PRODUCTION_DEPLOYMENT && PRODUCTION_LOCKED_SECTIONS.has(key)) return;
     setOpenSections((prev) => ({ ...prev, [key]: true }));
     setMoreMenuOpen(false);
     setTimeout(() => {
@@ -2584,19 +2583,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                         <div style={{ color: "#999", fontSize: "clamp(0.75rem, 2vw, 0.85rem)" }}>Trader</div>
                         <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
                           <div style={{ fontWeight: "600", color: "#1a1a1a", fontSize: "clamp(0.9rem, 3vw, 1rem)" }}>{item.traderAlias}</div>
-                          {item.traderIsVerified && (
-                            <span style={{
-                              padding: "0.15rem 0.5rem",
-                              borderRadius: "999px",
-                              fontSize: "0.7rem",
-                              fontWeight: "600",
-                              background: "#e8f5e9",
-                              color: "#2e7d32",
-                              border: "1px solid #81c784",
-                            }}>
-                              Verified
-                            </span>
-                          )}
+                          {item.traderIsVerified && <VerifiedBadge size={20} title="Verified trader" />}
                         </div>
                       </div>
                     </div>
@@ -3582,7 +3569,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                       fontWeight: "600",
                     }}
                   >
-                    {priceReportLoading === `${type}-fc` ? "⏳ Processing…" : "🪙 Pay with FarmCoin"}
+                    {priceReportLoading === `${type}-fc` ? "⏳ Processing…" : <><FarmCoinIcon size={18} /> Pay with FarmCoin</>}
                   </button>
                   {/* Pesapal payment */}
                   {priceUGX > 0 && (

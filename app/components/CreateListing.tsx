@@ -6,6 +6,7 @@ import { Id } from "../../convex/_generated/dataModel";
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { FarmCoinReward, FarmCoinVideoPreloader } from "./FarmCoinAnimation";
+import { FarmCoinIcon } from "./icons/Brand";
 
 interface CreateListingProps {
   userId: Id<"users">;
@@ -505,7 +506,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
           </button>
         </div>
         <p style={{ fontSize: "0.85rem", color: "#555", marginBottom: "1rem" }}>
-          Report a commodity price at your market today. You earn 🪙 FarmCoins for each submission!
+          Report a commodity price at your market today. You earn <FarmCoinIcon size={16} /> FarmCoins for each submission!
         </p>
 
         {priceMessage && (
@@ -651,7 +652,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
                 fontWeight: "700",
               }}
             >
-              {priceLoading ? "Submitting..." : "📤 Submit Price & Earn 🪙"}
+              {priceLoading ? "Submitting..." : <>📤 Submit Price &amp; Earn <FarmCoinIcon size={18} /></>}
             </button>
           </div>
         </form>

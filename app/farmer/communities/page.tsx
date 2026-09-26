@@ -139,7 +139,8 @@ export default function FarmerCommunitiesPage() {
       await joinCommunity({ farmerId: userId, communityId: community.id });
       setMessage({ type: "success", text: "Successfully joined the community!" });
     } catch (error: any) {
-      setMessage({ type: "error", text: error.message || "Failed to join community" });
+      // ConvexError carries a readable reason in .data (production hides .message).
+      setMessage({ type: "error", text: (typeof error?.data === "string" && error.data) || error.message || "Failed to join community" });
     } finally {
       setLoadingAction(null);
     }
@@ -550,6 +551,10 @@ export default function FarmerCommunitiesPage() {
                       !community.isMember ? (
                         getCommunityStatus(community) === "PENDING" && isAgroFreshCommunity(community) ? (
                           <div style={{ color: "#b45309", fontWeight: 600 }}>Pending approval</div>
+                        ) : userRole === "trader" && (community as any).exportMarketsEnabled === true ? (
+                          <div style={{ flex: 1, padding: "0.75rem 1rem", borderRadius: 8, background: "#e1f5fe", color: "#01579b", fontWeight: 600, fontSize: "0.88rem", textAlign: "center" }}>
+                            🚢 Exporter community: traders are added by the community admin
+                          </div>
                         ) : (
                           <button
                             onClick={(e) => {

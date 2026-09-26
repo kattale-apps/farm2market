@@ -1103,7 +1103,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                 <div>
                   <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Export Markets</h3>
                   <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.95 }}>
-                    Add verified traders as exporters and verify their documents
+                    Exporters, documents, trace evidence, sample desk and deals
                   </p>
                 </div>
               </div>

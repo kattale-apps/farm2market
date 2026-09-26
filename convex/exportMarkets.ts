@@ -41,15 +41,15 @@ type Ctx = QueryCtx | MutationCtx;
 // Helpers
 // ------------------------------------------------------------------
 
-function isSuperAdmin(user: { adminLevel?: "super" | "junior"; adminCategory?: string }): boolean {
+export function isSuperAdmin(user: { adminLevel?: "super" | "junior"; adminCategory?: string }): boolean {
   return user.adminLevel === "super" || (user.adminLevel === undefined && !user.adminCategory);
 }
 
-function todayUganda(): string {
+export function todayUganda(): string {
   return ugandaDateFromStored(getUgandaTime());
 }
 
-async function requireAdmin(ctx: Ctx, adminId: Id<"users">): Promise<Doc<"users">> {
+export async function requireAdmin(ctx: Ctx, adminId: Id<"users">): Promise<Doc<"users">> {
   const admin = await ctx.db.get(adminId);
   if (!admin || admin.role !== "admin" || admin.state !== "active") {
     throw new Error("Not authorized: admin account required");
@@ -57,20 +57,20 @@ async function requireAdmin(ctx: Ctx, adminId: Id<"users">): Promise<Doc<"users"
   return admin;
 }
 
-async function requireSuperAdmin(ctx: Ctx, adminId: Id<"users">): Promise<Doc<"users">> {
+export async function requireSuperAdmin(ctx: Ctx, adminId: Id<"users">): Promise<Doc<"users">> {
   const admin = await requireAdmin(ctx, adminId);
   if (!isSuperAdmin(admin)) throw new Error("Only super admins can do this");
   return admin;
 }
 
 /** Community admins may act on the export communities they administer. */
-function adminManagesCommunity(admin: Doc<"users">, community: Doc<"communities">): boolean {
+export function adminManagesCommunity(admin: Doc<"users">, community: Doc<"communities">): boolean {
   if (isSuperAdmin(admin)) return true;
   if (String(community.communityAdminId ?? "") === String(admin._id)) return true;
   return (admin.assignedCommunityIds ?? []).some((id) => String(id) === String(community._id));
 }
 
-async function requireExportCommunityAdmin(
+export async function requireExportCommunityAdmin(
   ctx: Ctx,
   adminId: Id<"users">,
   communityId: Id<"communities">
@@ -88,13 +88,13 @@ async function requireExportCommunityAdmin(
 }
 
 /** Export communities an admin can manage. Communities are few, so a bounded scan is fine. */
-async function exportCommunitiesForAdmin(ctx: Ctx, admin: Doc<"users">): Promise<Doc<"communities">[]> {
+export async function exportCommunitiesForAdmin(ctx: Ctx, admin: Doc<"users">): Promise<Doc<"communities">[]> {
   const all = await ctx.db.query("communities").take(1000);
   return all.filter((c) => c.exportMarketsEnabled === true && adminManagesCommunity(admin, c));
 }
 
 /** Export communities a user belongs to. */
-async function exportCommunitiesForMember(ctx: Ctx, userId: Id<"users">): Promise<Doc<"communities">[]> {
+export async function exportCommunitiesForMember(ctx: Ctx, userId: Id<"users">): Promise<Doc<"communities">[]> {
   const memberships = await ctx.db
     .query("communityMemberships")
     .withIndex("by_user", (q) => q.eq("userId", userId))
@@ -107,11 +107,11 @@ async function exportCommunitiesForMember(ctx: Ctx, userId: Id<"users">): Promis
   return result;
 }
 
-function isVerifiedTrader(user: Doc<"users">): boolean {
+export function isVerifiedTrader(user: Doc<"users">): boolean {
   return user.role === "trader" && user.isVerifiedTrader === true && user.verificationStatus === "verified";
 }
 
-async function getFeeSettings(ctx: Ctx) {
+export async function getFeeSettings(ctx: Ctx) {
   const row = await ctx.db.query("exportFeeSettings").first();
   if (!row) return { ...DEFAULT_EXPORT_FEE_SETTINGS, isDefault: true as const, updatedAt: null as number | null };
   return {
@@ -144,7 +144,7 @@ type EffectiveDocType = {
  * The admin-managed list, or the built-in defaults until a super admin has
  * saved one for that audience.
  */
-async function getDocumentTypes(ctx: Ctx, appliesTo: "exporter" | "buyer"): Promise<EffectiveDocType[]> {
+export async function getDocumentTypes(ctx: Ctx, appliesTo: "exporter" | "buyer"): Promise<EffectiveDocType[]> {
   const rows = await ctx.db
     .query("exportDocumentTypes")
     .withIndex("by_appliesTo_and_order", (q) => q.eq("appliesTo", appliesTo))
@@ -169,7 +169,7 @@ async function getDocumentTypes(ctx: Ctx, appliesTo: "exporter" | "buyer"): Prom
   }));
 }
 
-async function walletBalance(ctx: Ctx, userId: Id<"users">): Promise<number> {
+export async function walletBalance(ctx: Ctx, userId: Id<"users">): Promise<number> {
   const last = await ctx.db
     .query("walletLedger")
     .withIndex("by_user", (q) => q.eq("userId", userId))
@@ -178,7 +178,70 @@ async function walletBalance(ctx: Ctx, userId: Id<"users">): Promise<number> {
   return last?.balanceAfter ?? 0;
 }
 
-async function notify(ctx: MutationCtx, userId: Id<"users">, title: string, message: string) {
+/**
+ * Charge an Export Markets fee from a user's wallet: pilot-mode guard,
+ * balance check, wallet ledger debit and a Finance record, in one place.
+ */
+export async function chargeExportFee(
+  ctx: MutationCtx,
+  args: {
+    userId: Id<"users">;
+    role: string;
+    amountUgx: number;
+    kind: "verification" | "success" | "buyer" | "sample";
+    note: string;
+    creditAppliedUgx?: number;
+    metadata?: Record<string, unknown>;
+  }
+): Promise<{ utid: string | null }> {
+  const amount = Math.round(args.amountUgx);
+  if (amount <= 0) {
+    if (args.creditAppliedUgx && args.creditAppliedUgx > 0) {
+      const utid = generateUTID(args.role);
+      await ctx.db.insert("exportFeeCharges", {
+        userId: args.userId,
+        kind: args.kind,
+        amountUgx: 0,
+        creditAppliedUgx: args.creditAppliedUgx,
+        utid,
+        note: args.note,
+        chargedAt: getUgandaTime(),
+      });
+      return { utid };
+    }
+    return { utid: null };
+  }
+  await checkPilotMode(ctx);
+  const balance = await walletBalance(ctx, args.userId);
+  if (balance < amount) {
+    throw new Error(
+      `Your wallet has UGX ${balance.toLocaleString()}. Top up UGX ${(amount - balance).toLocaleString()} to pay UGX ${amount.toLocaleString()}.`
+    );
+  }
+  const utid = generateUTID(args.role);
+  const now = getUgandaTime();
+  await ctx.db.insert("walletLedger", {
+    userId: args.userId,
+    utid,
+    type: "export_fee_payment",
+    amount,
+    balanceAfter: balance - amount,
+    timestamp: now,
+    metadata: { feeKind: args.kind, ...(args.metadata ?? {}) },
+  });
+  await ctx.db.insert("exportFeeCharges", {
+    userId: args.userId,
+    kind: args.kind,
+    amountUgx: amount,
+    creditAppliedUgx: args.creditAppliedUgx,
+    utid,
+    note: args.note,
+    chargedAt: now,
+  });
+  return { utid };
+}
+
+export async function notify(ctx: MutationCtx, userId: Id<"users">, title: string, message: string) {
   await ctx.db.insert("notifications", {
     userId,
     type: "system",
@@ -190,7 +253,7 @@ async function notify(ctx: MutationCtx, userId: Id<"users">, title: string, mess
   });
 }
 
-async function audit(
+export async function audit(
   ctx: MutationCtx,
   action: string,
   actorId: Id<"users">,
@@ -208,7 +271,7 @@ type DocSlot = {
   state: "missing" | "pending" | "rejected" | "verified" | "expiring" | "expired";
 };
 
-async function documentSlots(
+export async function documentSlots(
   ctx: Ctx,
   ownerId: Id<"users">,
   appliesTo: "exporter" | "buyer",
@@ -240,7 +303,7 @@ async function documentSlots(
   return slots;
 }
 
-function feeState(profile: Doc<"exporterProfiles"> | null, today: string) {
+export function feeState(profile: Doc<"exporterProfiles"> | null, today: string) {
   if (!profile) return { ok: false, state: "unpaid" as const, daysLeft: null as number | null };
   // A waiver (fee set to 0 when the exporter confirmed) lapses on the same
   // yearly cycle as a paid fee, so a fee a super admin introduces later is
@@ -266,7 +329,7 @@ function feeState(profile: Doc<"exporterProfiles"> | null, today: string) {
  * trader workspace, the admin review screen and (in later phases) to hide an
  * exporter's lots the moment a licence or the fee lapses.
  */
-async function exporterReadiness(ctx: Ctx, user: Doc<"users">, today: string) {
+export async function exporterReadiness(ctx: Ctx, user: Doc<"users">, today: string) {
   const communities = await exportCommunitiesForMember(ctx, user._id);
   const profile = await ctx.db
     .query("exporterProfiles")
@@ -306,7 +369,7 @@ export async function isActiveExporter(ctx: Ctx, userId: Id<"users">, today: str
   return (await exporterReadiness(ctx, user, today)).isActiveExporter;
 }
 
-async function withUrl(ctx: Ctx, d: Doc<"exportDocuments">) {
+export async function withUrl(ctx: Ctx, d: Doc<"exportDocuments">) {
   return { ...d, url: await ctx.storage.getUrl(d.storageId) };
 }
 
@@ -871,10 +934,17 @@ export const listDocumentsForReview = query({
               .withIndex("by_userId", (q) => q.eq("userId", d.ownerId))
               .first()
           : null;
+      const buyer =
+        d.ownerKind === "buyer"
+          ? await ctx.db
+              .query("buyerProfiles")
+              .withIndex("by_userId", (q) => q.eq("userId", d.ownerId))
+              .first()
+          : null;
       result.push({
         ...(await withUrl(ctx, d)),
         ownerAlias: owner?.alias ?? "",
-        ownerLegalName: profile?.legalName ?? null,
+        ownerLegalName: profile?.legalName ?? (buyer ? `${buyer.businessName}${buyer.countryName ? `, ${buyer.countryName}` : ""}` : null),
       });
     }
     return result;

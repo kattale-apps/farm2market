@@ -158,3 +158,58 @@ export async function uploadToConvex(uploadUrl: string, file: File): Promise<str
   const json = (await res.json()) as { storageId: string };
   return json.storageId;
 }
+
+/** Keep the human part of a Convex server error. */
+export function errorText(e: unknown): string {
+  const m = e instanceof Error ? e.message : String(e);
+  const match = m.match(/Uncaught Error: (.*?)(\n|$| at )/);
+  return match ? match[1] : m;
+}
+
+export function dataUrlToBlob(dataUrl: string): Blob {
+  const [header, base64] = dataUrl.split(",");
+  const mime = header.match(/:(.*?);/)?.[1] || "image/jpeg";
+  const bytes = atob(base64);
+  const array = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) array[i] = bytes.charCodeAt(i);
+  return new Blob([array], { type: mime });
+}
+
+export function formatUsd(n: number | undefined | null, digits = 2): string {
+  return `USD ${(n ?? 0).toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
+}
+
+export const TRACE_LEVEL_TEXT: Record<string, { text: string; bg: string; fg: string }> = {
+  platform_traced: { text: "Traced on platform", bg: "#e8f5e9", fg: "#2e7d32" },
+  partly_declared: { text: "Partly declared", bg: "#fff8e1", fg: "#ef6c00" },
+  declared: { text: "Declared sourcing", bg: "#f5f5f5", fg: "#616161" },
+};
+
+export function Badge({ text, bg, fg }: { text: string; bg: string; fg: string }) {
+  return (
+    <span style={{ display: "inline-block", padding: "0.12rem 0.5rem", borderRadius: 999, background: bg, color: fg, fontSize: "0.72rem", fontWeight: 700, whiteSpace: "nowrap" }}>
+      {text}
+    </span>
+  );
+}
+
+export function TraceBadges({ traceLevel, eudrReady }: { traceLevel: string; eudrReady: boolean }) {
+  const t = TRACE_LEVEL_TEXT[traceLevel] ?? TRACE_LEVEL_TEXT.declared;
+  return (
+    <span style={{ display: "inline-flex", gap: "0.3rem", flexWrap: "wrap" }}>
+      <Badge {...t} />
+      {eudrReady && <Badge text="EUDR-ready locations" bg="#e3f2fd" fg="#1565c0" />}
+    </span>
+  );
+}
+
+export function Stars({ value }: { value: number | null | undefined }) {
+  if (value == null) return <span style={{ color: "#777", fontSize: "0.8rem" }}>No ratings yet</span>;
+  const full = Math.round(value);
+  return (
+    <span style={{ color: "#f9a825", fontWeight: 700 }} title={`${value} out of 5`}>
+      {"★".repeat(full)}
+      <span style={{ color: "#ddd" }}>{"★".repeat(5 - full)}</span> <span style={{ color: "#333", fontSize: "0.8rem" }}>{value}</span>
+    </span>
+  );
+}

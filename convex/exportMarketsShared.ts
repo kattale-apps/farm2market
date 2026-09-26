@@ -295,3 +295,205 @@ export function countryName(code: string | undefined | null): string | undefined
   if (!code) return undefined;
   return COUNTRIES.find((c) => c.code === code.toUpperCase())?.name;
 }
+
+// ==================================================================
+// Phase 2-4 shared definitions
+// ==================================================================
+
+export const COFFEE_TYPES = ["Arabica", "Robusta"] as const;
+export const PROCESSING_METHODS = ["Washed", "Natural", "Honey", "Semi-washed", "Other"];
+export const INCOTERMS = ["EXW", "FCA", "FOB", "CFR", "CIF", "CPT", "CIP", "DAP"] as const;
+export type Incoterm = (typeof INCOTERMS)[number];
+export const DEFAULT_BAG_WEIGHT_KG = 60;
+export const PAYMENT_TERMS = [
+  "Letter of Credit (LC)",
+  "Cash Against Documents (CAD)",
+  "Advance payment (TT)",
+  "Part advance, balance against documents",
+  "Other",
+];
+
+// ------------------------------------------------------------------
+// Trace map: the coffee journey from farm to export bag. Farm stages are
+// verified by an admin of the farmer's community; the rest by an admin of
+// the exporter community. Super admins can verify any stage.
+// ------------------------------------------------------------------
+
+export type TraceScope = "farm" | "exporter";
+export const TRACE_STAGES: { key: string; name: string; scope: TraceScope; hint: string }[] = [
+  { key: "farm_harvest", name: "Harvest at the farm", scope: "farm", hint: "Cherries being picked on the farm; weight of cherry collected." },
+  { key: "drying", name: "Drying", scope: "farm", hint: "Coffee on drying tables or tarpaulins; weight in and out." },
+  { key: "hulling", name: "Hulling / processing", scope: "exporter", hint: "Hulling or wet processing into green beans; weight in and out." },
+  { key: "grading", name: "Grading and sorting", scope: "exporter", hint: "Screen grading and sorting; grading sheet if available." },
+  { key: "warehouse", name: "Warehouse storage", scope: "exporter", hint: "Bags in the warehouse with the lot marking visible." },
+  { key: "export_bagging", name: "Export bagging and marking", scope: "exporter", hint: "Final export bags with marks; total bags and weight." },
+];
+
+/** Weight may drop between stages (hulling, drying, sorting) but never rise beyond this tolerance. */
+export const MASS_BALANCE_TOLERANCE = 0.02;
+
+// ------------------------------------------------------------------
+// EUDR (EU Deforestation Regulation) readiness. Every source plot needs a
+// location; plots larger than 4 hectares need a boundary polygon.
+// ------------------------------------------------------------------
+
+export const EUDR_POLYGON_THRESHOLD_HA = 4;
+export const HECTARES_PER_ACRE = 0.40468564224;
+
+// ------------------------------------------------------------------
+// Order pipeline. System steps are driven by the app and cannot be removed
+// or reordered; super admins may rename them, change required documents,
+// and add custom steps after identities are revealed.
+// ------------------------------------------------------------------
+
+export type PipelineActor = "buyer" | "exporter" | "admin" | "platform";
+export type PipelineKind = "system" | "documents" | "confirm";
+export type PipelineStep = {
+  key: string;
+  name: string;
+  actor: PipelineActor;
+  kind: PipelineKind;
+  system: boolean;
+  requiredDocuments: string[];
+  description?: string;
+};
+
+export const SYSTEM_STEP_KEYS = [
+  "offer_accepted",
+  "buyer_kyc",
+  "sample",
+  "contract_terms",
+  "platform_fees",
+  "disclosure",
+  "payment_security",
+  "pre_shipment_docs",
+  "stuffing",
+  "shipped",
+  "arrived",
+  "balance_settled",
+  "rating",
+] as const;
+
+export function defaultPipelineSteps(incoterm: string): PipelineStep[] {
+  const insured = incoterm === "CIF" || incoterm === "CIP";
+  const preShipment = [
+    "ICO certificate of origin",
+    "Phytosanitary certificate",
+    "Quality / grading certificate",
+    "Fumigation certificate",
+    "Weight certificate",
+    "Commercial invoice",
+    "Packing list",
+    ...(insured ? ["Insurance certificate"] : []),
+  ];
+  return [
+    { key: "offer_accepted", name: "Offer accepted", actor: "exporter", kind: "system", system: true, requiredDocuments: [], description: "The exporter accepts the buyer's offer, subject to sample approval." },
+    { key: "buyer_kyc", name: "Buyer KYC approved", actor: "buyer", kind: "system", system: true, requiredDocuments: [], description: "The buyer submits company documents; an admin approves them." },
+    { key: "sample", name: "Sample approved", actor: "platform", kind: "system", system: true, requiredDocuments: [], description: "The platform collects a sample from the exporter and sends it to the buyer." },
+    { key: "contract_terms", name: "Contract terms agreed", actor: "buyer", kind: "system", system: true, requiredDocuments: [], description: "Price, quantity, Incoterm, port, shipment window and payment terms." },
+    { key: "platform_fees", name: "Platform fees paid", actor: "platform", kind: "system", system: true, requiredDocuments: [], description: "The exporter's success fee (and any buyer fee) is paid." },
+    { key: "disclosure", name: "Identities revealed", actor: "platform", kind: "system", system: true, requiredDocuments: [], description: "Company names and contacts are shared with both sides." },
+    { key: "payment_security", name: "Payment secured", actor: "buyer", kind: "documents", system: true, requiredDocuments: ["Letter of Credit or payment proof"], description: "The buyer uploads the LC or payment documents; an admin verifies them." },
+    { key: "pre_shipment_docs", name: "Pre-shipment certificates", actor: "exporter", kind: "documents", system: true, requiredDocuments: preShipment, description: "Export certificates for this shipment." },
+    { key: "stuffing", name: "Container stuffing", actor: "exporter", kind: "documents", system: true, requiredDocuments: ["Container stuffing photo"], description: "Container and seal numbers with a photo of the loaded container." },
+    { key: "shipped", name: "Shipped", actor: "exporter", kind: "documents", system: true, requiredDocuments: ["Bill of lading / air waybill"], description: "Vessel details and the bill of lading." },
+    { key: "arrived", name: "Arrived", actor: "buyer", kind: "confirm", system: true, requiredDocuments: [], description: "The buyer confirms the shipment arrived." },
+    { key: "balance_settled", name: "Balance settled", actor: "exporter", kind: "confirm", system: true, requiredDocuments: [], description: "The exporter confirms full payment was received." },
+    { key: "rating", name: "Buyer rating", actor: "buyer", kind: "system", system: true, requiredDocuments: [], description: "The buyer rates the exporter." },
+  ];
+}
+
+/** Validates an edited template: system steps all present, in order, and custom steps only after disclosure. */
+export function validatePipelineSteps(steps: PipelineStep[]): string | null {
+  const keys = steps.map((s) => s.key);
+  if (new Set(keys).size !== keys.length) return "Step keys must be unique";
+  const systemOrder = keys.filter((k) => (SYSTEM_STEP_KEYS as readonly string[]).includes(k));
+  if (systemOrder.join(",") !== SYSTEM_STEP_KEYS.join(",")) return "Built-in steps must all be present, in their original order";
+  const disclosureIndex = keys.indexOf("disclosure");
+  for (let i = 0; i < steps.length; i++) {
+    const s = steps[i];
+    if (!s.name.trim()) return "Every step needs a name";
+    const isSystemKey = (SYSTEM_STEP_KEYS as readonly string[]).includes(s.key);
+    if (s.system !== isSystemKey) return "Only built-in steps can be marked as system steps";
+    if (!s.system) {
+      if (i < disclosureIndex) return "Custom steps can only come after identities are revealed";
+      if (s.kind === "system") return "Custom steps must be a document or confirmation step";
+      if (s.actor === "platform") return "Custom steps need a buyer, exporter or admin to act";
+      if (s.kind === "documents" && s.requiredDocuments.length === 0) return `"${s.name}" needs at least one document`;
+    }
+  }
+  if (steps.length > 30) return "A pipeline can have at most 30 steps";
+  return null;
+}
+
+// ------------------------------------------------------------------
+// Anti side-trading: contact details are masked in deal messages until the
+// platform fees are paid and identities are revealed.
+// ------------------------------------------------------------------
+
+export function maskContactDetails(text: string): { text: string; masked: boolean } {
+  let masked = false;
+  const hide = (re: RegExp, label: string, t: string) =>
+    t.replace(re, (match, ...rest) => {
+      masked = true;
+      // Keep a leading space captured by the handle pattern.
+      const lead = typeof rest[0] === "string" && /^\s$/.test(rest[0]) ? rest[0] : "";
+      return `${lead}[${label} hidden until names are revealed]`;
+    });
+  let t = text;
+  t = hide(/[A-Z0-9._%+-]+\s*(?:@|\(at\)|\[at\])\s*[A-Z0-9.-]+\s*(?:\.|\(dot\)|\[dot\])\s*[A-Z]{2,}/gi, "email", t);
+  t = hide(/\b(?:https?:\/\/|www\.)\S+/gi, "link", t);
+  t = hide(/\b[a-z0-9-]+\.(?:com|net|org|co|io|biz|info|ug|ke|uk|de|nl|us|eu)(?:\/\S*)?\b/gi, "link", t);
+  t = hide(/\b(?:wa\.me|whatsapp|telegram|t\.me|signal|skype|wechat|viber)\b\S*/gi, "contact app", t);
+  // Phone numbers: 9+ digits in a run of digits, spaces and separators.
+  // Dates (2026-10-01) and quantities (19,200 kg) stay readable.
+  t = t.replace(/(?:\+|00)?\d[\d\s().-]{7,}\d/g, (match) => {
+    const digits = match.replace(/\D/g, "");
+    if (digits.length < 9 || /^\d{4}-\d{2}-\d{2}$/.test(match.trim())) return match;
+    masked = true;
+    return "[phone number hidden until names are revealed]";
+  });
+  t = hide(/(^|\s)@[A-Za-z0-9_]{3,}/g, "handle", t);
+  return { text: t, masked };
+}
+
+// ------------------------------------------------------------------
+// Fees
+// ------------------------------------------------------------------
+
+/** exchangeRates stores foreign units per 1 UGX; this returns UGX per 1 USD. */
+export function ugxPerUsd(usdPerUgx: number | undefined | null): number | null {
+  if (!usdPerUgx || usdPerUgx <= 0) return null;
+  return 1 / usdPerUgx;
+}
+
+export function computeDealFees(input: {
+  contractValueUsd: number;
+  bags: number;
+  fxUgxPerUsd: number;
+  successFeeMode: "percent" | "per_bag";
+  successFeePercent: number;
+  successFeePerBagUsd: number;
+  buyerFeePercent: number;
+  exporterCreditUgx: number;
+}) {
+  const successUsd =
+    input.successFeeMode === "percent"
+      ? (input.contractValueUsd * input.successFeePercent) / 100
+      : input.bags * input.successFeePerBagUsd;
+  const successUgx = Math.ceil(successUsd * input.fxUgxPerUsd);
+  const creditApplied = Math.min(Math.max(0, input.exporterCreditUgx), successUgx);
+  const buyerUgx = Math.ceil(((input.contractValueUsd * input.buyerFeePercent) / 100) * input.fxUgxPerUsd);
+  return {
+    successFeeUsd: successUsd,
+    successFeeUgx: successUgx,
+    creditAppliedUgx: creditApplied,
+    exporterDueUgx: successUgx - creditApplied,
+    buyerFeeUgx: buyerUgx,
+  };
+}
+
+/** 1 US cent per pound = 0.0220462 USD per kilogram. */
+export function centsPerLbToUsdPerKg(centsPerLb: number): number {
+  return (centsPerLb / 100) * 2.20462262;
+}

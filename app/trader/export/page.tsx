@@ -24,6 +24,9 @@ import {
   formatUgx,
   uploadToConvex,
 } from "../../components/exportMarkets/ui";
+import { ExporterLots } from "../../components/exportMarkets/ExporterLots";
+import { DealsList } from "../../components/exportMarkets/DealsList";
+import { PriceTicker } from "../../components/exportMarkets/PriceTicker";
 
 type Msg = { tone: "error" | "success" | "info"; text: string } | null;
 
@@ -51,6 +54,7 @@ export default function ExporterWorkspacePage() {
   const ws = useQuery(api.exportMarkets.getMyExporterWorkspace, userId ? { userId, today } : "skip");
 
   const [msg, setMsg] = useState<Msg>(null);
+  const [tab, setTab] = useState<"setup" | "lots" | "deals">("setup");
 
   if (authStatus === "loading") return <div style={{ padding: "2rem", fontFamily: FONT }}>Loading...</div>;
   if (!user || user.role !== "trader" || !userId) {
@@ -73,6 +77,7 @@ export default function ExporterWorkspacePage() {
       </p>
 
       {msg && <Notice tone={msg.tone}>{msg.text}</Notice>}
+      <PriceTicker />
 
       {ws === undefined ? (
         <div style={card}>Loading your exporter workspace...</div>
@@ -87,10 +92,31 @@ export default function ExporterWorkspacePage() {
         </div>
       ) : (
         <>
-          <StatusCard ws={ws} userId={userId} setMsg={setMsg} />
-          <ProfileCard ws={ws} userId={userId} setMsg={setMsg} />
-          {ws.profile && <FeeCard ws={ws} userId={userId} setMsg={setMsg} />}
-          {ws.profile && <DocumentsCard ws={ws} userId={userId} setMsg={setMsg} />}
+          {ws.profile && (
+            <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
+              {([
+                ["setup", "Profile & documents"],
+                ["lots", "Lots & trace map"],
+                ["deals", "Deals"],
+              ] as const).map(([key, text]) => (
+                <button key={key} style={button(tab === key ? "primary" : "secondary")} onClick={() => setTab(key)}>
+                  {text}
+                </button>
+              ))}
+            </div>
+          )}
+          {tab === "setup" || !ws.profile ? (
+            <>
+              <StatusCard ws={ws} userId={userId} setMsg={setMsg} />
+              <ProfileCard ws={ws} userId={userId} setMsg={setMsg} />
+              {ws.profile && <FeeCard ws={ws} userId={userId} setMsg={setMsg} />}
+              {ws.profile && <DocumentsCard ws={ws} userId={userId} setMsg={setMsg} />}
+            </>
+          ) : tab === "lots" ? (
+            <ExporterLots userId={userId} isActiveExporter={ws.isActiveExporter} />
+          ) : (
+            <DealsList userId={userId} viewer="exporter" />
+          )}
         </>
       )}
     </div>
@@ -131,7 +157,7 @@ function StatusCard({ ws, userId, setMsg }: CardProps) {
       </div>
       {ws.isActiveExporter ? (
         <p style={{ fontSize: "0.9rem" }}>
-          You are a live exporter. Listing export lots opens in the next release of Export Markets.
+          You are a live exporter. Create and list lots in the Lots tab; enquiries arrive in the Deals tab.
         </p>
       ) : status === "approved" ? (
         <Notice tone="error">

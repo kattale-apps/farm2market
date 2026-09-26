@@ -21,8 +21,9 @@ import {
   StatusPill,
   Notice,
 } from "../../components/exportMarkets/ui";
+import { AdminDealsPanel, AdminTracePanel, AdminPipelinePanel, AdminPricesPanel } from "../../components/exportMarkets/AdminExportPanels";
 
-type Tab = "applications" | "documents" | "members" | "types";
+type Tab = "applications" | "documents" | "members" | "deals" | "trace" | "types" | "pipeline" | "prices";
 type Msg = { tone: "error" | "success" | "info"; text: string } | null;
 
 function errorText(e: unknown): string {
@@ -47,8 +48,16 @@ export default function ExportMarketsAdminPage() {
   const tabs: [Tab, string][] = [
     ["applications", "Exporter applications"],
     ["documents", "Documents to review"],
+    ["deals", "Deals, KYC & samples"],
+    ["trace", "Trace evidence"],
     ["members", "Community members"],
-    ...(mine?.isSuperAdmin ? ([["types", "Document types"]] as [Tab, string][]) : []),
+    ...(mine?.isSuperAdmin
+      ? ([
+          ["types", "Document types"],
+          ["pipeline", "Order pipeline"],
+          ["prices", "Reference prices"],
+        ] as [Tab, string][])
+      : []),
   ];
 
   return (
@@ -62,8 +71,9 @@ export default function ExportMarketsAdminPage() {
         ☕ Export Markets — Admin
       </h1>
       <p style={{ color: "#222", fontWeight: 600, fontSize: "0.88rem", marginTop: 0, textShadow: ON_PHOTO_SHADOW }}>
-        Add verified traders to exporter communities, verify their documents and approve them as exporters. A super admin
-        switches Export Markets on for a community in its dashboard settings. Export fees live in Finance.
+        Add verified traders to exporter communities, verify documents, approve exporters, verify trace evidence, run the sample
+        desk and follow deals. A super admin switches Export Markets on for a community in its dashboard settings. Export fees
+        live in Finance.
       </p>
 
       {mine && mine.communities.length === 0 && (
@@ -86,6 +96,10 @@ export default function ExportMarketsAdminPage() {
       {tab === "documents" && <Documents adminId={adminId} today={today} setMsg={setMsg} />}
       {tab === "members" && mine && <Members adminId={adminId} today={today} communities={mine.communities} setMsg={setMsg} />}
       {tab === "types" && mine?.isSuperAdmin && <DocumentTypes adminId={adminId} setMsg={setMsg} />}
+      {tab === "deals" && <AdminDealsPanel adminId={adminId} setMsg={setMsg} />}
+      {tab === "trace" && <AdminTracePanel adminId={adminId} setMsg={setMsg} />}
+      {tab === "pipeline" && mine?.isSuperAdmin && <AdminPipelinePanel adminId={adminId} setMsg={setMsg} />}
+      {tab === "prices" && mine?.isSuperAdmin && <AdminPricesPanel adminId={adminId} setMsg={setMsg} />}
     </div>
   );
 }

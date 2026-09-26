@@ -16,6 +16,7 @@ import { UserProfileCard } from "./UserProfileCard";
 import { savePdfFromJsPDF } from "../utils/pdfDownload";
 import { menuAccentColor } from "../utils/menuAccentColors";
 import { IS_PRODUCTION_DEPLOYMENT } from "../utils/env";
+import { InfoTip } from "./exportMarkets/ui";
 
 interface BuyerDashboardProps {
   userId: Id<"users">;
@@ -1070,31 +1071,35 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       {moreSlot && createPortal(moreContent, moreSlot)}
       {profileExtraSlot && createPortal(<UserProfileCard userId={userId} />, profileExtraSlot)}
 
-      {/* Export Markets quick link - bean to cup, next to Advanced Markets
-          (seedling to harvest); the page explains the difference. */}
+      {/* Export Markets quick link: same glow and travelling arrow as
+          Advanced Markets, in the sky-blue export theme. */}
       <Link href="/buyer/export-markets" style={{
         display: "flex",
         alignItems: "center",
         gap: "0.75rem",
         padding: "1rem 1.25rem",
-        background: "linear-gradient(135deg, #e1f5fe 0%, #b3e5fc 100%)",
-        border: "2px solid #0288d1",
+        background: "#e1f5fe",
+        border: "3px solid #000",
         borderRadius: "14px",
         textDecoration: "none",
         color: "#01579b",
         fontFamily: '"Montserrat", sans-serif',
         fontWeight: 700,
         fontSize: "clamp(0.9rem,2.5vw,1rem)",
-        boxShadow: "0 4px 16px rgba(2,136,209,0.25)",
-        marginBottom: "1rem",
+        boxShadow: "0 0 0 1px #000, 0 0 22px 4px rgba(2,136,209,0.65), 0 0 40px 8px rgba(2,136,209,0.35), 0 2px 8px rgba(0,0,0,0.25)",
+        marginBottom: "1.5rem",
       }}>
-        <img src="/icons/cargo-ship.svg" alt="" width={44} height={44} style={{ flexShrink: 0 }} />
-        <div style={{ minWidth: 0 }}>
-          <div style={{ whiteSpace: "nowrap" }}>EXPORT MARKETS</div>
-          <div style={{ fontSize: "0.78rem", fontWeight: 500, color: "#0277bd" }}>
-            Bean to cup: ready green coffee in export volumes
-          </div>
+        <img src="/icons/cargo-ship.svg" alt="" width={44} height={44} style={{ flexShrink: 0, filter: "drop-shadow(0 0 6px rgba(2,136,209,0.5))" }} />
+        <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <span style={{ whiteSpace: "nowrap" }}>EXPORT MARKETS</span>
+          <InfoTip text="Ready, graded coffee in export volumes from verified exporters: price on request, platform-handled samples and tracked shipment." label="About Export Markets" />
         </div>
+        <span aria-hidden="true" className="am-quicklink-arrow em-quicklink-arrow">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+            <path d="M4.5 12h13" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" />
+            <path d="M12.5 6.2 18.6 12l-6.1 5.8" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
       </Link>
 
       {/* Advanced Markets quick link */}

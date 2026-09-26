@@ -9,7 +9,7 @@ import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { useStoredUser } from "../../hooks/useStoredUser";
 import { COFFEE_TYPES, DEFAULT_EXPORT_CROP, PRODUCT_FORMS, productFormLabel, ugandaDateFromInstant } from "../../../convex/exportMarketsShared";
-import { FONT, ON_PHOTO_SHADOW, EXPORT_HEADING, card, button, input, MarketsHelper, TraceBadges, Stars, PageHeader, CropTabs, COFFEE_BEAN_ICON } from "../../components/exportMarkets/ui";
+import { FONT, EXPORT_HEADING, card, button, input, TraceBadges, Stars, PageHeader, CropTabs, COFFEE_BEAN_ICON, InfoTip } from "../../components/exportMarkets/ui";
 import { PriceTicker } from "../../components/exportMarkets/PriceTicker";
 import { DealsList } from "../../components/exportMarkets/DealsList";
 
@@ -26,7 +26,6 @@ export default function BuyerExportMarketsPage() {
   const [productForm, setProductForm] = useState("");
   const [tab, setTab] = useState<"lots" | "deals">("lots");
   const lots = useQuery(api.exportLots.listCatalogue, { today, crop, coffeeType: coffeeType || undefined, productForm: productForm || undefined });
-  const [showHelp, setShowHelp] = useState(false);
 
   if (status === "loading") return <div style={{ padding: "2rem", fontFamily: FONT }}>Loading...</div>;
   const isBuyer = user?.role === "buyer" && !!userId;
@@ -36,29 +35,15 @@ export default function BuyerExportMarketsPage() {
       <PageHeader
         title="Export Markets"
         backHref="/"
-        subtitle="Buy ready export lots from verified exporters: price on request, platform-handled samples, and shipment tracked step by step."
         right={
-          <button style={button("secondary")} onClick={() => setShowHelp(!showHelp)}>
-            {showHelp ? "Hide help" : "Export vs Advanced Markets?"}
-          </button>
+          <InfoTip
+            align="right"
+            label="How Export Markets works"
+            text="Ask verified exporters for a price, approve a sample the platform sends you, agree the contract, and follow payment, shipment and delivery. Company names are shared once platform fees are paid."
+          />
         }
       />
       <CropTabs value={crop} onChange={setCrop} />
-      {showHelp && (
-        <>
-          <MarketsHelper highlight="export" />
-          <div style={card}>
-            <ol style={{ paddingLeft: "1.2rem", lineHeight: 1.7, fontSize: "0.88rem", margin: 0 }}>
-              <li>Browse lots from verified exporters: you see their alias, rating and delivery record.</li>
-              <li>Ask for a price. Prices are on request.</li>
-              <li>Once an exporter accepts your offer, submit your company KYC documents.</li>
-              <li>The platform collects a sample from the exporter and sends it to you.</li>
-              <li>Agree the contract. Company names are shared once the platform fees are paid.</li>
-              <li>Follow payment, shipment and delivery step by step, with a traceability report back to the farms.</li>
-            </ol>
-          </div>
-        </>
-      )}
       <PriceTicker />
 
       {isBuyer && (
@@ -129,11 +114,6 @@ export default function BuyerExportMarketsPage() {
           )}
         </>
       )}
-      <div style={{ textAlign: "center", marginTop: "1.5rem" }}>
-        <Link href="/buyer/advance-purchase" style={{ color: "#6a1b9a", fontWeight: 700, fontSize: "0.9rem", textShadow: ON_PHOTO_SHADOW }}>
-          Looking to fund production instead? Go to Advanced Markets →
-        </Link>
-      </div>
     </div>
   );
 }

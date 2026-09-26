@@ -45,14 +45,14 @@ const TABS: { key: Tab; label: string; needs: string }[] = [
 
 /** Each checklist item and where the trader goes to act on it. */
 const CHECKS: { key: string; text: string; tab?: Tab; who?: string }[] = [
-  { key: "platformVerified", text: "Trader account verified by a super admin", who: "A super admin does this." },
   { key: "joinedExportCommunity", text: "Joined an exporter community", who: "Join one from Communities (menu: Join A Community)." },
-  { key: "admittedAsExporter", text: "Export Markets activated by the community admin", who: "Your community admin does this after you join." },
+  { key: "admittedAsExporter", text: "Step 1: accepted by the community admin", who: "Your community admin does this after you join; your export dashboard opens." },
   { key: "profileSaved", text: "Company profile saved", tab: "profile" },
   { key: "requiredDocsUploaded", text: "Required documents uploaded", tab: "documents" },
   { key: "feeOk", text: "Verification fee paid", tab: "documents" },
   { key: "requiredDocsVerified", text: "Required documents verified by an admin", tab: "documents" },
   { key: "approved", text: "Exporter profile approved", tab: "overview" },
+  { key: "platformVerified", text: "Step 2: fully verified by a super admin (verified badge)", who: "A super admin does this." },
 ];
 
 export default function ExporterWorkspacePage() {
@@ -82,7 +82,7 @@ export default function ExporterWorkspacePage() {
   if (!user || user.role !== "trader" || !userId) {
     return <div style={{ padding: "2rem", fontFamily: FONT }}>Export Markets is available to trader accounts.</div>;
   }
-  const member = !!ws && ws.checks.platformVerified && ws.checks.admittedAsExporter;
+  const member = !!ws && ws.checks.admittedAsExporter;
 
   return (
     <div style={{ padding: "1rem", maxWidth: 900, margin: "0 auto", fontFamily: FONT }}>
@@ -123,13 +123,13 @@ export default function ExporterWorkspacePage() {
             <Notice tone="info">
               {ws.pendingCommunities.length > 0 ? (
                 <>
-                  You have joined <b>{ws.pendingCommunities.map((c) => c.name).join(", ")}</b>. Once a super admin has verified your trader account,
-                  the community admin activates Export Markets for you and saving and uploading open. Meanwhile you can explore every tab.
+                  You have joined <b>{ws.pendingCommunities.map((c) => c.name).join(", ")}</b>. Once the community admin accepts you, saving and
+                  uploading open; a super admin then completes your verification. Meanwhile you can explore every tab.
                 </>
               ) : (
                 <>
-                  You can explore every tab now. To start, join an exporter community from Communities. A super admin verifies your trader
-                  account and the community admin activates Export Markets for you; saving and uploading open then.
+                  You can explore every tab now. To start, join an exporter community from Communities. The community admin accepts you
+                  (saving and uploading open), then a super admin completes your verification.
                 </>
               )}
             </Notice>
@@ -182,6 +182,9 @@ function StatusCard({ ws, userId, setMsg, go, member }: CardProps & { go: (t: Ta
         <div style={{ width: `${(done / CHECKS.length) * 100}%`, height: "100%", background: EXPORT_PRIMARY }} />
       </div>
       {ws.isActiveExporter && <Notice tone="success">You are a live exporter. List lots in the Lots tab; enquiries arrive in Deals.</Notice>}
+      {ws.checks.admittedAsExporter && !ws.checks.platformVerified && (
+        <Notice tone="info">Step 1 done: your community admin accepted you. A super admin completes step 2, full verification with the badge, before your lots go live.</Notice>
+      )}
       {!ws.isActiveExporter && status === "approved" && (
         <Notice tone="error">Your profile is approved, but a required document or your verification fee has lapsed. Your lots stay hidden until renewed.</Notice>
       )}

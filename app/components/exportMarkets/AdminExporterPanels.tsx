@@ -198,11 +198,14 @@ export function Members({ adminId, today, communities, setMsg }: P & { communiti
 
   return (
     <div>
-      <select style={{ ...input, maxWidth: 360, marginBottom: "0.75rem" }} value={communityId} onChange={(e) => setCommunityId(e.target.value as Id<"communities">)}>
-        {communities.map((c) => (
-          <option key={c._id} value={c._id}>{c.name}</option>
-        ))}
-      </select>
+      {/* Inside a community's own dashboard there is only that community. */}
+      {communities.length > 1 && (
+        <select style={{ ...input, maxWidth: 360, marginBottom: "0.75rem" }} value={communityId} onChange={(e) => setCommunityId(e.target.value as Id<"communities">)}>
+          {communities.map((c) => (
+            <option key={c._id} value={c._id}>{c.name}</option>
+          ))}
+        </select>
+      )}
 
       <div style={card}>
         <h2 style={{ marginTop: 0, fontSize: "1.05rem" }}>Traders in this exporter community</h2>

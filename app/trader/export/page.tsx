@@ -45,8 +45,8 @@ const TABS: { key: Tab; label: string; needs: string }[] = [
 
 /** Each checklist item and where the trader goes to act on it. */
 const CHECKS: { key: string; text: string; tab?: Tab; who?: string }[] = [
-  { key: "verifiedTrader", text: "Trader account verified by a super admin", who: "A super admin does this." },
-  { key: "inExportCommunity", text: "Added to an exporter community", who: "An admin adds you." },
+  { key: "joinedExportCommunity", text: "Joined an exporter community", who: "Join one from Communities (menu: Join A Community)." },
+  { key: "admittedAsExporter", text: "Admitted as an exporter by the community admin", who: "Your community admin does this after you join." },
   { key: "profileSaved", text: "Company profile saved", tab: "profile" },
   { key: "requiredDocsUploaded", text: "Required documents uploaded", tab: "documents" },
   { key: "feeOk", text: "Verification fee paid", tab: "documents" },
@@ -81,7 +81,7 @@ export default function ExporterWorkspacePage() {
   if (!user || user.role !== "trader" || !userId) {
     return <div style={{ padding: "2rem", fontFamily: FONT }}>Export Markets is available to trader accounts.</div>;
   }
-  const member = !!ws && ws.checks.verifiedTrader && ws.checks.inExportCommunity;
+  const member = !!ws && ws.checks.admittedAsExporter;
 
   return (
     <div style={{ padding: "1rem", maxWidth: 900, margin: "0 auto", fontFamily: FONT }}>
@@ -120,8 +120,17 @@ export default function ExporterWorkspacePage() {
         <>
           {!member && (
             <Notice tone="info">
-              You can explore every tab now. Saving and uploading open once a super admin has verified your trader account and an admin has
-              added you to an exporter community.
+              {ws.pendingCommunities.length > 0 ? (
+                <>
+                  You have joined <b>{ws.pendingCommunities.map((c) => c.name).join(", ")}</b>. Its community admin will admit you as an exporter;
+                  saving and uploading open then. Meanwhile you can explore every tab.
+                </>
+              ) : (
+                <>
+                  You can explore every tab now. To start, join an exporter community from Communities; its admin then admits you as an
+                  exporter and saving and uploading open.
+                </>
+              )}
             </Notice>
           )}
           {tab === "overview" && (

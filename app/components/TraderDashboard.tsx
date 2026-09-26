@@ -30,7 +30,8 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
   const activeUTIDs = useQuery(api.traderDashboard.getTraderActiveUTIDs, { traderId: userId });
   const storageFeeRate = useQuery(api.traderDashboard.getTraderStorageFeeRate, { traderId: userId });
   const initiateDeposit = useAction(api.pesapal.initiateTraderDeposit);
-  // Export Markets card: only for verified traders in an exporter community.
+  // Export Markets card: for traders admitted as exporters, or who joined an
+  // exporter community and are waiting to be admitted.
   const exportAccess = useQuery(api.exportMarkets.getMyExportAccess, userId ? { userId } : "skip");
   const paymentTransactions = useQuery(api.pesapal.getUserPaymentTransactions, { userId });
   const buyOffers = useQuery(api.traderBuyerNegotiations.getTraderBuyOffers, { traderId: userId });
@@ -765,7 +766,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
       {msgSlot && createPortal(msgContent, msgSlot)}
       {moreSlot && createPortal(moreContent, moreSlot)}
 
-      {exportAccess?.hasModule && (
+      {(exportAccess?.hasModule || exportAccess?.pending) && (
         <a
           href="/trader/export"
           style={{
@@ -789,7 +790,9 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
           <div style={{ minWidth: 0 }}>
             <div>EXPORT MARKETS</div>
             <div style={{ fontSize: "0.78rem", fontWeight: 500, color: "#0277bd" }}>
-              Exporter profile, documents and verification ({exportAccess.communityNames.join(", ")})
+              {exportAccess.hasModule
+                ? `Exporter profile, documents and verification (${exportAccess.communityNames.join(", ")})`
+                : `Awaiting admission as an exporter in ${exportAccess.communityNames.join(", ")}`}
             </div>
           </div>
         </a>

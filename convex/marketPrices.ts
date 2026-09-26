@@ -420,9 +420,17 @@ export const triggerTodaySnapshot = mutation({
   },
 });
 
+/**
+ * Publishing daily snapshots (freezing them at midnight and listing them as
+ * "Published Snapshots" for super admins) is switched off for now. Live
+ * price building for the public price panel is unaffected.
+ */
+const SNAPSHOT_PUBLISHING_ENABLED = false;
+
 export const freezeDailySnapshot = internalMutation({
   args: {},
   handler: async (ctx) => {
+    if (!SNAPSHOT_PUBLISHING_ENABLED) return;
     await runBuildSnapshot(ctx);
 
     const dateKey = getTodayDateKey();
@@ -798,6 +806,7 @@ export const getAdminSnapshots = query({
   handler: async (ctx, args) => {
     const user = await ctx.db.get(args.adminId);
     assertSuperAdmin(user);
+    if (!SNAPSHOT_PUBLISHING_ENABLED) return [];
 
     const snapshots = await ctx.db
       .query("dailyPriceSnapshots")

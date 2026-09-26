@@ -347,6 +347,7 @@ export const saveLot = mutation({
     if (args.incoterms.length === 0) throw new Error("Offer at least one Incoterm");
     const crop = args.crop ?? DEFAULT_EXPORT_CROP;
     if (!EXPORT_CROPS.some((c) => c.key === crop)) throw new Error("Choose a crop");
+    if (!EXPORT_CROPS.some((c) => c.key === crop && c.active)) throw new Error("This crop is not open for export listings yet");
     const productForm = args.productForm ?? "green";
     if (!(PRODUCT_FORM_KEYS as string[]).includes(productForm)) throw new Error("Choose a product form");
     const allowedForms = profile.productForms?.length ? profile.productForms : ["green"];

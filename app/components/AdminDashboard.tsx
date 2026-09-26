@@ -293,10 +293,6 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
   const logExport = useMutation(api.communities.logExport);
 
   // ── Market Price Reports ──────────────────────────────────────────────────
-  const adminSnapshots = useQuery(
-    (api as any).marketPrices.getAdminSnapshots,
-    isSuperAdmin ? { adminId } : "skip"
-  );
   const updatePriceSheetPricing = useMutation((api as any).marketPrices.updatePriceSheetPricing);
   const priceSheetPricing = useQuery((api as any).marketPrices.getPriceSheetPricing);
   const recordPriceDownloadAudit = useMutation((api as any).marketPrices.recordDownloadAudit);
@@ -1520,48 +1516,6 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
               </button>
             </div>
 
-            {/* Snapshot list */}
-            <p style={{ fontWeight: "600", fontSize: "0.9rem", marginBottom: "0.75rem", color: "#333" }}>Published Snapshots</p>
-            {adminSnapshots === undefined ? (
-              <p style={{ color: "#999", fontSize: "0.9rem" }}>Loading snapshots…</p>
-            ) : !adminSnapshots || (adminSnapshots as any[]).length === 0 ? (
-              <p style={{ color: "#888", fontSize: "0.9rem" }}>No published snapshots yet. The cron publishes a snapshot daily at midnight Uganda time.</p>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxHeight: "300px", overflowY: "auto" }}>
-                {(adminSnapshots as any[]).slice(0, 30).map((snap: any) => (
-                  <div key={snap.id} style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "0.6rem 0.8rem",
-                    background: "#f5f5f5",
-                    borderRadius: "8px",
-                    fontSize: "0.85rem",
-                  }}>
-                    <div>
-                      <span style={{ fontWeight: "600" }}>{snap.dateKey}</span>
-                      <span style={{ color: "#666", marginLeft: "0.75rem" }}>{snap.rowCount} commodities</span>
-                    </div>
-                    <button
-                      disabled={priceSheetDownloadRequest?.scopeDateKey === snap.dateKey}
-                      onClick={() => setPriceSheetDownloadRequest({ productType: "daily", scopeDateKey: snap.dateKey })}
-                      style={{
-                        padding: "0.35rem 0.7rem",
-                        background: priceSheetDownloadRequest?.scopeDateKey === snap.dateKey ? "#c8e6c9" : "#2e7d32",
-                        color: "#fff",
-                        border: "none",
-                        borderRadius: "6px",
-                        cursor: priceSheetDownloadRequest?.scopeDateKey === snap.dateKey ? "not-allowed" : "pointer",
-                        fontSize: "0.8rem",
-                        fontWeight: "600",
-                      }}
-                    >
-                      {priceSheetDownloadRequest?.scopeDateKey === snap.dateKey ? "⏳" : "⬇️ Excel"}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
 
         </>

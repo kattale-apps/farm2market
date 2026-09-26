@@ -74,6 +74,27 @@ export const DEFAULT_EXPORT_FEE_SETTINGS = {
 // starts with. Regulator names are Uganda's export rules, not a tenant.
 // ------------------------------------------------------------------
 
+// ------------------------------------------------------------------
+// What an exporter sells. Roasted and packaged coffee is a food product
+// for consumption and needs UNBS certification on top of export papers.
+// ------------------------------------------------------------------
+
+export const PRODUCT_FORMS = [
+  { key: "green", label: "Green beans", hint: "Unroasted, graded export coffee" },
+  { key: "roasted", label: "Roasted", hint: "Roasted beans in bulk" },
+  { key: "packaged", label: "Packaged for consumption", hint: "Retail packs of roasted or ground coffee" },
+] as const;
+export type ProductForm = (typeof PRODUCT_FORMS)[number]["key"];
+export const PRODUCT_FORM_KEYS = PRODUCT_FORMS.map((p) => p.key) as ProductForm[];
+
+export function productFormLabel(key: string | undefined): string {
+  return PRODUCT_FORMS.find((p) => p.key === key)?.label ?? "Green beans";
+}
+
+/** Crops that can be exported. Each has its own icon in /public/icons. */
+export const EXPORT_CROPS = [{ key: "coffee", label: "Coffee", icon: "/icons/coffee-bean.svg" }] as const;
+export const DEFAULT_EXPORT_CROP = "coffee";
+
 export type DefaultDocumentType = {
   key: string;
   label: string;
@@ -81,7 +102,16 @@ export type DefaultDocumentType = {
   appliesTo: "exporter" | "buyer";
   required: boolean;
   hasExpiry: boolean;
+  /** Only needed by exporters who sell one of these forms; empty or absent = everyone. */
+  productForms?: ProductForm[];
 };
+
+/** Does a document type apply to an exporter who sells these product forms? */
+export function docTypeAppliesTo(type: { productForms?: string[] }, forms: string[] | undefined): boolean {
+  if (!type.productForms || type.productForms.length === 0) return true;
+  const mine = forms && forms.length ? forms : ["green"];
+  return type.productForms.some((f) => mine.includes(f));
+}
 
 export const DEFAULT_EXPORT_DOCUMENT_TYPES: DefaultDocumentType[] = [
   {
@@ -131,6 +161,24 @@ export const DEFAULT_EXPORT_DOCUMENT_TYPES: DefaultDocumentType[] = [
     appliesTo: "exporter",
     required: false,
     hasExpiry: true,
+  },
+  {
+    key: "unbs_certification",
+    label: "UNBS product certification",
+    description: "Uganda National Bureau of Standards certification (e.g. Q-Mark) for roasted or packaged coffee sold for consumption.",
+    appliesTo: "exporter",
+    required: true,
+    hasExpiry: true,
+    productForms: ["roasted", "packaged"],
+  },
+  {
+    key: "food_premises_certificate",
+    label: "Food processing premises certificate",
+    description: "Operating certificate or food safety certification (e.g. HACCP) for the roasting or packing premises.",
+    appliesTo: "exporter",
+    required: false,
+    hasExpiry: true,
+    productForms: ["roasted", "packaged"],
   },
   {
     key: "buyer_company_registration",

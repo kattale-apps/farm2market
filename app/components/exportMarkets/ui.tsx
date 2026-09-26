@@ -1,31 +1,39 @@
 "use client";
 
 import React from "react";
-import { MARKETS_HELPER } from "../../../convex/exportMarketsShared";
+import Link from "next/link";
+import { EXPORT_CROPS, MARKETS_HELPER } from "../../../convex/exportMarketsShared";
 
 export const FONT = '"Montserrat", sans-serif';
 
 /** Text sitting directly on the photographic background needs a white halo. */
 export const ON_PHOTO_SHADOW = "0 1px 2px rgba(255,255,255,0.95), 0 0 8px rgba(255,255,255,0.9)";
 
-export const EXPORT_GREEN = "#1b5e20";
-export const EXPORT_BROWN = "#5d4037";
+// Export Markets theme: light sky blue, for cargo in the sky and on blue oceans.
+export const EXPORT_PRIMARY = "#0288d1";
+export const EXPORT_HEADING = "#01579b";
+export const EXPORT_SKY = "#e1f5fe";
+export const EXPORT_SKY_BORDER = "#81d4fa";
+
+export const SHIP_ICON = "/icons/cargo-ship.svg";
+export const COFFEE_BEAN_ICON = "/icons/coffee-bean.svg";
 
 export const card: React.CSSProperties = {
   background: "#fff",
-  border: "1px solid #e0e0e0",
-  borderRadius: 12,
-  padding: "1rem",
-  marginBottom: "1rem",
-  boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+  border: `1px solid ${EXPORT_SKY_BORDER}`,
+  borderRadius: 14,
+  padding: "1.25rem",
+  marginBottom: "1.25rem",
+  boxShadow: "0 4px 14px rgba(2,136,209,0.10)",
   fontFamily: FONT,
+  lineHeight: 1.55,
 };
 
 export const input: React.CSSProperties = {
   width: "100%",
-  padding: "0.6rem",
+  padding: "0.7rem",
   borderRadius: 8,
-  border: "1px solid #ccc",
+  border: "1px solid #b0bec5",
   fontFamily: FONT,
   fontSize: "0.95rem",
   boxSizing: "border-box",
@@ -36,28 +44,111 @@ export const input: React.CSSProperties = {
 export const label: React.CSSProperties = {
   display: "block",
   fontWeight: 600,
-  fontSize: "0.85rem",
-  marginBottom: "0.3rem",
-  color: "#333",
+  fontSize: "0.88rem",
+  marginBottom: "0.35rem",
+  color: "#263238",
 };
 
 export function button(kind: "primary" | "secondary" | "danger" = "primary", disabled = false): React.CSSProperties {
   const colours = {
-    primary: { bg: EXPORT_GREEN, fg: "#fff", border: EXPORT_GREEN },
-    secondary: { bg: "#fff", fg: EXPORT_GREEN, border: EXPORT_GREEN },
+    primary: { bg: EXPORT_PRIMARY, fg: "#fff", border: EXPORT_PRIMARY },
+    secondary: { bg: "#fff", fg: EXPORT_HEADING, border: EXPORT_PRIMARY },
     danger: { bg: "#fff", fg: "#c62828", border: "#c62828" },
   }[kind];
   return {
-    padding: "0.55rem 1rem",
-    borderRadius: 8,
-    border: `1px solid ${disabled ? "#bbb" : colours.border}`,
+    padding: "0.6rem 1.1rem",
+    minHeight: 40,
+    borderRadius: 10,
+    border: `1.5px solid ${disabled ? "#bbb" : colours.border}`,
     background: disabled ? "#e0e0e0" : colours.bg,
     color: disabled ? "#777" : colours.fg,
     fontWeight: 700,
     fontFamily: FONT,
-    fontSize: "0.88rem",
+    fontSize: "0.9rem",
     cursor: disabled ? "not-allowed" : "pointer",
   };
+}
+
+/**
+ * Page header on its own light panel, so the title and intro stay readable
+ * over the photographic background.
+ */
+export function PageHeader({
+  title,
+  subtitle,
+  backHref,
+  backLabel = "← Back to Dashboard",
+  iconSrc = SHIP_ICON,
+  right,
+}: {
+  title: string;
+  subtitle?: React.ReactNode;
+  backHref?: string;
+  backLabel?: string;
+  iconSrc?: string;
+  right?: React.ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        background: "linear-gradient(135deg, rgba(225,245,254,0.97), rgba(255,255,255,0.97))",
+        border: `1px solid ${EXPORT_SKY_BORDER}`,
+        borderRadius: 16,
+        padding: "1rem 1.25rem",
+        marginBottom: "1.25rem",
+        boxShadow: "0 6px 20px rgba(1,87,155,0.12)",
+        fontFamily: FONT,
+      }}
+    >
+      {backHref && (
+        <Link href={backHref} style={{ color: EXPORT_HEADING, fontWeight: 700, fontSize: "0.9rem", textDecoration: "none" }}>
+          {backLabel}
+        </Link>
+      )}
+      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginTop: backHref ? "0.5rem" : 0, flexWrap: "wrap" }}>
+        <img src={iconSrc} alt="" width={44} height={44} style={{ flexShrink: 0 }} />
+        <h1 style={{ margin: 0, fontSize: "clamp(1.3rem, 4vw, 1.6rem)", fontWeight: 800, color: EXPORT_HEADING, flex: 1, minWidth: 200 }}>{title}</h1>
+        {right}
+      </div>
+      {subtitle && <div style={{ color: "#37474f", fontSize: "0.9rem", marginTop: "0.5rem", lineHeight: 1.55 }}>{subtitle}</div>}
+    </div>
+  );
+}
+
+/** Crop picker: one tab per exportable crop, each with its icon. */
+export function CropTabs({ value, onChange }: { value: string; onChange: (crop: string) => void }) {
+  return (
+    <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap", marginBottom: "1.25rem" }} role="tablist" aria-label="Crop being exported">
+      {EXPORT_CROPS.map((c) => {
+        const active = c.key === value;
+        return (
+          <button
+            key={c.key}
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(c.key)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              padding: "0.5rem 1rem 0.5rem 0.6rem",
+              borderRadius: 999,
+              border: `2px solid ${active ? EXPORT_PRIMARY : EXPORT_SKY_BORDER}`,
+              background: active ? EXPORT_SKY : "#fff",
+              color: EXPORT_HEADING,
+              fontWeight: 700,
+              fontFamily: FONT,
+              cursor: "pointer",
+              boxShadow: active ? "0 3px 10px rgba(2,136,209,0.25)" : "none",
+            }}
+          >
+            <img src={c.icon} alt="" width={30} height={30} />
+            {c.label}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 const TONES: Record<string, { bg: string; fg: string; text: string }> = {
@@ -117,8 +208,8 @@ export function Notice({ tone, children }: { tone: "error" | "success" | "info";
  */
 export function MarketsHelper({ highlight }: { highlight?: "export" | "advanced" }) {
   const items = [
-    { key: "export" as const, emoji: "☕", colour: EXPORT_BROWN, bg: "#efebe9", ...MARKETS_HELPER.export },
-    { key: "advanced" as const, emoji: "🌱", colour: "#6a1b9a", bg: "#f3e5f5", ...MARKETS_HELPER.advanced },
+    { key: "export" as const, emoji: <img src={SHIP_ICON} alt="" width={22} height={22} style={{ verticalAlign: "middle" }} />, colour: EXPORT_HEADING, bg: "#e1f5fe", ...MARKETS_HELPER.export },
+    { key: "advanced" as const, emoji: <span>🌱</span>, colour: "#6a1b9a", bg: "#f3e5f5", ...MARKETS_HELPER.advanced },
   ];
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "0.75rem", marginBottom: "1rem" }}>

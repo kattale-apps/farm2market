@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   COUNTRIES,
+  docTypeAppliesTo,
   DEFAULT_EXPORT_DOCUMENT_TYPES,
   addDaysToIsoDate,
   countryName,
@@ -62,4 +63,15 @@ test("default document types have unique keys and cover both audiences", () => {
   assert.equal(new Set(keys).size, keys.length);
   assert.ok(DEFAULT_EXPORT_DOCUMENT_TYPES.some((d) => d.appliesTo === "exporter" && d.required && d.hasExpiry));
   assert.ok(DEFAULT_EXPORT_DOCUMENT_TYPES.some((d) => d.appliesTo === "buyer" && d.required));
+});
+
+test("UNBS documents apply only to roasted or packaged exporters", () => {
+  const unbs = DEFAULT_EXPORT_DOCUMENT_TYPES.find((d) => d.key === "unbs_certification")!;
+  const licence = DEFAULT_EXPORT_DOCUMENT_TYPES.find((d) => d.key === "coffee_export_licence")!;
+  assert.equal(docTypeAppliesTo(unbs, ["green"]), false);
+  assert.equal(docTypeAppliesTo(unbs, undefined), false); // no choice yet means green beans
+  assert.equal(docTypeAppliesTo(unbs, ["green", "packaged"]), true);
+  assert.equal(docTypeAppliesTo(unbs, ["roasted"]), true);
+  assert.equal(docTypeAppliesTo(licence, ["roasted"]), true);
+  assert.equal(docTypeAppliesTo({ productForms: [] }, ["green"]), true);
 });

@@ -1077,21 +1077,21 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
         alignItems: "center",
         gap: "0.75rem",
         padding: "1rem 1.25rem",
-        background: "#efebe9",
-        border: "3px solid #000",
+        background: "linear-gradient(135deg, #e1f5fe 0%, #b3e5fc 100%)",
+        border: "2px solid #0288d1",
         borderRadius: "14px",
         textDecoration: "none",
-        color: "#4e342e",
+        color: "#01579b",
         fontFamily: '"Montserrat", sans-serif',
         fontWeight: 700,
         fontSize: "clamp(0.9rem,2.5vw,1rem)",
-        boxShadow: "0 0 0 1px #000, 0 0 18px 3px rgba(109,76,65,0.55), 0 2px 8px rgba(0,0,0,0.25)",
+        boxShadow: "0 4px 16px rgba(2,136,209,0.25)",
         marginBottom: "1rem",
       }}>
-        <span style={{ fontSize: "1.8rem", flexShrink: 0, lineHeight: 1 }}>☕</span>
+        <img src="/icons/cargo-ship.svg" alt="" width={44} height={44} style={{ flexShrink: 0 }} />
         <div style={{ minWidth: 0 }}>
           <div style={{ whiteSpace: "nowrap" }}>EXPORT MARKETS</div>
-          <div style={{ fontSize: "0.78rem", fontWeight: 500, color: "#6d4c41" }}>
+          <div style={{ fontSize: "0.78rem", fontWeight: 500, color: "#0277bd" }}>
             Bean to cup: ready green coffee in export volumes
           </div>
         </div>

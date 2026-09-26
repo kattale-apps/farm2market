@@ -28,6 +28,8 @@ import {
   DEFAULT_EXPORT_DOCUMENT_TYPES,
   DEFAULT_EXPORT_FEE_SETTINGS,
   EXPIRY_WARNING_DAYS,
+  PRODUCT_FORM_KEYS,
+  docTypeAppliesTo,
   addDaysToIsoDate,
   daysBetweenIsoDates,
   expiryState,
@@ -135,6 +137,7 @@ type EffectiveDocType = {
   appliesTo: "exporter" | "buyer";
   required: boolean;
   hasExpiry: boolean;
+  productForms?: string[];
   isActive: boolean;
   order: number;
   _id?: Id<"exportDocumentTypes">;
@@ -150,7 +153,17 @@ export async function getDocumentTypes(ctx: Ctx, appliesTo: "exporter" | "buyer"
     .withIndex("by_appliesTo_and_order", (q) => q.eq("appliesTo", appliesTo))
     .take(100);
   if (rows.length > 0) {
-    return rows.map((r) => ({
+    // Types are never deleted, only switched off, so a built-in type missing
+    // from the saved list is one added after the list was customised (for
+    // example the UNBS certification). Show it, after the saved ones.
+    const saved = new Set(rows.map((r) => r.key));
+    const maxOrder = rows.reduce((m, r) => Math.max(m, r.order), 0);
+    const added = DEFAULT_EXPORT_DOCUMENT_TYPES.filter((d) => d.appliesTo === appliesTo && !saved.has(d.key)).map((d, i) => ({
+      ...d,
+      isActive: true,
+      order: maxOrder + 1 + i,
+    }));
+    return [...rows.map((r) => ({
       _id: r._id,
       key: r.key,
       label: r.label,
@@ -158,9 +171,10 @@ export async function getDocumentTypes(ctx: Ctx, appliesTo: "exporter" | "buyer"
       appliesTo: r.appliesTo,
       required: r.required,
       hasExpiry: r.hasExpiry,
+      productForms: r.productForms,
       isActive: r.isActive,
       order: r.order,
-    }));
+    })), ...added];
   }
   return DEFAULT_EXPORT_DOCUMENT_TYPES.filter((d) => d.appliesTo === appliesTo).map((d, i) => ({
     ...d,
@@ -275,9 +289,13 @@ export async function documentSlots(
   ctx: Ctx,
   ownerId: Id<"users">,
   appliesTo: "exporter" | "buyer",
-  today: string
+  today: string,
+  productForms?: string[]
 ): Promise<DocSlot[]> {
-  const types = (await getDocumentTypes(ctx, appliesTo)).filter((t) => t.isActive);
+  // Exporters only see the documents that apply to what they sell.
+  const types = (await getDocumentTypes(ctx, appliesTo)).filter(
+    (t) => t.isActive && (appliesTo === "buyer" || docTypeAppliesTo(t, productForms))
+  );
   const slots: DocSlot[] = [];
   for (const type of types) {
     const docs = await ctx.db
@@ -335,7 +353,7 @@ export async function exporterReadiness(ctx: Ctx, user: Doc<"users">, today: str
     .query("exporterProfiles")
     .withIndex("by_userId", (q) => q.eq("userId", user._id))
     .first();
-  const slots = await documentSlots(ctx, user._id, "exporter", today);
+  const slots = await documentSlots(ctx, user._id, "exporter", today, profile?.productForms);
   const required = slots.filter((s) => s.type.required);
   const requiredDocsVerified = required.every((s) => s.state === "verified" || s.state === "expiring");
   const requiredDocsUploaded = required.every((s) => s.state !== "missing" && s.state !== "rejected" && s.state !== "expired");
@@ -442,6 +460,9 @@ export const getMyExporterWorkspace = query({
       },
       walletBalanceUgx: await walletBalance(ctx, user._id),
       slots,
+      // Every exporter document type, with the product forms it applies to,
+      // so the trader can see all requirements while exploring.
+      allDocumentTypes: (await getDocumentTypes(ctx, "exporter")).filter((t) => t.isActive),
     };
   },
 });
@@ -459,6 +480,7 @@ export const saveExporterProfile = mutation({
     contactPerson: v.string(),
     contactPhone: v.string(),
     contactEmail: v.optional(v.string()),
+    productForms: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     const user = await ctx.db.get(args.userId);
@@ -481,6 +503,8 @@ export const saveExporterProfile = mutation({
       if (!value) throw new Error(`${label} is required`);
     }
     const ports = args.preferredPorts.map((p) => p.trim()).filter(Boolean).slice(0, 10);
+    const forms = [...new Set(args.productForms ?? ["green"])].filter((f) => (PRODUCT_FORM_KEYS as string[]).includes(f));
+    if (forms.length === 0) throw new Error("Choose at least one product you export");
 
     const fields = {
       communityId: args.communityId,
@@ -493,6 +517,7 @@ export const saveExporterProfile = mutation({
       contactPerson: clean(args.contactPerson),
       contactPhone: clean(args.contactPhone),
       contactEmail: clean(args.contactEmail) || undefined,
+      productForms: forms,
       updatedAt: getUgandaTime(),
     };
 
@@ -550,7 +575,10 @@ export const uploadExporterDocument = mutation({
       .query("exporterProfiles")
       .withIndex("by_userId", (q) => q.eq("userId", user._id))
       .first();
-    if (!profile) throw new Error("Save your exporter profile before uploading documents");
+    // Documents can be uploaded before the profile is saved; they are
+    // reviewed by the admins of the exporter community the trader is in.
+    const communityId = profile?.communityId ?? (await exportCommunitiesForMember(ctx, user._id))[0]?._id;
+    if (!communityId) throw new Error("You must be a member of an exporter community");
 
     const type = (await getDocumentTypes(ctx, "exporter")).find((t) => t.key === args.documentTypeKey && t.isActive);
     if (!type) throw new Error("Unknown document type");
@@ -577,7 +605,7 @@ export const uploadExporterDocument = mutation({
     const documentId = await ctx.db.insert("exportDocuments", {
       ownerId: user._id,
       ownerKind: "exporter",
-      communityId: profile.communityId,
+      communityId,
       documentTypeKey: type.key,
       documentTypeLabel: type.label,
       documentNumber: args.documentNumber?.trim() || undefined,
@@ -699,8 +727,9 @@ export const submitExporterProfile = mutation({
     if (r.profile.status === "suspended") throw new Error("Your exporter profile is suspended. Contact an admin.");
     if (!r.checks.verifiedTrader) throw new Error("Your trader account must be verified by a super admin first");
     if (!r.checks.inExportCommunity) throw new Error("You must be a member of an exporter community");
-    if (!r.checks.requiredDocsUploaded) throw new Error("Upload every required document before submitting");
-    if (!r.checks.feeOk) throw new Error("Pay the verification fee before submitting");
+    // Submission is ongoing: the exporter can submit early and keep adding
+    // documents; admins review each one as it arrives. Approval still needs
+    // every required document verified and the fee paid.
 
     await ctx.db.patch(r.profile._id, { status: "submitted", submittedAt: getUgandaTime(), updatedAt: getUgandaTime() });
 
@@ -867,6 +896,7 @@ export const listExporterProfilesForReview = query({
       v.literal("draft")
     ),
     today: v.string(),
+    communityId: v.optional(v.id("communities")),
   },
   handler: async (ctx, args) => {
     const admin = await requireAdmin(ctx, args.adminId);
@@ -886,6 +916,7 @@ export const listExporterProfilesForReview = query({
         profiles.push(...rows);
       }
     }
+    if (args.communityId) profiles = profiles.filter((p) => p.communityId === args.communityId);
     const result = [];
     for (const p of profiles) {
       const u = await ctx.db.get(p.userId);
@@ -906,7 +937,7 @@ export const listExporterProfilesForReview = query({
 });
 
 export const listDocumentsForReview = query({
-  args: { adminId: v.id("users") },
+  args: { adminId: v.id("users"), communityId: v.optional(v.id("communities")) },
   handler: async (ctx, args) => {
     const admin = await requireAdmin(ctx, args.adminId);
     let docs: Doc<"exportDocuments">[] = [];
@@ -924,6 +955,7 @@ export const listDocumentsForReview = query({
         docs.push(...rows);
       }
     }
+    if (args.communityId) docs = docs.filter((d) => d.communityId === args.communityId);
     const result = [];
     for (const d of docs) {
       const owner = await ctx.db.get(d.ownerId);
@@ -1086,10 +1118,15 @@ export const saveDocumentType = mutation({
     required: v.boolean(),
     hasExpiry: v.boolean(),
     isActive: v.boolean(),
+    productForms: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     await requireSuperAdmin(ctx, args.adminId);
     const label = args.label.trim();
+    const productForms =
+      args.appliesTo === "exporter"
+        ? (args.productForms ?? []).filter((f) => (PRODUCT_FORM_KEYS as string[]).includes(f))
+        : [];
     if (!label) throw new Error("Label is required");
     const now = getUgandaTime();
 
@@ -1108,10 +1145,19 @@ export const saveDocumentType = mutation({
     }
 
     if (args.key) {
-      const row = await ctx.db
+      let row = await ctx.db
         .query("exportDocumentTypes")
         .withIndex("by_key", (q) => q.eq("key", args.key!))
         .first();
+      if (!row) {
+        // A built-in type added after this list was customised: save it first.
+        const d = DEFAULT_EXPORT_DOCUMENT_TYPES.find((x) => x.key === args.key && x.appliesTo === args.appliesTo);
+        if (d) {
+          maxOrder += 1;
+          const id = await ctx.db.insert("exportDocumentTypes", { ...d, isActive: true, order: maxOrder, createdAt: now, updatedAt: now });
+          row = await ctx.db.get(id);
+        }
+      }
       if (!row || row.appliesTo !== args.appliesTo) throw new Error("Document type not found");
       await ctx.db.patch(row._id, {
         label,
@@ -1119,6 +1165,7 @@ export const saveDocumentType = mutation({
         required: args.required,
         hasExpiry: args.hasExpiry,
         isActive: args.isActive,
+        productForms: args.productForms === undefined ? row.productForms : productForms.length ? productForms : undefined,
         updatedAt: now,
       });
       await audit(ctx, "doc_type_saved", args.adminId, { targetId: row.key });
@@ -1137,6 +1184,7 @@ export const saveDocumentType = mutation({
       appliesTo: args.appliesTo,
       required: args.required,
       hasExpiry: args.hasExpiry,
+      productForms: productForms.length ? productForms : undefined,
       isActive: args.isActive,
       order: maxOrder + 1,
       createdAt: now,

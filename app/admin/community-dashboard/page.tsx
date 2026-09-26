@@ -28,9 +28,11 @@ import { GOODS_CATEGORIES, FARM_SERVICE_OPTIONS } from "../../utils/advancedMark
 import { tallyDistricts, buildDistrictMatcher } from "../../utils/districtNormalization";
 import { CrmInsightsSection } from "../../components/crm/CrmInsightsSection";
 import { fromStoredUgandaTime, inUgandaTime } from "../../utils/timeUtils";
+import { CommunityExportMarketsPanel } from "../../components/exportMarkets/AdminExporterPanels";
+import { ugandaDateFromInstant } from "../../../convex/exportMarketsShared";
 
 /* ── Tab types for community cards ── */
-type CommunityTab = "members" | "noticeboard" | "messages" | "forms" | "insights" | "fertilizer" | "costTemplates" | "advancePurchase" | "diagnostics";
+type CommunityTab = "members" | "noticeboard" | "messages" | "forms" | "insights" | "fertilizer" | "costTemplates" | "advancePurchase" | "diagnostics" | "exportMarkets";
 type MembersListTab = "approved" | "all" | "imported" | "activeFarmsee";
 
 
@@ -2913,6 +2915,29 @@ export default function CommunityDashboardPage() {
     return communities;
   }, [communities]);
 
+  // One community at a time: a picker lists the communities, and choosing one
+  // shows only that community (?communityId= in the URL), with a back button.
+  const [selectedCommunityId, setSelectedCommunityId] = useState<string | null>(null);
+  const [exportToday] = useState(() => ugandaDateFromInstant(Date.now()));
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const fromUrl = new URLSearchParams(window.location.search).get("communityId");
+    if (fromUrl) setSelectedCommunityId(fromUrl);
+  }, []);
+  const selectCommunity = useCallback((id: string | null) => {
+    setSelectedCommunityId(id);
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (id) url.searchParams.set("communityId", id);
+    else url.searchParams.delete("communityId");
+    window.history.replaceState(null, "", url.toString());
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
+  const selectedCommunity = useMemo(() => {
+    if (userCommunities.length === 1) return userCommunities[0];
+    return userCommunities.find((c: any) => String(c?._id ?? c?.id) === selectedCommunityId) ?? null;
+  }, [userCommunities, selectedCommunityId]);
+
   const communityIds = useMemo(
     () => userCommunities.map((c: any) => c._id ?? c.id).filter(Boolean),
     [userCommunities]
@@ -3402,8 +3427,60 @@ export default function CommunityDashboardPage() {
           }}>
             <p style={{ color: "#999" }}>No communities found.</p>
           </div>
+        ) : !selectedCommunity ? (
+          <div>
+            <h2 style={{ fontSize: "1.15rem", fontWeight: 700, margin: "0 0 0.75rem", color: "#263238" }}>Choose a community</h2>
+            <div role="tablist" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 260px), 1fr))", gap: "0.85rem" }}>
+              {userCommunities.map((c: any, idx: number) => {
+                const id = String(c?._id ?? c?.id);
+                const colour = menuRainbowColor(idx);
+                const modules = [
+                  c?.advancedMarketsEnabled && "Advanced Markets",
+                  c?.exportMarketsEnabled && "Export Markets",
+                  c?.diagnosticsEnabled && "Diagnostics",
+                  c?.fertilizerEnabled && "Fertilizer",
+                  c?.costTemplatesEnabled && "Cost Templates",
+                ].filter(Boolean);
+                return (
+                  <button
+                    key={id}
+                    role="tab"
+                    onClick={() => selectCommunity(id)}
+                    style={{
+                      textAlign: "left",
+                      display: "flex",
+                      gap: "0.75rem",
+                      alignItems: "center",
+                      padding: "0.9rem 1rem",
+                      borderRadius: 14,
+                      border: `2px solid ${colour}`,
+                      borderLeft: `8px solid ${colour}`,
+                      background: "#fff",
+                      cursor: "pointer",
+                      fontFamily: '"Montserrat", sans-serif',
+                      boxShadow: "0 3px 10px rgba(0,0,0,0.06)",
+                    }}
+                  >
+                    {getCommunityLogo(c) ? (
+                      <img src={getCommunityLogo(c)!} alt="" style={{ width: 44, height: 44, objectFit: "contain", borderRadius: 10, flexShrink: 0 }} />
+                    ) : (
+                      <span style={{ width: 44, height: 44, borderRadius: 999, background: colour, color: "#fff", display: "grid", placeItems: "center", fontWeight: 800, flexShrink: 0 }}>
+                        {String(c?.name ?? "?").charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                    <span style={{ minWidth: 0 }}>
+                      <span style={{ display: "block", fontWeight: 800, color: "#263238", fontSize: "0.95rem" }}>{c?.name}</span>
+                      <span style={{ display: "block", fontSize: "0.78rem", color: "#607d8b" }}>
+                        {c?.memberCount ?? 0} members{modules.length ? ` · ${modules.join(", ")}` : ""}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         ) : (
-          userCommunities.map((community: any) => {
+          [selectedCommunity].map((community: any) => {
             const communityId = community?._id ?? community?.id;
             // Advanced Markets and Fertilizer are optional modules: a super admin
             // opens them per community, and they stay hidden everywhere else.
@@ -3428,14 +3505,32 @@ export default function CommunityDashboardPage() {
               ...(costTemplatesEnabled ? (["costTemplates"] as CommunityTab[]) : []),
               ...(advancedMarketsEnabled ? (["advancePurchase"] as CommunityTab[]) : []),
               ...(diagnosticsEnabled && canConfigureFertilizer ? (["diagnostics"] as CommunityTab[]) : []),
+              ...(exportMarketsEnabled ? (["exportMarkets"] as CommunityTab[]) : []),
             ];
             // A tab that was open before the module was switched off falls back
             // to Members rather than rendering a hidden module.
             const storedTab = getActiveTab(communityId);
             const activeTab: CommunityTab = visibleTabs.includes(storedTab) ? storedTab : "members";
             return (
+              <div key={communityId}>
+              {userCommunities.length > 1 && (
+                <button
+                  onClick={() => selectCommunity(null)}
+                  style={{
+                    marginBottom: "0.9rem",
+                    padding: "0.5rem 1rem",
+                    borderRadius: 999,
+                    border: "1px solid #cfd8dc",
+                    background: "#fff",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    fontFamily: '"Montserrat", sans-serif',
+                  }}
+                >
+                  ← All communities
+                </button>
+              )}
               <div
-                key={communityId}
                 style={{
                   background: `linear-gradient(rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.96))${getCommunityLogo(community) ? `, url('${getCommunityLogo(community)}')` : ''}`,
                   backgroundRepeat: "repeat",
@@ -3860,7 +3955,7 @@ export default function CommunityDashboardPage() {
                   {(visibleTabs).map((tab, idx) => {
                     const active = activeTab === tab;
                     const color = menuRainbowColor(idx);
-                    const labels: Record<CommunityTab, string> = { members: "Members", noticeboard: "Noticeboard", messages: "Messages", forms: "Forms", insights: "📊 Insights", fertilizer: "🌱 Fertilizer", costTemplates: "🌾 Cost Templates", advancePurchase: "🌱 Advanced Markets", diagnostics: "🔬 Diagnostics" };
+                    const labels: Record<CommunityTab, string> = { members: "Members", noticeboard: "Noticeboard", messages: "Messages", forms: "Forms", insights: "📊 Insights", fertilizer: "🌱 Fertilizer", costTemplates: "🌾 Cost Templates", advancePurchase: "🌱 Advanced Markets", diagnostics: "🔬 Diagnostics", exportMarkets: "🚢 Export Markets" };
                     return (
                       <button
                         key={tab}
@@ -3961,6 +4056,16 @@ export default function CommunityDashboardPage() {
                   userId={userId!}
                   communityId={communityId as Id<"communities">}
                   isSuperAdmin={isSuperAdminUser}
+                />
+              )}
+
+              {/* ── Export Markets Tab ── */}
+              {activeTab === "exportMarkets" && (
+                <CommunityExportMarketsPanel
+                  adminId={userId as Id<"users">}
+                  communityId={communityId as Id<"communities">}
+                  communityName={community?.name ?? ""}
+                  today={exportToday}
                 />
               )}
 
@@ -4988,6 +5093,7 @@ export default function CommunityDashboardPage() {
               </div>
 
               </>)}
+            </div>
             </div>
           );
           })

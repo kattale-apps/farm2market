@@ -21,6 +21,9 @@ import { mutation, query, QueryCtx, MutationCtx } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
 import { getUgandaTime } from "./utils";
 import {
+  DEFAULT_EXPORT_CROP,
+  EXPORT_CROPS,
+  PRODUCT_FORM_KEYS,
   EUDR_POLYGON_THRESHOLD_HA,
   HECTARES_PER_ACRE,
   MASS_BALANCE_TOLERANCE,
@@ -274,6 +277,8 @@ async function materializeStages(ctx: MutationCtx, lotId: Id<"exportLots">) {
 // ------------------------------------------------------------------
 
 const lotFields = {
+  crop: v.optional(v.string()),
+  productForm: v.optional(v.string()),
   coffeeType: v.string(),
   grade: v.string(),
   processing: v.string(),
@@ -340,8 +345,18 @@ export const saveLot = mutation({
     if (args.moisturePercent !== undefined && (args.moisturePercent < 0 || args.moisturePercent > 30)) throw new Error("Moisture looks wrong");
     if (args.cupScore !== undefined && (args.cupScore < 0 || args.cupScore > 100)) throw new Error("Cup score must be 0-100");
     if (args.incoterms.length === 0) throw new Error("Offer at least one Incoterm");
+    const crop = args.crop ?? DEFAULT_EXPORT_CROP;
+    if (!EXPORT_CROPS.some((c) => c.key === crop)) throw new Error("Choose a crop");
+    const productForm = args.productForm ?? "green";
+    if (!(PRODUCT_FORM_KEYS as string[]).includes(productForm)) throw new Error("Choose a product form");
+    const allowedForms = profile.productForms?.length ? profile.productForms : ["green"];
+    if (!allowedForms.includes(productForm)) {
+      throw new Error("Add this product form to your exporter profile first, so the right documents are checked");
+    }
 
     const fields = {
+      crop,
+      productForm,
       coffeeType: args.coffeeType.trim(),
       grade: args.grade.trim(),
       processing: args.processing.trim(),
@@ -619,7 +634,7 @@ export const submitTraceEvidence = mutation({
 });
 
 export const listTraceEvidenceForReview = query({
-  args: { adminId: v.id("users") },
+  args: { adminId: v.id("users"), communityId: v.optional(v.id("communities")) },
   handler: async (ctx, args) => {
     const admin = await requireAdmin(ctx, args.adminId);
     const pending = await ctx.db.query("exportTraceEvidence").withIndex("by_status", (q) => q.eq("status", "pending")).take(200);
@@ -628,6 +643,7 @@ export const listTraceEvidenceForReview = query({
       const lot = await ctx.db.get(e.lotId);
       const stage = await ctx.db.get(e.stageId);
       if (!lot || !stage) continue;
+      if (args.communityId && lot.communityId !== args.communityId) continue;
       if (!(await canReviewStage(ctx, admin, lot, stage))) continue;
       // Previous approved stage, to show the mass balance next to this one.
       const stages = await ctx.db.query("exportTraceStages").withIndex("by_lotId_and_order", (q) => q.eq("lotId", lot._id)).take(50);
@@ -708,6 +724,8 @@ function publicLot(lot: Doc<"exportLots">) {
   return {
     _id: lot._id,
     lotCode: lot.lotCode,
+    crop: lot.crop ?? DEFAULT_EXPORT_CROP,
+    productForm: lot.productForm ?? "green",
     coffeeType: lot.coffeeType,
     grade: lot.grade,
     processing: lot.processing,
@@ -735,7 +753,7 @@ function publicLot(lot: Doc<"exportLots">) {
 }
 
 export const listCatalogue = query({
-  args: { today: v.string(), coffeeType: v.optional(v.string()) },
+  args: { today: v.string(), coffeeType: v.optional(v.string()), crop: v.optional(v.string()), productForm: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const today = isIsoDate(args.today) ? args.today : todayUganda();
     const lots = await ctx.db.query("exportLots").withIndex("by_status", (q) => q.eq("status", "listed")).order("desc").take(300);
@@ -744,6 +762,8 @@ export const listCatalogue = query({
     const result = [];
     for (const lot of lots) {
       if (args.coffeeType && lot.coffeeType !== args.coffeeType) continue;
+      if (args.crop && (lot.crop ?? DEFAULT_EXPORT_CROP) !== args.crop) continue;
+      if (args.productForm && (lot.productForm ?? "green") !== args.productForm) continue;
       if (lot.availableBags <= 0) continue;
       const key = String(lot.exporterId);
       if (!live.has(key)) live.set(key, await isActiveExporter(ctx, lot.exporterId, today));

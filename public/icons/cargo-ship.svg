@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Cargo ship">
+  <title>Cargo ship</title>
+  <!-- containers -->
+  <rect x="14" y="20" width="9" height="8" rx="1" fill="#ef6c00"/>
+  <rect x="24" y="20" width="9" height="8" rx="1" fill="#43a047"/>
+  <rect x="34" y="20" width="9" height="8" rx="1" fill="#fbc02d"/>
+  <rect x="19" y="12" width="9" height="8" rx="1" fill="#1e88e5"/>
+  <rect x="29" y="12" width="9" height="8" rx="1" fill="#e53935"/>
+  <!-- bridge -->
+  <rect x="45" y="14" width="8" height="14" rx="1.5" fill="#eceff1" stroke="#546e7a" stroke-width="1.2"/>
+  <rect x="47" y="17" width="4" height="3" rx="0.6" fill="#4fc3f7"/>
+  <rect x="48" y="8" width="2" height="6" fill="#546e7a"/>
+  <!-- hull -->
+  <path d="M6 28h52l-6 12H12z" fill="#0d47a1"/>
+  <path d="M8 31h48" stroke="#ffffff" stroke-width="1.6" opacity="0.8"/>
+  <!-- sea -->
+  <path d="M2 46c5 0 5-3 10-3s5 3 10 3 5-3 10-3 5 3 10 3 5-3 10-3 5 3 10 3" fill="none" stroke="#29b6f6" stroke-width="3" stroke-linecap="round"/>
+  <path d="M6 54c5 0 5-3 10-3s5 3 10 3 5-3 10-3 5 3 10 3 5-3 10-3" fill="none" stroke="#81d4fa" stroke-width="2.6" stroke-linecap="round"/>
+</svg>

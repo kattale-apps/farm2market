@@ -1188,11 +1188,6 @@ export const joinCommunityByQr = mutation({
       if (isVendorOnlyCommunity((community as any).communityType) && user.role !== "vendor") {
         throw new Error("Only vendors can join this community");
       }
-      // In an exporter community, traders are added by an admin (that is
-      // what makes them exporters); everyone else joins as usual.
-      if ((community as any).exportMarketsEnabled === true && user.role === "trader") {
-        throw new ConvexError("Traders are added to this exporter community by an admin. Contact the community admin to be added.");
-      }
     } else {
       // Need to create or find user
       if (!args.email && !args.phoneNumber) {
@@ -1670,14 +1665,6 @@ export const joinCommunity = mutation({
       throw new Error("Only vendors can join this community");
     }
 
-    // In an exporter community, traders are added by an admin
-    // (exportMarkets.addTraderToExportCommunity), which is what makes them
-    // exporters. Farmers, buyers and others still join as usual. ConvexError
-    // so the reason reaches the user on production, where plain errors are
-    // shown only as "Server Error".
-    if (community.exportMarketsEnabled === true && user.role === "trader") {
-      throw new ConvexError("Traders are added to this exporter community by an admin. Contact the community admin to be added.");
-    }
 
     // Check if already a member
     const existing = await ctx.db
@@ -1709,6 +1696,20 @@ export const joinCommunity = mutation({
       userId: args.farmerId,
       joinedAt: getUgandaTime(),
     });
+
+    // A trader joining an exporter community waits for the community admin
+    // to admit them as an exporter; tell the admin.
+    if (community.exportMarketsEnabled === true && user.role === "trader" && community.communityAdminId) {
+      await ctx.db.insert("notifications", {
+        userId: community.communityAdminId,
+        type: "system",
+        category: "export_markets",
+        title: "Trader joined your exporter community",
+        message: `Trader ${user.alias} joined ${community.name}. Admit them as an exporter from the community's Export Markets tab.`,
+        read: false,
+        createdAt: getUgandaTime(),
+      });
+    }
 
     return { success: true };
   },

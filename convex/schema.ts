@@ -887,6 +887,12 @@ export default defineSchema({
     userId: v.id("users"), // Member who joined
     joinedAt: v.number(),
     communityRole: v.optional(v.string()), // Community-specific role label (e.g. "Lead Aggregator", "Input Supplier")
+    // Export Markets: in a community with exportMarketsEnabled, any trader can
+    // join; the community admin then admits them as an exporter, which is
+    // what opens the export dashboard for them.
+    exportAdmitted: v.optional(v.boolean()),
+    exportAdmittedBy: v.optional(v.id("users")),
+    exportAdmittedAt: v.optional(v.number()),
   })
     .index("by_community", ["communityId"])
     .index("by_user", ["userId"])

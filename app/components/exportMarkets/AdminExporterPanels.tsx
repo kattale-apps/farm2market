@@ -67,7 +67,7 @@ export function Applications({ adminId, today, setMsg, communityId }: P) {
               <StatusPill state={r.profile.status} />
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "0.3rem", margin: "0.6rem 0", fontSize: "0.82rem" }}>
-              <div>Trader verified: <b>{r.checks.verifiedTrader ? "Yes" : "No"}</b></div>
+              <div>Admitted as exporter: <b>{r.checks.admittedAsExporter ? "Yes" : "No"}</b></div>
               <div>Verification fee: <StatusPill state={r.fee.state} /></div>
               {r.documents.map((d) => (
                 <div key={d.label}>
@@ -208,55 +208,85 @@ export function Members({ adminId, today, communities, setMsg }: P & { communiti
       )}
 
       <div style={card}>
-        <h2 style={{ marginTop: 0, fontSize: "1.05rem" }}>Traders in this exporter community</h2>
+        <h2 style={{ marginTop: 0, fontSize: "1.05rem" }}>Traders in this community</h2>
+        <p style={{ fontSize: "0.82rem", color: "#555", marginTop: 0 }}>
+          Traders can join this community themselves. Admit a trader as an exporter to open the export dashboard for them; revoking keeps
+          them in the community.
+        </p>
         {members === undefined ? (
           "Loading..."
         ) : members.length === 0 ? (
-          <p style={{ fontSize: "0.88rem" }}>No traders yet. Add verified traders below.</p>
+          <p style={{ fontSize: "0.88rem" }}>No traders have joined yet. You can also add one below.</p>
         ) : (
-          members.map((m) => (
-            <div key={m.userId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", borderTop: "1px solid #eee", padding: "0.5rem 0", flexWrap: "wrap" }}>
-              <div style={{ fontSize: "0.88rem" }}>
-                <b>{m.legalName ?? m.alias}</b> {m.legalName ? `(alias ${m.alias})` : ""}
-                <div style={{ fontSize: "0.78rem", color: "#666" }}>
-                  {m.isActiveExporter ? "Live exporter" : m.profileStatus ? `Profile: ${m.profileStatus}` : "No exporter profile yet"} · fee {m.feeState}
+          [...members]
+            .sort((a, b) => Number(a.admitted) - Number(b.admitted))
+            .map((m) => (
+              <div key={m.userId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", borderTop: "1px solid #eee", padding: "0.6rem 0", flexWrap: "wrap" }}>
+                <div style={{ fontSize: "0.88rem" }}>
+                  <b>{m.legalName ?? m.alias}</b> {m.legalName ? `(alias ${m.alias})` : ""}{" "}
+                  <StatusPill state={m.admitted ? "approved" : "pending"} />
+                  <div style={{ fontSize: "0.78rem", color: "#666" }}>
+                    {[m.phoneNumber, m.email].filter(Boolean).join(" · ")}
+                    {m.platformVerified ? " · platform-verified trader" : ""}
+                  </div>
+                  {m.admitted && (
+                    <div style={{ fontSize: "0.78rem", color: "#666" }}>
+                      {m.isActiveExporter ? "Live exporter" : m.profileStatus ? `Profile: ${m.profileStatus}` : "No exporter profile yet"} · fee {m.feeState}
+                    </div>
+                  )}
                 </div>
+                {m.admitted ? (
+                  <button
+                    style={{ ...button("danger", busy === m.userId), fontSize: "0.78rem" }}
+                    disabled={busy === m.userId}
+                    onClick={async () => {
+                      const reason = window.prompt("Reason for removing this trader's exporter access?");
+                      if (!reason || !communityId) return;
+                      setBusy(m.userId);
+                      try {
+                        await remove({ adminId, communityId, traderId: m.userId, reason });
+                        setMsg({ tone: "success", text: "Exporter access removed. The trader stays in the community." });
+                      } catch (e) {
+                        setMsg({ tone: "error", text: errorText(e) });
+                      } finally {
+                        setBusy(null);
+                      }
+                    }}
+                  >
+                    Revoke exporter access
+                  </button>
+                ) : (
+                  <button
+                    style={{ ...button("primary", busy === m.userId), fontSize: "0.78rem" }}
+                    disabled={busy === m.userId}
+                    onClick={async () => {
+                      if (!communityId) return;
+                      setBusy(m.userId);
+                      try {
+                        await add({ adminId, communityId, traderId: m.userId });
+                        setMsg({ tone: "success", text: `${m.alias} admitted as an exporter. Export Markets is now open on their dashboard.` });
+                      } catch (e) {
+                        setMsg({ tone: "error", text: errorText(e) });
+                      } finally {
+                        setBusy(null);
+                      }
+                    }}
+                  >
+                    Admit as exporter
+                  </button>
+                )}
               </div>
-              <button
-                style={{ ...button("danger", busy === m.userId), fontSize: "0.78rem" }}
-                disabled={busy === m.userId}
-                onClick={async () => {
-                  const reason = window.prompt("Reason for removing this trader from the exporter community?");
-                  if (!reason || !communityId) return;
-                  setBusy(m.userId);
-                  try {
-                    await remove({ adminId, communityId, traderId: m.userId, reason });
-                    setMsg({ tone: "success", text: "Trader removed." });
-                  } catch (e) {
-                    setMsg({ tone: "error", text: errorText(e) });
-                  } finally {
-                    setBusy(null);
-                  }
-                }}
-              >
-                Remove
-              </button>
-            </div>
-          ))
+            ))
         )}
       </div>
 
       <div style={card}>
-        <h2 style={{ marginTop: 0, fontSize: "1.05rem" }}>Add a verified trader</h2>
-        <p style={{ fontSize: "0.82rem", color: "#555", marginTop: 0 }}>
-          Only traders a super admin has verified are listed. Exporter communities are invite-only, so traders cannot join
-          on their own.
-        </p>
+        <h2 style={{ marginTop: 0, fontSize: "1.05rem" }}>Add and admit a trader who has not joined</h2>
         <input style={{ ...input, marginBottom: "0.5rem" }} placeholder="Search alias, business name, phone or email" value={search} onChange={(e) => setSearch(e.target.value)} />
         {candidates === undefined ? (
           "Loading..."
         ) : candidates.length === 0 ? (
-          <p style={{ fontSize: "0.88rem" }}>No matching verified traders.</p>
+          <p style={{ fontSize: "0.88rem" }}>No matching traders.</p>
         ) : (
           candidates.map((c) => (
             <div key={c.userId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", borderTop: "1px solid #eee", padding: "0.5rem 0", flexWrap: "wrap" }}>
@@ -265,14 +295,14 @@ export function Members({ adminId, today, communities, setMsg }: P & { communiti
                 <div style={{ fontSize: "0.78rem", color: "#666" }}>{[c.phoneNumber, c.email].filter(Boolean).join(" · ")}</div>
               </div>
               <button
-                style={{ ...button("primary", busy === c.userId), fontSize: "0.78rem" }}
+                style={{ ...button("secondary", busy === c.userId), fontSize: "0.78rem" }}
                 disabled={busy === c.userId}
                 onClick={async () => {
                   if (!communityId) return;
                   setBusy(c.userId);
                   try {
                     await add({ adminId, communityId, traderId: c.userId });
-                    setMsg({ tone: "success", text: `${c.businessName ?? c.alias} added. They can now set up their exporter profile.` });
+                    setMsg({ tone: "success", text: `${c.businessName ?? c.alias} added and admitted as an exporter.` });
                   } catch (e) {
                     setMsg({ tone: "error", text: errorText(e) });
                   } finally {

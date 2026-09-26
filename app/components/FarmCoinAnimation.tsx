@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { FarmCoinIcon } from "./icons/Brand";
 
 const REWARD_VIDEO_SRC = "/videos/COIN-2-SOIL.mp4";
 const GOLD = "#f9a825";
@@ -187,7 +188,7 @@ export function CoinPlantAnimation({
         {/* Coins */}
         {Array.from({ length: Math.min(coinsFallen, 12) }).map((_, i) => (
           <div key={i} style={{ position: "absolute", bottom: 40 + (i % 3) * 8, left: 60 + (i % 5) * 22, fontSize: "1.6rem", animation: "fcaCoinDrop 0.5s ease-in forwards", filter: "drop-shadow(0 0 6px rgba(249,168,37,0.8))" }}>
-            🪙
+            <FarmCoinIcon size={30} />
           </div>
         ))}
         {/* Sprout */}
@@ -204,7 +205,7 @@ export function CoinPlantAnimation({
         {phase >= 4 && (
           <div style={{ animation: "fcaFadeUp 0.5s ease-out" }}>
             <p style={{ fontSize: "2rem", fontWeight: 800, color: GOLD, margin: "0 0 4px 0" }}>
-              🪙 +{coinsEarned} FarmCoin{coinsEarned !== 1 ? "s" : ""}!
+              <FarmCoinIcon size={40} /> +{coinsEarned} FarmCoin{coinsEarned !== 1 ? "s" : ""}!
             </p>
             <p style={{ fontSize: "0.95rem", color: "#a5d6a7", margin: "0 0 24px 0" }}>
               Your compliance investment is growing 🌱

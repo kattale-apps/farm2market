@@ -11,6 +11,7 @@ import * as XLSX from "xlsx";
 import { useStoredUser } from "../../hooks/useStoredUser";
 import { fromStoredUgandaTime, inUgandaTime } from "../../utils/timeUtils";
 import { ExportFeesPanel } from "../../components/exportMarkets/ExportFeesPanel";
+import { FarmCoinIcon } from "../../components/icons/Brand";
 
 export default function FinanceDashboardPage() {
   const { user, status: authStatus } = useStoredUser();
@@ -1272,7 +1273,7 @@ export default function FinanceDashboardPage() {
                   borderRadius: 999, background: "#fff8e1", color: "#f57f17",
                   border: "1px solid #f9a825"
                 }}>
-                  🪙 {farmerFormRewards.reduce((sum: number, e: any) => sum + (e.delta || 0), 0)} total issued
+                  <FarmCoinIcon size={16} /> {farmerFormRewards.reduce((sum: number, e: any) => sum + (e.delta || 0), 0)} total issued
                 </span>
               )}
             </div>
@@ -1308,7 +1309,7 @@ export default function FinanceDashboardPage() {
                             {entry.farmerName}
                           </td>
                           <td style={{ padding: "0.6rem", textAlign: "right", fontWeight: 700, color: "#f57f17" }}>
-                            🪙 {entry.delta}
+                            <FarmCoinIcon size={16} /> {entry.delta}
                           </td>
                           <td style={{ padding: "0.6rem", textAlign: "right", color: "#666" }}>
                             {entry.fieldCount || entry.delta}

@@ -334,3 +334,84 @@ export function Stars({ value }: { value: number | null | undefined }) {
     </span>
   );
 }
+
+/**
+ * A small "i" icon that shows a short explainer on hover, focus or tap.
+ * Buyers are experienced, so explanations stay out of the way until asked
+ * for. Rendered as a span so it can sit inside a link.
+ */
+export function InfoTip({ text, label = "More information", align = "center" }: { text: string; label?: string; align?: "center" | "right" }) {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <span
+      style={{ position: "relative", display: "inline-flex", verticalAlign: "middle" }}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <span
+        role="button"
+        tabIndex={0}
+        aria-label={label}
+        aria-expanded={open}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setOpen((o) => !o);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            e.stopPropagation();
+            setOpen((o) => !o);
+          }
+          if (e.key === "Escape") setOpen(false);
+        }}
+        style={{
+          width: 20,
+          height: 20,
+          borderRadius: 999,
+          border: "1.5px solid currentColor",
+          display: "inline-grid",
+          placeItems: "center",
+          fontSize: "0.72rem",
+          fontWeight: 800,
+          fontFamily: "Georgia, serif",
+          fontStyle: "italic",
+          cursor: "help",
+          opacity: 0.8,
+          flexShrink: 0,
+        }}
+      >
+        i
+      </span>
+      {open && (
+        <span
+          role="tooltip"
+          style={{
+            position: "absolute",
+            top: "calc(100% + 6px)",
+            ...(align === "right" ? { right: 0 } : { left: "50%", transform: "translateX(-50%)" }),
+            width: 240,
+            background: "#263238",
+            color: "#fff",
+            fontSize: "0.78rem",
+            fontWeight: 500,
+            fontStyle: "normal",
+            lineHeight: 1.45,
+            padding: "0.5rem 0.65rem",
+            borderRadius: 8,
+            zIndex: 50,
+            boxShadow: "0 6px 18px rgba(0,0,0,0.25)",
+            whiteSpace: "normal",
+            textAlign: "left",
+            fontFamily: FONT,
+          }}
+        >
+          {text}
+        </span>
+      )}
+    </span>
+  );
+}

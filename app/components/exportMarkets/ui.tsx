@@ -121,6 +121,36 @@ export function CropTabs({ value, onChange }: { value: string; onChange: (crop: 
     <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap", marginBottom: "1.25rem" }} role="tablist" aria-label="Crop being exported">
       {EXPORT_CROPS.map((c) => {
         const active = c.key === value;
+        // Placeholder crops are shown but cannot be chosen yet.
+        if (!c.active) {
+          return (
+            <span
+              key={c.key}
+              role="tab"
+              aria-disabled="true"
+              title={`${c.label}: coming soon`}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                padding: "0.5rem 1rem 0.5rem 0.6rem",
+                borderRadius: 999,
+                border: "2px dashed #cfd8dc",
+                background: "#f5f7f9",
+                color: "#90a4ae",
+                fontWeight: 700,
+                fontFamily: FONT,
+                cursor: "not-allowed",
+              }}
+            >
+              <img src={c.icon} alt="" width={30} height={30} style={{ filter: "grayscale(1)", opacity: 0.55 }} />
+              {c.label}
+              <span style={{ fontSize: "0.68rem", fontWeight: 700, background: "#eceff1", color: "#78909c", borderRadius: 999, padding: "0.1rem 0.45rem" }}>
+                coming soon
+              </span>
+            </span>
+          );
+        }
         return (
           <button
             key={c.key}

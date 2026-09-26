@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  EXPORT_CROPS,
+  isActiveExportCrop,
   COUNTRIES,
   docTypeAppliesTo,
   DEFAULT_EXPORT_DOCUMENT_TYPES,
@@ -74,4 +76,13 @@ test("UNBS documents apply only to roasted or packaged exporters", () => {
   assert.equal(docTypeAppliesTo(unbs, ["roasted"]), true);
   assert.equal(docTypeAppliesTo(licence, ["roasted"]), true);
   assert.equal(docTypeAppliesTo({ productForms: [] }, ["green"]), true);
+});
+
+test("only coffee is open for export listings; other crops are placeholders", () => {
+  assert.equal(isActiveExportCrop("coffee"), true);
+  for (const key of ["cocoa", "tea", "vanilla", "sesame"]) {
+    assert.equal(isActiveExportCrop(key), false, key);
+    assert.ok(EXPORT_CROPS.some((c) => c.key === key));
+  }
+  assert.equal(isActiveExportCrop("unknown"), false);
 });

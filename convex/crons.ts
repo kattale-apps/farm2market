@@ -50,12 +50,10 @@ crons.interval(
   (internal as any).fertilizerPlanner.sendSprayReminders,
 );
 
-// Freeze and publish the daily market price snapshot at midnight Uganda time (21:00 UTC)
-crons.daily(
-  "freeze daily price snapshot",
-  { hourUTC: 21, minuteUTC: 0 },
-  internal.marketPrices.freezeDailySnapshot,
-);
+// Daily price snapshot publishing is switched off for now (see
+// SNAPSHOT_PUBLISHING_ENABLED in marketPrices.ts). To turn it back on,
+// restore this cron:
+// crons.daily("freeze daily price snapshot", { hourUTC: 21, minuteUTC: 0 }, internal.marketPrices.freezeDailySnapshot);
 
 // Refresh the buyer wallet's UGX -> USD/GBP/EUR exchange rates twice a day
 // (the free source API itself only updates once every 24h, so this is

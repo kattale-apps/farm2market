@@ -91,8 +91,22 @@ export function productFormLabel(key: string | undefined): string {
   return PRODUCT_FORMS.find((p) => p.key === key)?.label ?? "Green beans";
 }
 
-/** Crops that can be exported. Each has its own icon in /public/icons. */
-export const EXPORT_CROPS = [{ key: "coffee", label: "Coffee", icon: "/icons/coffee-bean.svg" }] as const;
+/**
+ * Crops that can be exported, each with its icon in /public/icons. Only
+ * active crops can be listed; the others are placeholders shown as
+ * "coming soon" until their lot fields are defined.
+ */
+export const EXPORT_CROPS = [
+  { key: "coffee", label: "Coffee", icon: "/icons/coffee-bean.svg", active: true },
+  { key: "cocoa", label: "Cocoa", icon: "/icons/cocoa-pod.svg", active: false },
+  { key: "tea", label: "Tea", icon: "/icons/tea-leaf.svg", active: false },
+  { key: "vanilla", label: "Vanilla", icon: "/icons/vanilla-pod.svg", active: false },
+  { key: "sesame", label: "Sesame", icon: "/icons/sesame-seed.svg", active: false },
+] as const;
+
+export function isActiveExportCrop(key: string): boolean {
+  return EXPORT_CROPS.some((c) => c.key === key && c.active);
+}
 export const DEFAULT_EXPORT_CROP = "coffee";
 
 export type DefaultDocumentType = {

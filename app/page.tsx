@@ -290,6 +290,11 @@ export default function Home() {
           box-shadow: 0 2px 8px rgba(123, 31, 162, 0.5);
           transition: transform 0.12s ease;
         }
+        /* Export Markets variant: sky blue. */
+        .am-quicklink-arrow.em-quicklink-arrow {
+          background: #0288d1;
+          box-shadow: 0 2px 8px rgba(2, 136, 209, 0.5);
+        }
         @media (prefers-reduced-motion: no-preference) {
           .am-quicklink-arrow {
             animation: am-quicklink-arrow-slide 1.5s ease-in-out infinite;

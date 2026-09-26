@@ -10,7 +10,7 @@
 
 const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
 
-export type CommunityModule = "advancedMarkets" | "fertilizer" | "costTemplates" | "activeFarms" | "diagnostics";
+export type CommunityModule = "advancedMarkets" | "fertilizer" | "costTemplates" | "activeFarms" | "diagnostics" | "exportMarkets";
 
 type CommunityLike = {
   _id?: unknown;
@@ -21,6 +21,7 @@ type CommunityLike = {
   costTemplatesEnabled?: boolean;
   activeFarmsEnabled?: boolean;
   diagnosticsEnabled?: boolean;
+  exportMarketsEnabled?: boolean;
 };
 
 /**
@@ -111,6 +112,15 @@ export function isDiagnosticsEnabled(community: CommunityLike | null | undefined
   return community.diagnosticsEnabled === true;
 }
 
+/**
+ * Export Markets - marks an exporter community. Its verified-trader members
+ * get the exporter module. Off everywhere until a super admin turns it on.
+ */
+export function isExportMarketsEnabled(community: CommunityLike | null | undefined): boolean {
+  if (!community) return false;
+  return community.exportMarketsEnabled === true;
+}
+
 export function resolveCommunityModules(community: CommunityLike | null | undefined) {
   return {
     advancedMarketsEnabled: isAdvancedMarketsEnabled(community),
@@ -118,5 +128,6 @@ export function resolveCommunityModules(community: CommunityLike | null | undefi
     costTemplatesEnabled: isCostTemplatesEnabled(community),
     activeFarmsEnabled: isActiveFarmsEnabled(community),
     diagnosticsEnabled: isDiagnosticsEnabled(community),
+    exportMarketsEnabled: isExportMarketsEnabled(community),
   };
 }

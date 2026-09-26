@@ -3109,7 +3109,7 @@ export default function CommunityDashboardPage() {
 
   const handleToggleCommunityModule = async (
     communityId: Id<"communities">,
-    moduleKey: "advancedMarkets" | "fertilizer" | "costTemplates" | "activeFarms" | "diagnostics",
+    moduleKey: "advancedMarkets" | "fertilizer" | "costTemplates" | "activeFarms" | "diagnostics" | "exportMarkets",
     nextValue: boolean
   ) => {
     if (!userId) return;
@@ -3127,7 +3127,9 @@ export default function CommunityDashboardPage() {
           ? "Cost Templates"
           : moduleKey === "diagnostics"
             ? "Diagnostics"
-            : "Fertilizer";
+            : moduleKey === "exportMarkets"
+              ? "Export Markets"
+              : "Fertilizer";
 
     try {
       await setCommunityModuleEnabled({
@@ -3413,6 +3415,7 @@ export default function CommunityDashboardPage() {
             const fertilizerEnabled = community?.fertilizerEnabled === true;
             const costTemplatesEnabled = community?.costTemplatesEnabled === true;
             const diagnosticsEnabled = community?.diagnosticsEnabled === true;
+            const exportMarketsEnabled = community?.exportMarketsEnabled === true;
             const canConfigureFertilizer =
               isSuperAdminUser || resolvedAdminCategory === "community";
             const visibleTabs: CommunityTab[] = [
@@ -3746,6 +3749,31 @@ export default function CommunityDashboardPage() {
                             style={{ width: "16px", height: "16px", cursor: "pointer" }}
                           />
                           Enable Diagnostics (shared pest &amp; disease library)
+                        </label>
+                        <label
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.5rem",
+                            fontSize: "0.85rem",
+                            color: "#374151",
+                            fontWeight: 600,
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={exportMarketsEnabled}
+                            disabled={!!togglingMemberCountByCommunity[String(communityId)]}
+                            onChange={(e) => {
+                              handleToggleCommunityModule(
+                                communityId as Id<"communities">,
+                                "exportMarkets",
+                                e.target.checked
+                              );
+                            }}
+                            style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                          />
+                          Exporter community (verified traders here get Export Markets; invite-only)
                         </label>
                       </>
                     )}

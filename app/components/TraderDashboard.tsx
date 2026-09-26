@@ -29,6 +29,8 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
   const activeUTIDs = useQuery(api.traderDashboard.getTraderActiveUTIDs, { traderId: userId });
   const storageFeeRate = useQuery(api.traderDashboard.getTraderStorageFeeRate, { traderId: userId });
   const initiateDeposit = useAction(api.pesapal.initiateTraderDeposit);
+  // Export Markets card: only for verified traders in an exporter community.
+  const exportAccess = useQuery(api.exportMarkets.getMyExportAccess, userId ? { userId } : "skip");
   const paymentTransactions = useQuery(api.pesapal.getUserPaymentTransactions, { userId });
   const buyOffers = useQuery(api.traderBuyerNegotiations.getTraderBuyOffers, { traderId: userId });
   const traderSales = useQuery(api.traderDashboard.getTraderSales, { traderId: userId });
@@ -747,6 +749,36 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
       {titleSlot && createPortal(titleContent, titleSlot)}
       {msgSlot && createPortal(msgContent, msgSlot)}
       {moreSlot && createPortal(moreContent, moreSlot)}
+
+      {exportAccess?.hasModule && (
+        <a
+          href="/trader/export"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.75rem",
+            padding: "1rem 1.25rem",
+            background: "#efebe9",
+            border: "3px solid #000",
+            borderRadius: "14px",
+            textDecoration: "none",
+            color: "#4e342e",
+            fontFamily: '"Montserrat", sans-serif',
+            fontWeight: 700,
+            fontSize: "clamp(0.9rem,2.5vw,1rem)",
+            boxShadow: "0 0 0 1px #000, 0 0 18px 3px rgba(109,76,65,0.55), 0 2px 8px rgba(0,0,0,0.25)",
+            marginBottom: "1rem",
+          }}
+        >
+          <span style={{ fontSize: "1.8rem", lineHeight: 1 }}>☕</span>
+          <div style={{ minWidth: 0 }}>
+            <div>EXPORT MARKETS</div>
+            <div style={{ fontSize: "0.78rem", fontWeight: 500, color: "#6d4c41" }}>
+              Exporter profile, documents and verification ({exportAccess.communityNames.join(", ")})
+            </div>
+          </div>
+        </a>
+      )}
 
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "0.75rem" }}>
         <button

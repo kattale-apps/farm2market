@@ -5,33 +5,38 @@ import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { useRouter, useSearchParams } from "next/navigation";
 import { saveAuth, getLastCredential, saveLastCredential } from "../utils/authStorage";
-import { IS_PRODUCTION_DEPLOYMENT } from "../utils/env";
+import { VALUE_CHAIN_ROLES, roleLabel } from "../../convex/roleLabels";
 
 type IdentifierMode = "phone" | "email";
 type AuthStep = "login" | "confirmSignup";
 type SignupRole = "farmer" | "trader" | "buyer" | "vendor" | "transporter" | "store";
 
-// Farmer, Buyer and Trader signup on the production deployment while the
-// other roles are still being built out; the develop preview and local
-// dev keep every role fully enabled (see app/utils/env.ts).
-const SIGNUP_ROLES: Array<{ value: SignupRole; label: string; signupEnabled: boolean }> = [
-  { value: "farmer", label: "Farmer", signupEnabled: true },
-  { value: "buyer", label: "Buyer", signupEnabled: true },
-  { value: "trader", label: "Trader", signupEnabled: true },
-  { value: "vendor", label: "Vendor", signupEnabled: !IS_PRODUCTION_DEPLOYMENT },
-  { value: "transporter", label: "Transporter", signupEnabled: !IS_PRODUCTION_DEPLOYMENT },
-  { value: "store", label: "Store", signupEnabled: !IS_PRODUCTION_DEPLOYMENT },
-];
+// Every role can sign up on production. The switch per role stays so a role
+// can be paused again by setting it to false.
+// Listed in value-chain order: Farmer → Processor → Exporter → Buyer → Transporter → Vendor.
+const SIGNUP_ENABLED: Record<SignupRole, boolean> = {
+  farmer: true,
+  store: true,
+  trader: true,
+  buyer: true,
+  transporter: true,
+  vendor: true,
+};
+const SIGNUP_ROLES: Array<{ value: SignupRole; label: string; signupEnabled: boolean }> = VALUE_CHAIN_ROLES.map((role) => ({
+  value: role,
+  label: roleLabel(role),
+  signupEnabled: SIGNUP_ENABLED[role],
+}));
 
-// Spectrum-ordered role palette (green→yellow→orange→blue→red→purple),
+// Spectrum palette following the list order (green→yellow→orange→blue→red→purple),
 // one hue per role so no two categories read as the same color.
 const ROLE_STYLES: Record<SignupRole, { text: string; border: string; bgSelected: string; bgUnselected: string; borderUnselected: string }> = {
   farmer: { text: "#2e7d32", border: "#2e7d32", bgSelected: "#c8e6c9", bgUnselected: "#e8f5e9", borderUnselected: "#a5d6a7" }, // green
-  vendor: { text: "#ef6c00", border: "#ef6c00", bgSelected: "#ffe0b2", bgUnselected: "#fff3e0", borderUnselected: "#ffb74d" }, // orange
-  trader: { text: "#f9a825", border: "#f9a825", bgSelected: "#ffecb3", bgUnselected: "#fff8e1", borderUnselected: "#ffd54f" }, // yellow
+  store: { text: "#f9a825", border: "#f9a825", bgSelected: "#ffecb3", bgUnselected: "#fff8e1", borderUnselected: "#ffd54f" }, // yellow
+  trader: { text: "#ef6c00", border: "#ef6c00", bgSelected: "#ffe0b2", bgUnselected: "#fff3e0", borderUnselected: "#ffb74d" }, // orange
   buyer: { text: "#1976d2", border: "#1976d2", bgSelected: "#bbdefb", bgUnselected: "#e3f2fd", borderUnselected: "#90caf9" }, // blue
   transporter: { text: "#c62828", border: "#c62828", bgSelected: "#ffcdd2", bgUnselected: "#ffebee", borderUnselected: "#ef9a9a" }, // red
-  store: { text: "#7b1fa2", border: "#7b1fa2", bgSelected: "#e1bee7", bgUnselected: "#f3e5f5", borderUnselected: "#ce93d8" }, // purple
+  vendor: { text: "#7b1fa2", border: "#7b1fa2", bgSelected: "#e1bee7", bgUnselected: "#f3e5f5", borderUnselected: "#ce93d8" }, // purple
 };
 
 /**

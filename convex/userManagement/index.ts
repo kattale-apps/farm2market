@@ -248,36 +248,10 @@ export async function createUser(
       return createError("VALIDATION_FAILED", "Invalid adminLevel. Must be 'super' or 'junior'");
     }
     
-    // If creating junior admin, allowedStorageLocationIds must be provided and non-empty
-    if (input.adminLevel === "junior") {
-      if (!input.allowedStorageLocationIds || input.allowedStorageLocationIds.length === 0) {
-        return createError("VALIDATION_FAILED", "Junior admins must have at least one assigned storage location");
-      }
-      
-      // Validate that all location IDs exist and are active
-      for (const locationId of input.allowedStorageLocationIds) {
-        const location = await (ctx.db as DatabaseWriter).get(locationId as Id<"storageLocations">);
-        if (!location) {
-          return createError("VALIDATION_FAILED", `Storage location ${locationId} not found`);
-        }
-        if (!location.active) {
-          return createError("VALIDATION_FAILED", `Storage location ${locationId} is not active`);
-        }
-      }
-    }
-    
-    // If creating super admin, allowedStorageLocationIds should be ignored/not set
-    if (input.adminLevel === "super" || input.adminLevel === undefined) {
-      // Clear any provided allowedStorageLocationIds for super admins
-      // (They have access to all locations)
-    }
   } else {
-    // For non-admin roles, adminLevel and allowedStorageLocationIds should not be set
+    // For non-admin roles, adminLevel should not be set
     if (input.adminLevel !== undefined) {
       return createError("VALIDATION_FAILED", "adminLevel can only be set for admin role");
-    }
-    if (input.allowedStorageLocationIds !== undefined && input.allowedStorageLocationIds.length > 0) {
-      return createError("VALIDATION_FAILED", "allowedStorageLocationIds can only be set for junior admin role");
     }
   }
   
@@ -367,13 +341,10 @@ export async function createUser(
     lastActiveAt: ctx.now,
   };
   
-  // Add adminLevel and allowedStorageLocationIds for admin accounts
+  // Add adminLevel for admin accounts
   if (input.role === "admin") {
     if (input.adminLevel !== undefined) {
       userData.adminLevel = input.adminLevel;
-    }
-    if (input.adminLevel === "junior" && input.allowedStorageLocationIds) {
-      userData.allowedStorageLocationIds = input.allowedStorageLocationIds as Id<"storageLocations">[];
     }
   }
   

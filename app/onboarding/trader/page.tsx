@@ -116,7 +116,7 @@ export default function TraderOnboardingPage() {
           fontSize: "clamp(1.5rem, 4vw, 2rem)", marginBottom: "1rem", color: "#2c2c2c",
           fontFamily: '"Montserrat", sans-serif', fontWeight: "700"
         }}>
-          🤝 Trader Onboarding
+          🤝 Exporter Onboarding
         </h1>
         <p style={{
           marginBottom: "2rem", color: "#666", fontSize: "clamp(0.9rem, 2.5vw, 1rem)",
@@ -149,7 +149,7 @@ export default function TraderOnboardingPage() {
                 type="text"
                 value={businessName}
                 onChange={(e) => setBusinessName(e.target.value)}
-                placeholder="e.g. Kato Grain Traders"
+                placeholder="e.g. Kato Coffee Exporters"
                 required
                 style={inputStyle}
               />

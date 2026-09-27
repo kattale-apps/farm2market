@@ -32,7 +32,6 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   const orders = useQuery(api.buyerDashboard.getBuyerOrders, { buyerId: userId });
   const listingOrders = useQuery(api.buyerDashboard.getBuyerListingOrders, { buyerId: userId });
   const walletBalance = useQuery(api.buyerDashboard.getBuyerWalletBalance, { buyerId: userId });
-  const storageFeeRate = useQuery(api.buyerDashboard.getBuyerStorageFeeRate, { buyerId: userId });
   const serviceFeePercentage = useQuery(api.buyerDashboard.getBuyerServiceFeePercentageQuery, { buyerId: userId });
   const transactionLedger = useQuery(api.buyerDashboard.getBuyerTransactionLedger, { buyerId: userId });
   const walletReport = useQuery(api.buyerDashboard.getBuyerWalletReport, { buyerId: userId });
@@ -173,11 +172,11 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       key: "rewards",
       label: <><FarmCoinIcon size={18} /> FarmCoin Rewards{typeof (buyerFarmcoinBalance as any)?.balance === "number" ? ` (${(buyerFarmcoinBalance as any).balance})` : ""}</>,
     },
-    { key: "feesInfo", label: "💰 Service Fee & Kilo-Shaving Info" },
-    { key: "traderOrders", label: "📦 Trader Listing Orders" },
+    { key: "feesInfo", label: "💰 Service Fee Info" },
+    { key: "traderOrders", label: "📦 Exporter Listing Orders" },
     { key: "purchaseWindow", label: "🪟 Purchase Window Status" },
-    { key: "traderListings", label: "📦 Trader-sourced Listings" },
-    { key: "vendorStore", label: "🏪 Shop from Vendors & Stores" },
+    { key: "traderListings", label: "📦 Exporter-sourced Listings" },
+    { key: "vendorStore", label: "🏪 Shop from Vendors & Processors" },
     { key: "farmerInventory", label: "🌾 Farmer-sourced Inventory" },
     { key: "analytics", label: "📊 Buyer Analytics" },
     { key: "purchaseAnalytics", label: "📈 Purchase Analytics" },
@@ -1938,7 +1937,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
         </div>
       )}
 
-      {/* Service Fee & Kilo-Shaving Info */}
+      {/* Service Fee Info */}
       {isSectionOpen("feesInfo") && (
         <div id="section-feesInfo" style={{ marginBottom: "1.5rem" }}>
           {renderHideControl("feesInfo")}
@@ -1960,25 +1959,6 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
             </div>
           )}
 
-          {storageFeeRate && (
-            <div style={{
-              padding: "clamp(1rem, 3vw, 1.5rem)",
-              background: "#fff3cd",
-              borderRadius: "12px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-              border: "1px solid #ffc107"
-            }}>
-              <h3 style={{ marginTop: 0, marginBottom: "0.5rem", fontSize: "clamp(1rem, 3vw, 1.2rem)", color: "#856404" }}>
-                ⚠️ Kilo-Shaving Information
-              </h3>
-              <p style={{ margin: 0, color: "#666", fontSize: "clamp(0.9rem, 2.5vw, 1rem)", marginBottom: "0.5rem" }}>
-                <strong>Grace Period:</strong> You have <strong>48 hours</strong> after purchase to collect your order before kilo-shaving begins.
-              </p>
-              <p style={{ margin: 0, color: "#666", fontSize: "clamp(0.9rem, 2.5vw, 1rem)" }}>
-                <strong>Rate:</strong> {storageFeeRate.rateKgPerDay} kg per day per 100kg block (applies after the 48-hour grace period).
-              </p>
-            </div>
-          )}
         </div>
       )}
 
@@ -2053,7 +2033,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                       <td style={{ padding: "0.75rem", fontFamily: "monospace", fontWeight: 700 }}>{listing.listingUtid}</td>
                       <td style={{ padding: "0.75rem" }}>
                         <div>{listing.productName || listing.produceType}</div>
-                        <div style={{ fontSize: "0.75rem", color: "#666" }}>{listing.traderAlias || "Trader"}</div>
+                        <div style={{ fontSize: "0.75rem", color: "#666" }}>{listing.traderAlias || "Exporter"}</div>
                       </td>
                       <td style={{ padding: "0.75rem" }}>{unitsAvailable}</td>
                       <td style={{ padding: "0.75rem" }}>{listing.unitSize} unit</td>
@@ -2187,7 +2167,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                   const unitsAvailable = listing.availableUnits ?? 0;
                   const isVendor = listing.sellerRole === "vendor";
                   const badgeColor = isVendor ? "#e65100" : "#c62828";
-                  const badgeLabel = isVendor ? "Vendor" : "Store";
+                  const badgeLabel = isVendor ? "Vendor" : "Processor";
 
                   return (
                     <tr key={listing.listingId} style={{ borderBottom: "1px solid #f0f0f0" }}>
@@ -2398,7 +2378,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                           {item.qualityRating || "N/A"}
                         </td>
                         <td style={{ padding: "0.75rem" }}>
-                          {item.storageLocation ? `${item.storageLocation.districtName} (${item.storageLocation.code})` : "N/A"}
+                          {item.deliveryPoint ? `${item.deliveryPoint.name}, ${item.deliveryPoint.district}` : "To agree"}
                         </td>
                         <td style={{ padding: "0.75rem" }}>{storageAge} days</td>
                         <td style={{ padding: "0.75rem" }}>
@@ -2580,7 +2560,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                         <div style={{ fontWeight: "600", color: "#1a1a1a", fontSize: "clamp(0.9rem, 3vw, 1rem)" }}>{item.blockSize} kg</div>
                       </div>
                       <div>
-                        <div style={{ color: "#999", fontSize: "clamp(0.75rem, 2vw, 0.85rem)" }}>Trader</div>
+                        <div style={{ color: "#999", fontSize: "clamp(0.75rem, 2vw, 0.85rem)" }}>Exporter</div>
                         <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
                           <div style={{ fontWeight: "600", color: "#1a1a1a", fontSize: "clamp(0.9rem, 3vw, 1rem)" }}>{item.traderAlias}</div>
                           {item.traderIsVerified && <VerifiedBadge size={20} title="Verified trader" />}
@@ -2670,7 +2650,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                         </div>
                       </div>
                       <p style={{ margin: "0.5rem 0 0 0", fontSize: "clamp(0.7rem, 2vw, 0.8rem)", color: "#999" }}>
-                        ⚠️ You have 48 hours to pick up after purchase. Kilo-shaving starts after the grace period.
+                        ⚠️ You have 48 hours to pick up after purchase.
                       </p>
                     </div>
                   ) : (

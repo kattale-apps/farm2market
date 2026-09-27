@@ -36,6 +36,8 @@ export function ExportFeesPanel({ adminId }: { adminId: Id<"users"> }) {
         successFeePerBagUsd: String(settings.successFeePerBagUsd),
         buyerFeePercent: String(settings.buyerFeePercent),
         sampleHandlingFeeUgx: String(settings.sampleHandlingFeeUgx),
+        processorVerificationFeeUgx: String(settings.processorVerificationFeeUgx),
+        processorSuccessFeePercent: String(settings.processorSuccessFeePercent),
       });
     }
   }, [settings, form]);
@@ -75,6 +77,8 @@ export function ExportFeesPanel({ adminId }: { adminId: Id<"users"> }) {
           : num("successFeePerBagUsd", "Success fee (USD per bag)", "Charged to the exporter per 60 kg bag.")}
         {num("buyerFeePercent", "Buyer fee (% of contract value)", "Optional. 0 = no buyer fee.")}
         {num("sampleHandlingFeeUgx", "Sample handling fee (UGX)", "Optional. Covers the platform sample desk and courier.")}
+        {num("processorVerificationFeeUgx", "Processor verification fee (UGX)", "Paid by processors, same validity period. 0 = no fee (the default).")}
+        {num("processorSuccessFeePercent", "Processor success fee (% of sale value)", "Charged to the processor on an in-app sale to an exporter. 0 = no fee (the default).")}
       </div>
       <label style={{ display: "flex", gap: "0.5rem", alignItems: "center", margin: "0.8rem 0", fontSize: "0.88rem" }}>
         <input
@@ -101,6 +105,8 @@ export function ExportFeesPanel({ adminId }: { adminId: Id<"users"> }) {
               successFeePerBagUsd: Number(form.successFeePerBagUsd),
               buyerFeePercent: Number(form.buyerFeePercent),
               sampleHandlingFeeUgx: Number(form.sampleHandlingFeeUgx),
+              processorVerificationFeeUgx: Number(form.processorVerificationFeeUgx),
+              processorSuccessFeePercent: Number(form.processorSuccessFeePercent),
             });
             setMsg({ tone: "success", text: "Export fees saved." });
           } catch (e) {

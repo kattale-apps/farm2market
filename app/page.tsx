@@ -16,6 +16,7 @@ import { StoreDashboard } from "./components/StoreDashboard";
 import { Id } from "../convex/_generated/dataModel";
 import { getStoredUser, clearAuth } from "./utils/authStorage";
 import { NotificationMailbox } from "./components/NotificationMailbox";
+import { roleLabel } from "@/convex/roleLabels";
 // import { useMutation } from "convex/react";
 // import { initializePushNotifications } from "./utils/pushNotifications";
 
@@ -110,13 +111,6 @@ export default function Home() {
       : "skip"
   );
 
-  const storeOnboardingStatus = useQuery(
-    api.storeOnboarding.checkOnboardingStatus,
-    user?.role === "store" && user?.userId
-      ? { userId: user.userId as Id<"users"> }
-      : "skip"
-  );
-
   const communities = useQuery(
     api.communities.getActiveCommunities,
     ["farmer", "trader", "buyer", "vendor", "transporter", "store"].includes(user?.role) && user?.userId ? { userId: user.userId as Id<"users"> } : "skip"
@@ -150,9 +144,7 @@ export default function Home() {
     if (user?.role === "transporter" && transporterOnboardingStatus !== undefined && !transporterOnboardingStatus.completed) {
       router.push("/onboarding/transporter");
     }
-    if (user?.role === "store" && storeOnboardingStatus !== undefined && !storeOnboardingStatus.completed) {
-      router.push("/onboarding/store");
-    }
+    // Processors ("store") set up their facility inside the processor dashboard.
     if (user?.role === "trader" && traderOnboardingStatus !== undefined && !traderOnboardingStatus.completed) {
       router.push("/onboarding/trader");
     }
@@ -164,7 +156,6 @@ export default function Home() {
     onboardingStatus,
     vendorOnboardingStatus,
     transporterOnboardingStatus,
-    storeOnboardingStatus,
     traderOnboardingStatus,
     buyerOnboardingStatus,
     router,
@@ -388,7 +379,7 @@ export default function Home() {
                     Logged in as: <strong style={{ color: "#1a1a1a" }}>{effectiveUser?.alias || user?.alias || "Unknown"}</strong>
                   </p>
                   <p style={{ margin: "0 0 0.6rem", fontSize: "0.8rem", color: "#666", textTransform: "capitalize" }}>
-                    Role: {effectiveUser?.role || user?.role || "unknown"}
+                    Role: {roleLabel(effectiveUser?.role || user?.role) || "unknown"}
                   </p>
 
                   {(effectiveUser?.role === "farmer" || effectiveUser?.role === "trader" || effectiveUser?.role === "buyer" || effectiveUser?.role === "vendor" || effectiveUser?.role === "transporter" || effectiveUser?.role === "store") && (
@@ -414,6 +405,12 @@ export default function Home() {
                     <a href="/api/download/android" download="Farm2Market.apk" style={profileMenuLinkStyle}>
                       Download App
                     </a>
+                    {effectiveUser?.role && effectiveUser.role !== "admin" && (
+                      <a href="/transport" style={profileMenuLinkStyle}>🚚 Find transport</a>
+                    )}
+                    {effectiveUser?.role === "transporter" && (
+                      <a href="/transporter/services" style={profileMenuLinkStyle}>🚚 My transport services</a>
+                    )}
                     <a href="/contact" style={profileMenuLinkStyle}>Contact Us</a>
                     <a href="/privacy-policy" style={profileMenuLinkStyle}>Privacy Policy</a>
                     {(effectiveUser?.role === "farmer" || effectiveUser?.role === "trader" || effectiveUser?.role === "buyer" || effectiveUser?.role === "vendor" || effectiveUser?.role === "transporter" || effectiveUser?.role === "store" || isEffectiveSuperAdmin || (effectiveUser?.role === "admin" && effectiveUser?.adminCategory === "community") || isEffectiveCrmCommunityAdmin) && (

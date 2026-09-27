@@ -18,7 +18,6 @@ export default function StoreAdminAuditPage() {
   const userId = (user?.userId as Id<"users"> | undefined) ?? null;
   const [selectedStoreAdminId, setSelectedStoreAdminId] = useState<Id<"users"> | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode | null>(null);
-  const [selectedLocationId, setSelectedLocationId] = useState<Id<"storageLocations"> | null>(null);
 
   const storeAdmins = useQuery(api.adminAudit.getStoreAdmins, userId ? { adminId: userId } : "skip");
   const auditData = useQuery(
@@ -30,7 +29,7 @@ export default function StoreAdminAuditPage() {
   const inventoryData = useQuery(
     api.adminAudit.getStoreAdminInventory,
     userId && selectedStoreAdminId
-      ? { adminId: userId, storeAdminId: selectedStoreAdminId, locationId: selectedLocationId || undefined }
+      ? { adminId: userId, storeAdminId: selectedStoreAdminId }
       : "skip"
   );
 
@@ -105,7 +104,6 @@ export default function StoreAdminAuditPage() {
             onChange={(e) => {
               setSelectedStoreAdminId(e.target.value as Id<"users"> | null);
               setViewMode(null); // Reset view mode when changing admin
-              setSelectedLocationId(null);
             }}
             style={{
               width: "100%",
@@ -118,7 +116,7 @@ export default function StoreAdminAuditPage() {
             <option value="">-- Select StoreAdmin --</option>
             {storeAdmins.map((admin: any) => (
               <option key={admin.id} value={admin.id}>
-                {admin.alias} ({admin.email}) - {(admin.locations || []).map((l: any) => l.name).join(", ")}
+                {admin.alias} ({admin.email})
               </option>
             ))}
           </select>
@@ -140,9 +138,6 @@ export default function StoreAdminAuditPage() {
             <h2 style={{ fontSize: "1.3rem", marginBottom: "0.5rem", color: "#1a1a1a", fontWeight: "700" }}>
               {auditData.storeAdminAlias} ({auditData.storeAdminEmail})
             </h2>
-            <p style={{ color: "#333", fontSize: "0.95rem", margin: "0.5rem 0 0 0" }}>
-              <strong>Locations:</strong> {auditData.locations && auditData.locations.length > 0 ? auditData.locations.map((l: any) => `${l.name} (${l.code})`).join(", ") : "No locations assigned"}
-            </p>
           </div>
 
           {/* Clickable Cards */}
@@ -324,33 +319,6 @@ export default function StoreAdminAuditPage() {
               <div style={{ marginBottom: "1.5rem" }}>
                 <h3 style={{ fontSize: "1.2rem", marginBottom: "1rem", color: "#1a1a1a", fontWeight: "700" }}>📦 Inventory Summary</h3>
                 
-                {/* Location Filter */}
-                {auditData.locations && auditData.locations.length > 1 && (
-                  <div style={{ marginBottom: "1rem" }}>
-                    <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
-                      Filter by Location:
-                    </label>
-                    <select
-                      value={selectedLocationId || ""}
-                      onChange={(e) => setSelectedLocationId(e.target.value ? e.target.value as Id<"storageLocations"> : null)}
-                      style={{
-                        padding: "0.5rem",
-                        fontSize: "0.95rem",
-                        border: "1px solid #ddd",
-                        borderRadius: "4px",
-                        minWidth: "200px",
-                        minHeight: "44px",
-                        color: "#333",
-                      }}
-                    >
-                      <option value="">All Locations</option>
-                      {auditData.locations.map((loc: any) => (
-                        <option key={loc.id} value={loc.id}>{loc.name} ({loc.code})</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 200px), 1fr))", gap: "1rem", marginBottom: "1.5rem" }}>
                   <div style={{ padding: "1rem", background: "#f5f5f5", borderRadius: "8px" }}>
                     <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.25rem" }}>Total Kilos</div>

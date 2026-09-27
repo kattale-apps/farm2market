@@ -8,6 +8,7 @@ import { useState, useEffect } from "react";
 import { Id } from "@/convex/_generated/dataModel";
 import { formatUgandaDate } from "../../../utils/timeUtils";
 import { useStoredUser } from "@/app/hooks/useStoredUser";
+import { roleLabel } from "@/convex/roleLabels";
 
 const formatUGX = (amount: number) =>
   `UGX ${amount.toLocaleString("en-UG")}`;
@@ -81,9 +82,9 @@ export default function SuperadminListingsLogPage() {
             >
               <option value="all">All Roles</option>
               <option value="farmer">Farmer</option>
-              <option value="trader">Trader</option>
+              <option value="trader">Exporter</option>
               <option value="vendor">Vendor</option>
-              <option value="store">Store</option>
+              <option value="store">Processor</option>
             </select>
           </label>
 
@@ -186,7 +187,7 @@ export default function SuperadminListingsLogPage() {
                           fontWeight: "600",
                           textTransform: "capitalize",
                         }}>
-                          {item.sellerRole}
+                          {roleLabel(item.sellerRole)}
                         </span>
                       </td>
                       <td style={{ padding: "0.75rem", textTransform: "capitalize" }}>

@@ -12,11 +12,7 @@
  *    - Traders approaching UGX 1,000,000 exposure limit
  *    - Risk: System capacity constraints, trader unable to trade
  * 
- * 3. Inventory accruing high kilo-shaving loss
- *    - Inventory in storage losing significant kilos to storage fees
- *    - Risk: Trader value loss, system inefficiency
- * 
- * 4. Buyers approaching pickup SLA expiry
+ * 3. Buyers approaching pickup SLA expiry
  *    - Buyers with pending pickups approaching 48-hour deadline
  *    - Risk: Inventory stuck, buyer accountability unclear
  * 
@@ -28,7 +24,7 @@
 
 import { v } from "convex/values";
 import { query } from "./_generated/server";
-import { calculateTraderExposureInternal, getStorageFeeRate } from "./utils";
+import { calculateTraderExposureInternal } from "./utils";
 import { MAX_TRADER_EXPOSURE_UGX, BUYER_PICKUP_SLA_MS } from "./constants";
 
 /**
@@ -218,135 +214,6 @@ export const getTradersNearSpendCap = query({
 });
 
 /**
- * Get inventory accruing high kilo-shaving loss
- * 
- * Returns inventory where:
- * - status = "in_storage"
- * - Projected kilo loss is significant (threshold: >10% of total kilos OR >5kg)
- * 
- * These are HIGH RISK because:
- * - Trader value is being lost to storage fees
- * - System inefficiency (inventory not moving)
- * - Risk of inventory becoming worthless
- * - Indicates potential market or operational issues
- */
-export const getHighStorageLossInventory = query({
-  args: {
-    adminId: v.id("users"),
-    minLossPercent: v.optional(v.number()), // Minimum loss percentage (default 10%)
-    minLossKilos: v.optional(v.number()), // Minimum loss in kilos (default 5kg)
-    limit: v.optional(v.number()),
-  },
-  handler: async (ctx, args) => {
-    await verifyAdmin(ctx, args.adminId);
-
-    const minLossPercent = args.minLossPercent || 10; // Default 10%
-    const minLossKilos = args.minLossKilos || 5; // Default 5kg
-    const limit = args.limit || 50;
-
-    const now = Date.now();
-
-    // Get all inventory in storage
-    const allInventory = await ctx.db
-      .query("traderInventory")
-      .withIndex("by_status", (q) => q.eq("status", "in_storage"))
-      .collect();
-
-    // Calculate projected loss for each inventory block
-    const inventoryWithLoss = await Promise.all(
-      allInventory.map(async (inv) => {
-        // Calculate days in storage
-        const daysInStorage = (now - inv.storageStartTime) / (1000 * 60 * 60 * 24);
-        const fullDays = Math.floor(daysInStorage);
-
-        // Calculate projected kilo loss (using current rate from system settings)
-        // Rate is per 100kg block per day
-        const storageFeeRate = await getStorageFeeRate({ db: ctx.db });
-        const blocks = inv.totalKilos / 100; // Number of 100kg blocks
-        const projectedKilosLost = blocks * storageFeeRate * fullDays;
-        const lossPercent = (projectedKilosLost / inv.totalKilos) * 100;
-
-        // Get original listing info (for context)
-        let originalPricePerKilo = 0;
-        if (inv.listingUnitIds.length > 0) {
-          const firstUnit = await ctx.db.get(inv.listingUnitIds[0]);
-          if (firstUnit) {
-            const listing = await ctx.db.get(firstUnit.listingId);
-            if (listing) {
-              originalPricePerKilo = listing.pricePerKilo;
-            }
-          }
-        }
-
-        // Calculate value loss
-        const valueLost = originalPricePerKilo * projectedKilosLost;
-
-        return {
-          inventoryId: inv._id,
-          inventoryUtid: inv.utid,
-          traderId: inv.traderId,
-          produceType: inv.produceType,
-          totalKilos: inv.totalKilos,
-          storageStartTime: inv.storageStartTime,
-          daysInStorage: Math.round(daysInStorage * 100) / 100,
-          projectedKilosLost: Math.round(projectedKilosLost * 100) / 100,
-          lossPercent: Math.round(lossPercent * 100) / 100,
-          originalPricePerKilo: Math.round(originalPricePerKilo * 100) / 100,
-          valueLost: Math.round(valueLost * 100) / 100,
-        };
-      })
-    );
-
-    // Filter to high loss inventory
-    const highLoss = inventoryWithLoss.filter((inv) => {
-      return inv.lossPercent >= minLossPercent || inv.projectedKilosLost >= minLossKilos;
-    });
-
-    // Sort by highest loss first (highest risk first)
-    highLoss.sort((a, b) => b.lossPercent - a.lossPercent);
-
-    // Enrich with trader aliases
-    const enriched = await Promise.all(
-      highLoss.map(async (inv) => {
-        const trader = await ctx.db.get(inv.traderId);
-        return {
-          ...inv,
-          traderAlias: trader?.alias || null,
-        };
-      })
-    );
-
-    // Limit results for quick scanning
-    const limited = enriched.slice(0, limit);
-
-    // Calculate totals
-    const totals = {
-      total: enriched.length,
-      totalKilosAtRisk: enriched.reduce((sum, inv) => sum + inv.totalKilos, 0),
-      totalKilosLost: enriched.reduce((sum, inv) => sum + inv.projectedKilosLost, 0),
-      totalValueLost: enriched.reduce((sum, inv) => sum + inv.valueLost, 0),
-      averageLossPercent: enriched.length > 0
-        ? Math.round((enriched.reduce((sum, inv) => sum + inv.lossPercent, 0) / enriched.length) * 100) / 100
-        : 0,
-      maxLossPercent: enriched.length > 0 ? Math.max(...enriched.map((inv) => inv.lossPercent)) : 0,
-      averageDaysInStorage: enriched.length > 0
-        ? Math.round((enriched.reduce((sum, inv) => sum + inv.daysInStorage, 0) / enriched.length) * 100) / 100
-        : 0,
-    };
-
-    return {
-      totals,
-      inventory: limited,
-      hasMore: enriched.length > limit,
-      thresholds: {
-        minLossPercent,
-        minLossKilos,
-      },
-    };
-  },
-});
-
-/**
  * Get buyers approaching pickup SLA expiry
  * 
  * Returns purchases where:
@@ -512,27 +379,6 @@ export const getRedFlagsSummary = query({
       }
     }
 
-    // Get high storage loss inventory
-    const allInventory = await ctx.db
-      .query("traderInventory")
-      .withIndex("by_status", (q) => q.eq("status", "in_storage"))
-      .collect();
-
-    // Get storage fee rate once (same for all inventory)
-    const storageFeeRate = await getStorageFeeRate({ db: ctx.db });
-    
-    let highLossCount = 0;
-    for (const inv of allInventory) {
-      const daysInStorage = (now - inv.storageStartTime) / (1000 * 60 * 60 * 24);
-      const fullDays = Math.floor(daysInStorage);
-      const blocks = inv.totalKilos / 100;
-      const projectedKilosLost = blocks * storageFeeRate * fullDays;
-      const lossPercent = (projectedKilosLost / inv.totalKilos) * 100;
-      if (lossPercent >= 10 || projectedKilosLost >= 5) {
-        highLossCount++;
-      }
-    }
-
     // Get buyers approaching pickup SLA
     const allPurchases = await ctx.db
       .query("buyerPurchases")
@@ -549,9 +395,8 @@ export const getRedFlagsSummary = query({
     return {
       deliveriesPastSLA: deliveriesCount,
       tradersNearSpendCap: tradersNearCapCount,
-      highStorageLossInventory: highLossCount,
       buyersApproachingPickupSLA: buyersApproachingCount,
-      total: deliveriesCount + tradersNearCapCount + highLossCount + buyersApproachingCount,
+      total: deliveriesCount + tradersNearCapCount + buyersApproachingCount,
       timestamp: now,
     };
   },

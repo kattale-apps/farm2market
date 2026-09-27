@@ -28,7 +28,6 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
   const exposure = useQuery(api.traderDashboard.getExposureStatus, { traderId: userId });
   const inventory = useQuery(api.traderDashboard.getInventoryWithProjectedLoss, { traderId: userId });
   const activeUTIDs = useQuery(api.traderDashboard.getTraderActiveUTIDs, { traderId: userId });
-  const storageFeeRate = useQuery(api.traderDashboard.getTraderStorageFeeRate, { traderId: userId });
   const initiateDeposit = useAction(api.pesapal.initiateTraderDeposit);
   // Export Markets card: for traders admitted as exporters, or who joined an
   // exporter community and are waiting to be admitted.
@@ -111,12 +110,11 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
     { key: "buyOffers", label: "💬 Buy-Offers from Buyers" },
     { key: "createListing", label: "📝 Create Listing" },
     { key: "listingsNegotiations", label: "📑 Listings & Negotiations" },
-    { key: "storageFeeInfo", label: "💰 Kilo-Shaving Rate Info" },
     { key: "inventoryStorage", label: "📦 Inventory in Storage" },
     { key: "transactionsLog", label: "🧾 Transactions Log" },
     { key: "reports", label: "📊 Comprehensive Reports" },
     { key: "inventoryTable", label: "📋 Inventory Table" },
-    { key: "analytics", label: "📈 Trader Analytics" },
+    { key: "analytics", label: "📈 Exporter Analytics" },
     { key: "analyticsCharts", label: "📉 Analytics Charts" },
   ];
   // A handful of sections only exist in the DOM for one of the two view modes
@@ -314,9 +312,9 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
     const filename = `trader_report_${ugandaDate.toISOString().split("T")[0]}`;
 
     if (format === "excel") {
-      exportToExcel(formattedData, filename, "Trader");
+      exportToExcel(formattedData, filename, "Exporter");
     } else {
-      exportToPDF(formattedData, filename, "Trader", user?.alias);
+      exportToPDF(formattedData, filename, "Exporter", user?.alias);
     }
   };
 
@@ -368,7 +366,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
 
       doc.setFontSize(18);
       doc.setTextColor(46, 125, 50);
-      doc.text("Trader Analytics Report", 14, 20);
+      doc.text("Exporter Analytics Report", 14, 20);
       doc.setFontSize(10);
       doc.setTextColor(100, 100, 100);
       doc.text("Know Your Numbers — Farm2Market Uganda", 14, 28);
@@ -420,7 +418,6 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
           ["Inventory Items", String(inv.length)],
           ["Total Kilos in Storage", `${totalKilos.toLocaleString()} kg`],
           ["Estimated Inventory Value", `UGX ${totalValue.toLocaleString()}`],
-          ["Storage Fee Rate", `${storageFeeRate?.rateKgPerDay || 0} UGX/kg/day`],
         ],
         theme: "grid",
         headStyles: { fillColor: [25, 118, 210], fontSize: 9 },
@@ -665,7 +662,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
       gap: "0.4rem",
       minWidth: 0,
     }}>
-      Hello, {userRole === "transporter" ? "Transporter 🚛" : "Trader 🚚"}
+      Hello, {userRole === "transporter" ? "Transporter 🚛" : "Exporter 🚚"}
       {(user as any)?.isVerifiedTrader && (user as any)?.verificationStatus === "verified" && (
         <VerifiedBadge size={26} title="Verified trader" />
       )}
@@ -2115,26 +2112,6 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
             )}
           </div>
 
-      {/* Storage Fee Rate Info */}
-      {isSectionOpen("storageFeeInfo") && storageFeeRate && (
-        <div id="section-storageFeeInfo" style={{
-          marginBottom: "1.5rem",
-          padding: "clamp(1rem, 3vw, 1.5rem)",
-          background: "#fff3cd",
-          borderRadius: "12px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          border: "1px solid #ffc107"
-        }}>
-          {renderHideControl("storageFeeInfo")}
-          <h3 style={{ marginTop: 0, marginBottom: "0.5rem", fontSize: "clamp(1rem, 3vw, 1.2rem)", color: "#856404" }}>
-            Current Kilo-Shaving Rate
-          </h3>
-          <p style={{ margin: 0, color: "#666", fontSize: "clamp(0.9rem, 2.5vw, 1rem)" }}>
-            <strong>{storageFeeRate.rateKgPerDay} kg per day</strong> per 100kg block. This rate applies to all inventory in storage.
-          </p>
-        </div>
-      )}
-
       {/* Inventory */}
       {isSectionOpen("inventoryStorage") && (
       <div id="section-inventoryStorage" style={{
@@ -2185,7 +2162,6 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
           <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
             {pagedInventory.map((item: any, index: number) => {
               const totalPrice = item.originalPricePerKilo * item.totalKilos;
-              const projectedRemainingPrice = item.originalPricePerKilo * item.projectedKilosRemaining;
               
               return (
                 <div key={index} style={{
@@ -2197,7 +2173,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
                 }}>
                   {isMobile && (
                     <div style={{ fontSize: "0.8rem", color: "#64748b", marginBottom: "0.35rem" }}>
-                      Hint: Check storage days and projected loss.
+                      Hint: Check how long each block has been stored.
                     </div>
                   )}
                   {/* Header with UTID */}
@@ -2226,7 +2202,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
                       {item.utid}
                     </div>
                     {/* Delivery Location - Prominently Displayed */}
-                    {item.storageLocation && (
+                    {item.deliveryPoint && (
                       <div style={{
                         marginTop: "0.75rem",
                         padding: "0.75rem",
@@ -2251,7 +2227,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
                           fontWeight: "700",
                           fontFamily: '"Montserrat", sans-serif',
                         }}>
-                          {item.storageLocation.districtName} ({item.storageLocation.code})
+                          {item.deliveryPoint.name}, {item.deliveryPoint.district}
                         </div>
                       </div>
                     )}
@@ -2294,9 +2270,6 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
                         <div style={{ fontSize: "clamp(0.9rem, 3vw, 1rem)", fontWeight: "600", color: "#1a1a1a" }}>
                           {formatUGX(totalPrice)}
                         </div>
-                        <div style={{ fontSize: "clamp(0.7rem, 2vw, 0.75rem)", color: "#999", marginTop: "0.25rem" }}>
-                          Projected: {formatUGX(projectedRemainingPrice)}
-                        </div>
                       </div>
                     </div>
                   </div>
@@ -2315,14 +2288,6 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
                       <div>
                         <div style={{ color: "#999", fontSize: "clamp(0.7rem, 2vw, 0.75rem)" }}>Days Stored</div>
                         <div style={{ fontWeight: "600", color: "#1a1a1a", fontSize: "clamp(0.8rem, 2.5vw, 0.9rem)" }}>{item.daysInStorage.toFixed(1)}</div>
-                      </div>
-                      <div>
-                        <div style={{ color: "#999", fontSize: "clamp(0.7rem, 2vw, 0.75rem)" }}>Loss</div>
-                        <div style={{ fontWeight: "600", color: "#d32f2f", fontSize: "clamp(0.8rem, 2.5vw, 0.9rem)" }}>{item.projectedKilosLost.toFixed(2)} kg</div>
-                      </div>
-                      <div>
-                        <div style={{ color: "#999", fontSize: "clamp(0.7rem, 2vw, 0.75rem)" }}>Remaining</div>
-                        <div style={{ fontWeight: "600", color: "#2e7d32", fontSize: "clamp(0.8rem, 2.5vw, 0.9rem)" }}>{item.projectedKilosRemaining.toFixed(2)} kg</div>
                       </div>
                     </div>
                   </div>
@@ -2590,7 +2555,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
                     </div>
                   )}
                   {/* Delivery Location - Prominently Displayed */}
-                  {utid.entities && utid.entities.length > 0 && utid.entities[0].storageLocation && (
+                  {utid.entities && utid.entities.length > 0 && utid.entities[0].deliveryPoint && (
                     <div style={{
                       marginTop: "0.75rem",
                       padding: "0.75rem",
@@ -2615,7 +2580,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
                         fontWeight: "700",
                         fontFamily: '"Montserrat", sans-serif',
                       }}>
-                        {utid.entities[0].storageLocation.districtName} ({utid.entities[0].storageLocation.code})
+                        {utid.entities[0].deliveryPoint.name}, {utid.entities[0].deliveryPoint.district}
                       </div>
                     </div>
                   )}

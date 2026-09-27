@@ -31,7 +31,8 @@ import {
   dataUrlToBlob,
   uploadToConvex,
 } from "./ui";
-import { PhotoSetCapture, CapturedPhoto } from "./PhotoSetCapture";
+import { PhotoSetCapture, CapturedPhoto, evidencePhotoPayload } from "./PhotoSetCapture";
+import { ProcessorPurchasesPanel, TracePipelineEditor } from "./ProcessorPurchases";
 
 type Msg = { tone: "error" | "success" | "info"; text: string } | null;
 type LotDetail = FunctionReturnType<typeof api.exportLots.getMyLot>;
@@ -63,6 +64,8 @@ export function ExporterLots({
       {!isActiveExporter && (
         <Notice tone="info">You can prepare lots now. Listing them for buyers opens once you are an approved, live exporter.</Notice>
       )}
+      <ProcessorPurchasesPanel userId={userId} isActiveExporter={isActiveExporter} setMsg={setMsg} />
+      <TracePipelineEditor userId={userId} setMsg={setMsg} />
       {creating ? (
         <LotForm
           userId={userId}
@@ -504,7 +507,9 @@ function LotPhotos({ userId, data, setMsg }: { userId: Id<"users">; data: LotDet
 function LotSources({ userId, data, setMsg }: { userId: Id<"users">; data: LotDetail; setMsg: (m: Msg) => void }) {
   const add = useMutation(api.exportLots.addLotSource);
   const remove = useMutation(api.exportLots.removeLotSource);
-  const [kind, setKind] = useState<"platform_purchase" | "advance_commitment" | "declared">("platform_purchase");
+  const [kind, setKind] = useState<"processor_purchase" | "platform_purchase" | "advance_commitment" | "declared">(
+    data.linkableProcessorSales.length > 0 ? "processor_purchase" : "platform_purchase"
+  );
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({ ref: "", kilos: "", farmerName: "", village: "", district: "", lat: "", lng: "", areaHa: "", polygon: "" });
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setForm({ ...form, [k]: e.target.value });
@@ -522,7 +527,14 @@ function LotSources({ userId, data, setMsg }: { userId: Id<"users">; data: LotDe
         <div key={source._id} style={{ borderTop: "1px solid #eee", padding: "0.5rem 0", fontSize: "0.85rem" }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem" }}>
             <b>
-              {source.kind === "platform_purchase" ? "Platform purchase" : source.kind === "advance_commitment" ? "Advanced Markets commitment" : "Declared farm"} ·{" "}
+              {source.kind === "processor_purchase"
+                ? "Bought from a processor"
+                : source.kind === "platform_purchase"
+                  ? "Platform purchase"
+                  : source.kind === "advance_commitment"
+                    ? "Advanced Markets commitment"
+                    : "Declared farm"}{" "}
+              ·{" "}
               {source.kilos.toLocaleString()} kg
             </b>
             <button
@@ -555,10 +567,21 @@ function LotSources({ userId, data, setMsg }: { userId: Id<"users">; data: LotDe
       <div style={{ marginTop: "0.75rem", background: "#fafafa", border: "1px solid #eee", borderRadius: 8, padding: "0.75rem" }}>
         <label style={label}>Add a source</label>
         <select style={{ ...input, marginBottom: "0.5rem" }} value={kind} onChange={(e) => setKind(e.target.value as typeof kind)}>
+          <option value="processor_purchase">Coffee I bought from a processor</option>
           <option value="platform_purchase">Coffee I bought on the platform</option>
           <option value="advance_commitment">My Advanced Markets commitment</option>
           <option value="declared">A farm outside the platform (declared)</option>
         </select>
+        {kind === "processor_purchase" && (
+          <select style={{ ...input, marginBottom: "0.5rem" }} value={form.ref} onChange={set("ref")}>
+            <option value="">Choose a processor purchase</option>
+            {data.linkableProcessorSales.map((s) => (
+              <option key={s._id} value={s._id}>
+                {s.saleCode} · batch {s.batchCode} · {s.remainingKilos} of {s.kilos} kg left
+              </option>
+            ))}
+          </select>
+        )}
         {kind === "platform_purchase" && (
           <select style={{ ...input, marginBottom: "0.5rem" }} value={form.ref} onChange={set("ref")}>
             <option value="">Choose an inventory block</option>
@@ -612,6 +635,7 @@ function LotSources({ userId, data, setMsg }: { userId: Id<"users">; data: LotDe
                   kilos: Number(form.kilos),
                   inventoryId: kind === "platform_purchase" && form.ref ? (form.ref as Id<"traderInventory">) : undefined,
                   commitmentId: kind === "advance_commitment" && form.ref ? (form.ref as Id<"advancePurchaseCommitments">) : undefined,
+                  processorSaleId: kind === "processor_purchase" && form.ref ? (form.ref as Id<"processorSales">) : undefined,
                   farmerName: kind === "declared" ? form.farmerName : undefined,
                   village: kind === "declared" ? form.village || undefined : undefined,
                   district: kind === "declared" ? form.district : undefined,
@@ -643,18 +667,48 @@ function TraceMap({ userId, data, setMsg }: { userId: Id<"users">; data: LotDeta
     <div style={card}>
       <h3 style={{ marginTop: 0, fontSize: "1rem" }}>Trace map: the coffee journey</h3>
       <p style={{ fontSize: "0.8rem", color: "#666", marginTop: 0 }}>
-        Add proof photos (with GPS and time) and weights at each stage. Farm stages are verified by the farmer&apos;s community admin, the rest by
-        your exporter community admin.
+        Add proof photos (with GPS and time) and weights at each stage. Farm stages are verified by the farmer&apos;s community admin, your own
+        steps by your exporter community admin. Processor stages come from the processor&apos;s records, verified by the Storage and Transport Officer.
       </p>
+      {data.coveredByProcessor && (
+        <Notice tone="info">All of this lot comes from processors, so the farm stages are covered by the processors&apos; intake records.</Notice>
+      )}
       <ol style={{ listStyle: "none", padding: 0, margin: 0 }}>
-        {data.stages.map(({ stage, hint, evidence }, idx) => {
+        {data.stages.map(({ stage, hint, evidence, batch }, idx) => {
           const latest = evidence[0];
+          if (stage.scope === "farm" && data.coveredByProcessor) return null;
+          if (stage.scope === "processor") {
+            return (
+              <li key={stage._id} style={{ borderLeft: `3px solid ${stage.status === "approved" ? "#2e7d32" : "#f9a825"}`, padding: "0.25rem 0 0.75rem 0.75rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem", flexWrap: "wrap" }}>
+                  <b>
+                    {idx + 1}. {stage.name} <span style={{ fontWeight: 500, fontSize: "0.75rem", color: "#777" }}>(processor stage)</span>
+                  </b>
+                  <StatusPill state={stage.status === "approved" ? "verified" : stage.status === "submitted" ? "pending" : stage.status === "rejected" ? "rejected" : "missing"} />
+                </div>
+                <div style={{ fontSize: "0.78rem", color: "#666" }}>{hint}</div>
+                {batch && (
+                  <div style={{ fontSize: "0.78rem", marginTop: "0.3rem" }}>
+                    In {batch.weightInKg} kg{batch.weightOutKg != null ? ` → out ${batch.weightOutKg} kg` : ""}
+                    {batch.outturnPercent != null ? ` · outturn ${batch.outturnPercent}%` : ""}
+                    <div style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap", marginTop: "0.25rem" }}>
+                      {batch.photoUrls.map((u, i) => (
+                        <a key={i} href={u} target="_blank" rel="noreferrer">
+                          <img src={u} alt="" style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 4 }} />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </li>
+            );
+          }
           return (
             <li key={stage._id} style={{ borderLeft: `3px solid ${stage.status === "approved" ? "#2e7d32" : "#bdbdbd"}`, padding: "0.25rem 0 0.75rem 0.75rem", position: "relative" }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem", flexWrap: "wrap" }}>
                 <b>
                   {idx + 1}. {stage.name}{" "}
-                  <span style={{ fontWeight: 500, fontSize: "0.75rem", color: "#777" }}>({stage.scope === "farm" ? "farm stage" : "exporter stage"})</span>
+                  <span style={{ fontWeight: 500, fontSize: "0.75rem", color: "#777" }}>({stage.scope === "farm" ? "farm stage" : "your step"})</span>
                 </b>
                 <StatusPill state={stage.status === "approved" ? "verified" : stage.status === "submitted" ? "pending" : stage.status === "rejected" ? "rejected" : "missing"} />
               </div>
@@ -718,7 +772,7 @@ function EvidenceForm({ userId, lotId, stageKey, onDone, setMsg }: { userId: Id<
                 const url = await getUrl({ userId });
                 const res = await fetch(url, { method: "POST", body: dataUrlToBlob(p.dataUrl) });
                 const { storageId } = (await res.json()) as { storageId: Id<"_storage"> };
-                uploaded.push({ storageId, lat: p.lat ?? undefined, lng: p.lng ?? undefined, accuracy: p.accuracy ?? undefined, capturedAt: p.capturedAt });
+                uploaded.push(evidencePhotoPayload(p, storageId));
               }
               await submit({
                 userId,

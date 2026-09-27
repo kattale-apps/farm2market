@@ -199,6 +199,8 @@ export function AdminTracePanel({ adminId, setMsg, communityId }: P) {
                     {p.lat != null ? `📍 ${p.lat.toFixed(4)}, ${p.lng?.toFixed(4)}` : "no GPS"}
                     <br />
                     {new Date(p.capturedAt).toLocaleString(undefined, inUgandaTime({ dateStyle: "short", timeStyle: "short" }))}
+                    {p.manualEntry && <span style={{ display: "block", color: "#e65100", fontWeight: 700 }}>✍️ Entered manually</span>}
+                    {p.locationSource === "exif" && <span style={{ display: "block", color: "#2e7d32" }}>Gallery, from photo data</span>}
                   </a>
                 ) : null
               )}
@@ -209,6 +211,7 @@ export function AdminTracePanel({ adminId, setMsg, communityId }: P) {
               {it.evidence.notes && <div>Notes: {it.evidence.notes}</div>}
             </div>
             {it.massBalanceWarning && <Notice tone="error">{it.massBalanceWarning}</Notice>}
+            {it.manualPhotos && <Notice tone="info">One or more photos are from the gallery with the location and time entered by hand. Check them against the other evidence.</Notice>}
             <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginTop: "0.4rem" }}>
               <input style={{ ...input, maxWidth: 280 }} placeholder="Reason (to reject)" value={notes[id] ?? ""} onChange={(e) => setNotes({ ...notes, [id]: e.target.value })} />
               <button style={button("primary", busy === id)} disabled={busy === id} onClick={() => act("approve")}>

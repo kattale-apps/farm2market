@@ -11,14 +11,11 @@ interface CreateAdminAccountFormProps {
 
 export function CreateAdminAccountForm({ adminId }: CreateAdminAccountFormProps) {
   const createUser = useMutation(api.auth.createUser);
-  // Using the listings query to get active locations for the dropdown
-  const storageLocations = useQuery(api.listings.getActiveStorageLocations, {});
   const communities = useQuery(api.communities.getActiveCommunities, { userId: adminId });
   
   const [email, setEmail] = useState("");
   const [adminLevel, setAdminLevel] = useState<"super" | "junior">("junior");
   const [adminCategory, setAdminCategory] = useState<"store" | "message" | "community" | "community_crm">("store");
-  const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([]);
   const [selectedCommunityIds, setSelectedCommunityIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -44,9 +41,6 @@ export function CreateAdminAccountForm({ adminId }: CreateAdminAccountFormProps)
         role: "admin",
         adminLevel,
         adminCategory: adminLevel === "junior" ? adminCategory : undefined,
-        allowedStorageLocationIds: adminLevel === "junior" && adminCategory === "store" && selectedLocationIds.length > 0
-          ? selectedLocationIds.map(id => id as Id<"storageLocations">) 
-          : undefined,
         assignedCommunityIds: adminLevel === "junior" && (adminCategory === "community" || adminCategory === "community_crm") && selectedCommunityIds.length > 0
           ? selectedCommunityIds.map(id => id as Id<"communities">)
           : undefined,
@@ -54,7 +48,6 @@ export function CreateAdminAccountForm({ adminId }: CreateAdminAccountFormProps)
       });
       setMessage({ type: "success", text: "Admin account created successfully!" });
       setEmail("");
-      setSelectedLocationIds([]);
       setSelectedCommunityIds([]);
     } catch (err: any) {
       setMessage({ type: "error", text: err.message });
@@ -98,7 +91,7 @@ export function CreateAdminAccountForm({ adminId }: CreateAdminAccountFormProps)
               onChange={(e) => setAdminCategory(e.target.value as "store" | "message" | "community" | "community_crm")}
               style={{ width: "100%", padding: "0.5rem" }}
             >
-              <option value="store">Store Admin</option>
+              <option value="store">Storage and Transport Officer</option>
               <option value="message">Message Admin</option>
               <option value="community">Community Admin</option>
               <option value="community_crm">Community CRM</option>
@@ -107,22 +100,9 @@ export function CreateAdminAccountForm({ adminId }: CreateAdminAccountFormProps)
         )}
 
         {adminLevel === "junior" && adminCategory === "store" && (
-          <div>
-            <label style={{ display: "block", marginBottom: "0.5rem" }}>Assigned Locations:</label>
-            <select 
-              multiple
-              value={selectedLocationIds}
-              onChange={(e) => setSelectedLocationIds(Array.from(e.target.selectedOptions, option => option.value))}
-              style={{ width: "100%", padding: "0.5rem", minHeight: "100px" }}
-            >
-              {storageLocations?.map((loc: any) => (
-                <option key={loc.locationId} value={loc.locationId}>
-                  {loc.districtName} ({loc.code})
-                </option>
-              ))}
-            </select>
-            <small style={{ color: "#666" }}>Hold Ctrl/Cmd to select multiple</small>
-          </div>
+          <p style={{ color: "#666", fontSize: "0.85rem", margin: 0 }}>
+            Storage and Transport Officers see every processor and transporter, with filters; no assignment is needed.
+          </p>
         )}
 
         {adminLevel === "junior" && (adminCategory === "community" || adminCategory === "community_crm") && (

@@ -807,6 +807,7 @@ function DocumentsStep({ data, userId, setMsg, step }: P & { step: Data["steps"]
                 {latest.fileName}
               </a>
             )}
+            {latest?.locationManual && <div style={{ color: "#e65100", fontSize: "0.8rem" }}>✍️ Location and time entered manually</div>}
             {latest?.status === "rejected" && latest.reviewNotes && <div style={{ color: "#c62828" }}>{latest.reviewNotes}</div>}
             {role === "admin" && latest?.status === "pending" && (
               <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.3rem", flexWrap: "wrap" }}>
@@ -848,6 +849,7 @@ function DocumentsStep({ data, userId, setMsg, step }: P & { step: Data["steps"]
                               lat: p.lat ?? undefined,
                               lng: p.lng ?? undefined,
                               capturedAt: p.capturedAt,
+                              locationManual: p.manualEntry || undefined,
                             });
                             setPhotos([]);
                           })

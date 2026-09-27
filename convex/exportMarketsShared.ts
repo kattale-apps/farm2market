@@ -66,6 +66,9 @@ export const DEFAULT_EXPORT_FEE_SETTINGS = {
   successFeePerBagUsd: 0,
   buyerFeePercent: 0,
   sampleHandlingFeeUgx: 0,
+  // Processors pay nothing until a super admin sets these.
+  processorVerificationFeeUgx: 0,
+  processorSuccessFeePercent: 0,
 };
 
 // ------------------------------------------------------------------
@@ -113,7 +116,7 @@ export type DefaultDocumentType = {
   key: string;
   label: string;
   description: string;
-  appliesTo: "exporter" | "buyer";
+  appliesTo: "exporter" | "buyer" | "processor";
   required: boolean;
   hasExpiry: boolean;
   /** Only needed by exporters who sell one of these forms; empty or absent = everyone. */

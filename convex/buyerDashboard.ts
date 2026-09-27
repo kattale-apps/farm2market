@@ -23,7 +23,8 @@ import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { BUYER_BLOCK_SIZE_KG, BUYER_PICKUP_SLA_MS } from "./constants";
-import { getStorageFeeRate, getBuyerServiceFeePercentage } from "./utils";
+import { getBuyerServiceFeePercentage } from "./utils";
+import { deliveryPointOf } from "./processors";
 
 /**
  * Get available inventory for buyers
@@ -40,7 +41,6 @@ import { getStorageFeeRate, getBuyerServiceFeePercentage } from "./utils";
  * - Trader real identity
  * - Trader real identity
  * - Other buyers' purchases
- * - Storage fees
  */
 export const getAvailableInventory = query({
   args: {
@@ -61,11 +61,11 @@ export const getAvailableInventory = query({
       .filter((q) => q.eq(q.field("is100kgBlock"), true))
       .collect();
 
-    // Enrich with trader aliases and storage location (anonymity preserved)
+    // Enrich with trader aliases and delivery point (anonymity preserved)
     const enriched = await Promise.all(
       availableInventory.map(async (inventory) => {
         const trader = await ctx.db.get(inventory.traderId);
-        const storageLocation = await ctx.db.get(inventory.storageLocationId);
+        const deliveryPoint = await deliveryPointOf(ctx, inventory.deliveryProcessorId);
 
         return {
           inventoryId: inventory._id,
@@ -73,10 +73,7 @@ export const getAvailableInventory = query({
           totalKilos: inventory.totalKilos, // Should be 100kg for blocks
           blockSize: inventory.blockSize, // Target: 100kg blocks
           qualityRating: inventory.qualityRating || null, // Quality rating
-          storageLocation: storageLocation ? {
-            districtName: storageLocation.districtName,
-            code: storageLocation.code,
-          } : null,
+          deliveryPoint,
           traderAlias: trader?.alias || null, // Only alias, no real identity
           traderIsVerified: !!trader?.isVerifiedTrader && trader?.verificationStatus === "verified",
           inventoryUtid: inventory.utid, // UTID of the transaction that created this inventory
@@ -99,8 +96,6 @@ export const getAvailableInventory = query({
       byProduceType.get(inv.produceType)!.push(inv);
     }
 
-    // Get current storage fee rate for display (kilo-shaving rate)
-    const storageFeeRate = await getStorageFeeRate({ db: ctx.db });
     // Get current service fee percentage for display
     const serviceFeePercentage = await getBuyerServiceFeePercentage({ db: ctx.db });
 
@@ -109,7 +104,6 @@ export const getAvailableInventory = query({
       totalKilos: enriched.reduce((sum, inv) => sum + inv.totalKilos, 0),
       byProduceType: Object.fromEntries(byProduceType),
       inventory: enriched,
-      storageFeeRate: storageFeeRate, // Current kilo-shaving rate (visible to buyers before purchase)
       serviceFeePercentage: serviceFeePercentage, // Current service fee percentage
     };
   },
@@ -138,9 +132,7 @@ export const getAvailableTraderListingsForBuyers = query({
     const enriched = await Promise.all(
       traderListings.map(async (listing) => {
         const trader = listing.traderId ? await ctx.db.get(listing.traderId) : null;
-        const storageLocation = listing.storageLocationId
-          ? await ctx.db.get(listing.storageLocationId)
-          : null;
+        const deliveryPoint = await deliveryPointOf(ctx, listing.deliveryProcessorId);
 
         const availableUnits = listing.availableUnits ?? listing.totalUnits;
         const unitSize = listing.unitSize || 1;
@@ -169,9 +161,7 @@ export const getAvailableTraderListingsForBuyers = query({
           progressStage: listing.progressStage || null,
           traderAlias: trader?.alias || null,
           traderIsVerified: !!trader?.isVerifiedTrader && trader?.verificationStatus === "verified",
-          storageLocation: storageLocation
-            ? { districtName: storageLocation.districtName, code: storageLocation.code }
-            : null,
+          deliveryPoint,
           createdAt: listing.createdAt,
         };
       })
@@ -180,26 +170,6 @@ export const getAvailableTraderListingsForBuyers = query({
     enriched.sort((a, b) => b.createdAt - a.createdAt);
 
     return { listings: enriched };
-  },
-});
-
-/**
- * Get current storage fee rate (kilo-shaving rate)
- * Returns the current storage fee rate for display in buyer dashboard
- */
-export const getBuyerStorageFeeRate = query({
-  args: {
-    buyerId: v.id("users"),
-  },
-  handler: async (ctx, args) => {
-    // Verify user is a buyer
-    const user = await ctx.db.get(args.buyerId);
-    if (!user || user.role !== "buyer") {
-      throw new Error("User is not a buyer");
-    }
-
-    const rate = await getStorageFeeRate({ db: ctx.db });
-    return { rateKgPerDay: rate };
   },
 });
 

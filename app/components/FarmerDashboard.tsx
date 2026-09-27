@@ -17,6 +17,7 @@ import { useOfflineQuery } from "../hooks/useOfflineQuery";
 import { useOfflineMutation } from "../hooks/useOfflineMutation";
 import { menuRainbowColor } from "../utils/menuAccentColors";
 import { FarmCoinIcon } from "./icons/Brand";
+import { FarmerProcessorDeliveries } from "./processor/FarmerProcessorDeliveries";
 
 interface FarmerDashboardProps {
   userId: Id<"users">;
@@ -136,6 +137,11 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
         disabled: farm2MarketLocked,
       },
       { key: "advancePurchase", label: "🌱 Advanced Markets" },
+      { key: "sellServices", label: "🏭 Sell & services" },
+    ] : []),
+    ...(effectiveRole === "vendor" ? [
+      { key: "vendorBuying", label: "🧺 Buying from farmers" },
+      { key: "findTransport", label: "🚚 Find transport" },
     ] : []),
   ];
   const ROUTE_MENU_KEYS: Record<string, string> = {
@@ -145,6 +151,9 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
     farmCalendar: "/farmer/planner",
     farm2market: "/farmer/farm2market",
     advancePurchase: "/farmer/advance-purchase",
+    sellServices: "/farmer/services",
+    vendorBuying: "/vendor/buying",
+    findTransport: "/transport",
   };
   const openSectionFromMenu = (key: string) => {
     if (key === "farm2market" && farm2MarketLocked) {
@@ -536,7 +545,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
       });
       setMessage({
         type: "success",
-        text: `Offer accepted! UTID: ${result.acceptedUtid}. Trader can now proceed to pay-to-lock.`,
+        text: `Offer accepted! UTID: ${result.acceptedUtid}. Exporter can now proceed to pay-to-lock.`,
       });
       setTimeout(() => setMessage(null), 8000);
     } catch (error: any) {
@@ -591,7 +600,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
       }
       setMessage({
         type: "success",
-        text: `Accepted ${negotiationIds.length} offer(s). Trader can now proceed to pay-to-lock.`,
+        text: `Accepted ${negotiationIds.length} offer(s). Exporter can now proceed to pay-to-lock.`,
       });
       setTimeout(() => setMessage(null), 8000);
     } catch (error: any) {
@@ -939,7 +948,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
       alignItems: "center",
       gap: "0.6rem",
     }}>
-      Hello, {effectiveRole === "vendor" ? "Vendor 🏪" : effectiveRole === "store" ? "Store 🏬" : "Farmer 👩🏾‍🌾"}
+      Hello, {effectiveRole === "vendor" ? "Vendor 🏪" : effectiveRole === "store" ? "Processor 🏬" : "Farmer 👩🏾‍🌾"}
     </h2>
   );
 
@@ -1045,6 +1054,8 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
       {titleSlot && createPortal(titleContent, titleSlot)}
       {msgSlot && createPortal(msgContent, msgSlot)}
       {moreSlot && createPortal(moreContent, moreSlot)}
+
+      {effectiveRole === "farmer" && <FarmerProcessorDeliveries farmerId={userId} />}
 
       <div style={{
         background: "#fff",

@@ -36,6 +36,10 @@ import {
   isIsoDate,
   ugandaDateFromStored,
 } from "./exportMarketsShared";
+import { DEFAULT_PROCESSOR_DOCUMENT_TYPES } from "./processorShared";
+
+type DocAudience = "exporter" | "buyer" | "processor";
+const ALL_DEFAULT_DOCUMENT_TYPES = [...DEFAULT_EXPORT_DOCUMENT_TYPES, ...DEFAULT_PROCESSOR_DOCUMENT_TYPES];
 
 type Ctx = QueryCtx | MutationCtx;
 
@@ -144,6 +148,8 @@ export async function getFeeSettings(ctx: Ctx) {
     successFeePerBagUsd: row.successFeePerBagUsd,
     buyerFeePercent: row.buyerFeePercent,
     sampleHandlingFeeUgx: row.sampleHandlingFeeUgx,
+    processorVerificationFeeUgx: row.processorVerificationFeeUgx ?? 0,
+    processorSuccessFeePercent: row.processorSuccessFeePercent ?? 0,
     isDefault: false as const,
     updatedAt: row.updatedAt,
   };
@@ -153,7 +159,7 @@ type EffectiveDocType = {
   key: string;
   label: string;
   description?: string;
-  appliesTo: "exporter" | "buyer";
+  appliesTo: DocAudience;
   required: boolean;
   hasExpiry: boolean;
   productForms?: string[];
@@ -166,7 +172,7 @@ type EffectiveDocType = {
  * The admin-managed list, or the built-in defaults until a super admin has
  * saved one for that audience.
  */
-export async function getDocumentTypes(ctx: Ctx, appliesTo: "exporter" | "buyer"): Promise<EffectiveDocType[]> {
+export async function getDocumentTypes(ctx: Ctx, appliesTo: DocAudience): Promise<EffectiveDocType[]> {
   const rows = await ctx.db
     .query("exportDocumentTypes")
     .withIndex("by_appliesTo_and_order", (q) => q.eq("appliesTo", appliesTo))
@@ -177,7 +183,7 @@ export async function getDocumentTypes(ctx: Ctx, appliesTo: "exporter" | "buyer"
     // example the UNBS certification). Show it, after the saved ones.
     const saved = new Set(rows.map((r) => r.key));
     const maxOrder = rows.reduce((m, r) => Math.max(m, r.order), 0);
-    const added = DEFAULT_EXPORT_DOCUMENT_TYPES.filter((d) => d.appliesTo === appliesTo && !saved.has(d.key)).map((d, i) => ({
+    const added = ALL_DEFAULT_DOCUMENT_TYPES.filter((d) => d.appliesTo === appliesTo && !saved.has(d.key)).map((d, i) => ({
       ...d,
       isActive: true,
       order: maxOrder + 1 + i,
@@ -195,7 +201,7 @@ export async function getDocumentTypes(ctx: Ctx, appliesTo: "exporter" | "buyer"
       order: r.order,
     })), ...added];
   }
-  return DEFAULT_EXPORT_DOCUMENT_TYPES.filter((d) => d.appliesTo === appliesTo).map((d, i) => ({
+  return ALL_DEFAULT_DOCUMENT_TYPES.filter((d) => d.appliesTo === appliesTo).map((d, i) => ({
     ...d,
     isActive: true,
     order: i,
@@ -307,13 +313,13 @@ type DocSlot = {
 export async function documentSlots(
   ctx: Ctx,
   ownerId: Id<"users">,
-  appliesTo: "exporter" | "buyer",
+  appliesTo: DocAudience,
   today: string,
   productForms?: string[]
 ): Promise<DocSlot[]> {
   // Exporters only see the documents that apply to what they sell.
   const types = (await getDocumentTypes(ctx, appliesTo)).filter(
-    (t) => t.isActive && (appliesTo === "buyer" || docTypeAppliesTo(t, productForms))
+    (t) => t.isActive && (appliesTo !== "exporter" || docTypeAppliesTo(t, productForms))
   );
   const slots: DocSlot[] = [];
   for (const type of types) {
@@ -340,7 +346,10 @@ export async function documentSlots(
   return slots;
 }
 
-export function feeState(profile: Doc<"exporterProfiles"> | null, today: string) {
+export function feeState(
+  profile: Pick<Doc<"exporterProfiles">, "verificationFeeStatus" | "verificationFeeValidUntil"> | null,
+  today: string
+) {
   if (!profile) return { ok: false, state: "unpaid" as const, daysLeft: null as number | null };
   // A waiver (fee set to 0 when the exporter confirmed) lapses on the same
   // yearly cycle as a paid fee, so a fee a super admin introduces later is
@@ -1005,6 +1014,7 @@ export const listDocumentsForReview = query({
       }
     }
     if (args.communityId) docs = docs.filter((d) => d.communityId === args.communityId);
+    docs = docs.filter((d) => d.ownerKind !== "processor");
     const result = [];
     for (const d of docs) {
       const owner = await ctx.db.get(d.ownerId);
@@ -1032,8 +1042,18 @@ export const listDocumentsForReview = query({
   },
 });
 
+/** Storage and Transport Officers (junior admins in the "store" category) and super admins. */
+export function isStorageOfficer(user: Doc<"users">): boolean {
+  return user.role === "admin" && user.state === "active" && (isSuperAdmin(user) || user.adminCategory === "store");
+}
+
 async function assertCanReviewDocument(ctx: Ctx, admin: Doc<"users">, doc: Doc<"exportDocuments">) {
   if (isSuperAdmin(admin)) return;
+  // Processor documents are checked by the Storage and Transport Officer, not the community admin.
+  if (doc.ownerKind === "processor") {
+    if (isStorageOfficer(admin)) return;
+    throw new Error("Only a Storage and Transport Officer can review processor documents");
+  }
   if (!doc.communityId) throw new Error("Only super admins can review this document");
   const community = await ctx.db.get(doc.communityId);
   if (!community || !adminManagesCommunity(admin, community)) {
@@ -1053,8 +1073,22 @@ export const reviewExportDocument = mutation({
     const doc = await ctx.db.get(args.documentId);
     if (!doc) throw new Error("Document not found");
     await assertCanReviewDocument(ctx, admin, doc);
+    return await applyDocumentReview(ctx, admin, doc, args.decision, args.notes);
+  },
+});
+
+/** Verify or reject one vault document (the caller checks who may review it). */
+export async function applyDocumentReview(
+  ctx: MutationCtx,
+  admin: Doc<"users">,
+  doc: Doc<"exportDocuments">,
+  decision: "verify" | "reject",
+  rawNotes: string | undefined
+) {
+  const args = { decision };
+  {
     if (doc.status !== "pending") throw new Error("This document has already been reviewed");
-    const notes = args.notes?.trim() || undefined;
+    const notes = rawNotes?.trim() || undefined;
     if (args.decision === "reject" && !notes) throw new Error("Give a reason so the owner knows what to fix");
 
     const now = getUgandaTime();
@@ -1088,8 +1122,8 @@ export const reviewExportDocument = mutation({
       note: notes,
     });
     return { success: true };
-  },
-});
+  }
+}
 
 export const reviewExporterProfile = mutation({
   args: {
@@ -1148,7 +1182,7 @@ export const reviewExporterProfile = mutation({
 // ------------------------------------------------------------------
 
 export const listDocumentTypes = query({
-  args: { appliesTo: v.union(v.literal("exporter"), v.literal("buyer")) },
+  args: { appliesTo: v.union(v.literal("exporter"), v.literal("buyer"), v.literal("processor")) },
   handler: async (ctx, args) => {
     const types = await getDocumentTypes(ctx, args.appliesTo);
     const customised = types.some((t) => t._id !== undefined);
@@ -1159,7 +1193,7 @@ export const listDocumentTypes = query({
 export const saveDocumentType = mutation({
   args: {
     adminId: v.id("users"),
-    appliesTo: v.union(v.literal("exporter"), v.literal("buyer")),
+    appliesTo: v.union(v.literal("exporter"), v.literal("buyer"), v.literal("processor")),
     key: v.optional(v.string()), // omitted = new type
     label: v.string(),
     description: v.optional(v.string()),
@@ -1186,7 +1220,7 @@ export const saveDocumentType = mutation({
       .take(100);
     let maxOrder = existing.reduce((m, r) => Math.max(m, r.order), -1);
     if (existing.length === 0) {
-      for (const d of DEFAULT_EXPORT_DOCUMENT_TYPES.filter((t) => t.appliesTo === args.appliesTo)) {
+      for (const d of ALL_DEFAULT_DOCUMENT_TYPES.filter((t) => t.appliesTo === args.appliesTo)) {
         maxOrder += 1;
         await ctx.db.insert("exportDocumentTypes", { ...d, isActive: true, order: maxOrder, createdAt: now, updatedAt: now });
       }
@@ -1199,7 +1233,7 @@ export const saveDocumentType = mutation({
         .first();
       if (!row) {
         // A built-in type added after this list was customised: save it first.
-        const d = DEFAULT_EXPORT_DOCUMENT_TYPES.find((x) => x.key === args.key && x.appliesTo === args.appliesTo);
+        const d = ALL_DEFAULT_DOCUMENT_TYPES.find((x) => x.key === args.key && x.appliesTo === args.appliesTo);
         if (d) {
           maxOrder += 1;
           const id = await ctx.db.insert("exportDocumentTypes", { ...d, isActive: true, order: maxOrder, createdAt: now, updatedAt: now });
@@ -1220,7 +1254,7 @@ export const saveDocumentType = mutation({
       return { key: row.key };
     }
 
-    const base = `${args.appliesTo === "buyer" ? "buyer_" : ""}${label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "")}`.slice(0, 60) || "document";
+    const base = `${args.appliesTo === "exporter" ? "" : `${args.appliesTo}_`}${label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "")}`.slice(0, 60) || "document";
     let key = base;
     for (let i = 2; await ctx.db.query("exportDocumentTypes").withIndex("by_key", (q) => q.eq("key", key)).first(); i++) {
       key = `${base}_${i}`;
@@ -1265,6 +1299,8 @@ export const updateExportFeeSettings = mutation({
     successFeePerBagUsd: v.number(),
     buyerFeePercent: v.number(),
     sampleHandlingFeeUgx: v.number(),
+    processorVerificationFeeUgx: v.optional(v.number()),
+    processorSuccessFeePercent: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     await requireSuperAdmin(ctx, args.adminId);
@@ -1285,9 +1321,24 @@ export const updateExportFeeSettings = mutation({
     if (!Number.isInteger(args.verificationFeeValidityDays) || args.verificationFeeValidityDays < 30 || args.verificationFeeValidityDays > 1095) {
       throw new Error("Validity must be between 30 and 1095 days");
     }
-    const { adminId, ...values } = args;
-    const row = { ...values, updatedBy: adminId, updatedAt: getUgandaTime() };
+    for (const [n, label] of [
+      [args.processorVerificationFeeUgx, "Processor verification fee"],
+      [args.processorSuccessFeePercent, "Processor success fee %"],
+    ] as [number | undefined, string][]) {
+      if (n !== undefined && (!Number.isFinite(n) || n < 0)) throw new Error(`${label} cannot be negative`);
+    }
+    if (args.processorSuccessFeePercent !== undefined && args.processorSuccessFeePercent > 20) {
+      throw new Error("Processor success fee % must be between 0 and 20");
+    }
     const existing = await ctx.db.query("exportFeeSettings").first();
+    const { adminId, ...given } = args;
+    // Processor fees are kept when a caller does not send them.
+    const values = {
+      ...given,
+      processorVerificationFeeUgx: given.processorVerificationFeeUgx ?? existing?.processorVerificationFeeUgx ?? 0,
+      processorSuccessFeePercent: given.processorSuccessFeePercent ?? existing?.processorSuccessFeePercent ?? 0,
+    };
+    const row = { ...values, updatedBy: adminId, updatedAt: getUgandaTime() };
     if (existing) await ctx.db.replace(existing._id, row);
     else await ctx.db.insert("exportFeeSettings", row);
     await audit(ctx, "fees_updated", adminId, { note: JSON.stringify(values) });

@@ -281,3 +281,44 @@ export const listMyCheckCommunities = query({
     return result;
   },
 });
+
+/** One of the farmer's own checks in full, for the "My checks" list. */
+export const getMyReport = query({
+  args: { userId: v.id("users"), reportId: v.id("diagnosticReports") },
+  handler: async (ctx, args) => {
+    const report = await ctx.db.get(args.reportId);
+    if (!report || report.farmerId !== args.userId) return null;
+    const describe = async (rows: { conditionId: Id<"diagnosticConditions">; percent: number }[]) =>
+      Promise.all(
+        rows.map(async (r) => {
+          const c = await ctx.db.get(r.conditionId);
+          return { name: c?.name ?? "Unknown", kind: c?.kind ?? "other", percent: r.percent };
+        })
+      );
+    return {
+      _id: report._id,
+      host: report.host,
+      checkedAt: report.checkedAt,
+      healthLevel: report.healthLevel,
+      symptomTags: report.symptomTags,
+      photoUrl: report.photoStorageId ? await ctx.storage.getUrl(report.photoStorageId) : null,
+      results: await describe(report.results),
+      aiStatus: report.aiStatus ?? null,
+      aiResults: report.aiResults ? await describe(report.aiResults) : [],
+      aiNote: report.aiNote ?? null,
+      feedback: report.feedback ?? null,
+    };
+  },
+});
+
+/** The farmer deletes one of their own checks, with its photo. */
+export const deleteMyReport = mutation({
+  args: { userId: v.id("users"), reportId: v.id("diagnosticReports") },
+  handler: async (ctx, args) => {
+    const report = await ctx.db.get(args.reportId);
+    if (!report || report.farmerId !== args.userId) throw new Error("Check not found");
+    if (report.photoStorageId) await ctx.storage.delete(report.photoStorageId);
+    await ctx.db.delete(report._id);
+    return { success: true };
+  },
+});

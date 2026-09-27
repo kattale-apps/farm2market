@@ -13,11 +13,11 @@ const PAGE_SIZE = 25;
 
 const CATEGORY_LABELS: Record<string, string> = {
   farmer: "Farmers",
-  trader: "Traders",
+  trader: "Exporters",
   buyer: "Buyers",
   vendor: "Vendors",
   transporter: "Transporters",
-  store: "Stores",
+  store: "Processors",
   admin: "Admins",
 };
 

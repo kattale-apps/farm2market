@@ -149,7 +149,7 @@ export default function DeliveryVerificationPage() {
         Delivery Verification
       </h1>
       <p style={{ marginBottom: "2rem", color: "#666" }}>
-        Verify deliveries for UTIDs from your assigned storage locations. Provide a comment; photos are optional.
+        Verify farmer deliveries to their delivery point. Provide a comment; photos are optional.
       </p>
 
       {message && (
@@ -193,7 +193,7 @@ export default function DeliveryVerificationPage() {
               <option value="">-- Select UTID --</option>
               {utids.map((utid: any) => (
                 <option key={utid.utid} value={utid.utid}>
-                  {utid.utid} - {utid.produceType} ({utid.units.length} units)
+                  {utid.utid} - {utid.produceType} ({utid.units.length} units){utid.deliveryPoint ? ` · ${utid.deliveryPoint}` : ""}
                 </option>
               ))}
             </select>

@@ -88,7 +88,7 @@ export function exportUTIDsByCategoryPDF(
   doc.setFontSize(12);
   doc.text(`Category: ${category}`, pageWidth / 2, 30, { align: "center" });
   if (userAlias) {
-    doc.text(`Trader: ${userAlias}`, pageWidth / 2, 37, { align: "center" });
+    doc.text(`Exporter: ${userAlias}`, pageWidth / 2, 37, { align: "center" });
   }
   doc.text(`Generated: ${formatUgandaDateTime(getUgandaTime())}`, pageWidth / 2, 44, { align: "center" });
   doc.text(`Total UTIDs: ${categoryUTIDs.length}`, pageWidth / 2, 51, { align: "center" });
@@ -195,7 +195,7 @@ export function exportInventoryVolume(
 
     doc.setFontSize(12);
     if (userAlias) {
-      doc.text(`Trader: ${userAlias}`, pageWidth / 2, 40, { align: "center" });
+      doc.text(`Exporter: ${userAlias}`, pageWidth / 2, 40, { align: "center" });
     }
     doc.text(`Generated: ${formatUgandaDateTime(getUgandaTime())}`, pageWidth / 2, 47, { align: "center" });
 
@@ -316,7 +316,7 @@ export function exportCapitalVolume(
 
     doc.setFontSize(12);
     if (userAlias) {
-      doc.text(`Trader: ${userAlias}`, pageWidth / 2, 40, { align: "center" });
+      doc.text(`Exporter: ${userAlias}`, pageWidth / 2, 40, { align: "center" });
     }
     doc.text(`Generated: ${formatUgandaDateTime(getUgandaTime())}`, pageWidth / 2, 47, { align: "center" });
 

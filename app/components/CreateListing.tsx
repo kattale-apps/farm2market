@@ -7,6 +7,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { FarmCoinReward, FarmCoinVideoPreloader } from "./FarmCoinAnimation";
 import { FarmCoinIcon } from "./icons/Brand";
+import { ugandaDateFromInstant } from "../../convex/exportMarketsShared";
 
 interface CreateListingProps {
   userId: Id<"users">;
@@ -21,11 +22,10 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
   const submitVendorPrice = useMutation((api as any).marketPrices.submitVendorPrice);
   const qualityOptions = useQuery(api.listings.getActiveQualityOptions, {});
   const produceOptions = useQuery(api.listings.getActiveProduceOptions, {});
-  const storageLocations = useQuery(api.listings.getActiveStorageLocations, {});
-  const autoStorageLocation = useQuery(
-    api.listings.getAutoStorageLocationForUser,
-    isVendorOrStore ? { userId } : "skip"
-  );
+  const [today] = useState(() => ugandaDateFromInstant(Date.now()));
+  // Farmers may name a verified processor as the delivery point (optional).
+  const deliveryProcessors = useQuery(api.processors.listDeliveryProcessors, !isVendorOrStore ? { userId, today } : "skip");
+  const collectionPoint = useQuery(api.listings.getCollectionPointForUser, isVendorOrStore ? { userId } : "skip");
   const onboardingStatus = useQuery(api.farmerOnboarding.checkOnboardingStatus, { farmerId: userId });  // supports farmer/vendor/store
   const recentCommodities = useQuery(
     api.marketPrices.getVendorRecentCommodities,
@@ -73,7 +73,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
     pricePerKilo: "",
     qualityRating: "",
     qualityComment: "",
-    storageLocationId: "" as string | "",
+    deliveryProcessorId: "" as string | "",
     // Garden mode fields
     gardenSize: "",
     gardenLength: "",
@@ -101,11 +101,11 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
 
   // Auto-fill market name from vendor profile
   useEffect(() => {
-    if (isVendorOrStore && autoStorageLocation?.collectionText) {
-      const ct = autoStorageLocation.collectionText;
+    if (isVendorOrStore && collectionPoint?.collectionText) {
+      const ct = collectionPoint.collectionText;
       setPriceFormData((prev) => ({ ...prev, marketName: prev.marketName || ct }));
     }
-  }, [isVendorOrStore, autoStorageLocation]);
+  }, [isVendorOrStore, collectionPoint]);
 
   const saveCustomProduct = (emoji: string, name: string) => {
     const trimmed = name.trim();
@@ -141,13 +141,6 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
     }
   }, [onboardingStatus]);
 
-  // Auto-set storage location for vendor/store users
-  useEffect(() => {
-    if (isVendorOrStore && autoStorageLocation?.storageLocationId) {
-      setFormData((prev) => ({ ...prev, storageLocationId: autoStorageLocation.storageLocationId }));
-    }
-  }, [isVendorOrStore, autoStorageLocation]);
-
   const formatUGX = (amount: number) => {
     return new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX" }).format(amount);
   };
@@ -165,33 +158,8 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
     return (length * width) / sqftPerAcre;
   };
 
-  // Filter produce types based on selected location
-  const filteredProduceOptions = useMemo(() => {
-    if (!produceOptions) return [];
-    // Vendor/store: show all produce types even without storageLocationId
-    if (isVendorOrStore && !formData.storageLocationId) {
-      return produceOptions.filter((produce: any) => {
-        if (!produce.allowedStorageLocationIds || produce.allowedStorageLocationIds.length === 0) {
-          return true;
-        }
-        return true; // Show all for vendor/store without preset location
-      });
-    }
-    if (!formData.storageLocationId || !storageLocations) {
-      return [];
-    }
-    
-    // Find produce types that allow this location
-    return produceOptions.filter((produce: any) => {
-      // If produce has no location restrictions, it's allowed everywhere
-      if (!produce.allowedStorageLocationIds || produce.allowedStorageLocationIds.length === 0) {
-        return true;
-      }
-      
-      // Check if this location is in the allowed list
-      return produce.allowedStorageLocationIds.includes(formData.storageLocationId);
-    });
-  }, [formData.storageLocationId, produceOptions, storageLocations, isVendorOrStore]);
+  // Every active produce type can be listed (storage locations are retired).
+  const filteredProduceOptions = useMemo(() => produceOptions ?? [], [produceOptions]);
 
   const handlePriceSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -253,12 +221,6 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
         return;
       }
 
-      if (!isVendorOrStore && !formData.storageLocationId) {
-        setMessage({ type: "error", text: "Storage location is required" });
-        setLoading(false);
-        return;
-      }
-
       // Packaging mode validation
       if (listingMode === "packaging") {
         const units = parseInt(formData.availableUnits);
@@ -298,7 +260,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
           pricePerUnit: ppu,
           qualityRating: formData.qualityRating || undefined,
           qualityComment: formData.qualityComment.trim() || undefined,
-          storageLocationId: formData.storageLocationId ? (formData.storageLocationId as any) : undefined,
+          deliveryProcessorId: formData.deliveryProcessorId ? (formData.deliveryProcessorId as Id<"users">) : undefined,
         });
 
         const displayPkg = isCustomPkg ? customPackagingInput.trim() : formData.packagingType;
@@ -310,7 +272,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
         // Reset form
         setFormData({
           produceType: "", totalKilos: "", pricePerKilo: "", qualityRating: "", qualityComment: "",
-          storageLocationId: "", gardenSize: "", gardenLength: "", gardenWidth: "", totalPrice: "",
+          deliveryProcessorId: "", gardenSize: "", gardenLength: "", gardenWidth: "", totalPrice: "",
           packagingType: "", availableUnits: "", pricePerUnit: "",
         });
         setCustomPackagingInput("");
@@ -386,7 +348,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
         pricePerKilo,
         qualityRating: formData.qualityRating || undefined,
         qualityComment: formData.qualityComment.trim() || undefined,
-        storageLocationId: formData.storageLocationId ? (formData.storageLocationId as any) : undefined,
+        deliveryProcessorId: formData.deliveryProcessorId ? (formData.deliveryProcessorId as Id<"users">) : undefined,
         listingMode,
         gardenSize,
         gardenDimensions,
@@ -405,7 +367,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
         pricePerKilo: "",
         qualityRating: "",
         qualityComment: "",
-        storageLocationId: "",
+        deliveryProcessorId: "",
         gardenSize: "",
         gardenLength: "",
         gardenWidth: "",
@@ -683,7 +645,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
               pricePerKilo: "",
               qualityRating: "",
               qualityComment: "",
-              storageLocationId: "",
+              deliveryProcessorId: "",
               gardenSize: "",
               gardenLength: "",
               gardenWidth: "",
@@ -814,114 +776,45 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
           </div>
           )}
 
-          {/* STEP 1: Storage Location / Collection Point */}
+          {/* STEP 1: Collection point (vendors) or delivery point (farmers, optional) */}
           {isVendorOrStore ? (
             <div>
               <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
                 Collection Location
               </label>
-              {autoStorageLocation && autoStorageLocation.storageLocationId ? (
-                <div style={{
-                  padding: "0.75rem 1rem",
-                  background: "#e8f5e9",
-                  borderRadius: "8px",
-                  border: "1px solid #81c784",
-                  color: "#2e7d32",
-                  fontSize: "0.95rem",
-                  fontWeight: "500",
-                }}>
-                  📍 {autoStorageLocation.districtName} ({autoStorageLocation.code}) — your {effectiveRole === "vendor" ? "market" : "store"} location
-                </div>
-              ) : autoStorageLocation === undefined ? (
+              {collectionPoint === undefined ? (
                 <p style={{ color: "#999", fontSize: "0.9rem" }}>Loading your location...</p>
-              ) : autoStorageLocation?.collectionText ? (
-                <div style={{
-                  padding: "0.75rem 1rem",
-                  background: "#e8f5e9",
-                  borderRadius: "8px",
-                  border: "1px solid #81c784",
-                  color: "#2e7d32",
-                  fontSize: "0.95rem",
-                  fontWeight: "500",
-                }}>
-                  📍 {autoStorageLocation.collectionText} — your registered {effectiveRole === "vendor" ? "market" : "store"} address
+              ) : collectionPoint?.collectionText ? (
+                <div style={{ padding: "0.75rem 1rem", background: "#e8f5e9", borderRadius: "8px", border: "1px solid #81c784", color: "#2e7d32", fontSize: "0.95rem", fontWeight: "500" }}>
+                  📍 {collectionPoint.collectionText} — your registered {effectiveRole === "vendor" ? "market" : "store"} address
                 </div>
               ) : (
-                <div style={{
-                  padding: "0.75rem 1rem",
-                  background: "#e3f2fd",
-                  borderRadius: "8px",
-                  border: "1px solid #90caf9",
-                  color: "#1565c0",
-                  fontSize: "0.9rem",
-                }}>
+                <div style={{ padding: "0.75rem 1rem", background: "#e3f2fd", borderRadius: "8px", border: "1px solid #90caf9", color: "#1565c0", fontSize: "0.9rem" }}>
                   Your listing will be collected from your registered {effectiveRole === "vendor" ? "market" : "store"} address. You can update your address from your profile.
                 </div>
-              )}
-              {/* Fallback picker when auto-match fails */}
-              {autoStorageLocation === null && storageLocations && storageLocations.length > 0 && (
-                <select
-                  value={formData.storageLocationId}
-                  onChange={(e) => setFormData({ ...formData, storageLocationId: e.target.value, produceType: "" })}
-                  required
-                  style={{
-                    width: "100%",
-                    padding: "0.75rem",
-                    border: "1px solid #ddd",
-                    borderRadius: "6px",
-                    fontSize: "1rem",
-                    background: "#fff",
-                    marginTop: "0.5rem",
-                  }}
-                >
-                  <option value="">-- Select collection location --</option>
-                  {storageLocations.filter((loc: any) => loc.active).map((location) => (
-                    <option key={location.locationId} value={location.locationId}>
-                      {location.districtName} ({location.code})
-                    </option>
-                  ))}
-                </select>
               )}
             </div>
           ) : (
             <div>
               <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
-                Select Delivery Location (District) *
+                Delivery point (optional)
               </label>
               <p style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.75rem" }}>
-                Choose the storage location where you will deliver your produce
+                Name a verified processor where you will deliver, or leave it to agree with the buyer.
               </p>
-              {storageLocations === undefined ? (
-                <p style={{ color: "#999", fontSize: "0.9rem" }}>Loading storage locations...</p>
-              ) : storageLocations.length === 0 ? (
-                <p style={{ color: "#666", fontSize: "0.9rem", padding: "1rem", background: "#fff3cd", borderRadius: "6px" }}>
-                  No storage locations available. Please contact admin to add storage locations.
-                </p>
-              ) : (
-                <select
-                  value={formData.storageLocationId}
-                  onChange={(e) => {
-                    // Clear produce type when location changes
-                    setFormData({ ...formData, storageLocationId: e.target.value, produceType: "" });
-                  }}
-                  required
-                  style={{
-                    width: "100%",
-                    padding: "0.75rem",
-                    border: "1px solid #ddd",
-                    borderRadius: "6px",
-                    fontSize: "1rem",
-                    background: "#fff",
-                  }}
-                >
-                  <option value="">-- Select storage location --</option>
-                  {storageLocations.filter((loc: any) => loc.active).map((location) => (
-                    <option key={location.locationId} value={location.locationId}>
-                      {location.districtName} ({location.code})
-                    </option>
-                  ))}
-                </select>
-              )}
+              <select
+                value={formData.deliveryProcessorId}
+                onChange={(e) => setFormData({ ...formData, deliveryProcessorId: e.target.value })}
+                style={{ width: "100%", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "6px", fontSize: "1rem", background: "#fff" }}
+              >
+                <option value="">Agree the delivery point with the buyer</option>
+                {(deliveryProcessors ?? []).map((p) => (
+                  <option key={p.processorId} value={p.processorId}>
+                    🏭 {p.name}, {p.district}
+                    {p.sameDistrict ? " (your district)" : ""}
+                  </option>
+                ))}
+              </select>
             </div>
           )}
 
@@ -1010,11 +903,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
                 </div>
               </div>
             )}
-            {!formData.storageLocationId && !isVendorOrStore ? (
-              <p style={{ color: "#666", fontSize: "0.9rem", padding: "1rem", background: "#fff3cd", borderRadius: "6px" }}>
-                Please select a storage location first to see available produce types.
-              </p>
-            ) : produceOptions === undefined ? (
+            {produceOptions === undefined ? (
               <p style={{ color: "#999", fontSize: "0.9rem" }}>Loading produce options...</p>
             ) : filteredProduceOptions.length === 0 ? (
               <p style={{ color: "#d32f2f", fontSize: "0.9rem", padding: "1rem", background: "#ffebee", borderRadius: "6px" }}>
@@ -1081,11 +970,6 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
                     fontSize: "1rem",
                   }}
                 />
-                {formData.storageLocationId && filteredProduceOptions.length > 0 && (
-                  <p style={{ fontSize: "0.85rem", color: "#666", marginTop: "0.5rem" }}>
-                    {filteredProduceOptions.length} produce type(s) available for selected location
-                  </p>
-                )}
 
                 {/* Add & save custom product (vendor/store only) */}
                 {isVendorOrStore && (
@@ -1538,14 +1422,14 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
           <div style={{ display: "flex", gap: "1rem", marginTop: "0.5rem" }}>
             <button
               type="submit"
-              disabled={loading || (!isVendorOrStore && !formData.storageLocationId) || !formData.produceType || !onboardingStatus?.completed}
+              disabled={loading || !formData.produceType || !onboardingStatus?.completed}
               style={{
                 padding: "0.75rem 1.5rem",
-                background: loading || (!isVendorOrStore && !formData.storageLocationId) || !formData.produceType || !onboardingStatus?.completed ? "#ccc" : "#4caf50",
+                background: loading || !formData.produceType || !onboardingStatus?.completed ? "#ccc" : "#4caf50",
                 color: "#fff",
                 border: "none",
                 borderRadius: "6px",
-                cursor: loading || (!isVendorOrStore && !formData.storageLocationId) || !formData.produceType || !onboardingStatus?.completed ? "not-allowed" : "pointer",
+                cursor: loading || !formData.produceType || !onboardingStatus?.completed ? "not-allowed" : "pointer",
                 fontSize: "1rem",
                 fontWeight: "600",
               }}
@@ -1563,7 +1447,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
                   pricePerKilo: "",
                   qualityRating: "",
                   qualityComment: "",
-                  storageLocationId: "",
+                  deliveryProcessorId: "",
                   gardenSize: "",
                   gardenLength: "",
                   gardenWidth: "",

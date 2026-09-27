@@ -8,7 +8,7 @@
 
 import { v } from "convex/values";
 import { query, DatabaseReader, DatabaseWriter } from "./_generated/server";
-import { MAX_TRADER_EXPOSURE_UGX, DEFAULT_STORAGE_FEE_RATE_KG_PER_DAY, DEFAULT_BUYER_SERVICE_FEE_PERCENTAGE } from "./constants";
+import { MAX_TRADER_EXPOSURE_UGX, DEFAULT_BUYER_SERVICE_FEE_PERCENTAGE } from "./constants";
 import { Id } from "./_generated/dataModel";
 
 /**
@@ -176,20 +176,6 @@ export function calculateDeliverySLA(paymentTimestamp: number): number {
  */
 export function calculatePickupSLA(purchaseTimestamp: number): number {
   return purchaseTimestamp + 48 * 60 * 60 * 1000; // 48 hours in milliseconds
-}
-
-/**
- * Get storage fee rate from system settings
- * Returns the current storage fee rate from system settings, or default if not set
- * 
- * @param ctx - Database context (works with both DatabaseReader and DatabaseWriter)
- * @returns Storage fee rate in kilos per day per 100kg block
- */
-export async function getStorageFeeRate(
-  ctx: { db: DatabaseReader | DatabaseWriter }
-): Promise<number> {
-  const settings = await ctx.db.query("systemSettings").first();
-  return settings?.storageFeeRateKgPerDay ?? DEFAULT_STORAGE_FEE_RATE_KG_PER_DAY;
 }
 
 /**

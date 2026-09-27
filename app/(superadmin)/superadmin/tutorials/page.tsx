@@ -12,7 +12,7 @@ type RoleCategory = "farmer" | "trader" | "buyer" | "admin" | "all";
 
 const ROLE_LABELS: Record<RoleCategory, string> = {
   farmer: "Farmer",
-  trader: "Trader",
+  trader: "Exporter",
   buyer: "Buyer",
   admin: "Admin",
   all: "Everyone",

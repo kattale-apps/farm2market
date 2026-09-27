@@ -10,6 +10,7 @@ import { CommunityQRCode } from "@/app/components/CommunityQRCode";
 import { useOfflineQuery } from "@/app/hooks/useOfflineQuery";
 import { useOfflineMutation } from "@/app/hooks/useOfflineMutation";
 import { useStoredUser } from "@/app/hooks/useStoredUser";
+import { roleLabel } from "@/convex/roleLabels";
 
 const BRAND = "#2e7d32";
 const FONT = '"Montserrat", sans-serif';
@@ -307,7 +308,7 @@ export default function CommunityProfilePage() {
             </span>
             <div>
               <div style={{ fontWeight: 700, fontSize: "clamp(1rem, 3vw, 1.15rem)", textTransform: "capitalize" }}>
-                {userRole}
+                {roleLabel(userRole)}
               </div>
               <div style={{ fontSize: "0.78rem", opacity: 0.9 }}>Your signup role</div>
             </div>

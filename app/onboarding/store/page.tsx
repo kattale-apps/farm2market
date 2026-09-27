@@ -157,7 +157,7 @@ export default function StoreOnboardingPage() {
           fontSize: "clamp(1.5rem, 4vw, 2rem)", marginBottom: "1rem", color: "#2c2c2c",
           fontFamily: '"Montserrat", sans-serif', fontWeight: "700"
         }}>
-          🏬 Store Onboarding
+          🏬 Processor Onboarding
         </h1>
         <p style={{
           marginBottom: "2rem", color: "#666", fontSize: "clamp(0.9rem, 2.5vw, 1rem)",
@@ -165,7 +165,7 @@ export default function StoreOnboardingPage() {
           border: "1px solid #f8bbd0"
         }}>
           {onboardingStatus && !onboardingStatus.completed && onboardingStatus.hasLocation
-            ? "We've updated our onboarding — please confirm your details and fill in the new required fields (Street Address, Building Name, Store Number) to continue."
+            ? "We've updated our onboarding — please confirm your details and fill in the new required fields (Street Address, Building Name, Unit Number) to continue."
             : "Please provide your location, storage type, capacity, and store address. This information is required before you can create listings."}
         </p>
 
@@ -230,15 +230,15 @@ export default function StoreOnboardingPage() {
             </h2>
 
             <div style={{ marginBottom: "1rem" }}>
-              <label style={labelStyle}>Store Type *</label>
+              <label style={labelStyle}>Storage Type *</label>
               <select value={storeType} onChange={(e) => setStoreType(e.target.value)} required style={inputStyle}>
-                <option value="">Select Store Type</option>
+                <option value="">Select Storage Type</option>
                 {STORE_TYPES.map((st) => <option key={st.value} value={st.value}>{st.label}</option>)}
               </select>
             </div>
 
             <div style={{ marginBottom: "1rem" }}>
-              <label style={labelStyle}>Other Store Description (optional)</label>
+              <label style={labelStyle}>Other Storage Description (optional)</label>
               <input
                 type="text"
                 value={storeTypeCustom}
@@ -266,7 +266,7 @@ export default function StoreOnboardingPage() {
           {/* Store Address */}
           <div style={{ marginBottom: "2rem", background: "#fce4ec", padding: "1.5rem", borderRadius: "8px", border: "1px solid #f8bbd0" }}>
             <h2 style={{ fontSize: "clamp(1.2rem, 3vw, 1.5rem)", marginBottom: "1rem", color: "#c62828", fontFamily: '"Montserrat", sans-serif', fontWeight: "600" }}>
-              🏠 Store Address
+              🏠 Facility Address
             </h2>
 
             <div style={{ marginBottom: "1rem" }}>
@@ -294,7 +294,7 @@ export default function StoreOnboardingPage() {
             </div>
 
             <div style={{ marginBottom: "1rem" }}>
-              <label style={labelStyle}>Store Number *</label>
+              <label style={labelStyle}>Unit Number *</label>
               <input
                 type="text"
                 value={storeNumber}

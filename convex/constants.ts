@@ -22,11 +22,6 @@ export const BUYER_BLOCK_SIZE_KG = 100; // Traders aggregate into 100kg blocks
 export const FARMER_DELIVERY_SLA_MS = 6 * 60 * 60 * 1000; // 6 hours
 export const BUYER_PICKUP_SLA_MS = 48 * 60 * 60 * 1000; // 48 hours
 
-/**
- * Storage fee rates (set by admin, in kilos per day)
- * Default: 0.5 kilos per day per 100kg block
- */
-export const DEFAULT_STORAGE_FEE_RATE_KG_PER_DAY = 0.5;
 
 /**
  * Buyer service fee (set by admin, as percentage)

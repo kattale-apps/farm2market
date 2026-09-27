@@ -803,6 +803,7 @@ export const uploadDealDocument = mutation({
     lat: v.optional(v.number()),
     lng: v.optional(v.number()),
     capturedAt: v.optional(v.string()),
+    locationManual: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const { deal, role } = await loadDeal(ctx, args.userId, args.dealId);
@@ -831,6 +832,7 @@ export const uploadDealDocument = mutation({
       lat: args.lat,
       lng: args.lng,
       capturedAt: args.capturedAt,
+      locationManual: args.locationManual || undefined,
       status: "pending",
       uploadedAt: getUgandaTime(),
     });

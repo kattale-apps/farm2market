@@ -202,6 +202,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
     adminUser?.adminLevel === "junior" &&
     adminUser?.adminCategory === "message";
   const canMessageAdmin = isSuperAdmin || isMessageAdmin;
+  const isStorageOfficer = adminUser?.role === "admin" && adminUser?.adminCategory === "store";
 
   const allUsers = useQuery(
     api.introspection.getAllUsers,
@@ -645,7 +646,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                 style={{ padding: "0.45rem", borderRadius: 6, border: "1px solid #ddd" }}
               >
                 <option value="farmer">Farmers</option>
-                <option value="trader">Traders</option>
+                <option value="trader">Exporters</option>
                 <option value="buyer">Buyers</option>
                   <option value="vendor">Vendors</option>
               </select>
@@ -915,6 +916,28 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
 
   return (
     <div style={containerStyle}>
+      {/* Storage and Transport Officers (and super admins) review processors */}
+      {(isStorageOfficer || isSuperAdmin) && (
+        <a href="/storeadmin/processors" style={{ textDecoration: "none", display: "block", marginBottom: "1.25rem" }}>
+          <div
+            style={{
+              ...utilityCardStyle,
+              background: "linear-gradient(135deg, #f9a825 0%, #f57f17 100%)",
+              color: "#3e2723",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.9rem",
+            }}
+          >
+            <div style={{ fontSize: "2.2rem" }}>🏭</div>
+            <div>
+              <h3 style={{ margin: "0 0 0.3rem 0", fontSize: "1.1rem" }}>Processors{isStorageOfficer ? " (Storage and Transport Officer)" : ""}</h3>
+              <p style={{ margin: 0, fontSize: "0.9rem" }}>Approve processor facilities and documents, review intake and processing evidence, and verify transport vehicles and drivers</p>
+            </div>
+          </div>
+        </a>
+      )}
+
       {/* SuperAdmin Cards */}
       {isSuperAdmin && (
         <>
@@ -1200,9 +1223,9 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
               >
                 <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>🏪</div>
                 <div>
-                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Store Management</h3>
+                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Storage and Transport Officer Management</h3>
                   <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.95 }}>
-                    Manage stores, assign admins & audit activity
+                    Audit Storage and Transport Officers&apos; delivery checks and exporter inventory
                   </p>
                 </div>
               </div>

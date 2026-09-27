@@ -422,7 +422,7 @@ export default function AdminRoleManagementPage() {
                     <option value="">Select category...</option>
                     <option value="community">Community Admin</option>
                     <option value="community_crm">Community CRM</option>
-                    <option value="store">Store Admin</option>
+                    <option value="store">Storage and Transport Officer</option>
                     <option value="message">Message Admin</option>
                     <option value="finance">Finance Admin</option>
                   </select>
@@ -1007,7 +1007,7 @@ export default function AdminRoleManagementPage() {
                     <option value="">None</option>
                     <option value="community">Community</option>
                     <option value="community_crm">Community CRM</option>
-                    <option value="store">Store</option>
+                    <option value="store">Processor</option>
                     <option value="message">Message</option>
                     <option value="finance">Finance</option>
                   </select>

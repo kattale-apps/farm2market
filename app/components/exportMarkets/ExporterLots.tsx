@@ -31,7 +31,7 @@ import {
   dataUrlToBlob,
   uploadToConvex,
 } from "./ui";
-import { PhotoSetCapture, CapturedPhoto } from "./PhotoSetCapture";
+import { PhotoSetCapture, CapturedPhoto, evidencePhotoPayload } from "./PhotoSetCapture";
 
 type Msg = { tone: "error" | "success" | "info"; text: string } | null;
 type LotDetail = FunctionReturnType<typeof api.exportLots.getMyLot>;
@@ -718,7 +718,7 @@ function EvidenceForm({ userId, lotId, stageKey, onDone, setMsg }: { userId: Id<
                 const url = await getUrl({ userId });
                 const res = await fetch(url, { method: "POST", body: dataUrlToBlob(p.dataUrl) });
                 const { storageId } = (await res.json()) as { storageId: Id<"_storage"> };
-                uploaded.push({ storageId, lat: p.lat ?? undefined, lng: p.lng ?? undefined, accuracy: p.accuracy ?? undefined, capturedAt: p.capturedAt });
+                uploaded.push(evidencePhotoPayload(p, storageId));
               }
               await submit({
                 userId,

@@ -13,6 +13,7 @@
 
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { evidencePhotoValidator } from "./evidencePhotos";
 
 const imageMetadata = {
   storageId: v.id("_storage"),
@@ -3386,13 +3387,7 @@ export default defineSchema({
     stageId: v.id("exportTraceStages"),
     lotId: v.id("exportLots"),
     submittedBy: v.id("users"),
-    photos: v.array(v.object({
-      storageId: v.id("_storage"),
-      lat: v.optional(v.number()),
-      lng: v.optional(v.number()),
-      accuracy: v.optional(v.number()),
-      capturedAt: v.string(), // ISO 8601
-    })),
+    photos: v.array(evidencePhotoValidator),
     weightInKg: v.optional(v.number()),
     weightOutKg: v.optional(v.number()),
     notes: v.optional(v.string()),
@@ -3541,6 +3536,7 @@ export default defineSchema({
     lat: v.optional(v.number()),
     lng: v.optional(v.number()),
     capturedAt: v.optional(v.string()),
+    locationManual: v.optional(v.boolean()), // gallery photo whose location/time was typed in (Rule 9)
     status: v.union(v.literal("pending"), v.literal("accepted"), v.literal("rejected")),
     reviewedBy: v.optional(v.id("users")),
     reviewNotes: v.optional(v.string()),

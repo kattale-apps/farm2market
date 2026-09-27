@@ -20,6 +20,7 @@ import { v } from "convex/values";
 import { mutation, query, QueryCtx, MutationCtx } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
 import { getUgandaTime } from "./utils";
+import { assertEvidencePhotos, evidencePhotoValidator, hasManualPhoto } from "./evidencePhotos";
 import {
   DEFAULT_EXPORT_CROP,
   EXPORT_CROPS,
@@ -590,13 +591,7 @@ export const submitTraceEvidence = mutation({
     userId: v.id("users"),
     lotId: v.id("exportLots"),
     stageKey: v.string(),
-    photos: v.array(v.object({
-      storageId: v.id("_storage"),
-      lat: v.optional(v.number()),
-      lng: v.optional(v.number()),
-      accuracy: v.optional(v.number()),
-      capturedAt: v.string(),
-    })),
+    photos: v.array(evidencePhotoValidator),
     weightInKg: v.optional(v.number()),
     weightOutKg: v.optional(v.number()),
     notes: v.optional(v.string()),
@@ -607,12 +602,9 @@ export const submitTraceEvidence = mutation({
     const stage = stages.find((s) => s.key === args.stageKey);
     if (!stage) throw new Error("Stage not found");
     if (stage.status === "approved") throw new Error("This stage is already verified");
-    if (args.photos.length === 0 || args.photos.length > 6) throw new Error("Add between 1 and 6 photos");
+    assertEvidencePhotos(args.photos, 6);
     for (const w of [args.weightInKg, args.weightOutKg]) {
       if (w !== undefined && !(w >= 0 && w < 10_000_000)) throw new Error("Weights look wrong");
-    }
-    for (const p of args.photos) {
-      if (!validLat(p.lat) || !validLng(p.lng)) throw new Error("Photo GPS is out of range");
     }
     // Older evidence still waiting for review is superseded.
     const pending = await ctx.db.query("exportTraceEvidence").withIndex("by_stageId", (q) => q.eq("stageId", stage._id)).take(20);
@@ -672,6 +664,7 @@ export const listTraceEvidenceForReview = query({
         stageName: stage.name,
         scope: stage.scope,
         massBalanceWarning,
+        manualPhotos: hasManualPhoto(e.photos),
       });
     }
     return result;
@@ -824,13 +817,11 @@ export const getTraceabilityReport = query({
       deal = await ctx.db.get(args.dealId);
       if (!deal || deal.lotId !== lot._id) return null;
     }
-    // Who may read it: the exporter, admins over this exporter community,
-    // and the buyer of a deal on this lot once identities are revealed.
+    // Who may read it: the exporter, super admins, and the buyer of a deal on
+    // this lot once identities are revealed. Community admins review evidence
+    // stage by stage but do not get the full report.
     let allowed = lot.exporterId === viewer._id;
-    if (!allowed && viewer.role === "admin") {
-      const community = await ctx.db.get(lot.communityId);
-      allowed = isSuperAdmin(viewer) || (!!community && adminManagesCommunity(viewer, community));
-    }
+    if (!allowed && viewer.role === "admin") allowed = isSuperAdmin(viewer);
     if (!allowed && deal && deal.buyerId === viewer._id) allowed = !!deal.disclosedAt;
     // Buyers get the report once the platform fees are paid.
     if (!allowed) return null;
@@ -862,7 +853,7 @@ export const getTraceabilityReport = query({
         weightOutKg: approved?.weightOutKg,
         notes: approved?.notes,
         photos: approved
-          ? await Promise.all(approved.photos.map(async (p) => ({ url: await ctx.storage.getUrl(p.storageId), lat: p.lat, lng: p.lng, capturedAt: p.capturedAt })))
+          ? await Promise.all(approved.photos.map(async (p) => ({ url: await ctx.storage.getUrl(p.storageId), lat: p.lat, lng: p.lng, capturedAt: p.capturedAt, manualEntry: p.manualEntry === true })))
           : [],
       });
     }
@@ -880,7 +871,7 @@ export const getTraceabilityReport = query({
         bags: deal.contract?.bags ?? deal.bags,
         incoterm: deal.contract?.incoterm ?? deal.incoterm,
         port: deal.contract?.port,
-        stuffingPhotos: await Promise.all(stuffing.map(async (d) => ({ url: await ctx.storage.getUrl(d.storageId), lat: d.lat, lng: d.lng, capturedAt: d.capturedAt }))),
+        stuffingPhotos: await Promise.all(stuffing.map(async (d) => ({ url: await ctx.storage.getUrl(d.storageId), lat: d.lat, lng: d.lng, capturedAt: d.capturedAt, manualEntry: d.locationManual === true }))),
       };
     }
 

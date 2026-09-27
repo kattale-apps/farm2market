@@ -12,19 +12,27 @@ import { formLabel } from "../../../convex/processorShared";
 import { useStoredUser } from "../../hooks/useStoredUser";
 import { ReceiptCard, cropName } from "../../components/market/ReceiptCard";
 import { TransportDirectory } from "../../components/transport/TransportDirectory";
+import { TabBackBar, useTabHistory } from "../../components/nav/TabNav";
 
 const BRAND = "#2e7d32";
 const FONT = '"Montserrat", sans-serif';
 type Tab = "prices" | "deliveries" | "transport";
+const TAB_LABELS: [Tab, string][] = [
+  ["prices", "💰 Prices near me"],
+  ["deliveries", "🧾 My deliveries"],
+  ["transport", "🚚 Transport"],
+];
 
 /**
- * Sell & services (farmer): who buys near me and at what price, my delivery
+ * Sales & Services (farmer): which processors buy near me and at what price, my delivery
  * bookings and cash receipts, and transport. Free for every farmer.
  */
 export default function FarmerServicesPage() {
   const { user, status } = useStoredUser();
   const userId = (user?.userId as Id<"users"> | undefined) ?? null;
-  const [tab, setTab] = useState<Tab>("prices");
+  const nav = useTabHistory<Tab>("prices");
+  const tab = nav.tab;
+  const setTab = nav.go;
   if (status === "loading") return <div style={{ padding: "2rem", fontFamily: FONT }}>Loading...</div>;
   if (!userId) return <div style={{ padding: "2rem", fontFamily: FONT }}>Please log in again.</div>;
   return (
@@ -33,17 +41,11 @@ export default function FarmerServicesPage() {
         <Link href="/" style={{ color: "#fff", textDecoration: "none", fontSize: "1.3rem" }} aria-label="Back">
           ←
         </Link>
-        <h1 style={{ margin: 0, fontSize: "clamp(1rem, 4vw, 1.2rem)" }}>🏭 Sell & services</h1>
+        <h1 style={{ margin: 0, fontSize: "clamp(1rem, 4vw, 1.2rem)" }}>🏭 Sales & Services</h1>
       </div>
       <div style={{ padding: "1rem", maxWidth: 720, margin: "0 auto" }}>
         <div role="tablist" style={{ display: "flex", gap: 6, marginBottom: 12 }}>
-          {(
-            [
-              ["prices", "💰 Prices near me"],
-              ["deliveries", "🧾 My deliveries"],
-              ["transport", "🚚 Transport"],
-            ] as [Tab, string][]
-          ).map(([key, text]) => (
+          {TAB_LABELS.map(([key, text]) => (
             <button
               key={key}
               role="tab"
@@ -55,6 +57,11 @@ export default function FarmerServicesPage() {
             </button>
           ))}
         </div>
+        {tab !== "prices" && (
+          <div style={{ marginBottom: 12 }}>
+            <TabBackBar color={BRAND} previousLabel={TAB_LABELS.find(([k]) => k === nav.previous)![1]} homeLabel="Prices near me" onBack={nav.back} onHome={nav.goHome} />
+          </div>
+        )}
         {tab === "prices" && <PricesNearMe userId={userId} canBook={user?.role === "farmer"} onBooked={() => setTab("deliveries")} />}
         {tab === "deliveries" && <MyDeliveries userId={userId} />}
         {tab === "transport" && <TransportDirectory userId={userId} />}
@@ -67,22 +74,26 @@ function WorldPriceTicker() {
   const world = useQuery(api.marketOffers.getWorldPricesUgx, {});
   if (!world || world.prices.length === 0) return null;
   return (
-    <div style={{ background: "#e1f5fe", border: "1px solid #81d4fa", borderRadius: 12, padding: "0.7rem 0.85rem", marginBottom: 12 }}>
-      <div style={{ fontWeight: 800, color: "#01579b", fontSize: "0.9rem" }}>🌍 World coffee prices (reference)</div>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
+    <div style={{ background: "#e1f5fe", border: "2px solid #81d4fa", borderRadius: 14, padding: "1rem 1.1rem", marginBottom: 16 }}>
+      <div style={{ fontWeight: 800, color: "#01579b", fontSize: "1.05rem" }}>🌍 World coffee prices (reference)</div>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
         {world.prices.map((p) => (
-          <div key={p.label} style={{ background: "#fff", borderRadius: 10, padding: "0.45rem 0.65rem", minWidth: 150 }}>
-            <div style={{ fontSize: "0.75rem", color: "#455a64" }}>{p.label}</div>
-            <div style={{ fontWeight: 800, color: "#01579b" }}>UGX {p.ugxPerKg.toLocaleString()}/kg</div>
-            <div style={{ fontSize: "0.7rem", color: "#78909c" }}>
+          <div key={p.label} style={{ background: "#fff", borderRadius: 10, padding: "0.6rem 0.8rem", minWidth: 160, flex: "1 1 160px" }}>
+            <div style={{ fontSize: "0.85rem", color: "#37474f", fontWeight: 600 }}>{p.label}</div>
+            <div style={{ fontWeight: 800, color: "#01579b", fontSize: "1.1rem" }}>UGX {p.ugxPerKg.toLocaleString()}/kg</div>
+            <div style={{ fontSize: "0.78rem", color: "#607d8b" }}>
               USD {p.usdPerKg}/kg · {p.asOf}
             </div>
           </div>
         ))}
       </div>
-      <div style={{ fontSize: "0.72rem", color: "#546e7a", marginTop: 6 }}>
-        World price for export-grade green coffee, converted to UGX. Prices paid at the farm are lower, because of drying, hulling, grading,
-        transport and export costs.
+      <div style={{ fontSize: "0.92rem", color: "#263238", marginTop: 12, lineHeight: 1.6 }}>
+        <p style={{ margin: 0 }}>
+          <b>World price</b> for <b>export-grade green coffee</b>, converted to <b>UGX</b>.
+        </p>
+        <p style={{ margin: "0.4rem 0 0" }}>
+          <b>Prices paid at the farm are lower</b>, because of <b>drying, hulling, grading, transport</b> and <b>export costs</b>.
+        </p>
       </div>
     </div>
   );
@@ -133,7 +144,7 @@ function PricesNearMe({ userId, canBook, onBooked }: { userId: Id<"users">; canB
         )}
       </div>
       {data.offers.length === 0 ? (
-        <div style={{ background: "#fff", borderRadius: 12, padding: "1rem", fontSize: "0.9rem" }}>No buyers have posted prices in {data.district || "your district"} this week. Try another district.</div>
+        <div style={{ background: "#fff", borderRadius: 12, padding: "1rem", fontSize: "0.9rem" }}>No processors have posted prices in {data.district || "your district"} this week. Try another district.</div>
       ) : (
         data.offers.map((o) => (
           <div key={o._id} style={{ background: "#fff", borderRadius: 12, padding: "0.75rem 0.85rem", marginBottom: 8, border: "1px solid #e0e0e0" }}>
@@ -188,7 +199,7 @@ function BookForm({ userId, offer, today, onDone }: { userId: Id<"users">; offer
           <input style={field} type="date" min={today} max={offer.latestBookingDate} value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
       </div>
-      <input style={{ ...field, marginTop: 8 }} placeholder="Message to the buyer (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
+      <input style={{ ...field, marginTop: 8 }} placeholder="Message to the processor (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
       {error && <div style={{ color: "#c62828", fontSize: "0.82rem", marginTop: 6 }}>{error}</div>}
       <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
         <button
@@ -217,7 +228,7 @@ function BookForm({ userId, offer, today, onDone }: { userId: Id<"users">; offer
 }
 
 const BOOKING_TEXT: Record<string, string> = {
-  requested: "waiting for the buyer",
+  requested: "waiting for the processor",
   accepted: "accepted: deliver on the day",
   declined: "declined",
   cancelled: "cancelled",
@@ -240,12 +251,12 @@ function MyDeliveries({ userId }: { userId: Id<"users"> }) {
           <div key={b._id} style={{ background: "#fff", borderRadius: 12, padding: "0.7rem 0.85rem", marginBottom: 8, border: "1px solid #e0e0e0", fontSize: "0.86rem" }}>
             <b>
               {b.quantity} {b.unit} {cropName(b.crop)}
-              {b.form ? ` (${formLabel(b.form)})` : ""} → {b.buyer?.name ?? "Buyer"}
+              {b.form ? ` (${formLabel(b.form)})` : ""} → {b.buyer?.name ?? "Processor"}
             </b>
             <div style={{ color: "#455a64" }}>
               {b.deliveryDate} · UGX {b.priceUgx.toLocaleString()}/{b.unit} · <b>{BOOKING_TEXT[b.status]}</b>
             </div>
-            {b.buyerNote && <div style={{ color: "#607d8b" }}>Buyer: {b.buyerNote}</div>}
+            {b.buyerNote && <div style={{ color: "#607d8b" }}>Processor: {b.buyerNote}</div>}
             {(b.status === "requested" || b.status === "accepted") && (
               <button onClick={() => cancel({ userId, bookingId: b._id })} style={{ marginTop: 6, minHeight: 36, padding: "0.3rem 0.8rem", borderRadius: 8, border: "1px solid #c62828", background: "#fff", color: "#c62828", cursor: "pointer" }}>
                 Cancel booking

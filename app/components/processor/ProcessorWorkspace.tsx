@@ -5,11 +5,12 @@ import { useAction, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
-import { ugandaDateFromInstant } from "../../../convex/exportMarketsShared";
+import { DEFAULT_EXPORT_CROP, EXPORT_CROPS, ugandaDateFromInstant } from "../../../convex/exportMarketsShared";
 import { PROCESSING_CAPABILITIES, STORAGE_TYPES } from "../../../convex/processorShared";
 import { formatUgandaDateTime } from "../../utils/timeUtils";
-import { getCurrentLocation } from "../../utils/gps";
-import { FONT, card, input, label, button, StatusPill, Notice, PageHeader, formatUgx, uploadToConvex, errorText, dataUrlToBlob, COFFEE_BEAN_ICON } from "../exportMarkets/ui";
+import { LiveGps } from "./LiveGps";
+import { HomeTabButton, TabBackBar, useTabHistory } from "../nav/TabNav";
+import { FONT, card, input, label, button, StatusPill, Notice, PageHeader, formatUgx, uploadToConvex, errorText, dataUrlToBlob } from "../exportMarkets/ui";
 import { PhotoSetCapture, CapturedPhoto, evidencePhotoPayload } from "../exportMarkets/PhotoSetCapture";
 import { ProcessorIntakeTab, ProcessorBatchesTab } from "./ProcessorOperations";
 import { ProcessorSalesTab } from "./ProcessorSales";
@@ -52,25 +53,21 @@ export function ProcessorWorkspace({ userId }: { userId: Id<"users"> }) {
   const [today] = useState(() => ugandaDateFromInstant(Date.now()));
   const ws = useQuery(api.processors.getMyProcessorWorkspace, { userId, today });
   const [msg, setMsg] = useState<Msg>(null);
-  const [tab, setTab] = useState<Tab>("overview");
-  const [history, setHistory] = useState<Tab[]>([]);
+  const nav = useTabHistory<Tab>("overview");
+  const tab = nav.tab;
   const go = (t: Tab) => {
-    if (t !== tab) setHistory((h) => [...h, tab]);
-    setTab(t);
+    nav.go(t);
     setMsg(null);
-    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
   };
-  const back = () => {
-    setTab(history[history.length - 1] ?? "overview");
-    setHistory((h) => h.slice(0, -1));
-  };
+  const tabLabel = (t: Tab) => TABS.find((x) => x.key === t)?.label ?? "Overview";
   const member = !!ws && ws.checks.admitted;
 
   return (
     <div style={{ padding: "1rem", maxWidth: 900, margin: "0 auto", fontFamily: FONT }}>
       <PageHeader
         title="Processor"
-        iconSrc={COFFEE_BEAN_ICON}
+        iconSrc={FACTORY_ICON}
+        extraIcons={processorCropIcons(ws)}
         subtitle="Buy from farmers, process and store their coffee, and supply exporters, with every step on the trace map."
         right={ws ? <StatusPill state={ws.isActiveProcessor ? "approved" : ws.profile?.status ?? "draft"} /> : null}
       />
@@ -84,18 +81,29 @@ export function ProcessorWorkspace({ userId }: { userId: Id<"users"> }) {
       {msg && <Notice tone={msg.tone}>{msg.text}</Notice>}
 
       {/* Every tab is open for exploring; each says what it needs. */}
-      <div role="tablist" style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
-        {TABS.map((t) => (
-          <button key={t.key} role="tab" aria-selected={tab === t.key} style={tabButton(tab === t.key)} onClick={() => go(t.key)}>
-            {t.label}
-          </button>
-        ))}
+      <div role="tablist" style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center", marginBottom: "0.75rem" }}>
+        {TABS.map((t) =>
+          t.key === "overview" ? (
+            <HomeTabButton key={t.key} active={tab === t.key} color={PROCESSOR_HEADING} label={t.label} onClick={() => go(t.key)} />
+          ) : (
+            <button key={t.key} role="tab" aria-selected={tab === t.key} style={tabButton(tab === t.key)} onClick={() => go(t.key)}>
+              {t.label}
+            </button>
+          )
+        )}
       </div>
       <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap", marginBottom: "1.25rem" }}>
         {tab !== "overview" && (
-          <button style={button("secondary")} onClick={back}>
-            ← Back
-          </button>
+          <TabBackBar
+            color={PROCESSOR_HEADING}
+            previousLabel={tabLabel(nav.previous)}
+            homeLabel="Overview"
+            onBack={() => {
+              nav.back();
+              setMsg(null);
+            }}
+            onHome={() => go("overview")}
+          />
         )}
         <div style={{ flex: 1, minWidth: 220, background: PROCESSOR_SOFT, border: `1px solid ${PROCESSOR_BORDER}`, borderRadius: 12, padding: "0.7rem 0.9rem", fontSize: "0.88rem", color: PROCESSOR_HEADING }}>
           <b>This tab:</b> {TABS.find((t) => t.key === tab)?.needs}
@@ -142,6 +150,14 @@ export function ProcessorWorkspace({ userId }: { userId: Id<"users"> }) {
       )}
     </div>
   );
+}
+
+const FACTORY_ICON = "/icons/factory.svg";
+
+/** Icons for the crops this processor handles, shown beside the factory icon. */
+function processorCropIcons(ws: ProcessorWS | undefined) {
+  const keys = ws?.profile?.crops?.length ? ws.profile.crops : [DEFAULT_EXPORT_CROP];
+  return EXPORT_CROPS.filter((c) => keys.includes(c.key)).map((c) => ({ src: c.icon, label: c.label }));
 }
 
 /** Open crops the processor handles; before a profile exists, every open crop. */
@@ -359,27 +375,12 @@ function ProfileCard({ ws, userId, setMsg, member }: CardProps & { member: boole
 
       <div style={{ marginTop: "1rem", background: PROCESSOR_SOFT, border: `1px solid ${PROCESSOR_BORDER}`, borderRadius: 10, padding: "0.75rem" }}>
         <label style={label}>Facility GPS location *</label>
-        <p style={{ fontSize: "0.8rem", color: "#607d8b", marginTop: 0 }}>Stand at the facility and use your phone&apos;s location, or type the coordinates.</p>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "0.5rem" }}>
+        <p style={{ fontSize: "0.8rem", color: "#607d8b", marginTop: 0 }}>Stand at the facility and use the live reading from your phone, or type the coordinates.</p>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "0.5rem", marginBottom: "0.6rem" }}>
           <input style={input} placeholder="Latitude" inputMode="decimal" value={form.facilityLat} onChange={set("facilityLat")} disabled={!member} />
           <input style={input} placeholder="Longitude" inputMode="decimal" value={form.facilityLng} onChange={set("facilityLng")} disabled={!member} />
-          <button
-            type="button"
-            style={button("secondary", !member)}
-            disabled={!member}
-            onClick={async () => {
-              try {
-                const gps = await getCurrentLocation();
-                if (gps) setForm((f) => ({ ...f, facilityLat: gps.latitude.toFixed(6), facilityLng: gps.longitude.toFixed(6) }));
-                else setMsg({ tone: "error", text: "Could not get your location. Turn on location and try again." });
-              } catch (e) {
-                setMsg({ tone: "error", text: errorText(e) });
-              }
-            }}
-          >
-            📍 Use my location
-          </button>
         </div>
+        <LiveGps enabled={member} useLabel="Use this as the facility location" onUse={(lat, lng) => setForm((f) => ({ ...f, facilityLat: lat, facilityLng: lng }))} />
       </div>
 
       {p?.status === "approved" && (

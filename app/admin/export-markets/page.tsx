@@ -8,7 +8,8 @@ import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { useStoredUser } from "../../hooks/useStoredUser";
 import { ugandaDateFromInstant } from "../../../convex/exportMarketsShared";
-import { FONT, button, Notice, PageHeader } from "../../components/exportMarkets/ui";
+import { FONT, EXPORT_HEADING, button, Notice, PageHeader } from "../../components/exportMarkets/ui";
+import { TabBackBar, useTabHistory } from "../../components/nav/TabNav";
 import { AdminDealsPanel, AdminTracePanel, AdminPipelinePanel, AdminPricesPanel } from "../../components/exportMarkets/AdminExportPanels";
 import { Applications, Documents, Members, DocumentTypes } from "../../components/exportMarkets/AdminExporterPanels";
 
@@ -19,7 +20,9 @@ export default function ExportMarketsAdminPage() {
   const { user, status: authStatus } = useStoredUser();
   const adminId = (user?.userId as Id<"users"> | undefined) ?? null;
   const [today] = useState(() => ugandaDateFromInstant(Date.now()));
-  const [tab, setTab] = useState<Tab>("applications");
+  const nav = useTabHistory<Tab>("applications");
+  const tab = nav.tab;
+  const setTab = nav.go;
   const [msg, setMsg] = useState<Msg>(null);
   const mine = useQuery(api.exportMarkets.listMyExportCommunities, adminId ? { adminId } : "skip");
 
@@ -65,6 +68,11 @@ export default function ExportMarketsAdminPage() {
           </button>
         ))}
       </div>
+      {tab !== "applications" && (
+        <div style={{ marginBottom: "1.25rem" }}>
+          <TabBackBar color={EXPORT_HEADING} previousLabel={tabs.find(([k]) => k === nav.previous)?.[1] ?? "Exporter applications"} homeLabel="Exporter applications" onBack={nav.back} onHome={nav.goHome} />
+        </div>
+      )}
 
       {tab === "applications" && <Applications adminId={adminId} today={today} setMsg={setMsg} />}
       {tab === "documents" && <Documents adminId={adminId} today={today} setMsg={setMsg} />}

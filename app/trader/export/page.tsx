@@ -31,6 +31,7 @@ import {
 import { ExporterLots, PracticeLot } from "../../components/exportMarkets/ExporterLots";
 import { DealsList } from "../../components/exportMarkets/DealsList";
 import { PriceTicker } from "../../components/exportMarkets/PriceTicker";
+import { HomeTabButton, TabBackBar, useTabHistory } from "../../components/nav/TabNav";
 
 type Msg = { tone: "error" | "success" | "info"; text: string } | null;
 type Tab = "overview" | "profile" | "documents" | "lots" | "deals";
@@ -61,22 +62,13 @@ export default function ExporterWorkspacePage() {
   const [today] = useState(() => ugandaDateFromInstant(Date.now()));
   const ws = useQuery(api.exportMarkets.getMyExporterWorkspace, userId && user?.role === "trader" ? { userId, today } : "skip");
   const [msg, setMsg] = useState<Msg>(null);
-  const [tab, setTab] = useState<Tab>("overview");
+  const nav = useTabHistory<Tab>("overview");
+  const tab = nav.tab;
   const [crop, setCrop] = useState<string>(DEFAULT_EXPORT_CROP);
 
   // Tab history, so "Back" returns to wherever the trader came from.
-  const [history, setHistory] = useState<Tab[]>([]);
-  const go = (t: Tab) => {
-    if (t !== tab) setHistory((h) => [...h, tab]);
-    setTab(t);
-    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-  const back = () => {
-    const prev = history[history.length - 1] ?? "overview";
-    setHistory((h) => h.slice(0, -1));
-    setTab(prev);
-    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
-  };
+  const go = nav.go;
+  const tabLabel = (t: Tab) => TABS.find((x) => x.key === t)?.label ?? "Overview";
 
   if (authStatus === "loading") return <div style={{ padding: "2rem", fontFamily: FONT }}>Loading...</div>;
   if (!user || user.role !== "trader" || !userId) {
@@ -98,17 +90,19 @@ export default function ExporterWorkspacePage() {
 
       {/* Every tab is open for exploring; each says what it needs. */}
       <div role="tablist" style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
-        {TABS.map((t) => (
-          <button key={t.key} role="tab" aria-selected={tab === t.key} style={button(tab === t.key ? "primary" : "secondary")} onClick={() => go(t.key)}>
-            {t.label}
-          </button>
-        ))}
+        {TABS.map((t) =>
+          t.key === "overview" ? (
+            <HomeTabButton key={t.key} active={tab === t.key} color={EXPORT_HEADING} label={t.label} onClick={() => go(t.key)} />
+          ) : (
+            <button key={t.key} role="tab" aria-selected={tab === t.key} style={button(tab === t.key ? "primary" : "secondary")} onClick={() => go(t.key)}>
+              {t.label}
+            </button>
+          )
+        )}
       </div>
       <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap", marginBottom: "1.25rem" }}>
         {tab !== "overview" && (
-          <button style={button("secondary")} onClick={back}>
-            ← Back
-          </button>
+          <TabBackBar color={EXPORT_HEADING} previousLabel={tabLabel(nav.previous)} homeLabel="Overview" onBack={nav.back} onHome={() => go("overview")} />
         )}
         <div style={{ flex: 1, minWidth: 220, background: EXPORT_SKY, border: `1px solid ${EXPORT_SKY_BORDER}`, borderRadius: 12, padding: "0.7rem 0.9rem", fontSize: "0.88rem", color: EXPORT_HEADING }}>
           <b>This tab:</b> {TABS.find((t) => t.key === tab)?.needs}

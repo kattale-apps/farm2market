@@ -137,7 +137,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
         disabled: farm2MarketLocked,
       },
       { key: "advancePurchase", label: "🌱 Advanced Markets" },
-      { key: "sellServices", label: "🏭 Sell & services" },
+      { key: "sellServices", label: "🏭 Sales & Services" },
     ] : []),
     ...(effectiveRole === "vendor" ? [
       { key: "vendorBuying", label: "🧺 Buying from farmers" },

@@ -996,11 +996,13 @@ export const getTraceabilityReport = query({
       deal = await ctx.db.get(args.dealId);
       if (!deal || deal.lotId !== lot._id) return null;
     }
-    // Who may read it: the exporter, super admins, and the buyer of a deal on
-    // this lot once identities are revealed. Community admins review evidence
-    // stage by stage but do not get the full report.
+    // Who may read it: the exporter, super admins, admins of the exporter's
+    // community, and the buyer of a deal on this lot once identities are revealed.
     let allowed = lot.exporterId === viewer._id;
-    if (!allowed && viewer.role === "admin") allowed = isSuperAdmin(viewer);
+    if (!allowed && viewer.role === "admin") {
+      const community = await ctx.db.get(lot.communityId);
+      allowed = isSuperAdmin(viewer) || (!!community && adminManagesCommunity(viewer, community));
+    }
     if (!allowed && deal && deal.buyerId === viewer._id) allowed = !!deal.disclosedAt;
     // Buyers get the report once the platform fees are paid.
     if (!allowed) return null;

@@ -253,7 +253,7 @@ export function TracePipelineEditor({ userId, setMsg }: { userId: Id<"users">; s
         )}
       </div>
       <p style={{ fontSize: "0.82rem", color: "#607d8b" }}>
-        Every lot&apos;s trace map runs: farm stages → any processor stages → your own steps below. Buyers on a deal and super admins see each step
+        Every lot&apos;s trace map runs: farm stages → any processor stages → your own steps below. Buyers on a deal, your community admins and super admins see each step
         in the traceability report. Changes apply to new lots; existing lots keep their steps.
       </p>
       {!editing ? (

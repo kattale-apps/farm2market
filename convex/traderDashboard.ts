@@ -12,6 +12,7 @@ import { query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { calculateTraderExposureInternal } from "./utils";
 import { MAX_TRADER_EXPOSURE_UGX } from "./constants";
+import { deliveryPointOf } from "./processors";
 
 /**
  * Get capital ledger vs profit ledger breakdown
@@ -278,17 +279,7 @@ export const getTraderActiveUTIDs = query({
         const listing = await ctx.db.get(unit.listingId);
         const farmer = listing && listing.farmerId ? await ctx.db.get(listing.farmerId) : null;
         
-        // Get storage location for delivery
-        let storageLocation = null;
-        if (listing?.storageLocationId) {
-          const location = await ctx.db.get(listing.storageLocationId);
-          if (location) {
-            storageLocation = {
-              districtName: location.districtName,
-              code: location.code,
-            };
-          }
-        }
+        const deliveryPoint = await deliveryPointOf(ctx, listing?.deliveryProcessorId);
 
         utidData.entities.push({
           table: "listingUnits",
@@ -301,7 +292,7 @@ export const getTraderActiveUTIDs = query({
           deliveryStatus: unit.deliveryStatus,
           deliveryDeadline: unit.deliveryDeadline,
           lockedAt: unit.lockedAt,
-          storageLocation: storageLocation,
+          deliveryPoint,
         });
       }
     }
@@ -331,17 +322,7 @@ export const getTraderActiveUTIDs = query({
       }
       const utidData = utidMap.get(inv.utid)!;
       
-      // Get storage location for inventory
-      let storageLocation = null;
-      if (inv.storageLocationId) {
-        const location = await ctx.db.get(inv.storageLocationId);
-        if (location) {
-          storageLocation = {
-            districtName: location.districtName,
-            code: location.code,
-          };
-        }
-      }
+      const deliveryPoint = await deliveryPointOf(ctx, inv?.deliveryProcessorId);
       
       utidData.entities.push({
         table: "traderInventory",
@@ -351,7 +332,7 @@ export const getTraderActiveUTIDs = query({
         produceType: inv.produceType,
         acquiredAt: inv.acquiredAt,
         storageStartTime: inv.storageStartTime,
-        storageLocation: storageLocation,
+        deliveryPoint,
       });
     }
 
@@ -406,17 +387,7 @@ export const getInventoryWithProjectedLoss = query({
           }
         }
 
-        // Get storage location
-        let storageLocation = null;
-        if (inv.storageLocationId) {
-          const location = await ctx.db.get(inv.storageLocationId);
-          if (location) {
-            storageLocation = {
-              districtName: location.districtName,
-              code: location.code,
-            };
-          }
-        }
+        const deliveryPoint = await deliveryPointOf(ctx, inv?.deliveryProcessorId);
 
         return {
           inventoryId: inv._id,
@@ -428,8 +399,7 @@ export const getInventoryWithProjectedLoss = query({
           daysInStorage: Math.round(daysInStorage * 100) / 100,
           // Original price (for context, no farmer identity)
           originalPricePerKilo: originalPricePerKilo,
-          // Storage location
-          storageLocation: storageLocation,
+          deliveryPoint,
         };
       })
     );

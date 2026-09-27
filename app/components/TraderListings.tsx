@@ -1026,7 +1026,7 @@ export function TraderListings({ userId }: TraderListingsProps) {
                         {!batch.isGardenNegotiation && (
                           <div>Unit Size: <strong>{unitSize} kg</strong></div>
                         )}
-                        <div>Delivery Location: <strong>{batch.listing?.storageLocation?.districtName ? `${batch.listing.storageLocation.districtName} (${batch.listing.storageLocation.code})` : "Not available"}</strong></div>
+                        <div>Delivery Location: <strong>{batch.listing?.deliveryPoint ? `${batch.listing.deliveryPoint.name}, ${batch.listing.deliveryPoint.district}` : "To agree with the farmer"}</strong></div>
                       </div>
                       <div style={{ marginTop: "0.5rem", fontSize: "0.75rem", color: "#999" }}>
                         Batch UTIDs are listed above for quick reference.
@@ -1490,7 +1490,7 @@ export function TraderListings({ userId }: TraderListingsProps) {
                         : formatUGX(listing.pricePerKilo * listing.unitSize)}
                     </div>
                     <div>
-                      <strong>Location:</strong> {listing.storageLocation?.districtName || "N/A"}
+                      <strong>Delivery point:</strong> {listing.deliveryPoint ? `${listing.deliveryPoint.name}, ${listing.deliveryPoint.district}` : "To agree"}
                     </div>
                   </div>
                   {hasActiveNegotiation ? (

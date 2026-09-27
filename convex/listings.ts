@@ -20,12 +20,13 @@ import {
   throwAppError,
 } from "./errors";
 import { Id } from "./_generated/dataModel";
+import { deliveryPointOf, isActiveProcessor } from "./processors";
+import { todayUganda } from "./exportMarkets";
 
 /**
- * For vendor/store users, resolve their onboarded district to a matching storageLocation.
- * Returns the storageLocationId + districtName, or null if no match.
+ * For vendor/store users, where buyers collect their listings, from their profile.
  */
-export const getAutoStorageLocationForUser = query({
+export const getCollectionPointForUser = query({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
     const user = await ctx.db.get(args.userId);
@@ -51,26 +52,8 @@ export const getAutoStorageLocationForUser = query({
       }
     }
 
-    if (!user.districtId) {
-      // No district, but still return collectionText
-      return collectionText ? { storageLocationId: null, districtName: null, code: null, collectionText } : null;
-    }
-
-    const district = await ctx.db.get(user.districtId);
-    if (!district) return collectionText ? { storageLocationId: null, districtName: null, code: null, collectionText } : null;
-
-    const storageLocations = await ctx.db
-      .query("storageLocations")
-      .withIndex("by_active", (q: any) => q.eq("active", true))
-      .collect();
-
-    const match = storageLocations.find(
-      (sl) => sl.districtName.toLowerCase() === district.name.toLowerCase()
-    );
-
-    return match
-      ? { storageLocationId: match._id, districtName: match.districtName, code: match.code, collectionText }
-      : { storageLocationId: null, districtName: district.name, code: null, collectionText };
+    const district = user.districtId ? await ctx.db.get(user.districtId) : null;
+    return collectionText ? { collectionText, districtName: district?.name ?? null } : null;
   },
 });
 
@@ -86,7 +69,7 @@ export const createListing = mutation({
     pricePerKilo: v.optional(v.number()), // In UGX (for unit mode) — optional for packaging mode
     qualityRating: v.optional(v.string()),
     qualityComment: v.optional(v.string()),
-    storageLocationId: v.optional(v.id("storageLocations")),
+    deliveryProcessorId: v.optional(v.id("users")), // processor facility the farmer delivers to
     // Garden mode fields
     listingMode: v.optional(v.union(v.literal("unit"), v.literal("garden"), v.literal("packaging"))),
     gardenSize: v.optional(v.number()),
@@ -196,15 +179,9 @@ export const createListing = mutation({
         : LISTING_UNIT_SIZE_KG;
     }
 
-    // Verify storage location exists and is active (only when provided)
-    if (args.storageLocationId) {
-      const storageLocation = await ctx.db.get(args.storageLocationId);
-      if (!storageLocation) {
-        throw new Error("Storage location not found");
-      }
-      if (!storageLocation.active) {
-        throw new Error("Storage location is not active");
-      }
+    // The delivery point, when given, must be a live, verified processor.
+    if (args.deliveryProcessorId && !(await isActiveProcessor(ctx, args.deliveryProcessorId, todayUganda()))) {
+      throw new Error("Choose a verified processor as the delivery point");
     }
 
     // Build collection location text for vendor/store listings
@@ -241,7 +218,7 @@ export const createListing = mutation({
       deliverySLA: 0,
       qualityRating: args.qualityRating?.trim() || undefined,
       qualityComment: args.qualityComment?.trim() || undefined,
-      storageLocationId: args.storageLocationId,
+      deliveryProcessorId: args.deliveryProcessorId,
       // Garden mode fields
       listingMode,
       gardenSize: args.gardenSize,
@@ -297,9 +274,7 @@ export const getActiveListings = query({
       listings.map(async (listing) => {
         const farmer = listing.farmerId ? await ctx.db.get(listing.farmerId) : null;
         const trader = listing.traderId ? await ctx.db.get(listing.traderId) : null;
-        const storageLocation = listing.storageLocationId
-          ? await ctx.db.get(listing.storageLocationId)
-          : null;
+        const deliveryPoint = await deliveryPointOf(ctx, listing.deliveryProcessorId);
         const units = await ctx.db
           .query("listingUnits")
           .withIndex("by_listing", (q) => q.eq("listingId", listing._id))
@@ -340,9 +315,7 @@ export const getActiveListings = query({
           traderIsVerified: !!trader?.isVerifiedTrader && trader?.verificationStatus === "verified",
           isTraderListing: !!listing.traderId, // Flag to identify trader listings (100kg blocks)
           createdAt: listing.createdAt,
-          storageLocation: storageLocation
-            ? { districtName: storageLocation.districtName, code: storageLocation.code }
-            : null,
+          deliveryPoint,
           collectionLocationText: listing.collectionLocationText || null,
           // Garden sale fields (optional for older listings)
           listingMode: derivedListingMode,
@@ -369,9 +342,7 @@ export const getListingDetails = query({
     }
 
     const farmer = listing.farmerId ? await ctx.db.get(listing.farmerId) : null;
-    const storageLocation = listing.storageLocationId
-      ? await ctx.db.get(listing.storageLocationId)
-      : null;
+    const deliveryPoint = await deliveryPointOf(ctx, listing.deliveryProcessorId);
     const units = await ctx.db
       .query("listingUnits")
       .withIndex("by_listing", (q) => q.eq("listingId", args.listingId))
@@ -398,9 +369,7 @@ export const getListingDetails = query({
       status: listing.status,
       farmerAlias: farmer?.alias || "unknown",
       createdAt: listing.createdAt,
-      storageLocation: storageLocation
-        ? { districtName: storageLocation.districtName, code: storageLocation.code }
-        : null,
+      deliveryPoint,
       // Garden sale fields (optional for older listings)
       listingMode: derivedListingMode,
       gardenSize: listing.gardenSize,
@@ -482,31 +451,6 @@ export const getActiveProduceOptions = query({
       label: opt.label,
       icon: opt.icon,
       category: opt.category || "Other",
-      allowedStorageLocationIds: opt.allowedStorageLocationIds || [],
-    }));
-  },
-});
-
-/**
- * Get active storage locations (for farmers)
- * Returns all active storage locations sorted by order
- */
-export const getActiveStorageLocations = query({
-  args: {},
-  handler: async (ctx) => {
-    const locations = await ctx.db
-      .query("storageLocations")
-      .withIndex("by_active", (q: any) => q.eq("active", true))
-      .collect();
-
-    // Sort by order
-    locations.sort((a, b) => a.order - b.order);
-
-    return locations.map((loc) => ({
-      locationId: loc._id,
-      districtName: loc.districtName,
-      code: loc.code,
-      active: loc.active,
     }));
   },
 });
@@ -612,7 +556,7 @@ export const createTraderListing = mutation({
       deliverySLA: 0, // Not applicable for trader listings
       qualityRating: inventory.qualityRating,
       qualityComment: undefined,
-      storageLocationId: inventory.storageLocationId,
+      deliveryProcessorId: inventory.deliveryProcessorId,
     });
 
     // Create a single listing unit representing the inventory lot
@@ -745,7 +689,7 @@ export const createTraderInventoryLot = mutation({
     produceType: v.string(),
     totalKilos: v.number(),
     unitPrice: v.number(),
-    storageLocationId: v.id("storageLocations"),
+    deliveryProcessorId: v.optional(v.id("users")), // processor facility holding it, if any
     qualityRating: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -764,9 +708,8 @@ export const createTraderInventoryLot = mutation({
       throwAppError(invalidAmountError());
     }
 
-    const storageLocation = await ctx.db.get(args.storageLocationId);
-    if (!storageLocation || !storageLocation.active) {
-      throw new Error("Storage location not available");
+    if (args.deliveryProcessorId && !(await isActiveProcessor(ctx, args.deliveryProcessorId, todayUganda()))) {
+      throw new Error("Choose a verified processor");
     }
 
     const utid = generateUTID(user.role);
@@ -777,7 +720,7 @@ export const createTraderInventoryLot = mutation({
       totalKilos: args.totalKilos,
       blockSize: args.totalKilos,
       produceType: args.produceType.trim(),
-      storageLocationId: args.storageLocationId,
+      deliveryProcessorId: args.deliveryProcessorId,
       qualityRating: args.qualityRating?.trim() || undefined,
       unitPrice: args.unitPrice,
       acquiredAt: getUgandaTime(),
@@ -1122,7 +1065,7 @@ export const getTraderAvailableInventoryForListing = query({
           produceType: inv.produceType,
           totalKilos: inv.totalKilos,
           unitPrice: inv.unitPrice, // Original purchase price per kilo
-          storageLocationId: inv.storageLocationId,
+          deliveryPoint: await deliveryPointOf(ctx, inv.deliveryProcessorId),
           qualityRating: inv.qualityRating,
           acquiredAt: inv.acquiredAt,
           hasActiveListing: !!existingListing,

@@ -1,7 +1,8 @@
 /**
  * StoreAdmin Functions
  * 
- * - StoreAdmins (junior admins) can verify deliveries for their assigned locations
+ * - Storage and Transport Officers (junior admins, category "store") and super
+ *   admins verify deliveries to any delivery point (a processor facility)
  * - Must provide comment; photos are optional (weighing, checking, in-storage)
  * - PDF generation for delivery proof
  */
@@ -19,29 +20,14 @@ function isSuperAdmin(user: { adminLevel?: "super" | "junior" }): boolean {
   return user.adminLevel === "super" || user.adminLevel === undefined;
 }
 
-/**
- * Check if admin can access a specific storage location
- */
-function canAdminAccessLocation(
-  adminUser: { adminLevel?: "super" | "junior"; allowedStorageLocationIds?: Id<"storageLocations">[] },
-  locationId: Id<"storageLocations">
-): boolean {
-  // Super admins can access all locations
-  if (isSuperAdmin(adminUser)) {
-    return true;
-  }
-  
-  // Junior admins can only access assigned locations
-  if (adminUser.adminLevel === "junior") {
-    return adminUser.allowedStorageLocationIds?.includes(locationId) ?? false;
-  }
-  
-  return false;
+/** Storage and Transport Officers and super admins verify deliveries. */
+function isDeliveryOfficer(user: { adminLevel?: "super" | "junior"; adminCategory?: string }): boolean {
+  return isSuperAdmin(user) || user.adminCategory === "store";
 }
 
 /**
  * Get UTIDs available for StoreAdmin verification
- * Only shows UTIDs from assigned storage locations
+ * Every delivery a farmer has confirmed, with its delivery point
  */
 export const getStoreAdminUTIDs = query({
   args: { adminId: v.id("users") },
@@ -66,23 +52,24 @@ export const getStoreAdminUTIDs = query({
       (u) => u.status === "locked" && u.deliveryStatus === "farmer_confirmed"
     );
 
-    // Filter by StoreAdmin's assigned locations
+    if (!isDeliveryOfficer(adminUser)) {
+      throw new Error("Only a Storage and Transport Officer or super admin can verify deliveries");
+    }
     const accessibleUnits: any[] = [];
     for (const unit of confirmedUnits) {
       const listing = await ctx.db.get(unit.listingId);
-      if (!listing || !listing.storageLocationId) continue;
-
-      // SuperAdmin can see all, StoreAdmin only assigned locations
-      if (isSuperAdmin(adminUser) || canAdminAccessLocation(adminUser, listing.storageLocationId)) {
-        accessibleUnits.push({
-          unitId: unit._id,
-          lockUtid: unit.lockUtid,
-          listingId: listing._id,
-          produceType: listing.produceType,
-          storageLocationId: listing.storageLocationId,
-          lockedAt: unit.lockedAt,
-        });
-      }
+      if (!listing) continue;
+      const processor = listing.deliveryProcessorId
+        ? await ctx.db.query("processorProfiles").withIndex("by_userId", (q) => q.eq("userId", listing.deliveryProcessorId!)).first()
+        : null;
+      accessibleUnits.push({
+        unitId: unit._id,
+        lockUtid: unit.lockUtid,
+        listingId: listing._id,
+        produceType: listing.produceType,
+        deliveryPoint: processor ? `${processor.facilityName}, ${processor.district}` : listing.collectionLocationText ?? "Collection at the farm",
+        lockedAt: unit.lockedAt,
+      });
     }
 
     // Group by UTID
@@ -95,7 +82,7 @@ export const getStoreAdminUTIDs = query({
           utid: unit.lockUtid,
           units: [],
           produceType: unit.produceType,
-          storageLocationId: unit.storageLocationId,
+          deliveryPoint: unit.deliveryPoint,
         });
       }
       utidMap.get(unit.lockUtid)!.units.push(unit);
@@ -151,22 +138,8 @@ export const verifyDeliveryWithProof = mutation({
       throw new Error(`No locked units found with UTID: ${args.lockUtid}`);
     }
 
-    // Verify StoreAdmin has access to all locations in this UTID
-    if (!isSuperAdmin(adminUser)) {
-      for (const unit of lockedUnits) {
-        const listing = await ctx.db.get(unit.listingId);
-        if (!listing || !listing.storageLocationId) {
-          throw new Error("Listing missing storage location");
-        }
-
-        if (!canAdminAccessLocation(adminUser, listing.storageLocationId)) {
-          const location = await ctx.db.get(listing.storageLocationId);
-          const locationName = location ? location.districtName : listing.storageLocationId;
-          throw new Error(
-            `You do not have permission to verify deliveries for location: ${locationName}`
-          );
-        }
-      }
+    if (!isDeliveryOfficer(adminUser)) {
+      throw new Error("Only a Storage and Transport Officer or super admin can verify deliveries");
     }
 
     // Generate UTID for verification action

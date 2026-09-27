@@ -42,6 +42,7 @@ import {
   walletBalance,
   withUrl,
 } from "./exportMarkets";
+import { confirmDeliveryCore } from "./admin";
 
 type Ctx = QueryCtx | MutationCtx;
 
@@ -702,5 +703,87 @@ export const setProcessorPlatformVerified = mutation({
     );
     await audit(ctx, args.verified ? "processor_platform_verified" : "processor_platform_unverified", admin._id, { targetUserId: args.processorId, note: notes });
     return { success: true };
+  },
+});
+
+// ------------------------------------------------------------------
+// Delivery points: processor facilities farmers deliver to
+// ------------------------------------------------------------------
+
+/** A listing's or inventory's delivery point, as shown to users. */
+export async function deliveryPointOf(ctx: Ctx, processorId: Id<"users"> | undefined) {
+  if (!processorId) return null;
+  const p = await getProcessorProfile(ctx, processorId);
+  return p ? { processorId, name: p.facilityName, district: p.district } : null;
+}
+
+/** Live, verified processors a farmer can name as the delivery point; their own district first. */
+export const listDeliveryProcessors = query({
+  args: { userId: v.id("users"), today: v.string() },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) return [];
+    const today = isIsoDate(args.today) ? args.today : todayUganda();
+    const home = (user.districtText ?? "").trim().toLowerCase();
+    const profiles = await ctx.db.query("processorProfiles").withIndex("by_status", (q) => q.eq("status", "approved")).take(500);
+    const rows = [];
+    for (const p of profiles) {
+      if (!(await isActiveProcessor(ctx, p.userId, today))) continue;
+      rows.push({ processorId: p.userId, name: p.facilityName, district: p.district, crops: p.crops, sameDistrict: p.district.trim().toLowerCase() === home });
+    }
+    rows.sort((a, b) => Number(b.sameDistrict) - Number(a.sameDistrict) || a.district.localeCompare(b.district) || a.name.localeCompare(b.name));
+    return rows;
+  },
+});
+
+/** Farmer deliveries booked to this processor's facility, waiting for arrival to be confirmed. */
+export const listDeliveriesToMyFacility = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    await requireProcessorUser(ctx, args.userId);
+    const units = await ctx.db
+      .query("listingUnits")
+      .withIndex("by_delivery_status", (q) => q.eq("deliveryStatus", "farmer_confirmed"))
+      .take(2000);
+    const byUtid = new Map<string, { lockUtid: string; produceType: string; kilos: number; units: number; farmerAlias: string; exporterAlias: string }>();
+    for (const u of units) {
+      if (u.status !== "locked" || !u.lockUtid) continue;
+      const listing = await ctx.db.get(u.listingId);
+      if (!listing || listing.deliveryProcessorId !== args.userId) continue;
+      const row = byUtid.get(u.lockUtid);
+      if (row) {
+        row.kilos += listing.unitSize || 10;
+        row.units += 1;
+        continue;
+      }
+      const farmer = listing.farmerId ? await ctx.db.get(listing.farmerId) : null;
+      const exporter = u.lockedBy ? await ctx.db.get(u.lockedBy) : null;
+      byUtid.set(u.lockUtid, {
+        lockUtid: u.lockUtid,
+        produceType: listing.produceType,
+        kilos: listing.unitSize || 10,
+        units: 1,
+        farmerAlias: farmer?.alias ?? "",
+        exporterAlias: exporter?.alias ?? "",
+      });
+    }
+    return [...byUtid.values()];
+  },
+});
+
+/** The processor confirms a farmer's delivery arrived at its facility. */
+export const confirmDeliveryAtFacility = mutation({
+  args: { userId: v.id("users"), lockUtid: v.string() },
+  handler: async (ctx, args) => {
+    await requireProcessorUser(ctx, args.userId);
+    const units = await ctx.db.query("listingUnits").withIndex("by_lock_utid", (q) => q.eq("lockUtid", args.lockUtid)).take(2000);
+    if (units.length === 0) throw new Error("Delivery not found");
+    for (const u of units) {
+      const listing = await ctx.db.get(u.listingId);
+      if (!listing || listing.deliveryProcessorId !== args.userId) throw new Error("This delivery is not to your facility");
+    }
+    const { results } = await confirmDeliveryCore(ctx, { lockUtid: args.lockUtid });
+    await audit(ctx, "processor_confirmed_delivery", args.userId, { targetId: args.lockUtid, note: `${results.unitsUpdated} units` });
+    return { unitsUpdated: results.unitsUpdated, errors: results.errors };
   },
 });

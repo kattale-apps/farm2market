@@ -8,7 +8,7 @@
  */
 
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, MutationCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { generateUTID, getBuyerServiceFeePercentage, getTraderCommissionPercentage, getUgandaTime } from "./utils";
 import { MAX_TRADER_EXPOSURE_UGX, DEFAULT_BUYER_SERVICE_FEE_PERCENTAGE } from "./constants";
@@ -31,29 +31,6 @@ async function verifyAdmin(ctx: any, adminId: string) {
  */
 function isSuperAdmin(user: { adminLevel?: "super" | "junior" }): boolean {
   return user.adminLevel === "super" || user.adminLevel === undefined;
-}
-
-/**
- * Check if admin can access a specific storage location
- * - Super admins can access all locations
- * - Junior admins can only access locations in their allowedStorageLocationIds
- */
-function canAdminAccessLocation(
-  adminUser: { adminLevel?: "super" | "junior"; allowedStorageLocationIds?: Id<"storageLocations">[] },
-  locationId: Id<"storageLocations">
-): boolean {
-  // Super admins can access all locations
-  if (isSuperAdmin(adminUser)) {
-    return true;
-  }
-  
-  // Junior admins can only access assigned locations
-  if (adminUser.adminLevel === "junior") {
-    return adminUser.allowedStorageLocationIds?.includes(locationId) ?? false;
-  }
-  
-  // Default: deny access (should not happen for valid admin users)
-  return false;
 }
 
 /**
@@ -389,27 +366,19 @@ export const depositDemoFunds = mutation({
 });
 
 /**
- * Confirm delivery to storage by UTID (admin only)
- * Admin selects a UTID and confirms delivery, creating trader inventory
+ * Confirm that produce locked under one UTID reached its delivery point:
+ * units become delivered and the exporter's inventory is created. Used by
+ * Storage and Transport Officers (admin) and by the processor at the facility.
  */
-export const confirmDeliveryToStorageByUTID = mutation({
-  args: {
-    adminId: v.id("users"),
-    lockUtid: v.string(), // The UTID from the lock transaction
-    reason: v.string(),
-    deliveryPhotos: v.optional(v.array(v.string())),
-  },
-  handler: async (ctx, args) => {
-    const adminUser = await verifyAdmin(ctx, args.adminId);
-
+export async function confirmDeliveryCore(ctx: MutationCtx, input: { lockUtid: string; deliveryPhotos?: string[] }) {
     // Find all units locked with this UTID
     const allUnits = await ctx.db.query("listingUnits").collect();
     const lockedUnits = allUnits.filter(
-      (u) => u.status === "locked" && u.lockUtid === args.lockUtid
+      (u) => u.status === "locked" && u.lockUtid === input.lockUtid
     );
 
     if (lockedUnits.length === 0) {
-      throw new Error(`No locked units found with UTID: ${args.lockUtid}`);
+      throw new Error(`No locked units found with UTID: ${input.lockUtid}`);
     }
 
     // Verify all units have been confirmed by farmer (deliveryStatus === "farmer_confirmed")
@@ -424,33 +393,12 @@ export const confirmDeliveryToStorageByUTID = mutation({
       );
     }
 
-    // If admin is junior admin, verify they have access to all locations in this UTID
-    if (!isSuperAdmin(adminUser)) {
-      // Check each unit's listing location
-      for (const unit of lockedUnits) {
-        const listing = await ctx.db.get(unit.listingId);
-        if (!listing || !listing.storageLocationId) {
-          continue; // Skip if listing or location missing (will be handled later)
-        }
-        
-        // Check if junior admin can access this location
-        if (!canAdminAccessLocation(adminUser, listing.storageLocationId)) {
-          const location = await ctx.db.get(listing.storageLocationId);
-          const locationName = location ? location.districtName : listing.storageLocationId;
-          throw new Error(
-            `You do not have permission to confirm deliveries for location: ${locationName}. ` +
-            `This delivery is outside your assigned storage locations.`
-          );
-        }
-      }
-    }
-
-    // Group units by trader, produce type, and storage location
+    // Group units by trader, produce type and delivery point (processor facility)
     // Also preserve quality rating and unit price (actual purchase price after negotiation)
     const unitsByTraderProduceLocation = new Map<string, { 
       traderId: Id<"users">; 
       produceType: string; 
-      storageLocationId: Id<"storageLocations">;
+      deliveryProcessorId?: Id<"users">;
       qualityRating?: string;
       unitPrice: number; // Actual purchase price per kilo
       units: typeof lockedUnits; 
@@ -465,12 +413,6 @@ export const confirmDeliveryToStorageByUTID = mutation({
       const listing = await ctx.db.get(unit.listingId);
       if (!listing) continue;
 
-      // Skip if listing doesn't have storageLocationId (old data)
-      if (!listing.storageLocationId) {
-        errors.push(`Listing ${listing.utid} is missing storageLocationId. Please update the listing.`);
-        continue;
-      }
-
       // Get actual purchase price - check if there was a negotiation
       let actualPricePerKilo = listing.pricePerKilo;
       if (unit.activeNegotiationId) {
@@ -480,12 +422,12 @@ export const confirmDeliveryToStorageByUTID = mutation({
         }
       }
 
-      const key = `${unit.lockedBy}_${listing.produceType}_${listing.storageLocationId}`;
+      const key = `${unit.lockedBy}_${listing.produceType}_${listing.deliveryProcessorId ?? "none"}`;
       if (!unitsByTraderProduceLocation.has(key)) {
         unitsByTraderProduceLocation.set(key, {
           traderId: unit.lockedBy,
           produceType: listing.produceType,
-          storageLocationId: listing.storageLocationId,
+          deliveryProcessorId: listing.deliveryProcessorId,
           qualityRating: listing.qualityRating,
           unitPrice: actualPricePerKilo,
           units: [],
@@ -501,8 +443,8 @@ export const confirmDeliveryToStorageByUTID = mutation({
       errors: [] as string[],
     };
 
-    const deliveryPhotos = args.deliveryPhotos
-      ? args.deliveryPhotos.map((photo) => photo.trim()).filter(Boolean)
+    const deliveryPhotos = input.deliveryPhotos
+      ? input.deliveryPhotos.map((photo) => photo.trim()).filter(Boolean)
       : undefined;
 
     // Create inventory for each trader/produce/location combination
@@ -528,7 +470,7 @@ export const confirmDeliveryToStorageByUTID = mutation({
           totalKilos,
           blockSize: 100, // Target block size
           produceType: group.produceType,
-          storageLocationId: group.storageLocationId,
+          deliveryProcessorId: group.deliveryProcessorId,
           qualityRating: group.qualityRating,
           unitPrice: group.unitPrice, // Actual negotiated price per kilo (payment confirmed on delivery)
           acquiredAt: getUgandaTime(), // Timestamp when received at storage (delivery confirmed)
@@ -577,6 +519,27 @@ export const confirmDeliveryToStorageByUTID = mutation({
         results.errors.push(`Failed to create 100kg blocks for trader ${traderId}: ${blockError.message}`);
       }
     }
+
+    return { results, deliveryPhotos };
+}
+
+/**
+ * Confirm a delivery by UTID (Storage and Transport Officer or super admin).
+ * The mutation name is kept so existing screens keep working.
+ */
+export const confirmDeliveryToStorageByUTID = mutation({
+  args: {
+    adminId: v.id("users"),
+    lockUtid: v.string(), // The UTID from the lock transaction
+    reason: v.string(),
+    deliveryPhotos: v.optional(v.array(v.string())),
+  },
+  handler: async (ctx, args) => {
+    const adminUser = await verifyAdmin(ctx, args.adminId);
+    if (!isSuperAdmin(adminUser) && adminUser.adminCategory !== "store") {
+      throw new Error("Only a Storage and Transport Officer or super admin can confirm deliveries");
+    }
+    const { results, deliveryPhotos } = await confirmDeliveryCore(ctx, { lockUtid: args.lockUtid, deliveryPhotos: args.deliveryPhotos });
 
     const utid = await logAdminAction(
       ctx,
@@ -916,203 +879,6 @@ export const resetAllTransactions = mutation({
         results,
       };
     }
-  },
-});
-
-/**
- * Get all storage locations (admin only)
- */
-export const getStorageLocations = query({
-  args: {
-    adminId: v.id("users"),
-  },
-  handler: async (ctx, args) => {
-    await verifyAdmin(ctx, args.adminId);
-    const locations = await ctx.db
-      .query("storageLocations")
-      .collect();
-    return locations.sort((a, b) => a.order - b.order);
-  },
-});
-
-/**
- * Add storage location (admin only)
- */
-export const addStorageLocation = mutation({
-  args: {
-    adminId: v.id("users"),
-    districtName: v.string(),
-    code: v.string(),
-    order: v.number(),
-    reason: v.string(),
-  },
-  handler: async (ctx, args) => {
-    await verifyAdmin(ctx, args.adminId);
-
-    if (!args.districtName.trim()) {
-      throw new Error("District name cannot be empty");
-    }
-    if (!args.code.trim()) {
-      throw new Error("Code cannot be empty");
-    }
-
-    // Check if code already exists
-    const existing = await ctx.db
-      .query("storageLocations")
-      .withIndex("by_code", (q) => q.eq("code", args.code.trim().toUpperCase()))
-      .first();
-    if (existing) {
-      throw new Error(`Storage location with code "${args.code}" already exists`);
-    }
-
-    const utid = await logAdminAction(
-      ctx,
-      args.adminId,
-      "add_storage_location",
-      args.reason,
-      undefined,
-      {
-        districtName: args.districtName.trim(),
-        code: args.code.trim().toUpperCase(),
-        order: args.order,
-      }
-    );
-
-    const locationId = await ctx.db.insert("storageLocations", {
-      districtName: args.districtName.trim(),
-      code: args.code.trim().toUpperCase(),
-      order: args.order,
-      active: true,
-      createdAt: getUgandaTime(),
-      createdBy: args.adminId,
-      utid,
-    });
-
-    return { utid, locationId, districtName: args.districtName.trim(), code: args.code.trim().toUpperCase() };
-  },
-});
-
-/**
- * Update storage location (admin only)
- */
-export const updateStorageLocation = mutation({
-  args: {
-    adminId: v.id("users"),
-    locationId: v.id("storageLocations"),
-    districtName: v.optional(v.string()),
-    code: v.optional(v.string()),
-    order: v.optional(v.number()),
-    active: v.optional(v.boolean()),
-    reason: v.string(),
-  },
-  handler: async (ctx, args) => {
-    await verifyAdmin(ctx, args.adminId);
-
-    const location = await ctx.db.get(args.locationId);
-    if (!location) {
-      throw new Error("Storage location not found");
-    }
-
-    const previousState = {
-      districtName: location.districtName,
-      code: location.code,
-      order: location.order,
-      active: location.active,
-    };
-
-    const updates: any = {};
-    if (args.districtName !== undefined) {
-      if (!args.districtName.trim()) {
-        throw new Error("District name cannot be empty");
-      }
-      updates.districtName = args.districtName.trim();
-    }
-    if (args.code !== undefined) {
-      if (!args.code.trim()) {
-        throw new Error("Code cannot be empty");
-      }
-      const newCode = args.code.trim().toUpperCase();
-      if (newCode !== location.code) {
-        // Check if new code already exists
-        const existing = await ctx.db
-          .query("storageLocations")
-          .withIndex("by_code", (q) => q.eq("code", newCode))
-          .first();
-        if (existing) {
-          throw new Error(`Storage location with code "${newCode}" already exists`);
-        }
-        updates.code = newCode;
-      }
-    }
-    if (args.order !== undefined) {
-      updates.order = args.order;
-    }
-    if (args.active !== undefined) {
-      updates.active = args.active;
-    }
-
-    const utid = await logAdminAction(
-      ctx,
-      args.adminId,
-      "update_storage_location",
-      args.reason,
-      undefined,
-      {
-        locationId: args.locationId,
-        previousState,
-        newState: updates,
-      }
-    );
-
-    await ctx.db.patch(args.locationId, updates);
-
-    return { utid, locationId: args.locationId, ...updates };
-  },
-});
-
-/**
- * Delete storage location (admin only)
- */
-export const deleteStorageLocation = mutation({
-  args: {
-    adminId: v.id("users"),
-    locationId: v.id("storageLocations"),
-    reason: v.string(),
-  },
-  handler: async (ctx, args) => {
-    await verifyAdmin(ctx, args.adminId);
-
-    const location = await ctx.db.get(args.locationId);
-    if (!location) {
-      throw new Error("Storage location not found");
-    }
-
-    // Check if location is being used in any active listings
-    const activeListings = await ctx.db
-      .query("listings")
-      .withIndex("by_status", (q) => q.eq("status", "active"))
-      .collect();
-    const usingLocation = activeListings.some((listing) => listing.storageLocationId === args.locationId);
-    if (usingLocation) {
-      throw new Error("Cannot delete storage location that is being used in active listings");
-    }
-
-    const utid = await logAdminAction(
-      ctx,
-      args.adminId,
-      "delete_storage_location",
-      args.reason,
-      undefined,
-      {
-        locationId: args.locationId,
-        districtName: location.districtName,
-        code: location.code,
-      }
-    );
-
-    await ctx.db.delete(args.locationId);
-
-    return { utid, locationId: args.locationId };
   },
 });
 
@@ -1911,7 +1677,6 @@ export const getProduceOptions = query({
       icon: opt.icon,
       order: opt.order,
       active: opt.active,
-      allowedStorageLocationIds: opt.allowedStorageLocationIds || [],
       createdAt: opt.createdAt,
       createdBy: opt.createdBy,
     }));
@@ -1929,7 +1694,6 @@ export const addProduceOption = mutation({
     icon: v.string(), // Emoji icon
     order: v.float64(),
     category: v.optional(v.string()),
-    allowedStorageLocationIds: v.optional(v.array(v.id("storageLocations"))),
     reason: v.string(),
   },
   handler: async (ctx, args) => {
@@ -1982,9 +1746,6 @@ export const addProduceOption = mutation({
     if (args.category) {
       insertData.category = args.category.trim();
     }
-    if (args.allowedStorageLocationIds && args.allowedStorageLocationIds.length > 0) {
-      insertData.allowedStorageLocationIds = args.allowedStorageLocationIds;
-    }
     
     const optionId = await ctx.db.insert("produceOptions", insertData);
 
@@ -2003,7 +1764,6 @@ export const updateProduceOption = mutation({
     icon: v.optional(v.string()),
     order: v.optional(v.number()),
     active: v.optional(v.boolean()),
-    allowedStorageLocationIds: v.optional(v.array(v.id("storageLocations"))),
     reason: v.string(),
   },
   handler: async (ctx, args) => {
@@ -2019,7 +1779,6 @@ export const updateProduceOption = mutation({
       icon: option.icon,
       order: option.order,
       active: option.active,
-      allowedStorageLocationIds: option.allowedStorageLocationIds || [],
     };
 
     const updates: any = {};
@@ -2040,9 +1799,6 @@ export const updateProduceOption = mutation({
     }
     if (args.active !== undefined) {
       updates.active = args.active;
-    }
-    if (args.allowedStorageLocationIds !== undefined) {
-      updates.allowedStorageLocationIds = args.allowedStorageLocationIds;
     }
 
     const utid = await logAdminAction(

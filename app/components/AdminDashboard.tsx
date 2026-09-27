@@ -1225,7 +1225,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                 <div>
                   <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Storage and Transport Officer Management</h3>
                   <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.95 }}>
-                    Manage stores, assign admins & audit activity
+                    Audit Storage and Transport Officers&apos; delivery checks and exporter inventory
                   </p>
                 </div>
               </div>

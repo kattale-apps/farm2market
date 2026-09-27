@@ -2202,7 +2202,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
                       {item.utid}
                     </div>
                     {/* Delivery Location - Prominently Displayed */}
-                    {item.storageLocation && (
+                    {item.deliveryPoint && (
                       <div style={{
                         marginTop: "0.75rem",
                         padding: "0.75rem",
@@ -2227,7 +2227,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
                           fontWeight: "700",
                           fontFamily: '"Montserrat", sans-serif',
                         }}>
-                          {item.storageLocation.districtName} ({item.storageLocation.code})
+                          {item.deliveryPoint.name}, {item.deliveryPoint.district}
                         </div>
                       </div>
                     )}
@@ -2555,7 +2555,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
                     </div>
                   )}
                   {/* Delivery Location - Prominently Displayed */}
-                  {utid.entities && utid.entities.length > 0 && utid.entities[0].storageLocation && (
+                  {utid.entities && utid.entities.length > 0 && utid.entities[0].deliveryPoint && (
                     <div style={{
                       marginTop: "0.75rem",
                       padding: "0.75rem",
@@ -2580,7 +2580,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
                         fontWeight: "700",
                         fontFamily: '"Montserrat", sans-serif',
                       }}>
-                        {utid.entities[0].storageLocation.districtName} ({utid.entities[0].storageLocation.code})
+                        {utid.entities[0].deliveryPoint.name}, {utid.entities[0].deliveryPoint.district}
                       </div>
                     </div>
                   )}

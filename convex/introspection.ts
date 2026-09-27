@@ -265,7 +265,6 @@ export const getAllUsers = query({
         sex: (u as any).sex,
         adminLevel: u.adminLevel,
         adminCategory: u.adminCategory,
-        allowedStorageLocationIds: u.allowedStorageLocationIds ?? [],
         assignedCommunityIds: u.assignedCommunityIds ?? [],
         serviceLevel: u.serviceLevel,
         exportLimit: u.exportLimit,

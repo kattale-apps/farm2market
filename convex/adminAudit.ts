@@ -55,27 +55,7 @@ export const getStoreAdmins = query({
       (u) => u.adminLevel === "junior" && u.adminCategory === "store"
     );
 
-    // Get location names for each admin
-    const adminsWithLocations = await Promise.all(
-      storeAdmins.map(async (admin) => {
-        const locationIds = admin.allowedStorageLocationIds || [];
-        const locations = await Promise.all(
-          locationIds.map(async (locId) => {
-            const loc = await ctx.db.get(locId);
-            return loc ? { id: loc._id, name: loc.districtName, code: loc.code } : null;
-          })
-        );
-        return {
-          id: admin._id,
-          alias: admin.alias,
-          email: admin.email || "",
-          allowedStorageLocationIds: locationIds,
-          locations: locations.filter((l) => l !== null),
-        };
-      })
-    );
-
-    return adminsWithLocations;
+    return storeAdmins.map((admin) => ({ id: admin._id, alias: admin.alias, email: admin.email || "" }));
   },
 });
 
@@ -134,19 +114,9 @@ export const getStoreAdminUTIDs = query({
       metadata: action.metadata,
     }));
 
-    // Get location details for this admin
-    const locationIds = storeAdmin.allowedStorageLocationIds || [];
-    const locations = await Promise.all(
-      locationIds.map(async (locId) => {
-        const loc = await ctx.db.get(locId);
-        return loc ? { id: loc._id, name: loc.districtName, code: loc.code } : null;
-      })
-    );
-
     return {
       storeAdminAlias: storeAdmin.alias,
       storeAdminEmail: storeAdmin.email || "",
-      locations: locations.filter((l) => l !== null),
       totalActions: adminActions.length,
       deliveryVerifications: deliveryActions.length,
       utids,
@@ -155,13 +125,13 @@ export const getStoreAdminUTIDs = query({
 });
 
 /**
- * Get inventory summary for a StoreAdmin's locations
+ * Exporter inventory held at processor facilities (all, or one facility)
  */
 export const getStoreAdminInventory = query({
   args: {
     adminId: v.id("users"),
     storeAdminId: v.id("users"),
-    locationId: v.optional(v.id("storageLocations")),
+    processorId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
     // Verify admin role
@@ -189,13 +159,8 @@ export const getStoreAdminInventory = query({
       throw new Error("Invalid StoreAdmin");
     }
 
-    const locationIds = args.locationId ? [args.locationId] : (storeAdmin.allowedStorageLocationIds || []);
-    
-    // Get all trader inventory for these locations
-    const allInventory = await ctx.db.query("traderInventory").collect();
-    const locationInventory = allInventory.filter((inv: any) =>
-      locationIds.includes(inv.storageLocationId)
-    );
+    const allInventory = await ctx.db.query("traderInventory").withIndex("by_status", (q) => q.eq("status", "in_storage")).take(5000);
+    const locationInventory = args.processorId ? allInventory.filter((inv) => inv.deliveryProcessorId === args.processorId) : allInventory;
 
     // Calculate totals
     const totalKilos = locationInventory.reduce((sum, inv: any) => sum + inv.totalKilos, 0);

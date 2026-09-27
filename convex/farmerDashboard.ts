@@ -11,6 +11,7 @@ import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { getUgandaTime, generateUTID } from "./utils";
+import { deliveryPointOf } from "./processors";
 
 /**
  * Get farmer's listings
@@ -48,10 +49,8 @@ export const getFarmerListings = query({
         const deliveredCount = units.filter((u) => u.status === "delivered").length;
         const cancelledCount = units.filter((u) => u.status === "cancelled").length;
 
-        // Get storage location details if available
-        const storageLocation = listing.storageLocationId
-          ? await ctx.db.get(listing.storageLocationId)
-          : null;
+        // Where the farmer delivers (a processor facility), if chosen
+        const deliveryPoint = await deliveryPointOf(ctx, listing.deliveryProcessorId);
 
         return {
           listingId: listing._id,
@@ -66,11 +65,7 @@ export const getFarmerListings = query({
           deliverySLA: listing.deliverySLA,
           qualityRating: listing.qualityRating || null,
           qualityComment: listing.qualityComment || null,
-          storageLocation: storageLocation ? {
-            locationId: storageLocation._id,
-            districtName: storageLocation.districtName,
-            code: storageLocation.code,
-          } : null,
+          deliveryPoint,
           collectionLocationText: listing.collectionLocationText || null,
           // Unit breakdown
           units: {
@@ -987,42 +982,18 @@ export const farmerConfirmDelivery = mutation({
       deliveryStatus: "farmer_confirmed",
     });
 
-    // Send notifications to relevant admins
-    // Find all admins who should be notified:
-    // 1. Super admins (adminLevel === "super" or undefined)
-    // 2. Junior admins assigned to this storage location
+    // Tell super admins, Storage and Transport Officers, and the processor at
+    // the delivery point (who can confirm it on arrival).
     const adminUsers = await ctx.db
       .query("users")
       .withIndex("by_role", (q) => q.eq("role", "admin"))
       .collect();
-
-    const locationId = listing.storageLocationId;
-    const adminsToNotify: Id<"users">[] = [];
-
-    for (const adminUser of adminUsers) {
-      // Check if super admin
-      const isSuperAdmin = adminUser.adminLevel === "super" || adminUser.adminLevel === undefined;
-      
-      if (isSuperAdmin) {
-        // Super admins always get notified
-        adminsToNotify.push(adminUser._id);
-      } else if (adminUser.adminLevel === "junior" && locationId) {
-        // Junior admins only if they have access to this location
-        const hasLocationAccess = adminUser.allowedStorageLocationIds?.includes(locationId) ?? false;
-        if (hasLocationAccess) {
-          adminsToNotify.push(adminUser._id);
-        }
-      }
-    }
-
-    // Get storage location name for notification
-    let locationName = "storage location";
-    if (locationId) {
-      const storageLocation = await ctx.db.get(locationId);
-      if (storageLocation) {
-        locationName = `${storageLocation.districtName} (${storageLocation.code})`;
-      }
-    }
+    const adminsToNotify: Id<"users">[] = adminUsers
+      .filter((a) => a.adminLevel === "super" || a.adminLevel === undefined || a.adminCategory === "store")
+      .map((a) => a._id);
+    if (listing.deliveryProcessorId) adminsToNotify.push(listing.deliveryProcessorId);
+    const point = await deliveryPointOf(ctx, listing.deliveryProcessorId);
+    const locationName = point ? `${point.name}, ${point.district}` : "the collection point";
 
     // Get produce type and unit size for notification
     const produceType = listing.produceType || "produce";

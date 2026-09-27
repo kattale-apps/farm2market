@@ -2378,7 +2378,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                           {item.qualityRating || "N/A"}
                         </td>
                         <td style={{ padding: "0.75rem" }}>
-                          {item.storageLocation ? `${item.storageLocation.districtName} (${item.storageLocation.code})` : "N/A"}
+                          {item.deliveryPoint ? `${item.deliveryPoint.name}, ${item.deliveryPoint.district}` : "To agree"}
                         </td>
                         <td style={{ padding: "0.75rem" }}>{storageAge} days</td>
                         <td style={{ padding: "0.75rem" }}>

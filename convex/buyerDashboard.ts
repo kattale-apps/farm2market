@@ -24,6 +24,7 @@ import { query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { BUYER_BLOCK_SIZE_KG, BUYER_PICKUP_SLA_MS } from "./constants";
 import { getBuyerServiceFeePercentage } from "./utils";
+import { deliveryPointOf } from "./processors";
 
 /**
  * Get available inventory for buyers
@@ -60,11 +61,11 @@ export const getAvailableInventory = query({
       .filter((q) => q.eq(q.field("is100kgBlock"), true))
       .collect();
 
-    // Enrich with trader aliases and storage location (anonymity preserved)
+    // Enrich with trader aliases and delivery point (anonymity preserved)
     const enriched = await Promise.all(
       availableInventory.map(async (inventory) => {
         const trader = await ctx.db.get(inventory.traderId);
-        const storageLocation = await ctx.db.get(inventory.storageLocationId);
+        const deliveryPoint = await deliveryPointOf(ctx, inventory.deliveryProcessorId);
 
         return {
           inventoryId: inventory._id,
@@ -72,10 +73,7 @@ export const getAvailableInventory = query({
           totalKilos: inventory.totalKilos, // Should be 100kg for blocks
           blockSize: inventory.blockSize, // Target: 100kg blocks
           qualityRating: inventory.qualityRating || null, // Quality rating
-          storageLocation: storageLocation ? {
-            districtName: storageLocation.districtName,
-            code: storageLocation.code,
-          } : null,
+          deliveryPoint,
           traderAlias: trader?.alias || null, // Only alias, no real identity
           traderIsVerified: !!trader?.isVerifiedTrader && trader?.verificationStatus === "verified",
           inventoryUtid: inventory.utid, // UTID of the transaction that created this inventory
@@ -134,9 +132,7 @@ export const getAvailableTraderListingsForBuyers = query({
     const enriched = await Promise.all(
       traderListings.map(async (listing) => {
         const trader = listing.traderId ? await ctx.db.get(listing.traderId) : null;
-        const storageLocation = listing.storageLocationId
-          ? await ctx.db.get(listing.storageLocationId)
-          : null;
+        const deliveryPoint = await deliveryPointOf(ctx, listing.deliveryProcessorId);
 
         const availableUnits = listing.availableUnits ?? listing.totalUnits;
         const unitSize = listing.unitSize || 1;
@@ -165,9 +161,7 @@ export const getAvailableTraderListingsForBuyers = query({
           progressStage: listing.progressStage || null,
           traderAlias: trader?.alias || null,
           traderIsVerified: !!trader?.isVerifiedTrader && trader?.verificationStatus === "verified",
-          storageLocation: storageLocation
-            ? { districtName: storageLocation.districtName, code: storageLocation.code }
-            : null,
+          deliveryPoint,
           createdAt: listing.createdAt,
         };
       })

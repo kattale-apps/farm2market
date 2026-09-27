@@ -132,13 +132,20 @@ export function ProcessorWorkspace({ userId }: { userId: Id<"users"> }) {
               <FeeCard ws={ws} userId={userId} setMsg={setMsg} />
             </>
           )}
-          {tab === "intake" && <ProcessorIntakeTab userId={userId} member={member} today={today} setMsg={setMsg} />}
-          {tab === "batches" && <ProcessorBatchesTab userId={userId} member={member} today={today} setMsg={setMsg} />}
+          {tab === "intake" && <ProcessorIntakeTab userId={userId} member={member} today={today} crops={processorCrops(ws)} setMsg={setMsg} />}
+          {tab === "batches" && <ProcessorBatchesTab userId={userId} member={member} today={today} crops={processorCrops(ws)} setMsg={setMsg} />}
           {tab === "sales" && <ProcessorSalesTab userId={userId} member={member} active={ws.isActiveProcessor} today={today} setMsg={setMsg} />}
         </>
       )}
     </div>
   );
+}
+
+/** Open crops the processor handles; before a profile exists, every open crop. */
+function processorCrops(ws: ProcessorWS) {
+  const open = ws.crops.filter((c) => c.active);
+  const mine = ws.profile ? open.filter((c) => ws.profile!.crops.includes(c.key)) : open;
+  return (mine.length ? mine : open).map((c) => ({ key: c.key, label: c.label }));
 }
 
 export function tabButton(active: boolean): React.CSSProperties {

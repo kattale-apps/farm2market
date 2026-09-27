@@ -32,7 +32,6 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   const orders = useQuery(api.buyerDashboard.getBuyerOrders, { buyerId: userId });
   const listingOrders = useQuery(api.buyerDashboard.getBuyerListingOrders, { buyerId: userId });
   const walletBalance = useQuery(api.buyerDashboard.getBuyerWalletBalance, { buyerId: userId });
-  const storageFeeRate = useQuery(api.buyerDashboard.getBuyerStorageFeeRate, { buyerId: userId });
   const serviceFeePercentage = useQuery(api.buyerDashboard.getBuyerServiceFeePercentageQuery, { buyerId: userId });
   const transactionLedger = useQuery(api.buyerDashboard.getBuyerTransactionLedger, { buyerId: userId });
   const walletReport = useQuery(api.buyerDashboard.getBuyerWalletReport, { buyerId: userId });
@@ -173,7 +172,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       key: "rewards",
       label: <><FarmCoinIcon size={18} /> FarmCoin Rewards{typeof (buyerFarmcoinBalance as any)?.balance === "number" ? ` (${(buyerFarmcoinBalance as any).balance})` : ""}</>,
     },
-    { key: "feesInfo", label: "💰 Service Fee & Kilo-Shaving Info" },
+    { key: "feesInfo", label: "💰 Service Fee Info" },
     { key: "traderOrders", label: "📦 Exporter Listing Orders" },
     { key: "purchaseWindow", label: "🪟 Purchase Window Status" },
     { key: "traderListings", label: "📦 Exporter-sourced Listings" },
@@ -1938,7 +1937,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
         </div>
       )}
 
-      {/* Service Fee & Kilo-Shaving Info */}
+      {/* Service Fee Info */}
       {isSectionOpen("feesInfo") && (
         <div id="section-feesInfo" style={{ marginBottom: "1.5rem" }}>
           {renderHideControl("feesInfo")}
@@ -1960,25 +1959,6 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
             </div>
           )}
 
-          {storageFeeRate && (
-            <div style={{
-              padding: "clamp(1rem, 3vw, 1.5rem)",
-              background: "#fff3cd",
-              borderRadius: "12px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-              border: "1px solid #ffc107"
-            }}>
-              <h3 style={{ marginTop: 0, marginBottom: "0.5rem", fontSize: "clamp(1rem, 3vw, 1.2rem)", color: "#856404" }}>
-                ⚠️ Kilo-Shaving Information
-              </h3>
-              <p style={{ margin: 0, color: "#666", fontSize: "clamp(0.9rem, 2.5vw, 1rem)", marginBottom: "0.5rem" }}>
-                <strong>Grace Period:</strong> You have <strong>48 hours</strong> after purchase to collect your order before kilo-shaving begins.
-              </p>
-              <p style={{ margin: 0, color: "#666", fontSize: "clamp(0.9rem, 2.5vw, 1rem)" }}>
-                <strong>Rate:</strong> {storageFeeRate.rateKgPerDay} kg per day per 100kg block (applies after the 48-hour grace period).
-              </p>
-            </div>
-          )}
         </div>
       )}
 
@@ -2670,7 +2650,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                         </div>
                       </div>
                       <p style={{ margin: "0.5rem 0 0 0", fontSize: "clamp(0.7rem, 2vw, 0.8rem)", color: "#999" }}>
-                        ⚠️ You have 48 hours to pick up after purchase. Kilo-shaving starts after the grace period.
+                        ⚠️ You have 48 hours to pick up after purchase.
                       </p>
                     </div>
                   ) : (

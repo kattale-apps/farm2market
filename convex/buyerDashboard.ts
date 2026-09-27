@@ -23,7 +23,7 @@ import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { BUYER_BLOCK_SIZE_KG, BUYER_PICKUP_SLA_MS } from "./constants";
-import { getStorageFeeRate, getBuyerServiceFeePercentage } from "./utils";
+import { getBuyerServiceFeePercentage } from "./utils";
 
 /**
  * Get available inventory for buyers
@@ -40,7 +40,6 @@ import { getStorageFeeRate, getBuyerServiceFeePercentage } from "./utils";
  * - Trader real identity
  * - Trader real identity
  * - Other buyers' purchases
- * - Storage fees
  */
 export const getAvailableInventory = query({
   args: {
@@ -99,8 +98,6 @@ export const getAvailableInventory = query({
       byProduceType.get(inv.produceType)!.push(inv);
     }
 
-    // Get current storage fee rate for display (kilo-shaving rate)
-    const storageFeeRate = await getStorageFeeRate({ db: ctx.db });
     // Get current service fee percentage for display
     const serviceFeePercentage = await getBuyerServiceFeePercentage({ db: ctx.db });
 
@@ -109,7 +106,6 @@ export const getAvailableInventory = query({
       totalKilos: enriched.reduce((sum, inv) => sum + inv.totalKilos, 0),
       byProduceType: Object.fromEntries(byProduceType),
       inventory: enriched,
-      storageFeeRate: storageFeeRate, // Current kilo-shaving rate (visible to buyers before purchase)
       serviceFeePercentage: serviceFeePercentage, // Current service fee percentage
     };
   },
@@ -180,26 +176,6 @@ export const getAvailableTraderListingsForBuyers = query({
     enriched.sort((a, b) => b.createdAt - a.createdAt);
 
     return { listings: enriched };
-  },
-});
-
-/**
- * Get current storage fee rate (kilo-shaving rate)
- * Returns the current storage fee rate for display in buyer dashboard
- */
-export const getBuyerStorageFeeRate = query({
-  args: {
-    buyerId: v.id("users"),
-  },
-  handler: async (ctx, args) => {
-    // Verify user is a buyer
-    const user = await ctx.db.get(args.buyerId);
-    if (!user || user.role !== "buyer") {
-      throw new Error("User is not a buyer");
-    }
-
-    const rate = await getStorageFeeRate({ db: ctx.db });
-    return { rateKgPerDay: rate };
   },
 });
 

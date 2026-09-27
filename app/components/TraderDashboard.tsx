@@ -28,7 +28,6 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
   const exposure = useQuery(api.traderDashboard.getExposureStatus, { traderId: userId });
   const inventory = useQuery(api.traderDashboard.getInventoryWithProjectedLoss, { traderId: userId });
   const activeUTIDs = useQuery(api.traderDashboard.getTraderActiveUTIDs, { traderId: userId });
-  const storageFeeRate = useQuery(api.traderDashboard.getTraderStorageFeeRate, { traderId: userId });
   const initiateDeposit = useAction(api.pesapal.initiateTraderDeposit);
   // Export Markets card: for traders admitted as exporters, or who joined an
   // exporter community and are waiting to be admitted.
@@ -111,7 +110,6 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
     { key: "buyOffers", label: "💬 Buy-Offers from Buyers" },
     { key: "createListing", label: "📝 Create Listing" },
     { key: "listingsNegotiations", label: "📑 Listings & Negotiations" },
-    { key: "storageFeeInfo", label: "💰 Kilo-Shaving Rate Info" },
     { key: "inventoryStorage", label: "📦 Inventory in Storage" },
     { key: "transactionsLog", label: "🧾 Transactions Log" },
     { key: "reports", label: "📊 Comprehensive Reports" },
@@ -420,7 +418,6 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
           ["Inventory Items", String(inv.length)],
           ["Total Kilos in Storage", `${totalKilos.toLocaleString()} kg`],
           ["Estimated Inventory Value", `UGX ${totalValue.toLocaleString()}`],
-          ["Storage Fee Rate", `${storageFeeRate?.rateKgPerDay || 0} UGX/kg/day`],
         ],
         theme: "grid",
         headStyles: { fillColor: [25, 118, 210], fontSize: 9 },
@@ -2115,26 +2112,6 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
             )}
           </div>
 
-      {/* Storage Fee Rate Info */}
-      {isSectionOpen("storageFeeInfo") && storageFeeRate && (
-        <div id="section-storageFeeInfo" style={{
-          marginBottom: "1.5rem",
-          padding: "clamp(1rem, 3vw, 1.5rem)",
-          background: "#fff3cd",
-          borderRadius: "12px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          border: "1px solid #ffc107"
-        }}>
-          {renderHideControl("storageFeeInfo")}
-          <h3 style={{ marginTop: 0, marginBottom: "0.5rem", fontSize: "clamp(1rem, 3vw, 1.2rem)", color: "#856404" }}>
-            Current Kilo-Shaving Rate
-          </h3>
-          <p style={{ margin: 0, color: "#666", fontSize: "clamp(0.9rem, 2.5vw, 1rem)" }}>
-            <strong>{storageFeeRate.rateKgPerDay} kg per day</strong> per 100kg block. This rate applies to all inventory in storage.
-          </p>
-        </div>
-      )}
-
       {/* Inventory */}
       {isSectionOpen("inventoryStorage") && (
       <div id="section-inventoryStorage" style={{
@@ -2185,7 +2162,6 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
           <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
             {pagedInventory.map((item: any, index: number) => {
               const totalPrice = item.originalPricePerKilo * item.totalKilos;
-              const projectedRemainingPrice = item.originalPricePerKilo * item.projectedKilosRemaining;
               
               return (
                 <div key={index} style={{
@@ -2197,7 +2173,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
                 }}>
                   {isMobile && (
                     <div style={{ fontSize: "0.8rem", color: "#64748b", marginBottom: "0.35rem" }}>
-                      Hint: Check storage days and projected loss.
+                      Hint: Check how long each block has been stored.
                     </div>
                   )}
                   {/* Header with UTID */}
@@ -2294,9 +2270,6 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
                         <div style={{ fontSize: "clamp(0.9rem, 3vw, 1rem)", fontWeight: "600", color: "#1a1a1a" }}>
                           {formatUGX(totalPrice)}
                         </div>
-                        <div style={{ fontSize: "clamp(0.7rem, 2vw, 0.75rem)", color: "#999", marginTop: "0.25rem" }}>
-                          Projected: {formatUGX(projectedRemainingPrice)}
-                        </div>
                       </div>
                     </div>
                   </div>
@@ -2315,14 +2288,6 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
                       <div>
                         <div style={{ color: "#999", fontSize: "clamp(0.7rem, 2vw, 0.75rem)" }}>Days Stored</div>
                         <div style={{ fontWeight: "600", color: "#1a1a1a", fontSize: "clamp(0.8rem, 2.5vw, 0.9rem)" }}>{item.daysInStorage.toFixed(1)}</div>
-                      </div>
-                      <div>
-                        <div style={{ color: "#999", fontSize: "clamp(0.7rem, 2vw, 0.75rem)" }}>Loss</div>
-                        <div style={{ fontWeight: "600", color: "#d32f2f", fontSize: "clamp(0.8rem, 2.5vw, 0.9rem)" }}>{item.projectedKilosLost.toFixed(2)} kg</div>
-                      </div>
-                      <div>
-                        <div style={{ color: "#999", fontSize: "clamp(0.7rem, 2vw, 0.75rem)" }}>Remaining</div>
-                        <div style={{ fontWeight: "600", color: "#2e7d32", fontSize: "clamp(0.8rem, 2.5vw, 0.9rem)" }}>{item.projectedKilosRemaining.toFixed(2)} kg</div>
                       </div>
                     </div>
                   </div>

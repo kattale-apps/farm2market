@@ -10,8 +10,8 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { generateUTID, getStorageFeeRate, getBuyerServiceFeePercentage, getTraderCommissionPercentage, getUgandaTime } from "./utils";
-import { MAX_TRADER_EXPOSURE_UGX, DEFAULT_STORAGE_FEE_RATE_KG_PER_DAY, DEFAULT_BUYER_SERVICE_FEE_PERCENTAGE } from "./constants";
+import { generateUTID, getBuyerServiceFeePercentage, getTraderCommissionPercentage, getUgandaTime } from "./utils";
+import { MAX_TRADER_EXPOSURE_UGX, DEFAULT_BUYER_SERVICE_FEE_PERCENTAGE } from "./constants";
 import { Id } from "./_generated/dataModel";
 
 /**
@@ -532,7 +532,7 @@ export const confirmDeliveryToStorageByUTID = mutation({
           qualityRating: group.qualityRating,
           unitPrice: group.unitPrice, // Actual negotiated price per kilo (payment confirmed on delivery)
           acquiredAt: getUgandaTime(), // Timestamp when received at storage (delivery confirmed)
-          storageStartTime: getUgandaTime(), // When storage fees start
+          storageStartTime: getUgandaTime(), // When the produce went into storage
           status: "in_storage",
           utid: deliveryUtid, // Delivery UTID - shows actual price paid (payment moves from pending to paid)
           is100kgBlock: false, // Will be set to true when 100kg block is created
@@ -919,61 +919,6 @@ export const resetAllTransactions = mutation({
   },
 });
 
-/**
- * Update kilo-shaving rate (admin only)
- * Changes the storage fee rate (kilos per day per 100kg block)
- */
-export const updateKiloShavingRate = mutation({
-  args: {
-    adminId: v.id("users"),
-    rateKgPerDay: v.number(), // New rate in kilos per day per 100kg block
-    reason: v.string(),
-  },
-  handler: async (ctx, args) => {
-    await verifyAdmin(ctx, args.adminId);
-
-    if (args.rateKgPerDay < 0) {
-      throw new Error("Storage fee rate cannot be negative");
-    }
-
-    const utid = await logAdminAction(
-      ctx,
-      args.adminId,
-      "update_kilo_shaving_rate",
-      args.reason,
-      undefined,
-      {
-        previousRate: await getStorageFeeRate({ db: ctx.db }),
-        newRate: args.rateKgPerDay,
-      }
-    );
-
-    // Get or create system settings
-    let settings = await ctx.db.query("systemSettings").first();
-    if (!settings) {
-      // Create initial settings record
-      await ctx.db.insert("systemSettings", {
-        pilotMode: false,
-        setBy: args.adminId,
-        setAt: getUgandaTime(),
-        reason: "Initial system settings",
-        utid: generateUTID("admin"),
-        storageFeeRateKgPerDay: args.rateKgPerDay,
-      });
-    } else {
-      // Update existing settings
-      await ctx.db.patch(settings._id, {
-        storageFeeRateKgPerDay: args.rateKgPerDay,
-      });
-    }
-
-    return { utid, rateKgPerDay: args.rateKgPerDay };
-  },
-});
-
-/**
- * Get current kilo-shaving rate (admin only)
- */
 /**
  * Get all storage locations (admin only)
  */
@@ -1441,17 +1386,6 @@ export const getTodaySystemMetrics = query({
         listings: pickedUpListings,
       },
     };
-  },
-});
-
-export const getKiloShavingRate = query({
-  args: {
-    adminId: v.id("users"),
-  },
-  handler: async (ctx, args) => {
-    await verifyAdmin(ctx, args.adminId);
-    const rate = await getStorageFeeRate({ db: ctx.db });
-    return { rateKgPerDay: rate };
   },
 });
 

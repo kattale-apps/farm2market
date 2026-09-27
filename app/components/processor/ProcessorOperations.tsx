@@ -13,7 +13,24 @@ import { PhotoSetCapture, CapturedPhoto } from "../exportMarkets/PhotoSetCapture
 import { PROCESSOR_HEADING, PROCESSOR_SOFT, PROCESSOR_BORDER, chip, uploadEvidencePhotos } from "./ProcessorWorkspace";
 
 type Msg = { tone: "error" | "success" | "info"; text: string } | null;
-type TabProps = { userId: Id<"users">; member: boolean; today: string; setMsg: (m: Msg) => void };
+type TabProps = { userId: Id<"users">; member: boolean; today: string; crops: { key: string; label: string }[]; setMsg: (m: Msg) => void };
+
+/** Crop picker shown only when the processor handles more than one open crop. */
+function CropSelect({ crops, value, onChange }: { crops: { key: string; label: string }[]; value: string; onChange: (c: string) => void }) {
+  if (crops.length <= 1) return null;
+  return (
+    <div style={{ marginBottom: "0.75rem" }}>
+      <label style={label}>Crop *</label>
+      <select style={input} value={value} onChange={(e) => onChange(e.target.value)}>
+        {crops.map((c) => (
+          <option key={c.key} value={c.key}>
+            {c.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
 
 export const TRACE_LEVEL_LABEL: Record<string, string> = {
   platform_traced: "Platform traced",
@@ -53,7 +70,7 @@ export function PhotoStrip({ photos }: { photos: { url: string | null; manualEnt
 // Intake
 // ------------------------------------------------------------------
 
-export function ProcessorIntakeTab({ userId, member, today, setMsg }: TabProps) {
+export function ProcessorIntakeTab({ userId, member, today, crops, setMsg }: TabProps) {
   const intakes = useQuery(api.processorOperations.listMyIntakes, { userId });
   const [adding, setAdding] = useState(false);
   return (
@@ -72,7 +89,7 @@ export function ProcessorIntakeTab({ userId, member, today, setMsg }: TabProps) 
           location; photos approved by the Storage Officer raise it to <b>declared + evidenced</b>.
         </p>
         {!member && <Notice tone="info">You can record intake once a community admin accepts you as a processor.</Notice>}
-        {adding && <IntakeForm userId={userId} today={today} setMsg={setMsg} onDone={() => setAdding(false)} />}
+        {adding && <IntakeForm userId={userId} today={today} crops={crops} setMsg={setMsg} onDone={() => setAdding(false)} />}
       </div>
       {intakes === undefined ? (
         <div style={card}>Loading intake...</div>
@@ -155,7 +172,8 @@ function IntakeRow({ intake, userId, setMsg }: { intake: IntakeRowData; userId: 
   );
 }
 
-function IntakeForm({ userId, today, setMsg, onDone }: { userId: Id<"users">; today: string; setMsg: (m: Msg) => void; onDone: () => void }) {
+function IntakeForm({ userId, today, crops, setMsg, onDone }: { userId: Id<"users">; today: string; crops: { key: string; label: string }[]; setMsg: (m: Msg) => void; onDone: () => void }) {
+  const [crop, setCrop] = useState(crops[0]?.key ?? "coffee");
   const record = useMutation(api.processorOperations.recordIntake);
   const getUrl = useMutation(api.processors.generateProcessorUploadUrl);
   const [sourceKind, setSourceKind] = useState<"platform_farmer" | "declared">("declared");
@@ -171,6 +189,7 @@ function IntakeForm({ userId, today, setMsg, onDone }: { userId: Id<"users">; to
 
   return (
     <div style={{ background: PROCESSOR_SOFT, border: `1px solid ${PROCESSOR_BORDER}`, borderRadius: 10, padding: "0.85rem", marginTop: "0.5rem" }}>
+      <CropSelect crops={crops} value={crop} onChange={setCrop} />
       <label style={label}>Who delivered it?</label>
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
         <label style={chip(sourceKind === "platform_farmer", false)}>
@@ -284,7 +303,7 @@ function IntakeForm({ userId, today, setMsg, onDone }: { userId: Id<"users">; to
               const uploaded = await uploadEvidencePhotos(() => getUrl({ userId }), photos);
               const r = await record({
                 userId,
-                crop: "coffee",
+                crop,
                 inputForm: f.inputForm,
                 kilos: Number(f.kilos),
                 pricePerKgUgx: num(f.price),
@@ -325,7 +344,7 @@ function IntakeForm({ userId, today, setMsg, onDone }: { userId: Id<"users">; to
 // Processing batches
 // ------------------------------------------------------------------
 
-export function ProcessorBatchesTab({ userId, member, today, setMsg }: TabProps) {
+export function ProcessorBatchesTab({ userId, member, today, crops, setMsg }: TabProps) {
   const batches = useQuery(api.processorOperations.listMyBatches, { userId });
   const intakes = useQuery(api.processorOperations.listMyIntakes, { userId });
   const [creating, setCreating] = useState(false);
@@ -346,7 +365,7 @@ export function ProcessorBatchesTab({ userId, member, today, setMsg }: TabProps)
           verifies the batch photos. A verified batch shows as a processor stage on the exporter&apos;s trace map.
         </p>
         {member && open.length === 0 && <Notice tone="info">Record intake first; batches are made from intake that is not yet processed.</Notice>}
-        {creating && <BatchForm userId={userId} today={today} intakes={open} setMsg={setMsg} onDone={() => setCreating(false)} />}
+        {creating && <BatchForm userId={userId} today={today} crops={crops} intakes={open} setMsg={setMsg} onDone={() => setCreating(false)} />}
       </div>
       {batches === undefined ? (
         <div style={card}>Loading batches...</div>
@@ -359,9 +378,12 @@ export function ProcessorBatchesTab({ userId, member, today, setMsg }: TabProps)
   );
 }
 
-type IntakeOption = { _id: Id<"processorIntakes">; intakeCode: string; remainingKilos: number; farmerLabel: string; inputForm: string };
+type IntakeOption = { _id: Id<"processorIntakes">; intakeCode: string; remainingKilos: number; farmerLabel: string; inputForm: string; crop: string };
 
-function BatchForm({ userId, today, intakes, setMsg, onDone }: { userId: Id<"users">; today: string; intakes: IntakeOption[]; setMsg: (m: Msg) => void; onDone: () => void }) {
+function BatchForm({ userId, today, crops, intakes: allIntakes, setMsg, onDone }: { userId: Id<"users">; today: string; crops: { key: string; label: string }[]; intakes: IntakeOption[]; setMsg: (m: Msg) => void; onDone: () => void }) {
+  const [crop, setCrop] = useState(crops[0]?.key ?? "coffee");
+  // A batch holds one crop, so only that crop's intake can go in.
+  const intakes = allIntakes.filter((i) => i.crop === crop);
   const create = useMutation(api.processorOperations.createBatch);
   const [picked, setPicked] = useState<Record<string, string>>({});
   const [steps, setSteps] = useState<string[]>(["drying", "hulling"]);
@@ -370,6 +392,7 @@ function BatchForm({ userId, today, intakes, setMsg, onDone }: { userId: Id<"use
   const total = Object.values(picked).reduce((a, k) => a + (Number(k) || 0), 0);
   return (
     <div style={{ background: PROCESSOR_SOFT, border: `1px solid ${PROCESSOR_BORDER}`, borderRadius: 10, padding: "0.85rem", marginTop: "0.5rem" }}>
+      <CropSelect crops={crops} value={crop} onChange={(c) => { setCrop(c); setPicked({}); }} />
       <label style={label}>Intake going into this batch (kilos from each)</label>
       <div style={{ display: "grid", gap: "0.35rem" }}>
         {intakes.map((i) => (
@@ -446,7 +469,7 @@ function BatchForm({ userId, today, intakes, setMsg, onDone }: { userId: Id<"use
             try {
               const r = await create({
                 userId,
-                crop: "coffee",
+                crop,
                 outputForm: f.outputForm,
                 coffeeType: f.coffeeType,
                 processingMethod: f.processingMethod,

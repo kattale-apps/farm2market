@@ -5,7 +5,7 @@
  * has three steps:
  *   1. the admin of a community the processor joined accepts them, which opens
  *      the processor dashboard;
- *   2. a Storage Officer (junior admin, category "store") approves the
+ *   2. a Storage and Transport Officer (junior admin, category "store") approves the
  *      facility location, storage and documents;
  *   3. a super admin fully verifies the processor, which gives the badge.
  * A processor is live once all three are done, every required document is
@@ -57,7 +57,7 @@ export async function requireProcessorUser(ctx: Ctx, userId: Id<"users">): Promi
 
 export async function requireStorageOfficer(ctx: Ctx, adminId: Id<"users">): Promise<Doc<"users">> {
   const admin = await requireAdmin(ctx, adminId);
-  if (!isStorageOfficer(admin)) throw new Error("Only a Storage Officer or super admin can do this");
+  if (!isStorageOfficer(admin)) throw new Error("Only a Storage and Transport Officer or super admin can do this");
   return admin;
 }
 
@@ -281,8 +281,8 @@ export const saveProcessorProfile = mutation({
 
     const existing = await getProcessorProfile(ctx, user._id);
     if (existing) {
-      if (existing.status === "suspended") throw new Error("Your processor profile is suspended. Contact a Storage Officer.");
-      // A new legal identity or facility location needs a fresh Storage Officer review.
+      if (existing.status === "suspended") throw new Error("Your processor profile is suspended. Contact a Storage and Transport Officer.");
+      // A new legal identity or facility location needs a fresh Storage and Transport Officer review.
       const reviewChanged =
         existing.legalName !== fields.legalName ||
         existing.tin !== fields.tin ||
@@ -431,7 +431,7 @@ export const submitProcessorProfile = mutation({
     const r = await processorReadiness(ctx, user, todayUganda());
     if (!r.profile) throw new Error("Save your facility profile first");
     if (r.profile.status === "approved") throw new Error("Your processor profile is already approved");
-    if (r.profile.status === "suspended") throw new Error("Your processor profile is suspended. Contact a Storage Officer.");
+    if (r.profile.status === "suspended") throw new Error("Your processor profile is suspended. Contact a Storage and Transport Officer.");
     if (!r.checks.admitted) throw new Error("A community admin must accept you as a processor first");
     if (!r.checks.facilityLocated) throw new Error("Add the facility GPS location and at least one facility photo first");
     await ctx.db.patch(r.profile._id, { status: "submitted", submittedAt: getUgandaTime(), updatedAt: getUgandaTime() });
@@ -502,7 +502,7 @@ export const admitProcessor = mutation({
       ctx,
       args.processorId,
       "Processor dashboard unlocked",
-      `${community.name} accepted you as a processor. Set up your facility profile and documents; a Storage Officer then checks your facility.`
+      `${community.name} accepted you as a processor. Set up your facility profile and documents; a Storage and Transport Officer then checks your facility.`
     );
     await audit(ctx, "processor_admitted", args.adminId, { targetUserId: args.processorId, targetId: String(args.communityId) });
     return { success: true };
@@ -528,10 +528,10 @@ export const revokeProcessor = mutation({
 });
 
 // ------------------------------------------------------------------
-// Step 2: Storage Officer. Step 3: super admin.
+// Step 2: Storage and Transport Officer. Step 3: super admin.
 // ------------------------------------------------------------------
 
-/** Every processor, filtered; Storage Officers see all of them. */
+/** Every processor, filtered; Storage and Transport Officers see all of them. */
 export const listProcessorsForOfficer = query({
   args: {
     adminId: v.id("users"),
@@ -668,7 +668,7 @@ export const reviewProcessorProfile = mutation({
     }
     await ctx.db.patch(profile._id, { status, reviewedBy: admin._id, reviewedAt: getUgandaTime(), reviewNotes: notes, updatedAt: getUgandaTime() });
     const messages: Record<string, [string, string]> = {
-      approve: ["Facility approved", "A Storage Officer approved your facility, storage and documents. A super admin completes full verification."],
+      approve: ["Facility approved", "A Storage and Transport Officer approved your facility, storage and documents. A super admin completes full verification."],
       reinstate: ["Processor profile reinstated", "Your processor profile is active again."],
       reject: ["Processor profile needs changes", `Your processor profile was not approved: ${notes}`],
       suspend: ["Processor profile suspended", `Your processor profile was suspended: ${notes}`],

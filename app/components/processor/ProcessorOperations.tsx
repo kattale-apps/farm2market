@@ -86,7 +86,7 @@ export function ProcessorIntakeTab({ userId, member, today, crops, setMsg }: Tab
         </div>
         <p style={{ fontSize: "0.85rem", color: "#607d8b" }}>
           A farmer on the app is asked to confirm the delivery. A farmer who is not on the app is recorded as <b>declared</b> with the farm
-          location; photos approved by the Storage Officer raise it to <b>declared + evidenced</b>.
+          location; photos approved by the Storage and Transport Officer raise it to <b>declared + evidenced</b>.
         </p>
         {!member && <Notice tone="info">You can record intake once a community admin accepts you as a processor.</Notice>}
         {adding && <IntakeForm userId={userId} today={today} crops={crops} setMsg={setMsg} onDone={() => setAdding(false)} />}
@@ -131,7 +131,7 @@ function IntakeRow({ intake, userId, setMsg }: { intake: IntakeRowData; userId: 
           </div>
         )}
         {intake.eudrIssue && <div style={{ color: "#e65100" }}>EUDR: {intake.eudrIssue}</div>}
-        {intake.evidenceStatus === "rejected" && intake.reviewNotes && <div style={{ color: "#c62828" }}>Storage Officer: {intake.reviewNotes}</div>}
+        {intake.evidenceStatus === "rejected" && intake.reviewNotes && <div style={{ color: "#c62828" }}>Storage and Transport Officer: {intake.reviewNotes}</div>}
       </div>
       <PhotoStrip photos={intake.photoRows} />
       {intake.evidenceStatus !== "approved" &&
@@ -152,7 +152,7 @@ function IntakeRow({ intake, userId, setMsg }: { intake: IntakeRowData; userId: 
                     const photos = await uploadEvidencePhotos(() => getUrl({ userId }), adding);
                     await setPhotos({ userId, intakeId: intake._id, photos });
                     setAdding(null);
-                    setMsg({ tone: "success", text: "Photos sent to the Storage Officer." });
+                    setMsg({ tone: "success", text: "Photos sent to the Storage and Transport Officer." });
                   } catch (e) {
                     setMsg({ tone: "error", text: errorText(e) });
                   } finally {
@@ -370,7 +370,7 @@ export function ProcessorBatchesTab({ userId, member, today, crops, setMsg }: Ta
           )}
         </div>
         <p style={{ fontSize: "0.85rem", color: "#607d8b" }}>
-          Put intake into a batch (weight in), then record what came out (weight out). The outturn is worked out for you, and the Storage Officer
+          Put intake into a batch (weight in), then record what came out (weight out). The outturn is worked out for you, and the Storage and Transport Officer
           verifies the batch photos. A verified batch shows as a processor stage on the exporter&apos;s trace map.
         </p>
         {member && open.length === 0 && <Notice tone="info">Record intake first; batches are made from intake that is not yet processed.</Notice>}
@@ -532,7 +532,7 @@ function BatchRow({ batch, userId, today, setMsg }: { batch: BatchRowData; userI
         {batch.outturnPercent != null ? ` · outturn ${batch.outturnPercent}%` : ""} · steps: {batch.steps.map(capabilityLabel).join(", ")}
         <div>From: {batch.inputs.map((i) => `${i.intakeCode} (${i.kilos} kg)`).join(", ")}</div>
         {batch.soldKg > 0 && <div>Sold: {batch.soldKg} kg</div>}
-        {batch.evidenceStatus === "rejected" && batch.reviewNotes && <div style={{ color: "#c62828" }}>Storage Officer: {batch.reviewNotes}</div>}
+        {batch.evidenceStatus === "rejected" && batch.reviewNotes && <div style={{ color: "#c62828" }}>Storage and Transport Officer: {batch.reviewNotes}</div>}
       </div>
       <PhotoStrip photos={batch.photoRows} />
       {batch.evidenceStatus !== "approved" &&
@@ -584,7 +584,7 @@ function BatchRow({ batch, userId, today, setMsg }: { batch: BatchRowData; userI
                       moisturePercent: f.moisture.trim() ? Number(f.moisture) : undefined,
                       photos: uploaded,
                     });
-                    setMsg({ tone: "success", text: `Batch sent to the Storage Officer. Outturn ${r.outturnPercent}%.` });
+                    setMsg({ tone: "success", text: `Batch sent to the Storage and Transport Officer. Outturn ${r.outturnPercent}%.` });
                     setOpen(false);
                     setPhotos([]);
                   } catch (e) {

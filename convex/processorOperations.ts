@@ -7,7 +7,7 @@
  * 4 ha, as EUDR asks). Photos come from the camera or the gallery (Rule 9).
  *
  * Processing: intake kilos go into a batch; weight in and weight out give the
- * outturn. The Storage Officer reviews intake and batch evidence. Approved
+ * outturn. The Storage and Transport Officer reviews intake and batch evidence. Approved
  * evidence raises declared produce to "declared + evidenced"; it is added on
  * top of the declared level, never replacing it.
  */
@@ -449,7 +449,7 @@ export const listMyBatches = query({
 });
 
 // ------------------------------------------------------------------
-// Storage Officer: evidence review
+// Storage and Transport Officer: evidence review
 // ------------------------------------------------------------------
 
 export const listOperationsEvidenceForReview = query({

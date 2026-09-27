@@ -8,7 +8,7 @@ import { card, input, button, StatusPill, Notice, errorText } from "../exportMar
 
 /**
  * Community admin: accept processors who joined (step 1 of 3). Accepting opens
- * their processor dashboard; a Storage Officer then checks the facility and a
+ * their processor dashboard; a Storage and Transport Officer then checks the facility and a
  * super admin completes verification.
  */
 export function CommunityProcessorsPanel({ adminId, communityId, today }: { adminId: Id<"users">; communityId: Id<"communities">; today: string }) {
@@ -33,7 +33,7 @@ export function CommunityProcessorsPanel({ adminId, communityId, today }: { admi
     <div style={card}>
       <h2 style={{ marginTop: 0, fontSize: "1.05rem", color: "#6d4c00" }}>🏭 Processors in this community</h2>
       <p style={{ fontSize: "0.85rem", color: "#607d8b", marginTop: 0 }}>
-        Step 1 of 3: accept processors who joined. This opens their processor dashboard. A Storage Officer then approves their facility, storage
+        Step 1 of 3: accept processors who joined. This opens their processor dashboard. A Storage and Transport Officer then approves their facility, storage
         and documents, and a super admin completes verification.
       </p>
       {msg && <Notice tone={msg.tone}>{msg.text}</Notice>}

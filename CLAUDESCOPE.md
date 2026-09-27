@@ -197,8 +197,8 @@ gets touched.
   same way as a camera photo's live GPS and capture time. Show an info notice on those
   gallery inputs explaining that the photo must carry its location and date.
 - **Missing EXIF data is entered by hand and flagged.** If a gallery photo has no
-  location or date, the user types them in, and the photo is flagged for the Storage
-  Officer as "location/date entered manually" so the reviewer can tell it apart.
+  location or date, the user types them in, and the photo is flagged for the Storage and
+  Transport Officer as "location/date entered manually" so the reviewer can tell it apart.
 
 ---
 

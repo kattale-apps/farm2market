@@ -41,8 +41,8 @@ const CHECKS: { key: string; text: string; tab?: Tab; who?: string }[] = [
   { key: "facilityLocated", text: "Facility GPS location and photos added", tab: "profile" },
   { key: "requiredDocsUploaded", text: "Required documents uploaded", tab: "documents" },
   { key: "feeOk", text: "Verification fee paid (or none due)", tab: "documents" },
-  { key: "requiredDocsVerified", text: "Documents verified by a Storage Officer", tab: "documents" },
-  { key: "approved", text: "Step 2: facility and storage approved by a Storage Officer", tab: "overview" },
+  { key: "requiredDocsVerified", text: "Documents verified by a Storage and Transport Officer", tab: "documents" },
+  { key: "approved", text: "Step 2: facility and storage approved by a Storage and Transport Officer", tab: "overview" },
   { key: "platformVerified", text: "Step 3: fully verified by a super admin (verified badge)", who: "A super admin does this." },
 ];
 
@@ -183,7 +183,7 @@ function StatusCard({ ws, userId, setMsg, go, member }: CardProps & { go: (t: Ta
       {!ws.isActiveProcessor && status === "approved" && ws.checks.platformVerified && (
         <Notice tone="error">A required document or your verification fee has lapsed. Renew it to stay live.</Notice>
       )}
-      {ws.profile?.reviewNotes && (status === "rejected" || status === "suspended") && <Notice tone="error">Storage Officer note: {ws.profile.reviewNotes}</Notice>}
+      {ws.profile?.reviewNotes && (status === "rejected" || status === "suspended") && <Notice tone="error">Storage and Transport Officer note: {ws.profile.reviewNotes}</Notice>}
       <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: "0.45rem" }}>
         {CHECKS.map((c) => {
           const ok = checks[c.key];
@@ -231,7 +231,7 @@ function StatusCard({ ws, userId, setMsg, go, member }: CardProps & { go: (t: Ta
               setBusy(true);
               try {
                 await submit({ userId });
-                setMsg({ tone: "success", text: "Submitted. A Storage Officer checks your facility and documents; keep updating anytime." });
+                setMsg({ tone: "success", text: "Submitted. A Storage and Transport Officer checks your facility and documents; keep updating anytime." });
               } catch (e) {
                 setMsg({ tone: "error", text: errorText(e) });
               } finally {
@@ -239,7 +239,7 @@ function StatusCard({ ws, userId, setMsg, go, member }: CardProps & { go: (t: Ta
               }
             }}
           >
-            {status === "rejected" ? "Resubmit for review" : "Submit to the Storage Officer"}
+            {status === "rejected" ? "Resubmit for review" : "Submit to the Storage and Transport Officer"}
           </button>
           <p style={{ fontSize: "0.82rem", color: "#607d8b", marginBottom: 0 }}>
             You can submit now and keep adding documents. Approval needs every required document verified and the fee paid (none at the moment
@@ -292,7 +292,7 @@ function ProfileCard({ ws, userId, setMsg, member }: CardProps & { member: boole
     <div style={card}>
       <h2 style={{ marginTop: 0, fontSize: "1.15rem", color: PROCESSOR_HEADING }}>Facility profile</h2>
       <p style={{ fontSize: "0.85rem", color: "#607d8b", marginTop: 0 }}>
-        Save as you go. A Storage Officer checks the facility location, storage and documents; exporters see your facility name, district and
+        Save as you go. A Storage and Transport Officer checks the facility location, storage and documents; exporters see your facility name, district and
         badge.
       </p>
 
@@ -384,7 +384,7 @@ function ProfileCard({ ws, userId, setMsg, member }: CardProps & { member: boole
 
       {p?.status === "approved" && (
         <div style={{ marginTop: "0.85rem" }}>
-          <Notice tone="info">Changing the legal name, TIN, licence number or facility location sends your profile back to the Storage Officer.</Notice>
+          <Notice tone="info">Changing the legal name, TIN, licence number or facility location sends your profile back to the Storage and Transport Officer.</Notice>
         </div>
       )}
       <button
@@ -467,7 +467,7 @@ function FacilityPhotosCard({ ws, userId, setMsg }: CardProps) {
     <div style={card}>
       <h2 style={{ marginTop: 0, fontSize: "1.05rem", color: PROCESSOR_HEADING }}>Facility and storage photos</h2>
       <p style={{ fontSize: "0.82rem", color: "#607d8b", marginTop: 0 }}>
-        Up to 6 photos of the gate or signboard, the processing machines and the store. The Storage Officer uses them with the GPS location to
+        Up to 6 photos of the gate or signboard, the processing machines and the store. The Storage and Transport Officer uses them with the GPS location to
         approve the facility.
       </p>
       {existing.length > 0 && (
@@ -615,7 +615,7 @@ function DocumentsCard({ ws, userId, setMsg, member }: CardProps & { member: boo
     <div style={card}>
       <h2 style={{ marginTop: 0, fontSize: "1.15rem", color: PROCESSOR_HEADING }}>Document vault</h2>
       <p style={{ fontSize: "0.88rem", color: "#546e7a", marginTop: 0 }}>
-        Upload each document whenever you have it; a Storage Officer reviews them one by one. You are warned 30 days before anything expires.
+        Upload each document whenever you have it; a Storage and Transport Officer reviews them one by one. You are warned 30 days before anything expires.
       </p>
       {ws.slots.map((slot) => (
         <DocumentSlot key={slot.type.key} slot={slot} userId={userId} setMsg={setMsg} canUpload={member} />
@@ -724,7 +724,7 @@ function DocumentSlot({ slot, userId, setMsg, canUpload }: { slot: ProcessorWS["
                     issueDate: issueDate || undefined,
                     expiryDate: expiryDate || undefined,
                   });
-                  setMsg({ tone: "success", text: `${slot.type.label} uploaded. A Storage Officer will review it.` });
+                  setMsg({ tone: "success", text: `${slot.type.label} uploaded. A Storage and Transport Officer will review it.` });
                   setOpen(false);
                   setFile(null);
                   setDocNumber("");

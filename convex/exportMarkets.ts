@@ -1042,17 +1042,17 @@ export const listDocumentsForReview = query({
   },
 });
 
-/** Storage Officers (junior admins in the "store" category) and super admins. */
+/** Storage and Transport Officers (junior admins in the "store" category) and super admins. */
 export function isStorageOfficer(user: Doc<"users">): boolean {
   return user.role === "admin" && user.state === "active" && (isSuperAdmin(user) || user.adminCategory === "store");
 }
 
 async function assertCanReviewDocument(ctx: Ctx, admin: Doc<"users">, doc: Doc<"exportDocuments">) {
   if (isSuperAdmin(admin)) return;
-  // Processor documents are checked by the Storage Officer, not the community admin.
+  // Processor documents are checked by the Storage and Transport Officer, not the community admin.
   if (doc.ownerKind === "processor") {
     if (isStorageOfficer(admin)) return;
-    throw new Error("Only a Storage Officer can review processor documents");
+    throw new Error("Only a Storage and Transport Officer can review processor documents");
   }
   if (!doc.communityId) throw new Error("Only super admins can review this document");
   const community = await ctx.db.get(doc.communityId);

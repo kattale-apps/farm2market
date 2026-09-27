@@ -668,7 +668,7 @@ function TraceMap({ userId, data, setMsg }: { userId: Id<"users">; data: LotDeta
       <h3 style={{ marginTop: 0, fontSize: "1rem" }}>Trace map: the coffee journey</h3>
       <p style={{ fontSize: "0.8rem", color: "#666", marginTop: 0 }}>
         Add proof photos (with GPS and time) and weights at each stage. Farm stages are verified by the farmer&apos;s community admin, your own
-        steps by your exporter community admin. Processor stages come from the processor&apos;s records, verified by the Storage Officer.
+        steps by your exporter community admin. Processor stages come from the processor&apos;s records, verified by the Storage and Transport Officer.
       </p>
       {data.coveredByProcessor && (
         <Notice tone="info">All of this lot comes from processors, so the farm stages are covered by the processors&apos; intake records.</Notice>

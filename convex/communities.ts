@@ -1691,18 +1691,20 @@ export const joinCommunity = mutation({
 });
 
 /**
- * Switch on auto-join for a community and add every existing member of its
- * role (idempotent). Used to move a community onto the setting instead of a
- * hardcoded id:
+ * Switch on auto-join for a community, so new members of its role join it
+ * automatically. Used to move a community onto the setting instead of a
+ * hardcoded id. Existing members are only added when `backfill` is true,
+ * because that changes who is in the community today:
  *   npx convex run communities:enableAutoJoinForCommunity '{"communityId":"..."}'
  */
 export const enableAutoJoinForCommunity = internalMutation({
-  args: { communityId: v.id("communities") },
+  args: { communityId: v.id("communities"), backfill: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
     const community = await ctx.db.get(args.communityId);
     if (!community) throw new Error("Community not found");
     await ctx.db.patch(args.communityId, { autoJoinRoleMembers: true });
     const role = getCommunityDefaultRole((community as any).communityType);
+    if (!args.backfill) return { role, created: 0, scanned: 0 };
     const result = await backfillMandatoryRoleMembershipForCommunity(ctx, args.communityId, role);
     return { role, ...result };
   },

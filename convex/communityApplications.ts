@@ -6,7 +6,6 @@ import { filterCommunityForms } from "./types/communityForms";
 import { ugandaTimeToInstant } from "./utils";
 
 // Community constants for sync operations
-export const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
 const DEIGRO_COMMUNITY_ID = "ms7b1qga2n0kwjvczv3n1dqwwx809p81";
 
 const COMMUNITY_NAME = "AGROFRESH UG";
@@ -1189,12 +1188,12 @@ export const syncAgroFreshAdmin = mutation({
 });
 
 /**
- * Sync admin to BioFarm community
- * Helper to ensure the admin is correctly assigned to BioFarm community ID in assignedCommunityIds
+ * Sync a community admin
+ * Ensures the community's assigned admin has that community in assignedCommunityIds
  */
-export const syncBioFarmAdmin = mutation({
-  args: { adminId: v.id("users") },
-  handler: async (ctx, { adminId }) => {
+export const syncCommunityAdmin = mutation({
+  args: { adminId: v.id("users"), communityId: v.id("communities") },
+  handler: async (ctx, { adminId, communityId }) => {
     const adminCheck = await verifyAdminRole({ userId: adminId, db: ctx.db });
     if (!adminCheck.authorized) {
       throw new Error("Not authorized");
@@ -1203,23 +1202,23 @@ export const syncBioFarmAdmin = mutation({
     const admin = await ctx.db.get(adminId);
     if (!admin) throw new Error("Admin not found");
 
-    const community = await ctx.db.get(BIOFARM_COMMUNITY_ID as Id<"communities">);
-    if (!community) throw new Error("BioFarm community not found");
+    const community = await ctx.db.get(communityId);
+    if (!community) throw new Error("Community not found");
 
     const isDirectAdmin = community.communityAdminId === adminId;
     if (!isDirectAdmin) {
-      throw new Error("Forbidden: Only BioFarm's assigned admin can sync");
+      throw new Error("Forbidden: Only the community's assigned admin can sync");
     }
 
     const assigned = (admin as any).assignedCommunityIds || [];
 
-    if (!assigned.some((id: any) => String(id) === BIOFARM_COMMUNITY_ID)) {
+    if (!assigned.some((id: any) => String(id) === String(communityId))) {
       await ctx.db.patch(adminId, {
-        assignedCommunityIds: [...assigned, BIOFARM_COMMUNITY_ID as Id<"communities">],
+        assignedCommunityIds: [...assigned, communityId],
       });
-      return { success: true, message: "BioFarm admin synchronized", communityId: BIOFARM_COMMUNITY_ID };
+      return { success: true, message: "Community admin synchronized", communityId };
     }
-    return { success: true, message: "Already synchronized", communityId: BIOFARM_COMMUNITY_ID };
+    return { success: true, message: "Already synchronized", communityId };
   },
 });
 

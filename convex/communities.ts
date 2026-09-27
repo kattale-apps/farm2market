@@ -1,11 +1,9 @@
 import { v, ConvexError } from "convex/values";
-import { mutation, query, DatabaseReader } from "./_generated/server";
+import { mutation, query, internalMutation, DatabaseReader } from "./_generated/server";
 import { generateUTID, getUgandaTime } from "./utils";
 import { verifyAdminRole } from "./auth";
 import { Id } from "./_generated/dataModel";
 import { resolveCommunityModules } from "./communityModules";
-
-const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
 
 export type CommunityRole = "farmer" | "trader" | "buyer" | "vendor" | "transporter" | "store";
 
@@ -114,26 +112,6 @@ export async function ensureMandatoryRoleCommunityMembershipsForUserFast(
 ) {
   for (const communityId of autoJoinCommunityIdsByRole[role] || []) {
     await ensureCommunityMembership(ctx, communityId, userId);
-  }
-}
-
-async function ensureBioFarmMembershipForFarmer(ctx: any, userId: Id<"users">) {
-  const user = await ctx.db.get(userId);
-  if (!user || user.role !== "farmer") return;
-
-  const existing = await ctx.db
-    .query("communityMemberships")
-    .withIndex("by_community_user", (q: any) =>
-      q.eq("communityId", BIOFARM_COMMUNITY_ID as Id<"communities">).eq("userId", userId)
-    )
-    .first();
-
-  if (!existing) {
-    await ctx.db.insert("communityMemberships", {
-      communityId: BIOFARM_COMMUNITY_ID as Id<"communities">,
-      userId,
-      joinedAt: getUgandaTime(),
-    });
   }
 }
 
@@ -1253,12 +1231,9 @@ export const joinCommunityByQr = mutation({
       throw new Error("Failed to get user after creation");
     }
 
-    if (user.role === "farmer") {
-      await ensureBioFarmMembershipForFarmer(ctx, userId);
-    }
-    if (wasNewUser) {
-      await ensureMandatoryRoleCommunityMembershipsForUser(ctx, userId, user.role as CommunityRole);
-    }
+    // Communities with auto-join switched on for this role (idempotent, so
+    // an existing member joining by QR is covered as well as a new one).
+    await ensureMandatoryRoleCommunityMembershipsForUser(ctx, userId, user.role as CommunityRole);
 
 // Update onboardedViaCommunityId if not already set (analytics only — no accountScope restriction)
       if (!user.onboardedViaCommunityId) {
@@ -1716,83 +1691,20 @@ export const joinCommunity = mutation({
 });
 
 /**
- * Backfill existing farmer accounts into Bio Farm community membership (idempotent)
+ * Switch on auto-join for a community and add every existing member of its
+ * role (idempotent). Used to move a community onto the setting instead of a
+ * hardcoded id:
+ *   npx convex run communities:enableAutoJoinForCommunity '{"communityId":"..."}'
  */
-export const backfillBioFarmMembershipForFarmers = mutation({
-  args: {
-    adminId: v.optional(v.id("users")),
-  },
+export const enableAutoJoinForCommunity = internalMutation({
+  args: { communityId: v.id("communities") },
   handler: async (ctx, args) => {
-    let adminId = args.adminId;
-
-    if (!adminId) {
-      const authUser = await ctx.auth.getUserIdentity();
-      if (!authUser) {
-        throw new Error("Not authenticated");
-      }
-
-      let user = null;
-      if (authUser.email) {
-        user = await ctx.db
-          .query("users")
-          .withIndex("by_email", (q) => q.eq("email", authUser.email))
-          .first();
-      }
-
-      if (!user && authUser.phoneNumber) {
-        user = await ctx.db
-          .query("users")
-          .withIndex("by_phone", (q) => q.eq("phoneNumber", authUser.phoneNumber))
-          .first();
-      }
-
-      if (!user) {
-        throw new Error("User not found");
-      }
-
-      adminId = user._id;
-    }
-
-    const admin = await ctx.db.get(adminId);
-    if (!admin || admin.role !== "admin") {
-      throw new Error("Only admins can run backfill");
-    }
-
-    const farmers = await ctx.db
-      .query("users")
-      .withIndex("by_role", (q) => q.eq("role", "farmer"))
-      .collect();
-
-    let created = 0;
-    let skipped = 0;
-
-    for (const farmer of farmers) {
-      const exists = await ctx.db
-        .query("communityMemberships")
-        .withIndex("by_community_user", (q) =>
-          q.eq("communityId", BIOFARM_COMMUNITY_ID as Id<"communities">).eq("userId", farmer._id)
-        )
-        .first();
-
-      if (exists) {
-        skipped += 1;
-        continue;
-      }
-
-      await ctx.db.insert("communityMemberships", {
-        communityId: BIOFARM_COMMUNITY_ID as Id<"communities">,
-        userId: farmer._id,
-        joinedAt: getUgandaTime(),
-      });
-      created += 1;
-    }
-
-    return {
-      success: true,
-      farmersEvaluated: farmers.length,
-      created,
-      skipped,
-    };
+    const community = await ctx.db.get(args.communityId);
+    if (!community) throw new Error("Community not found");
+    await ctx.db.patch(args.communityId, { autoJoinRoleMembers: true });
+    const role = getCommunityDefaultRole((community as any).communityType);
+    const result = await backfillMandatoryRoleMembershipForCommunity(ctx, args.communityId, role);
+    return { role, ...result };
   },
 });
 

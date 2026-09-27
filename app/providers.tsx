@@ -8,6 +8,7 @@ import { OfflineBanner } from "./components/OfflineBanner";
 import { CommunityAutoJoin } from "./components/CommunityAutoJoin";
 import { ChunkErrorRecovery } from "./components/ChunkErrorRecovery";
 import { setSyncClient } from "./lib/syncService";
+import { GlobalPageNav } from "./components/nav/GlobalPageNav";
 
 export function Providers({ children }: { children: ReactNode }) {
   const deploymentMode = useMemo(() => getDeploymentMode(), []);
@@ -41,6 +42,7 @@ export function Providers({ children }: { children: ReactNode }) {
     return (
       <NetworkProvider>
         <ChunkErrorRecovery />
+        <GlobalPageNav />
         {children}
         <OfflineBanner />
       </NetworkProvider>
@@ -52,6 +54,7 @@ export function Providers({ children }: { children: ReactNode }) {
     <ConvexProvider client={convex}>
       <NetworkProvider>
         <ChunkErrorRecovery />
+        <GlobalPageNav />
         <CommunityAutoJoin />
         {children}
         <OfflineBanner />

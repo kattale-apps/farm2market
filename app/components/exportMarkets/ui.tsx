@@ -79,6 +79,7 @@ export function PageHeader({
   backHref,
   backLabel = "← Back to Dashboard",
   iconSrc = SHIP_ICON,
+  extraIcons = [],
   right,
 }: {
   title: string;
@@ -86,6 +87,8 @@ export function PageHeader({
   backHref?: string;
   backLabel?: string;
   iconSrc?: string;
+  /** More icons shown after the main one, e.g. the crops a processor handles. */
+  extraIcons?: { src: string; label: string }[];
   right?: React.ReactNode;
 }) {
   return (
@@ -106,7 +109,12 @@ export function PageHeader({
         </Link>
       )}
       <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginTop: backHref ? "0.5rem" : 0, flexWrap: "wrap" }}>
-        <img src={iconSrc} alt="" width={44} height={44} style={{ flexShrink: 0 }} />
+        <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", flexShrink: 0 }}>
+          <img src={iconSrc} alt="" width={44} height={44} />
+          {extraIcons.map((i) => (
+            <img key={i.src} src={i.src} alt={i.label} title={i.label} width={34} height={34} />
+          ))}
+        </span>
         <h1 style={{ margin: 0, fontSize: "clamp(1.3rem, 4vw, 1.6rem)", fontWeight: 800, color: EXPORT_HEADING, flex: 1, minWidth: 200 }}>{title}</h1>
         {right}
       </div>

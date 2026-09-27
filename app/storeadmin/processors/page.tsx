@@ -13,8 +13,10 @@ import { useStoredUser } from "../../hooks/useStoredUser";
 import { formatUgandaDateTime, inUgandaTime } from "../../utils/timeUtils";
 import { FONT, card, input, label, button, StatusPill, Notice, errorText } from "../../components/exportMarkets/ui";
 import { TraceLevelPill } from "../../components/processor/ProcessorOperations";
+import { TabBackBar, useTabHistory } from "../../components/nav/TabNav";
 
 type Msg = { tone: "error" | "success" | "info"; text: string } | null;
+const VIEW_LABELS = { processors: "Processors", evidence: "Evidence to review", transport: "Transport to verify" } as const;
 
 /**
  * Storage and Transport Officer: every processor, filtered. Approve facility location,
@@ -26,7 +28,9 @@ export default function StorageOfficerProcessorsPage() {
   const adminId = (user?.userId as Id<"users"> | undefined) ?? null;
   const [today] = useState(() => ugandaDateFromInstant(Date.now()));
   const [filters, setFilters] = useState({ status: "", communityId: "", district: "", search: "" });
-  const [view, setView] = useState<"processors" | "evidence" | "transport">("processors");
+  const nav = useTabHistory<"processors" | "evidence" | "transport">("processors");
+  const view = nav.tab;
+  const setView = nav.go;
   const [openId, setOpenId] = useState<Id<"users"> | null>(null);
   const [msg, setMsg] = useState<Msg>(null);
   const list = useQuery(
@@ -68,6 +72,11 @@ export default function StorageOfficerProcessorsPage() {
           Transport to verify
         </button>
       </div>
+      {view !== "processors" && (
+        <div style={{ marginBottom: "0.75rem" }}>
+          <TabBackBar color="#6d4c00" previousLabel={VIEW_LABELS[nav.previous]} homeLabel="Processors" onBack={nav.back} onHome={nav.goHome} />
+        </div>
+      )}
 
       {view === "transport" ? (
         <TransportQueue adminId={adminId} setMsg={setMsg} />

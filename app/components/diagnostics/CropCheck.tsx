@@ -284,6 +284,7 @@ export default function CropCheck({
   const setFeedback = useMutation(api.diagnosticsFarmer.setReportFeedback);
   const requestAiCheck = useMutation(api.diagnosticsAi.requestAiCheck);
 
+  const [openReportId, setOpenReportId] = useState<Id<"diagnosticReports"> | null>(null);
   const [step, setStep] = useState<Step>("crop");
   const [host, setHost] = useState<string>("");
   const [photo, setPhoto] = useState<Blob | null>(null);
@@ -671,20 +672,30 @@ export default function CropCheck({
             <h3 style={{ fontSize: "1rem", margin: "0 0 0.5rem" }}>My checks</h3>
             {history.filter((h) => groupHostKeys.has(h.host)).map((h) => {
               const hostInfo = DIAGNOSTIC_HOSTS.find((x) => x.key === h.host);
+              const open = openReportId === h._id;
               return (
-                <div key={h._id} style={{ background: "#fff", borderRadius: 12, padding: "0.6rem 0.8rem", marginBottom: 6, display: "flex", gap: 10, alignItems: "center" }}>
-                  <span style={{ fontSize: "1.6rem" }}>{HEALTH[h.healthLevel].emoji}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: "0.9rem", fontWeight: 600 }}>
-                      {hostInfo?.emoji} {hostInfo?.label ?? h.host} · {h.topMatch && h.healthLevel !== "unsure" ? `${h.topMatch.name} (${h.topMatch.percent}%)` : HEALTH[h.healthLevel].title}
-                    </div>
-                    {h.aiTopMatch?.name && (
-                      <div style={{ fontSize: "0.78rem", color: "#3730a3" }}>
-                        🤖 {h.aiTopMatch.name} ({h.aiTopMatch.percent}%)
+                <div key={h._id} style={{ background: "#fff", borderRadius: 12, marginBottom: 6, border: open ? "1px solid #a5d6a7" : "1px solid transparent" }}>
+                  <button
+                    type="button"
+                    aria-expanded={open}
+                    onClick={() => setOpenReportId(open ? null : h._id)}
+                    style={{ all: "unset", cursor: "pointer", boxSizing: "border-box", width: "100%", padding: "0.6rem 0.8rem", display: "flex", gap: 10, alignItems: "center", minHeight: 44 }}
+                  >
+                    <span style={{ fontSize: "1.6rem" }}>{HEALTH[h.healthLevel].emoji}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: "0.9rem", fontWeight: 600 }}>
+                        {hostInfo?.emoji} {hostInfo?.label ?? h.host} · {h.topMatch && h.healthLevel !== "unsure" ? `${h.topMatch.name} (${h.topMatch.percent}%)` : HEALTH[h.healthLevel].title}
                       </div>
-                    )}
-                    <div style={{ fontSize: "0.72rem", color: "#6b7280" }}>{formatUgandaDateTime(h.checkedAt)}</div>
-                  </div>
+                      {h.aiTopMatch?.name && (
+                        <div style={{ fontSize: "0.78rem", color: "#3730a3" }}>
+                          🤖 {h.aiTopMatch.name} ({h.aiTopMatch.percent}%)
+                        </div>
+                      )}
+                      <div style={{ fontSize: "0.72rem", color: "#6b7280" }}>{formatUgandaDateTime(h.checkedAt)}</div>
+                    </div>
+                    <span style={{ color: "#9ca3af" }}>{open ? "▲" : "▼"}</span>
+                  </button>
+                  {open && userId && <MyCheckDetail userId={userId} reportId={h._id} onDeleted={() => setOpenReportId(null)} />}
                 </div>
               );
             })}
@@ -693,6 +704,79 @@ export default function CropCheck({
       </div>
 
       {showTabBar && <CommunityTabBar />}
+    </div>
+  );
+}
+
+/** A past check opened from "My checks": photo, what it matched, and delete. */
+function MyCheckDetail({ userId, reportId, onDeleted }: { userId: Id<"users">; reportId: Id<"diagnosticReports">; onDeleted: () => void }) {
+  const report = useQuery(api.diagnosticsFarmer.getMyReport, { userId, reportId });
+  const remove = useMutation(api.diagnosticsFarmer.deleteMyReport);
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (report === undefined) return <div style={{ padding: "0 0.8rem 0.7rem", fontSize: "0.85rem", color: "#6b7280" }}>Loading...</div>;
+  if (report === null) return null;
+  const list = (title: string, rows: { name: string; percent: number }[]) =>
+    rows.length > 0 && (
+      <div style={{ marginTop: 6 }}>
+        <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#374151" }}>{title}</div>
+        {rows.slice(0, 5).map((r, i) => (
+          <div key={i} style={{ fontSize: "0.85rem" }}>
+            {r.name} · {r.percent}%
+          </div>
+        ))}
+      </div>
+    );
+  return (
+    <div style={{ padding: "0 0.8rem 0.8rem" }}>
+      {report.photoUrl && <img src={report.photoUrl} alt="Checked plant or animal" style={{ width: "100%", maxWidth: 320, borderRadius: 10, display: "block" }} />}
+      <div style={{ fontSize: "0.85rem", marginTop: 6, color: HEALTH[report.healthLevel].color, fontWeight: 700 }}>
+        {HEALTH[report.healthLevel].emoji} {HEALTH[report.healthLevel].title}
+      </div>
+      {list("Possible matches", report.results)}
+      {list("🤖 Photo check", report.aiResults)}
+      {report.aiNote && <div style={{ fontSize: "0.8rem", color: "#4b5563", marginTop: 4 }}>{report.aiNote}</div>}
+      {error && <div style={{ color: "#c62828", fontSize: "0.82rem", marginTop: 6 }}>{error}</div>}
+      {!confirming ? (
+        <button
+          type="button"
+          onClick={() => setConfirming(true)}
+          style={{ marginTop: 10, minHeight: 40, padding: "0.4rem 0.9rem", borderRadius: 8, border: "1px solid #c62828", background: "#fff", color: "#c62828", fontWeight: 700, cursor: "pointer" }}
+        >
+          🗑 Delete this check
+        </button>
+      ) : (
+        <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap", alignItems: "center" }}>
+          <span style={{ fontSize: "0.85rem" }}>Delete this check and its photo?</span>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              setError(null);
+              try {
+                await remove({ userId, reportId });
+                onDeleted();
+              } catch (e) {
+                setError(e instanceof Error ? e.message : "Could not delete");
+                setBusy(false);
+              }
+            }}
+            style={{ minHeight: 40, padding: "0.4rem 0.9rem", borderRadius: 8, border: "none", background: "#c62828", color: "#fff", fontWeight: 700, cursor: "pointer" }}
+          >
+            {busy ? "Deleting..." : "Yes, delete"}
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => setConfirming(false)}
+            style={{ minHeight: 40, padding: "0.4rem 0.9rem", borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", cursor: "pointer" }}
+          >
+            Keep it
+          </button>
+        </div>
+      )}
     </div>
   );
 }

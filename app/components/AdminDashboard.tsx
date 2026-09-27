@@ -916,8 +916,9 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
 
   return (
     <div style={containerStyle}>
-      {/* Storage and Transport Officers (and super admins) review processors */}
-      {(isStorageOfficer || isSuperAdmin) && (
+      {/* Storage and Transport Officers review processors here; super admins
+          find the Processors tile beside Storage and Transport Officer Management. */}
+      {isStorageOfficer && !isSuperAdmin && (
         <a href="/storeadmin/processors" style={{ textDecoration: "none", display: "block", marginBottom: "1.25rem" }}>
           <div
             style={{
@@ -1226,6 +1227,39 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                   <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Storage and Transport Officer Management</h3>
                   <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.95 }}>
                     Audit Storage and Transport Officers&apos; delivery checks and exporter inventory
+                  </p>
+                </div>
+              </div>
+            </a>
+
+            {/* Processors, beside Storage and Transport Officer Management */}
+            <a href="/storeadmin/processors" style={{ textDecoration: "none" }}>
+              <div
+                style={{
+                  ...utilityCardStyle,
+                  cursor: "pointer",
+                  transition: "transform 0.2s, box-shadow 0.2s",
+                  background: "linear-gradient(135deg, #f9a825 0%, #f57f17 100%)",
+                  color: "#3e2723",
+                  minHeight: "140px",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-4px)";
+                  e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.15)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.06)";
+                }}
+              >
+                <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>🏭</div>
+                <div>
+                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Processors</h3>
+                  <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.95 }}>
+                    Approve processor facilities and documents, review intake and processing evidence, and verify transport vehicles and drivers
                   </p>
                 </div>
               </div>

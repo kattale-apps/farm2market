@@ -7,7 +7,7 @@ import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { BATCH_OUTPUT_FORMS, INTAKE_FORMS, PROCESSING_CAPABILITIES, capabilityLabel, formLabel } from "../../../convex/processorShared";
 import { COFFEE_TYPES, PROCESSING_METHODS } from "../../../convex/exportMarketsShared";
-import { getCurrentLocation } from "../../utils/gps";
+import { LiveGps } from "./LiveGps";
 import { card, input, label, button, StatusPill, Notice, errorText, formatUgx } from "../exportMarkets/ui";
 import { PhotoSetCapture, CapturedPhoto } from "../exportMarkets/PhotoSetCapture";
 import { PROCESSOR_HEADING, PROCESSOR_SOFT, PROCESSOR_BORDER, chip, uploadEvidencePhotos } from "./ProcessorWorkspace";
@@ -242,18 +242,8 @@ function IntakeForm({ userId, today, crops, setMsg, onDone }: { userId: Id<"user
             <label style={label}>Farm longitude</label>
             <input style={input} value={f.lng} onChange={set("lng")} inputMode="decimal" />
           </div>
-          <div style={{ display: "flex", alignItems: "flex-end" }}>
-            <button
-              type="button"
-              style={button("secondary")}
-              onClick={async () => {
-                const gps = await getCurrentLocation().catch(() => null);
-                if (gps) setF((x) => ({ ...x, lat: gps.latitude.toFixed(6), lng: gps.longitude.toFixed(6) }));
-                else setMsg({ tone: "error", text: "Could not get your location." });
-              }}
-            >
-              📍 I am at the farm
-            </button>
+          <div style={{ gridColumn: "1 / -1" }}>
+            <LiveGps enabled useLabel="📍 I am at the farm: use this" onUse={(lat, lng) => setF((x) => ({ ...x, lat, lng }))} />
           </div>
           <div>
             <label style={label}>Farm size (hectares)</label>

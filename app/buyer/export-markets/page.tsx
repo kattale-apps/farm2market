@@ -12,6 +12,7 @@ import { COFFEE_TYPES, DEFAULT_EXPORT_CROP, PRODUCT_FORMS, productFormLabel, uga
 import { FONT, EXPORT_HEADING, card, button, input, TraceBadges, Stars, PageHeader, CropTabs, COFFEE_BEAN_ICON, InfoTip } from "../../components/exportMarkets/ui";
 import { PriceTicker } from "../../components/exportMarkets/PriceTicker";
 import { DealsList } from "../../components/exportMarkets/DealsList";
+import { TabBackBar, useTabHistory } from "../../components/nav/TabNav";
 
 /**
  * Buyer-facing Export Markets: an anonymous catalogue of lots from live
@@ -24,7 +25,9 @@ export default function BuyerExportMarketsPage() {
   const [coffeeType, setCoffeeType] = useState("");
   const [crop, setCrop] = useState<string>(DEFAULT_EXPORT_CROP);
   const [productForm, setProductForm] = useState("");
-  const [tab, setTab] = useState<"lots" | "deals">("lots");
+  const nav = useTabHistory<"lots" | "deals">("lots");
+  const tab = nav.tab;
+  const setTab = nav.go;
   const lots = useQuery(api.exportLots.listCatalogue, { today, crop, coffeeType: coffeeType || undefined, productForm: productForm || undefined });
 
   if (status === "loading") return <div style={{ padding: "2rem", fontFamily: FONT }}>Loading...</div>;
@@ -54,6 +57,11 @@ export default function BuyerExportMarketsPage() {
           <button style={button(tab === "deals" ? "primary" : "secondary")} onClick={() => setTab("deals")}>
             My deals
           </button>
+        </div>
+      )}
+      {isBuyer && tab !== "lots" && (
+        <div style={{ marginBottom: "0.75rem" }}>
+          <TabBackBar color={EXPORT_HEADING} previousLabel="Lots" homeLabel="Lots" onBack={nav.back} onHome={nav.goHome} />
         </div>
       )}
 

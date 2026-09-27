@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { mutation } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
-import { assertTestMode, ensureTestStorageLocation, ensureTestUsers, resetTestState } from "./testUtils";
+import { assertTestMode, ensureTestUsers, resetTestState } from "./testUtils";
 import { getUgandaTime } from "./utils";
 
 async function getLatestFarmcoinBalance(
@@ -128,14 +128,11 @@ export const runFarmcoinTokenTest = mutation({
     let postingEntry: any = null;
 
     try {
-      const storageLocationId = await ensureTestStorageLocation(ctx, seedResult.superadminId);
-
       const inventoryResult = await ctx.runMutation(apiAny.listings.createTraderInventoryLot, {
         traderId: seedResult.traderId,
         produceType: `TEST_FARMCOIN_${now}`,
         totalKilos: 100,
         unitPrice: 1000,
-        storageLocationId,
         qualityRating: "A",
       });
 

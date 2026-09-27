@@ -105,31 +105,6 @@ export async function ensureTestUsers(
   };
 }
 
-export async function ensureTestStorageLocation(
-  ctx: { db: DatabaseWriter },
-  adminId: Id<"users">
-): Promise<Id<"storageLocations">> {
-  const existing = await ctx.db
-    .query("storageLocations")
-    .withIndex("by_code", (q) => q.eq("code", TEST_STORAGE_CODE))
-    .first();
-
-  if (existing) {
-    return existing._id;
-  }
-
-  const now = getUgandaTime();
-  return ctx.db.insert("storageLocations", {
-    districtName: "Test District",
-    code: TEST_STORAGE_CODE,
-    active: true,
-    order: 9999,
-    createdAt: now,
-    createdBy: adminId,
-    utid: generateUTID("admin"),
-  });
-}
-
 export type ResetTestStateOptions = {
   testUserIds: Id<"users">[];
   resetLedger?: boolean;

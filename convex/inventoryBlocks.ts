@@ -35,11 +35,11 @@ export const checkAndCreate100kgBlocks = internalMutation({
       )
       .collect();
 
-    // Group by produce type and storage location (blocks must be same produce and location)
+    // Group by produce type and delivery point (blocks must be the same produce and place)
     const inventoryByProduceLocation = new Map<string, typeof allInventory>();
     
     for (const inv of allInventory) {
-      const key = `${inv.produceType}_${inv.storageLocationId}`;
+      const key = `${inv.produceType}_${inv.deliveryProcessorId ?? "none"}`;
       if (!inventoryByProduceLocation.has(key)) {
         inventoryByProduceLocation.set(key, []);
       }
@@ -49,7 +49,7 @@ export const checkAndCreate100kgBlocks = internalMutation({
     const blocksCreated: Array<{
       blockUtid: string;
       produceType: string;
-      storageLocationId: Id<"storageLocations">;
+      deliveryProcessorId?: Id<"users">;
       totalKilos: number;
     }> = [];
 
@@ -58,7 +58,7 @@ export const checkAndCreate100kgBlocks = internalMutation({
       // Calculate total available kilos
       let totalAvailableKilos = 0;
       const unitIds: Id<"listingUnits">[] = [];
-      let storageLocationId: Id<"storageLocations"> | null = null;
+      let deliveryProcessorId: Id<"users"> | undefined = undefined;
       let produceType: string | null = null;
       let qualityRating: string | undefined = undefined;
       let unitPrice: number | null = null;
@@ -66,13 +66,13 @@ export const checkAndCreate100kgBlocks = internalMutation({
       for (const inv of inventoryList) {
         totalAvailableKilos += inv.totalKilos;
         unitIds.push(...inv.listingUnitIds);
-        if (!storageLocationId) storageLocationId = inv.storageLocationId;
+        if (!deliveryProcessorId) deliveryProcessorId = inv.deliveryProcessorId;
         if (!produceType) produceType = inv.produceType;
         if (!qualityRating && inv.qualityRating) qualityRating = inv.qualityRating;
         if (!unitPrice) unitPrice = inv.unitPrice;
       }
 
-      if (!storageLocationId || !produceType || !unitPrice) continue;
+      if (!produceType || !unitPrice) continue;
 
       // Sort inventory by acquiredAt (oldest first) to create blocks from oldest inventory
       inventoryList.sort((a, b) => a.acquiredAt - b.acquiredAt);
@@ -141,7 +141,7 @@ export const checkAndCreate100kgBlocks = internalMutation({
             totalKilos: 100, // Exactly 100kg block
             blockSize: 100,
             produceType,
-            storageLocationId,
+            deliveryProcessorId,
             qualityRating,
             unitPrice,
             acquiredAt: getUgandaTime(), // Timestamp when block was created
@@ -154,7 +154,7 @@ export const checkAndCreate100kgBlocks = internalMutation({
           blocksCreated.push({
             blockUtid,
             produceType,
-            storageLocationId,
+            deliveryProcessorId,
             totalKilos: 100,
           });
 

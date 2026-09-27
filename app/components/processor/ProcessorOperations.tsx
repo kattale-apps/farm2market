@@ -75,6 +75,7 @@ export function ProcessorIntakeTab({ userId, member, today, crops, setMsg }: Tab
   const [adding, setAdding] = useState(false);
   return (
     <>
+      {member && <DeliveriesToFacility userId={userId} setMsg={setMsg} />}
       <div style={card}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
           <h2 style={{ margin: 0, fontSize: "1.15rem", color: PROCESSOR_HEADING }}>Intake from farmers</h2>
@@ -602,6 +603,49 @@ function BatchRow({ batch, userId, today, setMsg }: { batch: BatchRowData; userI
             </div>
           </div>
         ))}
+    </div>
+  );
+}
+
+/** Farmers' deliveries (sold to exporters) that name this facility as the delivery point. */
+function DeliveriesToFacility({ userId, setMsg }: { userId: Id<"users">; setMsg: (m: Msg) => void }) {
+  const rows = useQuery(api.processors.listDeliveriesToMyFacility, { userId });
+  const confirm = useMutation(api.processors.confirmDeliveryAtFacility);
+  const [busy, setBusy] = useState<string | null>(null);
+  if (!rows || rows.length === 0) return null;
+  return (
+    <div style={{ ...card, border: `2px solid ${PROCESSOR_BORDER}` }}>
+      <h2 style={{ margin: "0 0 0.4rem", fontSize: "1.05rem", color: PROCESSOR_HEADING }}>🚚 Deliveries arriving at your facility</h2>
+      <p style={{ fontSize: "0.82rem", color: "#607d8b", marginTop: 0 }}>
+        Produce exporters bought from farmers, delivered here. Confirm when it has arrived and been weighed.
+      </p>
+      {rows.map((r) => (
+        <div key={r.lockUtid} style={{ borderTop: "1px solid #eee", padding: "0.5rem 0", fontSize: "0.86rem", display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <span>
+            <b>
+              {r.kilos} kg {r.produceType}
+            </b>{" "}
+            from Farmer {r.farmerAlias} for Exporter {r.exporterAlias} · {r.lockUtid}
+          </span>
+          <button
+            style={button("primary", busy === r.lockUtid)}
+            disabled={busy === r.lockUtid}
+            onClick={async () => {
+              setBusy(r.lockUtid);
+              try {
+                const res = await confirm({ userId, lockUtid: r.lockUtid });
+                setMsg({ tone: res.errors.length ? "error" : "success", text: res.errors.length ? res.errors.join(" ") : "Delivery confirmed." });
+              } catch (e) {
+                setMsg({ tone: "error", text: errorText(e) });
+              } finally {
+                setBusy(null);
+              }
+            }}
+          >
+            Confirm arrival
+          </button>
+        </div>
+      ))}
     </div>
   );
 }

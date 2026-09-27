@@ -56,31 +56,6 @@ export const seedDemoData = mutation({
       const traders = testUsers.filter((u) => u.role === "trader");
       const buyers = testUsers.filter((u) => u.role === "buyer");
 
-      // Get or create a default storage location for demo data
-      let defaultStorageLocationId: Id<"storageLocations">;
-      const existingLocation = await ctx.db
-        .query("storageLocations")
-        .withIndex("by_active", (q) => q.eq("active", true))
-        .first();
-      
-      if (existingLocation) {
-        defaultStorageLocationId = existingLocation._id;
-      } else {
-        // Create a default storage location for demo purposes
-        const demoUtid = generateUTID("admin");
-        // Find an admin user to use as creator (or use first user if no admin)
-        const adminUser = testUsers.find((u) => u.role === "admin") || testUsers[0];
-        defaultStorageLocationId = await ctx.db.insert("storageLocations", {
-          districtName: "Kampala",
-          code: "KLA",
-          active: true,
-          order: 1,
-          createdAt: getUgandaTime(),
-          createdBy: adminUser._id,
-          utid: demoUtid,
-        });
-      }
-
       // ============================================================
       // 1. CREATE FARMER LISTINGS
       // ============================================================
@@ -113,7 +88,6 @@ export const seedDemoData = mutation({
             status: "active",
             createdAt: getUgandaTime(),
             deliverySLA: 0,
-            storageLocationId: defaultStorageLocationId,
           });
 
           // Create individual units

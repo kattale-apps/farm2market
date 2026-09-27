@@ -36,10 +36,10 @@ export default function StoreAdminDashboardPage() {
   return (
     <div style={{ padding: "clamp(1rem, 4vw, 2rem)", maxWidth: "1200px", margin: "0 auto" }}>
       <h1 style={{ fontSize: "clamp(1.5rem, 4vw, 2rem)", marginBottom: "1.5rem" }}>
-        StoreAdmin Dashboard
+        Storage and Transport Officer: deliveries
       </h1>
       <p style={{ marginBottom: "2rem", color: "#666" }}>
-        Manage deliveries for your assigned storage locations. You can only verify deliveries for UTIDs from your assigned locations.
+        Verify farmer deliveries to processor facilities (or agreed collection points). Processors can also confirm deliveries that arrive at their own facility.
       </p>
 
       {/* Quick Actions */}

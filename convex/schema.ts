@@ -66,7 +66,7 @@ export default defineSchema({
     customSpendCap: v.optional(v.number()), // Admin-set custom spend cap for traders (in UGX). If not set, uses default MAX_TRADER_EXPOSURE_UGX.
     adminLevel: v.optional(v.union(v.literal("super"), v.literal("junior"))), // Admin hierarchy level. undefined means super admin (backward compatible).
     adminCategory: v.optional(v.union(v.literal("store"), v.literal("message"), v.literal("community"), v.literal("community_crm"), v.literal("finance"))), // Junior admin category (store delivery vs message support vs community oversight vs CRM-only agent vs finance)
-    allowedStorageLocationIds: v.optional(v.array(v.id("storageLocations"))), // Storage locations junior admin can access. Only applies to junior admins.
+    allowedStorageLocationIds: v.optional(v.array(v.id("storageLocations"))), // Deprecated: storage locations are retired; removed once old rows are cleaned
     assignedCommunityIds: v.optional(v.array(v.id("communities"))), // Communities assigned to junior community admins. Only applies to community admins.
     serviceLevel: v.optional(v.union(v.literal("Standard"), v.literal("Premium"))), // Service tier for community admins (Standard = 5 exports/month, Premium = unlimited). Only applies to community admins.
     exportLimit: v.optional(v.number()), // Max number of exports per month for admin (super/junior)
@@ -168,7 +168,8 @@ export default defineSchema({
     deliverySLA: v.number(), // Timestamp: 6 hours after payment (for farmer listings)
     qualityRating: v.optional(v.string()), // Quality rating from admin-managed dropdown (e.g., "Premium", "Good", "Fair")
     qualityComment: v.optional(v.string()), // Farmer's text comment about produce quality
-    storageLocationId: v.optional(v.id("storageLocations")), // Storage location (district) where produce will be delivered (optional for backward compatibility with existing data)
+    storageLocationId: v.optional(v.id("storageLocations")), // Deprecated: storage locations are retired; removed once old rows are cleaned
+    deliveryProcessorId: v.optional(v.id("users")), // Processor facility the produce is delivered to (optional)
     // Trader packaging-based listing fields (optional for backward compatibility)
     productName: v.optional(v.string()),
     packagingTypeEnum: v.optional(v.string()),
@@ -338,7 +339,8 @@ export default defineSchema({
     totalKilos: v.number(), // Sum of all units
     blockSize: v.number(), // Target: 100kg blocks
     produceType: v.string(),
-    storageLocationId: v.id("storageLocations"), // Storage location (district) - retained from farmer listing
+    storageLocationId: v.optional(v.id("storageLocations")), // Deprecated: storage locations are retired
+    deliveryProcessorId: v.optional(v.id("users")), // Processor facility it was delivered to, from the farmer listing
     qualityRating: v.optional(v.string()), // Quality rating - retained from farmer listing
     unitPrice: v.number(), // Price per kilo in UGX - retained from farmer listing (actual purchase price)
     acquiredAt: v.number(), // When trader received delivery at storage (timestamp updated when admin confirms)
@@ -669,7 +671,7 @@ export default defineSchema({
     order: v.number(), // Display order (lower numbers appear first)
     active: v.boolean(), // Whether this option is currently active/available
     category: v.optional(v.string()), // Produce category (e.g., "Grains & Cereals", "Vegetables")
-    allowedStorageLocationIds: v.optional(v.array(v.id("storageLocations"))), // Storage locations where this produce can be delivered
+    allowedStorageLocationIds: v.optional(v.array(v.id("storageLocations"))), // Deprecated: storage locations are retired
     createdAt: v.number(),
     createdBy: v.id("users"), // Admin who created this option
   })
@@ -677,10 +679,8 @@ export default defineSchema({
     .index("by_order", ["order"]),
 
   /**
-   * Storage locations (districts)
-   * - Admin-managed storage locations where the app has storage facilities
-   * - Used by farmers when creating listings to specify delivery location
-   * - Helps admin prepare for delivery at specific locations
+   * Deprecated: platform storage locations are retired; farmers deliver to
+   * processor facilities. Kept until the old rows are deleted.
    */
   storageLocations: defineTable({
     districtName: v.string(), // District name (e.g., "Kampala", "Wakiso", "Mukono")

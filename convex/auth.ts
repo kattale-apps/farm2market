@@ -150,7 +150,6 @@ export const createUser = mutation({
     ),
     adminLevel: v.optional(v.union(v.literal("super"), v.literal("junior"))),
     adminCategory: v.optional(v.union(v.literal("store"), v.literal("message"), v.literal("community"), v.literal("community_crm"), v.literal("finance"))),
-    allowedStorageLocationIds: v.optional(v.array(v.id("storageLocations"))),
     assignedCommunityIds: v.optional(v.array(v.id("communities"))),
     creatorAdminId: v.optional(v.id("users")), // Admin creating this user (for permission check)
   },
@@ -197,20 +196,8 @@ export const createUser = mutation({
         
         // Validate based on category
         if (args.adminCategory === "store") {
-          // Store admins REQUIRE at least one storage location
-          if (!args.allowedStorageLocationIds || args.allowedStorageLocationIds.length === 0) {
-            throw new ConvexError("Storage and Transport Officers must have at least one assigned storage location");
-          }
-          // Validate that all location IDs exist and are active
-          for (const locationId of args.allowedStorageLocationIds) {
-            const location = await ctx.db.get(locationId);
-            if (!location) {
-              throw new ConvexError(`Storage location ${locationId} not found`);
-            }
-            if (!location.active) {
-              throw new ConvexError(`Storage location ${locationId} is not active`);
-            }
-          }
+          // Storage and Transport Officers need no assignment: they see every
+          // processor and transporter, with filters.
         } else if (args.adminCategory === "community") {
           // ✅ IMPORTANT: Community admins do NOT require assigned communities at creation
           // They can be assigned later via edit functionality
@@ -243,29 +230,14 @@ export const createUser = mutation({
           // (No special validation needed)
         }
         
-        // Additional validation for any provided storage locations
-        if (args.allowedStorageLocationIds && args.allowedStorageLocationIds.length > 0) {
-          for (const locationId of args.allowedStorageLocationIds) {
-            const location = await ctx.db.get(locationId);
-            if (!location) {
-              throw new ConvexError(`Storage location ${locationId} not found`);
-            }
-            if (!location.active) {
-              throw new ConvexError(`Storage location ${locationId} is not active`);
-            }
-          }
-        }
       }
     } else {
-      // For non-admin roles, adminLevel and allowedStorageLocationIds should not be set
+      // For non-admin roles, adminLevel and adminCategory should not be set
       if (args.adminLevel !== undefined) {
         throw new ConvexError("adminLevel can only be set for admin role");
       }
       if (args.adminCategory !== undefined) {
         throw new ConvexError("adminCategory can only be set for admin role");
-      }
-      if (args.allowedStorageLocationIds !== undefined && args.allowedStorageLocationIds.length > 0) {
-        throw new ConvexError("allowedStorageLocationIds can only be set for junior admin role");
       }
     }
 
@@ -286,16 +258,13 @@ export const createUser = mutation({
       passwordHash,
     };
     
-    // Add adminLevel and allowedStorageLocationIds for admin accounts
+    // Add adminLevel and adminCategory for admin accounts
     if (args.role === "admin") {
       if (args.adminLevel !== undefined) {
         userData.adminLevel = args.adminLevel;
       }
       if (args.adminCategory !== undefined) {
         userData.adminCategory = args.adminCategory;
-      }
-      if (args.adminLevel === "junior" && args.allowedStorageLocationIds) {
-        userData.allowedStorageLocationIds = args.allowedStorageLocationIds;
       }
       if (args.adminLevel === "junior" && args.assignedCommunityIds) {
         userData.assignedCommunityIds = args.assignedCommunityIds;

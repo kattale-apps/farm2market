@@ -182,6 +182,7 @@ function IntakeForm({ userId, today, crops, setMsg, onDone }: { userId: Id<"user
   const [farmerId, setFarmerId] = useState<Id<"users"> | null>(null);
   const [f, setF] = useState({ inputForm: "kiboko", kilos: "", price: "", intakeDate: today, farmerName: "", farmerPhone: "", village: "", district: "", lat: "", lng: "", areaHa: "", polygon: "", notes: "" });
   const [photos, setPhotos] = useState<CapturedPhoto[]>([]);
+  const [paidCash, setPaidCash] = useState(true);
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setF((x) => ({ ...x, [k]: e.target.value }));
   const num = (s: string) => (s.trim() ? Number(s) : undefined);
@@ -293,6 +294,10 @@ function IntakeForm({ userId, today, crops, setMsg, onDone }: { userId: Id<"user
       <label style={{ ...label, marginTop: "0.75rem" }}>Photos (weighing, the produce, the farm)</label>
       <PhotoSetCapture photos={photos} onChange={setPhotos} />
       <textarea style={{ ...input, minHeight: 50, marginTop: "0.5rem" }} placeholder="Notes" value={f.notes} onChange={set("notes")} />
+      <label style={{ ...chip(paidCash, false), borderRadius: 10, marginTop: "0.5rem" }}>
+        <input type="checkbox" checked={paidCash} onChange={(e) => setPaidCash(e.target.checked)} />
+        Paid in cash now: issue the farmer&apos;s receipt (needs the price per kg)
+      </label>
       <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.6rem" }}>
         <button
           style={button("primary", busy)}
@@ -320,8 +325,12 @@ function IntakeForm({ userId, today, crops, setMsg, onDone }: { userId: Id<"user
                 polygonGeoJson: f.polygon || undefined,
                 photos: uploaded,
                 notes: f.notes || undefined,
+                paidCash,
               });
-              setMsg({ tone: "success", text: `Intake ${r.intakeCode} recorded.${sourceKind === "platform_farmer" ? " The farmer was asked to confirm it." : ""}` });
+              setMsg({
+                tone: "success",
+                text: `Intake ${r.intakeCode} recorded.${r.receiptNumber ? ` Receipt ${r.receiptNumber} issued; share it from Buying prices → Receipts.` : ""}`,
+              });
               onDone();
             } catch (e) {
               setMsg({ tone: "error", text: errorText(e) });

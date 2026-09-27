@@ -20,6 +20,7 @@ import { EUDR_POLYGON_THRESHOLD_HA, EXPORT_CROPS, MASS_BALANCE_TOLERANCE, isIsoD
 import { BATCH_OUTPUT_FORM_KEYS, CAPABILITY_KEYS, INTAKE_FORM_KEYS, outturnPercent, traceLevelFromIntakes } from "./processorShared";
 import { assertEvidencePhotos, evidencePhotoValidator, hasManualPhoto } from "./evidencePhotos";
 import { audit, notify, todayUganda } from "./exportMarkets";
+import { issueReceipt } from "./marketOffers";
 import { recomputeLotSummary, uniqueCode } from "./exportLots";
 import { getProcessorProfile, processorCommunities, requireProcessorUser, requireStorageOfficer } from "./processors";
 
@@ -137,12 +138,22 @@ const intakeFields = {
   polygonGeoJson: v.optional(v.string()),
   photos: v.array(evidencePhotoValidator),
   notes: v.optional(v.string()),
+  // A farmer's delivery booking this intake fulfils, and whether the farmer
+  // was paid in cash now (which issues the receipt).
+  bookingId: v.optional(v.id("deliveryBookings")),
+  paidCash: v.optional(v.boolean()),
 };
 
 export const recordIntake = mutation({
   args: { userId: v.id("users"), ...intakeFields },
   handler: async (ctx, args) => {
     const user = await requireAdmittedProcessor(ctx, args.userId);
+    if (args.bookingId) {
+      const booking = await ctx.db.get(args.bookingId);
+      if (!booking || booking.buyerId !== user._id) throw new Error("Booking not found");
+      if (args.sourceKind !== "platform_farmer" || args.farmerId !== booking.farmerId) throw new Error("A booked delivery comes from the farmer who booked it");
+    }
+    if (args.paidCash && args.pricePerKgUgx === undefined) throw new Error("Enter the price paid per kg to issue a receipt");
     if (!EXPORT_CROPS.some((c) => c.key === args.crop && c.active)) throw new Error("This crop is not open yet");
     if (!INTAKE_FORM_KEYS.includes(args.inputForm)) throw new Error("Choose what the farmer delivered");
     if (!(args.kilos > 0 && args.kilos < 10_000_000)) throw new Error("Kilos must be above 0");
@@ -195,7 +206,27 @@ export const recordIntake = mutation({
         polygonGeoJson: validPolygon(args.polygonGeoJson),
       });
     }
-    return { intakeId, intakeCode };
+    // Cash paid now: the processor side issues the farmer's receipt.
+    let receiptNumber: string | null = null;
+    if (args.paidCash) {
+      const farmer = args.farmerId ? await ctx.db.get(args.farmerId) : null;
+      ({ receiptNumber } = await issueReceipt(ctx, {
+        buyer: user,
+        farmerId: args.sourceKind === "platform_farmer" ? args.farmerId : undefined,
+        farmerName: args.sourceKind === "platform_farmer" ? `Farmer ${farmer?.alias ?? ""}`.trim() : args.farmerName!.trim(),
+        crop: args.crop,
+        form: args.inputForm,
+        unit: "kg",
+        quantity: base.kilos,
+        priceUgx: args.pricePerKgUgx!,
+        paidOn: args.intakeDate,
+        bookingId: args.bookingId,
+        intakeId,
+      }));
+    } else if (args.bookingId) {
+      await ctx.db.patch(args.bookingId, { status: "completed", respondedAt: getUgandaTime() });
+    }
+    return { intakeId, intakeCode, receiptNumber };
   },
 });
 

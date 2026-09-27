@@ -405,6 +405,12 @@ export default function Home() {
                     <a href="/api/download/android" download="Farm2Market.apk" style={profileMenuLinkStyle}>
                       Download App
                     </a>
+                    {effectiveUser?.role && effectiveUser.role !== "admin" && (
+                      <a href="/transport" style={profileMenuLinkStyle}>🚚 Find transport</a>
+                    )}
+                    {effectiveUser?.role === "transporter" && (
+                      <a href="/transporter/services" style={profileMenuLinkStyle}>🚚 My transport services</a>
+                    )}
                     <a href="/contact" style={profileMenuLinkStyle}>Contact Us</a>
                     <a href="/privacy-policy" style={profileMenuLinkStyle}>Privacy Policy</a>
                     {(effectiveUser?.role === "farmer" || effectiveUser?.role === "trader" || effectiveUser?.role === "buyer" || effectiveUser?.role === "vendor" || effectiveUser?.role === "transporter" || effectiveUser?.role === "store" || isEffectiveSuperAdmin || (effectiveUser?.role === "admin" && effectiveUser?.adminCategory === "community") || isEffectiveCrmCommunityAdmin) && (

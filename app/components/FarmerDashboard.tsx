@@ -137,6 +137,11 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
         disabled: farm2MarketLocked,
       },
       { key: "advancePurchase", label: "🌱 Advanced Markets" },
+      { key: "sellServices", label: "🏭 Sell & services" },
+    ] : []),
+    ...(effectiveRole === "vendor" ? [
+      { key: "vendorBuying", label: "🧺 Buying from farmers" },
+      { key: "findTransport", label: "🚚 Find transport" },
     ] : []),
   ];
   const ROUTE_MENU_KEYS: Record<string, string> = {
@@ -146,6 +151,9 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
     farmCalendar: "/farmer/planner",
     farm2market: "/farmer/farm2market",
     advancePurchase: "/farmer/advance-purchase",
+    sellServices: "/farmer/services",
+    vendorBuying: "/vendor/buying",
+    findTransport: "/transport",
   };
   const openSectionFromMenu = (key: string) => {
     if (key === "farm2market" && farm2MarketLocked) {

@@ -15,7 +15,6 @@ export type TestUserSeedResult = {
 
 const TEST_SUPERADMIN_EMAIL = "superadmin_test@local";
 const TEST_TRADER_EMAIL = "trader_test@local";
-const TEST_STORAGE_CODE = "TEST_FARMCOIN";
 
 export function assertTestMode(mode: string | undefined) {
   const deployment = process.env.CONVEX_DEPLOYMENT;
@@ -118,7 +117,6 @@ export type ResetTestStateResult = {
   listingsDeleted: number;
   listingUnitsDeleted: number;
   inventoriesDeleted: number;
-  storageLocationsDeleted: number;
   usersDeleted: number;
   utidsDeleted: number;
 };
@@ -132,7 +130,6 @@ export async function resetTestState(
     listingsDeleted: 0,
     listingUnitsDeleted: 0,
     inventoriesDeleted: 0,
-    storageLocationsDeleted: 0,
     usersDeleted: 0,
     utidsDeleted: 0,
   };
@@ -196,19 +193,6 @@ export async function resetTestState(
       }
     }
 
-    const storageLocations = await ctx.db
-      .query("storageLocations")
-      .withIndex("by_code", (q) => q.eq("code", TEST_STORAGE_CODE))
-      .collect();
-
-    for (const location of storageLocations) {
-      if (testUserIds.includes(location.createdBy)) {
-        result.storageLocationsDeleted += 1;
-        if (!dryRun) {
-          await ctx.db.delete(location._id);
-        }
-      }
-    }
   }
 
   if (cleanupUsers) {

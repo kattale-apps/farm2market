@@ -745,7 +745,7 @@ export function CreateTraderListing({ userId }: CreateTraderListingProps) {
               fontWeight: "600",
             }}
           >
-            {loading ? "Posting Listing..." : "Post Trader Listing"}
+            {loading ? "Posting Listing..." : "Post Exporter Listing"}
           </button>
         </form>
       )}

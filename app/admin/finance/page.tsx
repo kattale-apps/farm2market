@@ -409,7 +409,7 @@ export default function FinanceDashboardPage() {
               <option value="">Select trader</option>
               {traderOptions.map((trader: any) => (
                 <option key={trader._id} value={trader._id}>
-                  {trader.alias || "Trader"} • {trader._id?.slice(0, 6)}…{trader._id?.slice(-4)}
+                  {trader.alias || "Exporter"} • {trader._id?.slice(0, 6)}…{trader._id?.slice(-4)}
                 </option>
               ))}
             </select>
@@ -470,7 +470,7 @@ export default function FinanceDashboardPage() {
 
         {isSuperAdmin && (
           <div style={{ marginTop: "1.5rem", display: "grid", gap: "0.75rem", maxWidth: 640 }}>
-            <div style={{ fontWeight: 600 }}>Trader Verification Status</div>
+            <div style={{ fontWeight: 600 }}>Exporter Verification Status</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "0.75rem" }}>
               <select
                 value={verificationFilter}
@@ -492,7 +492,7 @@ export default function FinanceDashboardPage() {
                 <option value="">Select trader</option>
                 {verificationOptions.map((trader: any) => (
                   <option key={trader._id} value={trader._id}>
-                    {trader.alias || "Trader"} • {trader.verificationStatus}
+                    {trader.alias || "Exporter"} • {trader.verificationStatus}
                   </option>
                 ))}
               </select>
@@ -513,7 +513,7 @@ export default function FinanceDashboardPage() {
                       traderId: verificationTraderId as any,
                       status: "verified",
                     });
-                    setMessage({ type: "success", text: "Trader verified." });
+                    setMessage({ type: "success", text: "Exporter verified." });
                   } catch (error: any) {
                     setMessage({ type: "error", text: error.message || "Failed to verify trader" });
                   }
@@ -540,7 +540,7 @@ export default function FinanceDashboardPage() {
                       traderId: verificationTraderId as any,
                       status: "pending",
                     });
-                    setMessage({ type: "success", text: "Trader set to not verified." });
+                    setMessage({ type: "success", text: "Exporter set to not verified." });
                   } catch (error: any) {
                     setMessage({ type: "error", text: error.message || "Failed to update trader" });
                   }
@@ -640,7 +640,7 @@ export default function FinanceDashboardPage() {
                         <th style={{ padding: "0.6rem", textAlign: "left" }}>Product</th>
                         <th style={{ padding: "0.6rem", textAlign: "left" }}>Total Cost (UGX)</th>
                         <th style={{ padding: "0.6rem", textAlign: "left" }}>Buyer Confirms</th>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Trader Confirmed</th>
+                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Exporter Confirmed</th>
                         <th style={{ padding: "0.6rem", textAlign: "left" }}>Sentify Receipt</th>
                       </tr>
                     </thead>
@@ -796,7 +796,7 @@ export default function FinanceDashboardPage() {
                         <th style={{ padding: "0.6rem", textAlign: "left" }}>Product</th>
                         <th style={{ padding: "0.6rem", textAlign: "left" }}>Purchases</th>
                         <th style={{ padding: "0.6rem", textAlign: "left" }}>Total Cost (UGX)</th>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Trader Confirmed</th>
+                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Exporter Confirmed</th>
                         <th style={{ padding: "0.6rem", textAlign: "left" }}>Buyer Confirmed</th>
                         <th style={{ padding: "0.6rem", textAlign: "left" }}>Superadmin Confirmed</th>
                       </tr>
@@ -929,7 +929,7 @@ export default function FinanceDashboardPage() {
                       <table style={{ width: "100%", borderCollapse: "collapse" }}>
                         <thead>
                           <tr style={{ borderBottom: "2px solid #ddd" }}>
-                            <th style={{ padding: "0.75rem", textAlign: "left" }}>Trader</th>
+                            <th style={{ padding: "0.75rem", textAlign: "left" }}>Exporter</th>
                             <th style={{ padding: "0.75rem", textAlign: "right" }}>Amount</th>
                             <th style={{ padding: "0.75rem", textAlign: "left" }}>Reason</th>
                             <th style={{ padding: "0.75rem", textAlign: "left" }}>UTID</th>
@@ -940,7 +940,7 @@ export default function FinanceDashboardPage() {
                           {pagedGrants.map((entry: any, idx: number) => (
                             <tr key={idx} style={{ borderBottom: "1px solid #eee" }}>
                               <td style={{ padding: "0.75rem" }}>
-                                {entry.traderAlias || "Trader"}
+                                {entry.traderAlias || "Exporter"}
                                 <div style={{ fontSize: "0.8rem", color: "#666" }}>{entry.traderId}</div>
                               </td>
                               <td style={{ padding: "0.75rem", textAlign: "right", fontWeight: 600 }}>

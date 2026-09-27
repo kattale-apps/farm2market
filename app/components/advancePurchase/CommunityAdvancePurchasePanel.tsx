@@ -479,7 +479,7 @@ function VerifiedMembersManager({ adminId, communityId }: { adminId: Id<"users">
               <option value="all">All roles</option>
               <option value="farmer">Farmers</option>
               <option value="vendor">Vendors</option>
-              <option value="store">Stores</option>
+              <option value="store">Processors</option>
             </select>
           </div>
 

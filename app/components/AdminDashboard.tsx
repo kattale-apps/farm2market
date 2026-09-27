@@ -645,7 +645,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                 style={{ padding: "0.45rem", borderRadius: 6, border: "1px solid #ddd" }}
               >
                 <option value="farmer">Farmers</option>
-                <option value="trader">Traders</option>
+                <option value="trader">Exporters</option>
                 <option value="buyer">Buyers</option>
                   <option value="vendor">Vendors</option>
               </select>
@@ -1200,7 +1200,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
               >
                 <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>🏪</div>
                 <div>
-                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Store Management</h3>
+                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Storage Officer Management</h3>
                   <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.95 }}>
                     Manage stores, assign admins & audit activity
                   </p>

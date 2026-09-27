@@ -212,7 +212,7 @@ export function Members({ adminId, today, communities, setMsg }: P & { communiti
       )}
 
       <div style={card}>
-        <h2 style={{ marginTop: 0, fontSize: "1.05rem" }}>Traders in this community</h2>
+        <h2 style={{ marginTop: 0, fontSize: "1.05rem" }}>Exporters in this community</h2>
         <p style={{ fontSize: "0.82rem", color: "#555", marginTop: 0 }}>
           Two-step verification. Step 1: the community admin accepts a trader, which opens Export Markets on their dashboard. Step 2: a
           super admin verifies the trader (full verification, with the badge). Traders go live to buyers after both steps.

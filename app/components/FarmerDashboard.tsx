@@ -536,7 +536,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
       });
       setMessage({
         type: "success",
-        text: `Offer accepted! UTID: ${result.acceptedUtid}. Trader can now proceed to pay-to-lock.`,
+        text: `Offer accepted! UTID: ${result.acceptedUtid}. Exporter can now proceed to pay-to-lock.`,
       });
       setTimeout(() => setMessage(null), 8000);
     } catch (error: any) {
@@ -591,7 +591,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
       }
       setMessage({
         type: "success",
-        text: `Accepted ${negotiationIds.length} offer(s). Trader can now proceed to pay-to-lock.`,
+        text: `Accepted ${negotiationIds.length} offer(s). Exporter can now proceed to pay-to-lock.`,
       });
       setTimeout(() => setMessage(null), 8000);
     } catch (error: any) {
@@ -939,7 +939,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
       alignItems: "center",
       gap: "0.6rem",
     }}>
-      Hello, {effectiveRole === "vendor" ? "Vendor 🏪" : effectiveRole === "store" ? "Store 🏬" : "Farmer 👩🏾‍🌾"}
+      Hello, {effectiveRole === "vendor" ? "Vendor 🏪" : effectiveRole === "store" ? "Processor 🏬" : "Farmer 👩🏾‍🌾"}
     </h2>
   );
 

@@ -587,10 +587,10 @@ export default function CreateCommunityPage() {
                       >
                         <option value="farmer">Farmer</option>
                         <option value="vendor">Vendor</option>
-                        <option value="trader">Trader</option>
+                        <option value="trader">Exporter</option>
                         <option value="buyer">Buyer</option>
                         <option value="transporter">Transporter</option>
-                        <option value="store">Store</option>
+                        <option value="store">Processor</option>
                       </select>
                       <p className="text-xs text-gray-500 mt-2">QR signups for this community will default to the {formData.communityType} role.</p>
                     </div>

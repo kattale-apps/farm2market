@@ -16,6 +16,7 @@ import { StoreDashboard } from "./components/StoreDashboard";
 import { Id } from "../convex/_generated/dataModel";
 import { getStoredUser, clearAuth } from "./utils/authStorage";
 import { NotificationMailbox } from "./components/NotificationMailbox";
+import { roleLabel } from "@/convex/roleLabels";
 // import { useMutation } from "convex/react";
 // import { initializePushNotifications } from "./utils/pushNotifications";
 
@@ -388,7 +389,7 @@ export default function Home() {
                     Logged in as: <strong style={{ color: "#1a1a1a" }}>{effectiveUser?.alias || user?.alias || "Unknown"}</strong>
                   </p>
                   <p style={{ margin: "0 0 0.6rem", fontSize: "0.8rem", color: "#666", textTransform: "capitalize" }}>
-                    Role: {effectiveUser?.role || user?.role || "unknown"}
+                    Role: {roleLabel(effectiveUser?.role || user?.role) || "unknown"}
                   </p>
 
                   {(effectiveUser?.role === "farmer" || effectiveUser?.role === "trader" || effectiveUser?.role === "buyer" || effectiveUser?.role === "vendor" || effectiveUser?.role === "transporter" || effectiveUser?.role === "store") && (

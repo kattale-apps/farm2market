@@ -116,7 +116,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
     { key: "transactionsLog", label: "🧾 Transactions Log" },
     { key: "reports", label: "📊 Comprehensive Reports" },
     { key: "inventoryTable", label: "📋 Inventory Table" },
-    { key: "analytics", label: "📈 Trader Analytics" },
+    { key: "analytics", label: "📈 Exporter Analytics" },
     { key: "analyticsCharts", label: "📉 Analytics Charts" },
   ];
   // A handful of sections only exist in the DOM for one of the two view modes
@@ -314,9 +314,9 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
     const filename = `trader_report_${ugandaDate.toISOString().split("T")[0]}`;
 
     if (format === "excel") {
-      exportToExcel(formattedData, filename, "Trader");
+      exportToExcel(formattedData, filename, "Exporter");
     } else {
-      exportToPDF(formattedData, filename, "Trader", user?.alias);
+      exportToPDF(formattedData, filename, "Exporter", user?.alias);
     }
   };
 
@@ -368,7 +368,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
 
       doc.setFontSize(18);
       doc.setTextColor(46, 125, 50);
-      doc.text("Trader Analytics Report", 14, 20);
+      doc.text("Exporter Analytics Report", 14, 20);
       doc.setFontSize(10);
       doc.setTextColor(100, 100, 100);
       doc.text("Know Your Numbers — Farm2Market Uganda", 14, 28);
@@ -665,7 +665,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
       gap: "0.4rem",
       minWidth: 0,
     }}>
-      Hello, {userRole === "transporter" ? "Transporter 🚛" : "Trader 🚚"}
+      Hello, {userRole === "transporter" ? "Transporter 🚛" : "Exporter 🚚"}
       {(user as any)?.isVerifiedTrader && (user as any)?.verificationStatus === "verified" && (
         <VerifiedBadge size={26} title="Verified trader" />
       )}

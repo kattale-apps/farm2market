@@ -429,7 +429,7 @@ export default function CommunitiesPage() {
                     }}
                   >
                     <option value="farmer">Farmer</option>
-                    <option value="trader">Trader</option>
+                    <option value="trader">Exporter</option>
                     <option value="buyer">Buyer</option>
                     <option value="vendor">Vendor</option>
                   </select>

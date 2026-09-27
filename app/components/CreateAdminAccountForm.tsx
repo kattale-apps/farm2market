@@ -98,7 +98,7 @@ export function CreateAdminAccountForm({ adminId }: CreateAdminAccountFormProps)
               onChange={(e) => setAdminCategory(e.target.value as "store" | "message" | "community" | "community_crm")}
               style={{ width: "100%", padding: "0.5rem" }}
             >
-              <option value="store">Store Admin</option>
+              <option value="store">Storage Officer</option>
               <option value="message">Message Admin</option>
               <option value="community">Community Admin</option>
               <option value="community_crm">Community CRM</option>

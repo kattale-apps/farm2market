@@ -17,7 +17,7 @@ import { TraceLevelPill } from "../../components/processor/ProcessorOperations";
 type Msg = { tone: "error" | "success" | "info"; text: string } | null;
 
 /**
- * Storage Officer: every processor, filtered. Approve facility location,
+ * Storage and Transport Officer: every processor, filtered. Approve facility location,
  * storage and documents (step 2), review intake and batch evidence. Super
  * admins also give full verification with the badge (step 3) here.
  */
@@ -44,7 +44,7 @@ export default function StorageOfficerProcessorsPage() {
   );
 
   if (authStatus === "loading") return <div style={{ padding: "2rem", fontFamily: FONT }}>Loading...</div>;
-  if (!adminId || user?.role !== "admin") return <div style={{ padding: "2rem", fontFamily: FONT }}>Storage Officers and super admins only.</div>;
+  if (!adminId || user?.role !== "admin") return <div style={{ padding: "2rem", fontFamily: FONT }}>Storage and Transport Officers and super admins only.</div>;
 
   return (
     <div style={{ padding: "1rem", maxWidth: 1000, margin: "0 auto", fontFamily: FONT }}>

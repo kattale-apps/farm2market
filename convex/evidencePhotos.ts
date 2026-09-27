@@ -2,7 +2,7 @@
  * A proof photo in the trace journey (CLAUDESCOPE Rule 9). Camera photos
  * carry the live GPS position and time; gallery photos carry what their EXIF
  * data says; when a gallery photo has neither, the user types them in and the
- * photo is flagged so the Storage Officer or reviewer can tell.
+ * photo is flagged so the Storage and Transport Officer or reviewer can tell.
  *
  * The provenance fields are optional so evidence saved before them stays valid.
  */

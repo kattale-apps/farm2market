@@ -3383,7 +3383,7 @@ export default defineSchema({
     status: v.union(v.literal("pending"), v.literal("submitted"), v.literal("approved"), v.literal("rejected")),
     hint: v.optional(v.string()), // exporter-defined stages carry their own hint
     // Processor stages mirror the processing batch, whose evidence the
-    // Storage Officer reviews; the exporter does not attest them.
+    // Storage and Transport Officer reviews; the exporter does not attest them.
     processingBatchId: v.optional(v.id("processingBatches")),
     updatedAt: v.number(),
   })
@@ -3614,7 +3614,7 @@ export default defineSchema({
     contactPerson: v.string(),
     contactPhone: v.string(),
     contactEmail: v.optional(v.string()),
-    // Step 2: the Storage Officer approves location, storage and documents.
+    // Step 2: the Storage and Transport Officer approves location, storage and documents.
     status: v.union(v.literal("draft"), v.literal("submitted"), v.literal("approved"), v.literal("rejected"), v.literal("suspended")),
     submittedAt: v.optional(v.number()),
     reviewedBy: v.optional(v.id("users")),

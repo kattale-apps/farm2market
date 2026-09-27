@@ -916,7 +916,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
 
   return (
     <div style={containerStyle}>
-      {/* Storage Officers (and super admins) review processors */}
+      {/* Storage and Transport Officers (and super admins) review processors */}
       {(isStorageOfficer || isSuperAdmin) && (
         <a href="/storeadmin/processors" style={{ textDecoration: "none", display: "block", marginBottom: "1.25rem" }}>
           <div
@@ -931,7 +931,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
           >
             <div style={{ fontSize: "2.2rem" }}>🏭</div>
             <div>
-              <h3 style={{ margin: "0 0 0.3rem 0", fontSize: "1.1rem" }}>Processors{isStorageOfficer ? " (Storage Officer)" : ""}</h3>
+              <h3 style={{ margin: "0 0 0.3rem 0", fontSize: "1.1rem" }}>Processors{isStorageOfficer ? " (Storage and Transport Officer)" : ""}</h3>
               <p style={{ margin: 0, fontSize: "0.9rem" }}>Approve processor facilities and documents, review intake and processing evidence, and verify transport vehicles and drivers</p>
             </div>
           </div>
@@ -1223,7 +1223,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
               >
                 <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>🏪</div>
                 <div>
-                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Storage Officer Management</h3>
+                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Storage and Transport Officer Management</h3>
                   <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.95 }}>
                     Manage stores, assign admins & audit activity
                   </p>

@@ -12,7 +12,7 @@
  *
  * The trace map is the journey from farm to export bag: farm stages, then a
  * processor stage for each processor batch the lot was bought from (verified
- * by the Storage Officer, never attested by the exporter), then the
+ * by the Storage and Transport Officer, never attested by the exporter), then the
  * exporter's own processing steps, which each exporter sets for their lots.
  * Each stage takes proof photos with GPS and time, plus weight in and out.
  * Farm stages are verified by an admin of a source farmer's community, the
@@ -275,7 +275,7 @@ async function farmerCommunityIds(ctx: Ctx, lotId: Id<"exportLots">): Promise<Se
 }
 
 async function canReviewStage(ctx: Ctx, admin: Doc<"users">, lot: Doc<"exportLots">, stage: Doc<"exportTraceStages">) {
-  // Processor stages follow the batch evidence the Storage Officer reviews.
+  // Processor stages follow the batch evidence the Storage and Transport Officer reviews.
   if (stage.scope === "processor") return false;
   if (isSuperAdmin(admin)) return true;
   if (stage.scope === "exporter") {
@@ -359,7 +359,7 @@ async function ensureProcessorStage(ctx: MutationCtx, lotId: Id<"exportLots">, b
     order,
     key: `processor_${batch.batchCode}`,
     name: `Processing at ${profile?.facilityName ?? "processor"} (batch ${batch.batchCode})`,
-    hint: "Intake from farms, drying, hulling and grading at the processor, verified by the Storage Officer.",
+    hint: "Intake from farms, drying, hulling and grading at the processor, verified by the Storage and Transport Officer.",
     scope: "processor",
     processingBatchId: batch._id,
     status,

@@ -56,7 +56,7 @@ export default function TransporterServicesPage() {
               <b>{ws.listed ? "✔ You are listed in the transport directory." : "Not listed yet."}</b>
               <div style={{ fontSize: "0.84rem", color: "#455a64", marginTop: 4 }}>
                 To be listed you need at least one verified vehicle with valid insurance, one verified driver with a valid licence, and
-                &quot;available&quot; switched on. A Storage Officer verifies vehicles and drivers.
+                &quot;available&quot; switched on. A Storage and Transport Officer verifies vehicles and drivers.
               </div>
               <div style={{ fontSize: "0.84rem", marginTop: 6 }}>
                 🪙 {ws.averageFarmcoins !== null ? `${ws.averageFarmcoins}/10 FarmCoins per trip from ${ws.ratings} rating(s)` : "No ratings yet"} · {ws.completedTrips} trips done

@@ -10,7 +10,7 @@
  * After a completed trip the person who booked rates it in FarmCoins, 0 to
  * 10, and those coins are credited to the transporter as a reward.
  *
- * Vehicles and drivers are verified by a Storage Officer or a super admin.
+ * Vehicles and drivers are verified by a Storage and Transport Officer or a super admin.
  */
 
 import { v } from "convex/values";
@@ -33,7 +33,7 @@ async function requireTransporter(ctx: Ctx, userId: Id<"users">) {
 
 async function requireOfficer(ctx: Ctx, adminId: Id<"users">) {
   const admin = await requireAdmin(ctx, adminId);
-  if (!isStorageOfficer(admin)) throw new Error("Only a Storage Officer or super admin can verify transport");
+  if (!isStorageOfficer(admin)) throw new Error("Only a Storage and Transport Officer or super admin can verify transport");
   return admin;
 }
 
@@ -359,7 +359,7 @@ export const respondToTransportBooking = mutation({
 });
 
 // ------------------------------------------------------------------
-// Verification (Storage Officer / super admin)
+// Verification (Storage and Transport Officer / super admin)
 // ------------------------------------------------------------------
 
 export const listTransportForReview = query({

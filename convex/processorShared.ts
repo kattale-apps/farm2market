@@ -103,7 +103,7 @@ export type TraceLevel = "platform_traced" | "partly_declared" | "declared_evide
 /**
  * Trace level of processed produce from its intakes. Farmers on the app make
  * it platform-traced; declared (off-app) farmers stay declared, raised to
- * "declared + evidenced" when the Storage Officer approved their intake
+ * "declared + evidenced" when the Storage and Transport Officer approved their intake
  * evidence. That approval is added on top of the declared level, it does not
  * replace it.
  */

@@ -5,24 +5,22 @@ import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { useRouter, useSearchParams } from "next/navigation";
 import { saveAuth, getLastCredential, saveLastCredential } from "../utils/authStorage";
-import { IS_PRODUCTION_DEPLOYMENT } from "../utils/env";
 import { VALUE_CHAIN_ROLES, roleLabel } from "../../convex/roleLabels";
 
 type IdentifierMode = "phone" | "email";
 type AuthStep = "login" | "confirmSignup";
 type SignupRole = "farmer" | "trader" | "buyer" | "vendor" | "transporter" | "store";
 
-// Farmer, Buyer and Exporter signup on the production deployment while the
-// other roles are still being built out; the develop preview and local
-// dev keep every role fully enabled (see app/utils/env.ts).
+// Every role can sign up on production. The switch per role stays so a role
+// can be paused again by setting it to false.
 // Listed in value-chain order: Farmer → Processor → Exporter → Buyer → Transporter → Vendor.
 const SIGNUP_ENABLED: Record<SignupRole, boolean> = {
   farmer: true,
-  store: !IS_PRODUCTION_DEPLOYMENT,
+  store: true,
   trader: true,
   buyer: true,
-  transporter: !IS_PRODUCTION_DEPLOYMENT,
-  vendor: !IS_PRODUCTION_DEPLOYMENT,
+  transporter: true,
+  vendor: true,
 };
 const SIGNUP_ROLES: Array<{ value: SignupRole; label: string; signupEnabled: boolean }> = VALUE_CHAIN_ROLES.map((role) => ({
   value: role,

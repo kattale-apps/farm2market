@@ -34,7 +34,7 @@ export function Header({ userId }: HeaderProps) {
       case "farmer":
         return `${greeting}, Farmer ${user.alias}`;
       case "trader":
-        return `${greeting}, Trader ${user.alias}`;
+        return `${greeting}, Exporter ${user.alias}`;
       case "buyer":
         return `${greeting}, Buyer ${user.alias}`;
       case "admin":

@@ -103,7 +103,7 @@ function AddFundsForm({ adminId }: { adminId: Id<"users"> }) {
       </p>
       <form onSubmit={handleSubmit} style={formStyle}>
         <div>
-          <label htmlFor="user-select" style={labelStyle}>Select Trader</label>
+          <label htmlFor="user-select" style={labelStyle}>Select Exporter</label>
           <select
             id="user-select"
             value={selectedUserId}

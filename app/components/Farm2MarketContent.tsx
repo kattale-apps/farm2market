@@ -380,7 +380,7 @@ export function Farm2MarketContent({ userId, userRole, isMobile }: Farm2MarketCo
       const result = await acceptOffer({ farmerId: userId, negotiationId });
       setMessage({
         type: "success",
-        text: `Offer accepted! UTID: ${result.acceptedUtid}. Trader can now proceed to pay-to-lock.`,
+        text: `Offer accepted! UTID: ${result.acceptedUtid}. Exporter can now proceed to pay-to-lock.`,
       });
       setTimeout(() => setMessage(null), 8000);
     } catch (error: any) {
@@ -428,7 +428,7 @@ export function Farm2MarketContent({ userId, userRole, isMobile }: Farm2MarketCo
       }
       setMessage({
         type: "success",
-        text: `Accepted ${negotiationIds.length} offer(s). Trader can now proceed to pay-to-lock.`,
+        text: `Accepted ${negotiationIds.length} offer(s). Exporter can now proceed to pay-to-lock.`,
       });
       setTimeout(() => setMessage(null), 8000);
     } catch (error: any) {
@@ -662,7 +662,7 @@ export function Farm2MarketContent({ userId, userRole, isMobile }: Farm2MarketCo
         {negotiations === undefined ? (
           <p style={{ color: "#999" }}>Loading...</p>
         ) : activeNegotiations.length === 0 ? (
-          <p style={{ color: "#666" }}>No active negotiations. Traders can make offers on your listings.</p>
+          <p style={{ color: "#666" }}>No active negotiations. Exporters can make offers on your listings.</p>
         ) : (
           <div>
             {activeNegotiationsView === "list" ? (
@@ -674,7 +674,7 @@ export function Farm2MarketContent({ userId, userRole, isMobile }: Farm2MarketCo
                       <span style={{ padding: "0.2rem 0.6rem", borderRadius: "999px", fontSize: "0.75rem", fontWeight: "600", background: "#ffc107", color: "#000" }}>{batch.status.toUpperCase()}</span>
                     </div>
                     <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.35rem", display: "flex", flexWrap: "wrap", gap: "0.35rem", alignItems: "center" }}>
-                      <span>Trader: {batch.traderAlias}</span>
+                      <span>Exporter: {batch.traderAlias}</span>
                       {batch.traderIsVerified && <VerifiedBadge size={20} title="Verified trader" />}
                       <span>• Offer: {formatUGX(batch.traderOfferPricePerKilo)}/kg</span>
                     </div>
@@ -691,7 +691,7 @@ export function Farm2MarketContent({ userId, userRole, isMobile }: Farm2MarketCo
                     <div key={batch.key} style={{ padding: "1rem", background: batch.status === "accepted" ? "#d4edda" : "#fff3cd", borderRadius: "8px", border: `1px solid ${batch.status === "accepted" ? "#28a745" : "#ffc107"}` }}>
                       <div style={{ fontWeight: "600", marginBottom: "0.5rem", fontSize: "clamp(0.9rem, 3vw, 1rem)" }}>{getProduceEmoji(batch.produceType)} {batch.produceType} - {batch.items.length} unit{batch.items.length !== 1 ? "s" : ""}</div>
                       <div style={{ fontSize: "clamp(0.8rem, 2.5vw, 0.85rem)", color: "#666", marginBottom: "0.5rem", display: "flex", flexWrap: "wrap", gap: "0.35rem", alignItems: "center" }}>
-                        <span>Trader: {batch.traderAlias}</span>
+                        <span>Exporter: {batch.traderAlias}</span>
                         {batch.traderIsVerified && <VerifiedBadge size={20} title="Verified trader" />}
                       </div>
                       <div style={{ marginBottom: "0.75rem" }}>
@@ -730,7 +730,7 @@ export function Farm2MarketContent({ userId, userRole, isMobile }: Farm2MarketCo
                         </div>
                       )}
                       {batch.status === "countered" && <div style={{ fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", color: "#856404" }}>Waiting for trader to accept your counter-offer...</div>}
-                      {batch.status === "accepted" && <div style={{ fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", color: "#155724" }}>✅ Offer accepted! Trader can now proceed to pay-to-lock. Delivery deadline will start 6 hours after payment.</div>}
+                      {batch.status === "accepted" && <div style={{ fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", color: "#155724" }}>✅ Offer accepted! Exporter can now proceed to pay-to-lock. Delivery deadline will start 6 hours after payment.</div>}
                       {counteringBatch === batch.key && (
                         <div style={{ marginTop: "0.75rem", padding: "0.75rem", background: "#fff", borderRadius: "6px", border: "1px solid #ffc107" }}>
                           <input type="number" value={counterPrice} onChange={(e) => setCounterPrice(e.target.value)} placeholder="Enter counter-offer price" style={{ padding: "0.5rem", width: "100%", marginBottom: "0.5rem", borderRadius: "6px", border: "1px solid #ccc", fontSize: "0.9rem" }} />

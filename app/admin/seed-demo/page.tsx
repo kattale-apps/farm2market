@@ -95,7 +95,7 @@ export default function SeedDemoDataPage() {
             <h3>Summary</h3>
             <ul style={{ margin: "0.5rem 0", paddingLeft: "1.5rem" }}>
               <li>Listings Created: {results.summary?.listingsCreated || 0}</li>
-              <li>Trader Deposits: {results.summary?.traderDeposits || 0}</li>
+              <li>Exporter Deposits: {results.summary?.traderDeposits || 0}</li>
               <li>Buyer Deposits: {results.summary?.buyerDeposits || 0}</li>
               <li>Errors: {results.summary?.errors || 0}</li>
             </ul>
@@ -118,7 +118,7 @@ export default function SeedDemoDataPage() {
 
                 {results.details.traderDeposits && results.details.traderDeposits.length > 0 && (
                   <div style={{ marginBottom: "1.5rem" }}>
-                    <h4>Trader Deposits:</h4>
+                    <h4>Exporter Deposits:</h4>
                     <ul style={{ margin: "0.5rem 0", paddingLeft: "1.5rem" }}>
                       {results.details.traderDeposits.map((deposit: any, idx: number) => (
                         <li key={idx}>

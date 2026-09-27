@@ -30,6 +30,7 @@ import { CrmInsightsSection } from "../../components/crm/CrmInsightsSection";
 import { fromStoredUgandaTime, inUgandaTime } from "../../utils/timeUtils";
 import { CommunityExportMarketsPanel } from "../../components/exportMarkets/AdminExporterPanels";
 import { ugandaDateFromInstant } from "../../../convex/exportMarketsShared";
+import { roleLabel, roleLabelPlural } from "@/convex/roleLabels";
 
 /* ── Tab types for community cards ── */
 type CommunityTab = "members" | "noticeboard" | "messages" | "forms" | "insights" | "fertilizer" | "costTemplates" | "advancePurchase" | "diagnostics" | "exportMarkets";
@@ -420,7 +421,7 @@ function MessagesTab({ communityId, userId }: { communityId: Id<"communities">; 
                   fontSize: "0.78rem", fontWeight: 600, cursor: "pointer",
                 }}
               >
-                {r.charAt(0).toUpperCase() + r.slice(1)}s
+                {roleLabelPlural(r)}
               </button>
             ))}
           </div>
@@ -3741,7 +3742,7 @@ export default function CommunityDashboardPage() {
                           gap: 4,
                         }}>
                           <span>{role === "farmer" ? "🌾" : role === "trader" ? "📊" : role === "buyer" ? "🛒" : role === "vendor" ? "🏪" : role === "transporter" ? "🚛" : role === "store" ? "🏬" : "👤"}</span>
-                          {role}: {count}
+                          {roleLabel(role)}: {count}
                         </div>
                       );
                     })}
@@ -4846,7 +4847,7 @@ export default function CommunityDashboardPage() {
                                                   fontSize: "0.78rem",
                                                   textTransform: "capitalize",
                                                 }}>
-                                                  {r}
+                                                  {roleLabel(r)}
                                                 </span>
                                               );
                                             })()}

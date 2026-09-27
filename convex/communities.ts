@@ -1704,8 +1704,8 @@ export const joinCommunity = mutation({
         userId: community.communityAdminId,
         type: "system",
         category: "export_markets",
-        title: "Trader joined your exporter community",
-        message: `Trader ${user.alias} joined ${community.name}. Admit them as an exporter from the community's Export Markets tab.`,
+        title: "Exporter joined your exporter community",
+        message: `Exporter ${user.alias} joined ${community.name}. Admit them as an exporter from the community's Export Markets tab.`,
         read: false,
         createdAt: getUgandaTime(),
       });

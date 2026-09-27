@@ -29,7 +29,7 @@ export default function StoreManagementPage() {
   if (!userId) {
     return (
       <div style={{ padding: "2rem", textAlign: "center" }}>
-        <p>Please log in to access Store Management.</p>
+        <p>Please log in to access Storage Officer Management.</p>
       </div>
     );
   }
@@ -462,7 +462,7 @@ function AuditTab({ userId }: { userId: Id<"users"> }) {
     <div>
       {/* StoreAdmin Selector */}
       <div style={{ marginBottom: "1.5rem" }}>
-        <label style={{ display: "block", fontWeight: 700, marginBottom: "0.5rem", color: "#333" }}>Select Store Admin</label>
+        <label style={{ display: "block", fontWeight: 700, marginBottom: "0.5rem", color: "#333" }}>Select Storage Officer</label>
         <select
           value={selectedStoreAdminId || ""}
           onChange={(e) => {
@@ -480,7 +480,7 @@ function AuditTab({ userId }: { userId: Id<"users"> }) {
             minHeight: "44px",
           }}
         >
-          <option value="">-- Choose a Store Admin --</option>
+          <option value="">-- Choose a Storage Officer --</option>
           {storeAdmins.map((admin: any) => (
             <option key={admin._id} value={admin._id}>
               {admin.fullName || admin.email} ({admin.adminCategory || "store"})
@@ -491,7 +491,7 @@ function AuditTab({ userId }: { userId: Id<"users"> }) {
 
       {!selectedStoreAdminId && (
         <div style={{ textAlign: "center", padding: "3rem", color: "#999" }}>
-          <p style={{ fontSize: "1.1rem" }}>Select a store admin above to view their activity.</p>
+          <p style={{ fontSize: "1.1rem" }}>Select a Storage Officer above to view their activity.</p>
         </div>
       )}
 

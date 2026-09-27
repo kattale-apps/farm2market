@@ -1671,7 +1671,7 @@ export const updateTraderSpendCap = mutation({
 
     const trader = await ctx.db.get(args.traderId);
     if (!trader) {
-      throw new Error("Trader not found");
+      throw new Error("Exporter not found");
     }
 
     if (!["trader", "transporter"].includes(trader.role)) {
@@ -1736,7 +1736,7 @@ export const getTraderSpendCap = query({
 
     const trader = await ctx.db.get(args.traderId);
     if (!trader) {
-      throw new Error("Trader not found");
+      throw new Error("Exporter not found");
     }
 
     if (!["trader", "transporter"].includes(trader.role)) {

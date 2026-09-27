@@ -44,7 +44,7 @@ export function NegotiationPanel({
         negotiationId: negotiation.negotiationId || negotiation._id,
         farmerId: userId,
       });
-      setMessage({ type: "success", text: "Offer accepted! Trader can now proceed to payment." });
+      setMessage({ type: "success", text: "Offer accepted! Exporter can now proceed to payment." });
       onUpdate?.();
     } catch (error: any) {
       setMessage({ type: "error", text: error.message || "Failed to accept offer" });
@@ -222,7 +222,7 @@ export function NegotiationPanel({
           </div>
 
           <div style={{ fontSize: "0.9rem", color: "#666", marginBottom: "0.5rem" }}>
-            {userRole === "farmer" ? "Trader's Offer" : "Your Offer"}
+            {userRole === "farmer" ? "Exporter's Offer" : "Your Offer"}
           </div>
           <div style={{ fontSize: "1.5rem", fontWeight: "700", color: "#1976d2", marginBottom: "1rem" }}>
             {formatUGX(negotiation.traderOfferPricePerKilo)}/kg

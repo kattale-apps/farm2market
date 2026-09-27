@@ -174,10 +174,10 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       label: <><FarmCoinIcon size={18} /> FarmCoin Rewards{typeof (buyerFarmcoinBalance as any)?.balance === "number" ? ` (${(buyerFarmcoinBalance as any).balance})` : ""}</>,
     },
     { key: "feesInfo", label: "💰 Service Fee & Kilo-Shaving Info" },
-    { key: "traderOrders", label: "📦 Trader Listing Orders" },
+    { key: "traderOrders", label: "📦 Exporter Listing Orders" },
     { key: "purchaseWindow", label: "🪟 Purchase Window Status" },
-    { key: "traderListings", label: "📦 Trader-sourced Listings" },
-    { key: "vendorStore", label: "🏪 Shop from Vendors & Stores" },
+    { key: "traderListings", label: "📦 Exporter-sourced Listings" },
+    { key: "vendorStore", label: "🏪 Shop from Vendors & Processors" },
     { key: "farmerInventory", label: "🌾 Farmer-sourced Inventory" },
     { key: "analytics", label: "📊 Buyer Analytics" },
     { key: "purchaseAnalytics", label: "📈 Purchase Analytics" },
@@ -2053,7 +2053,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                       <td style={{ padding: "0.75rem", fontFamily: "monospace", fontWeight: 700 }}>{listing.listingUtid}</td>
                       <td style={{ padding: "0.75rem" }}>
                         <div>{listing.productName || listing.produceType}</div>
-                        <div style={{ fontSize: "0.75rem", color: "#666" }}>{listing.traderAlias || "Trader"}</div>
+                        <div style={{ fontSize: "0.75rem", color: "#666" }}>{listing.traderAlias || "Exporter"}</div>
                       </td>
                       <td style={{ padding: "0.75rem" }}>{unitsAvailable}</td>
                       <td style={{ padding: "0.75rem" }}>{listing.unitSize} unit</td>
@@ -2187,7 +2187,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                   const unitsAvailable = listing.availableUnits ?? 0;
                   const isVendor = listing.sellerRole === "vendor";
                   const badgeColor = isVendor ? "#e65100" : "#c62828";
-                  const badgeLabel = isVendor ? "Vendor" : "Store";
+                  const badgeLabel = isVendor ? "Vendor" : "Processor";
 
                   return (
                     <tr key={listing.listingId} style={{ borderBottom: "1px solid #f0f0f0" }}>
@@ -2580,7 +2580,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                         <div style={{ fontWeight: "600", color: "#1a1a1a", fontSize: "clamp(0.9rem, 3vw, 1rem)" }}>{item.blockSize} kg</div>
                       </div>
                       <div>
-                        <div style={{ color: "#999", fontSize: "clamp(0.75rem, 2vw, 0.85rem)" }}>Trader</div>
+                        <div style={{ color: "#999", fontSize: "clamp(0.75rem, 2vw, 0.85rem)" }}>Exporter</div>
                         <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
                           <div style={{ fontWeight: "600", color: "#1a1a1a", fontSize: "clamp(0.9rem, 3vw, 1rem)" }}>{item.traderAlias}</div>
                           {item.traderIsVerified && <VerifiedBadge size={20} title="Verified trader" />}

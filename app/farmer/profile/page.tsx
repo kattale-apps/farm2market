@@ -384,7 +384,7 @@ export default function FarmerProfilePage() {
 
           <div style={{ marginBottom: "2rem" }}>
             <h2 style={{ fontSize: "1.2rem", marginBottom: "1rem", color: "#2c2c2c" }}>
-              {userRole === "vendor" ? "Market Information" : userRole === "store" ? "Store Information" : "Farm Information"}
+              {userRole === "vendor" ? "Market Information" : userRole === "store" ? "Processor Information" : "Farm Information"}
             </h2>
             <div style={{ display: "grid", gap: "1rem" }}>
               {userRole === "vendor" ? (
@@ -403,7 +403,7 @@ export default function FarmerProfilePage() {
               ) : userRole === "store" ? (
                 <>
                   {storeProfile?.storeType && (
-                    <div><strong>Store Type:</strong> {storeProfile.storeType.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}</div>
+                    <div><strong>Storage Type:</strong> {storeProfile.storeType.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}</div>
                   )}
                   {storeProfile?.buildingName && (
                     <div><strong>Building Name:</strong> {storeProfile.buildingName}</div>
@@ -412,9 +412,9 @@ export default function FarmerProfilePage() {
                     <div><strong>Street Address:</strong> {storeProfile.streetAddress}</div>
                   )}
                   {storeProfile?.storeNumber && (
-                    <div><strong>Store Number:</strong> {storeProfile.storeNumber}</div>
+                    <div><strong>Unit Number:</strong> {storeProfile.storeNumber}</div>
                   )}
-                  {!storeProfile && <div style={{ color: "#666", fontStyle: "italic" }}>Store info not set — edit your profile to add it</div>}
+                  {!storeProfile && <div style={{ color: "#666", fontStyle: "italic" }}>Processor info not set — edit your profile to add it</div>}
                 </>
               ) : (
                 <>
@@ -673,12 +673,12 @@ export default function FarmerProfilePage() {
             </div>
           ) : userRole === "store" ? (
             <div style={{ marginBottom: "2rem", background: "#e3f2fd", padding: "1.25rem", borderRadius: "10px", border: "1px solid #bbdefb" }}>
-              <h3 style={{ fontSize: "1rem", marginBottom: "1rem", color: "#2c2c2c" }}>Store Information</h3>
+              <h3 style={{ fontSize: "1rem", marginBottom: "1rem", color: "#2c2c2c" }}>Processor Information</h3>
               <div style={{ display: "grid", gap: "1rem" }}>
                 <div>
-                  <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>Store Type</label>
+                  <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>Storage Type</label>
                   <select value={storeType} onChange={(e) => setStoreType(e.target.value)} style={{ width: "100%", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "8px", fontSize: "1rem" }}>
-                    <option value="">Select Store Type</option>
+                    <option value="">Select Storage Type</option>
                     <option value="cold_storage">Cold Storage</option>
                     <option value="dry_storage">Dry Storage</option>
                   </select>
@@ -692,7 +692,7 @@ export default function FarmerProfilePage() {
                   <input type="text" value={streetAddress} onChange={(e) => setStreetAddress(e.target.value)} placeholder="e.g., Plot 5, Market Street" style={{ width: "100%", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "8px", fontSize: "1rem" }} />
                 </div>
                 <div>
-                  <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>Store Number</label>
+                  <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>Unit Number</label>
                   <input type="text" value={storeNumber} onChange={(e) => setStoreNumber(e.target.value)} placeholder="e.g., S-04" style={{ width: "100%", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "8px", fontSize: "1rem" }} />
                 </div>
               </div>

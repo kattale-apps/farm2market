@@ -578,7 +578,7 @@ export const buyerConfirmListingDelivery = mutation({
     }
 
     if (!purchase.traderConfirmedAt) {
-      throw new Error("Trader must confirm delivery first");
+      throw new Error("Exporter must confirm delivery first");
     }
 
     if (purchase.buyerConfirmedAt) {
@@ -642,7 +642,7 @@ export const superadminConfirmListingDelivery = mutation({
       }
 
       if (purchases.some((p) => !p.traderConfirmedAt)) {
-        throw new Error(`Trader confirmation missing for batch ${batchUtid}`);
+        throw new Error(`Exporter confirmation missing for batch ${batchUtid}`);
       }
 
       const deadline = purchases.find((p) => p.etaDeadline)?.etaDeadline;

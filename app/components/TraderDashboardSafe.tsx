@@ -41,7 +41,7 @@ export function TraderDashboardSafe({ userId }: TraderDashboardSafeProps) {
             fontWeight: "700",
             letterSpacing: "-0.02em"
           }}>
-            🚚 Trader: {user?.alias || "Trader"}
+            🚚 Exporter: {user?.alias || "Exporter"}
           </h2>
           <span style={{
             padding: "0.25rem 0.6rem",

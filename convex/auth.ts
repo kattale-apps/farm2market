@@ -224,7 +224,7 @@ export const createUser = mutation({
         if (args.adminCategory === "store") {
           // Store admins REQUIRE at least one storage location
           if (!args.allowedStorageLocationIds || args.allowedStorageLocationIds.length === 0) {
-            throw new ConvexError("Store admins must have at least one assigned storage location");
+            throw new ConvexError("Storage Officers must have at least one assigned storage location");
           }
           // Validate that all location IDs exist and are active
           for (const locationId of args.allowedStorageLocationIds) {

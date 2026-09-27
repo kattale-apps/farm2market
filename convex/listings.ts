@@ -532,7 +532,7 @@ export const createTraderListing = mutation({
 
     // Verify trader is approved
     if (!user.isVerifiedTrader || user.verificationStatus !== "verified") {
-      throw new Error("Trader verification required before posting listings");
+      throw new Error("Exporter verification required before posting listings");
     }
 
     // Rate limit check
@@ -655,7 +655,7 @@ export const createTraderPackagingListing = mutation({
     }
 
     if (!user.isVerifiedTrader || user.verificationStatus !== "verified") {
-      throw new Error("Trader verification required before posting listings");
+      throw new Error("Exporter verification required before posting listings");
     }
 
     await checkRateLimit(ctx, args.traderId, user.role, "create_trader_listing", {
@@ -810,7 +810,7 @@ export const updateTraderListingEta = mutation({
     }
 
     if (!trader.isVerifiedTrader || trader.verificationStatus !== "verified") {
-      throw new Error("Trader verification required before updating ETA");
+      throw new Error("Exporter verification required before updating ETA");
     }
 
     const listing = await ctx.db.get(args.listingId);

@@ -202,6 +202,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
     adminUser?.adminLevel === "junior" &&
     adminUser?.adminCategory === "message";
   const canMessageAdmin = isSuperAdmin || isMessageAdmin;
+  const isStorageOfficer = adminUser?.role === "admin" && adminUser?.adminCategory === "store";
 
   const allUsers = useQuery(
     api.introspection.getAllUsers,
@@ -915,6 +916,28 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
 
   return (
     <div style={containerStyle}>
+      {/* Storage Officers (and super admins) review processors */}
+      {(isStorageOfficer || isSuperAdmin) && (
+        <a href="/storeadmin/processors" style={{ textDecoration: "none", display: "block", marginBottom: "1.25rem" }}>
+          <div
+            style={{
+              ...utilityCardStyle,
+              background: "linear-gradient(135deg, #f9a825 0%, #f57f17 100%)",
+              color: "#3e2723",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.9rem",
+            }}
+          >
+            <div style={{ fontSize: "2.2rem" }}>🏭</div>
+            <div>
+              <h3 style={{ margin: "0 0 0.3rem 0", fontSize: "1.1rem" }}>Processors{isStorageOfficer ? " (Storage Officer)" : ""}</h3>
+              <p style={{ margin: 0, fontSize: "0.9rem" }}>Approve facility locations, storage and documents; review intake and processing evidence</p>
+            </div>
+          </div>
+        </a>
+      )}
+
       {/* SuperAdmin Cards */}
       {isSuperAdmin && (
         <>

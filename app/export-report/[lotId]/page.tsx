@@ -167,6 +167,7 @@ export default function TraceabilityReportPage() {
                   <a key={j} href={p.url} target="_blank" rel="noreferrer" style={{ fontSize: "0.7rem", color: "#555", textDecoration: "none" }}>
                     <img src={p.url} alt="" style={{ width: 96, height: 72, objectFit: "cover", borderRadius: 4, display: "block" }} />
                     {p.lat != null ? `${p.lat.toFixed(4)}, ${p.lng!.toFixed(4)}` : "no GPS"}
+                    {p.manualEntry && <span style={{ display: "block", color: "#e65100" }}>entered manually</span>}
                   </a>
                 ) : null
               )}
@@ -271,7 +272,7 @@ async function downloadPdf(r: Report) {
   for (const [i, s] of r.stages.entries()) {
     line(`${i + 1}. ${s.name}: ${s.verified ? "verified" : "not verified"}${s.weightInKg != null ? `, in ${s.weightInKg} kg` : ""}${s.weightOutKg != null ? `, out ${s.weightOutKg} kg` : ""}`, 10);
     for (const p of s.photos) {
-      line(`   photo ${p.lat != null ? `at ${p.lat.toFixed(5)}, ${p.lng!.toFixed(5)}` : "without GPS"}, taken ${p.capturedAt}`, 8, false, [90, 90, 90]);
+      line(`   photo ${p.lat != null ? `at ${p.lat.toFixed(5)}, ${p.lng!.toFixed(5)}` : "without GPS"}, taken ${p.capturedAt}${p.manualEntry ? " (location and time entered manually)" : ""}`, 8, false, [90, 90, 90]);
     }
   }
   for (const w of r.massBalanceWarnings) line(`Warning: ${w}`, 9, false, [198, 40, 40]);

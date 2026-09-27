@@ -1571,7 +1571,8 @@ export const initiateTraderDeposit = action({
     const user = await ctx.runQuery(api.pesapal.getUserDetails, {
       userId: args.traderId,
     });
-    if (!user || !["trader", "transporter"].includes(user.role)) {
+    // Processors ("store") top up the same way, for their verification fee.
+    if (!user || !["trader", "transporter", "store"].includes(user.role)) {
       throw pesapalError(
         "NOT_TRADER",
         "This account cannot make a trader deposit.",

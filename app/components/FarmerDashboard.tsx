@@ -17,6 +17,7 @@ import { useOfflineQuery } from "../hooks/useOfflineQuery";
 import { useOfflineMutation } from "../hooks/useOfflineMutation";
 import { menuRainbowColor } from "../utils/menuAccentColors";
 import { FarmCoinIcon } from "./icons/Brand";
+import { FarmerProcessorDeliveries } from "./processor/FarmerProcessorDeliveries";
 
 interface FarmerDashboardProps {
   userId: Id<"users">;
@@ -1045,6 +1046,8 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
       {titleSlot && createPortal(titleContent, titleSlot)}
       {msgSlot && createPortal(msgContent, msgSlot)}
       {moreSlot && createPortal(moreContent, moreSlot)}
+
+      {effectiveRole === "farmer" && <FarmerProcessorDeliveries farmerId={userId} />}
 
       <div style={{
         background: "#fff",

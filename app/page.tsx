@@ -111,13 +111,6 @@ export default function Home() {
       : "skip"
   );
 
-  const storeOnboardingStatus = useQuery(
-    api.storeOnboarding.checkOnboardingStatus,
-    user?.role === "store" && user?.userId
-      ? { userId: user.userId as Id<"users"> }
-      : "skip"
-  );
-
   const communities = useQuery(
     api.communities.getActiveCommunities,
     ["farmer", "trader", "buyer", "vendor", "transporter", "store"].includes(user?.role) && user?.userId ? { userId: user.userId as Id<"users"> } : "skip"
@@ -151,9 +144,7 @@ export default function Home() {
     if (user?.role === "transporter" && transporterOnboardingStatus !== undefined && !transporterOnboardingStatus.completed) {
       router.push("/onboarding/transporter");
     }
-    if (user?.role === "store" && storeOnboardingStatus !== undefined && !storeOnboardingStatus.completed) {
-      router.push("/onboarding/store");
-    }
+    // Processors ("store") set up their facility inside the processor dashboard.
     if (user?.role === "trader" && traderOnboardingStatus !== undefined && !traderOnboardingStatus.completed) {
       router.push("/onboarding/trader");
     }
@@ -165,7 +156,6 @@ export default function Home() {
     onboardingStatus,
     vendorOnboardingStatus,
     transporterOnboardingStatus,
-    storeOnboardingStatus,
     traderOnboardingStatus,
     buyerOnboardingStatus,
     router,

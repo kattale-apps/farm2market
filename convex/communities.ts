@@ -1686,6 +1686,20 @@ export const joinCommunity = mutation({
       });
     }
 
+    // A processor joining waits for the community admin to accept them
+    // (step 1 of processor verification); tell the admin.
+    if (user.role === "store" && community.communityAdminId) {
+      await ctx.db.insert("notifications", {
+        userId: community.communityAdminId,
+        type: "system",
+        category: "processors",
+        title: "Processor joined your community",
+        message: `Processor ${user.alias} joined ${community.name}. Accept them from the community's Processors tab.`,
+        read: false,
+        createdAt: getUgandaTime(),
+      });
+    }
+
     return { success: true };
   },
 });

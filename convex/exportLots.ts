@@ -10,10 +10,14 @@
  * commitments, or declared off-platform farms. Lots whose coffee is all
  * platform-traced are labelled differently from declared ones.
  *
- * The trace map is a fixed journey (TRACE_STAGES). Each stage takes proof
- * photos with GPS and time, plus weight in and out. Farm stages are verified
- * by an admin of a source farmer's community, the rest by an admin of the
- * exporter community; super admins can verify any stage.
+ * The trace map is the journey from farm to export bag: farm stages, then a
+ * processor stage for each processor batch the lot was bought from (verified
+ * by the Storage Officer, never attested by the exporter), then the
+ * exporter's own processing steps, which each exporter sets for their lots.
+ * Each stage takes proof photos with GPS and time, plus weight in and out.
+ * Farm stages are verified by an admin of a source farmer's community, the
+ * exporter's by an admin of the exporter community; super admins can verify
+ * any stage.
  */
 
 import { v } from "convex/values";
@@ -40,6 +44,15 @@ import {
   requireAdmin,
   todayUganda,
 } from "./exportMarkets";
+import {
+  DEFAULT_EXPORTER_TRACE_STAGES,
+  MAX_EXPORTER_TRACE_STAGES,
+  TraceLevel,
+  applicableStages,
+  combineTraceLevels,
+  outturnPercent,
+} from "./processorShared";
+import { batchIntakes } from "./processorOperations";
 
 type Ctx = QueryCtx | MutationCtx;
 
@@ -149,6 +162,37 @@ export async function plotsForSource(ctx: Ctx, source: Doc<"exportLotSources">):
     const farmer = offer ? await ctx.db.get(offer.farmerId) : null;
     return [farmerPlot(source, farmer, source.kilos)];
   }
+  if (source.kind === "processor_purchase" && source.processorSaleId) {
+    const sale = await ctx.db.get(source.processorSaleId);
+    const batch = sale ? await ctx.db.get(sale.batchId) : null;
+    if (!batch) return [];
+    // Share the source kilos across the intakes in proportion to what each put in.
+    const rows = await batchIntakes(ctx, batch._id);
+    const totalIn = rows.reduce((a, r) => a + r.kilos, 0) || 1;
+    const plots: FarmPlot[] = [];
+    for (const { intake, kilos } of rows) {
+      const share = Math.round((source.kilos * kilos) / totalIn);
+      if (intake.sourceKind === "platform_farmer" && intake.farmerId) {
+        plots.push(farmerPlot(source, await ctx.db.get(intake.farmerId), share));
+      } else {
+        const base = {
+          sourceId: source._id,
+          kind: source.kind,
+          label: `Declared farm: ${intake.farmerName ?? "farmer"} (via processor)`,
+          district: intake.district,
+          village: intake.village,
+          lat: intake.lat,
+          lng: intake.lng,
+          areaHa: intake.areaHa,
+          hasPolygon: !!intake.polygonGeoJson,
+          polygonGeoJson: intake.polygonGeoJson,
+          kilos: share,
+        };
+        plots.push({ ...base, eudrIssue: plotIssue(base) });
+      }
+    }
+    return plots;
+  }
   if (source.kind === "platform_purchase" && source.inventoryId) {
     const inv = await ctx.db.get(source.inventoryId);
     if (!inv) return [];
@@ -178,13 +222,16 @@ export async function recomputeLotSummary(ctx: MutationCtx, lotId: Id<"exportLot
   const lot = await ctx.db.get(lotId);
   if (!lot) return;
   const sources = await ctx.db.query("exportLotSources").withIndex("by_lotId", (q) => q.eq("lotId", lotId)).take(200);
-  const platform = sources.filter((s) => s.kind !== "declared").length;
-  const traceLevel =
-    sources.length > 0 && platform === sources.length
-      ? ("platform_traced" as const)
-      : platform > 0
-        ? ("partly_declared" as const)
-        : ("declared" as const);
+  const levels: TraceLevel[] = [];
+  for (const s of sources) {
+    if (s.kind === "declared") levels.push("declared");
+    else if (s.kind === "processor_purchase" && s.processorSaleId) {
+      const sale = await ctx.db.get(s.processorSaleId);
+      const batch = sale ? await ctx.db.get(sale.batchId) : null;
+      levels.push(batch?.traceLevel ?? "declared");
+    } else levels.push("platform_traced");
+  }
+  const traceLevel = combineTraceLevels(levels);
   let eudrReady = sources.length > 0;
   for (const s of sources) {
     if (!eudrReady) break;
@@ -195,7 +242,10 @@ export async function recomputeLotSummary(ctx: MutationCtx, lotId: Id<"exportLot
       }
     }
   }
-  const stages = await ctx.db.query("exportTraceStages").withIndex("by_lotId_and_order", (q) => q.eq("lotId", lotId)).take(50);
+  const stages = applicableStages(
+    await ctx.db.query("exportTraceStages").withIndex("by_lotId_and_order", (q) => q.eq("lotId", lotId)).take(50),
+    sources
+  );
   await ctx.db.patch(lotId, {
     traceLevel,
     eudrReady,
@@ -204,6 +254,7 @@ export async function recomputeLotSummary(ctx: MutationCtx, lotId: Id<"exportLot
     updatedAt: getUgandaTime(),
   });
 }
+
 
 /** Communities of the farmers behind a lot, for farm-stage review scope. */
 async function farmerCommunityIds(ctx: Ctx, lotId: Id<"exportLots">): Promise<Set<string>> {
@@ -224,6 +275,8 @@ async function farmerCommunityIds(ctx: Ctx, lotId: Id<"exportLots">): Promise<Se
 }
 
 async function canReviewStage(ctx: Ctx, admin: Doc<"users">, lot: Doc<"exportLots">, stage: Doc<"exportTraceStages">) {
+  // Processor stages follow the batch evidence the Storage Officer reviews.
+  if (stage.scope === "processor") return false;
   if (isSuperAdmin(admin)) return true;
   if (stage.scope === "exporter") {
     const community = await ctx.db.get(lot.communityId);
@@ -265,12 +318,53 @@ async function photoUrls(ctx: Ctx, ids: Id<"_storage">[]) {
   return urls;
 }
 
-async function materializeStages(ctx: MutationCtx, lotId: Id<"exportLots">) {
+/** The exporter's own processing steps (their pipeline), or the defaults. */
+export function exporterStages(profile: Doc<"exporterProfiles">) {
+  return profile.traceStages && profile.traceStages.length > 0 ? profile.traceStages : DEFAULT_EXPORTER_TRACE_STAGES;
+}
+
+// Farm stages first, processor stages from 10, the exporter's own from 100.
+const FARM_STAGES = TRACE_STAGES.filter((s) => s.scope === "farm");
+const PROCESSOR_STAGE_ORDER = 10;
+const EXPORTER_STAGE_ORDER = 100;
+
+async function materializeStages(ctx: MutationCtx, lotId: Id<"exportLots">, profile: Doc<"exporterProfiles">) {
   const now = getUgandaTime();
-  for (let i = 0; i < TRACE_STAGES.length; i++) {
-    const s = TRACE_STAGES[i];
-    await ctx.db.insert("exportTraceStages", { lotId, order: i, key: s.key, name: s.name, scope: s.scope, status: "pending", updatedAt: now });
+  for (let i = 0; i < FARM_STAGES.length; i++) {
+    const s = FARM_STAGES[i];
+    await ctx.db.insert("exportTraceStages", { lotId, order: i, key: s.key, name: s.name, scope: "farm", status: "pending", updatedAt: now });
   }
+  const own = exporterStages(profile);
+  for (let i = 0; i < own.length; i++) {
+    const s = own[i];
+    await ctx.db.insert("exportTraceStages", { lotId, order: EXPORTER_STAGE_ORDER + i, key: s.key, name: s.name, hint: s.hint, scope: "exporter", status: "pending", updatedAt: now });
+  }
+  return FARM_STAGES.length + own.length;
+}
+
+/** Add the processor stage for a batch to a lot, once per batch. */
+async function ensureProcessorStage(ctx: MutationCtx, lotId: Id<"exportLots">, batch: Doc<"processingBatches">) {
+  const stages = await ctx.db.query("exportTraceStages").withIndex("by_lotId_and_order", (q) => q.eq("lotId", lotId)).take(50);
+  if (stages.some((s) => s.processingBatchId === batch._id)) return;
+  const profile = await ctx.db.query("processorProfiles").withIndex("by_userId", (q) => q.eq("userId", batch.processorId)).first();
+  // Older lots numbered their exporter stages from 2, so fit processor stages in after the farm stages.
+  const farmMax = Math.max(-1, ...stages.filter((s) => s.scope === "farm").map((s) => s.order));
+  const firstLater = Math.min(Infinity, ...stages.filter((s) => s.scope !== "farm").map((s) => s.order));
+  const processorCount = stages.filter((s) => s.scope === "processor").length;
+  const order = firstLater >= PROCESSOR_STAGE_ORDER + 1 ? PROCESSOR_STAGE_ORDER + processorCount * 0.01 : farmMax + 0.5 + processorCount * 0.01;
+  const status =
+    batch.evidenceStatus === "approved" ? "approved" : batch.evidenceStatus === "pending" ? "submitted" : batch.evidenceStatus === "rejected" ? "rejected" : "pending";
+  await ctx.db.insert("exportTraceStages", {
+    lotId,
+    order,
+    key: `processor_${batch.batchCode}`,
+    name: `Processing at ${profile?.facilityName ?? "processor"} (batch ${batch.batchCode})`,
+    hint: "Intake from farms, drying, hulling and grading at the processor, verified by the Storage Officer.",
+    scope: "processor",
+    processingBatchId: batch._id,
+    status,
+    updatedAt: getUgandaTime(),
+  });
 }
 
 // ------------------------------------------------------------------
@@ -405,10 +499,10 @@ export const saveLot = mutation({
       traceLevel: "declared",
       eudrReady: false,
       traceStagesApproved: 0,
-      traceStagesTotal: TRACE_STAGES.length,
+      traceStagesTotal: FARM_STAGES.length + exporterStages(profile).length,
       createdAt: getUgandaTime(),
     });
-    await materializeStages(ctx, lotId);
+    await materializeStages(ctx, lotId, profile);
     return { lotId };
   },
 });
@@ -463,8 +557,23 @@ export const getMyLot = query({
       for (const e of ev) {
         evidence.push({ ...e, photoUrls: await photoUrls(ctx, e.photos.map((p) => p.storageId)) });
       }
-      stageRows.push({ stage: st, hint: TRACE_STAGES.find((t) => t.key === st.key)?.hint ?? "", evidence });
+      let batch = null;
+      if (st.processingBatchId) {
+        const b = await ctx.db.get(st.processingBatchId);
+        if (b) {
+          batch = {
+            batchCode: b.batchCode,
+            weightInKg: b.weightInKg,
+            weightOutKg: b.weightOutKg ?? null,
+            outturnPercent: outturnPercent(b.weightInKg, b.weightOutKg),
+            evidenceStatus: b.evidenceStatus,
+            photoUrls: await photoUrls(ctx, b.photos.map((p) => p.storageId)),
+          };
+        }
+      }
+      stageRows.push({ stage: st, hint: st.hint ?? TRACE_STAGES.find((t) => t.key === st.key)?.hint ?? "", evidence, batch });
     }
+    const coveredByProcessor = applicableStages([{ scope: "farm" }], sources).length === 0;
 
     // What the exporter can link as platform sources.
     const inventory = await ctx.db.query("traderInventory").withIndex("by_trader", (q) => q.eq("traderId", args.userId)).order("desc").take(100);
@@ -488,13 +597,27 @@ export const getMyLot = query({
       linkableCommitments.push({ _id: c._id, productName: offer?.productName ?? "", unit: offer?.unit ?? "", quantity: c.quantity, status: c.status, utid: c.utid });
     }
 
+    // Completed purchases from processors with kilos not yet put into lots.
+    const purchases = await ctx.db.query("processorSales").withIndex("by_exporterId", (q) => q.eq("exporterId", args.userId)).order("desc").take(100);
+    const linkableProcessorSales = [];
+    for (const s of purchases) {
+      if (s.status !== "completed") continue;
+      const allocations = await ctx.db.query("exportLotSources").withIndex("by_processorSaleId", (q) => q.eq("processorSaleId", s._id)).take(50);
+      const remaining = s.kilos - allocations.reduce((a, x) => a + x.kilos, 0);
+      if (remaining <= 0) continue;
+      const batch = await ctx.db.get(s.batchId);
+      linkableProcessorSales.push({ _id: s._id, saleCode: s.saleCode, batchCode: batch?.batchCode ?? "", kilos: s.kilos, remainingKilos: remaining, traceLevel: batch?.traceLevel ?? "declared" });
+    }
+
     return {
       lot,
       photoUrls: await photoUrls(ctx, lot.photoStorageIds),
       sources: sourceRows,
       stages: stageRows,
+      coveredByProcessor,
       linkableInventory,
       linkableCommitments,
+      linkableProcessorSales,
     };
   },
 });
@@ -503,10 +626,11 @@ export const addLotSource = mutation({
   args: {
     userId: v.id("users"),
     lotId: v.id("exportLots"),
-    kind: v.union(v.literal("platform_purchase"), v.literal("advance_commitment"), v.literal("declared")),
+    kind: v.union(v.literal("platform_purchase"), v.literal("advance_commitment"), v.literal("declared"), v.literal("processor_purchase")),
     kilos: v.number(),
     inventoryId: v.optional(v.id("traderInventory")),
     commitmentId: v.optional(v.id("advancePurchaseCommitments")),
+    processorSaleId: v.optional(v.id("processorSales")),
     farmerName: v.optional(v.string()),
     village: v.optional(v.string()),
     district: v.optional(v.string()),
@@ -524,7 +648,17 @@ export const addLotSource = mutation({
       kilos: Math.round(args.kilos),
       createdAt: getUgandaTime(),
     };
-    if (args.kind === "platform_purchase") {
+    let processorBatch: Doc<"processingBatches"> | null = null;
+    if (args.kind === "processor_purchase") {
+      if (!args.processorSaleId) throw new Error("Choose a purchase from a processor");
+      const sale = await ctx.db.get(args.processorSaleId);
+      if (!sale || sale.exporterId !== args.userId || sale.status !== "completed") throw new Error("Processor purchase not found");
+      const allocations = await ctx.db.query("exportLotSources").withIndex("by_processorSaleId", (q) => q.eq("processorSaleId", sale._id)).take(50);
+      const allocated = allocations.reduce((a, s) => a + s.kilos, 0);
+      if (allocated + row.kilos > sale.kilos) throw new Error(`Only ${sale.kilos - allocated} kg of this purchase is left to allocate`);
+      row.processorSaleId = sale._id;
+      processorBatch = await ctx.db.get(sale.batchId);
+    } else if (args.kind === "platform_purchase") {
       if (!args.inventoryId) throw new Error("Choose an inventory block");
       const inv = await ctx.db.get(args.inventoryId);
       if (!inv || inv.traderId !== args.userId) throw new Error("Inventory block not found");
@@ -565,6 +699,7 @@ export const addLotSource = mutation({
       row.areaHa = args.areaHa;
     }
     const sourceId = await ctx.db.insert("exportLotSources", row);
+    if (processorBatch) await ensureProcessorStage(ctx, lot._id, processorBatch);
     await recomputeLotSummary(ctx, lot._id);
     return { sourceId };
   },
@@ -601,6 +736,7 @@ export const submitTraceEvidence = mutation({
     const stages = await ctx.db.query("exportTraceStages").withIndex("by_lotId_and_order", (q) => q.eq("lotId", lot._id)).take(50);
     const stage = stages.find((s) => s.key === args.stageKey);
     if (!stage) throw new Error("Stage not found");
+    if (stage.scope === "processor") throw new Error("Processor stages come from the processor's own verified records");
     if (stage.status === "approved") throw new Error("This stage is already verified");
     assertEvidencePhotos(args.photos, 6);
     for (const w of [args.weightInKg, args.weightOutKg]) {
@@ -711,6 +847,45 @@ export const reviewTraceEvidence = mutation({
 });
 
 // ------------------------------------------------------------------
+// Exporter pipeline: the exporter's own processing steps
+// ------------------------------------------------------------------
+
+export const getMyTraceStages = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const profile = await ctx.db.query("exporterProfiles").withIndex("by_userId", (q) => q.eq("userId", args.userId)).first();
+    return {
+      farmStages: FARM_STAGES.map((s) => ({ key: s.key, name: s.name, hint: s.hint })),
+      stages: profile ? exporterStages(profile) : DEFAULT_EXPORTER_TRACE_STAGES,
+      customised: !!profile?.traceStages?.length,
+      max: MAX_EXPORTER_TRACE_STAGES,
+    };
+  },
+});
+
+/** Set the exporter's own steps; new lots use them, existing lots keep theirs. */
+export const saveMyTraceStages = mutation({
+  args: { userId: v.id("users"), stages: v.array(v.object({ name: v.string(), hint: v.string() })) },
+  handler: async (ctx, args) => {
+    const { profile } = await requireExporter(ctx, args.userId);
+    const stages = args.stages.map((s) => ({ name: s.name.trim().slice(0, 80), hint: s.hint.trim().slice(0, 300) }));
+    if (stages.length === 0) throw new Error("Keep at least one step");
+    if (stages.length > MAX_EXPORTER_TRACE_STAGES) throw new Error(`At most ${MAX_EXPORTER_TRACE_STAGES} steps`);
+    if (stages.some((s) => !s.name)) throw new Error("Every step needs a name");
+    const used = new Set<string>();
+    const keyed = stages.map((s) => {
+      const base = `x_${s.name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 40) || "step"}`;
+      let key = base;
+      for (let i = 2; used.has(key); i++) key = `${base}_${i}`;
+      used.add(key);
+      return { key, name: s.name, hint: s.hint };
+    });
+    await ctx.db.patch(profile._id, { traceStages: keyed, updatedAt: getUgandaTime() });
+    return { success: true };
+  },
+});
+
+// ------------------------------------------------------------------
 // Buyer catalogue (anonymous)
 // ------------------------------------------------------------------
 
@@ -779,7 +954,11 @@ export const getCatalogueLot = query({
     const today = isIsoDate(args.today) ? args.today : todayUganda();
     const lot = await ctx.db.get(args.lotId);
     if (!lot || lot.status !== "listed" || !(await isActiveExporter(ctx, lot.exporterId, today))) return null;
-    const stages = await ctx.db.query("exportTraceStages").withIndex("by_lotId_and_order", (q) => q.eq("lotId", lot._id)).take(50);
+    const lotSources = await ctx.db.query("exportLotSources").withIndex("by_lotId", (q) => q.eq("lotId", lot._id)).take(200);
+    const stages = applicableStages(
+      await ctx.db.query("exportTraceStages").withIndex("by_lotId_and_order", (q) => q.eq("lotId", lot._id)).take(50),
+      lotSources
+    );
     const trace = [];
     for (const st of stages) {
       let photos: { url: string | null; capturedAt: string }[] = [];
@@ -837,7 +1016,26 @@ export const getTraceabilityReport = query({
     const stageRows = [];
     let prevOut: number | undefined;
     const massWarnings: string[] = [];
-    for (const st of stages) {
+    for (const st of applicableStages(stages, sources)) {
+      if (st.processingBatchId) {
+        const b = await ctx.db.get(st.processingBatchId);
+        const verified = b?.evidenceStatus === "approved";
+        stageRows.push({
+          name: st.name,
+          scope: st.scope,
+          verified,
+          verifiedAt: verified ? b?.reviewedAt ?? null : null,
+          weightInKg: b?.weightInKg,
+          weightOutKg: b?.weightOutKg,
+          notes: b ? `Outturn ${outturnPercent(b.weightInKg, b.weightOutKg) ?? "-"}%` : undefined,
+          photos:
+            b && verified
+              ? await Promise.all(b.photos.map(async (p) => ({ url: await ctx.storage.getUrl(p.storageId), lat: p.lat, lng: p.lng, capturedAt: p.capturedAt, manualEntry: p.manualEntry === true })))
+              : [],
+        });
+        if (verified && b?.weightOutKg !== undefined) prevOut = b.weightOutKg;
+        continue;
+      }
       const ev = await ctx.db.query("exportTraceEvidence").withIndex("by_stageId", (q) => q.eq("stageId", st._id)).take(20);
       const approved = ev.find((e) => e.status === "approved") ?? null;
       if (approved?.weightInKg !== undefined && prevOut !== undefined && approved.weightInKg > prevOut * (1 + MASS_BALANCE_TOLERANCE)) {

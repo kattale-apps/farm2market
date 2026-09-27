@@ -894,6 +894,11 @@ export default defineSchema({
     exportAdmitted: v.optional(v.boolean()),
     exportAdmittedBy: v.optional(v.id("users")),
     exportAdmittedAt: v.optional(v.number()),
+    // Processors: the community admin accepts a processor who joined (step 1
+    // of verification), which opens the processor dashboard.
+    processorAdmitted: v.optional(v.boolean()),
+    processorAdmittedBy: v.optional(v.id("users")),
+    processorAdmittedAt: v.optional(v.number()),
   })
     .index("by_community", ["communityId"])
     .index("by_user", ["userId"])
@@ -3211,6 +3216,8 @@ export default defineSchema({
     verificationFeeValidUntil: v.optional(v.string()), // YYYY-MM-DD, Uganda date
     // Verification fee credited against future success fees (UGX left to use)
     successFeeCreditUgx: v.number(),
+    // The exporter's own processing steps for the trace map (absent = defaults).
+    traceStages: v.optional(v.array(v.object({ key: v.string(), name: v.string(), hint: v.string() }))),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -3223,7 +3230,7 @@ export default defineSchema({
     key: v.string(),
     label: v.string(),
     description: v.optional(v.string()),
-    appliesTo: v.union(v.literal("exporter"), v.literal("buyer")),
+    appliesTo: v.union(v.literal("exporter"), v.literal("buyer"), v.literal("processor")),
     required: v.boolean(),
     hasExpiry: v.boolean(),
     productForms: v.optional(v.array(v.string())), // only for exporters selling these forms
@@ -3238,7 +3245,7 @@ export default defineSchema({
   // The document vault: one row per uploaded file.
   exportDocuments: defineTable({
     ownerId: v.id("users"),
-    ownerKind: v.union(v.literal("exporter"), v.literal("buyer")),
+    ownerKind: v.union(v.literal("exporter"), v.literal("buyer"), v.literal("processor")),
     communityId: v.optional(v.id("communities")), // exporter community, for community-admin review scope
     documentTypeKey: v.string(),
     documentTypeLabel: v.string(),
@@ -3274,6 +3281,9 @@ export default defineSchema({
     successFeePerBagUsd: v.number(),
     buyerFeePercent: v.number(), // 0 = no buyer fee
     sampleHandlingFeeUgx: v.number(), // 0 = no sample fee
+    // Processors: both 0 until a super admin sets them.
+    processorVerificationFeeUgx: v.optional(v.number()),
+    processorSuccessFeePercent: v.optional(v.number()), // % of a processor-to-exporter sale
     updatedBy: v.id("users"),
     updatedAt: v.number(),
   }),
@@ -3341,7 +3351,7 @@ export default defineSchema({
       v.literal("withdrawn")
     ),
     // Denormalised from sources and trace stages (recomputeLotSummary)
-    traceLevel: v.union(v.literal("platform_traced"), v.literal("partly_declared"), v.literal("declared")),
+    traceLevel: v.union(v.literal("platform_traced"), v.literal("partly_declared"), v.literal("declared_evidenced"), v.literal("declared")),
     eudrReady: v.boolean(),
     traceStagesApproved: v.number(),
     traceStagesTotal: v.number(),
@@ -3355,9 +3365,10 @@ export default defineSchema({
   // Where a lot's coffee came from.
   exportLotSources: defineTable({
     lotId: v.id("exportLots"),
-    kind: v.union(v.literal("platform_purchase"), v.literal("advance_commitment"), v.literal("declared")),
+    kind: v.union(v.literal("platform_purchase"), v.literal("advance_commitment"), v.literal("declared"), v.literal("processor_purchase")),
     kilos: v.number(),
     inventoryId: v.optional(v.id("traderInventory")), // platform_purchase
+    processorSaleId: v.optional(v.id("processorSales")), // processor_purchase
     commitmentId: v.optional(v.id("advancePurchaseCommitments")), // advance_commitment
     // declared (off-platform) farm
     farmerName: v.optional(v.string()),
@@ -3371,17 +3382,24 @@ export default defineSchema({
   })
     .index("by_lotId", ["lotId"])
     .index("by_inventoryId", ["inventoryId"])
-    .index("by_commitmentId", ["commitmentId"]),
+    .index("by_commitmentId", ["commitmentId"])
+    .index("by_processorSaleId", ["processorSaleId"]),
 
   exportTraceStages: defineTable({
     lotId: v.id("exportLots"),
     order: v.number(),
     key: v.string(),
     name: v.string(),
-    scope: v.union(v.literal("farm"), v.literal("exporter")),
+    scope: v.union(v.literal("farm"), v.literal("processor"), v.literal("exporter")),
     status: v.union(v.literal("pending"), v.literal("submitted"), v.literal("approved"), v.literal("rejected")),
+    hint: v.optional(v.string()), // exporter-defined stages carry their own hint
+    // Processor stages mirror the processing batch, whose evidence the
+    // Storage Officer reviews; the exporter does not attest them.
+    processingBatchId: v.optional(v.id("processingBatches")),
     updatedAt: v.number(),
-  }).index("by_lotId_and_order", ["lotId", "order"]),
+  })
+    .index("by_lotId_and_order", ["lotId", "order"])
+    .index("by_processingBatchId", ["processingBatchId"]),
 
   exportTraceEvidence: defineTable({
     stageId: v.id("exportTraceStages"),
@@ -3580,4 +3598,165 @@ export default defineSchema({
     enteredBy: v.optional(v.id("users")),
     updatedAt: v.number(),
   }).index("by_key", ["key"]),
+
+  // ------------------------------------------------------------------
+  // Processors (role key "store"): hullers, millers and graders between the
+  // farmer and the exporter. See convex/processors.ts.
+  // ------------------------------------------------------------------
+
+  processorProfiles: defineTable({
+    userId: v.id("users"),
+    communityId: v.id("communities"), // community whose admin accepted the processor
+    legalName: v.string(),
+    tradingName: v.optional(v.string()),
+    tin: v.string(),
+    processingLicenceNumber: v.optional(v.string()),
+    facilityName: v.string(),
+    facilityAddress: v.string(),
+    district: v.string(),
+    facilityLat: v.optional(v.number()),
+    facilityLng: v.optional(v.number()),
+    capabilities: v.array(v.string()), // PROCESSING_CAPABILITIES keys
+    crops: v.array(v.string()), // EXPORT_CROPS keys
+    processingCapacityTonnesPerMonth: v.number(),
+    storageCapacityTonnes: v.number(),
+    storageType: v.union(v.literal("dry"), v.literal("cold"), v.literal("both")),
+    facilityPhotos: v.array(evidencePhotoValidator), // at most 6
+    contactPerson: v.string(),
+    contactPhone: v.string(),
+    contactEmail: v.optional(v.string()),
+    // Step 2: the Storage Officer approves location, storage and documents.
+    status: v.union(v.literal("draft"), v.literal("submitted"), v.literal("approved"), v.literal("rejected"), v.literal("suspended")),
+    submittedAt: v.optional(v.number()),
+    reviewedBy: v.optional(v.id("users")),
+    reviewedAt: v.optional(v.number()),
+    reviewNotes: v.optional(v.string()),
+    // Step 3: a super admin fully verifies the processor (badge).
+    platformVerified: v.optional(v.boolean()),
+    platformVerifiedBy: v.optional(v.id("users")),
+    platformVerifiedAt: v.optional(v.number()),
+    verificationFeeStatus: v.union(v.literal("unpaid"), v.literal("paid"), v.literal("waived")),
+    verificationFeePaidUgx: v.optional(v.number()),
+    verificationFeePaidAt: v.optional(v.number()),
+    verificationFeeUtid: v.optional(v.string()),
+    verificationFeeValidUntil: v.optional(v.string()), // YYYY-MM-DD, Uganda date
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_status", ["status"])
+    .index("by_communityId_and_status", ["communityId", "status"]),
+
+  // Coffee a processor bought from a farmer, on the app or off it.
+  processorIntakes: defineTable({
+    processorId: v.id("users"),
+    intakeCode: v.string(),
+    crop: v.string(),
+    inputForm: v.string(), // INTAKE_FORMS key
+    kilos: v.number(),
+    pricePerKgUgx: v.optional(v.number()),
+    intakeDate: v.string(), // YYYY-MM-DD, Uganda date
+    sourceKind: v.union(v.literal("platform_farmer"), v.literal("declared")),
+    farmerId: v.optional(v.id("users")), // platform_farmer
+    farmerConfirmation: v.optional(v.union(v.literal("pending"), v.literal("confirmed"), v.literal("disputed"))),
+    // declared (off-app) farmer and farm
+    farmerName: v.optional(v.string()),
+    farmerPhone: v.optional(v.string()),
+    village: v.optional(v.string()),
+    district: v.optional(v.string()),
+    lat: v.optional(v.number()),
+    lng: v.optional(v.number()),
+    areaHa: v.optional(v.number()),
+    polygonGeoJson: v.optional(v.string()),
+    photos: v.array(evidencePhotoValidator), // at most 6
+    evidenceStatus: v.union(v.literal("none"), v.literal("pending"), v.literal("approved"), v.literal("rejected")),
+    reviewedBy: v.optional(v.id("users")),
+    reviewedAt: v.optional(v.number()),
+    reviewNotes: v.optional(v.string()),
+    allocatedKilos: v.number(), // put into processing batches
+    notes: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_processorId", ["processorId"])
+    .index("by_evidenceStatus", ["evidenceStatus"])
+    .index("by_farmerId", ["farmerId"])
+    .index("by_intakeCode", ["intakeCode"]),
+
+  processingBatches: defineTable({
+    processorId: v.id("users"),
+    batchCode: v.string(),
+    crop: v.string(),
+    outputForm: v.string(), // BATCH_OUTPUT_FORMS key
+    coffeeType: v.optional(v.string()),
+    grade: v.optional(v.string()),
+    processingMethod: v.optional(v.string()),
+    steps: v.array(v.string()), // PROCESSING_CAPABILITIES keys done on this batch
+    weightInKg: v.number(), // sum of intake allocations
+    weightOutKg: v.optional(v.number()),
+    moisturePercent: v.optional(v.number()),
+    startedDate: v.string(),
+    completedDate: v.optional(v.string()),
+    status: v.union(v.literal("in_progress"), v.literal("completed")),
+    photos: v.array(evidencePhotoValidator), // at most 6
+    evidenceStatus: v.union(v.literal("none"), v.literal("pending"), v.literal("approved"), v.literal("rejected")),
+    reviewedBy: v.optional(v.id("users")),
+    reviewedAt: v.optional(v.number()),
+    reviewNotes: v.optional(v.string()),
+    traceLevel: v.union(v.literal("platform_traced"), v.literal("partly_declared"), v.literal("declared_evidenced"), v.literal("declared")),
+    soldKg: v.number(),
+    // PROCESSED MARKETS (optional): shown to verified exporters when listed.
+    marketListed: v.optional(v.boolean()),
+    askingPricePerKgUgx: v.optional(v.number()),
+    notes: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_processorId", ["processorId"])
+    .index("by_evidenceStatus", ["evidenceStatus"])
+    .index("by_marketListed", ["marketListed"])
+    .index("by_batchCode", ["batchCode"]),
+
+  processingBatchInputs: defineTable({
+    batchId: v.id("processingBatches"),
+    intakeId: v.id("processorIntakes"),
+    kilos: v.number(),
+  })
+    .index("by_batchId", ["batchId"])
+    .index("by_intakeId", ["intakeId"]),
+
+  // Processed coffee moving from a processor to an exporter.
+  processorSales: defineTable({
+    saleCode: v.string(),
+    processorId: v.id("users"),
+    batchId: v.id("processingBatches"),
+    kilos: v.number(),
+    pricePerKgUgx: v.optional(v.number()),
+    saleDate: v.string(), // YYYY-MM-DD, Uganda date
+    // direct: processor offers to one exporter; market: exporter requests a
+    // PROCESSED MARKETS listing; exporter_logged: exporter records a purchase
+    // for the processor to confirm; off_app: sold to an exporter outside the app.
+    mode: v.union(v.literal("direct"), v.literal("market"), v.literal("exporter_logged"), v.literal("off_app")),
+    exporterId: v.optional(v.id("users")),
+    offAppExporterName: v.optional(v.string()),
+    offAppExporterLicence: v.optional(v.string()),
+    status: v.union(
+      v.literal("offered"), // waiting for the exporter
+      v.literal("requested"), // waiting for the processor
+      v.literal("completed"),
+      v.literal("off_app"), // logged; an exporter on the app may claim it by code
+      v.literal("declined"),
+      v.literal("cancelled")
+    ),
+    receiptPhotos: v.array(evidencePhotoValidator), // at most 3
+    notes: v.optional(v.string()),
+    successFeeUgx: v.optional(v.number()),
+    successFeeUtid: v.optional(v.string()),
+    createdBy: v.id("users"),
+    respondedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_processorId", ["processorId"])
+    .index("by_exporterId", ["exporterId"])
+    .index("by_batchId", ["batchId"])
+    .index("by_saleCode", ["saleCode"]),
 });

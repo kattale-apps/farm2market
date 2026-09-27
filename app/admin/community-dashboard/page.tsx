@@ -29,11 +29,12 @@ import { tallyDistricts, buildDistrictMatcher } from "../../utils/districtNormal
 import { CrmInsightsSection } from "../../components/crm/CrmInsightsSection";
 import { fromStoredUgandaTime, inUgandaTime } from "../../utils/timeUtils";
 import { CommunityExportMarketsPanel } from "../../components/exportMarkets/AdminExporterPanels";
+import { CommunityProcessorsPanel } from "../../components/processor/CommunityProcessorsPanel";
 import { ugandaDateFromInstant } from "../../../convex/exportMarketsShared";
 import { roleLabel, roleLabelPlural } from "@/convex/roleLabels";
 
 /* ── Tab types for community cards ── */
-type CommunityTab = "members" | "noticeboard" | "messages" | "forms" | "insights" | "fertilizer" | "costTemplates" | "advancePurchase" | "diagnostics" | "exportMarkets";
+type CommunityTab = "members" | "noticeboard" | "messages" | "forms" | "insights" | "fertilizer" | "costTemplates" | "advancePurchase" | "diagnostics" | "exportMarkets" | "processors";
 type MembersListTab = "approved" | "all" | "imported" | "activeFarmsee";
 
 
@@ -3591,6 +3592,9 @@ export default function CommunityDashboardPage() {
               ...(advancedMarketsEnabled ? (["advancePurchase"] as CommunityTab[]) : []),
               ...(diagnosticsEnabled && canConfigureFertilizer ? (["diagnostics"] as CommunityTab[]) : []),
               ...(exportMarketsEnabled ? (["exportMarkets"] as CommunityTab[]) : []),
+              // Shown once processors have joined (or when the member breakdown is
+              // not available), so the admin can accept them.
+              ...(((community?.roleBreakdown as Record<string, number> | undefined) === undefined || ((community?.roleBreakdown as Record<string, number>).store ?? 0) > 0) ? (["processors"] as CommunityTab[]) : []),
             ];
             // A tab that was open before the module was switched off falls back
             // to Members rather than rendering a hidden module.
@@ -4042,7 +4046,7 @@ export default function CommunityDashboardPage() {
                   {(visibleTabs).map((tab, idx) => {
                     const active = activeTab === tab;
                     const color = menuRainbowColor(idx);
-                    const labels: Record<CommunityTab, string> = { members: "Members", noticeboard: "Noticeboard", messages: "Messages", forms: "Forms", insights: "📊 Insights", fertilizer: "🌱 Fertilizer", costTemplates: "🌾 Cost Templates", advancePurchase: "🌱 Advanced Markets", diagnostics: "🔬 Diagnostics", exportMarkets: "🚢 Export Markets" };
+                    const labels: Record<CommunityTab, string> = { members: "Members", noticeboard: "Noticeboard", messages: "Messages", forms: "Forms", insights: "📊 Insights", fertilizer: "🌱 Fertilizer", costTemplates: "🌾 Cost Templates", advancePurchase: "🌱 Advanced Markets", diagnostics: "🔬 Diagnostics", exportMarkets: "🚢 Export Markets", processors: "🏭 Processors" };
                     return (
                       <button
                         key={tab}
@@ -4144,6 +4148,11 @@ export default function CommunityDashboardPage() {
                   communityId={communityId as Id<"communities">}
                   isSuperAdmin={isSuperAdminUser}
                 />
+              )}
+
+              {/* ── Processors Tab ── */}
+              {activeTab === "processors" && (
+                <CommunityProcessorsPanel adminId={userId as Id<"users">} communityId={communityId as Id<"communities">} today={exportToday} />
               )}
 
               {/* ── Export Markets Tab ── */}

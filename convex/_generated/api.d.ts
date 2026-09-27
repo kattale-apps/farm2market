@@ -109,6 +109,7 @@ import type * as seedDemo from "../seedDemo.js";
 import type * as seedProduce from "../seedProduce.js";
 import type * as seedUgandaLocations from "../seedUgandaLocations.js";
 import type * as serviceLevels from "../serviceLevels.js";
+import type * as storageRetirement from "../storageRetirement.js";
 import type * as storeAdmin from "../storeAdmin.js";
 import type * as storeOnboarding from "../storeOnboarding.js";
 import type * as storeadminAudit from "../storeadminAudit.js";
@@ -241,6 +242,7 @@ declare const fullApi: ApiFromModules<{
   seedProduce: typeof seedProduce;
   seedUgandaLocations: typeof seedUgandaLocations;
   serviceLevels: typeof serviceLevels;
+  storageRetirement: typeof storageRetirement;
   storeAdmin: typeof storeAdmin;
   storeOnboarding: typeof storeOnboarding;
   storeadminAudit: typeof storeadminAudit;

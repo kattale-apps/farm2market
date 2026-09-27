@@ -14,8 +14,6 @@ import { PILOT_SHARED_PASSWORD } from "./constants";
 import { getUgandaTime } from "./utils";
 import { markImportedMemberActivatedByUserId } from "./communityImports";
 
-const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
-
 type CommunityRole = "farmer" | "trader" | "buyer" | "vendor" | "transporter" | "store";
 
 function getCommunityDefaultRole(communityType?: string | null): CommunityRole {
@@ -53,29 +51,6 @@ async function ensureMandatoryRoleCommunityMembershipsForUser(
         joinedAt: getUgandaTime(),
       });
     }
-  }
-}
-
-async function ensureBioFarmMembershipForFarmer(
-  ctx: any,
-  userId: Id<"users">,
-  role: string
-) {
-  if (role !== "farmer") return;
-
-  const existing = await ctx.db
-    .query("communityMemberships")
-    .withIndex("by_community_user", (q: any) =>
-      q.eq("communityId", BIOFARM_COMMUNITY_ID as Id<"communities">).eq("userId", userId)
-    )
-    .first();
-
-  if (!existing) {
-    await ctx.db.insert("communityMemberships", {
-      communityId: BIOFARM_COMMUNITY_ID as Id<"communities">,
-      userId,
-      joinedAt: getUgandaTime(),
-    });
   }
 }
 
@@ -330,7 +305,6 @@ export const createUser = mutation({
     // Create user
     const userId = await ctx.db.insert("users", userData);
 
-    await ensureBioFarmMembershipForFarmer(ctx, userId, args.role);
     await ensureMandatoryRoleCommunityMembershipsForUser(ctx, userId, args.role);
 
     return { userId, alias };
@@ -442,7 +416,6 @@ export const signup = mutation({
       passwordHash,
     });
 
-    await ensureBioFarmMembershipForFarmer(ctx, userId, args.role);
     await ensureMandatoryRoleCommunityMembershipsForUser(ctx, userId, args.role);
 
     // Fetch the created user
@@ -1096,7 +1069,6 @@ export const signupWithSession = mutation({
       lastActiveAt: now,
     });
 
-    await ensureBioFarmMembershipForFarmer(ctx, userId, args.role);
     await ensureMandatoryRoleCommunityMembershipsForUser(ctx, userId, args.role);
 
     const sessionToken = generateSessionToken();

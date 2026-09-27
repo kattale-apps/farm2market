@@ -21,25 +21,6 @@ import {
   CommunityRole,
 } from "./communities";
 
-const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
-
-async function ensureBioFarmMembershipForFarmer(ctx: any, userId: Id<"users">) {
-  const existing = await ctx.db
-    .query("communityMemberships")
-    .withIndex("by_community_user", (q: any) =>
-      q.eq("communityId", BIOFARM_COMMUNITY_ID as Id<"communities">).eq("userId", userId)
-    )
-    .first();
-
-  if (!existing) {
-    await ctx.db.insert("communityMemberships", {
-      communityId: BIOFARM_COMMUNITY_ID as Id<"communities">,
-      userId,
-      joinedAt: getUgandaTime(),
-    });
-  }
-}
-
 /**
  * Create (or reuse) a real member account for an imported row, the same way
  * CRM's resolveOrCreateClientMember creates accounts for new clients: phone
@@ -119,9 +100,6 @@ async function createOrJoinMemberAccount(
     await ensureMandatoryRoleCommunityMembershipsForUserFast(ctx, userId, args.role, args.autoJoinCommunityIdsByRole);
   } else {
     await ensureMandatoryRoleCommunityMembershipsForUser(ctx, userId, args.role);
-  }
-  if (args.role === "farmer") {
-    await ensureBioFarmMembershipForFarmer(ctx, userId);
   }
 
   return { userId: userId as Id<"users">, wasNewUser: true };

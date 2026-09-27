@@ -8,8 +8,6 @@
  * default) into a plain boolean so every surface gates the same way.
  */
 
-const BIOFARM_COMMUNITY_ID = "ms72de3njrrc9k43cf9h3yq70181ncp0";
-
 export type CommunityModule = "advancedMarkets" | "fertilizer" | "costTemplates" | "activeFarms" | "diagnostics" | "exportMarkets";
 
 type CommunityLike = {
@@ -42,13 +40,10 @@ export function normalizeCommunityKey(value: string | undefined | null): string 
 
 /**
  * Bio Farm is the only community that had Advanced Markets in active use
- * before these flags existed, so it stays switched on by default. Matching on
- * the name as well as the id keeps that true on deployments where the
- * community document has a different id.
+ * before these flags existed, so it stays switched on by default. It is
+ * matched by name, so no deployment-specific id is hardcoded.
  */
 export function isBioFarmCommunity(community: CommunityLike): boolean {
-  const id = String(community?._id ?? community?.id ?? "");
-  if (id === BIOFARM_COMMUNITY_ID) return true;
   return isBioFarmName(community?.name);
 }
 

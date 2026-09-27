@@ -8,7 +8,7 @@
  * - Wallet system (closed loop, ledger-based)
  * - Spend cap enforcement (UGX 1,000,000 max exposure)
  * - Pay-to-lock atomicity
- * - Time-based SLAs and storage fees
+ * - Time-based SLAs
  */
 
 import { defineSchema, defineTable } from "convex/server";
@@ -342,7 +342,7 @@ export default defineSchema({
     qualityRating: v.optional(v.string()), // Quality rating - retained from farmer listing
     unitPrice: v.number(), // Price per kilo in UGX - retained from farmer listing (actual purchase price)
     acquiredAt: v.number(), // When trader received delivery at storage (timestamp updated when admin confirms)
-    storageStartTime: v.number(), // When storage fees start
+    storageStartTime: v.number(), // When the produce went into storage
     status: v.union(
       v.literal("pending_delivery"),
       v.literal("in_storage"),
@@ -392,24 +392,6 @@ export default defineSchema({
     .index("by_buyer", ["buyerId"])
     .index("by_utid", ["utid"])
     .index("by_status", ["status"]),
-
-  /**
-   * Storage fee deductions
-   * - Deducted in kilos, not money
-   * - All deductions logged with UTIDs
-   */
-  storageFeeDeductions: defineTable({
-    inventoryId: v.id("traderInventory"),
-    traderId: v.id("users"),
-    kilosDeducted: v.number(),
-    ratePerDay: v.number(), // Kilos per day
-    daysStored: v.number(),
-    deductionUtid: v.string(),
-    timestamp: v.number(),
-  })
-    .index("by_inventory", ["inventoryId"])
-    .index("by_trader", ["traderId"])
-    .index("by_utid", ["deductionUtid"]),
 
   /**
    * Admin actions log
@@ -521,7 +503,7 @@ export default defineSchema({
     setAt: v.number(), // Timestamp when flag was set
     reason: v.string(), // Reason for setting flag
     utid: v.string(), // Admin action UTID
-    storageFeeRateKgPerDay: v.optional(v.number()), // Kilo-shaving rate (kilos per day per 100kg block). Default: 0.5
+    storageFeeRateKgPerDay: v.optional(v.number()), // Retired (storage fees removed); kept so older settings rows stay valid
     buyerServiceFeePercentage: v.optional(v.number()), // Service fee percentage added to purchase price for buyers. Default: 3
     traderCommissionPercentage: v.optional(v.number()), // Trader commission percentage on sales. Default: 0
     farmcoinPostingCost: v.optional(v.number()), // FarmCoin Tokens required to post a listing

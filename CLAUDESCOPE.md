@@ -184,6 +184,22 @@ the server or the viewer's device is in.
   storage-fee day counts, buyer ETA/overdue, and delivery-deadline red flags. Fixing
   these changes charges and alerts, so it needs owner sign-off under Rule 1.
 
+### Rule 9 — Every photo can come from the camera or the gallery
+Wherever the app asks for a photo (evidence, intake, listings, documents, profiles or
+anything else), the user must be able to take one with the camera **or** upload one
+already on the phone's gallery. Never ship a camera-only photo input: users often take
+the photo earlier, have a poor connection at the moment of capture, or get the photo
+from someone else. This applies to new screens and to any existing photo input that
+gets touched.
+- **Trace-journey photos carry location and time.** Wherever a photo is evidence in the
+  trace journey (intake, processing, processor and exporter trace steps), a gallery photo
+  takes its GPS coordinates and date/time from the photo file's EXIF data, stored the
+  same way as a camera photo's live GPS and capture time. Show an info notice on those
+  gallery inputs explaining that the photo must carry its location and date.
+- **Missing EXIF data is entered by hand and flagged.** If a gallery photo has no
+  location or date, the user types them in, and the photo is flagged for the Storage
+  Officer as "location/date entered manually" so the reviewer can tell it apart.
+
 ---
 
 ## Part 2 — Codebase Map (refresh as it drifts)
@@ -291,8 +307,9 @@ wallet/payments/admin code)
 
 ---
 
-*Last written: 2026-09-24. Added Rule 8 (always use Uganda time, UTC+3) at the owner's
-request, after a CRM overdue mismatch traced to mixed clocks. Does not weaken or replace
-any prior rule. Previous revision (2026-09-14) added Rule 4c and refreshed Part 2 §6.
+*Last written: 2026-09-27. Added Rule 9 (every photo can come from the camera or the
+gallery) at the owner's request, while planning the Processor role. Does not weaken or
+replace any prior rule. Previous revision (2026-09-24) added Rule 8 (always use Uganda
+time, UTC+3).
 Update Part 2 whenever it's found stale; update Part 1 only with explicit owner sign-off
 per Rule 6.*

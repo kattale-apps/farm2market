@@ -26,7 +26,7 @@ export default function StorageOfficerProcessorsPage() {
   const adminId = (user?.userId as Id<"users"> | undefined) ?? null;
   const [today] = useState(() => ugandaDateFromInstant(Date.now()));
   const [filters, setFilters] = useState({ status: "", communityId: "", district: "", search: "" });
-  const [view, setView] = useState<"processors" | "evidence">("processors");
+  const [view, setView] = useState<"processors" | "evidence" | "transport">("processors");
   const [openId, setOpenId] = useState<Id<"users"> | null>(null);
   const [msg, setMsg] = useState<Msg>(null);
   const list = useQuery(
@@ -64,9 +64,14 @@ export default function StorageOfficerProcessorsPage() {
         <button style={button(view === "evidence" ? "primary" : "secondary")} onClick={() => setView("evidence")}>
           Evidence to review
         </button>
+        <button style={button(view === "transport" ? "primary" : "secondary")} onClick={() => setView("transport")}>
+          Transport to verify
+        </button>
       </div>
 
-      {view === "evidence" ? (
+      {view === "transport" ? (
+        <TransportQueue adminId={adminId} setMsg={setMsg} />
+      ) : view === "evidence" ? (
         <EvidenceQueue adminId={adminId} setMsg={setMsg} />
       ) : list === undefined ? (
         <div style={card}>Loading...</div>
@@ -413,6 +418,83 @@ function EvidenceQueue({ adminId, setMsg }: { adminId: Id<"users">; setMsg: (m: 
             batch._id,
             () => reviewBatch({ adminId, batchId: batch._id, decision: "approve" }),
             () => reviewBatch({ adminId, batchId: batch._id, decision: "reject", notes: notes[batch._id] })
+          )}
+        </div>
+      ))}
+    </>
+  );
+}
+
+/** Vehicles (logbook, insurance) and drivers (licence) waiting for verification. */
+function TransportQueue({ adminId, setMsg }: { adminId: Id<"users">; setMsg: (m: Msg) => void }) {
+  const data = useQuery(api.transport.listTransportForReview, { adminId });
+  const review = useMutation(api.transport.reviewTransportItem);
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const act = async (id: string, fn: () => Promise<unknown>, ok: string) => {
+    setBusy(id);
+    try {
+      await fn();
+      setMsg({ tone: "success", text: ok });
+    } catch (e) {
+      setMsg({ tone: "error", text: errorText(e) });
+    } finally {
+      setBusy(null);
+    }
+  };
+  if (data === undefined) return <div style={card}>Loading...</div>;
+  if (data.vehicles.length === 0 && data.drivers.length === 0) return <div style={card}>No vehicles or drivers waiting.</div>;
+  const link = (url: string | null, text: string) =>
+    url ? (
+      <a href={url} target="_blank" rel="noreferrer" style={{ marginRight: "0.75rem" }}>
+        {text}
+      </a>
+    ) : null;
+  const buttons = (id: string, verify: () => Promise<unknown>, reject: () => Promise<unknown>) => (
+    <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginTop: "0.4rem" }}>
+      <input style={{ ...input, maxWidth: 260 }} placeholder="Reason (to reject)" value={notes[id] ?? ""} onChange={(e) => setNotes({ ...notes, [id]: e.target.value })} />
+      <button style={button("primary", busy === id)} disabled={busy === id} onClick={() => act(id, verify, "Verified.")}>
+        Verify
+      </button>
+      <button style={button("danger", busy === id)} disabled={busy === id} onClick={() => act(id, reject, "Rejected.")}>
+        Reject
+      </button>
+    </div>
+  );
+  return (
+    <>
+      {data.vehicles.map((x) => (
+        <div key={x._id} style={card}>
+          <b>
+            🚚 {x.plateNumber} · {x.vehicleType} · {x.capacityTonnes} t
+          </b>
+          <div style={{ fontSize: "0.85rem", color: "#455a64" }}>
+            Transporter {x.transporterAlias} · insurance expires {x.insuranceExpiry}
+          </div>
+          <div style={{ fontSize: "0.85rem", marginTop: "0.3rem" }}>
+            {link(x.logbookUrl, "Logbook")}
+            {link(x.insuranceUrl, "Insurance")}
+            {link(x.photoUrl, "Photo")}
+          </div>
+          {buttons(
+            x._id,
+            () => review({ adminId, vehicleId: x._id, decision: "verify" }),
+            () => review({ adminId, vehicleId: x._id, decision: "reject", notes: notes[x._id] })
+          )}
+        </div>
+      ))}
+      {data.drivers.map((d) => (
+        <div key={d._id} style={card}>
+          <b>🧑‍✈️ {d.name}</b>
+          <div style={{ fontSize: "0.85rem", color: "#455a64" }}>
+            Transporter {d.transporterAlias} · licence {d.licenceNumber}
+            {d.licenceClass ? ` (class ${d.licenceClass})` : ""} · expires {d.licenceExpiry}
+          </div>
+          <div style={{ fontSize: "0.85rem", marginTop: "0.3rem" }}>{link(d.licenceUrl, "Licence")}</div>
+          {buttons(
+            d._id,
+            () => review({ adminId, driverId: d._id, decision: "verify" }),
+            () => review({ adminId, driverId: d._id, decision: "reject", notes: notes[d._id] })
           )}
         </div>
       ))}

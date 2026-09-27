@@ -13,6 +13,7 @@ import { FONT, card, input, label, button, StatusPill, Notice, PageHeader, forma
 import { PhotoSetCapture, CapturedPhoto, evidencePhotoPayload } from "../exportMarkets/PhotoSetCapture";
 import { ProcessorIntakeTab, ProcessorBatchesTab } from "./ProcessorOperations";
 import { ProcessorSalesTab } from "./ProcessorSales";
+import { BuyerOffersPanel } from "../market/BuyerOffersPanel";
 
 export const PROCESSOR_HEADING = "#6d4c00";
 export const PROCESSOR_ACCENT = "#f9a825";
@@ -20,12 +21,13 @@ export const PROCESSOR_SOFT = "#fff8e1";
 export const PROCESSOR_BORDER = "#ffd54f";
 
 type Msg = { tone: "error" | "success" | "info"; text: string } | null;
-type Tab = "overview" | "profile" | "documents" | "intake" | "batches" | "sales";
+type Tab = "overview" | "profile" | "documents" | "buying" | "intake" | "batches" | "sales";
 
 const TABS: { key: Tab; label: string; needs: string }[] = [
   { key: "overview", label: "Overview", needs: "Your progress to becoming a verified processor, step by step." },
   { key: "profile", label: "Facility profile", needs: "Business details, facility location with GPS, what you process, capacity, storage and facility photos." },
   { key: "documents", label: "Documents & fee", needs: "Business registration, TIN and processing licence, with expiry dates, and the verification fee." },
+  { key: "buying", label: "Buying prices", needs: "Post this week's buying price per form, answer farmers' delivery bookings and pay them in cash with a receipt." },
   { key: "intake", label: "Intake", needs: "Record coffee you buy from farmers, on the app or not, with photos and the farm location." },
   { key: "batches", label: "Processing", needs: "Turn intake into processed batches: weight in, weight out and the outturn, with photos." },
   { key: "sales", label: "Sales", needs: "Sell processed batches to exporters directly, log sales made outside the app, or list in PROCESSED MARKETS." },
@@ -132,6 +134,7 @@ export function ProcessorWorkspace({ userId }: { userId: Id<"users"> }) {
               <FeeCard ws={ws} userId={userId} setMsg={setMsg} />
             </>
           )}
+          {tab === "buying" && <BuyerOffersPanel userId={userId} />}
           {tab === "intake" && <ProcessorIntakeTab userId={userId} member={member} today={today} crops={processorCrops(ws)} setMsg={setMsg} />}
           {tab === "batches" && <ProcessorBatchesTab userId={userId} member={member} today={today} crops={processorCrops(ws)} setMsg={setMsg} />}
           {tab === "sales" && <ProcessorSalesTab userId={userId} member={member} active={ws.isActiveProcessor} today={today} setMsg={setMsg} />}

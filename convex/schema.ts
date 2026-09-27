@@ -543,7 +543,8 @@ export default defineSchema({
       v.literal("buyer_reward_cashout"),
       v.literal("form_field_reward"),
       v.literal("price_sheet_download"),
-      v.literal("tracker_entry_reward")
+      v.literal("tracker_entry_reward"),
+      v.literal("transport_rating_reward")
     ),
     utid: v.string(),
     listingId: v.optional(v.id("listings")),
@@ -553,6 +554,7 @@ export default defineSchema({
     reason: v.optional(v.string()),
     formResponseId: v.optional(v.id("formResponses")),
     trackerEntryId: v.optional(v.id("farmTrackerEntries")), // Farm toolbox tracker entry reward
+    transportBookingId: v.optional(v.id("transportBookings")), // Trip rating reward
     communityId: v.optional(v.id("communities")),
     fieldCount: v.optional(v.number()),
     createdAt: v.number(),
@@ -1777,6 +1779,11 @@ export default defineSchema({
     departureRegion: v.optional(v.string()),
     departureDistrictId: v.optional(v.id("districts")),
     departureSubcountyId: v.optional(v.id("subcounties")),
+    // Transport directory: whether they take bookings, and where they go.
+    available: v.optional(v.boolean()),
+    availableFrom: v.optional(v.string()), // YYYY-MM-DD, Uganda date
+    districtsServed: v.optional(v.array(v.string())),
+    priceGuide: v.optional(v.string()), // free text, e.g. "UGX 2,500 per km"; payment is agreed off the app
     onboardingCompleted: v.boolean(),
     createdAt: v.number(),
   })
@@ -3741,4 +3748,148 @@ export default defineSchema({
     .index("by_exporterId", ["exporterId"])
     .index("by_batchId", ["batchId"])
     .index("by_saleCode", ["saleCode"]),
+
+  // ------------------------------------------------------------------
+  // Sell & services: buying offers, delivery bookings and cash receipts.
+  // See convex/marketOffers.ts.
+  // ------------------------------------------------------------------
+
+  // A processor's weekly buying price, or a vendor's buying offer, per crop.
+  buyingOffers: defineTable({
+    ownerId: v.id("users"),
+    ownerKind: v.union(v.literal("processor"), v.literal("vendor")),
+    crop: v.string(), // EXPORT_CROPS key (processors) or VENDOR_CROPS key (vendors)
+    form: v.optional(v.string()), // INTAKE_FORMS key, processors only (e.g. kiboko)
+    unit: v.string(), // kg, bunch, bag...
+    priceUgx: v.number(), // per unit
+    minQuantity: v.optional(v.number()),
+    district: v.string(), // where the buyer is
+    districtKey: v.string(), // district compared without case
+    validFrom: v.string(), // YYYY-MM-DD, Uganda date
+    validUntil: v.string(), // validFrom + 6 days
+    active: v.boolean(), // false once replaced or withdrawn; kept as price history
+    notes: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_ownerId", ["ownerId"])
+    .index("by_districtKey_and_active", ["districtKey", "active"])
+    .index("by_active", ["active"]),
+
+  deliveryBookings: defineTable({
+    farmerId: v.id("users"),
+    buyerId: v.id("users"),
+    buyerKind: v.union(v.literal("processor"), v.literal("vendor")),
+    offerId: v.id("buyingOffers"),
+    crop: v.string(),
+    form: v.optional(v.string()),
+    unit: v.string(),
+    quantity: v.number(),
+    priceUgx: v.number(), // the offer price when booked
+    deliveryDate: v.string(), // YYYY-MM-DD, at most 5 days ahead
+    status: v.union(
+      v.literal("requested"),
+      v.literal("accepted"),
+      v.literal("declined"),
+      v.literal("cancelled"),
+      v.literal("completed")
+    ),
+    farmerNote: v.optional(v.string()),
+    buyerNote: v.optional(v.string()),
+    receiptId: v.optional(v.id("purchaseReceipts")),
+    respondedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_farmerId", ["farmerId"])
+    .index("by_buyerId", ["buyerId"]),
+
+  // A receipt the processor or vendor side issues when paying a farmer cash.
+  purchaseReceipts: defineTable({
+    receiptNumber: v.string(),
+    buyerId: v.id("users"),
+    buyerKind: v.union(v.literal("processor"), v.literal("vendor")),
+    buyerName: v.string(), // facility or market name when issued
+    buyerDistrict: v.optional(v.string()),
+    farmerId: v.optional(v.id("users")), // farmer on the app
+    farmerName: v.string(), // alias or the declared farmer's name when issued
+    crop: v.string(),
+    form: v.optional(v.string()),
+    unit: v.string(),
+    quantity: v.number(),
+    priceUgx: v.number(),
+    totalUgx: v.number(),
+    paymentMethod: v.literal("cash"),
+    paidOn: v.string(), // YYYY-MM-DD, Uganda date
+    bookingId: v.optional(v.id("deliveryBookings")),
+    intakeId: v.optional(v.id("processorIntakes")),
+    createdAt: v.number(),
+  })
+    .index("by_farmerId", ["farmerId"])
+    .index("by_buyerId", ["buyerId"])
+    .index("by_receiptNumber", ["receiptNumber"]),
+
+  // ------------------------------------------------------------------
+  // Transport directory: verified vehicles and drivers, in-app bookings and
+  // FarmCoin trip ratings. Payment is agreed off the app. See convex/transport.ts.
+  // ------------------------------------------------------------------
+
+  transportVehicles: defineTable({
+    transporterId: v.id("users"),
+    plateNumber: v.string(),
+    vehicleType: v.string(), // TRANSPORT_VEHICLE_TYPES key
+    capacityTonnes: v.number(),
+    insuranceExpiry: v.string(), // YYYY-MM-DD
+    logbookStorageId: v.id("_storage"),
+    insuranceStorageId: v.id("_storage"),
+    photoStorageId: v.optional(v.id("_storage")),
+    status: v.union(v.literal("pending"), v.literal("verified"), v.literal("rejected")),
+    reviewedBy: v.optional(v.id("users")),
+    reviewedAt: v.optional(v.number()),
+    reviewNotes: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_transporterId", ["transporterId"])
+    .index("by_status", ["status"]),
+
+  transportDrivers: defineTable({
+    transporterId: v.id("users"),
+    name: v.string(),
+    licenceNumber: v.string(),
+    licenceClass: v.optional(v.string()),
+    licenceExpiry: v.string(), // YYYY-MM-DD
+    licenceStorageId: v.id("_storage"),
+    status: v.union(v.literal("pending"), v.literal("verified"), v.literal("rejected")),
+    reviewedBy: v.optional(v.id("users")),
+    reviewedAt: v.optional(v.number()),
+    reviewNotes: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_transporterId", ["transporterId"])
+    .index("by_status", ["status"]),
+
+  transportBookings: defineTable({
+    requesterId: v.id("users"),
+    transporterId: v.id("users"),
+    fromDistrict: v.string(),
+    toDistrict: v.string(),
+    pickupDate: v.string(), // YYYY-MM-DD
+    load: v.string(), // what is being moved
+    weightKg: v.optional(v.number()),
+    status: v.union(
+      v.literal("requested"),
+      v.literal("accepted"),
+      v.literal("declined"),
+      v.literal("cancelled"),
+      v.literal("completed")
+    ),
+    requesterNote: v.optional(v.string()),
+    transporterNote: v.optional(v.string()),
+    completedAt: v.optional(v.number()),
+    // The requester rates the trip in FarmCoins (0-10); the coins go to the transporter.
+    farmcoinRating: v.optional(v.number()),
+    feedback: v.optional(v.string()),
+    ratedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_requesterId", ["requesterId"])
+    .index("by_transporterId", ["transporterId"]),
 });

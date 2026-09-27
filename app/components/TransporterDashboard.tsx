@@ -22,6 +22,15 @@ export function TransporterDashboard({ userId }: TransporterDashboardProps) {
 
   return (
     <div>
+      <a href="/transporter/services" style={{ display: "block", textDecoration: "none", marginBottom: "1rem" }}>
+        <div style={{ background: "linear-gradient(135deg, #c62828, #8e0000)", color: "#fff", borderRadius: 12, padding: "0.9rem 1rem", display: "flex", gap: "0.8rem", alignItems: "center" }}>
+          <span style={{ fontSize: "1.8rem" }}>🚚</span>
+          <span>
+            <b style={{ fontSize: "1.05rem" }}>My transport services</b>
+            <span style={{ display: "block", fontSize: "0.85rem", opacity: 0.95 }}>Availability, vehicles and drivers, trip bookings and FarmCoin ratings</span>
+          </span>
+        </div>
+      </a>
       <div
         style={{
           marginBottom: "1.5rem",

@@ -932,7 +932,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
             <div style={{ fontSize: "2.2rem" }}>🏭</div>
             <div>
               <h3 style={{ margin: "0 0 0.3rem 0", fontSize: "1.1rem" }}>Processors{isStorageOfficer ? " (Storage Officer)" : ""}</h3>
-              <p style={{ margin: 0, fontSize: "0.9rem" }}>Approve facility locations, storage and documents; review intake and processing evidence</p>
+              <p style={{ margin: 0, fontSize: "0.9rem" }}>Approve processor facilities and documents, review intake and processing evidence, and verify transport vehicles and drivers</p>
             </div>
           </div>
         </a>

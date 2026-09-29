@@ -13,6 +13,7 @@ import { internal } from "./_generated/api";
 import { generateUTID, getBuyerServiceFeePercentage, getTraderCommissionPercentage, getUgandaTime } from "./utils";
 import { MAX_TRADER_EXPOSURE_UGX, DEFAULT_BUYER_SERVICE_FEE_PERCENTAGE } from "./constants";
 import { Id } from "./_generated/dataModel";
+import { hasDemoWallet, lockDemoShare, postWallet, realMoneyAtRisk } from "./walletSplit";
 
 /**
  * Verify user is admin
@@ -311,25 +312,19 @@ export const depositDemoFunds = mutation({
     if (!user || !["trader", "buyer", "transporter"].includes(user.role)) {
       throw new Error("Target user must be a trader, buyer, or transporter");
     }
+    // Only accounts that already hold demo money may receive more.
+    if (!(await hasDemoWallet(ctx, args.targetUserId))) {
+      throw new Error("This account holds only real money, so demo funds cannot be added to it.");
+    }
 
-    // Get current balance
-    const latestEntry = await ctx.db
-      .query("walletLedger")
-      .withIndex("by_user", (q: any) => q.eq("userId", args.targetUserId))
-      .order("desc")
-      .first();
-
-    const currentBalance = latestEntry?.balanceAfter || 0;
-    const balanceAfter = currentBalance + args.amount;
     const utid = generateUTID("admin");
 
-    await ctx.db.insert("walletLedger", {
+    const { balanceAfter } = await postWallet(ctx, {
       userId: args.targetUserId,
       utid,
       type: "capital_deposit",
       amount: args.amount,
-      balanceAfter,
-      timestamp: getUgandaTime(),
+      rule: { kind: "all" },
       metadata: {
         source: "admin_demo_deposit",
         reason: args.reason,
@@ -348,7 +343,7 @@ export const depositDemoFunds = mutation({
         targetUserId: args.targetUserId,
         role: user.role,
         amount: args.amount,
-        previousBalance: currentBalance,
+        previousBalance: balanceAfter - args.amount,
         balanceAfter,
       }
     );
@@ -360,7 +355,7 @@ export const depositDemoFunds = mutation({
       role: user.role,
       amount: args.amount,
       balanceAfter,
-      previousBalance: currentBalance,
+      previousBalance: balanceAfter - args.amount,
     };
   },
 });
@@ -625,23 +620,14 @@ export const reverseDeliveryFailure = mutation({
       deliveryStatus: undefined,
     });
 
-    // Step 2: Reverse wallet ledger entry (unlock capital)
-    const walletEntries = await ctx.db
-      .query("walletLedger")
-      .withIndex("by_user", (q: any) => q.eq("userId", traderId))
-      .order("desc")
-      .first();
-
-    const currentBalance = walletEntries?.balanceAfter || 0;
-    const balanceAfter = currentBalance + unitPrice;
-
-    await ctx.db.insert("walletLedger", {
+    // Step 2: Reverse wallet ledger entry (unlock capital), returning the
+    // lock's demo share as demo.
+    const { balanceAfter } = await postWallet(ctx, {
       userId: traderId,
       utid,
       type: "capital_unlock",
       amount: unitPrice,
-      balanceAfter,
-      timestamp: getUgandaTime(),
+      rule: { kind: "exact", demoAmount: await lockDemoShare(ctx, unit.lockUtid, unitPrice) },
       metadata: {
         unitId: args.unitId,
         listingId: listing._id,
@@ -701,6 +687,16 @@ export const resetAllTransactions = mutation({
   handler: async (ctx, args) => {
     await verifyAdmin(ctx, args.adminId);
 
+    // The reset deletes every wallet ledger entry. Wallets now hold real,
+    // cashable money, so refuse while any account has some.
+    const atRisk = await realMoneyAtRisk(ctx);
+    if (atRisk.accounts > 0 || atRisk.pendingCashouts > 0) {
+      throw new Error(
+        `Reset blocked: ${atRisk.accounts} account(s) hold real money and ${atRisk.pendingCashouts} cash-out(s) are waiting. ` +
+          "Resetting would wipe real money."
+      );
+    }
+
     const utid = await logAdminAction(
       ctx,
       args.adminId,
@@ -728,11 +724,16 @@ export const resetAllTransactions = mutation({
       // Then restore 1,000,000 UGX capital deposit for each trader
       const walletEntries = await ctx.db.query("walletLedger").collect();
       
-      // Get all traders first
-      const traders = await ctx.db
+      // Get all traders first. Only those that already held demo money get
+      // demo capital back; real-money accounts never receive demo funds.
+      const allTraders = await ctx.db
         .query("users")
         .withIndex("by_role", (q: any) => q.eq("role", "trader"))
         .collect();
+      const traders = [];
+      for (const trader of allTraders) {
+        if (await hasDemoWallet(ctx, trader._id)) traders.push(trader);
+      }
       
       // Delete all wallet entries (we'll restore capital deposits after)
       for (const entry of walletEntries) {
@@ -752,13 +753,12 @@ export const resetAllTransactions = mutation({
       for (const trader of traders) {
         try {
           const utid = generateUTID("admin");
-          await ctx.db.insert("walletLedger", {
+          await postWallet(ctx, {
             userId: trader._id,
             utid,
             type: "capital_deposit",
             amount: MAX_TRADER_EXPOSURE_UGX, // 1,000,000 UGX
-            balanceAfter: MAX_TRADER_EXPOSURE_UGX,
-            timestamp: getUgandaTime(),
+            rule: { kind: "all" },
             metadata: {
               source: "admin_reset_restore",
               reason: args.reason,
@@ -1881,6 +1881,10 @@ export const adminDepositDemoFunds = mutation({
     if (!["trader", "buyer", "transporter"].includes(targetUser.role)) {
       throw new Error("Can only deposit demo funds to traders, buyers, or transporters");
     }
+    // Only accounts that already hold demo money may receive more.
+    if (!(await hasDemoWallet(ctx, args.targetUserId))) {
+      throw new Error("This account holds only real money, so demo funds cannot be added to it.");
+    }
 
     if (args.amount <= 0) {
       throw new Error("Amount must be greater than zero");
@@ -1917,13 +1921,12 @@ export const adminDepositDemoFunds = mutation({
     );
 
     // Create wallet entry
-    await ctx.db.insert("walletLedger", {
+    await postWallet(ctx, {
       userId: args.targetUserId,
       utid,
       type: "capital_deposit",
       amount: args.amount,
-      balanceAfter,
-      timestamp: getUgandaTime(),
+      rule: { kind: "all" },
       metadata: {
         source: "admin_demo_deposit",
         adminId: args.adminId,

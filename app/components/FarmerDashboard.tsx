@@ -124,6 +124,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
       key: "farmcoinRewards",
       label: <><FarmCoinIcon size={18} /> FarmCoin Rewards{typeof farmerFarmcoinBalance === "number" ? ` (${farmerFarmcoinBalance})` : ""}</>,
     },
+    { key: "myWallet", label: "💰 My Wallet" },
     { key: "communities", label: "🌾 My Communities" },
     ...(effectiveRole === "farmer" ? [
       { key: "farmNeeds", label: "🧺 Farm Needs" },
@@ -153,6 +154,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
     farmCalendar: "/farmer/planner",
     farm2market: "/farmer/farm2market",
     marketspace: "/marketspace",
+    myWallet: "/wallet",
     advancePurchase: "/farmer/advance-purchase",
     sellServices: "/farmer/services",
     vendorBuying: "/vendor/buying",

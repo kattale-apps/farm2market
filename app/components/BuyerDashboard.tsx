@@ -36,12 +36,10 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   const transactionLedger = useQuery(api.buyerDashboard.getBuyerTransactionLedger, { buyerId: userId });
   const walletReport = useQuery(api.buyerDashboard.getBuyerWalletReport, { buyerId: userId });
   const buyerRewardSummary = useQuery((api as any).farmcoin.getBuyerRewardSummary, { userId } as any);
-  const buyerRewardReceipts = useQuery((api as any).farmcoin.getBuyerRewardReceipts, { userId } as any);
   const createPurchase = useMutation(api.buyers.createBuyerPurchase);
   const createListingPurchase = useMutation((api as any).buyers.createBuyerListingPurchase);
   const createVendorStorePurchase = useMutation((api as any).buyers.createBuyerVendorStorePurchase);
   const buyerConfirmListingDelivery = useMutation((api as any).buyers.buyerConfirmListingDelivery);
-  const cashOutBuyerRewardReceipt = useMutation((api as any).farmcoin.cashOutBuyerRewardReceipt);
   const messageThreads = useQuery(api.messages.getUserMessageThreads, { userId });
   const communities = useQuery(api.communities.getActiveCommunities, { userId });
   const memberCommunities = (Array.isArray(communities) ? communities : []).filter((c: any) => c.isMember);
@@ -134,9 +132,6 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   const depositSectionRef = useRef<HTMLDivElement | null>(null);
   const [depositMessage, setDepositMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [listingPurchaseMessage, setListingPurchaseMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [rewardCashoutPhone, setRewardCashoutPhone] = useState<string>("");
-  const [rewardReceiptUtid, setRewardReceiptUtid] = useState<string>("");
-  const [rewardCashoutMessage, setRewardCashoutMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   // Section collapse state — every major dashboard section is reached only
   // via the "☰ More" menu; the main dashboard body always shows just the
   // Advanced Markets link and the Wallet section.
@@ -168,6 +163,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   }, []);
   const RAW_MORE_MENU_SECTIONS: Array<{ key: string; label: React.ReactNode }> = [
     { key: "marketspace", label: "🗺️ Marketspace" },
+    { key: "myWallet", label: "💰 My Wallet (sell FarmCoin, cash out)" },
     { key: "communities", label: "🌾 My Communities" },
     {
       key: "rewards",
@@ -194,9 +190,9 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
     IS_PRODUCTION_DEPLOYMENT && PRODUCTION_LOCKED_SECTIONS.has(section.key) ? { ...section, label: <>🔐 {section.label}</>, disabled: true } : section
   ));
   const openSectionFromMenu = (key: string) => {
-    if (key === "marketspace") {
+    if (key === "marketspace" || key === "myWallet") {
       setMoreMenuOpen(false);
-      router.push("/marketspace");
+      router.push(key === "marketspace" ? "/marketspace" : "/wallet");
       return;
     }
     if (IS_PRODUCTION_DEPLOYMENT && PRODUCTION_LOCKED_SECTIONS.has(key)) return;
@@ -933,25 +929,6 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       setListingPurchaseMessage({ type: "success", text: "Delivery confirmed. You received a FarmCoin reward." });
     } catch (error: any) {
       setListingPurchaseMessage({ type: "error", text: error?.message || "Failed to confirm delivery" });
-    }
-  };
-
-  const handleBuyerRewardCashout = async () => {
-    if (!rewardReceiptUtid || !rewardCashoutPhone.trim()) {
-      setRewardCashoutMessage({ type: "error", text: "Select a receipt and enter a phone number" });
-      return;
-    }
-
-    try {
-      const result = await cashOutBuyerRewardReceipt({
-        buyerId: userId,
-        receiptUtid: rewardReceiptUtid,
-        phoneNumber: rewardCashoutPhone.trim(),
-      });
-      setRewardCashoutMessage({ type: "success", text: `Cash-out processed. UGX ${result.payoutAmount.toFixed(2)} requested.` });
-      setRewardReceiptUtid("");
-    } catch (error: any) {
-      setRewardCashoutMessage({ type: "error", text: error?.message || "Cash-out failed" });
     }
   };
 
@@ -1854,18 +1831,13 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
             Buyer FarmCoin Rewards
           </h3>
           <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.75rem" }}>
-            Sentify is to turn your FarmCoin into cash via mobile money.
+            Sentify is to turn your FarmCoin into cash via mobile money. Sell your FarmCoin in your Wallet, then cash out to any mobile money number.
           </div>
           <div style={{ marginBottom: "0.75rem" }}>
             <div style={{ color: "#666", fontSize: "0.9rem" }}>Reward Balance</div>
             <div style={{ fontSize: "1.25rem", fontWeight: "600", color: "#1976d2" }}>
               {buyerRewardSummary?.balance ?? 0} Token(s)
             </div>
-            {buyerRewardSummary && (
-              <div style={{ fontSize: "0.8rem", color: "#64748b" }}>
-                Cash-out rate: UGX {buyerRewardSummary.cashoutRate} per token
-              </div>
-            )}
           </div>
           {buyerRewardSummary?.recent?.length ? (
             <div style={{ marginBottom: "0.75rem" }}>
@@ -1883,38 +1855,9 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
             </div>
           ) : null}
           <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-            <div>
-              <label style={{ display: "block", marginBottom: "0.4rem", fontSize: "0.85rem", color: "#666" }}>
-                Select Reward Receipt
-              </label>
-              <select
-                value={rewardReceiptUtid}
-                onChange={(e) => setRewardReceiptUtid(e.target.value)}
-                style={{ width: "100%", padding: "0.6rem", borderRadius: "6px", border: "1px solid #ddd" }}
-              >
-                <option value="">Select receipt</option>
-                {(buyerRewardReceipts || []).map((receipt: any) => (
-                  <option key={receipt.utid} value={receipt.utid}>
-                    {receipt.utid} • {receipt.delta} token(s)
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label style={{ display: "block", marginBottom: "0.4rem", fontSize: "0.85rem", color: "#666" }}>
-                Mobile Money Phone Number
-              </label>
-              <input
-                type="tel"
-                value={rewardCashoutPhone}
-                onChange={(e) => setRewardCashoutPhone(e.target.value)}
-                placeholder="e.g., 2567XXXXXXXX"
-                style={{ width: "100%", padding: "0.6rem", borderRadius: "6px", border: "1px solid #ddd" }}
-              />
-            </div>
             <button
               type="button"
-              onClick={handleBuyerRewardCashout}
+              onClick={() => router.push("/wallet")}
               style={{
                 padding: "0.6rem 1rem",
                 background: "#1976d2",
@@ -1925,20 +1868,8 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
                 cursor: "pointer"
               }}
             >
-              Sentify Cash-out
+              Open Wallet to sell FarmCoin and cash out
             </button>
-            {rewardCashoutMessage && (
-              <div style={{
-                padding: "0.6rem",
-                borderRadius: "6px",
-                fontSize: "0.85rem",
-                background: rewardCashoutMessage.type === "success" ? "#e8f5e9" : "#ffebee",
-                color: rewardCashoutMessage.type === "success" ? "#2e7d32" : "#c62828",
-                border: `1px solid ${rewardCashoutMessage.type === "success" ? "#c8e6c9" : "#ffcdd2"}`
-              }}>
-                {rewardCashoutMessage.text}
-              </div>
-            )}
           </div>
         </div>
       )}

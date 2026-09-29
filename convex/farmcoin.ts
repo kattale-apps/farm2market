@@ -47,11 +47,6 @@ async function getLatestFarmcoinBalance(
   return latest?.balanceAfter ?? 0;
 }
 
-async function getFarmcoinCashoutRate(ctx: any): Promise<number> {
-  const settings = await ctx.db.query("systemSettings").first();
-  return settings?.farmcoinPostingCost ?? DEFAULT_POSTING_COST;
-}
-
 export const getFarmcoinSettings = query({
   args: {},
   handler: async (ctx) => {
@@ -354,9 +349,8 @@ export const getSentifyWalletSummary = query({
 
     const balance = entries[0]?.balanceAfter ?? 0;
     const recent = entries.slice(0, 10);
-    const cashoutRate = await getFarmcoinCashoutRate(ctx);
 
-    return { balance, recent, cashoutRate };
+    return { balance, recent };
   },
 });
 
@@ -377,9 +371,8 @@ export const getBuyerRewardSummary = query({
 
     const balance = entries[0]?.balanceAfter ?? 0;
     const recent = entries.slice(0, 10);
-    const cashoutRate = await getFarmcoinCashoutRate(ctx);
 
-    return { balance, recent, cashoutRate };
+    return { balance, recent };
   },
 });
 
@@ -452,113 +445,22 @@ export const getBuyerRewardReceipts = query({
   },
 });
 
+/**
+ * Retired: Sentify and buyer-reward receipts are no longer cashed out one by
+ * one. Holders sell FarmCoin on the exchange and cash out from their Wallet
+ * (convex/farmcoinExchange.ts). Kept so older app builds get a clear message.
+ */
+const RETIRED_CASHOUT_MESSAGE =
+  "Sentify cash-out has moved to your Wallet: sell your FarmCoin there, then cash out to mobile money.";
+
 export const cashOutSentifyReceipt = mutation({
   args: {
     traderId: v.id("users"),
     receiptUtid: v.string(),
     phoneNumber: v.string(),
   },
-  handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.traderId);
-    if (!user || !["trader", "transporter"].includes(user.role)) {
-      throw new Error("User is not a trader or transporter");
-    }
-
-    const receipt = await ctx.db
-      .query("farmcoinLedger")
-      .withIndex("by_utid", (q: any) => q.eq("utid", args.receiptUtid))
-      .first();
-
-    if (!receipt || receipt.accountType !== "sentify" || receipt.delta <= 0) {
-      throw new Error("Sentify receipt not found");
-    }
-
-    const priorCashout = await ctx.db
-      .query("farmcoinLedger")
-      .withIndex("by_user", (q: any) => q.eq("userId", args.traderId))
-      .filter((q: any) => q.eq(q.field("source"), "sentify_cashout"))
-      .filter((q: any) => q.eq(q.field("relatedUtid"), args.receiptUtid))
-      .first();
-
-    if (priorCashout) {
-      throw new Error("Receipt already cashed out");
-    }
-
-    const currentBalance = await getLatestFarmcoinBalance(ctx, "sentify", undefined, args.traderId);
-    if (currentBalance < receipt.delta) {
-      throw new Error("Insufficient Sentify balance");
-    }
-
-    const cashoutUtid = generateUTID(user.role);
-    const balanceAfter = currentBalance - receipt.delta;
-    const cashoutRate = await getFarmcoinCashoutRate(ctx);
-    const payoutAmount = receipt.delta * cashoutRate;
-
-    await ctx.db.insert("farmcoinLedger", {
-      accountType: "sentify",
-      traderId: args.traderId,
-      userId: args.traderId,
-      delta: -receipt.delta,
-      balanceAfter,
-      source: "sentify_cashout",
-      utid: cashoutUtid,
-      listingId: receipt.listingId,
-      batchUtid: receipt.batchUtid,
-      relatedUtid: receipt.utid,
-      reason: "Sentify cash-out",
-      createdAt: getUgandaTime(),
-    });
-
-    await ctx.db.insert("adminActions", {
-      adminId: args.traderId,
-      actionType: "sentify_cashout_request",
-      utid: cashoutUtid,
-      reason: "Sentify cash-out request",
-      metadata: {
-        role: "trader",
-        phoneNumber: args.phoneNumber,
-        receiptUtid: receipt.utid,
-        batchUtid: receipt.batchUtid,
-        tokenAmount: receipt.delta,
-        payoutAmount,
-      },
-      timestamp: getUgandaTime(),
-    });
-
-    const superAdmins = await ctx.db
-      .query("users")
-      .withIndex("by_role", (q: any) => q.eq("role", "admin"))
-      .collect();
-
-    const targetAdmins = superAdmins.filter((admin: any) => admin.adminLevel === "super" || admin.adminLevel === undefined);
-
-    await Promise.all(
-      targetAdmins.map((admin: any) =>
-        ctx.db.insert("notifications", {
-          userId: admin._id,
-          type: "system",
-          category: "pending_sentify_request",
-          priority: "high",
-          reminderFlag: true,
-          title: "Pending Sentify Request",
-          message: `Sentify cash-out request from ${user.alias} for ${receipt.delta} token(s) (UGX ${payoutAmount.toFixed(2)}).`,
-          utid: cashoutUtid,
-          metadata: {
-            role: "trader",
-            phoneNumber: args.phoneNumber,
-            receiptUtid: receipt.utid,
-            batchUtid: receipt.batchUtid,
-            tokenAmount: receipt.delta,
-            payoutAmount,
-            futureEmail: true,
-          },
-          read: false,
-          createdAt: getUgandaTime(),
-        })
-      )
-    );
-
-    return { success: true, utid: cashoutUtid, payoutAmount, balanceAfter };
+  handler: async () => {
+    throw new Error(RETIRED_CASHOUT_MESSAGE);
   },
 });
 
@@ -568,103 +470,8 @@ export const cashOutBuyerRewardReceipt = mutation({
     receiptUtid: v.string(),
     phoneNumber: v.string(),
   },
-  handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.buyerId);
-    if (!user || user.role !== "buyer") {
-      throw new Error("User is not a buyer");
-    }
-
-    const receipt = await ctx.db
-      .query("farmcoinLedger")
-      .withIndex("by_utid", (q: any) => q.eq("utid", args.receiptUtid))
-      .first();
-
-    if (!receipt || receipt.accountType !== "buyer_reward" || receipt.delta <= 0) {
-      throw new Error("Buyer reward receipt not found");
-    }
-
-    const priorCashout = await ctx.db
-      .query("farmcoinLedger")
-      .withIndex("by_user", (q: any) => q.eq("userId", args.buyerId))
-      .filter((q: any) => q.eq(q.field("source"), "buyer_reward_cashout"))
-      .filter((q: any) => q.eq(q.field("relatedUtid"), args.receiptUtid))
-      .first();
-
-    if (priorCashout) {
-      throw new Error("Receipt already cashed out");
-    }
-
-    const currentBalance = await getLatestFarmcoinBalance(ctx, "buyer_reward", undefined, args.buyerId);
-    if (currentBalance < receipt.delta) {
-      throw new Error("Insufficient buyer reward balance");
-    }
-
-    const cashoutUtid = generateUTID(user.role);
-    const balanceAfter = currentBalance - receipt.delta;
-    const cashoutRate = await getFarmcoinCashoutRate(ctx);
-    const payoutAmount = receipt.delta * cashoutRate;
-
-    await ctx.db.insert("farmcoinLedger", {
-      accountType: "buyer_reward",
-      userId: args.buyerId,
-      delta: -receipt.delta,
-      balanceAfter,
-      source: "buyer_reward_cashout",
-      utid: cashoutUtid,
-      batchUtid: receipt.batchUtid,
-      relatedUtid: receipt.utid,
-      reason: "Buyer reward cash-out",
-      createdAt: getUgandaTime(),
-    });
-
-    await ctx.db.insert("adminActions", {
-      adminId: args.buyerId,
-      actionType: "buyer_reward_cashout_request",
-      utid: cashoutUtid,
-      reason: "Buyer reward cash-out request",
-      metadata: {
-        role: "buyer",
-        phoneNumber: args.phoneNumber,
-        receiptUtid: receipt.utid,
-        tokenAmount: receipt.delta,
-        payoutAmount,
-      },
-      timestamp: getUgandaTime(),
-    });
-
-    const superAdmins = await ctx.db
-      .query("users")
-      .withIndex("by_role", (q: any) => q.eq("role", "admin"))
-      .collect();
-
-    const targetAdmins = superAdmins.filter((admin: any) => admin.adminLevel === "super" || admin.adminLevel === undefined);
-
-    await Promise.all(
-      targetAdmins.map((admin: any) =>
-        ctx.db.insert("notifications", {
-          userId: admin._id,
-          type: "system",
-          category: "pending_sentify_request",
-          priority: "high",
-          reminderFlag: true,
-          title: "Pending Sentify Request",
-          message: `Buyer reward cash-out request from ${user.alias} for ${receipt.delta} token(s) (UGX ${payoutAmount.toFixed(2)}).`,
-          utid: cashoutUtid,
-          metadata: {
-            role: "buyer",
-            phoneNumber: args.phoneNumber,
-            receiptUtid: receipt.utid,
-            tokenAmount: receipt.delta,
-            payoutAmount,
-            futureEmail: true,
-          },
-          read: false,
-          createdAt: getUgandaTime(),
-        })
-      )
-    );
-
-    return { success: true, utid: cashoutUtid, payoutAmount, balanceAfter };
+  handler: async () => {
+    throw new Error(RETIRED_CASHOUT_MESSAGE);
   },
 });
 

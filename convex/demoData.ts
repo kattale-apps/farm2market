@@ -14,6 +14,7 @@ import { mutation } from "./_generated/server";
 import { generateUTID, getUgandaTime } from "./utils";
 import { MAX_TRADER_EXPOSURE_UGX } from "./constants";
 import { Id } from "./_generated/dataModel";
+import { hasDemoWallet, postWallet } from "./walletSplit";
 
 /**
  * Seed demo data for pilot testing
@@ -120,28 +121,20 @@ export const seedDemoData = mutation({
       // ============================================================
       for (const trader of traders) {
         try {
+          // Real-money accounts never receive demo funds (convex/walletSplit.ts).
+          if (!(await hasDemoWallet(ctx, trader._id))) continue;
+
           // Generate UTID
           const utid = generateUTID(trader.role);
-
-          // Get current balance
-          const currentEntries = await ctx.db
-            .query("walletLedger")
-            .withIndex("by_user", (q) => q.eq("userId", trader._id))
-            .order("desc")
-            .first();
-
-          const currentBalance = currentEntries?.balanceAfter || 0;
           const depositAmount = MAX_TRADER_EXPOSURE_UGX; // 1,000,000 UGX
-          const balanceAfter = currentBalance + depositAmount;
 
           // Create ledger entry
-          await ctx.db.insert("walletLedger", {
+          const { balanceAfter } = await postWallet(ctx, {
             userId: trader._id,
             utid,
             type: "capital_deposit",
             amount: depositAmount,
-            balanceAfter,
-            timestamp: getUgandaTime(),
+            rule: { kind: "all" },
             metadata: { source: "demo_seed", pilot: true },
           });
 
@@ -164,28 +157,20 @@ export const seedDemoData = mutation({
       // If they do, we'll deposit. If not, we'll skip with a note.
       for (const buyer of buyers) {
         try {
+          // Real-money accounts never receive demo funds (convex/walletSplit.ts).
+          if (!(await hasDemoWallet(ctx, buyer._id))) continue;
+
           // Generate UTID
           const utid = generateUTID(buyer.role);
-
-          // Get current balance (if wallet exists)
-          const currentEntries = await ctx.db
-            .query("walletLedger")
-            .withIndex("by_user", (q) => q.eq("userId", buyer._id))
-            .order("desc")
-            .first();
-
-          const currentBalance = currentEntries?.balanceAfter || 0;
           const depositAmount = 2_000_000; // 2,000,000 UGX
-          const balanceAfter = currentBalance + depositAmount;
 
           // Create ledger entry (buyers might use same wallet system)
-          await ctx.db.insert("walletLedger", {
+          const { balanceAfter } = await postWallet(ctx, {
             userId: buyer._id,
             utid,
             type: "capital_deposit",
             amount: depositAmount,
-            balanceAfter,
-            timestamp: getUgandaTime(),
+            rule: { kind: "all" },
             metadata: { source: "demo_seed", pilot: true, role: "buyer" },
           });
 

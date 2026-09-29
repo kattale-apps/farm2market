@@ -37,6 +37,7 @@ import {
   ugandaDateFromStored,
 } from "./exportMarketsShared";
 import { DEFAULT_PROCESSOR_DOCUMENT_TYPES } from "./processorShared";
+import { postWallet } from "./walletSplit";
 
 type DocAudience = "exporter" | "buyer" | "processor";
 const ALL_DEFAULT_DOCUMENT_TYPES = [...DEFAULT_EXPORT_DOCUMENT_TYPES, ...DEFAULT_PROCESSOR_DOCUMENT_TYPES];
@@ -259,12 +260,12 @@ export async function chargeExportFee(
   }
   const utid = generateUTID(args.role);
   const now = getUgandaTime();
-  await ctx.db.insert("walletLedger", {
+  await postWallet(ctx, {
     userId: args.userId,
     utid,
     type: "export_fee_payment",
     amount,
-    balanceAfter: balance - amount,
+    rule: { kind: "demo_first" },
     timestamp: now,
     metadata: { feeKind: args.kind, ...(args.metadata ?? {}) },
   });
@@ -725,12 +726,12 @@ export const payExporterVerificationFee = mutation({
 
     const utid = generateUTID("trader");
     const now = getUgandaTime();
-    await ctx.db.insert("walletLedger", {
+    await postWallet(ctx, {
       userId: user._id,
       utid,
       type: "export_fee_payment",
       amount,
-      balanceAfter: balance - amount,
+      rule: { kind: "demo_first" },
       timestamp: now,
       metadata: { feeKind: "verification", validUntil },
     });

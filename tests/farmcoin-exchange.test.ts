@@ -5,7 +5,6 @@ import {
   guessNetwork,
   planFills,
   priceFill,
-  summarizeWallet,
   validateExchangeSettings,
 } from "../convex/farmcoinExchangeShared";
 
@@ -40,34 +39,6 @@ test("a short queue fills only what is there", () => {
   const fills = planFills(queue, "buyer", 50);
   assert.equal(fills.reduce((s, f) => s + f.coins, 0), 2);
   assert.deepEqual(planFills([], "buyer", 5), []);
-});
-
-test("only the pocket is cashable; trading money and demo capital are not", () => {
-  const summary = summarizeWallet([
-    { type: "capital_deposit", amount: 1_000_000, metadata: { source: "auto_restore_demo_capital" } },
-    { type: "capital_deposit", amount: 50_000, metadata: { source: "pesapal_payment" } },
-    { type: "capital_lock", amount: 200_000 },
-    { type: "profit_credit", amount: 30_000 },
-    { type: "farmcoin_sale_credit", amount: 4_750 },
-    { type: "wallet_topup", amount: 10_000 },
-    { type: "farmcoin_purchase_debit", amount: 5_000 },
-  ]);
-  assert.equal(summary.availableUGX, 9_750);
-  assert.equal(summary.demoCapitalUGX, 1_000_000);
-});
-
-test("a cash-out hold is spent at once and a rejection returns it", () => {
-  const held = summarizeWallet([
-    { type: "farmcoin_sale_credit", amount: 20_000 },
-    { type: "cashout_hold", amount: 15_000 },
-  ]);
-  assert.equal(held.availableUGX, 5_000);
-  const released = summarizeWallet([
-    { type: "farmcoin_sale_credit", amount: 20_000 },
-    { type: "cashout_hold", amount: 15_000 },
-    { type: "cashout_release", amount: 15_000 },
-  ]);
-  assert.equal(released.availableUGX, 20_000);
 });
 
 test("settings are validated", () => {

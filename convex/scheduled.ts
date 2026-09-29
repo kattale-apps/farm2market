@@ -12,6 +12,7 @@ import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
 import { generateUTID, getUgandaTime } from "./utils";
+import { postWallet } from "./walletSplit";
 
 /**
  * Scheduled function to check for expired UTIDs and unlock trader capital
@@ -94,21 +95,12 @@ export const checkExpiredUTIDs = internalMutation({
         });
 
         // Step 2: Reverse wallet ledger entry (unlock capital)
-        const latestEntry = await ctx.db
-          .query("walletLedger")
-          .withIndex("by_user", (q: any) => q.eq("userId", traderId))
-          .order("desc")
-          .first();
-
-        const currentBalance = latestEntry?.balanceAfter || 0;
-        const balanceAfter = currentBalance + unitPrice;
-
-        await ctx.db.insert("walletLedger", {
+        const { balanceAfter } = await postWallet(ctx, {
           userId: traderId,
           utid: expirationUtid,
           type: "capital_unlock",
           amount: unitPrice,
-          balanceAfter,
+          rule: { kind: "exact", demoAmount: walletEntry.demoAmount ?? 0 },
           timestamp: now,
           metadata: {
             unitId: unit._id,

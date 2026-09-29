@@ -22,6 +22,7 @@ import {
   throwAppError,
 } from "./errors";
 import { Id } from "./_generated/dataModel";
+import { postWallet } from "./walletSplit";
 
 /**
  * Make an offer on one or more units (trader only)
@@ -150,20 +151,12 @@ export const makeOffer = mutation({
       });
 
       // Create incoming_purchase ledger entry for TRADER
-      const traderEntries = await ctx.db
-        .query("walletLedger")
-        .withIndex("by_user", (q) => q.eq("userId", args.traderId))
-        .order("desc")
-        .first();
-      const traderBalanceAfter = traderEntries?.balanceAfter || 0;
-
-      await ctx.db.insert("walletLedger", {
+      await postWallet(ctx, {
         userId: args.traderId,
         utid: unitUtid,
-        type: "incoming_purchase",
+        type: "incoming_purchase", // Balance doesn't change for incoming purchases
         amount: unitPrice,
-        balanceAfter: traderBalanceAfter, // Balance doesn't change for incoming purchases
-        timestamp: getUgandaTime(),
+        rule: { kind: "none" },
         metadata: {
           unitId: unit._id,
           listingId: listing._id,
@@ -175,20 +168,12 @@ export const makeOffer = mutation({
       });
 
       // Create incoming_purchase ledger entry for FARMER
-      const farmerEntries = await ctx.db
-        .query("walletLedger")
-        .withIndex("by_user", (q) => q.eq("userId", listing.farmerId))
-        .order("desc")
-        .first();
-      const farmerBalanceAfter = farmerEntries?.balanceAfter || 0;
-
-      await ctx.db.insert("walletLedger", {
+      await postWallet(ctx, {
         userId: listing.farmerId,
         utid: unitUtid,
-        type: "incoming_purchase",
+        type: "incoming_purchase", // Balance doesn't change for incoming purchases
         amount: unitPrice,
-        balanceAfter: farmerBalanceAfter, // Balance doesn't change for incoming purchases
-        timestamp: getUgandaTime(),
+        rule: { kind: "none" },
         metadata: {
           unitId: unit._id,
           listingId: listing._id,

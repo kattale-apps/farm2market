@@ -95,7 +95,7 @@ export default function WalletPage() {
   return (
     <Shell>
       <section style={{ ...card, background: `linear-gradient(135deg, ${GREEN}, ${DARK_GREEN})`, color: "#fff" }}>
-        <div style={{ fontSize: "0.8rem", opacity: 0.85, textTransform: "uppercase", letterSpacing: "0.06em" }}>Available to spend or cash out</div>
+        <div style={{ fontSize: "0.8rem", opacity: 0.85, textTransform: "uppercase", letterSpacing: "0.06em" }}>Real money · can be cashed out</div>
         <div style={{ fontSize: "2rem", fontWeight: 800, margin: "0.2rem 0 0.6rem" }}>{formatUGX(wallet.wallet.availableUGX)}</div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
           {wallet.balances.map((b) => (
@@ -104,10 +104,11 @@ export default function WalletPage() {
             </span>
           ))}
         </div>
-        {wallet.wallet.tradingBalanceUGX > 0 && (
-          <div style={{ marginTop: "0.8rem", fontSize: "0.8rem", opacity: 0.9, lineHeight: 1.4 }}>
-            Trading balance {formatUGX(wallet.wallet.tradingBalanceUGX)} is kept for produce purchases and fees and cannot be cashed out
-            {wallet.wallet.demoCapitalUGX > 0 ? " (it includes demo capital)" : ""}.
+        {wallet.demoWallet && (
+          <div style={{ marginTop: "0.8rem", padding: "0.55rem 0.7rem", borderRadius: 10, background: "rgba(0,0,0,0.18)", fontSize: "0.82rem", lineHeight: 1.4 }}>
+            <b>Demo money: {formatUGX(wallet.wallet.demoUGX)}</b>
+            <br />
+            Practice money for trading. It is used first when you buy produce, and it can never be cashed out or used to buy FarmCoin.
           </div>
         )}
       </section>
@@ -317,7 +318,7 @@ function BuyForm({ token, wallet, onDone }: { token: string; wallet: WalletData;
       {coins && rateUGX > 0 && (
         <div style={{ background: "#f7f9f6", borderRadius: 10, padding: "0.6rem 0.8rem" }}>
           <Row left={`${coins} × ${formatUGX(rateUGX)}`} right={formatUGX(cost)} strong />
-          <Row left="In your wallet" right={formatUGX(wallet.wallet.availableUGX)} />
+          <Row left="Real money in your wallet" right={formatUGX(wallet.wallet.availableUGX)} />
         </div>
       )}
       {cannotAfford && (
@@ -326,7 +327,7 @@ function BuyForm({ token, wallet, onDone }: { token: string; wallet: WalletData;
         </div>
       )}
       <div style={{ fontSize: "0.8rem", color: "#666", lineHeight: 1.4 }}>
-        Paid from your wallet. If fewer coins are for sale than you ask for, you get what is there and pay only for that. Use FarmCoin for things like keeping a Marketspace ad up.
+        Paid from the real money in your wallet. If fewer coins are for sale than you ask for, you get what is there and pay only for that. Use FarmCoin for things like keeping a Marketspace ad up.
       </div>
       <button type="button" onClick={submit} disabled={disabled} style={button(GREEN, disabled)}>
         {busy ? "Buying…" : "Buy FarmCoin"}
@@ -541,8 +542,6 @@ function Cashouts({ cashouts }: { cashouts: WalletData["cashouts"] }) {
   );
 }
 
-const MONEY_IN = new Set(["wallet_topup", "farmcoin_sale_credit", "cashout_release"]);
-
 function Activity({ activity }: { activity: WalletData["activity"] }) {
   if (activity.length === 0) return null;
   return (
@@ -550,7 +549,8 @@ function Activity({ activity }: { activity: WalletData["activity"] }) {
       <h2 style={{ fontSize: "1rem", margin: "0 0 0.6rem" }}>Wallet activity</h2>
       <div style={{ display: "grid", gap: 6 }}>
         {activity.map((a) => {
-          const inflow = MONEY_IN.has(a.type);
+          const inflow = a.inflow;
+          const demoNote = a.demoAmount <= 0 ? null : a.demoAmount >= a.amount ? "demo money" : `${formatUGX(a.demoAmount)} demo`;
           return (
             <div key={a._id} style={{ display: "flex", gap: 8, fontSize: "0.85rem", borderBottom: "1px solid #f0f0f0", paddingBottom: 6 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -558,6 +558,7 @@ function Activity({ activity }: { activity: WalletData["activity"] }) {
                 <div style={{ color: "#777", fontSize: "0.76rem" }}>
                   {formatWhen(a.timestamp)}
                   {a.note && ` · ${a.note}`}
+                  {demoNote && <span style={{ color: "#8d6e00", fontWeight: 700 }}> · {demoNote}</span>}
                 </div>
               </div>
               <div style={{ fontWeight: 700, color: inflow ? GREEN : "#444", whiteSpace: "nowrap" }}>

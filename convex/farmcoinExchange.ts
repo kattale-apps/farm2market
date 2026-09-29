@@ -23,15 +23,15 @@ import { Doc, Id } from "./_generated/dataModel";
 import { generateUTID, getUgandaTime } from "./utils";
 import { simpleHash } from "./auth";
 import { normalizeUgandaPhone, walletForRole } from "./marketspaceShared";
+import { currentRunning, postWallet } from "./walletSplit";
+import { direction, realOf, type DemoRule } from "./walletSplitShared";
 import {
   ACCOUNT_LABELS,
   CASHOUT_NOTICE,
   DEFAULT_EXCHANGE_SETTINGS,
   FARMCOIN_ACCOUNTS,
-  POCKET_SIGN,
   planFills,
   priceFill,
-  summarizeWallet,
   validateExchangeSettings,
   type ExchangeSettings,
   type FarmcoinAccount,
@@ -169,21 +169,25 @@ async function moveFarmcoin(
   return balanceAfter;
 }
 
+/** Real money (cashable) and demo money (sandbox) in a user's wallet. */
 async function loadWallet(ctx: Ctx, userId: Id<"users">) {
-  const entries: Doc<"walletLedger">[] = [];
-  for await (const entry of ctx.db.query("walletLedger").withIndex("by_user", (q) => q.eq("userId", userId))) {
-    entries.push(entry);
-  }
-  const latest = await ctx.db
-    .query("walletLedger")
-    .withIndex("by_user", (q) => q.eq("userId", userId))
-    .order("desc")
-    .first();
-  // The running balance the existing purchase and fee flows spend from.
-  return { summary: { ...summarizeWallet(entries), tradingBalanceUGX: latest?.balanceAfter ?? 0 } };
+  const running = await currentRunning(ctx, userId);
+  return {
+    availableUGX: realOf(running), // Real money: cashable, and what FarmCoin is bought with.
+    demoUGX: running.demo, // Demo money: can be traded with, never cashed out.
+    totalUGX: running.balance,
+  };
 }
 
-type WalletEntryType = "wallet_topup" | "farmcoin_sale_credit" | "farmcoin_purchase_debit" | "cashout_hold" | "cashout_release";
+type WalletEntryType = "farmcoin_sale_credit" | "farmcoin_purchase_debit" | "cashout_hold" | "cashout_release";
+
+/** FarmCoin purchases and cash-outs use real money only; proceeds and returned cash-outs are real. */
+const ENTRY_RULES: Record<WalletEntryType, DemoRule> = {
+  farmcoin_sale_credit: { kind: "none" },
+  farmcoin_purchase_debit: { kind: "real_only" },
+  cashout_hold: { kind: "real_only" },
+  cashout_release: { kind: "none" },
+};
 
 async function writeWallet(
   ctx: MutationCtx,
@@ -193,22 +197,7 @@ async function writeWallet(
   utid: string,
   metadata: Record<string, unknown>
 ) {
-  const latest = await ctx.db
-    .query("walletLedger")
-    .withIndex("by_user", (q) => q.eq("userId", userId))
-    .order("desc")
-    .first();
-  // Pocket entries carry the running balance forward unchanged, so the
-  // existing flows that spend `balanceAfter` never see pocket money.
-  await ctx.db.insert("walletLedger", {
-    userId,
-    utid,
-    type,
-    amount,
-    balanceAfter: latest?.balanceAfter ?? 0,
-    timestamp: getUgandaTime(),
-    metadata,
-  });
+  await postWallet(ctx, { userId, utid, type, amount, rule: ENTRY_RULES[type], metadata });
 }
 
 async function notify(ctx: MutationCtx, userId: Id<"users">, title: string, message: string, utid: string, category = "wallet") {
@@ -246,6 +235,13 @@ const WALLET_ENTRY_LABELS: Record<string, string> = {
   farmcoin_purchase_debit: "FarmCoin bought",
   cashout_hold: "Cash-out requested",
   cashout_release: "Cash-out returned",
+  capital_deposit: "Deposit",
+  capital_lock: "Paid into a purchase",
+  capital_unlock: "Returned from a purchase",
+  profit_credit: "Payment received",
+  profit_withdrawal: "Profit withdrawn",
+  trader_commission_deduction: "Commission",
+  export_fee_payment: "Export fee",
 };
 
 // ------------------------------------------------------------------
@@ -259,7 +255,7 @@ export const getMyWallet = query({
     if (!user) return { status: "signed_out" as const };
     if (user.role === "admin") return { status: "admin" as const, canManage: canManage(user) };
 
-    const { summary } = await loadWallet(ctx, user._id);
+    const wallet = await loadWallet(ctx, user._id);
     const settings = await getSettings(ctx);
     const totals = await getTotals(ctx);
     const primary = walletForRole(user.role)?.accountType ?? "farmer";
@@ -286,16 +282,15 @@ export const getMyWallet = query({
       .query("walletLedger")
       .withIndex("by_user", (q) => q.eq("userId", user._id))
       .order("desc")
-      .filter((q) =>
-        q.or(...Object.keys(POCKET_SIGN).map((type) => q.eq(q.field("type"), type as Doc<"walletLedger">["type"])))
-      )
+      .filter((q) => q.neq(q.field("type"), "incoming_purchase"))
       .take(30);
 
     return {
       status: "ok" as const,
       role: user.role,
       phoneNumber: user.phoneNumber ?? null,
-      wallet: summary,
+      wallet,
+      demoWallet: user.demoWallet === true || wallet.demoUGX > 0,
       balances,
       settings,
       queuedCoins: totals.queuedCoins,
@@ -324,6 +319,8 @@ export const getMyWallet = query({
         type: e.type,
         label: WALLET_ENTRY_LABELS[e.type] ?? e.type,
         amount: e.amount,
+        demoAmount: e.demoAmount ?? 0,
+        inflow: direction(e.type) > 0,
         timestamp: e.timestamp,
         note: typeof e.metadata?.note === "string" ? e.metadata.note : null,
       })),
@@ -423,9 +420,9 @@ export const buyFarmcoin = mutation({
     const totalUGX = priced.reduce((s, f) => s + f.grossUGX, 0);
     const feesUGX = priced.reduce((s, f) => s + f.feeUGX, 0);
 
-    const { summary } = await loadWallet(ctx, buyer._id);
-    if (summary.availableUGX < totalUGX) {
-      throw new Error(`${coinsBought} FarmCoin costs ${ugx(totalUGX)}, but your wallet has ${ugx(summary.availableUGX)}. Top up first.`);
+    const wallet = await loadWallet(ctx, buyer._id);
+    if (wallet.availableUGX < totalUGX) {
+      throw new Error(`${coinsBought} FarmCoin costs ${ugx(totalUGX)}, but your wallet has ${ugx(wallet.availableUGX)} of real money. Top up first.`);
     }
 
     const now = getUgandaTime();
@@ -504,9 +501,9 @@ export const requestCashout = mutation({
     const phone = normalizeUgandaPhone(args.phone);
     if (!phone || !phone.startsWith("+2567")) throw new Error("Enter a Ugandan mobile money number, for example 0772 123456.");
 
-    const { summary } = await loadWallet(ctx, user._id);
-    if (summary.availableUGX < args.amountUGX) {
-      throw new Error(`Your wallet has ${ugx(summary.availableUGX)} available to cash out.`);
+    const wallet = await loadWallet(ctx, user._id);
+    if (wallet.availableUGX < args.amountUGX) {
+      throw new Error(`Your wallet has ${ugx(wallet.availableUGX)} of real money available to cash out.`);
     }
 
     const utid = generateUTID(user.role);

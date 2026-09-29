@@ -23,6 +23,7 @@ import {
   throwAppError,
 } from "./errors";
 import { Id } from "./_generated/dataModel";
+import { lockDemoShare, postWallet } from "./walletSplit";
 
 /**
  * Create buyer purchase (buyer only)
@@ -157,14 +158,13 @@ export const createBuyerPurchase = mutation({
       );
     }
 
-    // Step 5: Create wallet ledger entry for purchase
-    const balanceAfter = currentBalance - totalCost;
-    await ctx.db.insert("walletLedger", {
+    // Step 5: Create wallet ledger entry for purchase (demo money spent first)
+    await postWallet(ctx, {
       userId: args.buyerId,
       utid: purchaseUtid,
       type: "capital_lock", // Using capital_lock for buyer purchases
       amount: totalCost,
-      balanceAfter,
+      rule: { kind: "demo_first" },
       timestamp: purchaseTime,
       metadata: {
         type: "buyer_purchase",
@@ -287,13 +287,12 @@ export const createBuyerListingPurchase = mutation({
     const purchaseTime = getUgandaTime();
     const purchaseUtid = generateUTID(user.role);
 
-    const balanceAfter = currentBalance - totalCost;
-    await ctx.db.insert("walletLedger", {
+    await postWallet(ctx, {
       userId: args.buyerId,
       utid: purchaseUtid,
       type: "capital_lock",
       amount: totalCost,
-      balanceAfter,
+      rule: { kind: "demo_first" },
       timestamp: purchaseTime,
       metadata: {
         type: "buyer_listing_purchase",
@@ -445,14 +444,12 @@ export const createBuyerVendorStorePurchase = mutation({
 
     const purchaseTime = getUgandaTime();
     const purchaseUtid = generateUTID(user.role);
-    const balanceAfter = currentBalance - totalCost;
-
-    await ctx.db.insert("walletLedger", {
+    await postWallet(ctx, {
       userId: args.buyerId,
       utid: purchaseUtid,
       type: "capital_lock",
       amount: totalCost,
-      balanceAfter,
+      rule: { kind: "demo_first" },
       timestamp: purchaseTime,
       metadata: {
         type: "buyer_listing_purchase",
@@ -668,21 +665,18 @@ export const superadminConfirmListingDelivery = mutation({
         reason: "Sentify receipt for delivered batch",
       });
 
-      const walletEntries = await ctx.db
-        .query("walletLedger")
-        .withIndex("by_user", (q: any) => q.eq("userId", traderId))
-        .order("desc")
-        .first();
+      // The trader receives the buyers' money with the demo share it was paid with.
+      let releaseDemo = 0;
+      for (const purchase of purchases) {
+        releaseDemo += await lockDemoShare(ctx, purchase.utid, purchase.totalCost);
+      }
 
-      const currentBalance = walletEntries?.balanceAfter || 0;
-      const balanceAfter = currentBalance + totalCost;
-
-      await ctx.db.insert("walletLedger", {
+      await postWallet(ctx, {
         userId: traderId,
         utid: superadminUtid,
         type: "profit_credit",
         amount: totalCost,
-        balanceAfter,
+        rule: { kind: "exact", demoAmount: releaseDemo },
         timestamp: now,
         metadata: {
           batchUtid,

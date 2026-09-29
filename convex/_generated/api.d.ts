@@ -136,6 +136,8 @@ import type * as utils_index from "../utils/index.js";
 import type * as utils_types from "../utils/types.js";
 import type * as vendorOnboarding from "../vendorOnboarding.js";
 import type * as wallet from "../wallet.js";
+import type * as walletSplit from "../walletSplit.js";
+import type * as walletSplitShared from "../walletSplitShared.js";
 
 import type {
   ApiFromModules,
@@ -272,6 +274,8 @@ declare const fullApi: ApiFromModules<{
   "utils/types": typeof utils_types;
   vendorOnboarding: typeof vendorOnboarding;
   wallet: typeof wallet;
+  walletSplit: typeof walletSplit;
+  walletSplitShared: typeof walletSplitShared;
 }>;
 
 /**

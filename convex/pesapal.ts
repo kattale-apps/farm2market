@@ -20,6 +20,7 @@ import {
 import { checkPilotMode } from "./pilotMode";
 import { generateUTID, getUgandaTime } from "./utils";
 import { Id } from "./_generated/dataModel";
+import { postWallet } from "./walletSplit";
 
 // Pesapal API Configuration
 // Note: Environment variables must be set in Convex Dashboard → Settings → Environment Variables
@@ -1130,28 +1131,13 @@ export const completePaymentTransaction = internalMutation({
     // Generate UTID for wallet deposit
     const depositUtid = generateUTID(transaction.userRole);
 
-    // Get current wallet balance
-    const currentEntries = await ctx.db
-      .query("walletLedger")
-      .withIndex("by_user", (q) => q.eq("userId", transaction.userId))
-      .order("desc")
-      .first();
-
-    // A Wallet top-up goes into the cashable pocket, which is kept out of the
-    // running balance (see convex/farmcoinExchangeShared.ts).
-    const runningBalance = currentEntries?.balanceAfter ?? 0;
-    const balanceAfter = isWalletTopUp
-      ? runningBalance
-      : runningBalance + transaction.amount;
-
-    // Create wallet deposit entry
-    await ctx.db.insert("walletLedger", {
+    // Pesapal money is real money: it can be cashed out (convex/walletSplitShared.ts).
+    const { balanceAfter } = await postWallet(ctx, {
       userId: transaction.userId,
       utid: depositUtid,
       type: isWalletTopUp ? "wallet_topup" : "capital_deposit",
       amount: transaction.amount,
-      balanceAfter,
-      timestamp: getUgandaTime(),
+      rule: { kind: "none" },
       metadata: {
         source: "pesapal_payment",
         ...(isWalletTopUp ? { note: "Mobile money top-up" } : {}),

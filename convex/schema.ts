@@ -64,6 +64,7 @@ export default defineSchema({
     lastActiveAt: v.number(),
     passwordHash: v.optional(v.string()), // Secure password hash (bcrypt/argon2). Required for production authentication.
     customSpendCap: v.optional(v.number()), // Admin-set custom spend cap for traders (in UGX). If not set, uses default MAX_TRADER_EXPOSURE_UGX.
+    demoWallet: v.optional(v.boolean()), // true: the account holds demo money and may keep receiving it. Unset/false: real money only.
     adminLevel: v.optional(v.union(v.literal("super"), v.literal("junior"))), // Admin hierarchy level. undefined means super admin (backward compatible).
     adminCategory: v.optional(v.union(v.literal("store"), v.literal("message"), v.literal("community"), v.literal("community_crm"), v.literal("finance"))), // Junior admin category (store delivery vs message support vs community oversight vs CRM-only agent vs finance)
     assignedCommunityIds: v.optional(v.array(v.id("communities"))), // Communities assigned to junior community admins. Only applies to community admins.
@@ -140,6 +141,8 @@ export default defineSchema({
     ),
     amount: v.number(), // Amount in UGX
     balanceAfter: v.number(), // Running balance after this entry
+    demoAmount: v.optional(v.number()), // Part of `amount` that was demo money (convex/walletSplitShared.ts)
+    demoBalanceAfter: v.optional(v.number()), // Running demo balance after this entry; real = balanceAfter - this
     timestamp: v.number(),
     metadata: v.optional(v.any()), // Additional context
   })
@@ -2952,6 +2955,7 @@ export default defineSchema({
     ),
     walletUtid: v.optional(v.string()), // walletLedger utid for the funding debit
     releasedAmount: v.number(), // sum of milestone-release credits to the farmer for this commitment
+    releasedDemoAmount: v.optional(v.number()), // demo part of releasedAmount (see convex/walletSplitShared.ts)
     quantityDelivered: v.number(),
     fundedAt: v.optional(v.number()),
     createdAt: v.number(),

@@ -8,13 +8,8 @@
  * - Sell offers form a queue. A purchase fills from the oldest offer first
  *   and may take coins from several sellers; if the queue runs short the
  *   buyer gets what is there and pays only for that.
- * - Every user's wallet has a cashable pocket, fed only by FarmCoin sale
- *   proceeds and Wallet top-ups, and spent on FarmCoin and cash-outs.
- * - The pocket is kept out of the running `balanceAfter` in walletLedger.
- *   Existing flows (produce purchases, fees, trader buys) spend from that
- *   running balance, which also holds auto-restored demo capital and money
- *   earned from it. Keeping the two apart means no shilling can be both
- *   spent on produce and cashed out, and demo money never reaches a phone.
+ * - Every user's wallet holds real and demo money (convex/walletSplitShared.ts).
+ *   Only real money can buy FarmCoin or be cashed out.
  */
 
 export type FarmcoinAccount = "farmer" | "trader" | "sentify" | "buyer_reward";
@@ -86,38 +81,6 @@ export function planFills(offers: QueuedOffer[], buyerId: string, coinsWanted: n
     left -= coins;
   }
   return fills;
-}
-
-/** Pocket entry types, with the direction each moves cashable money. */
-export const POCKET_SIGN: Record<string, 1 | -1> = {
-  wallet_topup: 1,
-  farmcoin_sale_credit: 1,
-  cashout_release: 1,
-  farmcoin_purchase_debit: -1,
-  cashout_hold: -1,
-};
-
-export function isPocketEntry(type: string): boolean {
-  return type in POCKET_SIGN;
-}
-
-export type WalletEntry = { type: string; amount: number; metadata?: any };
-
-export type WalletSummary = {
-  availableUGX: number; // The cashable pocket; FarmCoin purchases are paid from it too.
-  demoCapitalUGX: number; // Demo capital ever auto-restored into the trading balance.
-};
-
-/** Adds up a user's wallet ledger. Order does not matter. */
-export function summarizeWallet(entries: WalletEntry[]): WalletSummary {
-  let available = 0;
-  let demo = 0;
-  for (const entry of entries) {
-    const sign = POCKET_SIGN[entry.type];
-    if (sign) available += sign * entry.amount;
-    else if (entry.type === "capital_deposit" && entry.metadata?.source === "auto_restore_demo_capital") demo += entry.amount;
-  }
-  return { availableUGX: Math.max(0, available), demoCapitalUGX: demo };
 }
 
 export type MobileNetwork = "mtn" | "airtel";

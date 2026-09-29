@@ -83,6 +83,22 @@ export function planFills(offers: QueuedOffer[], buyerId: string, coinsWanted: n
   return fills;
 }
 
+/**
+ * Sentify cash: the part of a user's real money that came from selling
+ * system-generated FarmCoin on the exchange. Cash-outs are counted against
+ * it first, and it can never exceed the real money actually in the wallet.
+ * This only splits what is shown; all real money can be cashed out.
+ */
+export function sentifyCash(entries: { type: string; amount: number }[], realUGX: number): number {
+  let sentify = 0;
+  for (const e of entries) {
+    if (e.type === "farmcoin_sale_credit") sentify += e.amount;
+    else if (e.type === "cashout_hold") sentify = Math.max(0, sentify - e.amount);
+    else if (e.type === "cashout_release") sentify += e.amount;
+  }
+  return Math.max(0, Math.min(sentify, realUGX));
+}
+
 export type MobileNetwork = "mtn" | "airtel";
 
 /** Best guess at the network from a +256 number, to pre-select it in the form. */

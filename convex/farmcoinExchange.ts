@@ -31,6 +31,7 @@ import {
   DEFAULT_EXCHANGE_SETTINGS,
   FARMCOIN_ACCOUNTS,
   planFills,
+  sentifyCash,
   priceFill,
   validateExchangeSettings,
   type ExchangeSettings,
@@ -256,6 +257,11 @@ export const getMyWallet = query({
     if (user.role === "admin") return { status: "admin" as const, canManage: canManage(user) };
 
     const wallet = await loadWallet(ctx, user._id);
+    const moves: { type: string; amount: number }[] = [];
+    for await (const e of ctx.db.query("walletLedger").withIndex("by_user", (q) => q.eq("userId", user._id))) {
+      moves.push({ type: e.type, amount: e.amount });
+    }
+    const sentifyUGX = sentifyCash(moves, wallet.availableUGX);
     const settings = await getSettings(ctx);
     const totals = await getTotals(ctx);
     const primary = walletForRole(user.role)?.accountType ?? "farmer";
@@ -289,7 +295,7 @@ export const getMyWallet = query({
       status: "ok" as const,
       role: user.role,
       phoneNumber: user.phoneNumber ?? null,
-      wallet,
+      wallet: { ...wallet, sentifyUGX, otherRealUGX: wallet.availableUGX - sentifyUGX },
       demoWallet: user.demoWallet === true || wallet.demoUGX > 0,
       balances,
       settings,

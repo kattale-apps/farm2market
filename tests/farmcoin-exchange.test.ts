@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   DEFAULT_EXCHANGE_SETTINGS,
   guessNetwork,
+  sentifyCash,
   planFills,
   priceFill,
   validateExchangeSettings,
@@ -55,4 +56,16 @@ test("the mobile network is guessed from the number", () => {
   assert.equal(guessNetwork("+256701123456"), "airtel");
   assert.equal(guessNetwork("+256751123456"), "airtel");
   assert.equal(guessNetwork("+256414123456"), null);
+});
+
+test("Sentify cash is the FarmCoin part of real money", () => {
+  const sold = [{ type: "farmcoin_sale_credit", amount: 20_000 }];
+  assert.equal(sentifyCash(sold, 50_000), 20_000);
+  // Never more than the real money in the wallet.
+  assert.equal(sentifyCash(sold, 12_000), 12_000);
+  // Cash-outs count against it first; a rejected cash-out gives it back.
+  const held = [...sold, { type: "cashout_hold", amount: 15_000 }];
+  assert.equal(sentifyCash(held, 35_000), 5_000);
+  assert.equal(sentifyCash([...held, { type: "cashout_release", amount: 15_000 }], 50_000), 20_000);
+  assert.equal(sentifyCash([{ type: "profit_credit", amount: 9_000 }], 9_000), 0);
 });

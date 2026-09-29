@@ -97,6 +97,16 @@ export default function WalletPage() {
       <section style={{ ...card, background: `linear-gradient(135deg, ${GREEN}, ${DARK_GREEN})`, color: "#fff" }}>
         <div style={{ fontSize: "0.8rem", opacity: 0.85, textTransform: "uppercase", letterSpacing: "0.06em" }}>Real money · can be cashed out</div>
         <div style={{ fontSize: "2rem", fontWeight: 800, margin: "0.2rem 0 0.6rem" }}>{formatUGX(wallet.wallet.availableUGX)}</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: "0.7rem" }}>
+          <div style={{ background: "rgba(255,255,255,0.14)", borderRadius: 10, padding: "0.45rem 0.6rem" }}>
+            <div style={{ fontSize: "0.72rem", opacity: 0.9 }}>Sentify cash (FarmCoin sold)</div>
+            <div style={{ fontWeight: 800 }}>{formatUGX(wallet.wallet.sentifyUGX)}</div>
+          </div>
+          <div style={{ background: "rgba(255,255,255,0.14)", borderRadius: 10, padding: "0.45rem 0.6rem" }}>
+            <div style={{ fontSize: "0.72rem", opacity: 0.9 }}>Other real money</div>
+            <div style={{ fontWeight: 800 }}>{formatUGX(wallet.wallet.otherRealUGX)}</div>
+          </div>
+        </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
           {wallet.balances.map((b) => (
             <span key={b.account} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.16)", borderRadius: 999, padding: "0.3rem 0.7rem", fontSize: "0.85rem", fontWeight: 700 }}>

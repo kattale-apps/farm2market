@@ -543,7 +543,8 @@ export default defineSchema({
       v.literal("form_field_reward"),
       v.literal("price_sheet_download"),
       v.literal("tracker_entry_reward"),
-      v.literal("transport_rating_reward")
+      v.literal("transport_rating_reward"),
+      v.literal("marketspace_ad_extension")
     ),
     utid: v.string(),
     listingId: v.optional(v.id("listings")),
@@ -3871,4 +3872,103 @@ export default defineSchema({
   })
     .index("by_requesterId", ["requesterId"])
     .index("by_transporterId", ["transporterId"]),
+
+  /**
+   * Marketspace: a public, national classified-ads board.
+   * - A separate feature from Farm2Market listings; it never reads or writes
+   *   the listings tables.
+   * - Anyone can browse without logging in; any logged-in user can post.
+   * - Groups (e.g. Goods, Services) and their categories are created by the
+   *   super admin.
+   */
+  marketspaceGroups: defineTable({
+    name: v.string(),
+    icon: v.string(), // Emoji shown on the group tile
+    color: v.string(), // Hex card colour, e.g. "#2e7d32"
+    sortOrder: v.number(),
+    active: v.boolean(), // Hidden groups (and their ads) are not shown on the board
+    createdBy: v.optional(v.id("users")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }),
+
+  marketspaceCategories: defineTable({
+    groupId: v.id("marketspaceGroups"),
+    name: v.string(),
+    icon: v.string(),
+    sortOrder: v.number(),
+    active: v.boolean(),
+    createdBy: v.optional(v.id("users")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_groupId", ["groupId"]),
+
+  marketspaceAds: defineTable({
+    ownerId: v.id("users"),
+    utid: v.string(),
+    kind: v.union(v.literal("offer"), v.literal("wanted")), // Selling/offering vs seeking
+    groupId: v.id("marketspaceGroups"),
+    categoryId: v.id("marketspaceCategories"),
+    title: v.string(),
+    description: v.string(),
+    photoIds: v.array(v.id("_storage")), // At most MAX_PHOTOS
+    priceUGX: v.optional(v.number()), // Price (offer) or budget (wanted)
+    priceUnit: v.optional(v.string()), // e.g. "per kg", "per day"
+    negotiable: v.boolean(),
+    quantity: v.optional(v.string()), // Available (offer) or needed (wanted)
+    neededBy: v.optional(v.string()), // YYYY-MM-DD, wanted ads only
+    district: v.string(),
+    locationDetail: v.optional(v.string()),
+    contactPhone: v.string(), // Normalised +256…, shown publicly on the ad
+    status: v.union(
+      v.literal("active"),
+      v.literal("expired"),
+      v.literal("sold"),
+      v.literal("removed") // Taken down by an admin
+    ),
+    expiresAt: v.number(), // Uganda time (getUgandaTime); 30 days per period
+    reportCount: v.number(),
+    removedBy: v.optional(v.id("users")),
+    removedReason: v.optional(v.string()),
+    removedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_status_and_createdAt", ["status", "createdAt"])
+    .index("by_status_and_groupId_and_createdAt", ["status", "groupId", "createdAt"])
+    .index("by_status_and_categoryId_and_createdAt", ["status", "categoryId", "createdAt"])
+    .index("by_status_and_expiresAt", ["status", "expiresAt"])
+    .index("by_ownerId_and_createdAt", ["ownerId", "createdAt"])
+    .index("by_categoryId", ["categoryId"])
+    .index("by_groupId", ["groupId"])
+    .searchIndex("search_title", {
+      searchField: "title",
+      filterFields: ["status", "groupId", "categoryId"],
+    }),
+
+  marketspaceReports: defineTable({
+    adId: v.id("marketspaceAds"),
+    reason: v.union(
+      v.literal("scam"),
+      v.literal("wrong_category"),
+      v.literal("offensive"),
+      v.literal("already_sold"),
+      v.literal("other")
+    ),
+    details: v.optional(v.string()),
+    reporterId: v.optional(v.id("users")), // Empty when a guest reported
+    status: v.union(v.literal("open"), v.literal("dismissed"), v.literal("actioned")),
+    resolvedBy: v.optional(v.id("users")),
+    resolvedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_status_and_createdAt", ["status", "createdAt"])
+    .index("by_adId", ["adId"]),
+
+  /** Single row: Marketspace pricing set by super admin / finance. */
+  marketspaceSettings: defineTable({
+    extensionCostFarmcoin: v.number(), // FarmCoin per extra 30 days
+    updatedBy: v.id("users"),
+    updatedAt: v.number(),
+  }),
 });

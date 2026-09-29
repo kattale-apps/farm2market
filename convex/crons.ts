@@ -80,4 +80,11 @@ crons.interval(
   internal.exportPrices.refreshIcoComposite,
 );
 
+// Marketspace: hide ads whose 30 days are up.
+crons.interval(
+  "expire marketspace ads",
+  { minutes: 30 },
+  internal.marketspace.expireAds,
+);
+
 export default crons;

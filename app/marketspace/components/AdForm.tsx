@@ -30,7 +30,32 @@ export type EditableAd = {
   photoUrls: string[];
 };
 
-const PRICE_UNITS = ["per kg", "per bag", "per tonne", "per animal", "per bird", "each", "per acre", "per hour", "per day", "per trip", "per visit"];
+/** Moves one photo to a new position; the first photo is the ad's cover. */
+function movePhoto<T>(photos: T[], from: number, to: number): T[] {
+  if (to < 0 || to >= photos.length || from === to) return photos;
+  const next = [...photos];
+  const [moved] = next.splice(from, 1);
+  next.splice(to, 0, moved);
+  return next;
+}
+
+function orderButton(disabled: boolean): React.CSSProperties {
+  return {
+    minWidth: 26,
+    height: 26,
+    padding: 0,
+    borderRadius: 8,
+    border: `1.5px solid ${disabled ? "#e0e0e0" : "#2e7d32"}`,
+    background: "#fff",
+    color: disabled ? "#ccc" : "#1b5e20",
+    fontWeight: 800,
+    fontSize: "1rem",
+    lineHeight: 1,
+    cursor: disabled ? "default" : "pointer",
+  };
+}
+
+const PRICE_UNITS =["per kg", "per bag", "per tonne", "per animal", "per bird", "each", "per acre", "per hour", "per day", "per trip", "per visit"];
 
 const label: React.CSSProperties = { display: "block", fontWeight: 700, fontSize: "0.85rem", margin: "0.9rem 0 0.35rem", color: "#333" };
 const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", padding: "0.7rem", borderRadius: 10, border: "1.5px solid #d6d6d6", fontSize: "1rem", fontFamily: FONT, background: "#fff" };
@@ -338,19 +363,42 @@ export function AdForm({
       <span style={label}>
         Photos <span style={{ fontWeight: 400, color: "#888" }}>(up to {maxPhotos})</span>
       </span>
+      {photos.length > 1 && (
+        <div style={{ fontSize: "0.78rem", color: "#777", margin: "-0.1rem 0 0.5rem" }}>The first photo is the cover on the ad card. Use ‹ › to change the order, or ★ to make a photo the cover.</div>
+      )}
       <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
-        {photos.map((p) => (
-          <div key={p.id} style={{ position: "relative", width: 84, height: 84 }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={p.url} alt="" style={{ width: 84, height: 84, objectFit: "cover", borderRadius: 10, background: "#eee" }} />
-            <button
-              type="button"
-              aria-label="Remove photo"
-              onClick={() => setPhotos((all) => all.filter((x) => x.id !== p.id))}
-              style={{ position: "absolute", top: -8, right: -8, width: 26, height: 26, borderRadius: 999, border: "none", background: "#c62828", color: "#fff", cursor: "pointer", fontWeight: 800 }}
-            >
-              ×
-            </button>
+        {photos.map((p, i) => (
+          <div key={p.id} style={{ width: 84 }}>
+            <div style={{ position: "relative", width: 84, height: 84 }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={p.url} alt={`Photo ${i + 1}`} style={{ width: 84, height: 84, objectFit: "cover", borderRadius: 10, background: "#eee", outline: i === 0 ? "3px solid #f6bf26" : "none" }} />
+              {i === 0 && (
+                <span style={{ position: "absolute", left: 4, bottom: 4, background: "#f6bf26", color: "#1a1a1a", borderRadius: 999, padding: "0.05rem 0.4rem", fontSize: "0.65rem", fontWeight: 800 }}>★ Cover</span>
+              )}
+              <button
+                type="button"
+                aria-label={`Remove photo ${i + 1}`}
+                onClick={() => setPhotos((all) => all.filter((x) => x.id !== p.id))}
+                style={{ position: "absolute", top: -8, right: -8, width: 26, height: 26, borderRadius: 999, border: "none", background: "#c62828", color: "#fff", cursor: "pointer", fontWeight: 800 }}
+              >
+                ×
+              </button>
+            </div>
+            {photos.length > 1 && (
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 4, marginTop: 4 }}>
+                <button type="button" aria-label={`Move photo ${i + 1} left`} disabled={i === 0} onClick={() => setPhotos((all) => movePhoto(all, i, i - 1))} style={orderButton(i === 0)}>
+                  ‹
+                </button>
+                {i > 0 && (
+                  <button type="button" aria-label={`Make photo ${i + 1} the cover`} title="Make cover" onClick={() => setPhotos((all) => movePhoto(all, i, 0))} style={{ ...orderButton(false), flex: 1, fontSize: "0.8rem" }}>
+                    ★
+                  </button>
+                )}
+                <button type="button" aria-label={`Move photo ${i + 1} right`} disabled={i === photos.length - 1} onClick={() => setPhotos((all) => movePhoto(all, i, i + 1))} style={orderButton(i === photos.length - 1)}>
+                  ›
+                </button>
+              </div>
+            )}
           </div>
         ))}
         {uploading > 0 && (

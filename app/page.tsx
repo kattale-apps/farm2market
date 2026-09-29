@@ -407,6 +407,9 @@ export default function Home() {
                     </a>
                     <a href="/marketspace" style={profileMenuLinkStyle}>🗺️ Marketspace</a>
                     {effectiveUser?.role && effectiveUser.role !== "admin" && (
+                      <a href="/wallet" style={profileMenuLinkStyle}>💰 My Wallet</a>
+                    )}
+                    {effectiveUser?.role && effectiveUser.role !== "admin" && (
                       <a href="/transport" style={profileMenuLinkStyle}>🚚 Find transport</a>
                     )}
                     {effectiveUser?.role === "transporter" && (

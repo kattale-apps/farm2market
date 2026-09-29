@@ -61,6 +61,8 @@ import type * as farmPlanner from "../farmPlanner.js";
 import type * as farmToolbox from "../farmToolbox.js";
 import type * as farmValidation from "../farmValidation.js";
 import type * as farmcoin from "../farmcoin.js";
+import type * as farmcoinExchange from "../farmcoinExchange.js";
+import type * as farmcoinExchangeShared from "../farmcoinExchangeShared.js";
 import type * as farmcoinTest from "../farmcoinTest.js";
 import type * as farmerDashboard from "../farmerDashboard.js";
 import type * as farmerOnboarding from "../farmerOnboarding.js";
@@ -195,6 +197,8 @@ declare const fullApi: ApiFromModules<{
   farmToolbox: typeof farmToolbox;
   farmValidation: typeof farmValidation;
   farmcoin: typeof farmcoin;
+  farmcoinExchange: typeof farmcoinExchange;
+  farmcoinExchangeShared: typeof farmcoinExchangeShared;
   farmcoinTest: typeof farmcoinTest;
   farmerDashboard: typeof farmerDashboard;
   farmerOnboarding: typeof farmerOnboarding;

@@ -167,6 +167,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
     setProfileExtraSlot(document.getElementById("dashboard-profile-extra-slot"));
   }, []);
   const RAW_MORE_MENU_SECTIONS: Array<{ key: string; label: React.ReactNode }> = [
+    { key: "marketspace", label: "🗺️ Marketspace" },
     { key: "communities", label: "🌾 My Communities" },
     {
       key: "rewards",
@@ -193,6 +194,11 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
     IS_PRODUCTION_DEPLOYMENT && PRODUCTION_LOCKED_SECTIONS.has(section.key) ? { ...section, label: <>🔐 {section.label}</>, disabled: true } : section
   ));
   const openSectionFromMenu = (key: string) => {
+    if (key === "marketspace") {
+      setMoreMenuOpen(false);
+      router.push("/marketspace");
+      return;
+    }
     if (IS_PRODUCTION_DEPLOYMENT && PRODUCTION_LOCKED_SECTIONS.has(key)) return;
     setOpenSections((prev) => ({ ...prev, [key]: true }));
     setMoreMenuOpen(false);

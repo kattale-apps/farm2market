@@ -98,6 +98,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
     setMoreSlot(document.getElementById("dashboard-more-slot"));
   }, []);
   const MORE_MENU_SECTIONS: Array<{ key: string; label: React.ReactNode }> = [
+    { key: "marketspace", label: "🗺️ Marketspace" },
     { key: "wallet", label: "💰 Wallet (deposits)" },
     { key: "sentify", label: <><FarmCoinIcon size={18} /> Sentify rewards cash-out</> },
     {
@@ -123,6 +124,11 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
   const SIMPLE_VIEW_ONLY_KEYS = ["openListings", "todayActivity", "buyOffers", "deliveryConfirmations", "wallet", "sentify"];
   const PRO_VIEW_ONLY_KEYS = ["createListing", "listingsNegotiations"];
   const openSectionFromMenu = (key: string) => {
+    if (key === "marketspace") {
+      setMoreMenuOpen(false);
+      router.push("/marketspace");
+      return;
+    }
     if (SIMPLE_VIEW_ONLY_KEYS.includes(key)) {
       setProView(false);
     } else if (PRO_VIEW_ONLY_KEYS.includes(key)) {

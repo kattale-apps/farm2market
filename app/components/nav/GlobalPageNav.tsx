@@ -6,7 +6,7 @@ import { HouseIcon } from "./TabNav";
 const FONT = '"Montserrat", sans-serif';
 
 /** Pages that are the home itself, or come before sign-in, get no nav bar. */
-const HIDDEN_PREFIXES = ["/login", "/forgot-password", "/reset-password", "/onboarding", "/join/", "/q/"];
+const HIDDEN_PREFIXES = ["/login", "/forgot-password", "/reset-password", "/onboarding", "/join/", "/q/", "/marketspace", "/admin/marketspace"];
 
 /**
  * "← Back" and "Home" at the top of every page reached from a dashboard, so

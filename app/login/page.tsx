@@ -6,6 +6,7 @@ import { api } from "../../convex/_generated/api";
 import { useRouter, useSearchParams } from "next/navigation";
 import { saveAuth, getLastCredential, saveLastCredential } from "../utils/authStorage";
 import { VALUE_CHAIN_ROLES, roleLabel } from "../../convex/roleLabels";
+import { MarketspaceLoginBanner } from "../marketspace/components/MarketspaceLoginBanner";
 
 type IdentifierMode = "phone" | "email";
 type AuthStep = "login" | "confirmSignup";
@@ -263,6 +264,13 @@ function LoginPageInner() {
           max-width: 400px;
           width: 100%;
         }
+        .f2m-login-col {
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
+          max-width: 400px;
+          width: 100%;
+        }
         .f2m-panel-desktop { display: none; }
         .f2m-panel-mobile { max-width: 400px; width: 100%; }
         @keyframes f2m-role-glow-pulse {
@@ -280,11 +288,14 @@ function LoginPageInner() {
             padding: 2rem;
           }
           .f2m-login-card { max-width: 400px; flex-shrink: 0; }
+          .f2m-login-col { flex-shrink: 0; }
           .f2m-panel-desktop { display: block; max-width: 460px; width: 100%; align-self: flex-start; }
           .f2m-panel-mobile { display: none; }
         }
       `}</style>
     <main className="f2m-login-grid">
+      <div className="f2m-login-col">
+      {authStep !== "confirmSignup" && <MarketspaceLoginBanner />}
       <div className="f2m-login-card">
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "0.5rem" }}>
           <div>
@@ -600,6 +611,7 @@ function LoginPageInner() {
             </a>
           </div>
         )}
+      </div>
       </div>
     </main>
     </>

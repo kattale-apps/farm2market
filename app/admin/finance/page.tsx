@@ -12,7 +12,6 @@ import { useStoredUser } from "../../hooks/useStoredUser";
 import { fromStoredUgandaTime, inUgandaTime } from "../../utils/timeUtils";
 import { ExportFeesPanel } from "../../components/exportMarkets/ExportFeesPanel";
 import { FarmCoinIcon } from "../../components/icons/Brand";
-import { ExtensionCostCard } from "../../marketspace/components/ExtensionCostCard";
 import { ExchangeAdminPanel } from "../../wallet/ExchangeAdminPanel";
 
 export default function FinanceDashboardPage() {
@@ -340,9 +339,6 @@ export default function FinanceDashboardPage() {
               {farmcoinSettings?.farmcoinEtaChangeCost ?? 1} Token(s)
             </div>
           </div>
-        </div>
-        <div style={{ marginTop: "1.5rem" }}>
-          <ExtensionCostCard />
         </div>
 
         {isSuperAdmin && (

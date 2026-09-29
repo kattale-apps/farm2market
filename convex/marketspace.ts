@@ -5,9 +5,10 @@
  *   writes the listings, negotiations or purchase tables.
  * - Anyone can browse without logging in. Any logged-in user of any role can
  *   post an ad to offer something or to say they want something.
- * - Ads are live for 30 days. The owner can pay FarmCoin (a cost set by the
- *   super admin or the Finance admin) to extend by another 30 days, or to
- *   revive an expired ad.
+ * - Each account gets a number of free ads over its lifetime; later ads are
+ *   paid in FarmCoin. Owners can pay to extend an ad or revive an expired
+ *   one. Every period, cost and limit is a setting the super admin manages
+ *   (marketspaceSettings); code holds only fallback defaults.
  * - Groups and categories are created by the super admin. Admins can remove
  *   ads; anyone can report one.
  *
@@ -22,14 +23,17 @@ import { internal } from "./_generated/api";
 import { Doc, Id } from "./_generated/dataModel";
 import { generateUTID, getUgandaTime } from "./utils";
 import {
-  AD_PERIOD_MS,
-  MAX_ADS_PER_DAY,
   DAY_MS,
   STARTER_GROUPS,
+  daysText,
   extendedExpiry,
+  nextAdTerms,
   normalizeUgandaPhone,
   validateAd,
+  validateSettings,
   walletForRole,
+  withDefaults,
+  type MarketspaceSettings,
 } from "./marketspaceShared";
 
 type Ctx = QueryCtx | MutationCtx;
@@ -64,10 +68,6 @@ function canModerate(user: Doc<"users">): boolean {
   return isSuperAdmin(user) || (user.role === "admin" && user.adminCategory === "community");
 }
 
-function canSetPrice(user: Doc<"users">): boolean {
-  return isSuperAdmin(user) || (user.role === "admin" && user.adminLevel === "junior" && user.adminCategory === "finance");
-}
-
 async function requireSuperAdmin(ctx: Ctx, token: string): Promise<Doc<"users">> {
   const user = await requireUser(ctx, token);
   if (!isSuperAdmin(user)) throw new Error("Only the super admin can manage Marketspace categories.");
@@ -100,9 +100,29 @@ async function notifyOwner(ctx: MutationCtx, userId: Id<"users">, title: string,
   });
 }
 
-async function extensionCost(ctx: Ctx): Promise<number> {
-  const settings = await ctx.db.query("marketspaceSettings").first();
-  return settings?.extensionCostFarmcoin ?? 0;
+async function getSettings(ctx: Ctx): Promise<MarketspaceSettings> {
+  return withDefaults(await ctx.db.query("marketspaceSettings").first());
+}
+
+async function posterRecord(ctx: Ctx, userId: Id<"users">) {
+  return await ctx.db
+    .query("marketspacePosters")
+    .withIndex("by_userId", (q) => q.eq("userId", userId))
+    .first();
+}
+
+/**
+ * Free ads this account has used. Accounts that posted before the count was
+ * kept start from the free ads they still have.
+ */
+async function freeAdsUsed(ctx: Ctx, userId: Id<"users">): Promise<number> {
+  const record = await posterRecord(ctx, userId);
+  if (record) return record.freeAdsUsed;
+  const existing = await ctx.db
+    .query("marketspaceAds")
+    .withIndex("by_ownerId_and_createdAt", (q) => q.eq("ownerId", userId))
+    .take(1000);
+  return existing.filter((a) => !a.paid).length;
 }
 
 // ------------------------------------------------------------------
@@ -130,22 +150,29 @@ async function walletBalance(ctx: Ctx, user: Doc<"users">): Promise<number | nul
 }
 
 /** Moves `amount` FarmCoin from the user's wallet to the central pool. */
-async function chargeFarmcoin(ctx: MutationCtx, user: Doc<"users">, amount: number, ad: Doc<"marketspaceAds">) {
+async function chargeFarmcoin(
+  ctx: MutationCtx,
+  user: Doc<"users">,
+  amount: number,
+  ad: { title: string; utid: string },
+  source: "marketspace_ad_extension" | "marketspace_paid_ad",
+  reason: string
+) {
   const wallet = walletForRole(user.role);
   if (!wallet) throw new Error("Your account has no FarmCoin wallet.");
   const balance = (await walletBalance(ctx, user)) ?? 0;
   if (balance < amount) {
-    throw new Error(`Not enough FarmCoin. Extending costs ${amount}; you have ${balance}. Buy FarmCoin in My Wallet.`);
+    const what = source === "marketspace_paid_ad" ? "This ad costs" : "Extending costs";
+    throw new Error(`Not enough FarmCoin. ${what} ${amount}; you have ${balance}. Buy FarmCoin in My Wallet.`);
   }
   const now = getUgandaTime();
   const utid = generateUTID("mks");
-  const reason = `Marketspace ad extended 30 days: ${ad.title}`;
   await ctx.db.insert("farmcoinLedger", {
     accountType: wallet.accountType,
     ...(wallet.key === "traderId" ? { traderId: user._id } : { userId: user._id }),
     delta: -amount,
     balanceAfter: balance - amount,
-    source: "marketspace_ad_extension",
+    source,
     utid,
     relatedUtid: ad.utid,
     reason,
@@ -160,7 +187,7 @@ async function chargeFarmcoin(ctx: MutationCtx, user: Doc<"users">, amount: numb
     accountType: "central",
     delta: amount,
     balanceAfter: (central?.balanceAfter ?? 0) + amount,
-    source: "marketspace_ad_extension",
+    source,
     utid,
     relatedUtid: ad.utid,
     reason,
@@ -260,7 +287,7 @@ export const getBoardConfig = query({
           .sort((a, b) => a.sortOrder - b.sortOrder)
           .map((c) => ({ _id: c._id, name: c.name, icon: c.icon })),
       })),
-      extensionCostFarmcoin: await extensionCost(ctx),
+      settings: await getSettings(ctx),
     };
   },
 });
@@ -380,6 +407,7 @@ export const getMyContext = query({
   handler: async (ctx, args) => {
     const user = await sessionUser(ctx, args.sessionToken);
     if (!user) return null;
+    const settings = await getSettings(ctx);
     return {
       userId: user._id,
       role: user.role,
@@ -387,9 +415,9 @@ export const getMyContext = query({
       phoneNumber: user.phoneNumber ?? null,
       isSuperAdmin: isSuperAdmin(user),
       canModerate: canModerate(user),
-      canSetPrice: canSetPrice(user),
       farmcoinBalance: await walletBalance(ctx, user),
-      extensionCostFarmcoin: await extensionCost(ctx),
+      settings,
+      nextAd: nextAdTerms(settings, await freeAdsUsed(ctx, user._id)),
     };
   },
 });
@@ -460,8 +488,8 @@ type AdArgs = {
 };
 
 /** Validates an ad and returns the fields to store. */
-async function cleanAd(ctx: MutationCtx, args: AdArgs) {
-  const problem = validateAd({ ...args, photoCount: args.photoIds.length });
+async function cleanAd(ctx: MutationCtx, args: AdArgs, settings: MarketspaceSettings) {
+  const problem = validateAd({ ...args, photoCount: args.photoIds.length }, settings.maxPhotosPerAd);
   if (problem) throw new Error(problem);
   const category = await ctx.db.get(args.categoryId);
   const group = category ? await ctx.db.get(category.groupId) : null;
@@ -489,31 +517,59 @@ async function cleanAd(ctx: MutationCtx, args: AdArgs) {
 }
 
 export const createAd = mutation({
-  args: { sessionToken: v.string(), ...adFields },
+  args: {
+    sessionToken: v.string(),
+    ...adFields,
+    // The cost the form showed the poster; if the price changed meanwhile, the post is stopped.
+    expectedCostFarmcoin: v.number(),
+  },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx, args.sessionToken);
+    const settings = await getSettings(ctx);
     const now = getUgandaTime();
     const recent = await ctx.db
       .query("marketspaceAds")
       .withIndex("by_ownerId_and_createdAt", (q) => q.eq("ownerId", user._id).gt("createdAt", now - DAY_MS))
-      .take(MAX_ADS_PER_DAY);
-    if (recent.length >= MAX_ADS_PER_DAY) {
-      throw new Error(`You can post up to ${MAX_ADS_PER_DAY} ads a day. Please try again tomorrow.`);
+      .take(settings.maxAdsPerDay);
+    if (recent.length >= settings.maxAdsPerDay) {
+      throw new Error(`You can post up to ${settings.maxAdsPerDay} ad${settings.maxAdsPerDay === 1 ? "" : "s"} a day. Please try again tomorrow.`);
     }
-    const { sessionToken: _token, ...fields } = args;
-    const clean = await cleanAd(ctx, fields);
+    const { sessionToken: _token, expectedCostFarmcoin, ...fields } = args;
+    const clean = await cleanAd(ctx, fields, settings);
+    const used = await freeAdsUsed(ctx, user._id);
+    const terms = nextAdTerms(settings, used);
+    if (terms.cost !== expectedCostFarmcoin) {
+      throw new Error(
+        terms.cost === 0
+          ? "This ad is now free to post. Please check and post again."
+          : `Posting this ad now costs ${terms.cost} FarmCoin. Please check and post again.`
+      );
+    }
     const utid = generateUTID("mks");
+    if (terms.cost > 0) {
+      await chargeFarmcoin(ctx, user, terms.cost, { title: clean.title, utid }, "marketspace_paid_ad", `Marketspace paid ad (${daysText(terms.days)}): ${clean.title}`);
+    }
     const adId = await ctx.db.insert("marketspaceAds", {
       ...clean,
       ownerId: user._id,
       utid,
       status: "active",
-      expiresAt: now + AD_PERIOD_MS,
+      expiresAt: now + terms.days * DAY_MS,
+      paid: !terms.free,
+      postingCostFarmcoin: terms.cost,
       reportCount: 0,
       createdAt: now,
       updatedAt: now,
     });
-    return { adId, utid };
+    const record = await posterRecord(ctx, user._id);
+    const counts = {
+      freeAdsUsed: used + (terms.free ? 1 : 0),
+      paidAdsPosted: (record?.paidAdsPosted ?? 0) + (terms.free ? 0 : 1),
+      updatedAt: now,
+    };
+    if (record) await ctx.db.patch(record._id, counts);
+    else await ctx.db.insert("marketspacePosters", { userId: user._id, ...counts });
+    return { adId, utid, days: terms.days, cost: terms.cost, paid: !terms.free };
   },
 });
 
@@ -523,7 +579,7 @@ export const updateAd = mutation({
     const { ad } = await requireOwnAd(ctx, args.sessionToken, args.adId);
     if (ad.status === "removed") throw new Error("An admin removed this ad, so it can't be edited.");
     const { sessionToken: _token, adId: _adId, ...fields } = args;
-    const clean = await cleanAd(ctx, fields);
+    const clean = await cleanAd(ctx, fields, await getSettings(ctx));
     // Photos taken out of the ad are deleted from storage.
     for (const id of ad.photoIds) {
       if (!clean.photoIds.includes(id)) await ctx.storage.delete(id);
@@ -556,8 +612,8 @@ export const deleteAd = mutation({
 });
 
 /**
- * Keep an ad up for another 30 days, or bring an expired one back. Costs the
- * FarmCoin amount set by the super admin / Finance admin (free when 0).
+ * Keep an ad up for another extension period, or bring an expired one back.
+ * The period and FarmCoin cost are super admin settings (free when the cost is 0).
  */
 export const extendAd = mutation({
   args: { sessionToken: v.string(), adId: v.id("marketspaceAds") },
@@ -566,12 +622,15 @@ export const extendAd = mutation({
     if (ad.status !== "active" && ad.status !== "expired") {
       throw new Error(ad.status === "sold" ? "This ad is marked sold." : "An admin removed this ad.");
     }
-    const cost = await extensionCost(ctx);
-    if (cost > 0) await chargeFarmcoin(ctx, user, cost, ad);
+    const settings = await getSettings(ctx);
+    const cost = settings.extensionCostFarmcoin;
+    if (cost > 0) {
+      await chargeFarmcoin(ctx, user, cost, ad, "marketspace_ad_extension", `Marketspace ad extended ${daysText(settings.extensionDays)}: ${ad.title}`);
+    }
     const now = getUgandaTime();
-    const expiresAt = extendedExpiry(ad.expiresAt, now);
+    const expiresAt = extendedExpiry(ad.expiresAt, now, settings.extensionDays);
     await ctx.db.patch(ad._id, { status: "active", expiresAt, updatedAt: now });
-    return { expiresAt, cost };
+    return { expiresAt, cost, days: settings.extensionDays };
   },
 });
 
@@ -737,26 +796,51 @@ export const seedStarterCategories = internalMutation({
 });
 
 // ------------------------------------------------------------------
-// Super admin / Finance: extension price
+// Super admin: periods, free ads, prices and limits
 // ------------------------------------------------------------------
 
-export const setExtensionCost = mutation({
-  args: { sessionToken: v.string(), cost: v.number(), reason: v.string() },
+const settingsFields = {
+  freeAdDays: v.number(),
+  paidAdDays: v.number(),
+  extensionDays: v.number(),
+  freeAdsPerAccount: v.number(),
+  paidAdCostFarmcoin: v.number(),
+  extensionCostFarmcoin: v.number(),
+  maxPhotosPerAd: v.number(),
+  maxAdsPerDay: v.number(),
+};
+
+/** The settings in effect, and which ones are still on their default. */
+export const adminSettings = query({
+  args: { sessionToken: v.string() },
   handler: async (ctx, args) => {
-    const user = await requireUser(ctx, args.sessionToken);
-    if (!canSetPrice(user)) throw new Error("Only the super admin or Finance admin can set this price.");
-    if (!Number.isInteger(args.cost) || args.cost < 0) throw new Error("Enter a whole number of FarmCoin, 0 or more.");
+    const user = await sessionUser(ctx, args.sessionToken);
+    if (!user || !isSuperAdmin(user)) return null;
+    const row = await ctx.db.query("marketspaceSettings").first();
+    const saved: Record<string, boolean> = {};
+    for (const key of Object.keys(settingsFields)) saved[key] = typeof (row as Record<string, unknown> | null)?.[key] === "number";
+    return { settings: withDefaults(row), saved, updatedAt: row?.updatedAt ?? null };
+  },
+});
+
+export const saveSettings = mutation({
+  args: { sessionToken: v.string(), reason: v.string(), ...settingsFields },
+  handler: async (ctx, args) => {
+    const admin = await requireSuperAdmin(ctx, args.sessionToken);
+    const { sessionToken: _token, reason, ...settings } = args;
+    const problem = validateSettings(settings);
+    if (problem) throw new Error(problem);
     const now = getUgandaTime();
-    const settings = await ctx.db.query("marketspaceSettings").first();
-    const previous = settings?.extensionCostFarmcoin ?? 0;
-    if (settings) await ctx.db.patch(settings._id, { extensionCostFarmcoin: args.cost, updatedBy: user._id, updatedAt: now });
-    else await ctx.db.insert("marketspaceSettings", { extensionCostFarmcoin: args.cost, updatedBy: user._id, updatedAt: now });
+    const row = await ctx.db.query("marketspaceSettings").first();
+    const previous = withDefaults(row);
+    if (row) await ctx.db.patch(row._id, { ...settings, updatedBy: admin._id, updatedAt: now });
+    else await ctx.db.insert("marketspaceSettings", { ...settings, updatedBy: admin._id, updatedAt: now });
     await ctx.db.insert("adminActions", {
-      adminId: user._id,
-      actionType: "update_marketspace_extension_cost",
+      adminId: admin._id,
+      actionType: "update_marketspace_settings",
       utid: generateUTID("admin"),
-      reason: args.reason.trim() || "Marketspace extension cost update",
-      metadata: { previous, cost: args.cost },
+      reason: reason.trim() || "Marketspace settings update",
+      metadata: { previous, settings },
       timestamp: now,
     });
     return { success: true };
@@ -846,7 +930,7 @@ export const dismissReports = mutation({
 });
 
 // ------------------------------------------------------------------
-// Scheduled: mark ads past their 30 days as expired
+// Scheduled: mark ads past their expiry as expired
 // ------------------------------------------------------------------
 
 export const expireAds = internalMutation({
@@ -863,7 +947,7 @@ export const expireAds = internalMutation({
         ctx,
         ad.ownerId,
         "Marketspace ad expired",
-        `Your ad "${ad.title}" has finished its 30 days and is hidden from the board. Open Marketspace → My ads to bring it back.`,
+        `Your ad "${ad.title}" has reached its end date and is hidden from the board. Open Marketspace → My ads to bring it back.`,
         ad.utid
       );
     }

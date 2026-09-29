@@ -4,15 +4,81 @@
  */
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
-export const AD_PERIOD_DAYS = 30;
-export const AD_PERIOD_MS = AD_PERIOD_DAYS * DAY_MS;
-export const MAX_PHOTOS = 5;
-export const MAX_ADS_PER_DAY = 5;
 export const TITLE_MAX = 80;
 export const DESCRIPTION_MAX = 1000;
 export const SAFETY_NOTICE = "Always pay on delivery after inspecting the goods.";
 
 export type AdKind = "offer" | "wanted";
+
+/** Everything the super admin controls about posting and paying for ads. */
+export type MarketspaceSettings = {
+  freeAdDays: number; // How long a free ad stays up
+  paidAdDays: number; // How long a paid ad stays up
+  extensionDays: number; // Days each extension adds
+  freeAdsPerAccount: number; // Free ads per account, over its lifetime; later ads are paid
+  paidAdCostFarmcoin: number;
+  extensionCostFarmcoin: number;
+  maxPhotosPerAd: number;
+  maxAdsPerDay: number; // Anti-spam: new ads one user can post in 24 hours
+};
+
+/**
+ * Used only until the super admin saves the settings (and for a setting added
+ * later that has not been saved yet). The admin page shows the values in effect.
+ */
+export const DEFAULT_SETTINGS: MarketspaceSettings = {
+  freeAdDays: 30,
+  paidAdDays: 30,
+  extensionDays: 30,
+  freeAdsPerAccount: 3,
+  paidAdCostFarmcoin: 0,
+  extensionCostFarmcoin: 0,
+  maxPhotosPerAd: 5,
+  maxAdsPerDay: 5,
+};
+
+/** Allowed range for each setting (whole numbers). */
+export const SETTING_LIMITS: Record<keyof MarketspaceSettings, { min: number; max: number; label: string }> = {
+  freeAdDays: { min: 1, max: 365, label: "Free ad period (days)" },
+  paidAdDays: { min: 1, max: 365, label: "Paid ad period (days)" },
+  extensionDays: { min: 1, max: 365, label: "Extension period (days)" },
+  freeAdsPerAccount: { min: 0, max: 1000, label: "Free ads per account" },
+  paidAdCostFarmcoin: { min: 0, max: 1_000_000, label: "Paid ad cost (FarmCoin)" },
+  extensionCostFarmcoin: { min: 0, max: 1_000_000, label: "Extension cost (FarmCoin)" },
+  maxPhotosPerAd: { min: 1, max: 10, label: "Maximum photos per ad" },
+  maxAdsPerDay: { min: 1, max: 100, label: "Maximum new ads per user per day" },
+};
+
+/** Saved settings with defaults filled in for anything not saved yet. */
+export function withDefaults(saved: Partial<MarketspaceSettings> | null | undefined): MarketspaceSettings {
+  const out = { ...DEFAULT_SETTINGS };
+  for (const key of Object.keys(DEFAULT_SETTINGS) as (keyof MarketspaceSettings)[]) {
+    const value = saved?.[key];
+    if (typeof value === "number") out[key] = value;
+  }
+  return out;
+}
+
+/** Returns the first invalid setting, or null. */
+export function validateSettings(s: MarketspaceSettings): string | null {
+  for (const key of Object.keys(SETTING_LIMITS) as (keyof MarketspaceSettings)[]) {
+    const { min, max, label } = SETTING_LIMITS[key];
+    const value = s[key];
+    if (!Number.isInteger(value) || value < min || value > max) return `${label} must be a whole number from ${min} to ${max}.`;
+  }
+  return null;
+}
+
+/** Whether the next ad is free, and what it costs and how long it runs if not. */
+export function nextAdTerms(settings: MarketspaceSettings, freeAdsUsed: number): { free: boolean; freeAdsLeft: number; cost: number; days: number } {
+  const freeAdsLeft = Math.max(0, settings.freeAdsPerAccount - freeAdsUsed);
+  const free = freeAdsLeft > 0;
+  return { free, freeAdsLeft, cost: free ? 0 : settings.paidAdCostFarmcoin, days: free ? settings.freeAdDays : settings.paidAdDays };
+}
+
+export function daysText(days: number): string {
+  return `${days} day${days === 1 ? "" : "s"}`;
+}
 
 export const REPORT_REASONS = [
   { value: "scam", label: "Scam or fraud" },
@@ -66,9 +132,9 @@ export function whatsappNumber(phone: string): string {
   return phone.replace(/\D/g, "");
 }
 
-/** The expiry after paying for one more period: from now if already expired. */
-export function extendedExpiry(currentExpiresAt: number, now: number): number {
-  return Math.max(currentExpiresAt, now) + AD_PERIOD_MS;
+/** The expiry after an extension of `days`: counted from now if already expired. */
+export function extendedExpiry(currentExpiresAt: number, now: number, days: number): number {
+  return Math.max(currentExpiresAt, now) + days * DAY_MS;
 }
 
 export function isLive(ad: { status: string; expiresAt: number }, now: number): boolean {
@@ -113,7 +179,7 @@ export type AdInput = {
 };
 
 /** Returns the first problem with an ad, or null when it is valid. */
-export function validateAd(ad: AdInput): string | null {
+export function validateAd(ad: AdInput, maxPhotos: number): string | null {
   const title = ad.title.trim();
   if (title.length < 3) return "Give the ad a title (at least 3 characters).";
   if (title.length > TITLE_MAX) return `Keep the title under ${TITLE_MAX} characters.`;
@@ -124,6 +190,6 @@ export function validateAd(ad: AdInput): string | null {
   if (ad.kind === "offer" && ad.priceUGX === undefined && !ad.negotiable) return "Enter a price or mark it negotiable.";
   if (ad.neededBy !== undefined && ad.neededBy !== "" && !isIsoDate(ad.neededBy)) return "The 'needed by' date is not valid.";
   if (ad.kind === "offer" && ad.neededBy) return "Only Wanted ads have a 'needed by' date.";
-  if (ad.photoCount > MAX_PHOTOS) return `Add at most ${MAX_PHOTOS} photos.`;
+  if (ad.photoCount > maxPhotos) return `Add at most ${maxPhotos} photo${maxPhotos === 1 ? "" : "s"}.`;
   return null;
 }

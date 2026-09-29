@@ -563,6 +563,7 @@ export default defineSchema({
       v.literal("tracker_entry_reward"),
       v.literal("transport_rating_reward"),
       v.literal("marketspace_ad_extension"),
+      v.literal("marketspace_paid_ad"),
       v.literal("exchange_sell_escrow"), // Coins leave the holder's balance into the sell queue
       v.literal("exchange_sell_cancel"), // Unsold coins returned when the seller cancels
       v.literal("exchange_purchase") // Coins bought from the queue
@@ -3933,7 +3934,7 @@ export default defineSchema({
     categoryId: v.id("marketspaceCategories"),
     title: v.string(),
     description: v.string(),
-    photoIds: v.array(v.id("_storage")), // At most MAX_PHOTOS
+    photoIds: v.array(v.id("_storage")), // At most the maxPhotosPerAd setting
     priceUGX: v.optional(v.number()), // Price (offer) or budget (wanted)
     priceUnit: v.optional(v.string()), // e.g. "per kg", "per day"
     negotiable: v.boolean(),
@@ -3948,7 +3949,9 @@ export default defineSchema({
       v.literal("sold"),
       v.literal("removed") // Taken down by an admin
     ),
-    expiresAt: v.number(), // Uganda time (getUgandaTime); 30 days per period
+    expiresAt: v.number(), // Uganda time (getUgandaTime)
+    paid: v.optional(v.boolean()), // Posted after the account's free ads were used up
+    postingCostFarmcoin: v.optional(v.number()), // FarmCoin paid to post it
     reportCount: v.number(),
     removedBy: v.optional(v.id("users")),
     removedReason: v.optional(v.string()),
@@ -3987,12 +3990,33 @@ export default defineSchema({
     .index("by_status_and_createdAt", ["status", "createdAt"])
     .index("by_adId", ["adId"]),
 
-  /** Single row: Marketspace pricing set by super admin / finance. */
+  /**
+   * Single row: Marketspace settings, managed by the super admin. A field that
+   * has never been saved falls back to DEFAULT_SETTINGS in marketspaceShared.
+   */
   marketspaceSettings: defineTable({
-    extensionCostFarmcoin: v.number(), // FarmCoin per extra 30 days
+    extensionCostFarmcoin: v.number(), // FarmCoin per extension
+    extensionDays: v.optional(v.number()),
+    freeAdDays: v.optional(v.number()),
+    paidAdDays: v.optional(v.number()),
+    freeAdsPerAccount: v.optional(v.number()), // Lifetime free ads per account
+    paidAdCostFarmcoin: v.optional(v.number()),
+    maxPhotosPerAd: v.optional(v.number()),
+    maxAdsPerDay: v.optional(v.number()),
     updatedBy: v.id("users"),
     updatedAt: v.number(),
   }),
+
+  /**
+   * Per-account Marketspace posting counts. Free ads are counted over the
+   * account's lifetime, so deleting an ad does not give a free ad back.
+   */
+  marketspacePosters: defineTable({
+    userId: v.id("users"),
+    freeAdsUsed: v.number(),
+    paidAdsPosted: v.number(),
+    updatedAt: v.number(),
+  }).index("by_userId", ["userId"]),
 
   // ------------------------------------------------------------------
   // FarmCoin exchange and wallet cash-outs. See convex/farmcoinExchange.ts.

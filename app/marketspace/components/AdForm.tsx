@@ -4,7 +4,8 @@ import { useRef, useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
-import { MAX_PHOTOS, TITLE_MAX, DESCRIPTION_MAX, validateAd, normalizeUgandaPhone } from "../../../convex/marketspaceShared";
+import { TITLE_MAX, DESCRIPTION_MAX, daysText, validateAd, normalizeUgandaPhone, type MarketspaceSettings } from "../../../convex/marketspaceShared";
+import { FarmCoinIcon } from "../../components/icons/Brand";
 import { compressImage, uploadToConvex } from "../../utils/imageCompress";
 import { DISTRICTS, FONT, tint } from "./shared";
 
@@ -39,6 +40,9 @@ export function AdForm({
   sessionToken,
   groups,
   defaultPhone,
+  settings,
+  nextAd,
+  farmcoinBalance,
   editing,
   onDone,
   onCancel,
@@ -46,6 +50,9 @@ export function AdForm({
   sessionToken: string;
   groups: Group[];
   defaultPhone: string | null;
+  settings: MarketspaceSettings;
+  nextAd: { free: boolean; freeAdsLeft: number; cost: number; days: number };
+  farmcoinBalance: number | null;
   editing?: EditableAd | null;
   onDone: (message: string) => void;
   onCancel?: () => void;
@@ -78,12 +85,14 @@ export function AdForm({
 
   const group = groups.find((g) => g._id === groupId);
   const wanted = kind === "wanted";
+  const maxPhotos = settings.maxPhotosPerAd;
+  const cannotAfford = !editing && nextAd.cost > 0 && (farmcoinBalance ?? 0) < nextAd.cost;
 
   const addFiles = async (files: FileList | null) => {
     if (!files?.length) return;
-    const room = MAX_PHOTOS - photos.length;
+    const room = maxPhotos - photos.length;
     const picked = Array.from(files).slice(0, room);
-    if (files.length > room) setError(`You can add up to ${MAX_PHOTOS} photos.`);
+    if (files.length > room) setError(`You can add up to ${maxPhotos} photo${maxPhotos === 1 ? "" : "s"}.`);
     setUploading((n) => n + picked.length);
     for (const file of picked) {
       try {
@@ -116,8 +125,9 @@ export function AdForm({
       locationDetail,
       contactPhone: phone,
       photoCount: photos.length,
-    });
+    }, maxPhotos);
     if (problem) return setError(problem);
+    if (!editing && nextAd.cost > 0 && !window.confirm(`Post this ad for ${nextAd.cost} FarmCoin? It stays up for ${daysText(nextAd.days)}.`)) return;
     const payload = {
       sessionToken,
       kind,
@@ -140,8 +150,8 @@ export function AdForm({
         await updateAd({ ...payload, adId: editing._id as Id<"marketspaceAds"> });
         onDone("Your ad was updated.");
       } else {
-        await createAd(payload);
-        onDone("Your ad is live on Marketspace for 30 days.");
+        const result = await createAd({ ...payload, expectedCostFarmcoin: nextAd.cost });
+        onDone(`Your ad is live on Marketspace for ${daysText(result.days)}${result.cost > 0 ? ` (${result.cost} FarmCoin paid)` : ""}.`);
       }
     } catch (e: any) {
       setError(e?.message?.replace(/^.*Uncaught Error: /, "").split("\n")[0] ?? "Could not save the ad.");
@@ -326,7 +336,7 @@ export function AdForm({
       </div>
 
       <span style={label}>
-        Photos <span style={{ fontWeight: 400, color: "#888" }}>(up to {MAX_PHOTOS})</span>
+        Photos <span style={{ fontWeight: 400, color: "#888" }}>(up to {maxPhotos})</span>
       </span>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
         {photos.map((p) => (
@@ -347,7 +357,7 @@ export function AdForm({
           <div style={{ width: 84, height: 84, borderRadius: 10, background: "#f1f8e9", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.75rem", color: "#2e7d32" }}>Uploading…</div>
         )}
       </div>
-      {photos.length + uploading < MAX_PHOTOS && (
+      {photos.length + uploading < maxPhotos && (
         <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.6rem" }}>
           <button type="button" onClick={() => cameraRef.current?.click()} style={{ flex: 1, minHeight: 46, borderRadius: 10, border: "1.5px solid #2e7d32", background: "#fff", color: "#1b5e20", fontWeight: 700, fontFamily: FONT, cursor: "pointer" }}>
             📷 Take photo
@@ -380,6 +390,44 @@ export function AdForm({
         }}
       />
 
+      {!editing && (
+        <div
+          style={{
+            marginTop: "1.1rem",
+            padding: "0.7rem 0.85rem",
+            borderRadius: 12,
+            background: nextAd.free ? "#e8f5e9" : "#fff8e1",
+            border: `1.5px solid ${nextAd.free ? "#a5d6a7" : "#f6bf26"}`,
+            fontSize: "0.9rem",
+            color: "#333",
+            lineHeight: 1.45,
+          }}
+        >
+          {nextAd.free ? (
+            <>
+              <strong>Free ad.</strong> You have {nextAd.freeAdsLeft} of {settings.freeAdsPerAccount} free ad{settings.freeAdsPerAccount === 1 ? "" : "s"} left. It stays up for {daysText(nextAd.days)}.
+            </>
+          ) : (
+            <>
+              <strong>Paid ad.</strong> You have used your {settings.freeAdsPerAccount} free ad{settings.freeAdsPerAccount === 1 ? "" : "s"}.{" "}
+              {nextAd.cost > 0 ? (
+                <>
+                  This ad costs <FarmCoinIcon size={15} /> <strong>{nextAd.cost} FarmCoin</strong> and stays up for {daysText(nextAd.days)}.
+                  {farmcoinBalance !== null && <> Your balance: {farmcoinBalance}.</>}
+                </>
+              ) : (
+                <>Posting is free for now and the ad stays up for {daysText(nextAd.days)}.</>
+              )}
+            </>
+          )}
+          {cannotAfford && (
+            <div style={{ marginTop: 6, color: "#c62828", fontWeight: 700 }}>
+              Not enough FarmCoin. <a href="/wallet" style={{ color: "#1b5e20" }}>Buy FarmCoin in My Wallet →</a>
+            </div>
+          )}
+        </div>
+      )}
+
       {error && <div style={{ marginTop: "1rem", padding: "0.6rem 0.75rem", borderRadius: 10, background: "#ffebee", color: "#c62828", fontWeight: 600, fontSize: "0.9rem" }}>{error}</div>}
 
       <div style={{ display: "flex", gap: "0.6rem", marginTop: "1.2rem" }}>
@@ -390,11 +438,17 @@ export function AdForm({
         )}
         <button
           type="button"
-          disabled={saving || uploading > 0}
+          disabled={saving || uploading > 0 || cannotAfford}
           onClick={submit}
-          style={{ flex: 2, minHeight: 52, borderRadius: 12, border: "none", background: "#2e7d32", color: "#fff", fontWeight: 800, fontSize: "1.05rem", fontFamily: FONT, cursor: "pointer", opacity: saving || uploading > 0 ? 0.6 : 1 }}
+          style={{ flex: 2, minHeight: 52, borderRadius: 12, border: "none", background: "#2e7d32", color: "#fff", fontWeight: 800, fontSize: "1.05rem", fontFamily: FONT, cursor: "pointer", opacity: saving || uploading > 0 || cannotAfford ? 0.6 : 1 }}
         >
-          {saving ? "Saving…" : editing ? "Save changes" : "Post ad (free for 30 days)"}
+          {saving
+            ? "Saving…"
+            : editing
+              ? "Save changes"
+              : nextAd.cost > 0
+                ? `Post ad for ${nextAd.cost} FarmCoin`
+                : `Post ad${nextAd.free ? " free" : ""} (${daysText(nextAd.days)})`}
         </button>
       </div>
     </div>

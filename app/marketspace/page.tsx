@@ -300,6 +300,9 @@ export default function MarketspacePage() {
             sessionToken={token}
             groups={config.groups}
             defaultPhone={me?.phoneNumber ?? null}
+            settings={me!.settings}
+            nextAd={me!.nextAd}
+            farmcoinBalance={me?.farmcoinBalance ?? null}
             editing={editing}
             onCancel={editing ? () => { setEditing(null); setTab("mine"); } : undefined}
             onDone={(msg) => {
@@ -316,7 +319,7 @@ export default function MarketspacePage() {
             sessionToken={token}
             now={liveNow}
             farmcoinBalance={me?.farmcoinBalance ?? null}
-            extensionCost={me?.extensionCostFarmcoin ?? 0}
+            settings={me!.settings}
             onEdit={(ad) => {
               setEditing(ad);
               setNotice(null);

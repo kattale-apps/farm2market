@@ -405,6 +405,7 @@ export default function Home() {
                     <a href="/api/download/android" download="Farm2Market.apk" style={profileMenuLinkStyle}>
                       Download App
                     </a>
+                    <a href="/marketspace" style={profileMenuLinkStyle}>🗺️ Marketspace</a>
                     {effectiveUser?.role && effectiveUser.role !== "admin" && (
                       <a href="/transport" style={profileMenuLinkStyle}>🚚 Find transport</a>
                     )}

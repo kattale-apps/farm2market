@@ -999,6 +999,31 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
               </div>
             </a>
 
+            {/* Marketspace */}
+            <a href="/admin/marketspace" style={{ textDecoration: "none" }}>
+              <div
+                style={{
+                  ...utilityCardStyle,
+                  cursor: "pointer",
+                  transition: "transform 0.2s, box-shadow 0.2s",
+                  background: "linear-gradient(135deg, #f6bf26 0%, #e0a800 100%)",
+                  color: "#1a1a1a",
+                  minHeight: "140px",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                }}
+              >
+                <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>🗺️</div>
+                <div>
+                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Marketspace</h3>
+                  <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.9 }}>
+                    Public classified ads: groups and categories, reported ads and moderation
+                  </p>
+                </div>
+              </div>
+            </a>
+
             {/* Finance Dashboard */}
             <a href="/admin/finance" style={{ textDecoration: "none" }}>
               <div

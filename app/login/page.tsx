@@ -6,6 +6,7 @@ import { api } from "../../convex/_generated/api";
 import { useRouter, useSearchParams } from "next/navigation";
 import { saveAuth, getLastCredential, saveLastCredential } from "../utils/authStorage";
 import { VALUE_CHAIN_ROLES, roleLabel } from "../../convex/roleLabels";
+import { MarketspaceLoginBanner } from "../marketspace/components/MarketspaceLoginBanner";
 
 type IdentifierMode = "phone" | "email";
 type AuthStep = "login" | "confirmSignup";
@@ -28,14 +29,15 @@ const SIGNUP_ROLES: Array<{ value: SignupRole; label: string; signupEnabled: boo
   signupEnabled: SIGNUP_ENABLED[role],
 }));
 
-// Spectrum palette following the list order (green→yellow→orange→blue→red→purple),
-// one hue per role so no two categories read as the same color.
+// One clearly different hue per role: left column green (Farmer), yellow
+// (Processor), red (Exporter); right column blue (Buyer), orange
+// (Transporter), purple (Vendor).
 const ROLE_STYLES: Record<SignupRole, { text: string; border: string; bgSelected: string; bgUnselected: string; borderUnselected: string }> = {
   farmer: { text: "#2e7d32", border: "#2e7d32", bgSelected: "#c8e6c9", bgUnselected: "#e8f5e9", borderUnselected: "#a5d6a7" }, // green
   store: { text: "#f9a825", border: "#f9a825", bgSelected: "#ffecb3", bgUnselected: "#fff8e1", borderUnselected: "#ffd54f" }, // yellow
-  trader: { text: "#ef6c00", border: "#ef6c00", bgSelected: "#ffe0b2", bgUnselected: "#fff3e0", borderUnselected: "#ffb74d" }, // orange
+  trader: { text: "#c62828", border: "#c62828", bgSelected: "#ffcdd2", bgUnselected: "#ffebee", borderUnselected: "#ef9a9a" }, // red
   buyer: { text: "#1976d2", border: "#1976d2", bgSelected: "#bbdefb", bgUnselected: "#e3f2fd", borderUnselected: "#90caf9" }, // blue
-  transporter: { text: "#c62828", border: "#c62828", bgSelected: "#ffcdd2", bgUnselected: "#ffebee", borderUnselected: "#ef9a9a" }, // red
+  transporter: { text: "#ef6c00", border: "#ef6c00", bgSelected: "#ffe0b2", bgUnselected: "#fff3e0", borderUnselected: "#ffb74d" }, // orange
   vendor: { text: "#7b1fa2", border: "#7b1fa2", bgSelected: "#e1bee7", bgUnselected: "#f3e5f5", borderUnselected: "#ce93d8" }, // purple
 };
 
@@ -263,6 +265,13 @@ function LoginPageInner() {
           max-width: 400px;
           width: 100%;
         }
+        .f2m-login-col {
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
+          max-width: 400px;
+          width: 100%;
+        }
         .f2m-panel-desktop { display: none; }
         .f2m-panel-mobile { max-width: 400px; width: 100%; }
         @keyframes f2m-role-glow-pulse {
@@ -280,11 +289,14 @@ function LoginPageInner() {
             padding: 2rem;
           }
           .f2m-login-card { max-width: 400px; flex-shrink: 0; }
+          .f2m-login-col { flex-shrink: 0; }
           .f2m-panel-desktop { display: block; max-width: 460px; width: 100%; align-self: flex-start; }
           .f2m-panel-mobile { display: none; }
         }
       `}</style>
     <main className="f2m-login-grid">
+      <div className="f2m-login-col">
+      {authStep !== "confirmSignup" && <MarketspaceLoginBanner />}
       <div className="f2m-login-card">
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "0.5rem" }}>
           <div>
@@ -353,7 +365,8 @@ function LoginPageInner() {
             <label style={{ display: "block", marginBottom: "0.35rem", color: "#2e7d32", fontWeight: "500", fontSize: "0.9rem" }}>
               Select Category
             </label>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "0.5rem" }}>
+            {/* Filled column by column: Farmer, Processor, Exporter on the left; Buyer, Transporter, Vendor on the right. */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gridTemplateRows: "repeat(3, auto)", gridAutoFlow: "column", gap: "0.5rem" }}>
               {SIGNUP_ROLES.map((entry) => {
                 const isSelected = selectedRole === entry.value;
                 const roleStyle = ROLE_STYLES[entry.value];
@@ -600,6 +613,7 @@ function LoginPageInner() {
             </a>
           </div>
         )}
+      </div>
       </div>
     </main>
     </>

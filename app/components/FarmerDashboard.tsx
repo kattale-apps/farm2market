@@ -136,11 +136,13 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
           : "🛒 Farm 2 Market",
         disabled: farm2MarketLocked,
       },
+      { key: "marketspace", label: "🗺️ Marketspace" },
       { key: "advancePurchase", label: "🌱 Advanced Markets" },
       { key: "sellServices", label: "🏭 Sales & Services" },
     ] : []),
     ...(effectiveRole === "vendor" ? [
       { key: "vendorBuying", label: "🧺 Buying from farmers" },
+      { key: "marketspace", label: "🗺️ Marketspace" },
       { key: "findTransport", label: "🚚 Find transport" },
     ] : []),
   ];
@@ -150,6 +152,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
     farmToolbox: "/farmer/toolbox",
     farmCalendar: "/farmer/planner",
     farm2market: "/farmer/farm2market",
+    marketspace: "/marketspace",
     advancePurchase: "/farmer/advance-purchase",
     sellServices: "/farmer/services",
     vendorBuying: "/vendor/buying",

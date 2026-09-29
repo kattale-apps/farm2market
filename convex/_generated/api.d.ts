@@ -78,6 +78,8 @@ import type * as locations from "../locations.js";
 import type * as marketOffers from "../marketOffers.js";
 import type * as marketOffersShared from "../marketOffersShared.js";
 import type * as marketPrices from "../marketPrices.js";
+import type * as marketspace from "../marketspace.js";
+import type * as marketspaceShared from "../marketspaceShared.js";
 import type * as messages from "../messages.js";
 import type * as monetisation from "../monetisation.js";
 import type * as negotiations from "../negotiations.js";
@@ -210,6 +212,8 @@ declare const fullApi: ApiFromModules<{
   marketOffers: typeof marketOffers;
   marketOffersShared: typeof marketOffersShared;
   marketPrices: typeof marketPrices;
+  marketspace: typeof marketspace;
+  marketspaceShared: typeof marketspaceShared;
   messages: typeof messages;
   monetisation: typeof monetisation;
   negotiations: typeof negotiations;

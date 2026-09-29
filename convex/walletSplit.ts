@@ -131,6 +131,28 @@ export async function hasDemoWallet(ctx: MutationCtx, userId: Id<"users">): Prom
   return found;
 }
 
+/**
+ * How many accounts hold real money, and how many cash-outs are still
+ * waiting. Used to stop destructive admin resets from wiping real money.
+ */
+export async function realMoneyAtRisk(ctx: Ctx): Promise<{ accounts: number; pendingCashouts: number }> {
+  const byUser = new Map<string, HistoryEntry[]>();
+  for await (const e of ctx.db.query("walletLedger")) {
+    const list = byUser.get(e.userId) ?? [];
+    list.push(toHistory(e));
+    byUser.set(e.userId, list);
+  }
+  let accounts = 0;
+  for (const entries of byUser.values()) {
+    if (realOf(replayHistory(entries).final) > 0) accounts++;
+  }
+  const pending = await ctx.db
+    .query("walletCashouts")
+    .withIndex("by_status_and_requestedAt", (q) => q.eq("status", "pending"))
+    .take(1000);
+  return { accounts, pendingCashouts: pending.length };
+}
+
 // ------------------------------------------------------------------
 // One-off migration: split existing history into demo and real.
 // Run with: npx convex run walletSplit:migrateWalletSplit '{}'

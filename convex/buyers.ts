@@ -653,17 +653,9 @@ export const superadminConfirmListingDelivery = mutation({
 
       const superadminUtid = generateUTID("admin");
 
-      const tokenRate = await ctx.db.query("systemSettings").first();
-      const cashoutRate = tokenRate?.farmcoinPostingCost ?? 1;
-      const tokenAmount = Number((totalCost / cashoutRate).toFixed(2));
-
-      const sentify = await ctx.runMutation((internal as any).farmcoin.creditSentifyReceipt, {
-        traderId,
-        listingId,
-        batchUtid,
-        tokenAmount,
-        reason: "Sentify receipt for delivered batch",
-      });
+      // No FarmCoin is minted here. FarmCoin is only generated for system
+      // actions (such as filling in form fields), never for sales the trader
+      // was paid money for.
 
       // The trader receives the buyers' money with the demo share it was paid with.
       let releaseDemo = 0;
@@ -705,13 +697,12 @@ export const superadminConfirmListingDelivery = mutation({
         await ctx.db.patch(purchase._id, {
           superadminConfirmedAt: now,
           superadminConfirmationUtid: superadminUtid,
-          sentifyUtid: sentify.utid,
           status: "delivered",
           escrowReleasedAt: now,
         });
       }
 
-      results.push({ batchUtid, sentifyUtid: sentify.utid });
+      results.push({ batchUtid });
     }
 
     return { success: true, results };

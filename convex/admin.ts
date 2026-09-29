@@ -13,7 +13,7 @@ import { internal } from "./_generated/api";
 import { generateUTID, getBuyerServiceFeePercentage, getTraderCommissionPercentage, getUgandaTime } from "./utils";
 import { MAX_TRADER_EXPOSURE_UGX, DEFAULT_BUYER_SERVICE_FEE_PERCENTAGE } from "./constants";
 import { Id } from "./_generated/dataModel";
-import { hasDemoWallet, lockDemoShare, postWallet } from "./walletSplit";
+import { hasDemoWallet, lockDemoShare, postWallet, realMoneyAtRisk } from "./walletSplit";
 
 /**
  * Verify user is admin
@@ -686,6 +686,16 @@ export const resetAllTransactions = mutation({
   },
   handler: async (ctx, args) => {
     await verifyAdmin(ctx, args.adminId);
+
+    // The reset deletes every wallet ledger entry. Wallets now hold real,
+    // cashable money, so refuse while any account has some.
+    const atRisk = await realMoneyAtRisk(ctx);
+    if (atRisk.accounts > 0 || atRisk.pendingCashouts > 0) {
+      throw new Error(
+        `Reset blocked: ${atRisk.accounts} account(s) hold real money and ${atRisk.pendingCashouts} cash-out(s) are waiting. ` +
+          "Resetting would wipe real money."
+      );
+    }
 
     const utid = await logAdminAction(
       ctx,

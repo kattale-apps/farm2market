@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { roleLabel } from "../../../convex/roleLabels";
+import { PhotoGallery } from "./PhotoGallery";
 import { SafetyNotice } from "./Sheets";
 import { FONT, adLink, formatDate, formatIsoDate, postedAgo, priceLine, tint, whatsappLink, type AdCardData } from "./shared";
 
@@ -9,6 +10,8 @@ import { FONT, adLink, formatDate, formatIsoDate, postedAgo, priceLine, tint, wh
 export function AdDetail({ ad, now, onReport }: { ad: AdCardData; now: number; onReport?: () => void }) {
   const wanted = ad.kind === "wanted";
   const [copied, setCopied] = useState(false);
+  const [photoIndex, setPhotoIndex] = useState(0);
+  const [fullScreen, setFullScreen] = useState(false);
   const price = priceLine(ad);
 
   const share = async () => {
@@ -46,16 +49,21 @@ export function AdDetail({ ad, now, onReport }: { ad: AdCardData; now: number; o
       {price && <div style={{ fontSize: "1.15rem", fontWeight: 800, color: wanted ? "#6d4c00" : "#1b5e20" }}>{price}</div>}
 
       {ad.photoUrls.length > 0 && (
-        <div style={{ display: "flex", gap: "0.5rem", overflowX: "auto", scrollSnapType: "x mandatory", margin: "0.75rem 0", paddingBottom: 4 }}>
-          {ad.photoUrls.map((url, i) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              key={url}
-              src={url}
-              alt={`${ad.title} photo ${i + 1}`}
-              style={{ flex: "0 0 88%", maxWidth: 420, height: 260, objectFit: "cover", borderRadius: 12, scrollSnapAlign: "center", background: "#f3f3f3" }}
-            />
-          ))}
+        <div style={{ margin: "0.75rem 0" }}>
+          <PhotoGallery key={ad.photoUrls.join("|")} urls={ad.photoUrls} title={ad.title} height={280} startIndex={photoIndex} onIndexChange={setPhotoIndex} onTap={(i) => { setPhotoIndex(i); setFullScreen(true); }} />
+          <div style={{ textAlign: "center", color: "#888", fontSize: "0.75rem", marginTop: 4 }}>
+            {ad.photoUrls.length > 1 ? "Swipe for more photos · tap to enlarge" : "Tap to enlarge"}
+          </div>
+        </div>
+      )}
+      {fullScreen && (
+        <div role="dialog" aria-modal="true" aria-label="Photos" style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(0,0,0,0.94)", display: "flex", flexDirection: "column", justifyContent: "center", padding: "0.75rem" }}>
+          <button type="button" aria-label="Close photos" onClick={() => setFullScreen(false)} style={{ position: "absolute", top: 12, right: 12, zIndex: 5, width: 44, height: 44, borderRadius: 999, border: "none", background: "rgba(255,255,255,0.15)", color: "#fff", fontSize: "1.3rem", cursor: "pointer" }}>
+            ✕
+          </button>
+          <div style={{ width: "100%", maxWidth: 720, margin: "0 auto" }}>
+            <PhotoGallery urls={ad.photoUrls} title={ad.title} height="78vh" fit="contain" dark startIndex={photoIndex} onIndexChange={setPhotoIndex} />
+          </div>
         </div>
       )}
 

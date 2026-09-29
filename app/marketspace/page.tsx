@@ -334,8 +334,9 @@ export default function MarketspacePage() {
 
       {detail && (
         <Sheet onClose={() => setDetail(null)} title="Ad details">
-          <AdDetail
+          <FullAdDetail
             ad={detail}
+            boardNow={boardNow}
             now={liveNow}
             onReport={() => {
               setReport(detail);
@@ -348,6 +349,12 @@ export default function MarketspacePage() {
       {report && <ReportSheet ad={report} sessionToken={token} onClose={() => setReport(null)} />}
     </div>
   );
+}
+
+/** The board's cards carry only their first photo, so the detail view loads the whole ad. */
+function FullAdDetail({ ad, boardNow, now, onReport }: { ad: AdCardData; boardNow: number; now: number; onReport: () => void }) {
+  const full = useQuery(api.marketspace.getAd, { adId: ad._id, now: boardNow }) as AdCardData | null | undefined;
+  return <AdDetail ad={full ?? ad} now={now} onReport={onReport} />;
 }
 
 const groupTile: React.CSSProperties = {

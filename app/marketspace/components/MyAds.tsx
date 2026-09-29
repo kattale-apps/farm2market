@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
-import { daysLeft } from "../../../convex/marketspaceShared";
+import { daysLeft, daysText, type MarketspaceSettings } from "../../../convex/marketspaceShared";
 import { FarmCoinIcon } from "../../components/icons/Brand";
 import type { EditableAd } from "./AdForm";
 import { FONT, formatDate, priceLine, type AdCardData } from "./shared";
@@ -23,14 +23,14 @@ export function MyAds({
   sessionToken,
   now,
   farmcoinBalance,
-  extensionCost,
+  settings,
   onEdit,
   onPostNew,
 }: {
   sessionToken: string;
   now: number;
   farmcoinBalance: number | null;
-  extensionCost: number;
+  settings: MarketspaceSettings;
   onEdit: (ad: EditableAd) => void;
   onPostNew: () => void;
 }) {
@@ -56,6 +56,8 @@ export function MyAds({
 
   if (ads === undefined) return <p style={{ fontFamily: FONT, textAlign: "center", color: "#777" }}>Loading your ads…</p>;
 
+  const extensionCost = settings.extensionCostFarmcoin;
+  const extension = daysText(settings.extensionDays);
   const costText = extensionCost > 0 ? `${extensionCost} FarmCoin` : "free";
   const btn = (color: string, filled = false): React.CSSProperties => ({
     minHeight: 40,
@@ -74,7 +76,7 @@ export function MyAds({
     <div style={{ fontFamily: FONT, maxWidth: 640, margin: "0 auto" }}>
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", marginBottom: "0.75rem" }}>
         <div style={{ fontSize: "0.85rem", color: "#555" }}>
-          Ads stay up for 30 days. Extending by 30 days costs <strong>{costText}</strong>.
+          Extending an ad by {extension} costs <strong>{costText}</strong>.
           {farmcoinBalance !== null && (
             <span style={{ display: "inline-flex", alignItems: "center", gap: 4, marginLeft: 6 }}>
               Your balance: <FarmCoinIcon size={16} /> <strong>{farmcoinBalance}</strong>
@@ -157,12 +159,12 @@ export function MyAds({
                       disabled={busy === ad._id}
                       onClick={() => {
                         const verb = statusKey === "expired" ? "Bring this ad back" : "Extend this ad";
-                        if (!window.confirm(`${verb} for 30 more days? Cost: ${costText}.`)) return;
-                        run(ad._id, () => extendAd({ sessionToken, adId: ad._id as Id<"marketspaceAds"> }), "Done. Your ad is live for 30 more days.");
+                        if (!window.confirm(`${verb} for ${extension}? Cost: ${costText}.`)) return;
+                        run(ad._id, () => extendAd({ sessionToken, adId: ad._id as Id<"marketspaceAds"> }), `Done. Your ad has ${extension} more.`);
                       }}
                       style={btn("#2e7d32", true)}
                     >
-                      {statusKey === "expired" ? "↺ Bring back" : "⏩ Extend 30 days"} ({costText})
+                      {statusKey === "expired" ? "↺ Bring back" : `⏩ Extend ${extension}`} ({costText})
                     </button>
                   )}
                   {ad.status !== "removed" && (

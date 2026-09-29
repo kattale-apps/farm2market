@@ -9,15 +9,15 @@ import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { REPORT_REASONS } from "../../../convex/marketspaceShared";
 import { AdCard } from "../../marketspace/components/AdCard";
-import { ExtensionCostCard } from "../../marketspace/components/ExtensionCostCard";
+import { SettingsCard } from "../../marketspace/components/SettingsCard";
 import { TopBar } from "../../marketspace/components/TopBar";
 import { FONT, formatDate, tint, useMarketspaceSession, useUgandaNow, type AdCardData } from "../../marketspace/components/shared";
 
-type Section = "moderation" | "categories" | "price";
+type Section = "moderation" | "categories" | "settings";
 
 const errorText = (e: any) => e?.message?.replace(/^.*Uncaught Error: /, "").split("\n")[0] ?? "Something went wrong.";
 
-/** Marketspace admin: moderation for admins, categories for the super admin, price for super admin / Finance. */
+/** Marketspace admin: moderation for admins; categories and settings for the super admin. */
 export default function MarketspaceAdminPage() {
   const session = useMarketspaceSession();
   const token = session.token;
@@ -27,7 +27,7 @@ export default function MarketspaceAdminPage() {
   if (session.status === "loading" || (token && me === undefined)) {
     return <p style={{ fontFamily: FONT, textAlign: "center", padding: "3rem" }}>Loading…</p>;
   }
-  if (!token || !me || !(me.canModerate || me.isSuperAdmin || me.canSetPrice)) {
+  if (!token || !me || !(me.canModerate || me.isSuperAdmin)) {
     return (
       <div style={{ fontFamily: FONT, textAlign: "center", padding: "3rem 1rem" }}>
         <p style={{ fontWeight: 700 }}>This page is for Marketspace admins.</p>
@@ -41,7 +41,7 @@ export default function MarketspaceAdminPage() {
   const sections: { key: Section; label: string; show: boolean }[] = [
     { key: "moderation", label: "🚩 Moderation", show: me.canModerate },
     { key: "categories", label: "🗂️ Groups & categories", show: me.isSuperAdmin },
-    { key: "price", label: "🪙 Extension price", show: me.canSetPrice },
+    { key: "settings", label: "⚙️ Settings", show: me.isSuperAdmin },
   ];
   const visible = sections.filter((s) => s.show);
   const active = visible.some((s) => s.key === section) ? section : visible[0].key;
@@ -65,7 +65,7 @@ export default function MarketspaceAdminPage() {
         </div>
         {active === "moderation" && <Moderation token={token} />}
         {active === "categories" && <Categories token={token} />}
-        {active === "price" && <ExtensionCostCard />}
+        {active === "settings" && <SettingsCard token={token} />}
       </main>
     </div>
   );

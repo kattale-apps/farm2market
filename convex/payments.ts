@@ -30,6 +30,7 @@ import {
  * Internal helper function to lock a unit (shared logic)
  */
 import { Id } from "./_generated/dataModel";
+import { postWallet } from "./walletSplit";
 
 async function lockUnitInternal(
   ctx: any,
@@ -120,17 +121,14 @@ async function lockUnitInternal(
   // Generate UTID
   const utid = generateUTID(user.role);
 
-  // ATOMIC OPERATION: Lock capital, deduct commission, and lock unit together
-  let balanceAfter = currentBalance - unitPrice; // First deduct purchase price
-  
-  // Deduct purchase price
-  await ctx.db.insert("walletLedger", {
+  // ATOMIC OPERATION: Lock capital, deduct commission, and lock unit together.
+  // Demo money is spent first (convex/walletSplitShared.ts).
+  let { balanceAfter } = await postWallet(ctx, {
     userId: traderId,
     utid,
     type: "capital_lock",
     amount: unitPrice,
-    balanceAfter,
-    timestamp: getUgandaTime(),
+    rule: { kind: "demo_first" },
     metadata: {
       unitId: unitId,
       listingId: listing._id,
@@ -142,14 +140,12 @@ async function lockUnitInternal(
 
   // Deduct commission if applicable (atomic with purchase)
   if (commission > 0) {
-    balanceAfter = balanceAfter - commission;
-    await ctx.db.insert("walletLedger", {
+    ({ balanceAfter } = await postWallet(ctx, {
       userId: traderId,
       utid: `${utid}-COMM`, // Commission UTID (linked to main UTID)
       type: "trader_commission_deduction",
       amount: commission,
-      balanceAfter,
-      timestamp: getUgandaTime(),
+      rule: { kind: "demo_first" },
       metadata: {
         mainUtid: utid,
         unitId: unitId,
@@ -157,7 +153,7 @@ async function lockUnitInternal(
         commissionPercentage,
         purchaseAmount: unitPrice,
       },
-    });
+    }));
   }
 
   // Lock the unit

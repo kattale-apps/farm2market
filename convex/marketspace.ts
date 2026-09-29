@@ -135,7 +135,7 @@ async function chargeFarmcoin(ctx: MutationCtx, user: Doc<"users">, amount: numb
   if (!wallet) throw new Error("Your account has no FarmCoin wallet.");
   const balance = (await walletBalance(ctx, user)) ?? 0;
   if (balance < amount) {
-    throw new Error(`Not enough FarmCoin. Extending costs ${amount}; you have ${balance}.`);
+    throw new Error(`Not enough FarmCoin. Extending costs ${amount}; you have ${balance}. Buy FarmCoin in My Wallet.`);
   }
   const now = getUgandaTime();
   const utid = generateUTID("mks");

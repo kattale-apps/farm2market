@@ -41,10 +41,8 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
   const counterBuyerOffer = useMutation(api.traderBuyerNegotiations.counterBuyerOffer);
   const farmcoinSummary = useQuery(api.farmcoin.getTraderFarmcoinSummary, { traderId: userId });
   const sentifySummary = useQuery((api as any).farmcoin.getSentifyWalletSummary, { userId } as any);
-  const sentifyReceipts = useQuery((api as any).farmcoin.getSentifyReceipts, { userId } as any);
   const traderDeliveryBatches = useQuery((api as any).buyers.getTraderDeliveryBatches, { traderId: userId } as any);
   const traderConfirmListingDelivery = useMutation((api as any).buyers.traderConfirmListingDelivery);
-  const cashOutSentifyReceipt = useMutation((api as any).farmcoin.cashOutSentifyReceipt);
   const paginationPreferences = useQuery(
     (api as any).userSettings.getPaginationPreferences,
     { userId } as any
@@ -56,8 +54,6 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
   const [depositAmount, setDepositAmount] = useState<string>("");
   const [isDepositing, setIsDepositing] = useState(false);
   const [depositMessage, setDepositMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [sentifyReceiptUtid, setSentifyReceiptUtid] = useState<string>("");
-  const [sentifyPhone, setSentifyPhone] = useState<string>("");
   const [sentifyMessage, setSentifyMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [proView, setProView] = useState(false);
   const [counterPrices, setCounterPrices] = useState<{ [key: string]: string }>({});
@@ -99,7 +95,8 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
   }, []);
   const MORE_MENU_SECTIONS: Array<{ key: string; label: React.ReactNode }> = [
     { key: "marketspace", label: "🗺️ Marketspace" },
-    { key: "wallet", label: "💰 Wallet (deposits)" },
+    { key: "myWallet", label: "💰 My Wallet (sell FarmCoin, cash out)" },
+    { key: "wallet", label: "🏦 Trading capital (deposits)" },
     { key: "sentify", label: <><FarmCoinIcon size={18} /> Sentify rewards cash-out</> },
     {
       key: "farmcoinTokens",
@@ -124,9 +121,9 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
   const SIMPLE_VIEW_ONLY_KEYS = ["openListings", "todayActivity", "buyOffers", "deliveryConfirmations", "wallet", "sentify"];
   const PRO_VIEW_ONLY_KEYS = ["createListing", "listingsNegotiations"];
   const openSectionFromMenu = (key: string) => {
-    if (key === "marketspace") {
+    if (key === "marketspace" || key === "myWallet") {
       setMoreMenuOpen(false);
-      router.push("/marketspace");
+      router.push(key === "marketspace" ? "/marketspace" : "/wallet");
       return;
     }
     if (SIMPLE_VIEW_ONLY_KEYS.includes(key)) {
@@ -285,25 +282,6 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
       setSentifyMessage({ type: "success", text: "Delivery confirmed. Await buyer and superadmin confirmation." });
     } catch (error: any) {
       setSentifyMessage({ type: "error", text: error?.message || "Failed to confirm delivery" });
-    }
-  };
-
-  const handleSentifyCashout = async () => {
-    if (!sentifyReceiptUtid || !sentifyPhone.trim()) {
-      setSentifyMessage({ type: "error", text: "Select a receipt and enter a phone number" });
-      return;
-    }
-
-    try {
-      const result = await cashOutSentifyReceipt({
-        traderId: userId,
-        receiptUtid: sentifyReceiptUtid,
-        phoneNumber: sentifyPhone.trim(),
-      });
-      setSentifyMessage({ type: "success", text: `Cash-out processed. UGX ${result.payoutAmount.toFixed(2)} requested.` });
-      setSentifyReceiptUtid("");
-    } catch (error: any) {
-      setSentifyMessage({ type: "error", text: error?.message || "Cash-out failed" });
     }
   };
 
@@ -1878,42 +1856,18 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
               Sentify Wallet
             </h3>
             <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.75rem" }}>
-              Sentify is to turn your FarmCoin into cash via mobile money.
+              Sentify is to turn your FarmCoin into cash via mobile money. Sell your FarmCoin in your Wallet, then cash out to any mobile money number.
             </div>
             <div style={{ marginBottom: "0.75rem" }}>
               <div style={{ color: "#666", fontSize: "0.9rem" }}>Balance</div>
               <div style={{ fontSize: "1.5rem", fontWeight: "600", color: "#2e7d32" }}>
                 {sentifySummary?.balance ?? 0} Token(s)
               </div>
-              {sentifySummary && (
-                <div style={{ fontSize: "0.8rem", color: "#64748b" }}>
-                  Cash-out rate: UGX {sentifySummary.cashoutRate} per token
-                </div>
-              )}
             </div>
             <div style={{ display: "grid", gap: "0.6rem", maxWidth: 520 }}>
-              <select
-                value={sentifyReceiptUtid}
-                onChange={(e) => setSentifyReceiptUtid(e.target.value)}
-                style={{ padding: "0.6rem", borderRadius: 8, border: "1px solid #ddd" }}
-              >
-                <option value="">Select receipt to cash out</option>
-                {(sentifyReceipts || []).map((receipt: any) => (
-                  <option key={receipt.utid} value={receipt.utid}>
-                    {receipt.utid} • {receipt.delta} token(s)
-                  </option>
-                ))}
-              </select>
-              <input
-                type="tel"
-                placeholder="Mobile money phone number"
-                value={sentifyPhone}
-                onChange={(e) => setSentifyPhone(e.target.value)}
-                style={{ padding: "0.6rem", borderRadius: 8, border: "1px solid #ddd" }}
-              />
               <button
                 type="button"
-                onClick={handleSentifyCashout}
+                onClick={() => router.push("/wallet")}
                 style={{
                   padding: "0.6rem 1rem",
                   borderRadius: 8,
@@ -1924,7 +1878,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
                   cursor: "pointer",
                 }}
               >
-                Sentify Cash-out
+                Open Wallet to sell FarmCoin and cash out
               </button>
               {sentifyMessage && (
                 <div style={{

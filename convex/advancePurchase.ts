@@ -21,10 +21,12 @@
  */
 
 import { v, ConvexError } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, MutationCtx } from "./_generated/server";
 import { generateUTID, getUgandaTime } from "./utils";
 import { checkPilotMode } from "./pilotMode";
 import { Id, Doc } from "./_generated/dataModel";
+import { findLock, postWallet } from "./walletSplit";
+import { shareOf } from "./walletSplitShared";
 
 // ------------------------------------------------------------------
 // Shared authorization helpers (local, per project convention — see
@@ -1043,14 +1045,15 @@ export const createCommitment = mutation({
 
     const now = getUgandaTime();
     const utid = generateUTID(buyer.role);
-    const balanceAfter = currentBalance - grandTotal;
 
-    await ctx.db.insert("walletLedger", {
+    // Demo money is spent first; milestone payouts and refunds carry the
+    // same demo share (convex/walletSplitShared.ts).
+    await postWallet(ctx, {
       userId: args.buyerId,
       utid,
       type: "capital_lock",
       amount: grandTotal,
-      balanceAfter,
+      rule: { kind: "demo_first" },
       timestamp: now,
       metadata: {
         type: "advance_purchase_commitment",
@@ -1120,7 +1123,7 @@ export const createCommitment = mutation({
 // --------------------------------------------------------------------
 
 async function refundCommitmentToBuyer(
-  ctx: { db: any },
+  ctx: MutationCtx,
   commitment: Doc<"advancePurchaseCommitments">,
   offer: Doc<"advancePurchaseOffers">,
   reason: "buyer_cancelled" | "buyer_forfeited"
@@ -1130,19 +1133,16 @@ async function refundCommitmentToBuyer(
   const refundUtid = generateUTID("buyer");
 
   if (refundAmount > 0) {
-    const latestEntry = await ctx.db
-      .query("walletLedger")
-      .withIndex("by_user", (q: any) => q.eq("userId", commitment.buyerId))
-      .order("desc")
-      .first();
-    const balanceAfter = (latestEntry?.balanceAfter || 0) + refundAmount;
+    // The buyer gets back whatever demo money was not already paid out.
+    const lock = await findLock(ctx, commitment.walletUtid);
+    const refundDemo = Math.min(refundAmount, Math.max(0, (lock?.demoAmount ?? 0) - (commitment.releasedDemoAmount ?? 0)));
 
-    await ctx.db.insert("walletLedger", {
+    await postWallet(ctx, {
       userId: commitment.buyerId,
       utid: refundUtid,
       type: "capital_unlock",
       amount: refundAmount,
-      balanceAfter,
+      rule: { kind: "exact", demoAmount: refundDemo },
       timestamp: now,
       metadata: {
         type: "advance_purchase_refund",
@@ -1542,12 +1542,6 @@ export const reviewMilestoneEvidence = mutation({
       const releasable = commitments.filter((c: any) => ["funded", "in_production"].includes(c.status));
 
       if (releasable.length > 0) {
-        const farmerEntry = await ctx.db
-          .query("walletLedger")
-          .withIndex("by_user", (q: any) => q.eq("userId", offer.farmerId))
-          .order("desc")
-          .first();
-        let farmerBalance = farmerEntry?.balanceAfter || 0;
         const releaseUtid = generateUTID("farmer");
 
         const allMilestones = await ctx.db
@@ -1560,13 +1554,17 @@ export const reviewMilestoneEvidence = mutation({
 
         for (const c of releasable) {
           const releaseAmount = Math.round((c.totalAmount * milestone.releasePercent) / 100);
-          farmerBalance += releaseAmount;
-          await ctx.db.insert("walletLedger", {
+          // The farmer is paid with the demo share the buyer funded with.
+          const lock = await findLock(ctx, c.walletUtid);
+          const releaseDemo = lock
+            ? Math.min(shareOf(lock.demoAmount ?? 0, lock.amount, releaseAmount), Math.max(0, (lock.demoAmount ?? 0) - (c.releasedDemoAmount ?? 0)))
+            : 0;
+          await postWallet(ctx, {
             userId: offer.farmerId,
             utid: releaseUtid,
             type: "profit_credit",
             amount: releaseAmount,
-            balanceAfter: farmerBalance,
+            rule: { kind: "exact", demoAmount: releaseDemo },
             timestamp: now,
             metadata: {
               type: "advance_purchase_milestone_release",
@@ -1581,6 +1579,7 @@ export const reviewMilestoneEvidence = mutation({
 
           await ctx.db.patch(c._id, {
             releasedAmount: c.releasedAmount + releaseAmount,
+            releasedDemoAmount: (c.releasedDemoAmount ?? 0) + releaseDemo,
             status: isFinalStage ? "ready_for_delivery" : "in_production",
             updatedAt: now,
           });

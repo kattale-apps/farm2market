@@ -12,6 +12,7 @@ import { query, mutation } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { getUgandaTime, generateUTID } from "./utils";
 import { deliveryPointOf } from "./processors";
+import { postWallet } from "./walletSplit";
 
 /**
  * Get farmer's listings
@@ -879,22 +880,12 @@ export const cancelOverdueUTID = mutation({
     });
 
     // Step 2: Return capital to trader (unlock capital)
-    const walletEntries = await ctx.db
-      .query("walletLedger")
-      .withIndex("by_user", (q: any) => q.eq("userId", traderId))
-      .order("desc")
-      .collect();
-
-    const currentBalance = walletEntries[0]?.balanceAfter || 0;
-    const balanceAfter = currentBalance + unitPrice;
-
-    await ctx.db.insert("walletLedger", {
+    await postWallet(ctx, {
       userId: traderId,
       type: "capital_unlock",
       amount: unitPrice,
-      balanceAfter: balanceAfter,
+      rule: { kind: "exact", demoAmount: walletEntry.demoAmount ?? 0 },
       utid: cancellationUtid,
-      timestamp: getUgandaTime(),
       metadata: {
         originalLockUtid: unit.lockUtid,
         unitId: unit._id,

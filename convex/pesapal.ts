@@ -20,6 +20,7 @@ import {
 import { checkPilotMode } from "./pilotMode";
 import { generateUTID, getUgandaTime } from "./utils";
 import { Id } from "./_generated/dataModel";
+import { postWallet } from "./walletSplit";
 
 // Pesapal API Configuration
 // Note: Environment variables must be set in Convex Dashboard → Settings → Environment Variables
@@ -526,7 +527,15 @@ export const getUserDetails = query({
 export const createPaymentTransaction = internalMutation({
   args: {
     userId: v.id("users"),
-    userRole: v.union(v.literal("trader"), v.literal("buyer")),
+    userRole: v.union(
+      v.literal("trader"),
+      v.literal("buyer"),
+      v.literal("farmer"),
+      v.literal("vendor"),
+      v.literal("transporter"),
+      v.literal("store"),
+    ),
+    purpose: v.optional(v.literal("wallet_topup")),
     amount: v.number(),
     currency: v.string(),
     pesapalOrderTrackingId: v.string(),
@@ -538,6 +547,7 @@ export const createPaymentTransaction = internalMutation({
     const transactionId = await ctx.db.insert("paymentTransactions", {
       userId: args.userId,
       userRole: args.userRole,
+      purpose: args.purpose,
       amount: args.amount,
       currency: args.currency,
       pesapalOrderTrackingId: args.pesapalOrderTrackingId,
@@ -1110,34 +1120,27 @@ export const completePaymentTransaction = internalMutation({
       return { completed: false, status: nextStatus ?? "pending" };
     }
 
-    // Payment completed - credit wallet
-    // Check pilot mode (deposit moves money)
-    await checkPilotMode(ctx);
+    // Payment completed - credit wallet.
+    // Wallet top-ups feed the FarmCoin exchange, which the user chose not to
+    // block in pilot mode; trading-capital deposits still are.
+    const isWalletTopUp = transaction.purpose === "wallet_topup";
+    if (!isWalletTopUp) {
+      await checkPilotMode(ctx);
+    }
 
     // Generate UTID for wallet deposit
     const depositUtid = generateUTID(transaction.userRole);
 
-    // Get current wallet balance
-    const currentEntries = await ctx.db
-      .query("walletLedger")
-      .withIndex("by_user", (q) => q.eq("userId", transaction.userId))
-      .order("desc")
-      .first();
-
-    const balanceAfter = currentEntries
-      ? currentEntries.balanceAfter + transaction.amount
-      : transaction.amount;
-
-    // Create wallet deposit entry
-    await ctx.db.insert("walletLedger", {
+    // Pesapal money is real money: it can be cashed out (convex/walletSplitShared.ts).
+    const { balanceAfter } = await postWallet(ctx, {
       userId: transaction.userId,
       utid: depositUtid,
-      type: "capital_deposit",
+      type: isWalletTopUp ? "wallet_topup" : "capital_deposit",
       amount: transaction.amount,
-      balanceAfter,
-      timestamp: getUgandaTime(),
+      rule: { kind: "none" },
       metadata: {
         source: "pesapal_payment",
+        ...(isWalletTopUp ? { note: "Mobile money top-up" } : {}),
         pesapalOrderTrackingId: args.orderTrackingId,
         paymentReference: args.paymentStatus.payment_reference || null,
       },
@@ -1628,5 +1631,65 @@ export const initiateBuyerDeposit = action({
       callbackUrl: args.callbackUrl,
       cancelUrl: args.cancelUrl,
     });
+  },
+});
+
+/**
+ * Top up the Wallet (any non-admin role) through Pesapal. The money lands as
+ * cashable wallet balance, used to buy FarmCoin or cashed out again.
+ */
+export const initiateWalletTopUp = action({
+  args: {
+    sessionToken: v.string(),
+    amount: v.number(),
+    callbackUrl: v.string(),
+    cancelUrl: v.string(),
+  },
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{
+    transactionId: any;
+    orderTrackingId: string;
+    redirectUrl: string;
+  }> => {
+    const user = await ctx.runQuery(internal.farmcoinExchange.topUpUser, {
+      sessionToken: args.sessionToken,
+    });
+    if (!user) {
+      throw pesapalError("NOT_SIGNED_IN", "Please log in again to top up your wallet.");
+    }
+    if (!Number.isInteger(args.amount) || args.amount <= 0) {
+      throw pesapalError("INVALID_AMOUNT", "Enter a whole number of shillings.");
+    }
+
+    const { merchantReference, orderTrackingId, redirectUrl } =
+      await submitPesapalOrder(ctx, {
+        email: user.email,
+        phone: user.phoneNumber,
+        firstName: user.alias,
+        amount: args.amount,
+        currency: "UGX",
+        description: "Farm2Market wallet top-up",
+        callbackUrl: args.callbackUrl,
+        cancelUrl: args.cancelUrl,
+      });
+
+    const transactionId: any = await ctx.runMutation(
+      internal.pesapal.createPaymentTransaction,
+      {
+        userId: user.userId,
+        userRole: user.role as "trader" | "buyer" | "farmer" | "vendor" | "transporter" | "store",
+        purpose: "wallet_topup",
+        amount: args.amount,
+        currency: "UGX",
+        pesapalOrderTrackingId: orderTrackingId,
+        pesapalMerchantReference: merchantReference,
+        redirectUrl,
+        callbackUrl: args.callbackUrl,
+      },
+    );
+
+    return { transactionId, orderTrackingId, redirectUrl };
   },
 });

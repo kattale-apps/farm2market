@@ -61,6 +61,8 @@ import type * as farmPlanner from "../farmPlanner.js";
 import type * as farmToolbox from "../farmToolbox.js";
 import type * as farmValidation from "../farmValidation.js";
 import type * as farmcoin from "../farmcoin.js";
+import type * as farmcoinExchange from "../farmcoinExchange.js";
+import type * as farmcoinExchangeShared from "../farmcoinExchangeShared.js";
 import type * as farmcoinTest from "../farmcoinTest.js";
 import type * as farmerDashboard from "../farmerDashboard.js";
 import type * as farmerOnboarding from "../farmerOnboarding.js";
@@ -134,6 +136,8 @@ import type * as utils_index from "../utils/index.js";
 import type * as utils_types from "../utils/types.js";
 import type * as vendorOnboarding from "../vendorOnboarding.js";
 import type * as wallet from "../wallet.js";
+import type * as walletSplit from "../walletSplit.js";
+import type * as walletSplitShared from "../walletSplitShared.js";
 
 import type {
   ApiFromModules,
@@ -195,6 +199,8 @@ declare const fullApi: ApiFromModules<{
   farmToolbox: typeof farmToolbox;
   farmValidation: typeof farmValidation;
   farmcoin: typeof farmcoin;
+  farmcoinExchange: typeof farmcoinExchange;
+  farmcoinExchangeShared: typeof farmcoinExchangeShared;
   farmcoinTest: typeof farmcoinTest;
   farmerDashboard: typeof farmerDashboard;
   farmerOnboarding: typeof farmerOnboarding;
@@ -268,6 +274,8 @@ declare const fullApi: ApiFromModules<{
   "utils/types": typeof utils_types;
   vendorOnboarding: typeof vendorOnboarding;
   wallet: typeof wallet;
+  walletSplit: typeof walletSplit;
+  walletSplitShared: typeof walletSplitShared;
 }>;
 
 /**

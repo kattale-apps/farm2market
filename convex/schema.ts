@@ -64,6 +64,7 @@ export default defineSchema({
     lastActiveAt: v.number(),
     passwordHash: v.optional(v.string()), // Secure password hash (bcrypt/argon2). Required for production authentication.
     customSpendCap: v.optional(v.number()), // Admin-set custom spend cap for traders (in UGX). If not set, uses default MAX_TRADER_EXPOSURE_UGX.
+    demoWallet: v.optional(v.boolean()), // true: the account holds demo money and may keep receiving it. Unset/false: real money only.
     adminLevel: v.optional(v.union(v.literal("super"), v.literal("junior"))), // Admin hierarchy level. undefined means super admin (backward compatible).
     adminCategory: v.optional(v.union(v.literal("store"), v.literal("message"), v.literal("community"), v.literal("community_crm"), v.literal("finance"))), // Junior admin category (store delivery vs message support vs community oversight vs CRM-only agent vs finance)
     assignedCommunityIds: v.optional(v.array(v.id("communities"))), // Communities assigned to junior community admins. Only applies to community admins.
@@ -130,10 +131,18 @@ export default defineSchema({
       v.literal("profit_withdrawal"),
       v.literal("incoming_purchase"), // Created when trader makes offer on unit(s) - not inventory, just a pending purchase record
       v.literal("trader_commission_deduction"), // Trader commission deducted from wallet
-      v.literal("export_fee_payment") // Export Markets platform fee (verification, success, sample) paid from the wallet
+      v.literal("export_fee_payment"), // Export Markets platform fee (verification, success, sample) paid from the wallet
+      // FarmCoin exchange and cash-outs. See convex/farmcoinExchange.ts.
+      v.literal("wallet_topup"), // Pesapal top-up made from the Wallet page (cashable)
+      v.literal("farmcoin_sale_credit"), // Net proceeds when the user's FarmCoin sells
+      v.literal("farmcoin_purchase_debit"), // Paid from the wallet to buy FarmCoin
+      v.literal("cashout_hold"), // Held when a cash-out is requested
+      v.literal("cashout_release") // Returned when Finance rejects a cash-out
     ),
     amount: v.number(), // Amount in UGX
     balanceAfter: v.number(), // Running balance after this entry
+    demoAmount: v.optional(v.number()), // Part of `amount` that was demo money (convex/walletSplitShared.ts)
+    demoBalanceAfter: v.optional(v.number()), // Running demo balance after this entry; real = balanceAfter - this
     timestamp: v.number(),
     metadata: v.optional(v.any()), // Additional context
   })
@@ -465,7 +474,16 @@ export default defineSchema({
    */
   paymentTransactions: defineTable({
     userId: v.id("users"), // Trader or buyer making payment
-    userRole: v.union(v.literal("trader"), v.literal("buyer")),
+    userRole: v.union(
+      v.literal("trader"),
+      v.literal("buyer"),
+      v.literal("farmer"),
+      v.literal("vendor"),
+      v.literal("transporter"),
+      v.literal("store")
+    ),
+    // "wallet_topup" credits the cashable wallet; absent means a trading-capital deposit.
+    purpose: v.optional(v.literal("wallet_topup")),
     amount: v.number(), // Amount in UGX
     currency: v.string(), // Currency code (e.g., "UGX")
     pesapalOrderTrackingId: v.string(), // Pesapal's own order tracking ID (returned by SubmitOrderRequest, echoed on the callback/IPN)
@@ -544,7 +562,10 @@ export default defineSchema({
       v.literal("price_sheet_download"),
       v.literal("tracker_entry_reward"),
       v.literal("transport_rating_reward"),
-      v.literal("marketspace_ad_extension")
+      v.literal("marketspace_ad_extension"),
+      v.literal("exchange_sell_escrow"), // Coins leave the holder's balance into the sell queue
+      v.literal("exchange_sell_cancel"), // Unsold coins returned when the seller cancels
+      v.literal("exchange_purchase") // Coins bought from the queue
     ),
     utid: v.string(),
     listingId: v.optional(v.id("listings")),
@@ -2934,6 +2955,7 @@ export default defineSchema({
     ),
     walletUtid: v.optional(v.string()), // walletLedger utid for the funding debit
     releasedAmount: v.number(), // sum of milestone-release credits to the farmer for this commitment
+    releasedDemoAmount: v.optional(v.number()), // demo part of releasedAmount (see convex/walletSplitShared.ts)
     quantityDelivered: v.number(),
     fundedAt: v.optional(v.number()),
     createdAt: v.number(),
@@ -3971,4 +3993,90 @@ export default defineSchema({
     updatedBy: v.id("users"),
     updatedAt: v.number(),
   }),
+
+  // ------------------------------------------------------------------
+  // FarmCoin exchange and wallet cash-outs. See convex/farmcoinExchange.ts.
+  // ------------------------------------------------------------------
+
+  /** Single row: exchange rate, fee and minimums set by super admin / finance. */
+  farmcoinExchangeSettings: defineTable({
+    rateUGX: v.number(), // UGX per FarmCoin; 0 closes the exchange
+    feePercent: v.number(), // Platform fee taken from the seller's proceeds
+    minSellCoins: v.number(),
+    minBuyCoins: v.number(),
+    minCashoutUGX: v.number(),
+    updatedBy: v.id("users"),
+    updatedAt: v.number(),
+  }),
+
+  farmcoinExchangeSettingsHistory: defineTable({
+    changedBy: v.id("users"),
+    rateUGX: v.number(),
+    feePercent: v.number(),
+    minSellCoins: v.number(),
+    minBuyCoins: v.number(),
+    minCashoutUGX: v.number(),
+    reason: v.string(),
+    createdAt: v.number(),
+  }).index("by_createdAt", ["createdAt"]),
+
+  /** Single row of running totals, so admin screens need not scan the trades. */
+  farmcoinExchangeTotals: defineTable({
+    queuedCoins: v.number(),
+    coinsSold: v.number(),
+    grossUGX: v.number(),
+    feesUGX: v.number(),
+    pendingCashoutUGX: v.number(),
+    paidCashoutUGX: v.number(),
+  }),
+
+  /** Coins a holder has put up for sale. The coins are already out of their balance. */
+  farmcoinSellOffers: defineTable({
+    sellerId: v.id("users"),
+    accountType: v.union(v.literal("farmer"), v.literal("trader"), v.literal("sentify"), v.literal("buyer_reward")),
+    coinsOffered: v.number(),
+    coinsRemaining: v.number(),
+    status: v.union(v.literal("open"), v.literal("filled"), v.literal("cancelled")),
+    utid: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_status_and_createdAt", ["status", "createdAt"])
+    .index("by_sellerId_and_createdAt", ["sellerId", "createdAt"]),
+
+  /** One row per seller offer a purchase drew from. */
+  farmcoinTrades: defineTable({
+    purchaseUtid: v.string(), // Shared by every fill of one purchase
+    buyerId: v.id("users"),
+    sellerId: v.id("users"),
+    offerId: v.id("farmcoinSellOffers"),
+    coins: v.number(),
+    rateUGX: v.number(),
+    feePercent: v.number(),
+    grossUGX: v.number(),
+    feeUGX: v.number(),
+    netUGX: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_buyerId_and_createdAt", ["buyerId", "createdAt"])
+    .index("by_sellerId_and_createdAt", ["sellerId", "createdAt"])
+    .index("by_createdAt", ["createdAt"]),
+
+  /** Requests to pay wallet money out to mobile money. Paid by hand today. */
+  walletCashouts: defineTable({
+    userId: v.id("users"),
+    amountUGX: v.number(),
+    phone: v.string(), // +256...
+    network: v.union(v.literal("mtn"), v.literal("airtel")),
+    status: v.union(v.literal("pending"), v.literal("paid"), v.literal("rejected")),
+    provider: v.literal("manual"), // An automatic payout provider can be added later
+    providerReference: v.optional(v.string()), // Mobile money transaction ID
+    utid: v.string(),
+    requestedAt: v.number(),
+    handledBy: v.optional(v.id("users")),
+    handledAt: v.optional(v.number()),
+    rejectReason: v.optional(v.string()),
+  })
+    .index("by_status_and_requestedAt", ["status", "requestedAt"])
+    .index("by_userId_and_requestedAt", ["userId", "requestedAt"]),
 });

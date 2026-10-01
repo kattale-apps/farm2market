@@ -176,7 +176,7 @@ export function AdForm({
         onDone("Your ad was updated.");
       } else {
         const result = await createAd({ ...payload, expectedCostFarmcoin: nextAd.cost });
-        onDone(`Your ad is live on Marketspace for ${daysText(result.days)}${result.cost > 0 ? ` (${result.cost} FarmCoin paid)` : ""}.`);
+        onDone(`Your ad is live on MarketSpace for ${daysText(result.days)}${result.cost > 0 ? ` (${result.cost} FarmCoin paid)` : ""}.`);
       }
     } catch (e: any) {
       setError(e?.message?.replace(/^.*Uncaught Error: /, "").split("\n")[0] ?? "Could not save the ad.");

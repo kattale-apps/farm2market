@@ -19,7 +19,7 @@ export function AdDetail({ ad, now, onReport }: { ad: AdCardData; now: number; o
     const title = `${wanted ? "Wanted: " : ""}${ad.title}`;
     try {
       if (navigator.share) {
-        await navigator.share({ title, text: `${title} on Farm2Market Marketspace`, url });
+        await navigator.share({ title, text: `${title} on Farm2Market MarketSpace`, url });
         return;
       }
       await navigator.clipboard.writeText(url);
@@ -52,7 +52,7 @@ export function AdDetail({ ad, now, onReport }: { ad: AdCardData; now: number; o
         <div style={{ margin: "0.75rem 0" }}>
           <PhotoGallery key={ad.photoUrls.join("|")} urls={ad.photoUrls} title={ad.title} height={280} startIndex={photoIndex} onIndexChange={setPhotoIndex} onTap={(i) => { setPhotoIndex(i); setFullScreen(true); }} />
           <div style={{ textAlign: "center", color: "#888", fontSize: "0.75rem", marginTop: 4 }}>
-            {ad.photoUrls.length > 1 ? "Swipe for more photos · tap to enlarge" : "Tap to enlarge"}
+            {ad.photoUrls.length > 1 ? "Swipe for more photos · tap to enlarge and zoom" : "Tap to enlarge and zoom"}
           </div>
         </div>
       )}
@@ -62,7 +62,8 @@ export function AdDetail({ ad, now, onReport }: { ad: AdCardData; now: number; o
             ✕
           </button>
           <div style={{ width: "100%", maxWidth: 720, margin: "0 auto" }}>
-            <PhotoGallery urls={ad.photoUrls} title={ad.title} height="78vh" fit="contain" dark startIndex={photoIndex} onIndexChange={setPhotoIndex} />
+            <PhotoGallery urls={ad.photoUrls} title={ad.title} height="72vh" fit="contain" dark zoomable startIndex={photoIndex} onIndexChange={setPhotoIndex} />
+            <div style={{ textAlign: "center", color: "rgba(255,255,255,0.6)", fontSize: "0.75rem", marginTop: 6 }}>Pinch or double-tap to zoom · drag to look around</div>
           </div>
         </div>
       )}

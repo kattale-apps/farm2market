@@ -22,7 +22,7 @@ type Tab = "browse" | "post" | "mine";
 type Kind = "all" | "offer" | "wanted";
 
 /**
- * Marketspace: public classified ads from across Uganda. Anyone can browse
+ * MarketSpace: public classified ads from across Uganda. Anyone can browse
  * and contact advertisers without logging in; signed-in users can post and
  * manage their own ads here too.
  */
@@ -92,7 +92,7 @@ export default function MarketspacePage() {
   const group = groups.find((g) => g._id === groupId) ?? null;
   const scopeName = useMemo(() => {
     const cat = group?.categories.find((c) => c._id === categoryId);
-    return cat ? cat.name : group ? group.name : "Marketspace";
+    return cat ? cat.name : group ? group.name : "MarketSpace";
   }, [group, categoryId]);
 
   const isUser = session.status === "user" && !!me;

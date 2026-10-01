@@ -1,5 +1,5 @@
 /**
- * Marketspace rules shared by the Convex functions, the pages and the tests.
+ * MarketSpace rules shared by the Convex functions, the pages and the tests.
  * Pure functions only: no database access.
  */
 

@@ -137,13 +137,13 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
           : "🛒 Farm 2 Market",
         disabled: farm2MarketLocked,
       },
-      { key: "marketspace", label: "🗺️ Marketspace" },
+      { key: "marketspace", label: "🗺️ MarketSpace" },
       { key: "advancePurchase", label: "🌱 Advanced Markets" },
       { key: "sellServices", label: "🏭 Sales & Services" },
     ] : []),
     ...(effectiveRole === "vendor" ? [
       { key: "vendorBuying", label: "🧺 Buying from farmers" },
-      { key: "marketspace", label: "🗺️ Marketspace" },
+      { key: "marketspace", label: "🗺️ MarketSpace" },
       { key: "findTransport", label: "🚚 Find transport" },
     ] : []),
   ];

@@ -3897,7 +3897,7 @@ export default defineSchema({
     .index("by_transporterId", ["transporterId"]),
 
   /**
-   * Marketspace: a public, national classified-ads board.
+   * MarketSpace: a public, national classified-ads board.
    * - A separate feature from Farm2Market listings; it never reads or writes
    *   the listings tables.
    * - Anyone can browse without logging in; any logged-in user can post.
@@ -3991,7 +3991,7 @@ export default defineSchema({
     .index("by_adId", ["adId"]),
 
   /**
-   * Single row: Marketspace settings, managed by the super admin. A field that
+   * Single row: MarketSpace settings, managed by the super admin. A field that
    * has never been saved falls back to DEFAULT_SETTINGS in marketspaceShared.
    */
   marketspaceSettings: defineTable({
@@ -4008,7 +4008,7 @@ export default defineSchema({
   }),
 
   /**
-   * Per-account Marketspace posting counts. Free ads are counted over the
+   * Per-account MarketSpace posting counts. Free ads are counted over the
    * account's lifetime, so deleting an ad does not give a free ad back.
    */
   marketspacePosters: defineTable({

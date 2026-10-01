@@ -5,7 +5,7 @@ import { UgandaMapIcon } from "./UgandaMapIcon";
 import { FONT } from "./shared";
 
 /**
- * Marketspace header. Guests always see Log in / Sign up; signed-in users get
+ * MarketSpace header. Guests always see Log in / Sign up; signed-in users get
  * a way back to their dashboard, and admins a link to moderation.
  */
 export function TopBar({ status, showAdmin, backHref }: { status: "loading" | "guest" | "user"; showAdmin?: boolean; backHref?: string }) {
@@ -44,7 +44,7 @@ export function TopBar({ status, showAdmin, backHref }: { status: "loading" | "g
       <Link href="/marketspace" style={{ display: "flex", alignItems: "center", gap: "0.5rem", textDecoration: "none", minWidth: 0 }}>
         <UgandaMapIcon size={34} />
         <span style={{ minWidth: 0 }}>
-          <span style={{ display: "block", fontWeight: 800, fontSize: "1.05rem", color: "#1b5e20", lineHeight: 1.1 }}>Marketspace</span>
+          <span style={{ display: "block", fontWeight: 800, fontSize: "1.05rem", color: "#1b5e20", lineHeight: 1.1 }}>MarketSpace</span>
           <span style={{ display: "block", fontSize: "0.66rem", color: "#777", letterSpacing: "0.06em", textTransform: "uppercase" }}>Farm2Market Uganda</span>
         </span>
       </Link>

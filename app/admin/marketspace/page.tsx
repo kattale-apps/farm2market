@@ -17,7 +17,7 @@ type Section = "moderation" | "categories" | "settings";
 
 const errorText = (e: any) => e?.message?.replace(/^.*Uncaught Error: /, "").split("\n")[0] ?? "Something went wrong.";
 
-/** Marketspace admin: moderation for admins; categories and settings for the super admin. */
+/** MarketSpace admin: moderation for admins; categories and settings for the super admin. */
 export default function MarketspaceAdminPage() {
   const session = useMarketspaceSession();
   const token = session.token;
@@ -30,9 +30,9 @@ export default function MarketspaceAdminPage() {
   if (!token || !me || !(me.canModerate || me.isSuperAdmin)) {
     return (
       <div style={{ fontFamily: FONT, textAlign: "center", padding: "3rem 1rem" }}>
-        <p style={{ fontWeight: 700 }}>This page is for Marketspace admins.</p>
+        <p style={{ fontWeight: 700 }}>This page is for MarketSpace admins.</p>
         <Link href="/marketspace" style={{ color: "#1b5e20", fontWeight: 800 }}>
-          Go to Marketspace →
+          Go to MarketSpace →
         </Link>
       </div>
     );
@@ -50,7 +50,7 @@ export default function MarketspaceAdminPage() {
     <div style={{ minHeight: "100vh", background: "#f6f8f4", fontFamily: FONT }}>
       <TopBar status="user" />
       <main style={{ maxWidth: 980, margin: "0 auto", padding: "1rem" }}>
-        <h1 style={{ fontSize: "1.3rem", margin: "0.25rem 0 0.75rem" }}>Marketspace admin</h1>
+        <h1 style={{ fontSize: "1.3rem", margin: "0.25rem 0 0.75rem" }}>MarketSpace admin</h1>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginBottom: "1rem" }}>
           {visible.map((s) => (
             <button
@@ -83,7 +83,7 @@ function Moderation({ token }: { token: string }) {
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
   const remove = async (ad: AdCardData) => {
-    const reason = window.prompt(`Remove "${ad.title}" from Marketspace? The advertiser is told the reason.\n\nReason:`);
+    const reason = window.prompt(`Remove "${ad.title}" from MarketSpace? The advertiser is told the reason.\n\nReason:`);
     if (!reason) return;
     try {
       await removeAd({ sessionToken: token, adId: ad._id as Id<"marketspaceAds">, reason });
@@ -102,7 +102,7 @@ function Moderation({ token }: { token: string }) {
   };
 
   if (queue === undefined) return <p>Loading…</p>;
-  if (queue === null) return <p>You cannot moderate Marketspace.</p>;
+  if (queue === null) return <p>You cannot moderate MarketSpace.</p>;
   const reasonLabel = (r: string) => REPORT_REASONS.find((x) => x.value === r)?.label ?? r;
   const danger: React.CSSProperties = { minHeight: 40, padding: "0 0.9rem", borderRadius: 10, border: "none", background: "#c62828", color: "#fff", fontWeight: 800, fontFamily: FONT, cursor: "pointer" };
 

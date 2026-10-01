@@ -45,7 +45,7 @@ const SECTIONS: { title: string; note: string; keys: { key: Key; unit: string }[
 
 const errorText = (e: any) => e?.message?.replace(/^.*Uncaught Error: /, "").split("\n")[0] ?? "Could not save.";
 
-/** Super admin: every Marketspace period, price and limit. */
+/** Super admin: every MarketSpace period, price and limit. */
 export function SettingsCard({ token }: { token: string }) {
   const data = useQuery(api.marketspace.adminSettings, { sessionToken: token });
   const saveSettings = useMutation(api.marketspace.saveSettings);
@@ -60,7 +60,7 @@ export function SettingsCard({ token }: { token: string }) {
   }, [data, draft]);
 
   if (data === undefined || (data && !draft)) return <p>Loading…</p>;
-  if (data === null || !draft) return <p>Only the super admin can change Marketspace settings.</p>;
+  if (data === null || !draft) return <p>Only the super admin can change MarketSpace settings.</p>;
 
   const values = Object.fromEntries(Object.entries(draft).map(([k, v]) => [k, v.trim() === "" ? NaN : Number(v)])) as MarketspaceSettings;
   const changed = (Object.keys(draft) as Key[]).some((k) => values[k] !== data.settings[k]);
@@ -81,7 +81,7 @@ export function SettingsCard({ token }: { token: string }) {
   return (
     <div style={{ fontFamily: FONT, display: "grid", gap: "0.9rem", maxWidth: 640 }}>
       <p style={{ margin: 0, color: "#555", fontSize: "0.9rem" }}>
-        Every Marketspace period, price and limit is set here. Changes apply to new ads and extensions; ads already live keep their end dates.
+        Every MarketSpace period, price and limit is set here. Changes apply to new ads and extensions; ads already live keep their end dates.
         {data.updatedAt ? ` Last saved ${formatDate(data.updatedAt)}.` : " Nothing saved yet: the values below are the starting defaults."}
       </p>
       {SECTIONS.map((section) => (

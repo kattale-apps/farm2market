@@ -94,7 +94,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
     setMoreSlot(document.getElementById("dashboard-more-slot"));
   }, []);
   const MORE_MENU_SECTIONS: Array<{ key: string; label: React.ReactNode }> = [
-    { key: "marketspace", label: "🗺️ Marketspace" },
+    { key: "marketspace", label: "🗺️ MarketSpace" },
     { key: "myWallet", label: "💰 My Wallet (sell FarmCoin, cash out)" },
     { key: "wallet", label: "🏦 Trading capital (deposits)" },
     { key: "sentify", label: <><FarmCoinIcon size={18} /> Sentify rewards cash-out</> },

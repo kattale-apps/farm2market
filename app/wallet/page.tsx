@@ -337,7 +337,7 @@ function BuyForm({ token, wallet, onDone }: { token: string; wallet: WalletData;
         </div>
       )}
       <div style={{ fontSize: "0.8rem", color: "#666", lineHeight: 1.4 }}>
-        Paid from the real money in your wallet. If fewer coins are for sale than you ask for, you get what is there and pay only for that. Use FarmCoin for things like keeping a Marketspace ad up.
+        Paid from the real money in your wallet. If fewer coins are for sale than you ask for, you get what is there and pay only for that. Use FarmCoin for things like keeping a MarketSpace ad up.
       </div>
       <button type="button" onClick={submit} disabled={disabled} style={button(GREEN, disabled)}>
         {busy ? "Buying…" : "Buy FarmCoin"}

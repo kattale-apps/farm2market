@@ -11,7 +11,7 @@ export { SAFETY_NOTICE };
 export const FONT = '"Montserrat", sans-serif';
 export const DISTRICTS: string[] = [...new Set(UG_DISTRICTS.map((d) => d.name))].sort((a, b) => a.localeCompare(b));
 
-/** The ad card shape returned by the Marketspace queries. */
+/** The ad card shape returned by the MarketSpace queries. */
 export type AdCardData = {
   _id: string;
   utid: string;
@@ -112,7 +112,7 @@ export function adLink(adId: string): string {
 }
 
 export function whatsappLink(ad: Pick<AdCardData, "_id" | "title" | "contactPhone" | "kind">): string {
-  const text = ad.kind === "wanted" ? `Hello, I can supply what you asked for on Farm2Market Marketspace: "${ad.title}" ${adLink(ad._id)}` : `Hello, I saw your ad on Farm2Market Marketspace: "${ad.title}" ${adLink(ad._id)}`;
+  const text = ad.kind === "wanted" ? `Hello, I can supply what you asked for on Farm2Market MarketSpace: "${ad.title}" ${adLink(ad._id)}` : `Hello, I saw your ad on Farm2Market MarketSpace: "${ad.title}" ${adLink(ad._id)}`;
   return `https://wa.me/${whatsappNumber(ad.contactPhone)}?text=${encodeURIComponent(text)}`;
 }
 

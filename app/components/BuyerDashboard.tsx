@@ -162,7 +162,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
     setProfileExtraSlot(document.getElementById("dashboard-profile-extra-slot"));
   }, []);
   const RAW_MORE_MENU_SECTIONS: Array<{ key: string; label: React.ReactNode }> = [
-    { key: "marketspace", label: "🗺️ Marketspace" },
+    { key: "marketspace", label: "🗺️ MarketSpace" },
     { key: "myWallet", label: "💰 My Wallet (sell FarmCoin, cash out)" },
     { key: "communities", label: "🌾 My Communities" },
     {

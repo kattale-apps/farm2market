@@ -28,7 +28,7 @@ export default function MarketspaceAdPage() {
         ) : ad === null ? (
           <div style={{ textAlign: "center", padding: "3rem 1rem", background: "#fff", borderRadius: 16 }}>
             <div style={{ fontSize: "2.2rem" }}>🔍</div>
-            <p style={{ fontWeight: 700 }}>This ad is no longer on Marketspace.</p>
+            <p style={{ fontWeight: 700 }}>This ad is no longer on MarketSpace.</p>
             <p style={{ color: "#666", fontSize: "0.9rem" }}>It may have been sold, expired or removed.</p>
             <Link href="/marketspace" style={{ color: "#1b5e20", fontWeight: 800 }}>
               Browse all ads →

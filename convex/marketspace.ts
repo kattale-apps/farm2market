@@ -1,5 +1,5 @@
 /**
- * Marketspace: a public, national classified-ads board.
+ * MarketSpace: a public, national classified-ads board.
  *
  * - A separate feature from Farm2Market listings. Nothing here reads or
  *   writes the listings, negotiations or purchase tables.
@@ -70,13 +70,13 @@ function canModerate(user: Doc<"users">): boolean {
 
 async function requireSuperAdmin(ctx: Ctx, token: string): Promise<Doc<"users">> {
   const user = await requireUser(ctx, token);
-  if (!isSuperAdmin(user)) throw new Error("Only the super admin can manage Marketspace categories.");
+  if (!isSuperAdmin(user)) throw new Error("Only the super admin can manage MarketSpace categories.");
   return user;
 }
 
 async function requireModerator(ctx: Ctx, token: string): Promise<Doc<"users">> {
   const user = await requireUser(ctx, token);
-  if (!canModerate(user)) throw new Error("Only admins can moderate Marketspace.");
+  if (!canModerate(user)) throw new Error("Only admins can moderate MarketSpace.");
   return user;
 }
 
@@ -547,7 +547,7 @@ export const createAd = mutation({
     }
     const utid = generateUTID("mks");
     if (terms.cost > 0) {
-      await chargeFarmcoin(ctx, user, terms.cost, { title: clean.title, utid }, "marketspace_paid_ad", `Marketspace paid ad (${daysText(terms.days)}): ${clean.title}`);
+      await chargeFarmcoin(ctx, user, terms.cost, { title: clean.title, utid }, "marketspace_paid_ad", `MarketSpace paid ad (${daysText(terms.days)}): ${clean.title}`);
     }
     const adId = await ctx.db.insert("marketspaceAds", {
       ...clean,
@@ -625,7 +625,7 @@ export const extendAd = mutation({
     const settings = await getSettings(ctx);
     const cost = settings.extensionCostFarmcoin;
     if (cost > 0) {
-      await chargeFarmcoin(ctx, user, cost, ad, "marketspace_ad_extension", `Marketspace ad extended ${daysText(settings.extensionDays)}: ${ad.title}`);
+      await chargeFarmcoin(ctx, user, cost, ad, "marketspace_ad_extension", `MarketSpace ad extended ${daysText(settings.extensionDays)}: ${ad.title}`);
     }
     const now = getUgandaTime();
     const expiresAt = extendedExpiry(ad.expiresAt, now, settings.extensionDays);
@@ -839,7 +839,7 @@ export const saveSettings = mutation({
       adminId: admin._id,
       actionType: "update_marketspace_settings",
       utid: generateUTID("admin"),
-      reason: reason.trim() || "Marketspace settings update",
+      reason: reason.trim() || "MarketSpace settings update",
       metadata: { previous, settings },
       timestamp: now,
     });
@@ -915,7 +915,7 @@ export const removeAd = mutation({
       utid: generateUTID("admin"),
       timestamp: now,
     });
-    await notifyOwner(ctx, ad.ownerId, "Marketspace ad removed", `An admin removed your ad "${ad.title}". Reason: ${reason}`, ad.utid);
+    await notifyOwner(ctx, ad.ownerId, "MarketSpace ad removed", `An admin removed your ad "${ad.title}". Reason: ${reason}`, ad.utid);
     return { success: true };
   },
 });
@@ -946,8 +946,8 @@ export const expireAds = internalMutation({
       await notifyOwner(
         ctx,
         ad.ownerId,
-        "Marketspace ad expired",
-        `Your ad "${ad.title}" has reached its end date and is hidden from the board. Open Marketspace → My ads to bring it back.`,
+        "MarketSpace ad expired",
+        `Your ad "${ad.title}" has reached its end date and is hidden from the board. Open MarketSpace → My ads to bring it back.`,
         ad.utid
       );
     }

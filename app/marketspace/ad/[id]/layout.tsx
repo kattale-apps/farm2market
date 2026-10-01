@@ -8,17 +8,17 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   const { id } = params;
   try {
     const ad = await fetchQuery(api.marketspace.getAd, { adId: id, now: Date.now() + 3 * 60 * 60 * 1000 });
-    if (!ad) return { title: "Marketspace | Farm2Market Uganda" };
+    if (!ad) return { title: "MarketSpace | Farm2Market Uganda" };
     const title = `${ad.kind === "wanted" ? "Wanted: " : ""}${ad.title} · ${ad.district}`;
     const price = ad.priceUGX !== null ? `UGX ${Math.round(ad.priceUGX).toLocaleString("en-UG")}${ad.priceUnit ? ` ${ad.priceUnit}` : ""}. ` : "";
-    const description = `${price}${ad.categoryName} on Farm2Market Marketspace. ${SAFETY_NOTICE}`;
+    const description = `${price}${ad.categoryName} on Farm2Market MarketSpace. ${SAFETY_NOTICE}`;
     return {
-      title: `${title} | Marketspace`,
+      title: `${title} | MarketSpace`,
       description,
       openGraph: { title, description, images: ad.photoUrls[0] ? [{ url: ad.photoUrls[0] }] : undefined, type: "website" },
     };
   } catch {
-    return { title: "Marketspace | Farm2Market Uganda" };
+    return { title: "MarketSpace | Farm2Market Uganda" };
   }
 }
 

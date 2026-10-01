@@ -5,12 +5,12 @@ import { UgandaMapIcon } from "./UgandaMapIcon";
 
 const FONT = '"Montserrat", sans-serif';
 
-/** The public entry to Marketspace, shown above the login card. */
+/** The public entry to MarketSpace, shown above the login card. */
 export function MarketspaceLoginBanner() {
   return (
     <Link
       href="/marketspace"
-      aria-label="Check Marketspace: browse classified ads from across Uganda, no login needed"
+      aria-label="Check MarketSpace: browse classified ads from across Uganda, no login needed"
       style={{
         display: "flex",
         alignItems: "center",
@@ -31,7 +31,7 @@ export function MarketspaceLoginBanner() {
         <UgandaMapIcon size={46} />
       </span>
       <span style={{ flex: 1, minWidth: 0 }}>
-        <span style={{ display: "block", fontWeight: 800, fontSize: "1.1rem", color: "#1b5e20", letterSpacing: "-0.01em" }}>Check Marketspace</span>
+        <span style={{ display: "block", fontWeight: 800, fontSize: "1.1rem", color: "#1b5e20", letterSpacing: "-0.01em" }}>Check MarketSpace</span>
         <span style={{ display: "block", fontSize: "0.82rem", color: "#4a4a4a", marginTop: 2, lineHeight: 1.35 }}>
           Browse classified ads from across Uganda. No login needed.
         </span>

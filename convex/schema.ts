@@ -100,7 +100,7 @@ export default defineSchema({
     // Community scope and onboarding
     accountScope: v.optional(v.union(v.literal("full"), v.literal("community_only"))), // Whether account is restricted to a single community
     onboardedViaCommunityId: v.optional(v.id("communities")), // The community through which user was onboarded (for community_only accounts)
-    supplyChainRole: v.optional(v.string()), // Role in the supply chain (e.g., "producer", "aggregator", "processor")
+    supplyChainRole: v.optional(v.string()), // Role in the supply chain (e.g., "producer", "aggregator", "miller")
     supplyChainRoleOther: v.optional(v.string()), // Custom supply chain role if not in standard list
     // QR platform (Phase 1: schema only, unenforced — Phase 2 wires real permission checks)
     qrPermissions: v.optional(v.array(v.string())), // e.g. "qr.create", "forms.edit", "analytics.view"

@@ -321,7 +321,7 @@ export const getActiveSupplyChainRoles = query({
     return [
       { id: "producer", label: "Producer" },
       { id: "aggregator", label: "Aggregator" },
-      { id: "processor", label: "Processor" },
+      { id: "miller", label: "Miller" },
       { id: "exporter", label: "Exporter" },
       { id: "transporter", label: "Transporter" },
       { id: "trader", label: "Trader" },

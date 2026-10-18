@@ -28,7 +28,7 @@ const ROLE_COLORS: Record<string, string> = {
 const SUPPLY_CHAIN_ROLES = [
   "Farmer", "Market vendor", "Trader", "Buyer", "Transporter",
   "Storage provider", "Stockist", "Agent", "Distributor",
-  "Investor", "Sponsor", "Agroprocessor", "Exporter",
+  "Investor", "Sponsor", "Miller", "Exporter",
   "Agronomist", "VET doctor", "Agro-machinery repair",
   "Input supplier", "Financial services", "Other",
 ];

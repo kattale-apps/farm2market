@@ -39,8 +39,24 @@ export function AdDetail({ ad, now, onReport }: { ad: AdCardData; now: number; o
 
   return (
     <div style={{ fontFamily: FONT }}>
-      <div style={{ display: "inline-flex", gap: "0.35rem", alignItems: "center", padding: "0.25rem 0.6rem", borderRadius: 999, background: wanted ? "#fff3c4" : tint(ad.groupColor, 0.14), color: wanted ? "#6d4c00" : ad.groupColor, fontWeight: 800, fontSize: "0.75rem" }}>
-        {wanted ? "WANTED" : "OFFER"} · {ad.categoryIcon} {ad.groupName} · {ad.categoryName}
+      <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap", alignItems: "center" }}>
+        <div style={{ display: "inline-flex", gap: "0.35rem", alignItems: "center", padding: "0.25rem 0.6rem", borderRadius: 999, background: wanted ? "#fff3c4" : tint(ad.groupColor, 0.14), color: wanted ? "#6d4c00" : ad.groupColor, fontWeight: 800, fontSize: "0.75rem" }}>
+          {wanted ? "WANTED" : "OFFER"} · {ad.categoryIcon} {ad.groupName} · {ad.categoryName}
+        </div>
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            borderRadius: 999,
+            padding: "0.2rem 0.6rem",
+            background: ad.visibility === "verified_only" ? "#f3e5f5" : "#e8f5e9",
+            color: ad.visibility === "verified_only" ? "#6a1b9a" : "#1b5e20",
+            fontWeight: 800,
+            fontSize: "0.72rem",
+          }}
+        >
+          {ad.visibility === "verified_only" ? "Verified only" : "Visible to all"}
+        </span>
       </div>
       <h1 style={{ margin: "0.5rem 0 0.25rem", fontSize: "1.35rem", fontWeight: 800, lineHeight: 1.25 }}>
         {wanted && <span style={{ color: ad.groupColor }}>Looking for: </span>}
@@ -79,6 +95,12 @@ export function AdDetail({ ad, now, onReport }: { ad: AdCardData; now: number; o
         {row("Posted", `${postedAgo(ad.createdAt, now)} (${formatDate(ad.createdAt)})`)}
         {row("Ad reference", ad.utid)}
       </div>
+
+      {ad.visibility === "verified_only" && (
+        <div style={{ margin: "0.5rem 0 0.9rem", padding: "0.65rem 0.8rem", borderRadius: 10, background: "#f3e5f5", border: "1px solid #d1c4e9", color: "#4a148c", fontSize: "0.82rem", fontWeight: 700 }}>
+          Verified-only listing: this ad is visible to verified accounts only.
+        </div>
+      )}
 
       <SafetyNotice />
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.6rem", marginTop: "0.8rem" }}>

@@ -26,6 +26,7 @@ export type EditableAd = {
   district: string;
   locationDetail: string | null;
   contactPhone: string;
+  visibility?: "all" | "verified_only";
   photoIds: string[];
   photoUrls: string[];
 };
@@ -99,6 +100,7 @@ export function AdForm({
   const [district, setDistrict] = useState(editing?.district ?? "");
   const [locationDetail, setLocationDetail] = useState(editing?.locationDetail ?? "");
   const [phone, setPhone] = useState(editing?.contactPhone ?? defaultPhone ?? "");
+  const [visibility, setVisibility] = useState<"all" | "verified_only">(editing?.visibility ?? "all");
   const [photos, setPhotos] = useState<{ id: string; url: string }[]>(
     editing ? editing.photoIds.map((id, i) => ({ id, url: editing.photoUrls[i] ?? "" })) : []
   );
@@ -168,6 +170,7 @@ export function AdForm({
       district,
       locationDetail: locationDetail || undefined,
       contactPhone: phone,
+      visibility,
     };
     setSaving(true);
     try {
@@ -215,6 +218,29 @@ export function AdForm({
       <div style={{ display: "flex", gap: "0.6rem" }}>
         {kindButton("offer", "I'm offering", "Selling goods or providing a service")}
         {kindButton("wanted", "I'm looking for", "I need goods or a service")}
+      </div>
+
+      <span style={label}>Visibility</span>
+      <div style={{ display: "flex", gap: "0.6rem" }}>
+        {(["all", "verified_only"] as const).map((option) => (
+          <button
+            key={option}
+            type="button"
+            onClick={() => setVisibility(option)}
+            style={{
+              flex: 1,
+              padding: "0.7rem 0.8rem",
+              borderRadius: 10,
+              border: `2px solid ${visibility === option ? "#2e7d32" : "#ddd"}`,
+              background: visibility === option ? "#e8f5e9" : "#fff",
+              color: "#222",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            {option === "all" ? "Visible to all" : "Verified accounts only"}
+          </button>
+        ))}
       </div>
 
       <span style={label}>Group</span>

@@ -92,6 +92,7 @@ export default defineSchema({
     verificationStatus: v.optional(v.union(v.literal("pending"), v.literal("verified"), v.literal("rejected"))),
     verifiedBy: v.optional(v.id("users")),
     verifiedAt: v.optional(v.number()),
+    marketspaceVendOptIn: v.optional(v.boolean()), // Farmer/buyer may opt in to MarketSpace publication capability for vendor-style listings.
     isTestUser: v.optional(v.boolean()), // Marks test users for safe cleanup/reset
     // Notification preferences
     notificationPreferences: v.optional(v.any()), // { newListings: boolean, offers: boolean, etc. }
@@ -206,6 +207,12 @@ export default defineSchema({
     gardenDimensions: v.optional(v.any()), // Raw garden dimensions (for garden mode)
     totalPrice: v.optional(v.number()), // Total price for entire garden (for garden mode, in UGX)
     collectionLocationText: v.optional(v.string()), // Vendor/store collection location text for buyers
+    // MarketSpace classification and publication metadata (kept backward-compatible with legacy listings)
+    listingType: v.optional(v.union(v.literal("goods"), v.literal("services"), v.literal("opportunity"))),
+    listingCategory: v.optional(v.string()),
+    visibility: v.optional(v.union(v.literal("all"), v.literal("verified_only"))),
+    publishToMarketSpace: v.optional(v.boolean()),
+    publishedAt: v.optional(v.number()),
   })
     .index("by_farmer", ["farmerId"])
     .index("by_trader", ["traderId"])
@@ -3943,6 +3950,7 @@ export default defineSchema({
     district: v.string(),
     locationDetail: v.optional(v.string()),
     contactPhone: v.string(), // Normalised +256…, shown publicly on the ad
+    visibility: v.optional(v.union(v.literal("all"), v.literal("verified_only"))),
     status: v.union(
       v.literal("active"),
       v.literal("expired"),

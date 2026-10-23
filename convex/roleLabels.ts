@@ -1,13 +1,13 @@
 /**
  * What users see for each role. The stored role keys never change: "trader"
- * is shown as Exporter and "store" as Processor, and a junior admin in the
+ * is shown as Exporter and "store" as Miller, and a junior admin in the
  * "store" category is a Storage and Transport Officer. Shared by the app and Convex so
  * notifications and screens use the same words.
  */
 
 export const ROLE_LABELS = {
   farmer: "Farmer",
-  store: "Processor",
+  store: "Miller",
   trader: "Exporter",
   buyer: "Buyer",
   transporter: "Transporter",
@@ -17,7 +17,7 @@ export const ROLE_LABELS = {
 
 export const ROLE_LABELS_PLURAL = {
   farmer: "Farmers",
-  store: "Processors",
+  store: "Millers",
   trader: "Exporters",
   buyer: "Buyers",
   transporter: "Transporters",
@@ -25,7 +25,7 @@ export const ROLE_LABELS_PLURAL = {
   admin: "Admins",
 } as const;
 
-// Member roles in value-chain order: farm → processing → export → buyer.
+// Member roles in value-chain order: farm → milling → export → buyer.
 export const VALUE_CHAIN_ROLES = ["farmer", "store", "trader", "buyer", "transporter", "vendor"] as const;
 
 export const STORAGE_OFFICER_LABEL = "Storage and Transport Officer";

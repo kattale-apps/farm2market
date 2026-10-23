@@ -63,6 +63,23 @@ export function AdCard({
         <span style={{ marginLeft: "auto", flexShrink: 0, fontWeight: 800, letterSpacing: "0.04em" }}>{wanted ? "WANTED" : "OFFER"}</span>
       </div>
 
+      <div style={{ display: "flex", justifyContent: "flex-end", padding: "0.4rem 0.6rem 0" }}>
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            borderRadius: 999,
+            padding: "0.18rem 0.55rem",
+            background: ad.visibility === "verified_only" ? "#f3e5f5" : "#e8f5e9",
+            color: ad.visibility === "verified_only" ? "#6a1b9a" : "#1b5e20",
+            fontWeight: 800,
+            fontSize: "0.66rem",
+          }}
+        >
+          {ad.visibility === "verified_only" ? "Verified only" : "Visible to all"}
+        </span>
+      </div>
+
       <div style={{ position: "relative", height: photoHeight, background: tint(color, 0.08), flexShrink: 0 }}>
         {ad.photoUrls[0] ? (
           // eslint-disable-next-line @next/next/no-img-element

@@ -121,7 +121,6 @@ export function MyAds({
             district: ad.district,
             locationDetail: ad.locationDetail,
             contactPhone: ad.contactPhone,
-            visibility: ad.visibility ?? "all",
             photoIds: ad.photoIds,
             photoUrls: ad.photoUrls,
           };
@@ -139,9 +138,6 @@ export function MyAds({
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", alignItems: "center", marginBottom: 4 }}>
                   <span style={{ padding: "0.1rem 0.5rem", borderRadius: 999, background: s.bg, color: s.color, fontWeight: 800, fontSize: "0.7rem" }}>{s.label}</span>
                   <span style={{ padding: "0.1rem 0.5rem", borderRadius: 999, background: ad.kind === "wanted" ? "#fff3c4" : "#f1f1f1", fontWeight: 700, fontSize: "0.7rem" }}>{ad.kind === "wanted" ? "WANTED" : "OFFER"}</span>
-                  <span style={{ padding: "0.1rem 0.5rem", borderRadius: 999, background: ad.visibility === "verified_only" ? "#f3e5f5" : "#e8f5e9", color: ad.visibility === "verified_only" ? "#6a1b9a" : "#1b5e20", fontWeight: 700, fontSize: "0.7rem" }}>
-                    {ad.visibility === "verified_only" ? "Verified only" : "Visible to all"}
-                  </span>
                   <span style={{ fontSize: "0.72rem", color: "#777" }}>
                     {ad.categoryIcon} {ad.categoryName}
                   </span>

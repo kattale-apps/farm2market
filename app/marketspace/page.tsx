@@ -17,7 +17,6 @@ import { SwipeDeck } from "./components/SwipeDeck";
 import { TopBar } from "./components/TopBar";
 import { UgandaMapIcon } from "./components/UgandaMapIcon";
 import { DISTRICTS, FONT, tint, useMarketspaceSession, useUgandaNow, type AdCardData } from "./components/shared";
-import { resolveQrScanAction } from "./qrScanner";
 
 type Tab = "browse" | "post" | "mine";
 type Kind = "all" | "offer" | "wanted";
@@ -38,7 +37,6 @@ export default function MarketspacePage() {
   const [groupId, setGroupId] = useState<string | null>(null);
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [kind, setKind] = useState<Kind>("all");
-  const [visibility, setVisibility] = useState<"all" | "verified_only">("all");
   const [district, setDistrict] = useState("");
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -48,9 +46,6 @@ export default function MarketspacePage() {
   const [report, setReport] = useState<AdCardData | null>(null);
   const [editing, setEditing] = useState<EditableAd | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [qrOpen, setQrOpen] = useState(false);
-  const [qrValue, setQrValue] = useState("");
-  const [qrMessage, setQrMessage] = useState<string | null>(null);
 
   // The board's clock is fixed while browsing a filter, so the list does not reload every minute.
   const [boardNow, setBoardNow] = useState(() => Math.floor(getUgandaTime() / 60000) * 60000);
@@ -84,8 +79,6 @@ export default function MarketspacePage() {
     categoryId: (categoryId ?? undefined) as Id<"marketspaceCategories"> | undefined,
     kind: kind === "all" ? undefined : kind,
     district: district || undefined,
-    visibility,
-    sessionToken: token || undefined,
   };
   const { results, status, loadMore } = usePaginatedQuery(api.marketspace.listAds, debounced ? "skip" : filters, { initialNumItems: 12 });
   const searchResults = useQuery(api.marketspace.searchAds, debounced ? { ...filters, text: debounced } : "skip");
@@ -94,23 +87,6 @@ export default function MarketspacePage() {
   const loading = debounced ? searchResults === undefined : status === "LoadingFirstPage";
   const hasMore = !debounced && status === "CanLoadMore";
   const onLoadMore = useCallback(() => loadMore(12), [loadMore]);
-
-  const handleQrResult = useCallback((raw: string) => {
-    const action = resolveQrScanAction(raw);
-    if (action.kind === "link") {
-      setQrOpen(false);
-      setQrValue("");
-      setQrMessage(null);
-      window.location.href = action.value;
-      return;
-    }
-
-    setQrOpen(false);
-    setQrValue("");
-    setQrMessage(null);
-    setSearch(action.value);
-    setDebounced(action.value.trim());
-  }, []);
 
   const groups = config?.groups ?? [];
   const group = groups.find((g) => g._id === groupId) ?? null;
@@ -267,18 +243,6 @@ export default function MarketspacePage() {
                   </button>
                 ))}
               </div>
-              <div role="group" aria-label="Visibility" style={{ display: "inline-flex", borderRadius: 999, border: "1.5px solid #ccc", overflow: "hidden", background: "#fff" }}>
-                {(["all", "verified_only"] as const).map((v) => (
-                  <button
-                    key={v}
-                    type="button"
-                    onClick={() => setVisibility(v)}
-                    style={{ minHeight: 38, padding: "0 0.75rem", border: "none", background: visibility === v ? "#1b5e20" : "transparent", color: visibility === v ? "#fff" : "#444", fontWeight: 700, fontSize: "0.82rem", fontFamily: FONT, cursor: "pointer" }}
-                  >
-                    {v === "all" ? "Open to all" : "Verified only"}
-                  </button>
-                ))}
-              </div>
               <div role="group" aria-label="View" style={{ display: "inline-flex", marginLeft: "auto", borderRadius: 999, border: "1.5px solid #ccc", overflow: "hidden", background: "#fff" }}>
                 <button type="button" onClick={() => chooseView("swipe")} aria-pressed={view === "swipe"} aria-label="Swipe cards" title="Swipe cards" style={viewBtn(view === "swipe")}>
                   🃏 Swipe
@@ -295,32 +259,15 @@ export default function MarketspacePage() {
                   </option>
                 ))}
               </select>
-              <div style={{ position: "relative", flex: "1 1 160px", minWidth: 0 }}>
-                <input
-                  type="search"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="🔍 Search ads"
-                  aria-label="Search ads"
-                  style={{ width: "100%", minWidth: 0, minHeight: 40, borderRadius: 999, border: "1.5px solid #ccc", padding: "0 2.6rem 0 0.9rem", fontFamily: FONT, fontSize: "0.9rem" }}
-                />
-                <button
-                  type="button"
-                  aria-label="Scan QR code"
-                  title="Scan QR code"
-                  onClick={() => setQrOpen(true)}
-                  style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", width: 28, height: 28, borderRadius: 999, border: "none", background: "#e8f5e9", color: "#1b5e20", fontSize: "0.95rem", cursor: "pointer" }}
-                >
-                  ◉
-                </button>
-              </div>
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="🔍 Search ads"
+                aria-label="Search ads"
+                style={{ flex: "1 1 160px", minWidth: 0, minHeight: 40, borderRadius: 999, border: "1.5px solid #ccc", padding: "0 0.9rem", fontFamily: FONT, fontSize: "0.9rem" }}
+              />
             </div>
-
-            {visibility === "verified_only" && (
-              <div style={{ marginBottom: "0.85rem", padding: "0.7rem 0.9rem", borderRadius: 12, background: "#f3e5f5", border: "1px solid #d1c4e9", color: "#4a148c", fontWeight: 700, fontSize: "0.85rem" }}>
-                Verified-only listings are restricted to verified accounts. Sign in and complete verification to view these ads.
-              </div>
-            )}
 
             {config === undefined || loading ? (
               <p style={{ textAlign: "center", color: "#777", padding: "3rem 0" }}>Loading ads…</p>
@@ -394,7 +341,6 @@ export default function MarketspacePage() {
             ad={detail}
             boardNow={boardNow}
             now={liveNow}
-            sessionToken={token}
             onReport={() => {
               setReport(detail);
               setDetail(null);
@@ -404,82 +350,13 @@ export default function MarketspacePage() {
       )}
       {contact && <ContactSheet ad={contact} onClose={() => setContact(null)} />}
       {report && <ReportSheet ad={report} sessionToken={token} onClose={() => setReport(null)} />}
-      {qrOpen && <QrScannerSheet onClose={() => { setQrOpen(false); setQrMessage(null); }} onResult={handleQrResult} message={qrMessage} setMessage={setQrMessage} />}
-    </div>
-  );
-}
-
-function QrScannerSheet({ onClose, onResult, message, setMessage }: { onClose: () => void; onResult: (raw: string) => void; message: string | null; setMessage: (msg: string | null) => void }) {
-  const [manual, setManual] = useState("");
-  const [useCamera, setUseCamera] = useState(false);
-
-  useEffect(() => {
-    const checkCamera = async () => {
-      const hasCamera = !!(navigator as any)?.mediaDevices?.getUserMedia;
-      setUseCamera(hasCamera);
-    };
-    checkCamera().catch(() => setUseCamera(false));
-  }, []);
-
-  const startCamera = async () => {
-    try {
-      if (!(navigator as any)?.mediaDevices?.getUserMedia) {
-        setMessage("Your device does not expose a camera to this browser.");
-        return;
-      }
-      const stream = await (navigator as any).mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-      setMessage("Camera ready. Use the phone scanner or paste the QR result below.");
-      setTimeout(() => stream.getTracks().forEach((track: MediaStreamTrack) => track.stop()), 1000);
-    } catch {
-      setMessage("Camera access was blocked. You can still paste the QR text manually.");
-    }
-  };
-
-  return (
-    <div role="dialog" aria-modal="true" aria-label="Scan QR code" onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 2200 }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, background: "#fff", borderRadius: "18px 18px 0 0", padding: "1rem", boxSizing: "border-box", fontFamily: FONT }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.85rem" }}>
-          <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 800 }}>Scan QR code</h3>
-          <button type="button" onClick={onClose} aria-label="Close QR scanner" style={{ border: "none", background: "#f1f1f1", borderRadius: 999, width: 36, height: 36, cursor: "pointer" }}>✕</button>
-        </div>
-        <div style={{ display: "grid", gap: "0.7rem" }}>
-          {useCamera ? (
-            <button type="button" onClick={startCamera} style={{ border: "none", borderRadius: 12, background: "#2e7d32", color: "#fff", minHeight: 50, fontWeight: 800, cursor: "pointer" }}>
-              Open phone camera scanner
-            </button>
-          ) : (
-            <div style={{ padding: "0.75rem", borderRadius: 12, background: "#f0f8f1", color: "#1b5e20", fontWeight: 700 }}>Camera scanning is unavailable here. Paste the QR text below.</div>
-          )}
-          {message && <div style={{ fontSize: "0.85rem", color: "#1b5e20", fontWeight: 700 }}>{message}</div>}
-          <input
-            type="text"
-            value={manual}
-            onChange={(e) => setManual(e.target.value)}
-            placeholder="Paste QR result or MarketSpace link"
-            style={{ minHeight: 44, borderRadius: 10, border: "1px solid #ccc", padding: "0 0.75rem", fontFamily: FONT }}
-          />
-          <button
-            type="button"
-            onClick={() => {
-              if (!manual.trim()) {
-                setMessage("Paste a QR result or URL first.");
-                return;
-              }
-              onResult(manual);
-            }}
-            style={{ border: "none", borderRadius: 12, background: "#1b5e20", color: "#fff", minHeight: 48, fontWeight: 800, cursor: "pointer" }}
-          >
-            Use scanned text
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
 
 /** The board's cards carry only their first photo, so the detail view loads the whole ad. */
-function FullAdDetail({ ad, boardNow, now, onReport, sessionToken }: { ad: AdCardData; boardNow: number; now: number; onReport: () => void; sessionToken?: string }) {
-  const full = useQuery(api.marketspace.getAd, { adId: ad._id, now: boardNow, sessionToken: sessionToken || undefined }) as AdCardData | null | undefined;
+function FullAdDetail({ ad, boardNow, now, onReport }: { ad: AdCardData; boardNow: number; now: number; onReport: () => void }) {
+  const full = useQuery(api.marketspace.getAd, { adId: ad._id, now: boardNow }) as AdCardData | null | undefined;
   return <AdDetail ad={full ?? ad} now={now} onReport={onReport} />;
 }
 

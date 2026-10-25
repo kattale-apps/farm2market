@@ -152,16 +152,13 @@ export function isIsoDate(value: string): boolean {
 }
 
 /**
- * Which FarmCoin wallet a role pays from.
- * Commercial MarketSpace actors (vendor, store, trader, transporter, processor,
- * exporter, contractor) operate through the trader wallet; buyers use buyer_reward;
- * farmer-like roles keep the farmer wallet. Admin has no wallet.
+ * Which FarmCoin wallet a role pays from. Traders and transporters hold the
+ * "trader" account (keyed by traderId); buyers hold "buyer_reward"; every
+ * other member earns into the "farmer" account (keyed by userId).
  */
 export function walletForRole(role: string): { accountType: "trader" | "buyer_reward" | "farmer"; key: "traderId" | "userId" } | null {
   if (role === "admin") return null;
-  if (["vendor", "store", "trader", "transporter", "processor", "exporter", "contractor"].includes(role)) {
-    return { accountType: "trader", key: "traderId" };
-  }
+  if (role === "trader" || role === "transporter") return { accountType: "trader", key: "traderId" };
   if (role === "buyer") return { accountType: "buyer_reward", key: "userId" };
   return { accountType: "farmer", key: "userId" };
 }

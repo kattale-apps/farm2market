@@ -321,7 +321,7 @@ export const getActiveSupplyChainRoles = query({
     return [
       { id: "producer", label: "Producer" },
       { id: "aggregator", label: "Aggregator" },
-      { id: "miller", label: "Miller" },
+      { id: "processor", label: "Processor" },
       { id: "exporter", label: "Exporter" },
       { id: "transporter", label: "Transporter" },
       { id: "trader", label: "Trader" },
@@ -411,7 +411,6 @@ export const getUserProfile = query({
       parishId: user.parishId,
       parishName,
       parishText: (user as any).parishText,
-      marketspaceVendOptIn: !!(user as any).marketspaceVendOptIn,
     };
   },
 });
@@ -435,7 +434,6 @@ export const updateUserProfile = mutation({
     districtId: v.optional(v.id("districts")),
     subcountyId: v.optional(v.id("subcounties")),
     parishId: v.optional(v.id("parishes")),
-    marketspaceVendOptIn: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const user = await ctx.db.get(args.userId);
@@ -456,7 +454,6 @@ export const updateUserProfile = mutation({
     if (args.districtId !== undefined) updates.districtId = args.districtId;
     if (args.subcountyId !== undefined) updates.subcountyId = args.subcountyId;
     if (args.parishId !== undefined) updates.parishId = args.parishId;
-    if (args.marketspaceVendOptIn !== undefined) updates.marketspaceVendOptIn = args.marketspaceVendOptIn;
 
     await ctx.db.patch(args.userId, updates);
     return { success: true, message: "Profile updated successfully" };

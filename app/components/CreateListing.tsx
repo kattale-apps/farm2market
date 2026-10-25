@@ -69,9 +69,6 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
 
   const [formData, setFormData] = useState({
     produceType: "",
-    listingType: "goods" as "goods" | "services" | "opportunity",
-    visibility: "all" as "all" | "verified_only",
-    publishToMarketSpace: true,
     totalKilos: "",
     pricePerKilo: "",
     qualityRating: "",
@@ -255,9 +252,6 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
         const result = await createListing({
           farmerId: userId,
           produceType: formData.produceType.trim(),
-          listingType: formData.listingType,
-          visibility: formData.visibility,
-          publishToMarketSpace: formData.publishToMarketSpace,
           listingMode: "packaging",
           packagingTypeEnum: isCustomPkg ? undefined : formData.packagingType,
           packagingTypeCustom: isCustomPkg ? customPackagingInput.trim() : undefined,
@@ -277,7 +271,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
 
         // Reset form
         setFormData({
-          produceType: "", listingType: "goods", visibility: "all", publishToMarketSpace: true, totalKilos: "", pricePerKilo: "", qualityRating: "", qualityComment: "",
+          produceType: "", totalKilos: "", pricePerKilo: "", qualityRating: "", qualityComment: "",
           deliveryProcessorId: "", gardenSize: "", gardenLength: "", gardenWidth: "", totalPrice: "",
           packagingType: "", availableUnits: "", pricePerUnit: "",
         });
@@ -350,9 +344,6 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
       const result = await createListing({
         farmerId: userId,
         produceType: formData.produceType.trim(),
-        listingType: formData.listingType,
-        visibility: formData.visibility,
-        publishToMarketSpace: formData.publishToMarketSpace,
         totalKilos,
         pricePerKilo,
         qualityRating: formData.qualityRating || undefined,
@@ -372,9 +363,6 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
       // Reset form
       setFormData({
         produceType: "",
-        listingType: "goods",
-        visibility: "all",
-        publishToMarketSpace: true,
         totalKilos: "",
         pricePerKilo: "",
         qualityRating: "",
@@ -829,47 +817,6 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
               </select>
             </div>
           )}
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "1rem", marginBottom: "1rem" }}>
-            <div>
-              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
-                Listing type
-              </label>
-              <select
-                value={formData.listingType}
-                onChange={(e) => setFormData({ ...formData, listingType: e.target.value as "goods" | "services" | "opportunity" })}
-                style={{ width: "100%", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "6px", fontSize: "1rem", background: "#fff" }}
-              >
-                <option value="goods">Goods</option>
-                <option value="services">Services</option>
-                <option value="opportunity">Opportunity</option>
-              </select>
-            </div>
-            <div>
-              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
-                Visibility
-              </label>
-              <select
-                value={formData.visibility}
-                onChange={(e) => setFormData({ ...formData, visibility: e.target.value as "all" | "verified_only" })}
-                style={{ width: "100%", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "6px", fontSize: "1rem", background: "#fff" }}
-              >
-                <option value="all">Visible to all viewers</option>
-                <option value="verified_only">Verified accounts only</option>
-              </select>
-            </div>
-          </div>
-
-          <div style={{ marginBottom: "1rem" }}>
-            <label style={{ display: "flex", alignItems: "center", gap: "0.6rem", fontWeight: "600", color: "#333" }}>
-              <input
-                type="checkbox"
-                checked={formData.publishToMarketSpace}
-                onChange={(e) => setFormData({ ...formData, publishToMarketSpace: e.target.checked })}
-              />
-              Publish to MarketSpace
-            </label>
-          </div>
 
           {/* STEP 2: Produce Type Selection (filtered by location) */}
           <div>

@@ -23,90 +23,6 @@ import { Id } from "./_generated/dataModel";
 import { deliveryPointOf, isActiveProcessor } from "./processors";
 import { todayUganda } from "./exportMarkets";
 
-export type ListingVisibility = "all" | "verified_only";
-export type ListingType = "goods" | "services" | "opportunity";
-
-export function normalizeListingClassification(input: {
-  listingType?: string;
-  listingCategory?: string;
-  visibility?: string;
-  publishToMarketSpace?: boolean;
-} = {}) {
-  const listingType: ListingType =
-    input.listingType === "services" || input.listingType === "opportunity"
-      ? input.listingType
-      : "goods";
-
-  const visibility: ListingVisibility =
-    input.visibility === "verified_only" ? "verified_only" : "all";
-
-  const listingCategory = input.listingCategory?.trim() || listingType;
-
-  return {
-    listingType,
-    listingCategory,
-    visibility,
-    publishToMarketSpace: !!input.publishToMarketSpace,
-  };
-}
-
-export function getMarketSpaceRoleCapability(
-  role?: string
-): { canPublish: boolean; requiresVerification: boolean; requiresOptIn: boolean } {
-  const normalizedRole = role ?? "";
-
-  if (["admin", "vendor", "store", "trader", "transporter", "processor", "exporter", "contractor"].includes(normalizedRole)) {
-    return { canPublish: true, requiresVerification: false, requiresOptIn: false };
-  }
-
-  if (["farmer", "buyer"].includes(normalizedRole)) {
-    return { canPublish: false, requiresVerification: false, requiresOptIn: true };
-  }
-
-  return { canPublish: false, requiresVerification: false, requiresOptIn: false };
-}
-
-export function isVerifiedMarketspaceUser(
-  user?: Partial<{ verificationStatus: string; isVerifiedTrader: boolean; adminLevel?: string; role?: string }> | null
-): boolean {
-  if (!user) return false;
-  if (user.verificationStatus === "verified") return true;
-  if (user.isVerifiedTrader === true) return true;
-  if (user.role === "admin" && (user.adminLevel === "super" || user.adminLevel === undefined)) return true;
-  return false;
-}
-
-export function canViewListingForUser(
-  user: Partial<{ verificationStatus: string; isVerifiedTrader: boolean; adminLevel?: string; role?: string }> | null,
-  listing?: Partial<{ publishToMarketSpace?: boolean; visibility?: string }>
-): boolean {
-  if (!listing?.publishToMarketSpace) return false;
-  if (listing.visibility !== "verified_only") return true;
-  return isVerifiedMarketspaceUser(user);
-}
-
-export function canPublishListingToMarketSpace(
-  user: Partial<{ role?: string; verificationStatus?: string; isVerifiedTrader?: boolean; adminLevel?: string; marketspaceVendOptIn?: boolean }> | null,
-  listing?: Partial<{ publishToMarketSpace?: boolean; listingType?: string; visibility?: string }>
-): { canPublish: boolean; reason?: string } {
-  if (!user) return { canPublish: false, reason: "Log in to publish a listing" };
-  if (!listing?.publishToMarketSpace) return { canPublish: false, reason: "This listing is not marked for publication" };
-
-  const role = user.role ?? "";
-  const capability = getMarketSpaceRoleCapability(role);
-  const hasVendAbility = capability.canPublish || ((role === "farmer" || role === "buyer") && !!user.marketspaceVendOptIn);
-
-  if (!hasVendAbility) {
-    return { canPublish: false, reason: "The account is not eligible to publish to MarketSpace" };
-  }
-
-  if (listing.visibility === "verified_only" && !isVerifiedMarketspaceUser(user)) {
-    return { canPublish: false, reason: "Verified accounts are required for this listing visibility" };
-  }
-
-  return { canPublish: true };
-}
-
 /**
  * For vendor/store users, where buyers collect their listings, from their profile.
  */
@@ -165,10 +81,6 @@ export const createListing = mutation({
     availableUnits: v.optional(v.number()),
     pricingUnit: v.optional(v.union(v.literal("per_package"), v.literal("per_kg"))),
     pricePerUnit: v.optional(v.number()),
-    listingType: v.optional(v.union(v.literal("goods"), v.literal("services"), v.literal("opportunity"))),
-    listingCategory: v.optional(v.string()),
-    visibility: v.optional(v.union(v.literal("all"), v.literal("verified_only"))),
-    publishToMarketSpace: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     // ============================================================
@@ -244,13 +156,6 @@ export const createListing = mutation({
 
     // Generate UTID
     const utid = generateUTID(user.role);
-    const listingClassification = normalizeListingClassification(args);
-    const publishEligibility = canPublishListingToMarketSpace(user, listingClassification);
-    if (listingClassification.publishToMarketSpace && !publishEligibility.canPublish) {
-      listingClassification.publishToMarketSpace = false;
-      listingClassification.visibility = "all";
-    }
-    const now = getUgandaTime();
 
     // Calculate units based on mode
     let totalUnits: number;
@@ -309,7 +214,7 @@ export const createListing = mutation({
       unitSize: actualUnitSize,
       totalUnits,
       status: "active",
-      createdAt: now,
+      createdAt: getUgandaTime(),
       deliverySLA: 0,
       qualityRating: args.qualityRating?.trim() || undefined,
       qualityComment: args.qualityComment?.trim() || undefined,
@@ -327,12 +232,6 @@ export const createListing = mutation({
       pricePerUnit: args.pricePerUnit,
       // Collection location
       collectionLocationText,
-      // MarketSpace publication metadata kept optional to preserve legacy behavior.
-      listingType: listingClassification.listingType,
-      listingCategory: listingClassification.listingCategory,
-      visibility: listingClassification.visibility,
-      publishToMarketSpace: listingClassification.publishToMarketSpace,
-      publishedAt: listingClassification.publishToMarketSpace ? now : undefined,
     });
 
     // Create individual units

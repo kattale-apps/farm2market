@@ -16,7 +16,7 @@ export default function MarketspaceAdPage() {
   const session = useMarketspaceSession();
   const now = useUgandaNow();
   const [boardNow] = useState(now);
-  const ad = useQuery(api.marketspace.getAd, params?.id ? { adId: params.id, now: boardNow, sessionToken: session.token || undefined } : "skip") as AdCardData | null | undefined;
+  const ad = useQuery(api.marketspace.getAd, params?.id ? { adId: params.id, now: boardNow } : "skip") as AdCardData | null | undefined;
   const [reporting, setReporting] = useState(false);
 
   return (

@@ -35,7 +35,6 @@ import {
   withDefaults,
   type MarketspaceSettings,
 } from "./marketspaceShared";
-import { canViewListingForUser, isVerifiedMarketspaceUser } from "./listings";
 
 type Ctx = QueryCtx | MutationCtx;
 
@@ -252,7 +251,6 @@ async function toCard(ctx: Ctx, ad: Doc<"marketspaceAds">, tax: Taxonomy, allPho
     categoryName: category?.name ?? "",
     categoryIcon: category?.icon ?? "",
     posterRole: owner?.role ?? null,
-    visibility: ad.visibility ?? "all",
     status: ad.status,
     expiresAt: ad.expiresAt,
     createdAt: ad.createdAt,
@@ -265,26 +263,7 @@ const boardFilters = {
   categoryId: v.optional(v.id("marketspaceCategories")),
   kind: v.optional(v.union(v.literal("offer"), v.literal("wanted"))),
   district: v.optional(v.string()),
-  visibility: v.optional(v.union(v.literal("all"), v.literal("verified_only"))),
-  sessionToken: v.optional(v.string()),
 };
-
-export function matchesVisibilityFilter(
-  filter: "all" | "verified_only" | undefined,
-  adVisibility: "all" | "verified_only" | undefined,
-): boolean {
-  if (!filter) return true;
-  if (filter === "all") return adVisibility === "all";
-  return true;
-}
-
-function isAdVisibleToViewer(
-  ad: Doc<"marketspaceAds">,
-  viewer: Awaited<ReturnType<typeof sessionUser>>,
-): boolean {
-  if (ad.visibility !== "verified_only") return true;
-  return canViewListingForUser(viewer, { publishToMarketSpace: true, visibility: ad.visibility });
-}
 
 // ------------------------------------------------------------------
 // Public board (no login)
@@ -318,7 +297,6 @@ export const listAds = query({
   args: { paginationOpts: paginationOptsValidator, ...boardFilters },
   handler: async (ctx, args) => {
     const tax = await loadTaxonomy(ctx);
-    const viewer = args.sessionToken ? await sessionUser(ctx, args.sessionToken) : null;
     const base = args.categoryId
       ? ctx.db
           .query("marketspaceAds")
@@ -340,10 +318,7 @@ export const listAds = query({
       .paginate(args.paginationOpts);
     const page = [];
     for (const ad of result.page) {
-      if (!isVisible(ad, tax)) continue;
-      if (!matchesVisibilityFilter(args.visibility, ad.visibility)) continue;
-      if (!isAdVisibleToViewer(ad, viewer)) continue;
-      page.push(await toCard(ctx, ad, tax, false));
+      if (isVisible(ad, tax)) page.push(await toCard(ctx, ad, tax, false));
     }
     return { ...result, page };
   },
@@ -356,7 +331,6 @@ export const searchAds = query({
     const text = args.text.trim();
     if (!text) return [];
     const tax = await loadTaxonomy(ctx);
-    const viewer = args.sessionToken ? await sessionUser(ctx, args.sessionToken) : null;
     const hits = await ctx.db
       .query("marketspaceAds")
       .withSearchIndex("search_title", (q) => {
@@ -370,8 +344,6 @@ export const searchAds = query({
     const cards = [];
     for (const ad of hits) {
       if (ad.expiresAt <= args.now || !isVisible(ad, tax)) continue;
-      if (!matchesVisibilityFilter(args.visibility, ad.visibility)) continue;
-      if (!isAdVisibleToViewer(ad, viewer)) continue;
       if (args.kind && ad.kind !== args.kind) continue;
       if (district && ad.district !== district) continue;
       cards.push(await toCard(ctx, ad, tax, false));
@@ -382,15 +354,13 @@ export const searchAds = query({
 
 /** One live ad with all its photos, or null when it is not on the board. */
 export const getAd = query({
-  args: { adId: v.string(), now: v.number(), sessionToken: v.optional(v.string()) }, // A string, so a mistyped shared link shows "not found"
+  args: { adId: v.string(), now: v.number() }, // A string, so a mistyped shared link shows "not found"
   handler: async (ctx, args) => {
     const adId = ctx.db.normalizeId("marketspaceAds", args.adId);
     const ad = adId ? await ctx.db.get(adId) : null;
     if (!ad || ad.status !== "active" || ad.expiresAt <= args.now) return null;
     const tax = await loadTaxonomy(ctx);
     if (!isVisible(ad, tax)) return null;
-    const viewer = args.sessionToken ? await sessionUser(ctx, args.sessionToken) : null;
-    if (!isAdVisibleToViewer(ad, viewer)) return null;
     return await toCard(ctx, ad, tax, true);
   },
 });
@@ -499,7 +469,6 @@ const adFields = {
   district: v.string(),
   locationDetail: v.optional(v.string()),
   contactPhone: v.string(),
-  visibility: v.optional(v.union(v.literal("all"), v.literal("verified_only"))),
 };
 
 type AdArgs = {
@@ -516,7 +485,6 @@ type AdArgs = {
   district: string;
   locationDetail?: string;
   contactPhone: string;
-  visibility?: "all" | "verified_only";
 };
 
 /** Validates an ad and returns the fields to store. */
@@ -545,7 +513,6 @@ async function cleanAd(ctx: MutationCtx, args: AdArgs, settings: MarketspaceSett
     district: args.district.trim(),
     locationDetail: optional(args.locationDetail)?.slice(0, 120),
     contactPhone: normalizeUgandaPhone(args.contactPhone)!,
-    visibility: args.visibility === "verified_only" ? "verified_only" : "all",
   };
 }
 
@@ -566,9 +533,6 @@ export const createAd = mutation({
       .take(settings.maxAdsPerDay);
     if (recent.length >= settings.maxAdsPerDay) {
       throw new Error(`You can post up to ${settings.maxAdsPerDay} ad${settings.maxAdsPerDay === 1 ? "" : "s"} a day. Please try again tomorrow.`);
-    }
-    if (args.visibility === "verified_only" && !isVerifiedMarketspaceUser(user)) {
-      throw new Error("Only verified accounts can post verified-only ads.");
     }
     const { sessionToken: _token, expectedCostFarmcoin, ...fields } = args;
     const clean = await cleanAd(ctx, fields, settings);
@@ -612,11 +576,8 @@ export const createAd = mutation({
 export const updateAd = mutation({
   args: { sessionToken: v.string(), adId: v.id("marketspaceAds"), ...adFields },
   handler: async (ctx, args) => {
-    const { user, ad } = await requireOwnAd(ctx, args.sessionToken, args.adId);
+    const { ad } = await requireOwnAd(ctx, args.sessionToken, args.adId);
     if (ad.status === "removed") throw new Error("An admin removed this ad, so it can't be edited.");
-    if (args.visibility === "verified_only" && !isVerifiedMarketspaceUser(user)) {
-      throw new Error("Only verified accounts can keep verified-only ads.");
-    }
     const { sessionToken: _token, adId: _adId, ...fields } = args;
     const clean = await cleanAd(ctx, fields, await getSettings(ctx));
     // Photos taken out of the ad are deleted from storage.

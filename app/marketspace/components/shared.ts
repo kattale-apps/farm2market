@@ -36,7 +36,6 @@ export type AdCardData = {
   categoryName: string;
   categoryIcon: string;
   posterRole: string | null;
-  visibility: "all" | "verified_only";
   status: string;
   expiresAt: number;
   createdAt: number;

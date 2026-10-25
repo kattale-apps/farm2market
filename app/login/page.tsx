@@ -14,7 +14,7 @@ type SignupRole = "farmer" | "trader" | "buyer" | "vendor" | "transporter" | "st
 
 // Every role can sign up on production. The switch per role stays so a role
 // can be paused again by setting it to false.
-// Listed in value-chain order: Farmer → Miller → Exporter → Buyer → Transporter → Vendor.
+// Listed in value-chain order: Farmer → Processor → Exporter → Buyer → Transporter → Vendor.
 const SIGNUP_ENABLED: Record<SignupRole, boolean> = {
   farmer: true,
   store: true,
@@ -30,7 +30,7 @@ const SIGNUP_ROLES: Array<{ value: SignupRole; label: string; signupEnabled: boo
 }));
 
 // One clearly different hue per role: left column green (Farmer), yellow
-// (Miller), red (Exporter); right column blue (Buyer), orange
+// (Processor), red (Exporter); right column blue (Buyer), orange
 // (Transporter), purple (Vendor).
 const ROLE_STYLES: Record<SignupRole, { text: string; border: string; bgSelected: string; bgUnselected: string; borderUnselected: string }> = {
   farmer: { text: "#2e7d32", border: "#2e7d32", bgSelected: "#c8e6c9", bgUnselected: "#e8f5e9", borderUnselected: "#a5d6a7" }, // green
@@ -113,9 +113,8 @@ function LoginPageInner() {
     const roleParam = searchParams.get("role");
     if (!roleParam) return;
     const normalized = roleParam.toLowerCase();
-    const mappedRole = normalized === "miller" ? "store" : normalized;
-    if (["farmer", "trader", "buyer", "vendor", "transporter", "store"].includes(mappedRole)) {
-      setSelectedRole(mappedRole as SignupRole);
+    if (["farmer", "trader", "buyer", "vendor", "transporter", "store"].includes(normalized)) {
+      setSelectedRole(normalized as SignupRole);
     }
   }, [searchParams]);
 

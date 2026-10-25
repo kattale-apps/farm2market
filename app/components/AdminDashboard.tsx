@@ -1090,7 +1090,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
               </div>
             </a>
 
-            {/* Advanced Markets */}
+            {/* Contract Farming Market */}
             <a href="/admin/advance-purchase" style={{ textDecoration: "none" }}>
               <div
                 style={{
@@ -1115,7 +1115,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
               >
                 <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>🌱</div>
                 <div>
-                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Advanced Markets</h3>
+                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Contract Farming Market</h3>
                   <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.95 }}>
                     Configure milestones and review farmer proof pictures
                   </p>

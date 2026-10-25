@@ -926,13 +926,13 @@ export const setTraderVerificationStatus = mutation({
 
 // ─── Farmer Form Field Rewards ───────────────────────────────────────
 
-// ─── Farm 2 Market Access Gate ────────────────────────────────────────
+// ─── Farmers Produce Market Access Gate ────────────────────────────────────────
 
 const FARM2MARKET_REQUIRED_FARMCOINS = 1000;
 const PILOT_EMAIL_DOMAIN = "@pilot.farm2market";
 
 /**
- * Evaluate whether a farmer is allowed to access Farm 2 Market.
+ * Evaluate whether a farmer is allowed to access the Farmers Produce Market.
  * Criteria:
  *   - Farmer has >= 500 FarmCoins, OR
  *   - Farmer's email ends with @pilot.farm2market (pilot users are always allowed)
@@ -964,7 +964,7 @@ export const getFarm2MarketAccess = query({
       requiredBalance: FARM2MARKET_REQUIRED_FARMCOINS,
       reason: allowed
         ? null
-        : `You need ${FARM2MARKET_REQUIRED_FARMCOINS - balance} more FarmCoin${FARM2MARKET_REQUIRED_FARMCOINS - balance === 1 ? "" : "s"} to unlock Farm 2 Market.`,
+        : `You need ${FARM2MARKET_REQUIRED_FARMCOINS - balance} more FarmCoin${FARM2MARKET_REQUIRED_FARMCOINS - balance === 1 ? "" : "s"} to unlock the Farmers Produce Market.`,
     };
   },
 });

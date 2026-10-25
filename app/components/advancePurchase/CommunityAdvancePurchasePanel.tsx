@@ -133,7 +133,7 @@ function ConfigBuilder({ adminId, communityId, existing, onDone }: { adminId: Id
   return (
     <div style={{ background: "#fff", border: "1px solid #e0e0e0", borderRadius: 12, padding: "1rem", marginBottom: "1rem" }}>
       <h3 style={{ margin: "0 0 0.75rem" }}>
-        {isEdit ? `Edit "${existing.name}"` : "New Advanced Markets configuration"}
+        {isEdit ? `Edit "${existing.name}"` : "New Contract Farming configuration"}
       </h3>
       <input placeholder="Program name (e.g. Coffee Seedlings)" value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} />
 
@@ -546,9 +546,9 @@ function VerifiedMembersManager({ adminId, communityId }: { adminId: Id<"users">
 }
 
 /**
- * Shared Advanced Markets config + proof-picture-review panel for a single
+ * Shared Contract Farming config + proof-picture-review panel for a single
  * community. Used both by the standalone /admin/advance-purchase page
- * (which adds its own community picker) and by the "Advanced Markets"
+ * (which adds its own community picker) and by the "Contract Farming Market"
  * tab inside the per-community community-dashboard console.
  */
 export function CommunityAdvancePurchasePanel({ adminId, communityId }: { adminId: Id<"users">; communityId: Id<"communities"> }) {
@@ -614,7 +614,7 @@ export function CommunityAdvancePurchasePanel({ adminId, communityId }: { adminI
           {configs === undefined ? (
             <p>Loading configurations...</p>
           ) : configs.length === 0 ? (
-            <p style={{ color: "#777", fontSize: "0.9rem" }}>No Advanced Markets form configured.</p>
+            <p style={{ color: "#777", fontSize: "0.9rem" }}>No Contract Farming form configured.</p>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
               {configs.map((c: any) => (

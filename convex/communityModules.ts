@@ -1,7 +1,7 @@
 /**
  * Community module feature flags.
  *
- * Optional modules ("Advanced Markets", "Fertilizer") are hidden from a
+ * Optional modules ("Contract Farming Market", "Fertilizer") are hidden from a
  * community dashboard unless a super admin has switched them on for that
  * community. The stored fields are optional so existing community documents
  * keep working untouched; these helpers resolve the stored value (or its
@@ -39,7 +39,7 @@ export function normalizeCommunityKey(value: string | undefined | null): string 
 }
 
 /**
- * Bio Farm is the only community that had Advanced Markets in active use
+ * Bio Farm is the only community that had the Contract Farming Market in active use
  * before these flags existed, so it stays switched on by default. It is
  * matched by name, so no deployment-specific id is hardcoded.
  */
@@ -86,7 +86,7 @@ export function isCostTemplatesEnabled(community: CommunityLike | null | undefin
  * their community id was compared against a literal in every function that
  * served it. Nothing in that data path is specific to one community: it reads
  * the community's own approved members and the entries those members logged.
- * The flag follows Advanced Markets - Bio Farm keeps it by default so their
+ * The flag follows the Contract Farming Market - Bio Farm keeps it by default so their
  * dashboard is unchanged, and any other community gets it when a super admin
  * switches it on.
  */

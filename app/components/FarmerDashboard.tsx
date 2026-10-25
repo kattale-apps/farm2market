@@ -133,12 +133,12 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
       {
         key: "farm2market",
         label: farm2MarketLocked
-          ? <>🔒 Farm 2 Market (<FarmCoinIcon size={16} /> {farm2MarketAccess?.balance ?? 0}/{farm2MarketAccess?.requiredBalance ?? 0})</>
-          : "🛒 Farm 2 Market",
+          ? <>🔒 Farmers Produce Market (<FarmCoinIcon size={16} /> {farm2MarketAccess?.balance ?? 0}/{farm2MarketAccess?.requiredBalance ?? 0})</>
+          : "🛒 Farmers Produce Market",
         disabled: farm2MarketLocked,
       },
       { key: "marketspace", label: "🗺️ MarketSpace" },
-      { key: "advancePurchase", label: "🌱 Advanced Markets" },
+      { key: "advancePurchase", label: "🌱 Contract Farming Market" },
       { key: "sellServices", label: "🏭 Sales & Services" },
     ] : []),
     ...(effectiveRole === "vendor" ? [

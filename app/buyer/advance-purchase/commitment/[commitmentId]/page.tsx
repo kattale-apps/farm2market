@@ -121,7 +121,7 @@ export default function CommitmentDetailPage() {
           href="/buyer/advance-purchase"
           style={{ color: "#0d47a1", fontWeight: 700, fontSize: "0.9rem", textShadow: ON_PHOTO_SHADOW }}
         >
-          ← Advanced Markets
+          ← Contract Farming Market
         </Link>
       </div>
 

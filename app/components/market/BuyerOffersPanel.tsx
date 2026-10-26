@@ -28,10 +28,12 @@ function errorText(e: unknown) {
 }
 
 /**
- * Processors and vendors: post this week's buying prices, answer farmers'
- * delivery bookings, record the delivery with a cash receipt, and keep every
- * receipt as a transaction record.
+ * Processors, exporters and vendors: post this week's buying prices, answer
+ * farmers' delivery bookings, record the delivery with a cash receipt, and
+ * keep every receipt as a transaction record. Exporters' purchases become
+ * stock traced to the farmer through the receipt.
  */
+type Kind = "processor" | "vendor" | "exporter";
 export function BuyerOffersPanel({ userId }: { userId: Id<"users"> }) {
   const [today] = useState(() => ugandaDateFromInstant(Date.now()));
   const data = useQuery(api.marketOffers.listMyOffers, { userId, today });
@@ -64,7 +66,11 @@ export function BuyerOffersPanel({ userId }: { userId: Id<"users"> }) {
         </p>
         {!data.canPost ? (
           <div style={{ fontSize: "0.85rem", color: "#e65100" }}>
-            {data.kind === "processor" ? "Prices open once you are a verified, live processor." : "Add your district to your profile to post buying offers."}
+            {data.kind === "processor"
+              ? "Prices open once you are a verified, live processor."
+              : data.kind === "exporter"
+                ? "Prices open once you are a verified, licensed exporter with your district on your profile."
+                : "Add your district to your profile to post buying offers."}
           </div>
         ) : (
           <PostOfferForm userId={userId} crops={data.crops} kind={data.kind} onPosted={(t) => setMsg({ ok: true, text: t })} onError={(t) => setMsg({ ok: false, text: t })} />
@@ -130,7 +136,7 @@ export function BuyerOffersPanel({ userId }: { userId: Id<"users"> }) {
             )}
           </div>
         ))}
-        {data.kind === "vendor" && <WalkInPurchase userId={userId} crops={data.crops} today={today} onDone={(t) => setMsg({ ok: true, text: t })} onError={(t) => setMsg({ ok: false, text: t })} />}
+        {data.kind !== "processor" && <WalkInPurchase userId={userId} kind={data.kind} crops={data.crops} today={today} onDone={(t) => setMsg({ ok: true, text: t })} onError={(t) => setMsg({ ok: false, text: t })} />}
         {data.kind === "processor" && <div style={{ fontSize: "0.8rem", color: "#78909c", marginTop: 8 }}>Farmers who walk in without a booking: record them under Intake and tick &quot;paid in cash&quot; to issue their receipt.</div>}
       </div>
 
@@ -144,7 +150,7 @@ export function BuyerOffersPanel({ userId }: { userId: Id<"users"> }) {
 
 type CropOption = { key: string; label: string; units: string[] };
 
-function PostOfferForm({ userId, crops, kind, onPosted, onError }: { userId: Id<"users">; crops: CropOption[]; kind: "processor" | "vendor"; onPosted: (t: string) => void; onError: (t: string) => void }) {
+function PostOfferForm({ userId, crops, kind, onPosted, onError }: { userId: Id<"users">; crops: CropOption[]; kind: Kind; onPosted: (t: string) => void; onError: (t: string) => void }) {
   const post = useMutation(api.marketOffers.postOffer);
   const [crop, setCrop] = useState(crops[0]?.key ?? "");
   const cropInfo = crops.find((c) => c.key === crop);
@@ -164,7 +170,7 @@ function PostOfferForm({ userId, crops, kind, onPosted, onError }: { userId: Id<
             </option>
           ))}
         </select>
-        {kind === "processor" && (
+        {kind !== "vendor" && (
           <select style={field} value={form} onChange={(e) => setForm(e.target.value)} aria-label="Form bought">
             {INTAKE_FORMS.filter((f) => f.key !== "other").map((f) => (
               <option key={f.key} value={f.key}>
@@ -182,7 +188,7 @@ function PostOfferForm({ userId, crops, kind, onPosted, onError }: { userId: Id<
             ))}
           </select>
         )}
-        <input style={field} inputMode="decimal" placeholder={`Price UGX per ${kind === "processor" ? "kg" : unit}`} value={price} onChange={(e) => setPrice(e.target.value)} />
+        <input style={field} inputMode="decimal" placeholder={`Price UGX per ${kind !== "vendor" ? "kg" : unit}`} value={price} onChange={(e) => setPrice(e.target.value)} />
         <input style={field} inputMode="decimal" placeholder="Minimum quantity (optional)" value={minQuantity} onChange={(e) => setMinQuantity(e.target.value)} />
       </div>
       <input style={{ ...field, marginTop: 8 }} placeholder="Note to farmers (e.g. moisture below 14%)" value={notes} onChange={(e) => setNotes(e.target.value)} />
@@ -192,7 +198,7 @@ function PostOfferForm({ userId, crops, kind, onPosted, onError }: { userId: Id<
         onClick={async () => {
           setBusy(true);
           try {
-            await post({ userId, crop, form: kind === "processor" ? form : undefined, unit: kind === "processor" ? "kg" : unit, priceUgx: Number(price), minQuantity: minQuantity.trim() ? Number(minQuantity) : undefined, notes: notes || undefined });
+            await post({ userId, crop, form: kind !== "vendor" ? form : undefined, unit: kind !== "vendor" ? "kg" : unit, priceUgx: Number(price), minQuantity: minQuantity.trim() ? Number(minQuantity) : undefined, notes: notes || undefined });
             setPrice("");
             onPosted("Price posted for this week.");
           } catch (e) {
@@ -210,7 +216,7 @@ function PostOfferForm({ userId, crops, kind, onPosted, onError }: { userId: Id<
 
 type BookingRow = { _id: Id<"deliveryBookings">; farmerId: Id<"users">; crop: string; form?: string; unit: string; quantity: number; priceUgx: number };
 
-function RecordDeliveryForm({ userId, kind, booking, today, onDone, onError }: { userId: Id<"users">; kind: "processor" | "vendor"; booking: BookingRow; today: string; onDone: (t: string) => void; onError: (t: string) => void }) {
+function RecordDeliveryForm({ userId, kind, booking, today, onDone, onError }: { userId: Id<"users">; kind: Kind; booking: BookingRow; today: string; onDone: (t: string) => void; onError: (t: string) => void }) {
   const recordIntake = useMutation(api.processorOperations.recordIntake);
   const recordPurchase = useMutation(api.marketOffers.recordVendorPurchase);
   const [quantity, setQuantity] = useState(String(booking.quantity));
@@ -254,8 +260,8 @@ function RecordDeliveryForm({ userId, kind, booking, today, onDone, onError }: {
               });
               onDone(`Delivery recorded as intake ${r.intakeCode}; receipt ${r.receiptNumber} sent to the farmer.`);
             } else {
-              const r = await recordPurchase({ userId, bookingId: booking._id, crop: booking.crop, unit: booking.unit, quantity: Number(quantity), priceUgx: Number(price), paidOn: today });
-              onDone(`Receipt ${r.receiptNumber} sent to the farmer.`);
+              const r = await recordPurchase({ userId, bookingId: booking._id, crop: booking.crop, form: kind === "exporter" ? booking.form ?? "other" : undefined, unit: booking.unit, quantity: Number(quantity), priceUgx: Number(price), paidOn: today });
+              onDone(kind === "exporter" ? `Receipt ${r.receiptNumber} sent to the farmer. The coffee is in your stock, traced to the farm.` : `Receipt ${r.receiptNumber} sent to the farmer.`);
             }
           } catch (e) {
             onError(errorText(e));
@@ -270,11 +276,11 @@ function RecordDeliveryForm({ userId, kind, booking, today, onDone, onError }: {
   );
 }
 
-/** Vendors: a farmer who sold without a booking (on the app or not). */
-function WalkInPurchase({ userId, crops, today, onDone, onError }: { userId: Id<"users">; crops: CropOption[]; today: string; onDone: (t: string) => void; onError: (t: string) => void }) {
+/** Vendors and exporters: a farmer who sold without a booking (on the app or not). */
+function WalkInPurchase({ userId, kind, crops, today, onDone, onError }: { userId: Id<"users">; kind: Kind; crops: CropOption[]; today: string; onDone: (t: string) => void; onError: (t: string) => void }) {
   const record = useMutation(api.marketOffers.recordVendorPurchase);
   const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ farmerName: "", crop: crops[0]?.key ?? "", unit: crops[0]?.units[0] ?? "kg", quantity: "", price: "" });
+  const [f, setF] = useState({ farmerName: "", crop: crops[0]?.key ?? "", form: "kiboko", unit: crops[0]?.units[0] ?? "kg", quantity: "", price: "" });
   const units = crops.find((c) => c.key === f.crop)?.units ?? ["kg"];
   if (!open)
     return (
@@ -293,12 +299,22 @@ function WalkInPurchase({ userId, crops, today, onDone, onError }: { userId: Id<
             </option>
           ))}
         </select>
-        <select style={field} value={f.unit} onChange={(e) => setF({ ...f, unit: e.target.value })}>
-          {units.map((u) => (
-            <option key={u}>{u}</option>
-          ))}
-        </select>
-        <input style={field} inputMode="decimal" placeholder="Quantity" value={f.quantity} onChange={(e) => setF({ ...f, quantity: e.target.value })} />
+        {kind === "exporter" ? (
+          <select style={field} value={f.form} onChange={(e) => setF({ ...f, form: e.target.value })} aria-label="Form bought">
+            {INTAKE_FORMS.filter((x) => x.key !== "other").map((x) => (
+              <option key={x.key} value={x.key}>
+                {x.label}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <select style={field} value={f.unit} onChange={(e) => setF({ ...f, unit: e.target.value })}>
+            {units.map((u) => (
+              <option key={u}>{u}</option>
+            ))}
+          </select>
+        )}
+        <input style={field} inputMode="decimal" placeholder={kind === "exporter" ? "Kilos" : "Quantity"} value={f.quantity} onChange={(e) => setF({ ...f, quantity: e.target.value })} />
         <input style={field} inputMode="decimal" placeholder="Price UGX per unit" value={f.price} onChange={(e) => setF({ ...f, price: e.target.value })} />
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
@@ -306,7 +322,7 @@ function WalkInPurchase({ userId, crops, today, onDone, onError }: { userId: Id<
           style={btn("#2e7d32")}
           onClick={async () => {
             try {
-              const r = await record({ userId, farmerName: f.farmerName, crop: f.crop, unit: f.unit, quantity: Number(f.quantity), priceUgx: Number(f.price), paidOn: today });
+              const r = await record({ userId, farmerName: f.farmerName, crop: f.crop, form: kind === "exporter" ? f.form : undefined, unit: kind === "exporter" ? "kg" : f.unit, quantity: Number(f.quantity), priceUgx: Number(f.price), paidOn: today });
               setOpen(false);
               onDone(`Receipt ${r.receiptNumber} issued. Share it with the farmer from Receipts.`);
             } catch (e) {

@@ -124,9 +124,9 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
     { key: "marketspace", label: "🗺️ MarketSpace" },
     {
       key: "myWallet",
-      label: <>💰 My Wallet & FarmCoin{typeof farmerFarmcoinBalance === "number" ? <> (<FarmCoinIcon size={16} /> {farmerFarmcoinBalance})</> : null}</>,
+      label: <>💰 My Wallet and FarmCoin{typeof farmerFarmcoinBalance === "number" ? <> (<FarmCoinIcon size={16} /> {farmerFarmcoinBalance})</> : null}</>,
     },
-    { key: "findTransport", label: "🚚 Book transport" },
+    { key: "findTransport", label: "🚚 Book Transport" },
     { key: "communities", label: "🌾 My Communities" },
     ...(effectiveRole === "farmer" ? [
       { key: "farmNeeds", label: "🧺 Farm Needs" },
@@ -140,12 +140,13 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
         disabled: farm2MarketLocked,
       },
       { key: "advancePurchase", label: "🌱 Contract Farming Market" },
-      { key: "sellServices", label: "🏭 Sales & Services" },
+      { key: "sellServices", label: "🏭 Sales and Services" },
     ] : []),
     // Vendors buy farmers' lots through MarketSpace (Farmers Produce is a filter there), so no separate "Buy lots"
     ...(effectiveRole === "vendor" ? [
-      { key: "myLots", label: "📒 My lots & ledger" },
-      { key: "vendorBuying", label: "🧺 Post price to farmers" },
+      { key: "myLots", label: "📒 My Lots and Ledgers" },
+      { key: "vendorBuying", label: "🧺 Post Price to Farmers" },
+      { key: "records", label: "📊 Records and Reports" },
     ] : []),
   ];
   const ROUTE_MENU_KEYS: Record<string, string> = {
@@ -161,6 +162,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
     sellServices: "/farmer/services",
     vendorBuying: "/vendor/buying",
     findTransport: "/transport",
+    records: "/records",
   };
   const openSectionFromMenu = (key: string) => {
     if (key === "farm2market" && farm2MarketLocked) {

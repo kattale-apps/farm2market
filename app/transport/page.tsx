@@ -19,7 +19,7 @@ export default function TransportPage() {
         <Link href="/" style={{ color: "#fff", textDecoration: "none", fontSize: "1.3rem" }} aria-label="Back">
           ←
         </Link>
-        <h1 style={{ margin: 0, fontSize: "clamp(1rem, 4vw, 1.2rem)" }}>🚚 Book transport</h1>
+        <h1 style={{ margin: 0, fontSize: "clamp(1rem, 4vw, 1.2rem)" }}>🚚 Book Transport</h1>
       </div>
       <div style={{ padding: "1rem", maxWidth: 760, margin: "0 auto" }}>
         <TransportDirectory userId={userId} />

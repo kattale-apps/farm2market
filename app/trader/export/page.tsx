@@ -38,10 +38,10 @@ type Tab = "overview" | "profile" | "documents" | "lots" | "deals";
 
 const TABS: { key: Tab; label: string; needs: string }[] = [
   { key: "overview", label: "Overview", needs: "Your progress and everything you need to become a live exporter." },
-  { key: "profile", label: "Company profile", needs: "Legal name, URA TIN, licence number, address, ports, contact person and the products you export." },
-  { key: "documents", label: "Documents & fee", needs: "Upload each required document with its expiry date, and pay the verification fee from your wallet." },
-  { key: "lots", label: "Lots & trace map", needs: "Describe each lot, link where the coffee came from, and add proof photos at every stage of the journey." },
-  { key: "deals", label: "Deals", needs: "Buyer enquiries, quotes, samples, contracts, shipment documents and ratings." },
+  { key: "profile", label: "Company Profile", needs: "Legal name, URA TIN, licence number, address, ports, contact person and the products you export." },
+  { key: "documents", label: "Documents Vault", needs: "Upload each required document with its expiry date, and pay the verification fee from your wallet." },
+  { key: "lots", label: "Lots and Trace Map", needs: "Describe each lot, link where the coffee came from, and add proof photos at every stage of the journey." },
+  { key: "deals", label: "My Deals", needs: "Buyer enquiries, quotes, samples, contracts, shipment documents and ratings." },
 ];
 
 /** Each checklist item and where the trader goes to act on it. */
@@ -68,6 +68,12 @@ export default function ExporterWorkspacePage() {
 
   // Tab history, so "Back" returns to wherever the trader came from.
   const go = nav.go;
+  // The dashboard menu opens a tab directly: /trader/export?tab=documents or ?tab=deals
+  useEffect(() => {
+    const wanted = new URLSearchParams(window.location.search).get("tab");
+    if (wanted && TABS.some((t) => t.key === wanted)) nav.go(wanted as Tab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const tabLabel = (t: Tab) => TABS.find((x) => x.key === t)?.label ?? "Overview";
 
   if (authStatus === "loading") return <div style={{ padding: "2rem", fontFamily: FONT }}>Loading...</div>;

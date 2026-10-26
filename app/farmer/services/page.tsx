@@ -158,7 +158,7 @@ function PricesNearMe({ userId, canBook, onBooked }: { userId: Id<"users">; canB
               </b>
             </div>
             <div style={{ fontSize: "0.82rem", color: "#455a64" }}>
-              {o.buyer.kind === "processor" ? "🏭" : "🏪"} {o.buyer.name}
+              {o.buyer.kind === "processor" ? "🏭" : o.buyer.kind === "exporter" ? "🚢" : "🏪"} {o.buyer.name}
               {o.buyer.verified ? " ✔" : ""} · {o.district} · valid until {o.validUntil}
               {o.minQuantity ? ` · min ${o.minQuantity} ${o.unit}` : ""}
             </div>

@@ -7,6 +7,7 @@ import { Id } from "../../../convex/_generated/dataModel";
 import { formLabel } from "../../../convex/processorShared";
 import { card, button, formatUgx } from "../exportMarkets/ui";
 import { PROCESSOR_HEADING, PROCESSOR_SOFT, PROCESSOR_BORDER } from "./ProcessorWorkspace";
+import { TraceRecords } from "../records/TraceRecords";
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
@@ -106,7 +107,11 @@ export function ProcessorRecordsTab({ userId }: { userId: Id<"users"> }) {
         <button style={{ ...button("secondary"), marginTop: "0.75rem" }} onClick={download}>
           ⬇️ Download all records (Excel)
         </button>
-        <div style={{ fontSize: "0.8rem", color: "#607d8b", marginTop: "0.4rem" }}>Lots sold on MarketSpace are in Lots &amp; ledger.</div>
+      </div>
+      <div style={card}>
+        <h3 style={{ marginTop: 0, color: PROCESSOR_HEADING, fontSize: "1rem" }}>🌱 Trace Records</h3>
+        <p style={{ marginTop: 0, fontSize: "0.82rem", color: "#607d8b" }}>Every lot you bought or sold in the app, and your stock, traced back to the farms.</p>
+        <TraceRecords userId={userId} />
       </div>
       {table("Intake", ["Code", "Date", "Farmer", "Form", "Kg"], intakes.map((i) => [i.intakeCode, i.intakeDate, i.farmerLabel, formLabel(i.inputForm), i.kilos]))}
       {table("Processing", ["Code", "Output", "Kg in", "Kg out", "Outturn"], batches.map((b) => [b.batchCode, formLabel(b.outputForm), b.weightInKg, b.weightOutKg ?? "-", b.outturnPercent != null ? `${b.outturnPercent}%` : "-"]))}

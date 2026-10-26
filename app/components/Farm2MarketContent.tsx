@@ -11,6 +11,7 @@ import { useOfflineQuery } from "../hooks/useOfflineQuery";
 import { useOfflineMutation } from "../hooks/useOfflineMutation";
 import { savePdfFromJsPDF } from "../utils/pdfDownload";
 import { VerifiedBadge } from "./icons/Brand";
+import { EditListingTerms } from "./lots/EditListingTerms";
 
 interface Farm2MarketContentProps {
   userId: Id<"users">;
@@ -74,6 +75,7 @@ export function Farm2MarketContent({ userId, userRole, isMobile }: Farm2MarketCo
   const [cancelling, setCancelling] = useState<Id<"listingUnits"> | null>(null);
   const [confirmingDelivery, setConfirmingDelivery] = useState<Id<"listingUnits"> | null>(null);
   const [cancellingListing, setCancellingListing] = useState<Id<"listings"> | null>(null);
+  const [editingTerms, setEditingTerms] = useState<any | null>(null);
   const [counterPrice, setCounterPrice] = useState<string>("");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [selectedListing, setSelectedListing] = useState<any | null>(null);
@@ -641,6 +643,15 @@ export function Farm2MarketContent({ userId, userRole, isMobile }: Farm2MarketCo
                       </div>
                       <div style={{ fontWeight: "600", marginBottom: "0.5rem", fontSize: "clamp(1rem, 3vw, 1.1rem)", color: "#1a1a1a" }}>{getProduceEmoji(listing.produceType)} {listing.totalKilos}kg {listing.produceType}</div>
                       <div style={{ fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", fontWeight: "600", color: statusColor }}>Status: {status}</div>
+                      {listing.listingMode !== "packaging" && canCancel && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setEditingTerms(listing); }}
+                          style={{ marginTop: "0.5rem", minHeight: 40, padding: "0 0.9rem", borderRadius: 8, border: "1px solid #a5d6a7", background: "#e8f5e9", color: "#1b5e20", fontWeight: 700, cursor: "pointer" }}
+                        >
+                          ✎ Edit terms
+                        </button>
+                      )}
                       <div style={{ fontSize: "clamp(0.7rem, 2vw, 0.75rem)", color: "#666", marginTop: "0.5rem" }}>Click to view details →</div>
                     </div>
                   );
@@ -1136,6 +1147,21 @@ export function Farm2MarketContent({ userId, userRole, isMobile }: Farm2MarketCo
           )}
         </>)}
       </div>
+
+      {editingTerms && (
+        <EditListingTerms
+          sellerId={userId}
+          sellerRole={effectiveRole}
+          listing={editingTerms}
+          onClose={(text) => {
+            setEditingTerms(null);
+            if (text) {
+              setMessage({ type: "success", text });
+              setTimeout(() => setMessage(null), 5000);
+            }
+          }}
+        />
+      )}
 
       {/* UTID Details Modal */}
       {selectedListing && (

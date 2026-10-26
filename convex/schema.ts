@@ -14,6 +14,7 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { evidencePhotoValidator } from "./evidencePhotos";
+import { gpsValidator, planStepValidator } from "./lotOrdersShared";
 
 const imageMetadata = {
   storageId: v.id("_storage"),
@@ -25,12 +26,7 @@ const imageMetadata = {
 };
 
 // One step of a seller's lot plan (convex/lotOrdersShared.ts PlanStep)
-const planStep = v.object({
-  name: v.string(),
-  earnPercent: v.number(),
-  payPercent: v.number(),
-  handover: v.boolean(),
-});
+const planStep = planStepValidator;
 
 // Reusable livestock section template
 const livestockSection = v.object({
@@ -218,7 +214,7 @@ export default defineSchema({
     collectionLocationText: v.optional(v.string()), // Vendor/store collection location text for buyers
     // Lot order terms (convex/lotOrdersShared.ts). Older listings: 100% to commit and the default steps.
     photos: v.optional(v.array(evidencePhotoValidator)), // Listing photos, each with its own GPS and time (camera or gallery)
-    gps: v.optional(v.object({ lat: v.number(), lng: v.number(), accuracy: v.optional(v.number()), capturedAt: v.string() })), // Read live on the form; best effort
+    gps: v.optional(gpsValidator), // Read live on the form; best effort
     commitPercent: v.optional(v.number()), // Share of the price the buyer commits up front (1-100)
     milestonePlan: v.optional(v.array(planStep)), // The seller's steps; each order keeps a copy
     stockSource: v.optional(v.union(v.literal("own_farm"), v.literal("in_app"), v.literal("off_app"))), // in_app: listed from stock bought in the app (traced)

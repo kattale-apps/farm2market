@@ -934,6 +934,50 @@ export const myLedger = query({
   },
 });
 
+/**
+ * Stock an exporter, processor or vendor holds. Stock bought through lot
+ * orders is traced back to the lots (and sellers) it came from; stock
+ * declared outside the app is marked off-app.
+ */
+export const myStock = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const rows = await ctx.db
+      .query("traderInventory")
+      .withIndex("by_trader", (q) => q.eq("traderId", args.userId))
+      .order("desc")
+      .take(200);
+    const stock = [];
+    for (const row of rows) {
+      if (row.status !== "in_storage") continue;
+      const sellers = new Set<string>();
+      for (const unitId of row.listingUnitIds.slice(0, 100)) {
+        const unit = await ctx.db.get(unitId);
+        const listing = unit ? await ctx.db.get(unit.listingId) : null;
+        if (listing?.farmerId) sellers.add(listing.farmerId);
+      }
+      const listings = await ctx.db
+        .query("listings")
+        .withIndex("by_inventory", (q) => q.eq("inventoryId", row._id))
+        .take(20);
+      stock.push({
+        inventoryId: row._id,
+        utid: row.utid,
+        produceType: row.produceType,
+        totalKilos: row.totalKilos,
+        pricePerKilo: row.unitPrice,
+        acquiredAt: row.acquiredAt,
+        source: row.source ?? (row.listingUnitIds.length > 0 ? "in_app" : "off_app"),
+        sourceLots: row.listingUnitIds.length,
+        sellerCount: sellers.size,
+        listed: listings.some((l) => l.status === "active" || l.status === "partially_locked"),
+        isBuyerBlock: row.is100kgBlock,
+      });
+    }
+    return stock;
+  },
+});
+
 /** Proof photos of an order's steps, for its buyer, its seller or an admin. */
 export const orderPhotos = query({
   args: { userId: v.id("users"), orderId: v.id("lotOrders") },

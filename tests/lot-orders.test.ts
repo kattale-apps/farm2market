@@ -10,6 +10,7 @@ import {
   earnedSoFar,
   escrowTargetAfter,
   lotBuyingDecision,
+  lotTerms,
   nextStepIndex,
   penaltySplit,
   proRatePay,
@@ -145,4 +146,14 @@ test("who can buy lots: verified exporters, processors, vendors and business buy
   // Farmers sell; they do not buy lots
   assert.match(lotBuyingDecision({ role: "farmer", ...verified }, false).reason ?? "", /Only exporters, processors/);
   assert.equal(lotBuyingDecision(null, false).ok, false);
+});
+
+test("listing terms: defaults from a commit %, nothing stored for older callers", () => {
+  assert.equal(lotTerms("farmer"), null);
+  const terms = lotTerms("farmer", 20)!;
+  assert.equal(terms.commitPercent, 20);
+  assert.deepEqual(terms.milestonePlan.map((s) => s.payPercent), [40, 40, 0]);
+  // A seller's own plan is checked
+  assert.throws(() => lotTerms("farmer", 20, [{ name: "Collect", earnPercent: 100, payPercent: 0, handover: true }]), /add up to 100%/);
+  assert.equal(lotTerms("vendor", 50, [{ name: "Collect from my store", earnPercent: 100, payPercent: 50, handover: true }])!.commitPercent, 50);
 });

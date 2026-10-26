@@ -67,6 +67,13 @@ export const getFarmerListings = query({
           totalUnits: listing.totalUnits,
           bagKg: listing.bagKg ?? null,
           bagsPerLot: listing.bagsPerLot ?? null,
+          // Lot terms, for "Edit terms" (older listings: none stored)
+          listingMode: listing.listingMode ?? "unit",
+          commitPercent: listing.commitPercent ?? null,
+          milestonePlan: listing.milestonePlan ?? null,
+          stockSource: listing.stockSource ?? null,
+          photoCount: listing.photos?.length ?? 0,
+          withdrawn: !!listing.withdrawnAt,
           status: listing.status,
           createdAt: listing.createdAt,
           deliverySLA: listing.deliverySLA,

@@ -16,12 +16,29 @@
  * show the same numbers.
  */
 
+import { v } from "convex/values";
+
 export type PlanStep = {
   name: string;
   earnPercent: number; // Share of the price the seller has earned once this step is done (pending until settlement)
   payPercent: number; // Share of the price charged from the buyer into escrow when this step is done
   handover: boolean; // The last step: goods change hands; needs 100% in escrow
 };
+
+export const planStepValidator = v.object({
+  name: v.string(),
+  earnPercent: v.number(),
+  payPercent: v.number(),
+  handover: v.boolean(),
+});
+
+/** A position read live on a form. GPS is best effort and never blocks a form. */
+export const gpsValidator = v.object({
+  lat: v.number(),
+  lng: v.number(),
+  accuracy: v.optional(v.number()),
+  capturedAt: v.string(),
+});
 
 export const PURCHASER_ROLES = ["trader", "transporter", "store", "vendor", "buyer"] as const;
 export const LOT_SELLER_ROLES = ["farmer", "vendor", "store"] as const;
@@ -130,6 +147,17 @@ export function validatePlan(steps: PlanStep[], commitPercent: number): PlanStep
     throw new Error(`The first payment and the step payments must add up to 100% (now ${paid}%)`);
   }
   return clean;
+}
+
+/**
+ * A listing's terms from what the seller chose: with only a commit % the
+ * seller's default steps are used. Returns null when neither was given
+ * (older callers: 100% to commit and the default steps).
+ */
+export function lotTerms(sellerRole: string, commitPercent?: number, plan?: PlanStep[]) {
+  if (commitPercent === undefined && plan === undefined) return null;
+  const commit = commitPercent ?? 100;
+  return { commitPercent: commit, milestonePlan: validatePlan(plan ?? defaultPlan(sellerRole, commit), commit) };
 }
 
 /** UGX for a share of the order's total. */

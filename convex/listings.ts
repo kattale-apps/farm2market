@@ -30,6 +30,7 @@ import { deliveryPointOf, isActiveProcessor } from "./processors";
 import { todayUganda } from "./exportMarkets";
 import { maskContactDetails } from "./exportMarketsShared";
 import { assertEvidencePhotos, evidencePhotoValidator } from "./evidencePhotos";
+import { availableKg as batchAvailableKg } from "./processorSales";
 import { LOT_SELLER_ROLES, gpsValidator, lotTerms, planStepValidator, stockRowSource, stockSourceProblem, type StockSource } from "./lotOrdersShared";
 import { syncListingCard } from "./marketCards";
 
@@ -123,6 +124,8 @@ export const createListing = mutation({
     inventoryId: v.optional(v.id("traderInventory")), // Vendors, processors and exporters: the stock row being listed
     // Vendors, processors and exporters say where the stock is from (stockSourceProblem)
     stockSource: v.optional(v.union(v.literal("in_app"), v.literal("off_app"))),
+    // Processors: lots made from one of their processed batches (its trace level sets the stock badge)
+    processingBatchId: v.optional(v.id("processingBatches")),
   },
   handler: async (ctx, args) => {
     // ============================================================
@@ -242,6 +245,21 @@ export const createListing = mutation({
       stockSource = stockRowSource(inventory);
     }
 
+    // Processors: lots from a processed batch hold the batch's kilos, so it
+    // cannot also be sold directly. Traced intake makes traced lots.
+    let photos = args.photos && args.photos.length > 0 ? args.photos : undefined;
+    if (args.processingBatchId) {
+      if (user.role !== "store") throw new Error("Only processors list processed batches");
+      if (inventory || args.stockSource) throw new Error("A batch listing takes its stock from the batch");
+      if (listingMode !== "unit") throw new Error("Processed batches are sold in bags and lots");
+      const batch = await ctx.db.get(args.processingBatchId);
+      if (!batch || batch.processorId !== args.farmerId) throw new Error("Batch not found");
+      const left = await batchAvailableKg(ctx, batch);
+      if (normalizedTotalKilos > left) throw new Error(`Only ${left} kg of batch ${batch.batchCode} is left to sell`);
+      stockSource = batch.traceLevel === "platform_traced" ? "in_app" : "off_app";
+      photos = photos ?? (batch.photos.length > 0 ? batch.photos.slice(0, 6) : undefined);
+    }
+
     // Generate UTID
     const utid = generateUTID(user.role);
 
@@ -307,12 +325,13 @@ export const createListing = mutation({
       totalUnits,
       bagKg: lots?.bagKg,
       bagsPerLot: lots?.bagsPerLot,
-      photos: args.photos && args.photos.length > 0 ? args.photos : undefined,
+      photos,
       gps: args.gps,
       commitPercent: terms?.commitPercent,
       milestonePlan: terms?.milestonePlan,
       stockSource,
       inventoryId: args.inventoryId,
+      processingBatchId: args.processingBatchId,
       status: "active",
       createdAt: getUgandaTime(),
       deliverySLA: 0,

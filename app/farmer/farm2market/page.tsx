@@ -108,7 +108,7 @@ export default function Farm2MarketPage() {
               Farmers Produce Market Locked
             </h2>
             <p style={{ margin: "0 0 1rem", color: "#555", fontSize: "0.95rem", lineHeight: 1.5, fontFamily: FONT }}>
-              You need <strong>500 FarmCoins</strong> to unlock the Farmers Produce Market.<br />
+              You need <strong>{farm2MarketAccess.requiredBalance} FarmCoins</strong> to unlock the Farmers Produce Market.<br />
               Earn FarmCoins by completing farm data submissions.
             </p>
             {/* Progress bar */}

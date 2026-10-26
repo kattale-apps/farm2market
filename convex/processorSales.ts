@@ -25,6 +25,7 @@ import { outturnPercent, processorSuccessFeeUgx } from "./processorShared";
 import { assertEvidencePhotos, evidencePhotoValidator } from "./evidencePhotos";
 import { audit, chargeExportFee, exporterReadiness, getFeeSettings, isActiveExporter, notify, todayUganda } from "./exportMarkets";
 import { uniqueCode } from "./exportLots";
+import { lotListedKg } from "./batchLots";
 import { getProcessorProfile, isActiveProcessor, processorCommunities, processorPublic, requireProcessorUser } from "./processors";
 
 type Ctx = QueryCtx | MutationCtx;
@@ -35,9 +36,11 @@ export async function committedKg(ctx: Ctx, batchId: Id<"processingBatches">, ex
   return sales.filter((s) => s._id !== exceptSaleId && s.status !== "declined" && s.status !== "cancelled").reduce((a, s) => a + s.kilos, 0);
 }
 
-async function availableKg(ctx: Ctx, batch: Doc<"processingBatches">, exceptSaleId?: Id<"processorSales">) {
+/** What is left of a completed batch to sell: its weight out less sales and lots listed. */
+export async function availableKg(ctx: Ctx, batch: Doc<"processingBatches">, exceptSaleId?: Id<"processorSales">) {
   if (batch.status !== "completed" || batch.weightOutKg === undefined) return 0;
-  return Math.max(0, Math.round((batch.weightOutKg - (await committedKg(ctx, batch._id, exceptSaleId))) * 10) / 10);
+  const taken = (await committedKg(ctx, batch._id, exceptSaleId)) + (await lotListedKg(ctx, batch._id));
+  return Math.max(0, Math.round((batch.weightOutKg - taken) * 10) / 10);
 }
 
 async function requireExporterAccount(ctx: Ctx, userId: Id<"users">) {
@@ -172,7 +175,7 @@ export const offerDirectSale = mutation({
       createdAt: getUgandaTime(),
     });
     const profile = await getProcessorProfile(ctx, user._id);
-    await notify(ctx, exporter._id, "Processed coffee offered to you", `${profile?.facilityName ?? `Processor ${user.alias}`} offered ${args.kilos} kg (batch ${batch.batchCode}). Accept it under Export Markets → Lots → Processor purchases.`);
+    await notify(ctx, exporter._id, "Processed coffee offered to you", `${profile?.facilityName ?? `Processor ${user.alias}`} offered ${args.kilos} kg (batch ${batch.batchCode}). Accept it under Global Bulk Markets → Lots → Processor purchases.`);
     return { saleId, saleCode };
   },
 });
@@ -283,9 +286,11 @@ export const listMySales = query({
         sellable.push({
           _id: b._id,
           batchCode: b.batchCode,
+          crop: b.crop,
           outputForm: b.outputForm,
           grade: b.grade ?? null,
           availableKg: available,
+          photoCount: b.photos.length,
           traceLevel: b.traceLevel,
           evidenceStatus: b.evidenceStatus,
           marketListed: b.marketListed === true,

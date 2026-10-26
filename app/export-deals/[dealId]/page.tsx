@@ -60,7 +60,7 @@ export default function ExportDealPage() {
 
   return (
     <div style={{ padding: "1rem", maxWidth: 900, margin: "0 auto", fontFamily: FONT }}>
-      <PageHeader title={`Deal ${deal.dealCode}`} backHref={back} backLabel="← Back to Export Markets" />
+      <PageHeader title={`Deal ${deal.dealCode}`} backHref={back} backLabel="← Back to Global Bulk Markets" />
       {msg && <Notice tone={msg.tone}>{msg.text}</Notice>}
 
       <div style={card}>

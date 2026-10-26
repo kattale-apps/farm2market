@@ -3155,7 +3155,7 @@ export default function CommunityDashboardPage() {
           : moduleKey === "diagnostics"
             ? "Diagnostics"
             : moduleKey === "exportMarkets"
-              ? "Export Markets"
+              ? "Global Bulk Markets"
               : "Fertilizer";
 
     try {
@@ -3461,7 +3461,7 @@ export default function CommunityDashboardPage() {
                 const logo = getCommunityLogo(c);
                 const modules = [
                   c?.advancedMarketsEnabled && "Contract Farming Market",
-                  c?.exportMarketsEnabled && "Export Markets",
+                  c?.exportMarketsEnabled && "Global Bulk Markets",
                   c?.diagnosticsEnabled && "Diagnostics",
                   c?.fertilizerEnabled && "Fertilizer",
                   c?.costTemplatesEnabled && "Cost Templates",
@@ -3959,7 +3959,7 @@ export default function CommunityDashboardPage() {
                             }}
                             style={{ width: "16px", height: "16px", cursor: "pointer" }}
                           />
-                          Exporter community (verified traders here get Export Markets; invite-only)
+                          Exporter community (verified traders here get Global Bulk Markets; invite-only)
                         </label>
                       </>
                     )}
@@ -4046,7 +4046,7 @@ export default function CommunityDashboardPage() {
                   {(visibleTabs).map((tab, idx) => {
                     const active = activeTab === tab;
                     const color = menuRainbowColor(idx);
-                    const labels: Record<CommunityTab, string> = { members: "Members", noticeboard: "Noticeboard", messages: "Messages", forms: "Forms", insights: "📊 Insights", fertilizer: "🌱 Fertilizer", costTemplates: "🌾 Cost Templates", advancePurchase: "🌱 Contract Farming Market", diagnostics: "🔬 Diagnostics", exportMarkets: "🚢 Export Markets", processors: "🏭 Processors" };
+                    const labels: Record<CommunityTab, string> = { members: "Members", noticeboard: "Noticeboard", messages: "Messages", forms: "Forms", insights: "📊 Insights", fertilizer: "🌱 Fertilizer", costTemplates: "🌾 Cost Templates", advancePurchase: "🌱 Contract Farming Market", diagnostics: "🔬 Diagnostics", exportMarkets: "🚢 Global Bulk Markets", processors: "🏭 Processors" };
                     return (
                       <button
                         key={tab}

@@ -1075,8 +1075,8 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       }}>
         <img src="/icons/cargo-ship.svg" alt="" width={44} height={44} style={{ flexShrink: 0, filter: "drop-shadow(0 0 6px rgba(2,136,209,0.5))" }} />
         <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <span style={{ whiteSpace: "nowrap" }}>EXPORT MARKETS</span>
-          <InfoTip text="Ready, graded coffee in export volumes from verified exporters: price on request, platform-handled samples and tracked shipment." label="About Export Markets" />
+          <span style={{ whiteSpace: "nowrap" }}>GLOBAL BULK MARKETS</span>
+          <InfoTip text="A market of bulk lots in export volumes that you can filter by crop and form, serviced by licensed exporters: price on request, platform-handled samples and tracked shipment." label="About Global Bulk Markets" />
         </div>
         <span aria-hidden="true" className="am-quicklink-arrow em-quicklink-arrow">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none">

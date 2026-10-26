@@ -164,6 +164,7 @@ export default defineSchema({
     farmerId: v.optional(v.id("users")), // Optional - can be null for trader listings
     traderId: v.optional(v.id("users")), // Optional - for trader listings (100kg blocks only)
     inventoryId: v.optional(v.id("traderInventory")), // For trader listings, reference to the 100kg inventory block
+    processingBatchId: v.optional(v.id("processingBatches")), // Processors: the processed batch these lots come from (its kilos are held while listed)
     utid: v.string(), // Generated when listing is created
     produceType: v.string(),
     totalKilos: v.number(),
@@ -230,6 +231,7 @@ export default defineSchema({
     .index("by_farmer", ["farmerId"])
     .index("by_trader", ["traderId"])
     .index("by_inventory", ["inventoryId"])
+    .index("by_processingBatch", ["processingBatchId"])
     .index("by_utid", ["utid"])
     .index("by_status", ["status"]),
 

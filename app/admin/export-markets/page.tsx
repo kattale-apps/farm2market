@@ -49,9 +49,9 @@ export default function ExportMarketsAdminPage() {
   return (
     <div style={{ padding: "1rem", maxWidth: 980, margin: "0 auto", fontFamily: FONT }}>
       <PageHeader
-        title="Export Markets — Admin"
+        title="Global Bulk Markets — Admin"
         backHref="/"
-        subtitle="Add verified traders to exporter communities, verify documents, approve exporters, verify trace evidence, run the sample desk and follow deals. A super admin switches Export Markets on for a community in its dashboard settings. Export fees live in Finance."
+        subtitle="Add verified traders to exporter communities, verify documents, approve exporters, verify trace evidence, run the sample desk and follow deals. A super admin switches Global Bulk Markets on for a community in its dashboard settings. Export fees live in Finance."
       />
 
       {mine && mine.communities.length === 0 && (

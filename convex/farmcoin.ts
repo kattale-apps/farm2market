@@ -943,11 +943,14 @@ export const setTraderVerificationStatus = mutation({
 
 const FARM2MARKET_REQUIRED_FARMCOINS = 1000;
 const PILOT_EMAIL_DOMAIN = "@pilot.farm2market";
+// Suspended (26 Oct 2026): every farmer can use the Farmers Produce Market.
+// Set to false to bring back the FarmCoin requirement.
+const FARM2MARKET_GATE_SUSPENDED = true;
 
 /**
  * Evaluate whether a farmer is allowed to access the Farmers Produce Market.
- * Criteria:
- *   - Farmer has >= 500 FarmCoins, OR
+ * Criteria (while the gate is not suspended):
+ *   - Farmer has >= FARM2MARKET_REQUIRED_FARMCOINS, OR
  *   - Farmer's email ends with @pilot.farm2market (pilot users are always allowed)
  */
 export const getFarm2MarketAccess = query({
@@ -960,7 +963,7 @@ export const getFarm2MarketAccess = query({
 
     // The FarmCoin gate is a farmer incentive; vendors and processors list
     // their lots and keep their ledger here without it.
-    if (user && user.role !== "farmer") {
+    if ((user && user.role !== "farmer") || FARM2MARKET_GATE_SUSPENDED) {
       return { allowed: true, isPilotExempt, balance: 0, requiredBalance: FARM2MARKET_REQUIRED_FARMCOINS, reason: null };
     }
 

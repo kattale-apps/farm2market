@@ -245,7 +245,7 @@ export const DEFAULT_EXPORT_DOCUMENT_TYPES: DefaultDocumentType[] = [
 
 export const MARKETS_HELPER = {
   export: {
-    title: "Export Markets",
+    title: "Global Bulk Markets",
     tagline: "Bean to cup",
     body:
       "Buy green coffee that is already harvested, processed and graded, in export volumes. " +

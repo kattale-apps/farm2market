@@ -214,7 +214,7 @@ export function Members({ adminId, today, communities, setMsg }: P & { communiti
       <div style={card}>
         <h2 style={{ marginTop: 0, fontSize: "1.05rem" }}>Exporters in this community</h2>
         <p style={{ fontSize: "0.82rem", color: "#555", marginTop: 0 }}>
-          Two-step verification. Step 1: the community admin accepts a trader, which opens Export Markets on their dashboard. Step 2: a
+          Two-step verification. Step 1: the community admin accepts a trader, which opens Global Bulk Markets on their dashboard. Step 2: a
           super admin verifies the trader (full verification, with the badge). Traders go live to buyers after both steps.
         </p>
         {members === undefined ? (
@@ -294,7 +294,7 @@ export function Members({ adminId, today, communities, setMsg }: P & { communiti
                       setBusy(m.userId);
                       try {
                         await add({ adminId, communityId, traderId: m.userId });
-                        setMsg({ tone: "success", text: `${m.alias} accepted (step 1). Export Markets is now open on their dashboard.` });
+                        setMsg({ tone: "success", text: `${m.alias} accepted (step 1). Global Bulk Markets is now open on their dashboard.` });
                       } catch (e) {
                         setMsg({ tone: "error", text: errorText(e) });
                       } finally {
@@ -302,7 +302,7 @@ export function Members({ adminId, today, communities, setMsg }: P & { communiti
                       }
                     }}
                   >
-                    Accept for Export Markets
+                    Accept for Global Bulk Markets
                   </button>
                 )}
                 </div>
@@ -333,7 +333,7 @@ export function Members({ adminId, today, communities, setMsg }: P & { communiti
                   setBusy(c.userId);
                   try {
                     await add({ adminId, communityId, traderId: c.userId });
-                    setMsg({ tone: "success", text: `${c.businessName ?? c.alias} added and accepted for Export Markets.` });
+                    setMsg({ tone: "success", text: `${c.businessName ?? c.alias} added and accepted for Global Bulk Markets.` });
                   } catch (e) {
                     setMsg({ tone: "error", text: errorText(e) });
                   } finally {
@@ -505,7 +505,7 @@ export function CommunityExportMarketsPanel({
       <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "0.75rem" }}>
         <img src="/icons/cargo-ship.svg" alt="" width={36} height={36} />
         <div>
-          <div style={{ fontWeight: 800, color: "#01579b", fontSize: "1.1rem" }}>Export Markets</div>
+          <div style={{ fontWeight: 800, color: "#01579b", fontSize: "1.1rem" }}>Global Bulk Markets</div>
           <div style={{ fontSize: "0.82rem", color: "#607d8b" }}>Exporters, documents, trace evidence and deals for {communityName}.</div>
         </div>
       </div>

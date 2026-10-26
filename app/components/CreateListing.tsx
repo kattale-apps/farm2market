@@ -17,7 +17,7 @@ import { LotTermsFields, planProblem } from "./lots/LotTermsFields";
 
 interface CreateListingProps {
   userId: Id<"users">;
-  userRole?: "farmer" | "vendor" | "store";
+  userRole?: "farmer" | "vendor" | "store" | "trader";
 }
 
 // A blank listing form. Lots start at one lot of one bag; the seller picks the bag size.
@@ -46,13 +46,16 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
   const router = useRouter();
   const effectiveRole = userRole || "farmer";
   const isVendorOrStore = effectiveRole === "vendor" || effectiveRole === "store";
+  // Exporters list stock they hold as lots, like vendors and processors.
+  const isExporter = effectiveRole === "trader";
+  const sellsStock = isVendorOrStore || isExporter;
   const createListing = useMutation(api.listings.createListing);
   const submitVendorPrice = useMutation((api as any).marketPrices.submitVendorPrice);
   const qualityOptions = useQuery(api.listings.getActiveQualityOptions, {});
   const produceOptions = useQuery(api.listings.getActiveProduceOptions, {});
   const [today] = useState(() => ugandaDateFromInstant(Date.now()));
   // Farmers may name a verified processor as the delivery point (optional).
-  const deliveryProcessors = useQuery(api.processors.listDeliveryProcessors, !isVendorOrStore ? { userId, today } : "skip");
+  const deliveryProcessors = useQuery(api.processors.listDeliveryProcessors, effectiveRole === "farmer" ? { userId, today } : "skip");
   const collectionPoint = useQuery(api.listings.getCollectionPointForUser, isVendorOrStore ? { userId } : "skip");
   const onboardingStatus = useQuery(api.farmerOnboarding.checkOnboardingStatus, { farmerId: userId });  // supports farmer/vendor/store
   const recentCommodities = useQuery(
@@ -115,10 +118,14 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
   const [gpsState, setGpsState] = useState<"reading" | "ok" | "none">("reading");
   const [commitPercent, setCommitPercent] = useState(30);
   const [steps, setSteps] = useState<PlanStep[]>(() => defaultPlan(effectiveRole, 30));
-  // Vendors and processors: stock bought in the app (traced) or not.
-  const myStock = useQuery(api.lotOrders.myStock, isVendorOrStore ? { userId } : "skip");
+  // Vendors, processors and exporters: stock bought in the app (traced) or not.
+  const myStock = useQuery(api.lotOrders.myStock, sellsStock ? { userId } : "skip");
   const [stockChoice, setStockChoice] = useState<"stock" | "off_app">("off_app");
   const [stockId, setStockId] = useState("");
+  // Listable stock rows, kept apart by where they came from (100 kg buyer blocks are on the buyer catalogue)
+  const freeStock = (myStock ?? []).filter((s) => !s.listed && !s.isBuyerBlock);
+  const inAppStock = freeStock.filter((s) => s.source === "in_app");
+  const offAppStock = freeStock.filter((s) => s.source === "off_app");
 
   const readGps = () => {
     setGpsState("reading");
@@ -285,6 +292,11 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
         setLoading(false);
         return;
       }
+      if (sellsStock && listingMode === "unit" && stockChoice === "stock" && !stockId) {
+        setMessage({ type: "error", text: "Choose the stock you bought in the app, or choose \"Not bought in the app\"" });
+        setLoading(false);
+        return;
+      }
       const termsProblem = listingMode === "packaging" ? null : planProblem(steps, commitPercent);
       if (termsProblem) {
         setMessage({ type: "error", text: `Payment steps: ${termsProblem}` });
@@ -437,7 +449,8 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
         gps: gps ?? undefined,
         commitPercent,
         milestonePlan: steps,
-        inventoryId: stockChoice === "stock" && stockId ? (stockId as Id<"traderInventory">) : undefined,
+        inventoryId: sellsStock && listingMode === "unit" && stockId ? (stockId as Id<"traderInventory">) : undefined,
+        stockSource: sellsStock && listingMode === "unit" ? (stockChoice === "stock" ? "in_app" : "off_app") : undefined,
       });
 
       setMessage({
@@ -778,8 +791,8 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
       <form onSubmit={handleSubmit}>
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
           
-          {/* Listing Mode Selection */}
-          {isVendorOrStore ? (
+          {/* Listing Mode Selection (exporters sell by weight only) */}
+          {isExporter ? null : isVendorOrStore ? (
           <div>
             <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
               Listing Mode *
@@ -838,7 +851,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
           )}
 
           {/* STEP 1: Collection point (vendors) or delivery point (farmers, optional) */}
-          {isVendorOrStore ? (
+          {isExporter ? null : isVendorOrStore ? (
             <div>
               <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
                 Collection Location
@@ -1503,8 +1516,8 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
             </p>
           </div>
 
-          {/* Vendors and processors: is this stock bought in the app (traced to farms)? */}
-          {isVendorOrStore && listingMode === "unit" && (
+          {/* Vendors, processors and exporters: is this stock bought in the app (traced to farms)? */}
+          {sellsStock && listingMode === "unit" && (
             <div>
               <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
                 Where is this stock from? *
@@ -1521,28 +1534,33 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
                   </button>
                 ))}
               </div>
-              {stockChoice === "stock" && (
-                (myStock ?? []).filter((s) => !s.listed).length === 0 ? (
-                  <p style={{ margin: "0.5rem 0 0", fontSize: "0.85rem", color: "#666" }}>You have no unlisted stock bought in the app yet.</p>
-                ) : (
-                  <select
-                    value={stockId}
-                    onChange={(e) => {
-                      setStockId(e.target.value);
-                      const chosen = myStock?.find((s) => s.inventoryId === e.target.value);
-                      if (chosen && !formData.produceType) setFormData({ ...formData, produceType: chosen.produceType });
-                    }}
-                    style={{ width: "100%", marginTop: "0.5rem", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "6px", fontSize: "1rem", background: "#fff" }}
-                  >
-                    <option value="">-- Choose your stock --</option>
-                    {(myStock ?? []).filter((s) => !s.listed).map((s) => (
-                      <option key={s.inventoryId} value={s.inventoryId}>
-                        {s.produceType} · {s.totalKilos.toLocaleString()} kg · {s.source === "in_app" ? "traced" : "off-app"}
-                      </option>
-                    ))}
-                  </select>
-                )
+              {stockChoice === "stock" && inAppStock.length === 0 && (
+                <p style={{ margin: "0.5rem 0 0", fontSize: "0.85rem", color: "#666" }}>You have no unlisted stock bought in the app yet.</p>
               )}
+              {/* Each choice lists only its own stock, so the two never mix (the server checks too) */}
+              {(stockChoice === "stock" ? inAppStock : offAppStock).length > 0 && (
+                <select
+                  value={stockId}
+                  onChange={(e) => {
+                    setStockId(e.target.value);
+                    const chosen = myStock?.find((s) => s.inventoryId === e.target.value);
+                    if (chosen) setFormData({ ...formData, produceType: chosen.produceType });
+                  }}
+                  style={{ width: "100%", marginTop: "0.5rem", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "6px", fontSize: "1rem", background: "#fff" }}
+                >
+                  <option value="">{stockChoice === "stock" ? "-- Choose your stock --" : "-- New stock (not in my records) --"}</option>
+                  {(stockChoice === "stock" ? inAppStock : offAppStock).map((s) => (
+                    <option key={s.inventoryId} value={s.inventoryId}>
+                      {s.produceType} · {s.totalKilos.toLocaleString()} kg{s.sellerCount > 0 ? ` · from ${s.sellerCount} seller${s.sellerCount === 1 ? "" : "s"}` : ""}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <p style={{ margin: "0.4rem 0 0", fontSize: "0.8rem", color: "#666" }}>
+                {stockChoice === "stock"
+                  ? "Buyers see it as traced: bought in the app, back to the farms it came from."
+                  : "Buyers see it as off-app stock."}
+              </p>
             </div>
           )}
 

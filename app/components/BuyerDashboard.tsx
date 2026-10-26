@@ -195,7 +195,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   const openSectionFromMenu = (key: string) => {
     if (key === "marketspace" || key === "myWallet" || key === "buyLots") {
       setMoreMenuOpen(false);
-      router.push(key === "marketspace" ? "/marketspace" : key === "buyLots" ? "/lots" : "/wallet");
+      router.push(key === "marketspace" ? "/marketspace" : key === "buyLots" ? "/marketspace?view=produce" : "/wallet");
       return;
     }
     if (IS_PRODUCTION_DEPLOYMENT && PRODUCTION_LOCKED_SECTIONS.has(key)) return;

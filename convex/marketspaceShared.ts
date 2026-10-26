@@ -20,6 +20,8 @@ export type MarketspaceSettings = {
   extensionCostFarmcoin: number;
   maxPhotosPerAd: number;
   maxAdsPerDay: number; // Anti-spam: new ads one user can post in 24 hours
+  maxVendDays: number; // Longest a vended listing stays up before it must be refreshed
+  bulkVendCostFarmcoin: number; // FarmCoin to switch on "Sell in bulk" (0 = free)
 };
 
 /**
@@ -35,6 +37,8 @@ export const DEFAULT_SETTINGS: MarketspaceSettings = {
   extensionCostFarmcoin: 0,
   maxPhotosPerAd: 5,
   maxAdsPerDay: 5,
+  maxVendDays: 30,
+  bulkVendCostFarmcoin: 0,
 };
 
 /** Allowed range for each setting (whole numbers). */
@@ -47,6 +51,8 @@ export const SETTING_LIMITS: Record<keyof MarketspaceSettings, { min: number; ma
   extensionCostFarmcoin: { min: 0, max: 1_000_000, label: "Extension cost (FarmCoin)" },
   maxPhotosPerAd: { min: 1, max: 10, label: "Maximum photos per ad" },
   maxAdsPerDay: { min: 1, max: 100, label: "Maximum new ads per user per day" },
+  maxVendDays: { min: 7, max: 90, label: "Longest a vended listing stays up (days)" },
+  bulkVendCostFarmcoin: { min: 0, max: 1_000_000, label: "Sell in bulk cost (FarmCoin)" },
 };
 
 /** Saved settings with defaults filled in for anything not saved yet. */
@@ -192,4 +198,152 @@ export function validateAd(ad: AdInput, maxPhotos: number): string | null {
   if (ad.kind === "offer" && ad.neededBy) return "Only Wanted ads have a 'needed by' date.";
   if (ad.photoCount > maxPhotos) return `Add at most ${maxPhotos} photo${maxPhotos === 1 ? "" : "s"}.`;
   return null;
+}
+
+// ------------------------------------------------------------------
+// Vending lot listings on MarketSpace
+// ------------------------------------------------------------------
+
+/** How long a vended listing stays up before it must be refreshed (the "self-destruct timer"). */
+export function vendDayChoices(maxVendDays: number): number[] {
+  return [7, 14, 30, 60, 90].filter((d) => d <= maxVendDays);
+}
+
+/** Preset bulk ranges a verified seller picks from; the kilos for sale must fall in the range. */
+export const BULK_RANGES = [
+  { key: "100kg_1t", label: "100 kg – 1 tonne", minKg: 100, maxKg: 1000 },
+  { key: "1t_5t", label: "1 – 5 tonnes", minKg: 1000, maxKg: 5000 },
+  { key: "5t_20t", label: "5 – 20 tonnes", minKg: 5000, maxKg: 20000 },
+  { key: "over_20t", label: "Over 20 tonnes", minKg: 20000, maxKg: null as number | null },
+] as const;
+
+export type BulkRangeKey = (typeof BULK_RANGES)[number]["key"];
+
+export function bulkRange(key: string | undefined | null) {
+  return BULK_RANGES.find((r) => r.key === key) ?? null;
+}
+
+/** Why `kg` does not fit the range, or null when it does. */
+export function bulkRangeProblem(key: string, kg: number): string | null {
+  const range = bulkRange(key);
+  if (!range) return "Choose one of the bulk ranges.";
+  if (kg < range.minKg || (range.maxKg !== null && kg > range.maxKg)) {
+    return `This listing has ${kg.toLocaleString()} kg for sale, which is not in "${range.label}".`;
+  }
+  return null;
+}
+
+// ------------------------------------------------------------------
+// The lite card: what visitors and unverified viewers see
+// ------------------------------------------------------------------
+
+/** "UGX 1,000 – 1,500 /kg": a price band in steps of 500 (lite cards hide the exact price). */
+export function priceBand(pricePerKilo: number | undefined | null): string | null {
+  if (!pricePerKilo || pricePerKilo <= 0) return null;
+  const step = pricePerKilo < 2000 ? 500 : pricePerKilo < 10000 ? 1000 : 5000;
+  const low = Math.floor(pricePerKilo / step) * step;
+  return `UGX ${low.toLocaleString()} – ${(low + step).toLocaleString()} /kg`;
+}
+
+/** A rough quantity for lite cards: "under 100 kg", "1 – 5 tonnes", ... */
+export function quantityBand(kg: number | undefined | null): string | null {
+  if (!kg || kg <= 0) return null;
+  if (kg < 100) return "under 100 kg";
+  const range = BULK_RANGES.find((r) => kg >= r.minKg && (r.maxKg === null || kg <= r.maxKg));
+  return range?.label ?? null;
+}
+
+/** Who is looking at a card: not signed in, signed in, or a verified buyer (convex/lotOrders lotBuyingAccess). */
+export type ViewerTier = "public" | "member" | "verified";
+
+export type CardView = "produce" | "lots" | "classifieds";
+
+/**
+ * Lite cards hide what only buyers should see. Visitors get lite cards
+ * everywhere; signed-in members get full classified ads but lite produce
+ * and lots until they are verified buyers. A seller always sees their own
+ * card in full.
+ */
+export function isLiteFor(view: CardView, tier: ViewerTier, isMine = false): boolean {
+  if (isMine || tier === "verified") return false;
+  return tier === "public" || view !== "classifieds";
+}
+
+/** The line a lite card shows instead of the details. */
+export function liteReason(tier: ViewerTier): string {
+  return tier === "public"
+    ? "Sign up as a buyer to see prices and full details."
+    : "Get verified to see prices, ask questions and buy.";
+}
+
+type CardSource = {
+  _id: string;
+  view: CardView;
+  kind: "offer" | "wanted";
+  title: string;
+  isBulk: boolean;
+  bulkRange?: string;
+  sellerRole: string;
+  district: string;
+  stockSource?: "own_farm" | "in_app" | "off_app";
+  lotKg?: number;
+  bagKg?: number;
+  bagsPerLot?: number;
+  lotsAvailable?: number;
+  qtyKg?: number;
+  quantityText?: string;
+  pricePerKilo?: number;
+  priceUGX?: number;
+  priceUnit?: string;
+  commitPercent?: number;
+  qualityRating?: string;
+  expiresAt: number;
+  createdAt: number;
+};
+
+/**
+ * What a card sends to a viewer. Lite cards keep the same shape with the
+ * hidden fields set to null, so the screens stay simple; the server never
+ * sends what the viewer may not see.
+ */
+export function shapeCard(
+  card: CardSource,
+  viewer: { tier: ViewerTier; isMine: boolean },
+  extras: { thumbUrl: string | null; sellerAlias: string | null; sellerCategory: string }
+) {
+  const lite = isLiteFor(card.view, viewer.tier, viewer.isMine);
+  const range = bulkRange(card.bulkRange);
+  return {
+    cardId: card._id,
+    view: card.view,
+    kind: card.kind,
+    title: card.title,
+    thumbUrl: extras.thumbUrl,
+    sellerCategory: extras.sellerCategory,
+    district: card.district,
+    stockSource: card.stockSource ?? null,
+    isBulk: card.isBulk,
+    bulkLabel: range?.label ?? null,
+    createdAt: card.createdAt,
+    expiresAt: card.expiresAt,
+    isMine: viewer.isMine,
+    lite,
+    liteReason: lite ? liteReason(viewer.tier) : null,
+    // Bands for everyone
+    priceBand: priceBand(card.pricePerKilo),
+    quantityBand: quantityBand(card.qtyKg),
+    // Details only full viewers get
+    sellerAlias: lite ? null : extras.sellerAlias,
+    pricePerKilo: lite ? null : card.pricePerKilo ?? null,
+    priceUGX: lite ? null : card.priceUGX ?? null,
+    priceUnit: lite ? null : card.priceUnit ?? null,
+    lotKg: lite ? null : card.lotKg ?? null,
+    bagKg: lite ? null : card.bagKg ?? null,
+    bagsPerLot: lite ? null : card.bagsPerLot ?? null,
+    lotsAvailable: lite ? null : card.lotsAvailable ?? null,
+    qtyKg: lite ? null : card.qtyKg ?? null,
+    quantityText: lite ? null : card.quantityText ?? null,
+    commitPercent: lite ? null : card.commitPercent ?? null,
+    qualityRating: lite ? null : card.qualityRating ?? null,
+  };
 }

@@ -26,7 +26,6 @@
 
 import { v, ConvexError } from "convex/values";
 import { internalMutation, mutation, query, MutationCtx, QueryCtx } from "./_generated/server";
-import { internal } from "./_generated/api";
 import { Doc, Id } from "./_generated/dataModel";
 import { generateUTID, getUgandaTime, calculateTraderExposureInternal, getTraderCommissionPercentage } from "./utils";
 import { MAX_TRADER_EXPOSURE_UGX } from "./constants";
@@ -38,6 +37,7 @@ import { todayUganda } from "./exportMarkets";
 import { roleLabel } from "./roleLabels";
 import { assertEvidencePhotos, evidencePhotoValidator } from "./evidencePhotos";
 import { spendCapExceededError, throwAppError } from "./errors";
+import { syncListingCard } from "./marketCards";
 import {
   AUTO_SETTLE_MS,
   PAYMENT_GRACE_MS,
@@ -49,6 +49,7 @@ import {
   earnedSoFar,
   nextStepIndex,
   penaltySplit,
+  stockRowSource,
 } from "./lotOrdersShared";
 
 type Ctx = QueryCtx | MutationCtx;
@@ -138,6 +139,16 @@ export async function refreshListingStatus(ctx: MutationCtx, listingId: Id<"list
           ? "delivered"
           : "cancelled";
   if (listing.status !== status) await ctx.db.patch(listingId, { status });
+
+  // Stock listed as lots: used up once every lot is delivered; free again if
+  // the listing closes with nothing sold.
+  if (listing.inventoryId && listing.farmerId && (status === "delivered" || status === "cancelled")) {
+    const stock = await ctx.db.get(listing.inventoryId);
+    if (stock?.reservedListingId === listingId) {
+      await ctx.db.patch(stock._id, status === "delivered" ? { status: "sold" } : { reservedListingId: undefined });
+    }
+  }
+  await syncListingCard(ctx, listingId);
 }
 
 /** Demo money held in an order's escrow, from its locks. */
@@ -212,10 +223,8 @@ async function addToStock(ctx: MutationCtx, order: Order, now: number) {
     source: "in_app",
     lotOrderId: order._id,
   });
-  // Only exporters' stock is pooled into 100kg blocks for buyers.
-  if (isExporter) {
-    await ctx.runMutation(internal.inventoryBlocks.checkAndCreate100kgBlocks, { traderId: order.buyerId });
-  }
+  // Stock bought through lot orders is not pooled into 100kg buyer blocks:
+  // its owner lists it as lots (with payment steps) instead.
 }
 
 /** The lot was collected: it is delivered on the unit and in both ledgers. */
@@ -497,6 +506,37 @@ export const commit = mutation({
   handler: async (ctx, args) => {
     await checkPilotMode(ctx);
     return await commitLots(ctx, args.buyerId, args.unitIds);
+  },
+});
+
+/**
+ * Buy N lots from a MarketSpace card. The buyer is the signed-in user
+ * (session token), and the lots are the first ones nobody is negotiating on.
+ */
+export const commitFromCard = mutation({
+  args: {
+    sessionToken: v.string(),
+    cardId: v.id("marketCards"),
+    lots: v.number(),
+  },
+  handler: async (ctx, args) => {
+    await checkPilotMode(ctx);
+    const buyer = await sessionUser(ctx, args.sessionToken);
+    if (!buyer) throw new Error("Please sign in to buy lots.");
+    const card = await ctx.db.get(args.cardId);
+    if (!card || card.sourceKind !== "listing" || !card.listingId || card.status !== "active" || card.expiresAt <= getUgandaTime()) {
+      throw new Error("This lot is no longer on MarketSpace.");
+    }
+    const n = Math.floor(args.lots);
+    if (!(n >= 1)) throw new Error("Choose how many lots to buy");
+    const listingId = card.listingId;
+    const units = await ctx.db
+      .query("listingUnits")
+      .withIndex("by_listing", (q) => q.eq("listingId", listingId))
+      .collect();
+    const free = units.filter((u) => u.status === "available" && !u.activeNegotiationId);
+    if (free.length < n) throw new Error(`Only ${free.length} lot(s) are free to buy right now.`);
+    return await commitLots(ctx, buyer._id, free.slice(0, n).map((u) => u._id));
   },
 });
 
@@ -967,7 +1007,7 @@ export const myStock = query({
         totalKilos: row.totalKilos,
         pricePerKilo: row.unitPrice,
         acquiredAt: row.acquiredAt,
-        source: row.source ?? (row.listingUnitIds.length > 0 ? "in_app" : "off_app"),
+        source: stockRowSource(row),
         sourceLots: row.listingUnitIds.length,
         sellerCount: sellers.size,
         listed: listings.some((l) => l.status === "active" || l.status === "partially_locked"),

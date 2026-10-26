@@ -2,159 +2,104 @@
 
 export const dynamic = "force-dynamic";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { usePaginatedQuery, useQuery } from "convex/react";
+import { Suspense, useEffect, useState } from "react";
+import nextDynamic from "next/dynamic";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import { Id } from "../../convex/_generated/dataModel";
+import { ugandaDateFromInstant } from "../../convex/exportMarketsShared";
 import { getUgandaTime } from "../utils/timeUtils";
-import { AdCard } from "./components/AdCard";
-import { AdDetail } from "./components/AdDetail";
 import { AdForm, type EditableAd } from "./components/AdForm";
+import { Discover, type Chip } from "./components/Discover";
 import { MyAds } from "./components/MyAds";
-import { ContactSheet, ReportSheet, Sheet } from "./components/Sheets";
-import { SwipeDeck } from "./components/SwipeDeck";
+import { MyLots } from "./components/MyLots";
 import { TopBar } from "./components/TopBar";
-import { UgandaMapIcon } from "./components/UgandaMapIcon";
-import { DISTRICTS, FONT, tint, useMarketspaceSession, useUgandaNow, type AdCardData } from "./components/shared";
+import { FONT, useMarketspaceSession, useUgandaNow } from "./components/shared";
 
-type Tab = "browse" | "post" | "mine";
-type Kind = "all" | "offer" | "wanted";
+// The QR decoder loads only when someone taps Scan QR, so the board stays light on slow phones.
+const QrScanSheet = nextDynamic(() => import("./components/QrScanSheet").then((m) => m.QrScanSheet), { ssr: false });
+
+type Tab = "discover" | "post" | "mine";
+const CHIPS: Chip[] = ["all", "produce", "bulk", "lots", "classifieds"];
+const SELLER_ROLES = ["farmer", "vendor", "store", "trader"];
+
+export default function MarketspacePage() {
+  return (
+    <Suspense fallback={<p style={{ padding: "2rem", fontFamily: FONT }}>Loading MarketSpace…</p>}>
+      <MarketspaceInner />
+    </Suspense>
+  );
+}
 
 /**
- * MarketSpace: public classified ads from across Uganda. Anyone can browse
- * and contact advertisers without logging in; signed-in users can post and
- * manage their own ads here too.
+ * MarketSpace: the one market every member and visitor uses. Scan a
+ * Farm2Market QR code or Discover every post (farmers' produce, bulk lots,
+ * processors' and vendors' lots, classified ads). Sellers vend their lot
+ * listings here and post classified ads; MarketSpace is anonymous, with
+ * category badges and aliases instead of phone numbers.
  */
-export default function MarketspacePage() {
+function MarketspaceInner() {
+  const router = useRouter();
+  const params = useSearchParams();
   const session = useMarketspaceSession();
   const token = session.token;
   const config = useQuery(api.marketspace.getBoardConfig, {});
   const me = useQuery(api.marketspace.getMyContext, token ? { sessionToken: token } : "skip");
   const liveNow = useUgandaNow();
+  const [today] = useState(() => ugandaDateFromInstant(Date.now()));
 
-  const [tab, setTab] = useState<Tab>("browse");
-  const [groupId, setGroupId] = useState<string | null>(null);
-  const [categoryId, setCategoryId] = useState<string | null>(null);
-  const [kind, setKind] = useState<Kind>("all");
-  const [district, setDistrict] = useState("");
-  const [search, setSearch] = useState("");
-  const [debounced, setDebounced] = useState("");
-  const [view, setView] = useState<"swipe" | "grid">("swipe");
-  const [detail, setDetail] = useState<AdCardData | null>(null);
-  const [contact, setContact] = useState<AdCardData | null>(null);
-  const [report, setReport] = useState<AdCardData | null>(null);
+  const viewParam = params.get("view");
+  const initialChip: Chip = CHIPS.includes(viewParam as Chip) ? (viewParam as Chip) : "all";
+  const tabParam = params.get("tab");
+  const [tab, setTab] = useState<Tab>(tabParam === "post" || tabParam === "mine" ? tabParam : "discover");
+  const [onBoard, setOnBoard] = useState(!!viewParam);
+  const [scanning, setScanning] = useState(false);
+  const [postKind, setPostKind] = useState<"choose" | "lots" | "ad">("choose");
   const [editing, setEditing] = useState<EditableAd | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  // The board's clock is fixed while browsing a filter, so the list does not reload every minute.
+  // The board's clock is fixed while browsing, so the list does not reload every minute.
   const [boardNow, setBoardNow] = useState(() => Math.floor(getUgandaTime() / 60000) * 60000);
-  useEffect(() => setBoardNow(Math.floor(getUgandaTime() / 60000) * 60000), [groupId, categoryId, kind, district]);
-
-  useEffect(() => {
-    const id = setTimeout(() => setDebounced(search.trim()), 350);
-    return () => clearTimeout(id);
-  }, [search]);
-
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("marketspace_view");
-      if (saved === "grid" || saved === "swipe") setView(saved);
-    } catch {
-      /* storage unavailable */
-    }
-  }, []);
-  const chooseView = (v: "swipe" | "grid") => {
-    setView(v);
-    try {
-      localStorage.setItem("marketspace_view", v);
-    } catch {
-      /* storage unavailable */
-    }
-  };
-
-  const filters = {
-    now: boardNow,
-    groupId: (groupId ?? undefined) as Id<"marketspaceGroups"> | undefined,
-    categoryId: (categoryId ?? undefined) as Id<"marketspaceCategories"> | undefined,
-    kind: kind === "all" ? undefined : kind,
-    district: district || undefined,
-  };
-  const { results, status, loadMore } = usePaginatedQuery(api.marketspace.listAds, debounced ? "skip" : filters, { initialNumItems: 12 });
-  const searchResults = useQuery(api.marketspace.searchAds, debounced ? { ...filters, text: debounced } : "skip");
-
-  const ads = (debounced ? searchResults ?? [] : results) as AdCardData[];
-  const loading = debounced ? searchResults === undefined : status === "LoadingFirstPage";
-  const hasMore = !debounced && status === "CanLoadMore";
-  const onLoadMore = useCallback(() => loadMore(12), [loadMore]);
-
-  const groups = config?.groups ?? [];
-  const group = groups.find((g) => g._id === groupId) ?? null;
-  const scopeName = useMemo(() => {
-    const cat = group?.categories.find((c) => c._id === categoryId);
-    return cat ? cat.name : group ? group.name : "MarketSpace";
-  }, [group, categoryId]);
+  useEffect(() => setBoardNow(Math.floor(getUgandaTime() / 60000) * 60000), [onBoard]);
 
   const isUser = session.status === "user" && !!me;
-  // A stored login whose session has ended browses as a guest.
   const viewerStatus = session.status === "user" && me === null ? "guest" : session.status;
+  const isSeller = !!me && SELLER_ROLES.includes(me.role);
+
+  const go = (t: Tab) => {
+    setTab(t);
+    setNotice(null);
+    if (t !== "post") setEditing(null);
+    if (t === "post") setPostKind(isSeller ? "choose" : "ad");
+  };
   const tabButton = (t: Tab, label: string) => (
     <button
       type="button"
-      onClick={() => {
-        setTab(t);
-        if (t !== "post") setEditing(null);
-        setNotice(null);
-      }}
-      style={{
-        flex: 1,
-        minHeight: 44,
-        border: "none",
-        borderBottom: `3px solid ${tab === t ? "#2e7d32" : "transparent"}`,
-        background: "none",
-        fontWeight: 800,
-        fontSize: "0.92rem",
-        color: tab === t ? "#1b5e20" : "#666",
-        fontFamily: FONT,
-        cursor: "pointer",
-      }}
+      onClick={() => go(t)}
+      style={{ flex: 1, minHeight: 44, border: "none", borderBottom: `3px solid ${tab === t ? "#2e7d32" : "transparent"}`, background: "none", fontWeight: 800, fontSize: "0.92rem", color: tab === t ? "#1b5e20" : "#666", fontFamily: FONT, cursor: "pointer" }}
     >
       {label}
     </button>
   );
-
-  const chip = (active: boolean, color = "#2e7d32"): React.CSSProperties => ({
-    flexShrink: 0,
-    padding: "0.45rem 0.85rem",
-    borderRadius: 999,
-    border: `2px solid ${active ? color : "#ddd"}`,
-    background: active ? tint(color, 0.12) : "#fff",
-    color: active ? color : "#333",
-    fontWeight: 700,
-    fontSize: "0.85rem",
+  const bigTile: React.CSSProperties = {
+    flex: 1,
+    minHeight: 130,
+    borderRadius: 18,
+    border: "2px solid #c8e6c9",
+    background: "#fff",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "0.4rem",
+    fontWeight: 800,
+    fontSize: "1.05rem",
     fontFamily: FONT,
+    color: "#1b5e20",
     cursor: "pointer",
-    whiteSpace: "nowrap",
-  });
-
-  const endOfDeck = (
-    <>
-      <div style={{ fontSize: "2.2rem" }}>🎉</div>
-      <p style={{ margin: 0, fontWeight: 700 }}>{ads.length === 0 ? `No ads in ${scopeName} yet.` : `You've seen all ads in ${scopeName}.`}</p>
-      <button type="button" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} style={{ ...chip(true), minHeight: 44 }}>
-        Switch category
-      </button>
-      {viewerStatus === "guest" ? (
-        <Link href="/login" style={{ color: "#1b5e20", fontWeight: 700 }}>
-          Sign up free to post your own ad →
-        </Link>
-      ) : (
-        <button type="button" onClick={() => setTab("post")} style={{ ...chip(false), minHeight: 44 }}>
-          ＋ Post an ad
-        </button>
-      )}
-    </>
-  );
+    boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+  };
+  const section: React.CSSProperties = { padding: "1rem", borderRadius: 14, background: "#fff", border: "1px solid #e3e8e0", marginBottom: "1rem" };
 
   return (
     <div style={{ minHeight: "100vh", background: "#f6f8f4", fontFamily: FONT }}>
@@ -162,220 +107,123 @@ export default function MarketspacePage() {
 
       {isUser && (
         <nav style={{ display: "flex", background: "#fff", borderBottom: "1px solid #e6e6e6", position: "sticky", top: 57, zIndex: 40 }}>
-          {tabButton("browse", "Browse")}
-          {tabButton("post", editing ? "Edit ad" : "Post ad")}
-          {tabButton("mine", "My ads")}
+          {tabButton("discover", "Discover")}
+          {tabButton("post", editing ? "Edit ad" : "Post")}
+          {tabButton("mine", "My posts")}
         </nav>
       )}
 
       <main style={{ maxWidth: 1080, margin: "0 auto", padding: "1rem" }}>
         {notice && (
-          <div style={{ marginBottom: "0.9rem", padding: "0.7rem 0.9rem", borderRadius: 12, background: "#e8f5e9", color: "#1b5e20", fontWeight: 700 }}>
-            ✓ {notice}
+          <div style={{ marginBottom: "0.9rem", padding: "0.7rem 0.9rem", borderRadius: 12, background: "#e8f5e9", color: "#1b5e20", fontWeight: 700 }}>✓ {notice}</div>
+        )}
+
+        {tab === "discover" && !onBoard && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.9rem", maxWidth: 520, margin: "1.5rem auto" }}>
+            <p style={{ margin: 0, textAlign: "center", color: "#444" }}>Farm produce, bulk lots and services from across Uganda.</p>
+            <div style={{ display: "flex", gap: "0.9rem" }}>
+              <button type="button" onClick={() => setScanning(true)} style={bigTile}>
+                <span style={{ fontSize: "2.4rem" }}>📷</span>
+                Scan QR
+              </button>
+              <button type="button" onClick={() => setOnBoard(true)} style={bigTile}>
+                <span style={{ fontSize: "2.4rem" }}>🔎</span>
+                Discover
+              </button>
+            </div>
           </div>
         )}
 
-        {tab === "browse" && (
+        {tab === "discover" && onBoard && config && (
+          <Discover
+            token={token}
+            today={today}
+            boardNow={boardNow}
+            liveNow={liveNow}
+            groups={config.groups}
+            initialChip={initialChip}
+            onChipChange={(chip) => router.replace(`/marketspace?view=${chip}`, { scroll: false })}
+          />
+        )}
+
+        {tab === "post" && isUser && token && config && (
           <>
-            {viewerStatus === "guest" && (
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", marginBottom: "0.7rem", fontSize: "0.85rem", color: "#444" }}>
-                <span>Classified ads from across Uganda</span>
-                <Link href="/login" style={{ color: "#1b5e20", fontWeight: 800, whiteSpace: "nowrap" }}>
-                  Post an ad →
-                </Link>
+            {postKind === "choose" && isSeller && !editing && (
+              <div style={{ display: "flex", gap: "0.9rem", flexWrap: "wrap" }}>
+                <button type="button" onClick={() => setPostKind("lots")} style={{ ...bigTile, minWidth: 220 }}>
+                  <span style={{ fontSize: "2.2rem" }}>🌾</span>
+                  Sell lots from my ledger
+                  <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "#555" }}>Buyers pay in steps through the app</span>
+                </button>
+                <button type="button" onClick={() => setPostKind("ad")} style={{ ...bigTile, minWidth: 220 }}>
+                  <span style={{ fontSize: "2.2rem" }}>📰</span>
+                  Post a classified ad
+                  <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "#555" }}>Services, equipment, wanted</span>
+                </button>
               </div>
             )}
-
-            {/* Groups */}
-            <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(groups.length + 1, 4)}, minmax(0, 1fr))`, gap: "0.6rem" }}>
-              <button
-                type="button"
-                onClick={() => {
-                  setGroupId(null);
-                  setCategoryId(null);
+            {postKind === "lots" && !editing && (
+              <div style={section}>
+                <h3 style={{ marginTop: 0 }}>Sell lots from my ledger</h3>
+                <MyLots token={token} now={liveNow} />
+              </div>
+            )}
+            {(postKind === "ad" || editing) && (
+              <AdForm
+                key={editing?._id ?? "new"}
+                sessionToken={token}
+                groups={config.groups}
+                defaultPhone={me?.phoneNumber ?? null}
+                settings={me!.settings}
+                nextAd={me!.nextAd}
+                farmcoinBalance={me?.farmcoinBalance ?? null}
+                editing={editing}
+                onCancel={editing ? () => { setEditing(null); setTab("mine"); } : undefined}
+                onDone={(msg) => {
+                  setNotice(msg);
+                  setEditing(null);
+                  setTab("mine");
+                  window.scrollTo({ top: 0, behavior: "smooth" });
                 }}
-                style={{ ...groupTile, borderColor: groupId === null ? "#2e7d32" : "#e0e0e0", background: groupId === null ? "#e8f5e9" : "#fff" }}
-              >
-                <UgandaMapIcon size={30} />
-                <span>All ads</span>
-              </button>
-              {groups.map((g) => (
-                <button
-                  key={g._id}
-                  type="button"
-                  onClick={() => {
-                    setGroupId(g._id);
-                    setCategoryId(null);
-                  }}
-                  style={{ ...groupTile, borderColor: groupId === g._id ? g.color : "#e0e0e0", background: groupId === g._id ? tint(g.color, 0.12) : "#fff", color: groupId === g._id ? g.color : "#222" }}
-                >
-                  <span style={{ fontSize: "1.7rem" }}>{g.icon}</span>
-                  <span>{g.name}</span>
-                </button>
-              ))}
-            </div>
-
-            {/* Categories in the chosen group */}
-            {group && group.categories.length > 0 && (
-              <div style={{ display: "flex", gap: "0.45rem", overflowX: "auto", padding: "0.75rem 0 0.1rem" }}>
-                <button type="button" onClick={() => setCategoryId(null)} style={chip(categoryId === null, group.color)}>
-                  All {group.name}
-                </button>
-                {group.categories.map((c) => (
-                  <button key={c._id} type="button" onClick={() => setCategoryId(c._id)} style={chip(categoryId === c._id, group.color)}>
-                    {c.icon} {c.name}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Filters */}
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center", margin: "0.7rem 0 0.8rem" }}>
-              <div role="group" aria-label="Ad kind" style={{ display: "inline-flex", borderRadius: 999, border: "1.5px solid #ccc", overflow: "hidden", background: "#fff" }}>
-                {(["all", "offer", "wanted"] as Kind[]).map((k) => (
-                  <button
-                    key={k}
-                    type="button"
-                    onClick={() => setKind(k)}
-                    style={{ minHeight: 38, padding: "0 0.8rem", border: "none", background: kind === k ? (k === "wanted" ? "#f6bf26" : "#2e7d32") : "transparent", color: kind === k ? (k === "wanted" ? "#1a1a1a" : "#fff") : "#444", fontWeight: 700, fontSize: "0.82rem", fontFamily: FONT, cursor: "pointer" }}
-                  >
-                    {k === "all" ? "All" : k === "offer" ? "Offering" : "Wanted"}
-                  </button>
-                ))}
-              </div>
-              <div role="group" aria-label="View" style={{ display: "inline-flex", marginLeft: "auto", borderRadius: 999, border: "1.5px solid #ccc", overflow: "hidden", background: "#fff" }}>
-                <button type="button" onClick={() => chooseView("swipe")} aria-pressed={view === "swipe"} aria-label="Swipe cards" title="Swipe cards" style={viewBtn(view === "swipe")}>
-                  🃏 Swipe
-                </button>
-                <button type="button" onClick={() => chooseView("grid")} aria-pressed={view === "grid"} aria-label="Grid" title="Grid" style={viewBtn(view === "grid")}>
-                  ▦ Grid
-                </button>
-              </div>
-              <select value={district} onChange={(e) => setDistrict(e.target.value)} aria-label="District" style={{ flex: "0 1 150px", minWidth: 0, minHeight: 40, borderRadius: 999, border: "1.5px solid #ccc", padding: "0 0.7rem", fontFamily: FONT, background: "#fff" }}>
-                <option value="">📍 All districts</option>
-                {DISTRICTS.map((d) => (
-                  <option key={d} value={d}>
-                    {d}
-                  </option>
-                ))}
-              </select>
-              <input
-                type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="🔍 Search ads"
-                aria-label="Search ads"
-                style={{ flex: "1 1 160px", minWidth: 0, minHeight: 40, borderRadius: 999, border: "1.5px solid #ccc", padding: "0 0.9rem", fontFamily: FONT, fontSize: "0.9rem" }}
               />
-            </div>
-
-            {config === undefined || loading ? (
-              <p style={{ textAlign: "center", color: "#777", padding: "3rem 0" }}>Loading ads…</p>
-            ) : view === "swipe" ? (
-              <SwipeDeck ads={ads} now={liveNow} hasMore={hasMore} onLoadMore={onLoadMore} onOpen={setDetail} onContact={setContact} endOfDeck={endOfDeck} />
-            ) : ads.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "2.5rem 1rem", border: "2px dashed #c8e6c9", borderRadius: 18, background: "#fafffa", display: "flex", flexDirection: "column", alignItems: "center", gap: "0.75rem" }}>{endOfDeck}</div>
-            ) : (
-              <>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(165px, 1fr))", gap: "0.75rem" }}>
-                  {ads.map((ad) => (
-                    <AdCard key={ad._id} ad={ad} now={liveNow} variant="grid" onOpen={() => setDetail(ad)} onContact={() => setContact(ad)} />
-                  ))}
-                </div>
-                {hasMore && (
-                  <div style={{ textAlign: "center", marginTop: "1rem" }}>
-                    <button type="button" onClick={onLoadMore} style={{ ...chip(true), minHeight: 44 }}>
-                      Show more ads
-                    </button>
-                  </div>
-                )}
-              </>
             )}
           </>
         )}
 
-        {tab === "post" && isUser && token && config && (
-          <AdForm
-            key={editing?._id ?? "new"}
-            sessionToken={token}
-            groups={config.groups}
-            defaultPhone={me?.phoneNumber ?? null}
-            settings={me!.settings}
-            nextAd={me!.nextAd}
-            farmcoinBalance={me?.farmcoinBalance ?? null}
-            editing={editing}
-            onCancel={editing ? () => { setEditing(null); setTab("mine"); } : undefined}
-            onDone={(msg) => {
-              setNotice(msg);
-              setEditing(null);
-              setTab("mine");
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }}
-          />
-        )}
-
         {tab === "mine" && isUser && token && (
-          <MyAds
-            sessionToken={token}
-            now={liveNow}
-            farmcoinBalance={me?.farmcoinBalance ?? null}
-            settings={me!.settings}
-            onEdit={(ad) => {
-              setEditing(ad);
-              setNotice(null);
-              setTab("post");
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }}
-            onPostNew={() => {
-              setEditing(null);
-              setNotice(null);
-              setTab("post");
-            }}
-          />
+          <>
+            {isSeller && (
+              <div style={section}>
+                <h3 style={{ marginTop: 0 }}>My lots</h3>
+                <MyLots token={token} now={liveNow} />
+              </div>
+            )}
+            <div style={section}>
+              <h3 style={{ marginTop: 0 }}>My classified ads</h3>
+              <MyAds
+                sessionToken={token}
+                now={liveNow}
+                farmcoinBalance={me?.farmcoinBalance ?? null}
+                settings={me!.settings}
+                onEdit={(ad) => {
+                  setEditing(ad);
+                  setNotice(null);
+                  setTab("post");
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                onPostNew={() => {
+                  setEditing(null);
+                  setNotice(null);
+                  setPostKind("ad");
+                  setTab("post");
+                }}
+              />
+            </div>
+          </>
         )}
       </main>
 
-      {detail && (
-        <Sheet onClose={() => setDetail(null)} title="Ad details">
-          <FullAdDetail
-            ad={detail}
-            boardNow={boardNow}
-            now={liveNow}
-            onReport={() => {
-              setReport(detail);
-              setDetail(null);
-            }}
-          />
-        </Sheet>
-      )}
-      {contact && <ContactSheet ad={contact} onClose={() => setContact(null)} />}
-      {report && <ReportSheet ad={report} sessionToken={token} onClose={() => setReport(null)} />}
+      {scanning && <QrScanSheet onClose={() => setScanning(false)} />}
     </div>
   );
-}
-
-/** The board's cards carry only their first photo, so the detail view loads the whole ad. */
-function FullAdDetail({ ad, boardNow, now, onReport }: { ad: AdCardData; boardNow: number; now: number; onReport: () => void }) {
-  const full = useQuery(api.marketspace.getAd, { adId: ad._id, now: boardNow }) as AdCardData | null | undefined;
-  return <AdDetail ad={full ?? ad} now={now} onReport={onReport} />;
-}
-
-const groupTile: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: "0.2rem",
-  minHeight: 70,
-  borderRadius: 16,
-  border: "2px solid #e0e0e0",
-  fontWeight: 800,
-  fontSize: "0.92rem",
-  fontFamily: FONT,
-  cursor: "pointer",
-  boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
-};
-
-function viewBtn(active: boolean): React.CSSProperties {
-  return { minHeight: 38, padding: "0 0.6rem", border: "none", background: active ? "#1b5e20" : "transparent", color: active ? "#fff" : "#444", fontWeight: 700, fontSize: "0.82rem", fontFamily: FONT, cursor: "pointer" };
 }

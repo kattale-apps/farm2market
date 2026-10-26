@@ -15,6 +15,7 @@ import { deliveryPointOf } from "./processors";
 import { findLock, postWallet } from "./walletSplit";
 import { roleLabel } from "./roleLabels";
 import { refreshListingStatus } from "./lotOrders";
+import { LOT_SELLER_ROLES } from "./lotOrdersShared";
 
 /**
  * Get farmer's listings
@@ -29,7 +30,7 @@ export const getFarmerListings = query({
   handler: async (ctx, args) => {
     // Verify user is a farmer
     const user = await ctx.db.get(args.farmerId);
-    if (!user || !["farmer", "vendor", "store"].includes(user.role)) {
+    if (!user || !(LOT_SELLER_ROLES as readonly string[]).includes(user.role)) {
       throw new Error("User is not a farmer");
     }
 
@@ -116,7 +117,7 @@ export const getActiveNegotiations = query({
   handler: async (ctx, args) => {
     // Verify user is a farmer
     const user = await ctx.db.get(args.farmerId);
-    if (!user || !["farmer", "vendor", "store"].includes(user.role)) {
+    if (!user || !(LOT_SELLER_ROLES as readonly string[]).includes(user.role)) {
       throw new Error("User is not a farmer");
     }
 
@@ -216,7 +217,7 @@ export const getPayToLockConfirmations = query({
   handler: async (ctx, args) => {
     // Verify user is a farmer
     const user = await ctx.db.get(args.farmerId);
-    if (!user || !["farmer", "vendor", "store"].includes(user.role)) {
+    if (!user || !(LOT_SELLER_ROLES as readonly string[]).includes(user.role)) {
       throw new Error("User is not a farmer");
     }
 
@@ -304,7 +305,7 @@ export const getDeliveryDeadlines = query({
   handler: async (ctx, args) => {
     // Verify user is a farmer
     const user = await ctx.db.get(args.farmerId);
-    if (!user || !["farmer", "vendor", "store"].includes(user.role)) {
+    if (!user || !(LOT_SELLER_ROLES as readonly string[]).includes(user.role)) {
       throw new Error("User is not a farmer");
     }
 
@@ -414,7 +415,7 @@ export const getDeliveryStatus = query({
   handler: async (ctx, args) => {
     // Verify user is a farmer
     const user = await ctx.db.get(args.farmerId);
-    if (!user || !["farmer", "vendor", "store"].includes(user.role)) {
+    if (!user || !(LOT_SELLER_ROLES as readonly string[]).includes(user.role)) {
       throw new Error("User is not a farmer");
     }
 
@@ -520,7 +521,7 @@ export const getExpiredUTIDs = query({
   handler: async (ctx, args) => {
     // Verify user is a farmer
     const user = await ctx.db.get(args.farmerId);
-    if (!user || !["farmer", "vendor", "store"].includes(user.role)) {
+    if (!user || !(LOT_SELLER_ROLES as readonly string[]).includes(user.role)) {
       throw new Error("User is not a farmer");
     }
 
@@ -607,7 +608,7 @@ export const archiveUTID = mutation({
   handler: async (ctx, args) => {
     // Verify user is a farmer
     const user = await ctx.db.get(args.farmerId);
-    if (!user || !["farmer", "vendor", "store"].includes(user.role)) {
+    if (!user || !(LOT_SELLER_ROLES as readonly string[]).includes(user.role)) {
       throw new Error("User is not a farmer");
     }
 
@@ -661,7 +662,7 @@ export const getSuccessfulTransactionsLedger = query({
   handler: async (ctx, args) => {
     // Verify user is a farmer
     const user = await ctx.db.get(args.farmerId);
-    if (!user || !["farmer", "vendor", "store"].includes(user.role)) {
+    if (!user || !(LOT_SELLER_ROLES as readonly string[]).includes(user.role)) {
       throw new Error("User is not a farmer");
     }
 
@@ -829,7 +830,7 @@ export const cancelOverdueUTID = mutation({
   handler: async (ctx, args) => {
     // Verify user is a farmer
     const user = await ctx.db.get(args.farmerId);
-    if (!user || !["farmer", "vendor", "store"].includes(user.role)) {
+    if (!user || !(LOT_SELLER_ROLES as readonly string[]).includes(user.role)) {
       throw new Error("User is not a farmer");
     }
 
@@ -960,7 +961,7 @@ export const farmerConfirmDelivery = mutation({
   handler: async (ctx, args) => {
     // Verify user is a farmer
     const user = await ctx.db.get(args.farmerId);
-    if (!user || !["farmer", "vendor", "store"].includes(user.role)) {
+    if (!user || !(LOT_SELLER_ROLES as readonly string[]).includes(user.role)) {
       throw new Error("User is not a farmer");
     }
 
@@ -1050,7 +1051,7 @@ export const getAllUnitsLedger = query({
   handler: async (ctx, args) => {
     // Verify user is a farmer
     const user = await ctx.db.get(args.farmerId);
-    if (!user || !["farmer", "vendor", "store"].includes(user.role)) {
+    if (!user || !(LOT_SELLER_ROLES as readonly string[]).includes(user.role)) {
       throw new Error("User is not a farmer");
     }
 
@@ -1214,7 +1215,7 @@ export const cancelListing = mutation({
   handler: async (ctx, args) => {
     // Verify user is a farmer
     const user = await ctx.db.get(args.farmerId);
-    if (!user || !["farmer", "vendor", "store"].includes(user.role)) {
+    if (!user || !(LOT_SELLER_ROLES as readonly string[]).includes(user.role)) {
       throw new Error("User is not a farmer");
     }
 

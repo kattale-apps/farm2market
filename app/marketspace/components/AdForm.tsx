@@ -353,11 +353,11 @@ export function AdForm({
       <input id="ms-loc" value={locationDetail} maxLength={120} onChange={(e) => setLocationDetail(e.target.value)} placeholder="e.g. Nakaloke trading centre" style={input} />
 
       <label style={label} htmlFor="ms-phone">
-        Contact phone for this ad
+        Your phone (for Farm2Market only)
       </label>
       <input id="ms-phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="0772 123456" style={input} />
       <div style={{ fontSize: "0.78rem", color: phone && !normalizeUgandaPhone(phone) ? "#c62828" : "#777", marginTop: 4 }}>
-        {phone && !normalizeUgandaPhone(phone) ? "Enter a Ugandan number, e.g. 0772 123456." : "Shown publicly on the ad with Call and WhatsApp buttons."}
+        {phone && !normalizeUgandaPhone(phone) ? "Enter a Ugandan number, e.g. 0772 123456." : "Never shown on MarketSpace. Only Farm2Market admins see it, to reach you about this ad."}
       </div>
 
       <span style={label}>

@@ -775,7 +775,7 @@ export const getUnverifiedTraders = query({
 });
 
 // Accounts the super admin verifies so they can buy lots (convex/lotOrders.ts).
-const VERIFIABLE_ROLES = ["trader", "transporter", "store", "vendor", "buyer"] as const;
+const VERIFIABLE_ROLES = ["trader", "transporter", "store", "vendor", "buyer", "farmer"] as const; // Farmers: to sell in bulk on MarketSpace
 const isExporterRole = (role: string) => role === "trader" || role === "transporter";
 
 export const getTraderVerificationList = query({
@@ -830,7 +830,7 @@ export const verifyTrader = mutation({
 
     const trader = await ctx.db.get(args.traderId);
     if (!trader || !(VERIFIABLE_ROLES as readonly string[]).includes(trader.role)) {
-      throw new Error("Only exporters, processors, vendors and buyers can be verified here");
+      throw new Error("Only exporters, processors, vendors, buyers and farmers can be verified here");
     }
 
     await ctx.db.patch(args.traderId, {
@@ -903,7 +903,7 @@ export const setTraderVerificationStatus = mutation({
 
     const trader = await ctx.db.get(args.traderId);
     if (!trader || !(VERIFIABLE_ROLES as readonly string[]).includes(trader.role)) {
-      throw new Error("Only exporters, processors, vendors and buyers can be verified here");
+      throw new Error("Only exporters, processors, vendors, buyers and farmers can be verified here");
     }
 
     const now = getUgandaTime();

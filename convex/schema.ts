@@ -3868,14 +3868,16 @@ export default defineSchema({
     district: v.string(), // where the buyer is
     districtKey: v.string(), // district compared without case
     validFrom: v.string(), // YYYY-MM-DD, Uganda date
-    validUntil: v.string(), // validFrom + 6 days
-    active: v.boolean(), // false once replaced or withdrawn; kept as price history
+    validUntil: v.string(), // validFrom + validDays - 1
+    validDays: v.optional(v.number()), // How long the poster chose (OFFER_DAY_CHOICES); older offers ran 7 days
+    active: v.boolean(), // false once replaced, withdrawn or ended by itself; kept as price history
     notes: v.optional(v.string()),
     createdAt: v.number(),
   })
     .index("by_ownerId", ["ownerId"])
     .index("by_districtKey_and_active", ["districtKey", "active"])
-    .index("by_active", ["active"]),
+    .index("by_active", ["active"])
+    .index("by_active_and_validUntil", ["active", "validUntil"]),
 
   deliveryBookings: defineTable({
     farmerId: v.id("users"),

@@ -16,11 +16,19 @@ const CHIPS: { key: Chip; label: string }[] = [
   { key: "all", label: "All" },
   { key: "produce", label: "🌾 Farmers Produce" },
   { key: "bulk", label: "📦 Local Bulk" },
-  { key: "lots", label: "🏭 Processors & Vendors" },
+  { key: "lots", label: "🏪 Vendors and Processors" },
   { key: "classifieds", label: "📰 Classifieds" },
 ];
 
 type Groups = NonNullable<FunctionReturnType<typeof api.marketspace.getBoardConfig>>["groups"];
+
+/** The Vendors and Processors market, filtered by who sells (exporters sell lots there too). */
+const SELLER_CHIPS: { key: string; label: string }[] = [
+  { key: "", label: "All Sellers" },
+  { key: "vendor", label: "Vendors" },
+  { key: "store", label: "Processors" },
+  { key: "trader", label: "Exporters" },
+];
 
 const LAYOUTS: { key: CardLayout; label: string }[] = [
   { key: "list", label: "☰ List" },
@@ -126,6 +134,7 @@ export function Discover({
     setChip(c);
     setCategoryId(null);
     setKind("all");
+    setSellerRole("");
     onChipChange(c);
   };
 
@@ -191,6 +200,16 @@ export function Discover({
           </button>
         ))}
       </div>
+
+      {chip === "lots" && (
+        <div style={{ display: "flex", gap: "0.45rem", overflowX: "auto", padding: "0.4rem 0 0.1rem" }}>
+          {SELLER_CHIPS.map((r) => (
+            <button key={r.key || "all"} type="button" onClick={() => setSellerRole(r.key)} style={chipStyle(sellerRole === r.key, "#6d4c00")}>
+              {r.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {chip === "classifieds" && (
         <div style={{ display: "flex", gap: "0.45rem", overflowX: "auto", padding: "0.4rem 0 0.1rem" }}>

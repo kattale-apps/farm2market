@@ -33,15 +33,21 @@ import {
   normalizeUgandaPhone,
   validateAd,
   validateSettings,
+  shapeCard,
   vendDayChoices,
   walletForRole,
   withDefaults,
+  type CardView,
   type MarketspaceSettings,
+  type ViewerTier,
 } from "./marketspaceShared";
 import { syncAdCard, syncListingCard } from "./marketCards";
 import { bulkSellingDecision, defaultPlan } from "./lotOrdersShared";
 import { isActiveProcessor } from "./processors";
 import { todayUganda } from "./exportMarkets";
+import { maskContactDetails } from "./exportMarketsShared";
+import { lotBuyingAccess } from "./lotOrders";
+import { roleLabel } from "./roleLabels";
 
 type Ctx = QueryCtx | MutationCtx;
 
@@ -224,7 +230,8 @@ function isVisible(ad: Doc<"marketspaceAds">, tax: Taxonomy): boolean {
   return !!tax.groups.get(ad.groupId)?.active && !!tax.categories.get(ad.categoryId)?.active;
 }
 
-async function toCard(ctx: Ctx, ad: Doc<"marketspaceAds">, tax: Taxonomy, allPhotos: boolean) {
+// The phone number is never public: only the ad's owner (My ads) and moderators see it.
+async function toCard(ctx: Ctx, ad: Doc<"marketspaceAds">, tax: Taxonomy, allPhotos: boolean, includeContact = false) {
   const group = tax.groups.get(ad.groupId);
   const category = tax.categories.get(ad.categoryId);
   const ids = allPhotos ? ad.photoIds : ad.photoIds.slice(0, 1);
@@ -247,7 +254,7 @@ async function toCard(ctx: Ctx, ad: Doc<"marketspaceAds">, tax: Taxonomy, allPho
     neededBy: ad.neededBy ?? null,
     district: ad.district,
     locationDetail: ad.locationDetail ?? null,
-    contactPhone: ad.contactPhone,
+    contactPhone: includeContact ? ad.contactPhone : null,
     photoUrls,
     photoCount: ad.photoIds.length,
     groupId: ad.groupId,
@@ -442,7 +449,7 @@ export const myAds = query({
       .take(100);
     const cards = [];
     for (const ad of ads) {
-      const card = await toCard(ctx, ad, tax, true);
+      const card = await toCard(ctx, ad, tax, true, true);
       cards.push({
         ...card,
         photoIds: ad.photoIds,
@@ -498,6 +505,10 @@ type AdArgs = {
 async function cleanAd(ctx: MutationCtx, args: AdArgs, settings: MarketspaceSettings) {
   const problem = validateAd({ ...args, photoCount: args.photoIds.length }, settings.maxPhotosPerAd);
   if (problem) throw new Error(problem);
+  // MarketSpace is anonymous: buyers ask through questions, not phone calls.
+  if (maskContactDetails(`${args.title}\n${args.description}`).masked) {
+    throw new Error("Remove phone numbers, emails, links and contact apps from the title and description. Buyers ask you through questions on MarketSpace.");
+  }
   const category = await ctx.db.get(args.categoryId);
   const group = category ? await ctx.db.get(category.groupId) : null;
   if (!category || !group || !category.active || !group.active) throw new Error("Choose a category that is open for ads.");
@@ -814,6 +825,217 @@ export const myLots = query({
   },
 });
 
+// ------------------------------------------------------------------
+// Discover: one board for every post (vended lots and classified ads)
+//
+// Who is viewing comes from the session token, never an id argument:
+// visitors and unverified members get lite cards (bands, no price, no
+// alias); verified buyers get the full card and can buy. No response ever
+// carries a phone number.
+// ------------------------------------------------------------------
+
+async function viewerOf(ctx: QueryCtx, token: string | undefined, today: string): Promise<{ user: Doc<"users"> | null; tier: ViewerTier }> {
+  const user = await sessionUser(ctx, token);
+  if (!user) return { user: null, tier: "public" };
+  return { user, tier: (await lotBuyingAccess(ctx, user, today)).ok ? "verified" : "member" };
+}
+
+function cardVisible(card: Doc<"marketCards">, tax: Taxonomy): boolean {
+  if (card.sourceKind !== "ad") return true;
+  return !!(card.groupId && tax.groups.get(card.groupId)?.active) && !!(card.categoryId && tax.categories.get(card.categoryId)?.active);
+}
+
+async function shapeForViewer(ctx: QueryCtx, card: Doc<"marketCards">, viewer: { user: Doc<"users"> | null; tier: ViewerTier }, tax: Taxonomy) {
+  const seller = await ctx.db.get(card.sellerId);
+  const category = card.categoryId ? tax.categories.get(card.categoryId) : undefined;
+  return {
+    ...shapeCard(
+      card,
+      { tier: viewer.tier, isMine: !!viewer.user && viewer.user._id === card.sellerId },
+      {
+        thumbUrl: card.thumbStorageId ? await ctx.storage.getUrl(card.thumbStorageId) : null,
+        sellerAlias: seller ? `${roleLabel(seller.role)} ${seller.alias}`.trim() : null,
+        sellerCategory: roleLabel(card.sellerRole) || "Member",
+      }
+    ),
+    categoryName: category?.name ?? null,
+    categoryIcon: category?.icon ?? null,
+  };
+}
+
+const discoverFilters = {
+  now: v.number(), // Client's Uganda time, so the query does not read the clock
+  today: v.string(), // Uganda date, for the verified-buyer check
+  sessionToken: v.optional(v.string()),
+  view: v.optional(v.union(v.literal("produce"), v.literal("lots"), v.literal("classifieds"))),
+  bulk: v.optional(v.boolean()), // Local Bulk
+  kind: v.optional(v.union(v.literal("offer"), v.literal("wanted"))),
+  district: v.optional(v.string()),
+  categoryId: v.optional(v.id("marketspaceCategories")),
+  stockSource: v.optional(v.union(v.literal("own_farm"), v.literal("in_app"), v.literal("off_app"))),
+  sellerRole: v.optional(v.string()),
+  minPricePerKilo: v.optional(v.number()), // Verified viewers only (a visitor could find the exact price by filtering)
+  maxPricePerKilo: v.optional(v.number()),
+};
+
+type DiscoverFilters = {
+  now: number;
+  view?: CardView;
+  bulk?: boolean;
+  kind?: "offer" | "wanted";
+  district?: string;
+  categoryId?: Id<"marketspaceCategories">;
+  stockSource?: "own_farm" | "in_app" | "off_app";
+  sellerRole?: string;
+  minPricePerKilo?: number;
+  maxPricePerKilo?: number;
+};
+
+function matchesFilters(card: Doc<"marketCards">, f: DiscoverFilters, tier: ViewerTier): boolean {
+  if (card.expiresAt <= f.now) return false;
+  if (f.view && card.view !== f.view) return false;
+  if (f.bulk && !card.isBulk) return false;
+  if (f.kind && card.kind !== f.kind) return false;
+  if (f.district?.trim() && card.district !== f.district.trim()) return false;
+  if (f.categoryId && card.categoryId !== f.categoryId) return false;
+  if (f.stockSource && card.stockSource !== f.stockSource) return false;
+  if (f.sellerRole && card.sellerRole !== f.sellerRole) return false;
+  if (tier === "verified" && (f.minPricePerKilo !== undefined || f.maxPricePerKilo !== undefined)) {
+    const price = card.pricePerKilo;
+    if (price === undefined) return false;
+    if (f.minPricePerKilo !== undefined && price < f.minPricePerKilo) return false;
+    if (f.maxPricePerKilo !== undefined && price > f.maxPricePerKilo) return false;
+  }
+  return true;
+}
+
+/** Live posts, newest first, filtered and tiered for the viewer. */
+export const discover = query({
+  args: { paginationOpts: paginationOptsValidator, ...discoverFilters },
+  handler: async (ctx, args) => {
+    const tax = await loadTaxonomy(ctx);
+    const viewer = await viewerOf(ctx, args.sessionToken, args.today);
+    const base = args.bulk
+      ? ctx.db.query("marketCards").withIndex("by_status_bulk_created", (q) => q.eq("status", "active").eq("isBulk", true))
+      : args.view
+        ? ctx.db.query("marketCards").withIndex("by_status_view_created", (q) => q.eq("status", "active").eq("view", args.view!))
+        : ctx.db.query("marketCards").withIndex("by_status_created", (q) => q.eq("status", "active"));
+    const result = await base
+      .order("desc")
+      .filter((q) => q.gt(q.field("expiresAt"), args.now))
+      .paginate(args.paginationOpts);
+    const page = [];
+    for (const card of result.page) {
+      if (!cardVisible(card, tax) || !matchesFilters(card, args, viewer.tier)) continue;
+      page.push(await shapeForViewer(ctx, card, viewer, tax));
+    }
+    return { ...result, page, tier: viewer.tier };
+  },
+});
+
+/** Title search across live posts (best 40 matches), with the same filters and tiers. */
+export const searchCards = query({
+  args: { text: v.string(), ...discoverFilters },
+  handler: async (ctx, args) => {
+    const text = args.text.trim();
+    if (!text) return [];
+    const tax = await loadTaxonomy(ctx);
+    const viewer = await viewerOf(ctx, args.sessionToken, args.today);
+    const hits = await ctx.db
+      .query("marketCards")
+      .withSearchIndex("search_title", (q) => {
+        let s = q.search("title", text).eq("status", "active");
+        if (args.view) s = s.eq("view", args.view);
+        if (args.bulk) s = s.eq("isBulk", true);
+        return s;
+      })
+      .take(40);
+    const cards = [];
+    for (const card of hits) {
+      if (!cardVisible(card, tax) || !matchesFilters(card, args, viewer.tier)) continue;
+      cards.push(await shapeForViewer(ctx, card, viewer, tax));
+    }
+    return cards;
+  },
+});
+
+/**
+ * One post in full for its page (and QR code): every photo, and for lots the
+ * payment steps, the price of one lot and the lots free to buy now. Lite
+ * viewers get the first photo and the bands only.
+ */
+export const cardDetail = query({
+  args: { cardId: v.string(), now: v.number(), today: v.string(), sessionToken: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const cardId = ctx.db.normalizeId("marketCards", args.cardId);
+    const card = cardId ? await ctx.db.get(cardId) : null;
+    if (!card) return null;
+    const viewer = await viewerOf(ctx, args.sessionToken, args.today);
+    const isMine = !!viewer.user && viewer.user._id === card.sellerId;
+    const live = card.status === "active" && card.expiresAt > args.now;
+    if (!live && !isMine) return null;
+    const tax = await loadTaxonomy(ctx);
+    if (!cardVisible(card, tax) && !isMine) return null;
+    const shaped = await shapeForViewer(ctx, card, viewer, tax);
+    const photoIds: Id<"_storage">[] = [];
+    let steps = null;
+    let lotPrice: number | null = null;
+    let freeUnitIds: Id<"listingUnits">[] = [];
+    let description: string | null = null;
+    let qualityComment: string | null = null;
+    let neededBy: string | null = null;
+    let negotiable: boolean | null = null;
+
+    if (card.sourceKind === "listing" && card.listingId) {
+      const listing = await ctx.db.get(card.listingId);
+      if (!listing) return null;
+      photoIds.push(...(listing.photos ?? []).map((p) => p.storageId));
+      if (!shaped.lite) {
+        const commit = listing.commitPercent ?? 100;
+        steps = listing.milestonePlan ?? defaultPlan(card.sellerRole, commit);
+        lotPrice = Math.round(listing.pricePerKilo * (listing.unitSize || 10));
+        qualityComment = listing.qualityComment ?? null;
+        if (viewer.tier === "verified" && !isMine) {
+          const units = await ctx.db
+            .query("listingUnits")
+            .withIndex("by_listing", (q) => q.eq("listingId", listing._id))
+            .collect();
+          freeUnitIds = units.filter((u) => u.status === "available" && !u.activeNegotiationId).slice(0, 50).map((u) => u._id);
+        }
+      }
+    } else if (card.adId) {
+      const ad = await ctx.db.get(card.adId);
+      if (!ad) return null;
+      photoIds.push(...ad.photoIds);
+      if (!shaped.lite) {
+        description = ad.description;
+        neededBy = ad.neededBy ?? null;
+        negotiable = ad.negotiable;
+      }
+    }
+    const photoUrls: string[] = [];
+    for (const id of shaped.lite ? photoIds.slice(0, 1) : photoIds) {
+      const url = await ctx.storage.getUrl(id);
+      if (url) photoUrls.push(url);
+    }
+    return {
+      ...shaped,
+      sourceKind: card.sourceKind,
+      live,
+      photoUrls,
+      steps,
+      lotPrice,
+      freeUnitIds,
+      description,
+      qualityComment,
+      neededBy,
+      negotiable,
+      viewerTier: viewer.tier,
+      viewerUserId: viewer.user?._id ?? null,
+    };
+  },
+});
+
 /** One-off: give every live ad its card (run once after deploying cards). */
 export const backfillAdCards = internalMutation({
   args: {},
@@ -1065,7 +1287,7 @@ export const moderationQueue = query({
       const ad = await ctx.db.get(adId);
       if (!ad) continue;
       reported.push({
-        ad: { ...(await toCard(ctx, ad, tax, true)), removedReason: ad.removedReason ?? null },
+        ad: { ...(await toCard(ctx, ad, tax, true, true)), removedReason: ad.removedReason ?? null },
         reports: reports.map((r) => ({ _id: r._id, reason: r.reason, details: r.details ?? null, byGuest: !r.reporterId, createdAt: r.createdAt })),
       });
     }

@@ -252,3 +252,98 @@ export function quantityBand(kg: number | undefined | null): string | null {
   const range = BULK_RANGES.find((r) => kg >= r.minKg && (r.maxKg === null || kg <= r.maxKg));
   return range?.label ?? null;
 }
+
+/** Who is looking at a card: not signed in, signed in, or a verified buyer (convex/lotOrders lotBuyingAccess). */
+export type ViewerTier = "public" | "member" | "verified";
+
+export type CardView = "produce" | "lots" | "classifieds";
+
+/**
+ * Lite cards hide what only buyers should see. Visitors get lite cards
+ * everywhere; signed-in members get full classified ads but lite produce
+ * and lots until they are verified buyers. A seller always sees their own
+ * card in full.
+ */
+export function isLiteFor(view: CardView, tier: ViewerTier, isMine = false): boolean {
+  if (isMine || tier === "verified") return false;
+  return tier === "public" || view !== "classifieds";
+}
+
+/** The line a lite card shows instead of the details. */
+export function liteReason(tier: ViewerTier): string {
+  return tier === "public"
+    ? "Sign up as a buyer to see prices and full details."
+    : "Get verified to see prices, ask questions and buy.";
+}
+
+type CardSource = {
+  _id: string;
+  view: CardView;
+  kind: "offer" | "wanted";
+  title: string;
+  isBulk: boolean;
+  bulkRange?: string;
+  sellerRole: string;
+  district: string;
+  stockSource?: "own_farm" | "in_app" | "off_app";
+  lotKg?: number;
+  bagKg?: number;
+  bagsPerLot?: number;
+  lotsAvailable?: number;
+  qtyKg?: number;
+  quantityText?: string;
+  pricePerKilo?: number;
+  priceUGX?: number;
+  priceUnit?: string;
+  commitPercent?: number;
+  qualityRating?: string;
+  expiresAt: number;
+  createdAt: number;
+};
+
+/**
+ * What a card sends to a viewer. Lite cards keep the same shape with the
+ * hidden fields set to null, so the screens stay simple; the server never
+ * sends what the viewer may not see.
+ */
+export function shapeCard(
+  card: CardSource,
+  viewer: { tier: ViewerTier; isMine: boolean },
+  extras: { thumbUrl: string | null; sellerAlias: string | null; sellerCategory: string }
+) {
+  const lite = isLiteFor(card.view, viewer.tier, viewer.isMine);
+  const range = bulkRange(card.bulkRange);
+  return {
+    cardId: card._id,
+    view: card.view,
+    kind: card.kind,
+    title: card.title,
+    thumbUrl: extras.thumbUrl,
+    sellerCategory: extras.sellerCategory,
+    district: card.district,
+    stockSource: card.stockSource ?? null,
+    isBulk: card.isBulk,
+    bulkLabel: range?.label ?? null,
+    createdAt: card.createdAt,
+    expiresAt: card.expiresAt,
+    isMine: viewer.isMine,
+    lite,
+    liteReason: lite ? liteReason(viewer.tier) : null,
+    // Bands for everyone
+    priceBand: priceBand(card.pricePerKilo),
+    quantityBand: quantityBand(card.qtyKg),
+    // Details only full viewers get
+    sellerAlias: lite ? null : extras.sellerAlias,
+    pricePerKilo: lite ? null : card.pricePerKilo ?? null,
+    priceUGX: lite ? null : card.priceUGX ?? null,
+    priceUnit: lite ? null : card.priceUnit ?? null,
+    lotKg: lite ? null : card.lotKg ?? null,
+    bagKg: lite ? null : card.bagKg ?? null,
+    bagsPerLot: lite ? null : card.bagsPerLot ?? null,
+    lotsAvailable: lite ? null : card.lotsAvailable ?? null,
+    qtyKg: lite ? null : card.qtyKg ?? null,
+    quantityText: lite ? null : card.quantityText ?? null,
+    commitPercent: lite ? null : card.commitPercent ?? null,
+    qualityRating: lite ? null : card.qualityRating ?? null,
+  };
+}

@@ -25,6 +25,7 @@ export default function FinanceDashboardPage() {
   const [grantAmount, setGrantAmount] = useState<string>("");
   const [grantReason, setGrantReason] = useState("");
   const [verificationFilter, setVerificationFilter] = useState<"all" | "verified" | "unverified">("all");
+  const [verificationRole, setVerificationRole] = useState<string>("all");
   const [verificationTraderId, setVerificationTraderId] = useState<string>("");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [selectedSentifyBatches, setSelectedSentifyBatches] = useState<Set<string>>(new Set());
@@ -165,6 +166,7 @@ export default function FinanceDashboardPage() {
   const verificationOptions = useMemo(() => {
     const traders = traderVerificationList ? [...traderVerificationList] : [];
     const filtered = traders.filter((trader: any) => {
+      if (verificationRole !== "all" && trader.role !== verificationRole) return false;
       if (verificationFilter === "verified") {
         return trader.verificationStatus === "verified";
       }
@@ -174,7 +176,7 @@ export default function FinanceDashboardPage() {
       return true;
     });
     return filtered.sort((a, b) => (a.alias || "").localeCompare(b.alias || ""));
-  }, [traderVerificationList, verificationFilter]);
+  }, [traderVerificationList, verificationFilter, verificationRole]);
 
   const handleToggleSentifyBatch = (batchUtid: string) => {
     const updated = new Set(selectedSentifyBatches);
@@ -474,8 +476,24 @@ export default function FinanceDashboardPage() {
 
         {isSuperAdmin && (
           <div style={{ marginTop: "1.5rem", display: "grid", gap: "0.75rem", maxWidth: 640 }}>
-            <div style={{ fontWeight: 600 }}>Verification: who can buy lots (exporters, processors, vendors, buyers)</div>
+            <div style={{ fontWeight: 600 }}>Verification: who can buy lots, and sell in bulk on MarketSpace</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "0.75rem" }}>
+              <select
+                value={verificationRole}
+                onChange={(e) => {
+                  setVerificationRole(e.target.value);
+                  setVerificationTraderId("");
+                }}
+                style={{ padding: "0.6rem", borderRadius: 8, border: "1px solid #ddd" }}
+                aria-label="Category"
+              >
+                <option value="all">All categories</option>
+                <option value="trader">Exporters</option>
+                <option value="store">Processors</option>
+                <option value="vendor">Vendors</option>
+                <option value="buyer">Buyers</option>
+                <option value="farmer">Farmers</option>
+              </select>
               <select
                 value={verificationFilter}
                 onChange={(e) => {

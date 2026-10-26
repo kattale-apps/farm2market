@@ -508,6 +508,37 @@ export const commit = mutation({
   },
 });
 
+/**
+ * Buy N lots from a MarketSpace card. The buyer is the signed-in user
+ * (session token), and the lots are the first ones nobody is negotiating on.
+ */
+export const commitFromCard = mutation({
+  args: {
+    sessionToken: v.string(),
+    cardId: v.id("marketCards"),
+    lots: v.number(),
+  },
+  handler: async (ctx, args) => {
+    await checkPilotMode(ctx);
+    const buyer = await sessionUser(ctx, args.sessionToken);
+    if (!buyer) throw new Error("Please sign in to buy lots.");
+    const card = await ctx.db.get(args.cardId);
+    if (!card || card.sourceKind !== "listing" || !card.listingId || card.status !== "active" || card.expiresAt <= getUgandaTime()) {
+      throw new Error("This lot is no longer on MarketSpace.");
+    }
+    const n = Math.floor(args.lots);
+    if (!(n >= 1)) throw new Error("Choose how many lots to buy");
+    const listingId = card.listingId;
+    const units = await ctx.db
+      .query("listingUnits")
+      .withIndex("by_listing", (q) => q.eq("listingId", listingId))
+      .collect();
+    const free = units.filter((u) => u.status === "available" && !u.activeNegotiationId);
+    if (free.length < n) throw new Error(`Only ${free.length} lot(s) are free to buy right now.`);
+    return await commitLots(ctx, buyer._id, free.slice(0, n).map((u) => u._id));
+  },
+});
+
 async function loadOrder(ctx: Ctx, orderId: Id<"lotOrders">, userId: Id<"users">, side: "buyer" | "seller" | "either") {
   const order = await ctx.db.get(orderId);
   if (!order) throw new Error("Order not found");

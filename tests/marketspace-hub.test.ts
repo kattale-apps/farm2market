@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { BULK_RANGES, bulkRangeProblem, priceBand, quantityBand, vendDayChoices, withDefaults } from "../convex/marketspaceShared";
+import { BULK_RANGES, bulkRangeProblem, isLiteFor, priceBand, quantityBand, shapeCard, vendDayChoices, withDefaults } from "../convex/marketspaceShared";
+import { maskContactDetails } from "../convex/exportMarketsShared";
 import { LOT_SELLER_ROLES, bulkSellingDecision, defaultSteps } from "../convex/lotOrdersShared";
 
 test("exporters sell lots like farmers, vendors and processors", () => {
@@ -48,4 +49,72 @@ test("lite cards show bands, not exact prices or quantities", () => {
   assert.equal(quantityBand(300), "100 kg – 1 tonne");
   assert.equal(quantityBand(2500), "1 – 5 tonnes");
   assert.equal(quantityBand(25_000), "Over 20 tonnes");
+});
+
+const lotCard = {
+  _id: "card1",
+  view: "produce" as const,
+  kind: "offer" as const,
+  title: "Maize",
+  isBulk: true,
+  bulkRange: "100kg_1t",
+  sellerRole: "farmer",
+  district: "Mbale",
+  stockSource: "own_farm" as const,
+  lotKg: 100,
+  bagKg: 50,
+  bagsPerLot: 2,
+  lotsAvailable: 3,
+  qtyKg: 300,
+  pricePerKilo: 1200,
+  commitPercent: 30,
+  qualityRating: "Premium",
+  expiresAt: 2,
+  createdAt: 1,
+};
+const extras = { thumbUrl: "https://x/photo.jpg", sellerAlias: "Farmer F-12", sellerCategory: "Farmer" };
+
+test("who gets a lite card", () => {
+  assert.equal(isLiteFor("produce", "public"), true);
+  assert.equal(isLiteFor("classifieds", "public"), true);
+  assert.equal(isLiteFor("produce", "member"), true);
+  assert.equal(isLiteFor("lots", "member"), true);
+  assert.equal(isLiteFor("classifieds", "member"), false);
+  assert.equal(isLiteFor("produce", "verified"), false);
+  assert.equal(isLiteFor("produce", "public", true), false, "a seller sees their own card in full");
+});
+
+test("lite cards carry bands but never the exact price, alias or lot details", () => {
+  const lite = shapeCard(lotCard, { tier: "public", isMine: false }, extras);
+  assert.equal(lite.lite, true);
+  assert.match(lite.liteReason ?? "", /Sign up as a buyer/);
+  for (const hidden of ["sellerAlias", "pricePerKilo", "lotKg", "lotsAvailable", "qtyKg", "commitPercent", "qualityRating"] as const) {
+    assert.equal(lite[hidden], null, `${hidden} is hidden`);
+  }
+  assert.equal(lite.priceBand, "UGX 1,000 – 1,500 /kg");
+  assert.equal(lite.quantityBand, "100 kg – 1 tonne");
+  assert.equal(lite.sellerCategory, "Farmer");
+  assert.equal(lite.bulkLabel, "100 kg – 1 tonne");
+  assert.equal(JSON.stringify(lite).includes("1200"), false, "the exact price is nowhere in a lite card");
+
+  const member = shapeCard(lotCard, { tier: "member", isMine: false }, extras);
+  assert.match(member.liteReason ?? "", /Get verified/);
+
+  const full = shapeCard(lotCard, { tier: "verified", isMine: false }, extras);
+  assert.equal(full.lite, false);
+  assert.equal(full.pricePerKilo, 1200);
+  assert.equal(full.sellerAlias, "Farmer F-12");
+  assert.equal(full.lotsAvailable, 3);
+});
+
+test("cards and posts carry no contact details", () => {
+  assert.equal("contactPhone" in shapeCard(lotCard, { tier: "verified", isMine: false }, extras), false);
+  // Normal produce wording passes the contact check
+  for (const ok of ["2 bags of 50 kg, 1,000 kg total", "Harvested 2026-10-01, moisture 13%", "Grade A coffee, 19,200 kg"]) {
+    assert.equal(maskContactDetails(ok).masked, false, ok);
+  }
+  // Contact details do not
+  for (const bad of ["call 0772 123 456", "WhatsApp +256772123456", "see www.mymaize.com", "email me at a@b.co.ug"]) {
+    assert.equal(maskContactDetails(bad).masked, true, bad);
+  }
 });

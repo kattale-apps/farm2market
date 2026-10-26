@@ -28,6 +28,7 @@ import {
 import { Id } from "./_generated/dataModel";
 import { deliveryPointOf, isActiveProcessor } from "./processors";
 import { todayUganda } from "./exportMarkets";
+import { maskContactDetails } from "./exportMarketsShared";
 import { assertEvidencePhotos, evidencePhotoValidator } from "./evidencePhotos";
 import { LOT_SELLER_ROLES, gpsValidator, lotTerms, planStepValidator } from "./lotOrdersShared";
 import { syncListingCard } from "./marketCards";
@@ -202,6 +203,10 @@ export const createListing = mutation({
     // Packaged items are sold from the shop, not as lots.
     const terms = listingMode === "packaging" ? null : lotTerms(user.role, args.commitPercent, args.milestonePlan);
     if (args.photos && args.photos.length > 0) assertEvidencePhotos(args.photos, 6);
+    // Listings can go on MarketSpace, which is anonymous: no contact details in the comment.
+    if (args.qualityComment && maskContactDetails(args.qualityComment).masked) {
+      throw new Error("Remove phone numbers, emails and links from the quality comment. Buyers ask you through questions.");
+    }
 
     // Where the stock is from: the farmer's own farm, stock bought in the
     // app (traced to farms), or stock bought outside the app.

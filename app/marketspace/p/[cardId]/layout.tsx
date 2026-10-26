@@ -18,7 +18,8 @@ export async function generateMetadata({ params }: { params: { cardId: string } 
     if (!card) return fallback;
     const title = `${card.kind === "wanted" ? "Wanted: " : ""}${card.title} · ${card.district || "Uganda"}`;
     const bands = [card.priceBand, card.quantityBand].filter(Boolean).join(" · ");
-    const description = `${bands ? `${bands}. ` : ""}From a ${card.sellerCategory.toLowerCase()} on Farm2Market MarketSpace. Pay safely through the app.`;
+    const seller = card.sellerCategory.toLowerCase();
+    const description = `${bands ? `${bands}. ` : ""}From ${/^[aeiou]/.test(seller) ? "an" : "a"} ${seller} on Farm2Market MarketSpace. Pay safely through the app.`;
     return {
       title: `${title} | MarketSpace`,
       description,

@@ -78,6 +78,7 @@ import type * as inventoryBlocks from "../inventoryBlocks.js";
 import type * as listings from "../listings.js";
 import type * as locations from "../locations.js";
 import type * as lotOrders from "../lotOrders.js";
+import type * as lotOrdersDevCheck from "../lotOrdersDevCheck.js";
 import type * as lotOrdersShared from "../lotOrdersShared.js";
 import type * as marketOffers from "../marketOffers.js";
 import type * as marketOffersShared from "../marketOffersShared.js";
@@ -218,6 +219,7 @@ declare const fullApi: ApiFromModules<{
   listings: typeof listings;
   locations: typeof locations;
   lotOrders: typeof lotOrders;
+  lotOrdersDevCheck: typeof lotOrdersDevCheck;
   lotOrdersShared: typeof lotOrdersShared;
   marketOffers: typeof marketOffers;
   marketOffersShared: typeof marketOffersShared;

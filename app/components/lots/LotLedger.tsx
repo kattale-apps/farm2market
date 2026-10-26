@@ -196,9 +196,10 @@ function OrderCard({ order: o, side, userId }: { order: LedgerOrder; side: "sell
         <li style={{ fontSize: "0.88rem", color: "#2e7d32" }}>✓ Buyer committed {o.commitPercent}% ({formatUGX(o.commitAmount)})</li>
         {o.steps.map((s, i) => {
           const done = !!s.doneAt;
-          const icon = done ? "✓" : s.handedOverAt ? "⏳" : i === o.nextStep && o.isOpen ? "▶" : "○";
+          const current = i === o.nextStep && o.isOpen;
+          const icon = done ? "✓" : s.handedOverAt ? "⏳" : current ? "▶" : "○";
           return (
-            <li key={i} style={{ fontSize: "0.88rem", color: done ? "#2e7d32" : i === o.nextStep ? "#222" : "#888", fontWeight: i === o.nextStep && o.isOpen ? 700 : 500 }}>
+            <li key={i} style={{ fontSize: "0.88rem", color: done ? "#2e7d32" : current ? "#222" : "#888", fontWeight: current ? 700 : 500 }}>
               {icon} {s.name}
               {s.handover
                 ? s.handedOverAt && !done ? " — handed over, waiting for the buyer to confirm" : " — collection (full price in escrow)"

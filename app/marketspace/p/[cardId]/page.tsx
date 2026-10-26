@@ -12,6 +12,7 @@ import { ugandaDateFromInstant } from "../../../../convex/exportMarketsShared";
 import { chargeForStep, commitAmount } from "../../../../convex/lotOrdersShared";
 import { getUgandaTime } from "../../../utils/timeUtils";
 import { QrCodeDisplay } from "../../../components/qr/QrCodeDisplay";
+import { GoodsLabel } from "../../../components/qr/GoodsLabel";
 import { PhotoGallery } from "../../components/PhotoGallery";
 import { CardQuestions } from "../../components/Questions";
 import { ReportSheet, SafetyNotice } from "../../components/Sheets";
@@ -250,8 +251,19 @@ export default function CardPage() {
       </div>
       {showQr && pageUrl && (
         <div style={box}>
-          <QrCodeDisplay targetUrl={pageUrl} fileName={`farm2market-${card.title.replace(/\W+/g, "-").toLowerCase()}`} size={220} />
-          <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.4rem" }}>Print it for bags and lots: scanning it opens this page.</div>
+          {card.goodsCode ? (
+            <>
+              <GoodsLabel code={card.goodsCode} name={card.title} photoUrl={card.photoUrls[0] ?? null} />
+              <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.4rem" }}>
+                {card.goodsCode} · made by Farm2Market for these goods. Scanning it shows where they come from and opens this post while it is up.
+              </div>
+            </>
+          ) : (
+            <>
+              <QrCodeDisplay targetUrl={pageUrl} fileName={`farm2market-${card.title.replace(/\W+/g, "-").toLowerCase()}`} size={220} />
+              <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.4rem" }}>Print it for bags and lots: scanning it opens this page.</div>
+            </>
+          )}
         </div>
       )}
       {reporting && card.adId && <ReportSheet ad={{ _id: card.adId, title: card.title }} sessionToken={session.token} onClose={() => setReporting(false)} />}

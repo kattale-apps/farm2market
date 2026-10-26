@@ -335,6 +335,14 @@ export const cleanup = internalMutation({
         await ctx.db.delete(row._id);
         count("notifications");
       }
+      for (const code of await ctx.db.query("goodsCodes").withIndex("by_owner_and_goodKey", (q) => q.eq("ownerId", user._id)).collect()) {
+        for (const scan of await ctx.db.query("goodsCodeScans").withIndex("by_code_and_at", (q) => q.eq("codeId", code._id)).collect()) {
+          await ctx.db.delete(scan._id);
+          count("goodsCodeScans");
+        }
+        await ctx.db.delete(code._id);
+        count("goodsCodes");
+      }
       await ctx.db.delete(user._id);
       count("users");
     }

@@ -33,6 +33,7 @@ import { assertEvidencePhotos, evidencePhotoValidator } from "./evidencePhotos";
 import { availableKg as batchAvailableKg } from "./processorSales";
 import { LOT_SELLER_ROLES, PACKAGED_COMMIT_PERCENT, gpsValidator, lotTerms, packagedPlan, planStepValidator, stockRowSource, stockSourceProblem, type StockSource } from "./lotOrdersShared";
 import { syncListingCard } from "./marketCards";
+import { issueGoodsCode } from "./goodsCodesCore";
 
 /**
  * For vendor/store users, where buyers collect their listings, from their profile.
@@ -128,6 +129,8 @@ export const createListing = mutation({
     stockSource: v.optional(v.union(v.literal("in_app"), v.literal("off_app"))),
     // Processors: lots made from one of their processed batches (its trace level sets the stock badge)
     processingBatchId: v.optional(v.id("processingBatches")),
+    // Goods QR: the seller's code for the same good, reused so printed labels keep working (default: a new code)
+    goodsCodeId: v.optional(v.id("goodsCodes")),
   },
   handler: async (ctx, args) => {
     // ============================================================
@@ -367,6 +370,13 @@ export const createListing = mutation({
 
     // Stock listed as lots is reserved: it is not pooled into 100kg buyer blocks.
     if (args.inventoryId) await ctx.db.patch(args.inventoryId, { reservedListingId: listingId });
+    const goodsCodeId = await issueGoodsCode(ctx, {
+      ownerId: args.farmerId,
+      goodLabel: args.produceType,
+      target: { kind: "listing", id: listingId },
+      reuseCodeId: args.goodsCodeId,
+    });
+    await ctx.db.patch(listingId, { goodsCodeId });
 
     // Create individual units
     const unitIds = [];
@@ -758,6 +768,9 @@ export const createTraderListing = mutation({
       qualityComment: undefined,
       deliveryProcessorId: inventory.deliveryProcessorId,
     });
+    await ctx.db.patch(listingId, {
+      goodsCodeId: await issueGoodsCode(ctx, { ownerId: args.traderId, goodLabel: inventory.produceType, target: { kind: "listing", id: listingId } }),
+    });
 
     // Create a single listing unit representing the inventory lot
     const unitId = await ctx.db.insert("listingUnits", {
@@ -864,6 +877,9 @@ export const createTraderPackagingListing = mutation({
       etaValue: args.etaValue,
       etaLastUpdatedAt: now,
       deliveryStatus: args.deliveryStatus,
+    });
+    await ctx.db.patch(listingId, {
+      goodsCodeId: await issueGoodsCode(ctx, { ownerId: args.traderId, goodLabel: args.productName, target: { kind: "listing", id: listingId } }),
     });
 
     const unitIds: Id<"listingUnits">[] = [];

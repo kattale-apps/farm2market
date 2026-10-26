@@ -37,7 +37,8 @@ import { todayUganda } from "./exportMarkets";
 import { roleLabel } from "./roleLabels";
 import { assertEvidencePhotos, evidencePhotoValidator } from "./evidencePhotos";
 import { spendCapExceededError, throwAppError } from "./errors";
-import { syncListingCard } from "./marketCards";
+import { farmerLotProblem, syncListingCard } from "./marketCards";
+import { cardIsLive } from "./marketspaceShared";
 import {
   AUTO_SETTLE_MS,
   PAYMENT_GRACE_MS,
@@ -409,6 +410,12 @@ export async function commitLots(ctx: MutationCtx, buyerId: Id<"users">, unitIds
   if (!listing?.farmerId) throw new Error("Listing not found");
   const seller = await ctx.db.get(listing.farmerId);
   if (!seller) throw new Error("Seller not found");
+  // The commercial farmer rule: vendors and business buyers buy a farmer's lots only from a commercial
+  // farmer on MarketSpace. An offer the farmer already accepted stands.
+  if (lots.some((l) => !l.negotiationId)) {
+    const problem = await farmerLotProblem(ctx, listing._id, buyer);
+    if (problem) throw new Error(problem);
+  }
 
   const packaged = listing.listingMode === "packaging";
   const commitPercent = listing.commitPercent ?? (packaged ? PACKAGED_COMMIT_PERCENT : 100);
@@ -561,7 +568,7 @@ export const commitFromCard = mutation({
     const buyer = await sessionUser(ctx, args.sessionToken);
     if (!buyer) throw new Error("Please sign in to buy lots.");
     const card = await ctx.db.get(args.cardId);
-    if (!card || card.sourceKind !== "listing" || !card.listingId || card.status !== "active" || card.expiresAt <= getUgandaTime()) {
+    if (!card || card.sourceKind !== "listing" || !card.listingId || !cardIsLive(card, getUgandaTime())) {
       throw new Error("This lot is no longer on MarketSpace.");
     }
     const n = Math.floor(args.lots);
@@ -887,6 +894,7 @@ export const marketLots = query({
     const lots = [];
     for (const listing of [...open, ...partlySold]) {
       if (!listing.farmerId || listing.farmerId === args.userId || listing.listingMode === "packaging") continue;
+      if (await farmerLotProblem(ctx, listing._id, user!)) continue; // The commercial farmer rule
       const units = await ctx.db
         .query("listingUnits")
         .withIndex("by_listing", (q) => q.eq("listingId", listing._id))

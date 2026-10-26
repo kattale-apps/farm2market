@@ -34,6 +34,9 @@ import {
   validateAd,
   validateSettings,
   shapeCard,
+  cardIsLive,
+  produceVisible,
+  seesFarmGate,
   vendDayChoices,
   walletForRole,
   withDefaults,
@@ -42,7 +45,7 @@ import {
   type ViewerTier,
   PACKAGED_BATCHES,
 } from "./marketspaceShared";
-import { syncAdCard, syncListingCard } from "./marketCards";
+import { commercialStatusOf, syncAdCard, syncListingCard } from "./marketCards";
 import { PACKAGED_COMMIT_PERCENT, bulkSellingDecision, defaultPlan, packageLabel, packagedPlan, packagedUnitPrice } from "./lotOrdersShared";
 import { isActiveProcessor } from "./processors";
 import { todayUganda } from "./exportMarkets";
@@ -642,6 +645,10 @@ export const vendListing = mutation({
     const lots = await lotsLeft(ctx, listing._id);
     if (lots === 0) throw new Error("Every lot of this listing is sold or in an order.");
     if (!listing.photos?.length) throw new Error("Add at least one photo (Edit terms) before vending.");
+    // The commercial farmer rule: farmers put lots on MarketSpace with a commercial profile
+    if (user.role === "farmer" && !(await commercialStatusOf(ctx, user._id))) {
+      throw new Error("Add your commercial profile (trading name and a document) to put lots on MarketSpace.");
+    }
 
     const settings = await getSettings(ctx);
     if (!vendDayChoices(settings.maxVendDays).includes(args.days)) {
@@ -765,10 +772,18 @@ export const myLots = query({
         isBulk: !!l.isBulk,
         bulkRange: l.bulkRange ?? null,
         cardId: card?._id ?? null,
+        farmGate: card?.status === "farm_gate", // Not on MarketSpace: verified processors and exporters still see it
         waitingQuestions: card ? await waitingQuestions(ctx, card._id) : 0,
       });
     }
     const bulk = await canSellBulk(ctx, user);
+    const commercial =
+      user.role === "farmer"
+        ? await ctx.db
+            .query("commercialProfiles")
+            .withIndex("by_userId", (q) => q.eq("userId", user._id))
+            .first()
+        : null;
     return {
       userId: user._id,
       role: user.role,
@@ -777,6 +792,8 @@ export const myLots = query({
       bulkRanges: BULK_RANGES,
       canSellBulk: bulk.ok,
       bulkReason: bulk.reason ?? null,
+      // Farmers: their commercial profile, needed to vend ("none" until they fill it in)
+      commercialStatus: user.role === "farmer" ? (commercial?.status ?? ("none" as const)) : null,
       bulkCostFarmcoin: settings.bulkVendCostFarmcoin,
     };
   },
@@ -833,6 +850,7 @@ const discoverFilters = {
   sellerRole: v.optional(v.string()),
   minPricePerKilo: v.optional(v.number()), // Verified viewers only (a visitor could find the exact price by filtering)
   maxPricePerKilo: v.optional(v.number()),
+  farmGate: v.optional(v.boolean()), // Farmers' lots not on MarketSpace: verified processors and exporters only
 };
 
 type DiscoverFilters = {
@@ -848,8 +866,15 @@ type DiscoverFilters = {
   maxPricePerKilo?: number;
 };
 
+type Viewer = { user: Doc<"users"> | null; tier: ViewerTier };
+
+/** The commercial farmer rule for this viewer (marketspaceShared produceVisible). */
+function visibleTo(card: Doc<"marketCards">, viewer: Viewer): boolean {
+  return produceVisible(card, { tier: viewer.tier, role: viewer.user?.role ?? null, isMine: !!viewer.user && viewer.user._id === card.sellerId });
+}
+
 function matchesFilters(card: Doc<"marketCards">, f: DiscoverFilters, tier: ViewerTier): boolean {
-  if (card.expiresAt <= f.now) return false;
+  if (!cardIsLive(card, f.now)) return false;
   if (f.view && card.view !== f.view) return false;
   if (f.bulk && !card.isBulk) return false;
   if (f.kind && card.kind !== f.kind) return false;
@@ -872,6 +897,22 @@ export const discover = query({
   handler: async (ctx, args) => {
     const tax = await loadTaxonomy(ctx);
     const viewer = await viewerOf(ctx, args.sessionToken, args.today);
+    const farmGateOk = seesFarmGate({ tier: viewer.tier, role: viewer.user?.role ?? null });
+    if (args.farmGate) {
+      // Farm Gate: farmers' lots not on MarketSpace, for verified processors and exporters
+      if (!farmGateOk) return { page: [], isDone: true, continueCursor: "", tier: viewer.tier, seesFarmGate: false };
+      const result = await ctx.db
+        .query("marketCards")
+        .withIndex("by_status_view_created", (q) => q.eq("status", "farm_gate").eq("view", "produce"))
+        .order("desc")
+        .paginate(args.paginationOpts);
+      const page = [];
+      for (const card of result.page) {
+        if (!matchesFilters(card, args, viewer.tier)) continue;
+        page.push(await shapeForViewer(ctx, card, viewer, tax));
+      }
+      return { ...result, page, tier: viewer.tier, seesFarmGate: true };
+    }
     const base = args.bulk
       ? ctx.db.query("marketCards").withIndex("by_status_bulk_created", (q) => q.eq("status", "active").eq("isBulk", true))
       : args.view
@@ -883,10 +924,10 @@ export const discover = query({
       .paginate(args.paginationOpts);
     const page = [];
     for (const card of result.page) {
-      if (!cardVisible(card, tax) || !matchesFilters(card, args, viewer.tier)) continue;
+      if (!cardVisible(card, tax) || !matchesFilters(card, args, viewer.tier) || !visibleTo(card, viewer)) continue;
       page.push(await shapeForViewer(ctx, card, viewer, tax));
     }
-    return { ...result, page, tier: viewer.tier };
+    return { ...result, page, tier: viewer.tier, seesFarmGate: farmGateOk };
   },
 });
 
@@ -898,18 +939,20 @@ export const searchCards = query({
     if (!text) return [];
     const tax = await loadTaxonomy(ctx);
     const viewer = await viewerOf(ctx, args.sessionToken, args.today);
+    if (args.farmGate && !seesFarmGate({ tier: viewer.tier, role: viewer.user?.role ?? null })) return [];
     const hits = await ctx.db
       .query("marketCards")
       .withSearchIndex("search_title", (q) => {
-        let s = q.search("title", text).eq("status", "active");
-        if (args.view) s = s.eq("view", args.view);
+        let s = q.search("title", text).eq("status", args.farmGate ? "farm_gate" : "active");
+        if (args.farmGate) s = s.eq("view", "produce");
+        else if (args.view) s = s.eq("view", args.view);
         if (args.bulk) s = s.eq("isBulk", true);
         return s;
       })
       .take(40);
     const cards = [];
     for (const card of hits) {
-      if (!cardVisible(card, tax) || !matchesFilters(card, args, viewer.tier)) continue;
+      if (!cardVisible(card, tax) || !matchesFilters(card, args, viewer.tier) || !visibleTo(card, viewer)) continue;
       cards.push(await shapeForViewer(ctx, card, viewer, tax));
     }
     return cards;
@@ -929,8 +972,9 @@ export const cardDetail = query({
     if (!card) return null;
     const viewer = await viewerOf(ctx, args.sessionToken, args.today);
     const isMine = !!viewer.user && viewer.user._id === card.sellerId;
-    const live = card.status === "active" && card.expiresAt > args.now;
+    const live = cardIsLive(card, args.now);
     if (!live && !isMine) return null;
+    if (!visibleTo(card, viewer)) return null; // The commercial farmer rule
     const tax = await loadTaxonomy(ctx);
     if (!cardVisible(card, tax) && !isMine) return null;
     const shaped = await shapeForViewer(ctx, card, viewer, tax);

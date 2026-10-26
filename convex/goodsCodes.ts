@@ -20,6 +20,7 @@ import { sessionUser, viewerOf } from "./marketspace";
 import { FarmOrigin, originsOfBatch, originsOfListing, traceSummary } from "./traceChain";
 import { goodKeyOf, issueGoodsCode } from "./goodsCodesCore";
 import { batchGoodLabel, formLabel } from "./processorShared";
+import { cardIsLive, produceVisible, type ViewerTier } from "./marketspaceShared";
 
 type Ctx = QueryCtx | MutationCtx;
 
@@ -84,13 +85,17 @@ async function traceDigest(ctx: Ctx, origins: FarmOrigin[], withDistricts: boole
   };
 }
 
-/** A listing's MarketSpace post, when it is live now. */
-async function livePostOf(ctx: Ctx, listingId: Id<"listings">, now: number): Promise<string | null> {
+type Viewer = { user: Doc<"users"> | null; tier: ViewerTier };
+
+/** A listing's post, when it is live now and this viewer may open it (the commercial farmer rule). */
+async function livePostOf(ctx: Ctx, listingId: Id<"listings">, now: number, viewer: Viewer): Promise<{ path: string; farmGate: boolean } | null> {
   const card = await ctx.db
     .query("marketCards")
     .withIndex("by_listing", (q) => q.eq("listingId", listingId))
     .first();
-  return card && card.status === "active" && card.expiresAt > now ? `/marketspace/p/${card._id}` : null;
+  if (!card || !cardIsLive(card, now)) return null;
+  if (!produceVisible(card, { tier: viewer.tier, role: viewer.user?.role ?? null, isMine: !!viewer.user && viewer.user._id === card.sellerId })) return null;
+  return { path: `/marketspace/p/${card._id}`, farmGate: card.status === "farm_gate" };
 }
 
 /** The scan page: what a goods QR points to now, for this viewer. */
@@ -118,10 +123,13 @@ export const resolve = query({
       if (listing) {
         ref = listing.utid;
         photo = await photoUrl(ctx, listing.photos?.[0]?.storageId);
-        livePath = await livePostOf(ctx, listing._id, args.now);
-        liveLabel = "Open the post on MarketSpace";
-        state = livePath
-          ? "On MarketSpace now"
+        const post = await livePostOf(ctx, listing._id, args.now, viewer);
+        livePath = post?.path ?? null;
+        liveLabel = post?.farmGate ? "Open the lot (farm gate)" : "Open the post on MarketSpace";
+        state = post
+          ? post.farmGate
+            ? "For sale at the farm gate"
+            : "On MarketSpace now"
           : listing.status === "fully_locked" || listing.status === "delivered"
             ? "Sold out"
             : listing.status === "cancelled"
@@ -144,7 +152,7 @@ export const resolve = query({
           .order("desc")
           .take(10);
         for (const lot of lots) {
-          livePath = await livePostOf(ctx, lot._id, args.now);
+          livePath = (await livePostOf(ctx, lot._id, args.now, viewer))?.path ?? null;
           if (livePath) break;
         }
         liveLabel = "Buy lots of it on MarketSpace";

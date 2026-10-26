@@ -10,15 +10,16 @@ import { Id } from "../../../convex/_generated/dataModel";
 import { REPORT_REASONS } from "../../../convex/marketspaceShared";
 import { AdCard } from "../../marketspace/components/AdCard";
 import { QuestionPool } from "../../marketspace/components/QuestionPool";
+import { CommercialReview } from "../../marketspace/components/CommercialReview";
 import { SettingsCard } from "../../marketspace/components/SettingsCard";
 import { TopBar } from "../../marketspace/components/TopBar";
 import { FONT, formatDate, tint, useMarketspaceSession, useUgandaNow, type AdCardData } from "../../marketspace/components/shared";
 
-type Section = "moderation" | "categories" | "questions" | "settings";
+type Section = "moderation" | "commercial" | "categories" | "questions" | "settings";
 
 const errorText = (e: any) => e?.message?.replace(/^.*Uncaught Error: /, "").split("\n")[0] ?? "Something went wrong.";
 
-/** MarketSpace admin: moderation for admins; categories and settings for the super admin. */
+/** MarketSpace admin: moderation for admins; commercial farmer checks, categories and settings for the super admin. */
 export default function MarketspaceAdminPage() {
   const session = useMarketspaceSession();
   const token = session.token;
@@ -41,6 +42,7 @@ export default function MarketspaceAdminPage() {
 
   const sections: { key: Section; label: string; show: boolean }[] = [
     { key: "moderation", label: "🚩 Moderation", show: me.canModerate },
+    { key: "commercial", label: "🧑‍🌾 Commercial Farmers", show: me.isSuperAdmin },
     { key: "categories", label: "🗂️ Groups & categories", show: me.isSuperAdmin },
     { key: "questions", label: "❓ Question pool", show: me.isSuperAdmin },
     { key: "settings", label: "⚙️ Settings", show: me.isSuperAdmin },
@@ -66,6 +68,7 @@ export default function MarketspaceAdminPage() {
           ))}
         </div>
         {active === "moderation" && <Moderation token={token} />}
+        {active === "commercial" && <CommercialReview token={token} />}
         {active === "categories" && <Categories token={token} />}
         {active === "questions" && <QuestionPool token={token} />}
         {active === "settings" && <SettingsCard token={token} />}

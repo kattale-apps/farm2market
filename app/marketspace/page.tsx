@@ -20,7 +20,7 @@ import { FONT, GLASS, useMarketspaceSession, useUgandaNow } from "./components/s
 const QrScanSheet = nextDynamic(() => import("./components/QrScanSheet").then((m) => m.QrScanSheet), { ssr: false });
 
 type Tab = "discover" | "post" | "mine";
-const CHIPS: Chip[] = ["all", "produce", "bulk", "lots", "classifieds"];
+const CHIPS: Chip[] = ["all", "produce", "farmgate", "bulk", "lots", "classifieds"];
 const SELLER_ROLES = ["farmer", "vendor", "store", "trader"];
 
 export default function MarketspacePage() {

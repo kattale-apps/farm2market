@@ -27,6 +27,8 @@ import type * as buyerDashboard from "../buyerDashboard.js";
 import type * as buyerOnboarding from "../buyerOnboarding.js";
 import type * as buyers from "../buyers.js";
 import type * as campaigns from "../campaigns.js";
+import type * as commercialFarmers from "../commercialFarmers.js";
+import type * as commercialFarmersShared from "../commercialFarmersShared.js";
 import type * as communities from "../communities.js";
 import type * as communityApplications from "../communityApplications.js";
 import type * as communityImports from "../communityImports.js";
@@ -176,6 +178,8 @@ declare const fullApi: ApiFromModules<{
   buyerOnboarding: typeof buyerOnboarding;
   buyers: typeof buyers;
   campaigns: typeof campaigns;
+  commercialFarmers: typeof commercialFarmers;
+  commercialFarmersShared: typeof commercialFarmersShared;
   communities: typeof communities;
   communityApplications: typeof communityApplications;
   communityImports: typeof communityImports;

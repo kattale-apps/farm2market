@@ -397,6 +397,8 @@ export const createListing = mutation({
       unitIds.push(unitId);
       remainingKilos -= unitKilos;
     }
+    // A farmer's lots are farm-gate sources from the start: verified processors and exporters see them
+    if (user.role === "farmer") await syncListingCard(ctx, listingId);
 
     return { listingId, utid, totalUnits, unitIds };
   },

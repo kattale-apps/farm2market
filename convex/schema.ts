@@ -191,6 +191,7 @@ export default defineSchema({
     packagingTypeCustom: v.optional(v.string()),
     packagesPerBatch: v.optional(v.number()), // Packaged items: items in one sellable unit (1 = single items; more = a batch, sold in bulk)
     takesOffers: v.optional(v.boolean()), // Packaged items: the seller takes offers (price per item); lots by weight always do
+    goodsCodeId: v.optional(v.id("goodsCodes")), // The goods QR on this listing (kept after it is sold or ended)
     availableUnits: v.optional(v.number()),
     pricingUnit: v.optional(v.union(v.literal("per_package"), v.literal("per_kg"))),
     pricePerUnit: v.optional(v.number()),
@@ -234,6 +235,7 @@ export default defineSchema({
     .index("by_trader", ["traderId"])
     .index("by_inventory", ["inventoryId"])
     .index("by_processingBatch", ["processingBatchId"])
+    .index("by_goodsCode", ["goodsCodeId"])
     .index("by_utid", ["utid"])
     .index("by_status", ["status"]),
 
@@ -3451,12 +3453,14 @@ export default defineSchema({
     eudrReady: v.boolean(),
     traceStagesApproved: v.number(),
     traceStagesTotal: v.number(),
+    goodsCodeId: v.optional(v.id("goodsCodes")), // The export lot's goods QR
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_exporterId", ["exporterId"])
     .index("by_status", ["status"])
-    .index("by_lotCode", ["lotCode"]),
+    .index("by_lotCode", ["lotCode"])
+    .index("by_goodsCode", ["goodsCodeId"]),
 
   // Where a lot's coffee came from.
   exportLotSources: defineTable({
@@ -3804,13 +3808,15 @@ export default defineSchema({
     marketListed: v.optional(v.boolean()),
     askingPricePerKgUgx: v.optional(v.number()),
     notes: v.optional(v.string()),
+    goodsCodeId: v.optional(v.id("goodsCodes")), // The batch's goods QR
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_processorId", ["processorId"])
     .index("by_evidenceStatus", ["evidenceStatus"])
     .index("by_marketListed", ["marketListed"])
-    .index("by_batchCode", ["batchCode"]),
+    .index("by_batchCode", ["batchCode"])
+    .index("by_goodsCode", ["goodsCodeId"]),
 
   processingBatchInputs: defineTable({
     batchId: v.id("processingBatches"),
@@ -4126,6 +4132,39 @@ export default defineSchema({
       searchField: "title",
       filterFields: ["status", "view", "isBulk"],
     }),
+
+  // Goods QR codes (goodsCodesCore.ts): issued by the platform for every lot
+  // listing, processing batch and export lot; permanent, scan-counted, and
+  // reusable for a new listing of the same good, so printed labels keep working.
+  goodsCodes: defineTable({
+    code: v.string(), // "F2M-7KQ3XA": the QR opens /g/<code>
+    ownerId: v.id("users"),
+    goodKey: v.string(), // The good in plain lower case, to offer the code again for the same good
+    goodLabel: v.string(), // "Maize", "Tomatoes (crate)", "Coffee FAQ"
+    targetKind: v.union(v.literal("listing"), v.literal("batch"), v.literal("exportLot")),
+    listingId: v.optional(v.id("listings")),
+    batchId: v.optional(v.id("processingBatches")),
+    exportLotId: v.optional(v.id("exportLots")),
+    uses: v.number(), // Listings or batches it has been on
+    scanCount: v.number(),
+    lastScannedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_code", ["code"])
+    .index("by_owner_and_goodKey", ["ownerId", "goodKey"]),
+
+  // One scan of a goods QR (a visitor counts once an hour; the owner's own scans do not count)
+  goodsCodeScans: defineTable({
+    codeId: v.id("goodsCodes"),
+    targetId: v.string(), // The listing, batch or export lot it pointed to when scanned
+    visitorKey: v.string(), // Random per device
+    viewerRole: v.optional(v.string()),
+    at: v.number(),
+  })
+    .index("by_code_and_at", ["codeId", "at"])
+    .index("by_code_visitor_and_at", ["codeId", "visitorKey", "at"])
+    .index("by_target", ["targetId"]),
 
   // MarketSpace questions (convex/enquiriesShared.ts): the pool the super admin keeps
   enquiryQuestions: defineTable({

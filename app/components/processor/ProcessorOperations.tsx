@@ -5,12 +5,13 @@ import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
-import { BATCH_OUTPUT_FORMS, INTAKE_FORMS, PROCESSING_CAPABILITIES, capabilityLabel, formLabel } from "../../../convex/processorShared";
+import { BATCH_OUTPUT_FORMS, INTAKE_FORMS, PROCESSING_CAPABILITIES, batchGoodLabel, capabilityLabel, formLabel } from "../../../convex/processorShared";
 import { COFFEE_TYPES, PROCESSING_METHODS } from "../../../convex/exportMarketsShared";
 import { LiveGps } from "./LiveGps";
 import { card, input, label, button, StatusPill, Notice, errorText, formatUgx } from "../exportMarkets/ui";
 import { PhotoSetCapture, CapturedPhoto } from "../exportMarkets/PhotoSetCapture";
 import { PROCESSOR_HEADING, PROCESSOR_SOFT, PROCESSOR_BORDER, chip, uploadEvidencePhotos } from "./ProcessorWorkspace";
+import { GoodsQr, GoodsQrChooser, reuseCodeOf } from "../qr/GoodsQr";
 
 type Msg = { tone: "error" | "success" | "info"; text: string } | null;
 type TabProps = { userId: Id<"users">; member: boolean; today: string; crops: { key: string; label: string }[]; setMsg: (m: Msg) => void };
@@ -388,6 +389,7 @@ function BatchForm({ userId, today, crops, intakes: allIntakes, setMsg, onDone }
   const [picked, setPicked] = useState<Record<string, string>>({});
   const [steps, setSteps] = useState<string[]>(["drying", "hulling"]);
   const [f, setF] = useState({ outputForm: "faq", coffeeType: "Robusta", processingMethod: "Natural", startedDate: today, notes: "" });
+  const [qr, setQr] = useState<Id<"goodsCodes"> | "new" | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const total = Object.values(picked).reduce((a, k) => a + (Number(k) || 0), 0);
   return (
@@ -460,6 +462,9 @@ function BatchForm({ userId, today, crops, intakes: allIntakes, setMsg, onDone }
           <input style={input} type="date" max={today} value={f.startedDate} onChange={(e) => setF({ ...f, startedDate: e.target.value })} />
         </div>
       </div>
+      <div style={{ marginTop: "0.75rem" }}>
+        <GoodsQrChooser userId={userId} goodLabel={batchGoodLabel(crop, f.outputForm)} value={qr} onChange={setQr} />
+      </div>
       <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.75rem" }}>
         <button
           style={button("primary", busy || total <= 0)}
@@ -477,6 +482,7 @@ function BatchForm({ userId, today, crops, intakes: allIntakes, setMsg, onDone }
                 inputs: Object.entries(picked).map(([intakeId, kilos]) => ({ intakeId: intakeId as Id<"processorIntakes">, kilos: Number(kilos) })),
                 startedDate: f.startedDate,
                 notes: f.notes || undefined,
+                goodsCodeId: reuseCodeOf(qr),
               });
               setMsg({ tone: "success", text: `Batch ${r.batchCode} started. Record the weight out when it is done.` });
               onDone();
@@ -526,6 +532,7 @@ function BatchRow({ batch, userId, today, setMsg }: { batch: BatchRowData; userI
         {batch.evidenceStatus === "rejected" && batch.reviewNotes && <div style={{ color: "#c62828" }}>Storage and Transport Officer: {batch.reviewNotes}</div>}
       </div>
       <PhotoStrip photos={batch.photoRows} />
+      <GoodsQr goodsCode={batch.goodsCode} userId={userId} />
       {batch.evidenceStatus !== "approved" &&
         (!open ? (
           <button style={{ ...button("secondary"), marginTop: "0.5rem", fontSize: "0.8rem" }} onClick={() => setOpen(true)}>

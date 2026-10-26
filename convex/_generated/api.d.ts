@@ -74,6 +74,8 @@ import type * as fertilizerPlanner from "../fertilizerPlanner.js";
 import type * as files from "../files.js";
 import type * as finance from "../finance.js";
 import type * as forms from "../forms.js";
+import type * as goodsCodes from "../goodsCodes.js";
+import type * as goodsCodesCore from "../goodsCodesCore.js";
 import type * as http from "../http.js";
 import type * as index from "../index.js";
 import type * as introspection from "../introspection.js";
@@ -221,6 +223,8 @@ declare const fullApi: ApiFromModules<{
   files: typeof files;
   finance: typeof finance;
   forms: typeof forms;
+  goodsCodes: typeof goodsCodes;
+  goodsCodesCore: typeof goodsCodesCore;
   http: typeof http;
   index: typeof index;
   introspection: typeof introspection;

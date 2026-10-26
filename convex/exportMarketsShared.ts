@@ -107,6 +107,12 @@ export const EXPORT_CROPS = [
   { key: "sesame", label: "Sesame", icon: "/icons/sesame-seed.svg", active: false },
 ] as const;
 
+/** The good an export lot holds, for its goods QR: "Coffee Robusta Screen 18". */
+export function exportLotGoodLabel(lot: { crop?: string; coffeeType: string; grade: string }): string {
+  const crop = EXPORT_CROPS.find((c) => c.key === (lot.crop ?? DEFAULT_EXPORT_CROP))?.label ?? "Coffee";
+  return `${crop} ${lot.coffeeType} ${lot.grade}`;
+}
+
 export function isActiveExportCrop(key: string): boolean {
   return EXPORT_CROPS.some((c) => c.key === key && c.active);
 }

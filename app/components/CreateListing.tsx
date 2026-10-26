@@ -14,6 +14,7 @@ import { PhotoSetCapture, type CapturedPhoto } from "./exportMarkets/PhotoSetCap
 import { uploadEvidencePhotos } from "./exportMarkets/PhotoSetCapture";
 import { getCurrentLocation } from "../utils/gps";
 import { LotTermsFields, PackagedTermsFields, planProblem } from "./lots/LotTermsFields";
+import { GoodsQrChooser, reuseCodeOf } from "./qr/GoodsQr";
 
 interface CreateListingProps {
   userId: Id<"users">;
@@ -121,6 +122,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
   const [packSellAs, setPackSellAs] = useState<"single" | "batches">("single");
   const [perBatch, setPerBatch] = useState("10");
   const [takesOffers, setTakesOffers] = useState(false);
+  const [qr, setQr] = useState<Id<"goodsCodes"> | "new" | undefined>(undefined);
   const [pkgCommit, setPkgCommit] = useState(PACKAGED_COMMIT_PERCENT);
   const [pkgSteps, setPkgSteps] = useState<PlanStep[]>(() => packagedPlan());
   const [steps, setSteps] = useState<PlanStep[]>(() => defaultPlan(effectiveRole, 30));
@@ -159,6 +161,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
     setPackSellAs("single");
     setPerBatch("10");
     setTakesOffers(false);
+    setQr(undefined);
     setPkgCommit(PACKAGED_COMMIT_PERCENT);
     setPkgSteps(packagedPlan());
   };
@@ -373,6 +376,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
           pricePerUnit: ppu,
           packagesPerBatch: batchSize,
           takesOffers,
+          goodsCodeId: reuseCodeOf(qr),
           commitPercent: withSteps ? pkgCommit : undefined,
           milestonePlan: withSteps ? pkgSteps : undefined,
           qualityRating: formData.qualityRating || undefined,
@@ -481,6 +485,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
         milestonePlan: steps,
         inventoryId: sellsStock && listingMode === "unit" && stockId ? (stockId as Id<"traderInventory">) : undefined,
         stockSource: sellsStock && listingMode === "unit" ? (stockChoice === "stock" ? "in_app" : "off_app") : undefined,
+        goodsCodeId: reuseCodeOf(qr),
       });
 
       setMessage({
@@ -1723,6 +1728,8 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
               Describe the quality, freshness, or any special characteristics of your produce.
             </p>
           </div>
+
+          <GoodsQrChooser userId={userId} goodLabel={formData.produceType} value={qr} onChange={setQr} />
 
           <div style={{ display: "flex", gap: "1rem", marginTop: "0.5rem" }}>
             <button

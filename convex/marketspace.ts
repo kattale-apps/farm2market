@@ -49,6 +49,7 @@ import { todayUganda } from "./exportMarkets";
 import { maskContactDetails } from "./exportMarketsShared";
 import { lotBuyingAccess } from "./lotOrders";
 import { roleLabel } from "./roleLabels";
+import { goodsCodeSummary } from "./goodsCodesCore";
 
 type Ctx = QueryCtx | MutationCtx;
 
@@ -756,6 +757,7 @@ export const myLots = query({
         packagesPerBatch: packaged ? l.packagesPerBatch ?? 1 : null,
         pricePerUnit: packaged ? l.pricePerUnit ?? 0 : null,
         takesOffers: packaged ? l.takesOffers === true : true,
+        goodsCode: await goodsCodeSummary(ctx, l.goodsCodeId),
         photoCount: l.photos?.length ?? 0,
         stockSource: l.stockSource ?? null,
         vendExpiresAt: l.vendExpiresAt ?? null,
@@ -943,11 +945,13 @@ export const cardDetail = query({
     let qualityComment: string | null = null;
     let neededBy: string | null = null;
     let negotiable: boolean | null = null;
+    let goodsCode: string | null = null; // The listing's goods QR (/g/<code>), printed on the goods
 
     if (card.sourceKind === "listing" && card.listingId) {
       const listing = await ctx.db.get(card.listingId);
       if (!listing) return null;
       photoIds.push(...(listing.photos ?? []).map((p) => p.storageId));
+      goodsCode = (await goodsCodeSummary(ctx, listing.goodsCodeId))?.code ?? null;
       if (!shaped.lite) {
         const packaged = listing.listingMode === "packaging";
         const commit = listing.commitPercent ?? (packaged ? PACKAGED_COMMIT_PERCENT : 100);
@@ -985,6 +989,7 @@ export const cardDetail = query({
       ...shaped,
       sourceKind: card.sourceKind,
       adId: card.adId ?? null, // For reports
+      goodsCode,
       live,
       photoUrls,
       steps,

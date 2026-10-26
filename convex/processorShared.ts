@@ -7,6 +7,8 @@
  * the EXPORT_CROPS "active" flags.
  */
 
+import { EXPORT_CROPS } from "./exportMarketsShared";
+
 export const PROCESSING_CAPABILITIES = [
   { key: "drying", label: "Drying", hint: "Sun or mechanical drying of cherry or parchment" },
   { key: "wet_processing", label: "Wet processing", hint: "Pulping, fermenting and washing" },
@@ -46,6 +48,12 @@ export function formLabel(key: string): string {
   return (
     INTAKE_FORMS.find((f) => f.key === key)?.label ?? BATCH_OUTPUT_FORMS.find((f) => f.key === key)?.label ?? key
   );
+}
+
+/** The good a batch makes, for its goods QR: "Coffee FAQ". */
+export function batchGoodLabel(crop: string, outputForm: string): string {
+  const form = BATCH_OUTPUT_FORMS.find((f) => f.key === outputForm)?.label ?? formLabel(outputForm);
+  return `${EXPORT_CROPS.find((c) => c.key === crop)?.label ?? crop} ${form}`;
 }
 
 export const STORAGE_TYPES = [

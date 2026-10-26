@@ -28,6 +28,7 @@ import { assertEvidencePhotos, evidencePhotoValidator, hasManualPhoto } from "./
 import {
   DEFAULT_EXPORT_CROP,
   EXPORT_CROPS,
+  exportLotGoodLabel,
   PRODUCT_FORM_KEYS,
   EUDR_POLYGON_THRESHOLD_HA,
   HECTARES_PER_ACRE,
@@ -54,6 +55,7 @@ import {
 } from "./processorShared";
 import { batchIntakes } from "./processorOperations";
 import { originsOfStock, traceSummary } from "./traceChain";
+import { goodsCodeSummary, issueGoodsCode } from "./goodsCodesCore";
 
 type Ctx = QueryCtx | MutationCtx;
 
@@ -426,6 +428,7 @@ export const listMyLots = query({
         ...lot,
         coverUrl: lot.photoStorageIds[0] ? await ctx.storage.getUrl(lot.photoStorageIds[0]) : null,
         openDeals: deals.filter((d) => d.status === "enquiry" || d.status === "quoted" || d.status === "in_progress").length,
+        goodsCode: await goodsCodeSummary(ctx, lot.goodsCodeId),
       });
     }
     return result;
@@ -433,7 +436,12 @@ export const listMyLots = query({
 });
 
 export const saveLot = mutation({
-  args: { userId: v.id("users"), lotId: v.optional(v.id("exportLots")), ...lotFields },
+  args: {
+    userId: v.id("users"),
+    lotId: v.optional(v.id("exportLots")),
+    ...lotFields,
+    goodsCodeId: v.optional(v.id("goodsCodes")), // New lots: reuse the exporter's QR for the same good
+  },
   handler: async (ctx, args) => {
     const { profile } = await requireExporter(ctx, args.userId);
     const required: [string, string][] = [
@@ -516,6 +524,13 @@ export const saveLot = mutation({
       createdAt: getUgandaTime(),
     });
     await materializeStages(ctx, lotId, profile);
+    const goodsCodeId = await issueGoodsCode(ctx, {
+      ownerId: args.userId,
+      goodLabel: exportLotGoodLabel(fields),
+      target: { kind: "exportLot", id: lotId },
+      reuseCodeId: args.goodsCodeId,
+    });
+    await ctx.db.patch(lotId, { goodsCodeId });
     return { lotId };
   },
 });

@@ -16,6 +16,7 @@ import { findLock, postWallet } from "./walletSplit";
 import { roleLabel } from "./roleLabels";
 import { refreshListingStatus } from "./lotOrders";
 import { LOT_SELLER_ROLES, packageLabel } from "./lotOrdersShared";
+import { goodsCodeSummary } from "./goodsCodesCore";
 
 /**
  * Get farmer's listings
@@ -87,6 +88,7 @@ export const getFarmerListings = query({
           packagesPerBatch: listing.listingMode === "packaging" ? listing.packagesPerBatch ?? 1 : null,
           packageLabel: listing.listingMode === "packaging" ? packageLabel(listing) : null,
           takesOffers: listing.listingMode === "packaging" ? listing.takesOffers === true : null,
+          goodsCode: await goodsCodeSummary(ctx, listing.goodsCodeId),
           // Unit breakdown
           units: {
             available: availableCount,

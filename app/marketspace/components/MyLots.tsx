@@ -11,6 +11,7 @@ import { QuestionsSheet } from "./Questions";
 import { FONT, formatUGX } from "./shared";
 import { PACKAGED_COMMIT_PERCENT, isPackagedPlan, packagesText } from "../../../convex/lotOrdersShared";
 import { formatUgandaDateTime } from "../../utils/timeUtils";
+import { GoodsQr } from "../../components/qr/GoodsQr";
 
 const SELLER_ROLES = ["farmer", "vendor", "store", "trader"];
 
@@ -120,6 +121,7 @@ export function MyLots({ token, now }: { token: string; now: number }) {
                   </button>
                 )}
               </div>
+              <GoodsQr goodsCode={lot.goodsCode} sessionToken={token} />
             </div>
           );
         })

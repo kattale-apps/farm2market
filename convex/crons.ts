@@ -94,4 +94,11 @@ crons.interval(
   internal.marketspace.expireAds,
 );
 
+// Buying prices: end the ones whose days are up, so farmers never see an old price.
+crons.interval(
+  "end stale buying prices",
+  { hours: 6 },
+  internal.marketOffers.endStaleOffers,
+);
+
 export default crons;

@@ -14,12 +14,12 @@
  */
 
 import { v } from "convex/values";
-import { mutation, query, QueryCtx, MutationCtx } from "./_generated/server";
+import { internalMutation, mutation, query, QueryCtx, MutationCtx } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
 import { generateUTID, getUgandaTime } from "./utils";
 import { EXPORT_CROPS, addDaysToIsoDate, centsPerLbToUsdPerKg, isIsoDate, ugxPerUsd } from "./exportMarketsShared";
 import { INTAKE_FORM_KEYS, formLabel } from "./processorShared";
-import { MAX_BOOKING_DAYS_AHEAD, OFFER_VALID_DAYS, VENDOR_CROPS, districtKey, latestBookingDate } from "./marketOffersShared";
+import { DEFAULT_OFFER_DAYS, MAX_BOOKING_DAYS_AHEAD, OFFER_DAY_CHOICES, VENDOR_CROPS, districtKey, latestBookingDate, offerDaysLeft } from "./marketOffersShared";
 import { isActiveExporter, notify, todayUganda } from "./exportMarkets";
 import { uniqueCode } from "./exportLots";
 import { getProcessorProfile, isActiveProcessor } from "./processors";
@@ -83,13 +83,50 @@ export const listMyOffers = query({
         info.kind !== "vendor"
           ? EXPORT_CROPS.filter((c) => c.active).map((c) => ({ key: c.key, label: c.label, units: ["kg"] }))
           : VENDOR_CROPS,
-      live: offers.filter((o) => isLive(o, today)),
-      history: offers.filter((o) => !isLive(o, today)).slice(0, 30),
+      live: offers.filter((o) => isLive(o, today)).map((o) => ({ ...o, daysLeft: offerDaysLeft(today, o.validUntil) })),
+      // Ended prices (by themselves or withdrawn) with no live price for the same crop, form and unit: one tap posts them again
+      ended: offers
+        .filter((o) => !isLive(o, today))
+        .filter((o, i, all) => all.findIndex((x) => sameItem(x, o)) === i)
+        .filter((o) => !offers.some((x) => isLive(x, today) && sameItem(x, o)))
+        .slice(0, 5),
+      dayChoices: OFFER_DAY_CHOICES,
+      defaultDays: DEFAULT_OFFER_DAYS,
     };
   },
 });
 
-/** Post this week's price for a crop (and form); it replaces the previous one for the same crop, form and unit. */
+const sameItem = (a: Doc<"buyingOffers">, b: Doc<"buyingOffers">) => a.crop === b.crop && (a.form ?? "") === (b.form ?? "") && a.unit === b.unit;
+
+/** Who may post (or post again) a price for this crop, form and unit; throws a plain message. */
+async function checkCanPost(ctx: Ctx, user: Doc<"users">, today: string, args: { crop: string; form?: string; unit: string }) {
+  const info = await buyerInfo(ctx, user);
+  if (!info.district) throw new Error("Add your district to your profile first, so farmers near you can find you");
+  if (info.kind === "processor" || info.kind === "exporter") {
+    if (info.kind === "processor" && !(await isActiveProcessor(ctx, user._id, today))) throw new Error("Only a verified, live processor can post prices");
+    if (info.kind === "exporter" && !info.verified) throw new Error("Only a verified, licensed exporter can post prices");
+    if (!EXPORT_CROPS.some((c) => c.key === args.crop && c.active)) throw new Error("This crop is not open yet");
+    if (!args.form || !INTAKE_FORM_KEYS.includes(args.form)) throw new Error("Choose the form you buy it in (e.g. kiboko)");
+    if (args.unit !== "kg") throw new Error("Coffee prices are per kg");
+  } else {
+    const crop = VENDOR_CROPS.find((c) => c.key === args.crop);
+    if (!crop) throw new Error("Choose a crop");
+    if (!crop.units.includes(args.unit)) throw new Error(`Choose a unit for ${crop.label}`);
+  }
+  return info as typeof info & { district: string };
+}
+
+/** End any live price for the same crop, form and unit (a new or re-posted price replaces it). */
+async function endSameItem(ctx: MutationCtx, ownerId: Id<"users">, item: { crop: string; form?: string; unit: string }, except?: Id<"buyingOffers">) {
+  const mine = await ctx.db.query("buyingOffers").withIndex("by_ownerId", (q) => q.eq("ownerId", ownerId)).take(500);
+  for (const o of mine) {
+    if (o._id !== except && o.active && o.crop === item.crop && (o.form ?? "") === (item.form ?? "") && o.unit === item.unit) {
+      await ctx.db.patch(o._id, { active: false });
+    }
+  }
+}
+
+/** Post a price for a crop (and form) for 1, 3 or 7 days; it replaces the previous one for the same crop, form and unit. */
 export const postOffer = mutation({
   args: {
     userId: v.id("users"),
@@ -99,32 +136,18 @@ export const postOffer = mutation({
     priceUgx: v.number(),
     minQuantity: v.optional(v.number()),
     notes: v.optional(v.string()),
+    days: v.optional(v.number()), // How long it stays up (OFFER_DAY_CHOICES)
   },
   handler: async (ctx, args) => {
     const user = await requireBuyer(ctx, args.userId);
     const today = todayUganda();
-    const info = await buyerInfo(ctx, user);
-    if (!info.district) throw new Error("Add your district to your profile first, so farmers near you can find you");
-    if (info.kind === "processor" || info.kind === "exporter") {
-      if (info.kind === "processor" && !(await isActiveProcessor(ctx, user._id, today))) throw new Error("Only a verified, live processor can post prices");
-      if (info.kind === "exporter" && !info.verified) throw new Error("Only a verified, licensed exporter can post prices");
-      if (!EXPORT_CROPS.some((c) => c.key === args.crop && c.active)) throw new Error("This crop is not open yet");
-      if (!args.form || !INTAKE_FORM_KEYS.includes(args.form)) throw new Error("Choose the form you buy it in (e.g. kiboko)");
-      if (args.unit !== "kg") throw new Error("Coffee prices are per kg");
-    } else {
-      const crop = VENDOR_CROPS.find((c) => c.key === args.crop);
-      if (!crop) throw new Error("Choose a crop");
-      if (!crop.units.includes(args.unit)) throw new Error(`Choose a unit for ${crop.label}`);
-    }
+    const info = await checkCanPost(ctx, user, today, args);
+    const days = args.days ?? DEFAULT_OFFER_DAYS;
+    if (!OFFER_DAY_CHOICES.includes(days)) throw new Error(`Choose how long the price stays up: ${OFFER_DAY_CHOICES.join(", ")} days`);
     if (!(args.priceUgx > 0 && args.priceUgx < 100_000_000)) throw new Error("Price looks wrong");
     if (args.minQuantity !== undefined && !(args.minQuantity > 0)) throw new Error("Minimum quantity looks wrong");
 
-    const mine = await ctx.db.query("buyingOffers").withIndex("by_ownerId", (q) => q.eq("ownerId", user._id)).take(500);
-    for (const o of mine) {
-      if (o.active && o.crop === args.crop && (o.form ?? "") === (args.form ?? "") && o.unit === args.unit) {
-        await ctx.db.patch(o._id, { active: false });
-      }
-    }
+    await endSameItem(ctx, user._id, args);
     const offerId = await ctx.db.insert("buyingOffers", {
       ownerId: user._id,
       ownerKind: info.kind,
@@ -136,12 +159,58 @@ export const postOffer = mutation({
       district: info.district,
       districtKey: districtKey(info.district),
       validFrom: today,
-      validUntil: addDaysToIsoDate(today, OFFER_VALID_DAYS - 1),
+      validUntil: addDaysToIsoDate(today, days - 1),
+      validDays: days,
       active: true,
       notes: args.notes?.trim().slice(0, 300) || undefined,
       createdAt: getUgandaTime(),
     });
     return { offerId };
+  },
+});
+
+/** Post an ended (or still live) price again, unchanged, for the same number of days. */
+export const repostOffer = mutation({
+  args: { userId: v.id("users"), offerId: v.id("buyingOffers") },
+  handler: async (ctx, args) => {
+    const user = await requireBuyer(ctx, args.userId);
+    const offer = await ctx.db.get(args.offerId);
+    if (!offer || offer.ownerId !== user._id) throw new Error("Price not found");
+    const today = todayUganda();
+    const info = await checkCanPost(ctx, user, today, offer);
+    const days = offer.validDays ?? DEFAULT_OFFER_DAYS;
+    await endSameItem(ctx, user._id, offer, offer._id);
+    await ctx.db.patch(offer._id, {
+      active: true,
+      district: info.district,
+      districtKey: districtKey(info.district),
+      validFrom: today,
+      validUntil: addDaysToIsoDate(today, days - 1),
+      validDays: days,
+    });
+    return { days };
+  },
+});
+
+/**
+ * Prices end by themselves when their days are up, like MarketSpace posts, so
+ * farmers never see an old price. The poster hears about it and can post the
+ * price again with one tap. Runs a few times a day; a backlog clears in turns.
+ */
+export const endStaleOffers = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const today = todayUganda();
+    const stale = await ctx.db
+      .query("buyingOffers")
+      .withIndex("by_active_and_validUntil", (q) => q.eq("active", true).lt("validUntil", today))
+      .take(300);
+    for (const o of stale) {
+      await ctx.db.patch(o._id, { active: false });
+      const crop = EXPORT_CROPS.find((c) => c.key === o.crop)?.label ?? VENDOR_CROPS.find((c) => c.key === o.crop)?.label ?? o.crop;
+      await notify(ctx, o.ownerId, "Your buying price ended", `Your price of UGX ${o.priceUgx.toLocaleString()}/${o.unit} for ${crop} ended on ${o.validUntil}. Post it again from Post Price to Farmers to stay on the farmers' board.`);
+    }
+    return { ended: stale.length };
   },
 });
 
@@ -183,7 +252,7 @@ export const listOffersNearMe = query({
       const info = owners.get(key);
       // Only verified, live processors and exporters are shown to farmers.
       if (!info || (info.kind === "processor" && !(await isActiveProcessor(ctx, o.ownerId, today))) || (info.kind === "exporter" && !info.verified)) continue;
-      rows.push({ ...o, buyer: info, latestBookingDate: latestBookingDate(today, o.validUntil) });
+      rows.push({ ...o, buyer: info, latestBookingDate: latestBookingDate(today, o.validUntil), daysLeft: offerDaysLeft(today, o.validUntil) });
     }
     rows.sort((a, b) => b.priceUgx - a.priceUgx);
     // Districts that have any live offer, for the district picker.

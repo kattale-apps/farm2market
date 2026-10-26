@@ -1,10 +1,21 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MAX_BOOKING_DAYS_AHEAD, OFFER_VALID_DAYS, VENDOR_CROPS, districtKey, latestBookingDate, priceRange } from "../convex/marketOffersShared";
+import { DEFAULT_OFFER_DAYS, MAX_BOOKING_DAYS_AHEAD, OFFER_DAY_CHOICES, OFFER_VALID_DAYS, VENDOR_CROPS, districtKey, latestBookingDate, offerDaysLeft, priceRange } from "../convex/marketOffersShared";
 
-test("a price is valid for a week and bookings go at most 5 days ahead", () => {
-  assert.equal(OFFER_VALID_DAYS, 7);
+test("a price stays up 1, 3 or 7 days (3 by default) and bookings go at most 5 days ahead", () => {
+  assert.deepEqual(OFFER_DAY_CHOICES, [1, 3, 7]);
+  assert.ok(OFFER_DAY_CHOICES.includes(DEFAULT_OFFER_DAYS));
+  assert.equal(Math.max(...OFFER_DAY_CHOICES), OFFER_VALID_DAYS);
   assert.equal(MAX_BOOKING_DAYS_AHEAD, 5);
+});
+
+test("a price counts down its days and ends by itself", () => {
+  // Posted for 3 days on the 26th: up until the 28th
+  assert.equal(offerDaysLeft("2026-10-26", "2026-10-28"), 3);
+  assert.equal(offerDaysLeft("2026-10-28", "2026-10-28"), 1, "its last day");
+  assert.equal(offerDaysLeft("2026-10-29", "2026-10-28"), 0, "ended");
+  // Across a month end
+  assert.equal(offerDaysLeft("2026-10-31", "2026-11-02"), 3);
 });
 
 test("the latest booking date is 5 days ahead, or earlier when the price expires first", () => {

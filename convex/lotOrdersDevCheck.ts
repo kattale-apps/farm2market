@@ -30,9 +30,10 @@ const BUYER_EMAIL = "lotcheck.buyer@local";
 const ADMIN_EMAIL = "lotcheck.admin@local"; // No password: cannot log in; decides test disputes, then removed
 const MEMBER_EMAIL = "lotcheck.member@local"; // Signed in, not verified: sees lite produce cards
 const EXPORTER_EMAIL = "lotcheck.exporter@local"; // Verified exporter: lists stock as lots, sells in bulk
-const TEST_EMAILS = [FARMER_EMAIL, BUYER_EMAIL, ADMIN_EMAIL, MEMBER_EMAIL, EXPORTER_EMAIL];
+const VENDOR_EMAIL = "lotcheck.vendor@local"; // Vendor in Kampala: posts buying prices to farmers
+const TEST_EMAILS = [FARMER_EMAIL, BUYER_EMAIL, ADMIN_EMAIL, MEMBER_EMAIL, EXPORTER_EMAIL, VENDOR_EMAIL];
 
-async function testUser(ctx: MutationCtx, email: string, role: "farmer" | "buyer" | "admin" | "trader", alias: string, verified = role === "buyer") {
+async function testUser(ctx: MutationCtx, email: string, role: "farmer" | "buyer" | "admin" | "trader" | "vendor", alias: string, verified = role === "buyer") {
   const existing = await ctx.db
     .query("users")
     .withIndex("by_email", (q) => q.eq("email", email))
@@ -191,6 +192,32 @@ export const fundTestWallet = internalMutation({
   },
 });
 
+/** A test vendor in Kampala (and the test farmer placed there too), for the buying-price walkthrough. */
+export const seedVendor = internalMutation({
+  args: { mode: v.string() },
+  handler: async (ctx, args) => {
+    assertTestMode(args.mode);
+    const vendorId = await testUser(ctx, VENDOR_EMAIL, "vendor", "LOTCHECK-V");
+    const farmerId = await testUser(ctx, FARMER_EMAIL, "farmer", "LOTCHECK-F");
+    await ctx.db.patch(vendorId, { districtText: "Kampala" });
+    await ctx.db.patch(farmerId, { districtText: "Kampala" });
+    return { vendorId, farmerId };
+  },
+});
+
+/** Stands in for a posted buying price's days running out (test posters only). */
+export const ageBuyingPrice = internalMutation({
+  args: { mode: v.string(), offerId: v.id("buyingOffers") },
+  handler: async (ctx, args) => {
+    assertTestMode(args.mode);
+    const offer = await ctx.db.get(args.offerId);
+    if (!offer || !(await ctx.db.get(offer.ownerId))?.isTestUser) throw new Error("Only test prices can be moved in time");
+    const d = new Date(`${offer.validFrom}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() - 2);
+    await ctx.db.patch(offer._id, { validFrom: d.toISOString().slice(0, 10), validUntil: d.toISOString().slice(0, 10) });
+  },
+});
+
 /** Stands in for a card's MarketSpace time running out (test sellers only). */
 export const expireCard = internalMutation({
   args: { mode: v.string(), cardId: v.id("marketCards") },
@@ -286,6 +313,10 @@ export const cleanup = internalMutation({
       for (const row of await ctx.db.query("sessions").withIndex("by_user", (q) => q.eq("userId", user._id)).collect()) {
         await ctx.db.delete(row._id);
         count("sessions");
+      }
+      for (const row of await ctx.db.query("buyingOffers").withIndex("by_ownerId", (q) => q.eq("ownerId", user._id)).collect()) {
+        await ctx.db.delete(row._id);
+        count("buyingOffers");
       }
       for (const row of await ctx.db.query("purchaseReceipts").withIndex("by_buyerId", (q) => q.eq("buyerId", user._id)).collect()) {
         await ctx.db.delete(row._id);

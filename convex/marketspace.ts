@@ -55,7 +55,7 @@ type Ctx = QueryCtx | MutationCtx;
 // Access helpers
 // ------------------------------------------------------------------
 
-async function sessionUser(ctx: Ctx, token: string | undefined): Promise<Doc<"users"> | null> {
+export async function sessionUser(ctx: Ctx, token: string | undefined): Promise<Doc<"users"> | null> {
   if (!token || token.length < 10) return null;
   const session = await ctx.db
     .query("sessions")
@@ -67,7 +67,7 @@ async function sessionUser(ctx: Ctx, token: string | undefined): Promise<Doc<"us
   return user;
 }
 
-async function requireUser(ctx: Ctx, token: string): Promise<Doc<"users">> {
+export async function requireUser(ctx: Ctx, token: string): Promise<Doc<"users">> {
   const user = await sessionUser(ctx, token);
   if (!user) throw new Error("Please log in again to continue.");
   return user;
@@ -81,9 +81,9 @@ function canModerate(user: Doc<"users">): boolean {
   return isSuperAdmin(user) || (user.role === "admin" && user.adminCategory === "community");
 }
 
-async function requireSuperAdmin(ctx: Ctx, token: string): Promise<Doc<"users">> {
+export async function requireSuperAdmin(ctx: Ctx, token: string): Promise<Doc<"users">> {
   const user = await requireUser(ctx, token);
-  if (!isSuperAdmin(user)) throw new Error("Only the super admin can manage MarketSpace categories.");
+  if (!isSuperAdmin(user)) throw new Error("Only the super admin can manage MarketSpace.");
   return user;
 }
 
@@ -100,7 +100,7 @@ async function requireOwnAd(ctx: Ctx, token: string, adId: Id<"marketspaceAds">)
   return { user, ad };
 }
 
-async function notifyOwner(ctx: MutationCtx, userId: Id<"users">, title: string, message: string, utid?: string) {
+export async function notifyOwner(ctx: MutationCtx, userId: Id<"users">, title: string, message: string, utid?: string) {
   await ctx.db.insert("notifications", {
     userId,
     type: "system",
@@ -355,6 +355,15 @@ export const getMyContext = query({
   },
 });
 
+/** Questions buyers asked on a post that the poster has not answered yet. */
+async function waitingQuestions(ctx: Ctx, cardId: Id<"marketCards">): Promise<number> {
+  const open = await ctx.db
+    .query("enquiries")
+    .withIndex("by_card_and_answeredAt", (q) => q.eq("cardId", cardId).eq("answeredAt", undefined))
+    .take(50);
+  return open.filter((e) => e.askCount > 0).length;
+}
+
 export const myAds = query({
   args: { sessionToken: v.string() },
   handler: async (ctx, args) => {
@@ -369,11 +378,17 @@ export const myAds = query({
     const cards = [];
     for (const ad of ads) {
       const card = await toCard(ctx, ad, tax, true, true);
+      const marketCard = await ctx.db
+        .query("marketCards")
+        .withIndex("by_ad", (q) => q.eq("adId", ad._id))
+        .first();
       cards.push({
         ...card,
         photoIds: ad.photoIds,
         hidden: !isVisible(ad, tax),
         removedReason: ad.removedReason ?? null,
+        cardId: marketCard?._id ?? null,
+        waitingQuestions: marketCard ? await waitingQuestions(ctx, marketCard._id) : 0,
       });
     }
     return cards;
@@ -709,6 +724,10 @@ export const myLots = query({
       if (l.listingMode === "packaging" || l.withdrawnAt) continue;
       if (l.status !== "active" && l.status !== "partially_locked") continue;
       const commitPercent = l.commitPercent ?? 100;
+      const card = await ctx.db
+        .query("marketCards")
+        .withIndex("by_listing", (q) => q.eq("listingId", l._id))
+        .first();
       lots.push({
         listingId: l._id,
         utid: l.utid,
@@ -728,6 +747,8 @@ export const myLots = query({
         vendRefreshDays: l.vendRefreshDays ?? null,
         isBulk: !!l.isBulk,
         bulkRange: l.bulkRange ?? null,
+        cardId: card?._id ?? null,
+        waitingQuestions: card ? await waitingQuestions(ctx, card._id) : 0,
       });
     }
     const bulk = await canSellBulk(ctx, user);
@@ -753,7 +774,7 @@ export const myLots = query({
 // carries a phone number.
 // ------------------------------------------------------------------
 
-async function viewerOf(ctx: QueryCtx, token: string | undefined, today: string): Promise<{ user: Doc<"users"> | null; tier: ViewerTier }> {
+export async function viewerOf(ctx: QueryCtx, token: string | undefined, today: string): Promise<{ user: Doc<"users"> | null; tier: ViewerTier }> {
   const user = await sessionUser(ctx, token);
   if (!user) return { user: null, tier: "public" };
   return { user, tier: (await lotBuyingAccess(ctx, user, today)).ok ? "verified" : "member" };

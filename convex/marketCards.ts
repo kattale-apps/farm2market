@@ -15,6 +15,14 @@ import { MutationCtx } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
 import { getUgandaTime } from "./utils";
 
+/** A deleted post takes its questions, answers and wanted-ad responses with it (a post has a few dozen at most). */
+async function deleteCardQuestions(ctx: MutationCtx, cardId: Id<"marketCards">) {
+  const enquiries = await ctx.db.query("enquiries").withIndex("by_card_and_question", (q) => q.eq("cardId", cardId)).take(500);
+  const asks = await ctx.db.query("enquiryAsks").withIndex("by_card", (q) => q.eq("cardId", cardId)).take(2000);
+  const responses = await ctx.db.query("wantedResponses").withIndex("by_card_and_updatedAt", (q) => q.eq("cardId", cardId)).take(500);
+  for (const row of [...enquiries, ...asks, ...responses]) await ctx.db.delete(row._id);
+}
+
 async function districtOf(ctx: MutationCtx, user: Doc<"users"> | null): Promise<string> {
   if (!user?.districtId) return "";
   return (await ctx.db.get(user.districtId))?.name ?? "";
@@ -94,7 +102,10 @@ export async function syncAdCard(ctx: MutationCtx, adId: Id<"marketspaceAds">) {
     .withIndex("by_ad", (q) => q.eq("adId", adId))
     .first();
   if (!ad) {
-    if (existing) await ctx.db.delete(existing._id);
+    if (existing) {
+      await deleteCardQuestions(ctx, existing._id);
+      await ctx.db.delete(existing._id);
+    }
     return;
   }
   const owner = await ctx.db.get(ad.ownerId);

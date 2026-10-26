@@ -6,6 +6,8 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { EditListingTerms } from "../../components/lots/EditListingTerms";
 import { VendSheet, type MyLot } from "../../components/lots/VendSheet";
+import { ugandaDateFromInstant } from "../../../convex/exportMarketsShared";
+import { QuestionsSheet } from "./Questions";
 import { FONT, formatUGX } from "./shared";
 import { formatUgandaDateTime } from "../../utils/timeUtils";
 
@@ -21,6 +23,8 @@ export function MyLots({ token, now }: { token: string; now: number }) {
   const stop = useMutation(api.marketspace.stopVend);
   const [vending, setVending] = useState<MyLot | null>(null);
   const [editing, setEditing] = useState<MyLot | null>(null);
+  const [questionsFor, setQuestionsFor] = useState<string | null>(null);
+  const [today] = useState(() => ugandaDateFromInstant(Date.now()));
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -91,6 +95,11 @@ export function MyLots({ token, now }: { token: string; now: number }) {
                   </button>
                 )}
                 <button type="button" onClick={() => setEditing(lot)} style={button("plain")}>✎ Edit terms</button>
+                {lot.cardId && (
+                  <button type="button" onClick={() => setQuestionsFor(lot.cardId)} style={button(lot.waitingQuestions > 0 ? "warn" : "plain")}>
+                    ❓ Questions{lot.waitingQuestions > 0 ? ` (${lot.waitingQuestions} waiting)` : ""}
+                  </button>
+                )}
                 {live && (
                   <button type="button" disabled={busy === lot.listingId} onClick={() => act(lot.listingId, () => stop({ sessionToken: token, listingId: lot.listingId }), `${lot.produceType} is off MarketSpace. It stays in your ledger.`)} style={button("warn")}>
                     Take off
@@ -113,6 +122,7 @@ export function MyLots({ token, now }: { token: string; now: number }) {
           }}
         />
       )}
+      {questionsFor && <QuestionsSheet cardId={questionsFor} token={token} today={today} now={now} onClose={() => setQuestionsFor(null)} />}
       {editing && (
         <EditListingTerms
           sellerId={info.userId}

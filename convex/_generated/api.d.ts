@@ -45,6 +45,8 @@ import type * as diagnosticsAi from "../diagnosticsAi.js";
 import type * as diagnosticsFarmer from "../diagnosticsFarmer.js";
 import type * as diagnosticsImport from "../diagnosticsImport.js";
 import type * as diagnosticsRules from "../diagnosticsRules.js";
+import type * as enquiries from "../enquiries.js";
+import type * as enquiriesShared from "../enquiriesShared.js";
 import type * as errors from "../errors.js";
 import type * as errors_index from "../errors/index.js";
 import type * as errors_types from "../errors/types.js";
@@ -187,6 +189,8 @@ declare const fullApi: ApiFromModules<{
   diagnosticsFarmer: typeof diagnosticsFarmer;
   diagnosticsImport: typeof diagnosticsImport;
   diagnosticsRules: typeof diagnosticsRules;
+  enquiries: typeof enquiries;
+  enquiriesShared: typeof enquiriesShared;
   errors: typeof errors;
   "errors/index": typeof errors_index;
   "errors/types": typeof errors_types;

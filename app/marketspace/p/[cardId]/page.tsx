@@ -13,6 +13,7 @@ import { chargeForStep, commitAmount } from "../../../../convex/lotOrdersShared"
 import { getUgandaTime } from "../../../utils/timeUtils";
 import { QrCodeDisplay } from "../../../components/qr/QrCodeDisplay";
 import { PhotoGallery } from "../../components/PhotoGallery";
+import { CardQuestions } from "../../components/Questions";
 import { ReportSheet, SafetyNotice } from "../../components/Sheets";
 import { TopBar } from "../../components/TopBar";
 import { FONT, formatUGX, useMarketspaceSession } from "../../components/shared";
@@ -215,6 +216,8 @@ export default function CardPage() {
           {msg.text} {msg.topUp && <a href="/wallet" style={{ color: "#c62828" }}>Top up →</a>}
         </div>
       )}
+
+      <CardQuestions cardId={card.cardId} token={session.token} today={today} now={boardNow} />
 
       {/* Lots are paid through escrow; the pay-on-delivery notice is for classified ads */}
       {!isLot && (

@@ -15,6 +15,7 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { evidencePhotoValidator } from "./evidencePhotos";
 import { gpsValidator, planStepValidator } from "./lotOrdersShared";
+import { answerTypeValidator, answerValidator, audienceValidator } from "./enquiriesShared";
 
 const imageMetadata = {
   storageId: v.id("_storage"),
@@ -4114,6 +4115,57 @@ export default defineSchema({
       searchField: "title",
       filterFields: ["status", "view", "isBulk"],
     }),
+
+  // MarketSpace questions (convex/enquiriesShared.ts): the pool the super admin keeps
+  enquiryQuestions: defineTable({
+    text: v.string(),
+    answerType: answerTypeValidator,
+    unit: v.optional(v.string()), // Number answers: kg, %, UGX, lots
+    choices: v.optional(v.array(v.string())), // Choice answers
+    appliesTo: v.array(audienceValidator),
+    active: v.boolean(),
+    sortOrder: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_active_and_sortOrder", ["active", "sortOrder"]),
+
+  // One question on one post: asked by buyers (or answered before anyone asked),
+  // answered by the poster, shown to every viewer allowed to see the post
+  enquiries: defineTable({
+    cardId: v.id("marketCards"),
+    questionId: v.id("enquiryQuestions"),
+    sellerId: v.id("users"),
+    askCount: v.number(), // 0 when the poster answered it before anyone asked
+    lastAskedAt: v.optional(v.number()),
+    answer: v.optional(answerValidator),
+    answeredAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_card_and_question", ["cardId", "questionId"])
+    .index("by_card_and_answeredAt", ["cardId", "answeredAt"]),
+
+  // Who asked which question, so each hears the answer and asks it only once
+  enquiryAsks: defineTable({
+    enquiryId: v.id("enquiries"),
+    cardId: v.id("marketCards"),
+    askerId: v.id("users"),
+    createdAt: v.number(),
+  })
+    .index("by_enquiry", ["enquiryId"])
+    .index("by_asker_and_card", ["askerId", "cardId"])
+    .index("by_card", ["cardId"]),
+
+  // A supplier's typed answers to a wanted ad; only the poster and the supplier see it
+  wantedResponses: defineTable({
+    cardId: v.id("marketCards"),
+    posterId: v.id("users"),
+    responderId: v.id("users"),
+    answers: v.array(v.object({ questionId: v.id("enquiryQuestions"), answer: answerValidator })),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_card_and_updatedAt", ["cardId", "updatedAt"])
+    .index("by_card_and_responder", ["cardId", "responderId"]),
 
   marketspaceReports: defineTable({
     adId: v.id("marketspaceAds"),

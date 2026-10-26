@@ -73,27 +73,32 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
 }
 
 const LOGO = "/icons/farm2market-logo.png";
+const BANNER_PLACEHOLDER = "/backgrounds/farm-bg.jpg"; // The QR head banner's second picture (a slot that can carry a sponsor later)
 const W = 800; // Label width in pixels: about 7 cm when printed at 300 dpi
 const QR = 560;
 const BADGE = 120; // The logo badge on the QR's free corner
+const BANNER = 260; // The QR head banner: square pictures above the name and the code
+const BANNER_GAP = 24;
 const GREEN = "#1b5e20";
 
-/** Draws the label: photo and name, the QR with the good's icon in the middle and the Farm2Market logo on its free corner, and the code to type in. */
-async function drawLabel(url: string, code: string, label: string, photoUrl: string | null): Promise<string> {
+/** Draws the label: the QR head banner and the name, the QR with the good's icon in the middle and the Farm2Market logo on its free corner, and the code to type in. */
+async function drawLabel(url: string, code: string, label: string, photoUrl: string | null, bannerUrl: string): Promise<string> {
   const icon = goodsIcon(label);
   const name = label.trim();
-  const [photo, logo] = await Promise.all([
+  const [photo, second, logo] = await Promise.all([
     photoUrl ? loadImage(photoUrl).catch(() => null) : Promise.resolve(null),
+    loadImage(bannerUrl).catch(() => null),
     loadImage(LOGO).catch(() => null),
   ]);
+  // The QR head banner: the listing photo and the second picture side by side; the second picture alone when there is no photo
+  const banner = [photo, second].filter((img): img is HTMLImageElement => img !== null);
   const qr = await loadImage(await QRCode.toDataURL(url, { width: QR, margin: 1, errorCorrectionLevel: "H" }));
 
   const canvas = document.createElement("canvas");
   const measure = canvas.getContext("2d")!;
   measure.font = "800 56px Montserrat, Arial, sans-serif";
   const lines = nameLines(measure, name, W - 80);
-  const photoH = photo ? 260 : 0;
-  const H = 40 + (photo ? photoH + 24 : 0) + lines.length * 66 + 16 + QR + BADGE / 2 + 20 + 64 + 44 + 36;
+  const H = 40 + (banner.length > 0 ? BANNER + 24 : 0) + lines.length * 66 + 16 + QR + BADGE / 2 + 20 + 64 + 44 + 36;
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext("2d")!;
@@ -106,15 +111,19 @@ async function drawLabel(url: string, code: string, label: string, photoUrl: str
   ctx.stroke();
 
   let y = 40;
-  if (photo) {
-    // The photo, cropped to a square, so people can match the label to the goods
-    const side = Math.min(photo.width, photo.height);
-    ctx.save();
-    roundRect(ctx, (W - photoH) / 2, y, photoH, photoH, 20);
-    ctx.clip();
-    ctx.drawImage(photo, (photo.width - side) / 2, (photo.height - side) / 2, side, side, (W - photoH) / 2, y, photoH, photoH);
-    ctx.restore();
-    y += photoH + 24;
+  if (banner.length > 0) {
+    // Each picture cropped to a square; the listing photo first, so people can match the label to the goods
+    const rowWidth = banner.length * BANNER + (banner.length - 1) * BANNER_GAP;
+    banner.forEach((img, i) => {
+      const x = (W - rowWidth) / 2 + i * (BANNER + BANNER_GAP);
+      const side = Math.min(img.width, img.height);
+      ctx.save();
+      roundRect(ctx, x, y, BANNER, BANNER, 20);
+      ctx.clip();
+      ctx.drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, x, y, BANNER, BANNER);
+      ctx.restore();
+    });
+    y += BANNER + 24;
   }
 
   ctx.fillStyle = "#111";
@@ -169,13 +178,26 @@ async function drawLabel(url: string, code: string, label: string, photoUrl: str
 }
 
 /**
- * The printable label for a goods QR: the product photo and name sit above
- * the code and the good's icon in its middle, so people can tell labels apart
- * by eye; the Farm2Market logo sits on the code's free corner, so they know
- * whose code it is. The photo is left out when there is none or it cannot be
- * loaded.
+ * The printable label for a goods QR: the QR head banner (the listing photo
+ * and a second picture side by side, the second picture alone when there is
+ * no photo) and the name sit above the code and the good's icon in its
+ * middle, so people can tell labels apart by eye; the Farm2Market logo sits
+ * on the code's free corner, so they know whose code it is.
  */
-export function GoodsLabel({ code, name, photoUrl, width = 240 }: { code: string; name: string; photoUrl?: string | null; width?: number }) {
+export function GoodsLabel({
+  code,
+  name,
+  photoUrl,
+  bannerUrl = BANNER_PLACEHOLDER,
+  width = 240,
+}: {
+  code: string;
+  name: string;
+  photoUrl?: string | null;
+  /** The QR head banner's second picture (the placeholder until a sponsor's picture is set) */
+  bannerUrl?: string;
+  width?: number;
+}) {
   const [label, setLabel] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const url = typeof window !== "undefined" ? `${window.location.origin}/g/${code}` : "";
@@ -184,13 +206,13 @@ export function GoodsLabel({ code, name, photoUrl, width = 240 }: { code: string
     if (!url) return;
     let cancelled = false;
     setFailed(false);
-    drawLabel(url, code, name.trim() || "Farm2Market goods", photoUrl ?? null)
+    drawLabel(url, code, name.trim() || "Farm2Market goods", photoUrl ?? null, bannerUrl)
       .then((png) => !cancelled && setLabel(png))
       .catch(() => !cancelled && setFailed(true));
     return () => {
       cancelled = true;
     };
-  }, [url, code, name, photoUrl]);
+  }, [url, code, name, photoUrl, bannerUrl]);
 
   const download = () => {
     if (!label) return;

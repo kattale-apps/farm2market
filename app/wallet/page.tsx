@@ -591,7 +591,7 @@ function Activity({ activity }: { activity: WalletData["activity"] }) {
  */
 function PendingCard({ token }: { token: string }) {
   const pending = useQuery(api.lotOrders.myPending, { sessionToken: token });
-  if (!pending || (pending.openSales === 0 && pending.openPurchases === 0)) return null;
+  if (!pending || (pending.openSales === 0 && pending.openPurchases === 0 && pending.contractEarnedPending === 0)) return null;
   return (
     <section style={card}>
       <div style={{ fontWeight: 800, marginBottom: "0.4rem" }}>Pending (not in your wallet yet)</div>
@@ -617,6 +617,12 @@ function PendingCard({ token }: { token: string }) {
           <div>
             <div style={{ fontSize: "0.75rem", color: "#666" }}>Your money held in escrow</div>
             <div style={{ fontWeight: 800 }}>{formatUGX(pending.inEscrowAsBuyer)}</div>
+          </div>
+        )}
+        {pending.contractEarnedPending > 0 && (
+          <div>
+            <div style={{ fontSize: "0.75rem", color: "#666" }}>Contract Farming: earned by approved milestones</div>
+            <div style={{ fontWeight: 800 }}>{formatUGX(pending.contractEarnedPending)}</div>
           </div>
         )}
       </div>

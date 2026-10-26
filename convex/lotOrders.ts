@@ -1005,7 +1005,29 @@ export const myPending = query({
     ]);
     const openSold = sold.filter((o) => OPEN_STATUSES.includes(o.status));
     const openBought = bought.filter((o) => OPEN_STATUSES.includes(o.status));
+
+    // Contract Farming: what approved milestones earned the farmer and is not paid yet.
+    let contractEarnedPending = 0;
+    if (user.role === "farmer") {
+      const offers = await ctx.db
+        .query("advancePurchaseOffers")
+        .withIndex("by_farmer", (q) => q.eq("farmerId", user._id))
+        .take(100);
+      for (const offer of offers) {
+        const commitments = await ctx.db
+          .query("advancePurchaseCommitments")
+          .withIndex("by_offer", (q) => q.eq("offerId", offer._id))
+          .take(200);
+        for (const c of commitments) {
+          if (["funded", "in_production", "ready_for_delivery"].includes(c.status)) {
+            contractEarnedPending += Math.max(0, (c.earnedAmount ?? c.releasedAmount) - c.releasedAmount);
+          }
+        }
+      }
+    }
+
     return {
+      contractEarnedPending,
       inEscrowAsBuyer: openBought.reduce((sum, o) => sum + o.paidAmount, 0),
       inEscrowForMe: openSold.reduce((sum, o) => sum + o.paidAmount, 0),
       earnedPending: openSold.reduce((sum, o) => sum + earnedSoFar(o.totalAmount, o.milestones), 0),

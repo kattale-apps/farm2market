@@ -2851,6 +2851,8 @@ export default defineSchema({
     negotiationAllowed: v.boolean(),
     buyerCanProposePrice: v.boolean(),
     advancePercentage: v.optional(v.number()), // % of total due at funding vs balance later (display/config only in MVP)
+    // When the farmer is paid: once, when all milestones are approved (default), or at each approved milestone
+    settlementRule: v.optional(v.union(v.literal("at_completion"), v.literal("per_milestone"))),
     minCommitmentQty: v.optional(v.number()),
     maxCommitmentQty: v.optional(v.number()),
     offerExpiryDays: v.optional(v.number()),
@@ -3041,6 +3043,8 @@ export default defineSchema({
     walletUtid: v.optional(v.string()), // walletLedger utid for the funding debit
     releasedAmount: v.number(), // sum of milestone-release credits to the farmer for this commitment
     releasedDemoAmount: v.optional(v.number()), // demo part of releasedAmount (see convex/walletSplitShared.ts)
+    settlementRule: v.optional(v.union(v.literal("at_completion"), v.literal("per_milestone"))), // The config's rule when funded; missing = at_completion
+    earnedAmount: v.optional(v.number()), // Earned by approved milestones (paid and pending); missing = releasedAmount
     quantityDelivered: v.number(),
     fundedAt: v.optional(v.number()),
     createdAt: v.number(),

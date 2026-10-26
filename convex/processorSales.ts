@@ -8,8 +8,8 @@
  *     processor confirms it;
  *   - off_app: the processor logs a sale made outside the app; an exporter on
  *     the app can later claim it with the sale code to link it to a lot;
- *   - market: PROCESSED MARKETS, an opt-in listing that only verified
- *     exporters see; an exporter requests and the processor accepts.
+ *   - market: the retired PROCESSED MARKETS listing (old requests can still
+ *     be answered). Batches are now sold as lots on MarketSpace instead.
  * A completed sale can be linked to an export lot as a "bought from a
  * processor" source, carrying the trace back to the farms.
  *
@@ -25,7 +25,8 @@ import { outturnPercent, processorSuccessFeeUgx } from "./processorShared";
 import { assertEvidencePhotos, evidencePhotoValidator } from "./evidencePhotos";
 import { audit, chargeExportFee, exporterReadiness, getFeeSettings, isActiveExporter, notify, todayUganda } from "./exportMarkets";
 import { uniqueCode } from "./exportLots";
-import { getProcessorProfile, isActiveProcessor, processorCommunities, processorPublic, requireProcessorUser } from "./processors";
+import { lotListedKg } from "./batchLots";
+import { getProcessorProfile, processorCommunities, processorPublic, requireProcessorUser } from "./processors";
 
 type Ctx = QueryCtx | MutationCtx;
 
@@ -35,9 +36,11 @@ export async function committedKg(ctx: Ctx, batchId: Id<"processingBatches">, ex
   return sales.filter((s) => s._id !== exceptSaleId && s.status !== "declined" && s.status !== "cancelled").reduce((a, s) => a + s.kilos, 0);
 }
 
-async function availableKg(ctx: Ctx, batch: Doc<"processingBatches">, exceptSaleId?: Id<"processorSales">) {
+/** What is left of a completed batch to sell: its weight out less sales and lots listed. */
+export async function availableKg(ctx: Ctx, batch: Doc<"processingBatches">, exceptSaleId?: Id<"processorSales">) {
   if (batch.status !== "completed" || batch.weightOutKg === undefined) return 0;
-  return Math.max(0, Math.round((batch.weightOutKg - (await committedKg(ctx, batch._id, exceptSaleId))) * 10) / 10);
+  const taken = (await committedKg(ctx, batch._id, exceptSaleId)) + (await lotListedKg(ctx, batch._id));
+  return Math.max(0, Math.round((batch.weightOutKg - taken) * 10) / 10);
 }
 
 async function requireExporterAccount(ctx: Ctx, userId: Id<"users">) {
@@ -172,7 +175,7 @@ export const offerDirectSale = mutation({
       createdAt: getUgandaTime(),
     });
     const profile = await getProcessorProfile(ctx, user._id);
-    await notify(ctx, exporter._id, "Processed coffee offered to you", `${profile?.facilityName ?? `Processor ${user.alias}`} offered ${args.kilos} kg (batch ${batch.batchCode}). Accept it under Export Markets → Lots → Processor purchases.`);
+    await notify(ctx, exporter._id, "Processed coffee offered to you", `${profile?.facilityName ?? `Processor ${user.alias}`} offered ${args.kilos} kg (batch ${batch.batchCode}). Accept it under Global Bulk Markets → Lots → Processor purchases.`);
     return { saleId, saleCode };
   },
 });
@@ -255,21 +258,6 @@ export const cancelSale = mutation({
   },
 });
 
-export const setBatchMarketListing = mutation({
-  args: { userId: v.id("users"), batchId: v.id("processingBatches"), listed: v.boolean(), askingPricePerKgUgx: v.optional(v.number()) },
-  handler: async (ctx, args) => {
-    const batch = await ctx.db.get(args.batchId);
-    if (!batch || batch.processorId !== args.userId) throw new Error("Batch not found");
-    if (args.listed) {
-      if (!(await isActiveProcessor(ctx, args.userId, todayUganda()))) throw new Error("Only a verified, live processor can list in PROCESSED MARKETS");
-      if ((await availableKg(ctx, batch)) <= 0) throw new Error("Nothing of this batch is left to sell");
-      if (args.askingPricePerKgUgx !== undefined && !(args.askingPricePerKgUgx > 0 && args.askingPricePerKgUgx < 10_000_000)) throw new Error("Price looks wrong");
-    }
-    await ctx.db.patch(batch._id, { marketListed: args.listed || undefined, askingPricePerKgUgx: args.askingPricePerKgUgx, updatedAt: getUgandaTime() });
-    return { success: true };
-  },
-});
-
 export const listMySales = query({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
@@ -283,9 +271,11 @@ export const listMySales = query({
         sellable.push({
           _id: b._id,
           batchCode: b.batchCode,
+          crop: b.crop,
           outputForm: b.outputForm,
           grade: b.grade ?? null,
           availableKg: available,
+          photoCount: b.photos.length,
           traceLevel: b.traceLevel,
           evidenceStatus: b.evidenceStatus,
           marketListed: b.marketListed === true,
@@ -380,72 +370,3 @@ export const listMyProcessorPurchases = query({
   },
 });
 
-/** PROCESSED MARKETS: listed batches from live processors, for verified exporters only. */
-export const listProcessedMarket = query({
-  args: { userId: v.id("users"), today: v.string() },
-  handler: async (ctx, args) => {
-    const today = isIsoDate(args.today) ? args.today : todayUganda();
-    if (!(await isActiveExporter(ctx, args.userId, today))) return { allowed: false as const, listings: [] };
-    const batches = await ctx.db.query("processingBatches").withIndex("by_marketListed", (q) => q.eq("marketListed", true)).take(300);
-    const live = new Map<string, boolean>();
-    const listings = [];
-    for (const b of batches) {
-      const key = String(b.processorId);
-      if (!live.has(key)) live.set(key, await isActiveProcessor(ctx, b.processorId, today));
-      if (!live.get(key)) continue;
-      const available = await availableKg(ctx, b);
-      if (available <= 0) continue;
-      listings.push({
-        batchId: b._id,
-        batchCode: b.batchCode,
-        crop: b.crop,
-        outputForm: b.outputForm,
-        coffeeType: b.coffeeType ?? null,
-        grade: b.grade ?? null,
-        processingMethod: b.processingMethod ?? null,
-        moisturePercent: b.moisturePercent ?? null,
-        outturnPercent: outturnPercent(b.weightInKg, b.weightOutKg),
-        availableKg: available,
-        askingPricePerKgUgx: b.askingPricePerKgUgx ?? null,
-        traceLevel: b.traceLevel,
-        evidenceVerified: b.evidenceStatus === "approved",
-        coverUrl: b.photos[0] ? await ctx.storage.getUrl(b.photos[0].storageId) : null,
-        processor: await processorPublic(ctx, b.processorId),
-      });
-    }
-    return { allowed: true as const, listings };
-  },
-});
-
-export const requestFromProcessedMarket = mutation({
-  args: { userId: v.id("users"), batchId: v.id("processingBatches"), kilos: v.number(), pricePerKgUgx: v.optional(v.number()), notes: v.optional(v.string()) },
-  handler: async (ctx, args) => {
-    const exporter = await requireExporterAccount(ctx, args.userId);
-    if (!(await isActiveExporter(ctx, exporter._id, todayUganda()))) throw new Error("Only verified, live exporters can buy in PROCESSED MARKETS");
-    const batch = await ctx.db.get(args.batchId);
-    if (!batch || batch.marketListed !== true) throw new Error("This batch is not listed");
-    const saleDate = todayUganda();
-    const price = args.pricePerKgUgx ?? batch.askingPricePerKgUgx;
-    checkSaleInput(args.kilos, price, saleDate);
-    const available = await availableKg(ctx, batch);
-    if (args.kilos > available) throw new Error(`Only ${available} kg is available`);
-    const saleCode = await newSaleCode(ctx);
-    const saleId = await ctx.db.insert("processorSales", {
-      saleCode,
-      processorId: batch.processorId,
-      batchId: batch._id,
-      kilos: args.kilos,
-      pricePerKgUgx: price,
-      saleDate,
-      mode: "market",
-      exporterId: exporter._id,
-      status: "requested",
-      receiptPhotos: [],
-      notes: args.notes?.trim().slice(0, 1000) || undefined,
-      createdBy: exporter._id,
-      createdAt: getUgandaTime(),
-    });
-    await notify(ctx, batch.processorId, "PROCESSED MARKETS request", `Exporter ${exporter.alias} requested ${args.kilos} kg of batch ${batch.batchCode}. Answer it under Sales.`);
-    return { saleId, saleCode };
-  },
-});

@@ -1680,7 +1680,7 @@ export const joinCommunity = mutation({
         type: "system",
         category: "export_markets",
         title: "Exporter joined your exporter community",
-        message: `Exporter ${user.alias} joined ${community.name}. Admit them as an exporter from the community's Export Markets tab.`,
+        message: `Exporter ${user.alias} joined ${community.name}. Admit them as an exporter from the community's Global Bulk Markets tab.`,
         read: false,
         createdAt: getUgandaTime(),
       });

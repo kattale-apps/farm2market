@@ -173,6 +173,24 @@ export const seedExporterStock = internalMutation({
   },
 });
 
+/** Gives a test account demo money (never cashable), e.g. the test exporter buying lots in the trace walkthrough. */
+export const fundTestWallet = internalMutation({
+  args: { mode: v.string(), who: v.union(v.literal("buyer"), v.literal("exporter")), demoUGX: v.number() },
+  handler: async (ctx, args) => {
+    assertTestMode(args.mode);
+    const userId = args.who === "buyer" ? await testUser(ctx, BUYER_EMAIL, "buyer", "LOTCHECK-B") : await testUser(ctx, EXPORTER_EMAIL, "trader", "LOTCHECK-E", true);
+    await postWallet(ctx, {
+      userId,
+      utid: generateUTID("admin"),
+      type: "capital_deposit",
+      amount: args.demoUGX,
+      rule: { kind: "all" }, // Demo money: can be traded with, never cashed out
+      metadata: { source: "admin_demo_deposit", reason: "Trace walkthrough (test account)" },
+    });
+    return { userId };
+  },
+});
+
 /** Stands in for a card's MarketSpace time running out (test sellers only). */
 export const expireCard = internalMutation({
   args: { mode: v.string(), cardId: v.id("marketCards") },
@@ -268,6 +286,10 @@ export const cleanup = internalMutation({
       for (const row of await ctx.db.query("sessions").withIndex("by_user", (q) => q.eq("userId", user._id)).collect()) {
         await ctx.db.delete(row._id);
         count("sessions");
+      }
+      for (const row of await ctx.db.query("purchaseReceipts").withIndex("by_buyerId", (q) => q.eq("buyerId", user._id)).collect()) {
+        await ctx.db.delete(row._id);
+        count("purchaseReceipts");
       }
       for (const row of await ctx.db.query("traderInventory").withIndex("by_trader", (q) => q.eq("traderId", user._id)).collect()) {
         await ctx.db.delete(row._id);

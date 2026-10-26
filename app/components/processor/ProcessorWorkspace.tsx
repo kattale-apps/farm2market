@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
 import { useAction, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "../../../convex/_generated/api";
@@ -9,11 +11,14 @@ import { DEFAULT_EXPORT_CROP, EXPORT_CROPS, ugandaDateFromInstant } from "../../
 import { PROCESSING_CAPABILITIES, STORAGE_TYPES } from "../../../convex/processorShared";
 import { formatUgandaDateTime } from "../../utils/timeUtils";
 import { LiveGps } from "./LiveGps";
-import { HomeTabButton, TabBackBar, useTabHistory } from "../nav/TabNav";
+import { TabBackBar, useTabHistory } from "../nav/TabNav";
+import { EnvelopeIcon, MenuIcon } from "../icons/HeaderIcons";
+import { menuRainbowColor } from "../../utils/menuAccentColors";
 import { FONT, card, input, label, button, StatusPill, Notice, PageHeader, formatUgx, uploadToConvex, errorText } from "../exportMarkets/ui";
 import { PhotoSetCapture, CapturedPhoto, uploadEvidencePhotos } from "../exportMarkets/PhotoSetCapture";
 import { ProcessorIntakeTab, ProcessorBatchesTab } from "./ProcessorOperations";
 import { ProcessorSalesTab } from "./ProcessorSales";
+import { ProcessorRecordsTab } from "./ProcessorRecords";
 import { BuyerOffersPanel } from "../market/BuyerOffersPanel";
 import { LotLedger } from "../lots/LotLedger";
 import { MyStock } from "../lots/MyStock";
@@ -24,22 +29,23 @@ export const PROCESSOR_SOFT = "#fff8e1";
 export const PROCESSOR_BORDER = "#ffd54f";
 
 type Msg = { tone: "error" | "success" | "info"; text: string } | null;
-type Tab = "overview" | "profile" | "documents" | "buying" | "intake" | "batches" | "sales" | "lots";
+type Tab = "overview" | "profile" | "documents" | "buying" | "intake" | "batches" | "sales" | "lots" | "records";
 
-const TABS: { key: Tab; label: string; needs: string }[] = [
-  { key: "overview", label: "Overview", needs: "Your progress to becoming a verified processor, step by step." },
-  { key: "profile", label: "Facility profile", needs: "Business details, facility location with GPS, what you process, capacity, storage and facility photos." },
-  { key: "documents", label: "Documents & fee", needs: "Business registration, TIN and processing licence, with expiry dates, and the verification fee." },
-  { key: "buying", label: "Buying prices", needs: "Post this week's buying price per form, answer farmers' delivery bookings and pay them in cash with a receipt." },
-  { key: "intake", label: "Intake", needs: "Record coffee you buy from farmers, on the app or not, with photos and the farm location." },
-  { key: "batches", label: "Processing", needs: "Turn intake into processed batches: weight in, weight out and the outturn, with photos." },
-  { key: "sales", label: "Sales", needs: "Sell processed batches to exporters directly, log sales made outside the app, or list in PROCESSED MARKETS." },
-  { key: "lots", label: "Lots & ledger", needs: "List lots for sale with payment steps, follow the lots you bought and sold, and see your stock and where it came from." },
+const TABS: { key: Tab; label: string; icon: string; needs: string }[] = [
+  { key: "overview", label: "Overview", icon: "🏠", needs: "Your progress to becoming a verified processor, step by step." },
+  { key: "profile", label: "Facility Profile", icon: "🏭", needs: "Business details, facility location with GPS, what you process, capacity, storage and facility photos." },
+  { key: "documents", label: "Documents and Fee", icon: "📄", needs: "Business registration, TIN and processing licence, with expiry dates, and the verification fee." },
+  { key: "buying", label: "Post Price to Farmers", icon: "🧺", needs: "Post this week's buying price per form, answer farmers' delivery bookings and pay them in cash with a receipt." },
+  { key: "intake", label: "Intake", icon: "⚖️", needs: "Record coffee you buy from farmers, on the app or not, with photos and the farm location." },
+  { key: "batches", label: "Processing", icon: "⚙️", needs: "Turn intake into processed batches: weight in, weight out and the outturn, with photos." },
+  { key: "sales", label: "Sales", icon: "🤝", needs: "Sell processed batches on MarketSpace first, or directly to an exporter, or log a sale made outside the app." },
+  { key: "lots", label: "Lots and Ledgers", icon: "📒", needs: "List lots for sale with payment steps, follow the lots you bought and sold, and see your stock and where it came from." },
+  { key: "records", label: "Records and Reports", icon: "📊", needs: "What you bought, processed and sold, with totals and the outturn, and a spreadsheet to download." },
 ];
 
 /** Each checklist item and where the processor goes to act on it. */
 const CHECKS: { key: string; text: string; tab?: Tab; who?: string }[] = [
-  { key: "joinedCommunity", text: "Joined a community", who: "Join one from Communities (menu: Join A Community)." },
+  { key: "joinedCommunity", text: "Joined a community", who: "Join one from the ☰ menu: Communities." },
   { key: "admitted", text: "Step 1: accepted by the community admin", who: "The community admin does this after you join; saving and uploading open." },
   { key: "profileSaved", text: "Facility profile saved", tab: "profile" },
   { key: "facilityLocated", text: "Facility GPS location and photos added", tab: "profile" },
@@ -51,6 +57,107 @@ const CHECKS: { key: string; text: string; tab?: Tab; who?: string }[] = [
 ];
 
 export type ProcessorWS = FunctionReturnType<typeof api.processors.getMyProcessorWorkspace>;
+
+/** Pages outside the workspace that processors use too. */
+const MENU_LINKS: { href: string; label: string }[] = [
+  { href: "/marketspace", label: "🗺️ MarketSpace" },
+  { href: "/wallet", label: "💰 My Wallet and FarmCoin" },
+  { href: "/transport", label: "🚚 Book Transport" },
+  { href: "/farmer/communities", label: "🌾 My Communities" },
+];
+
+/**
+ * The header's ☰ menu and messages button, like every other dashboard: the
+ * workspace tabs and the pages processors share with other roles.
+ */
+function ProcessorHeaderMenu({ userId, tab, go }: { userId: Id<"users">; tab: Tab; go: (t: Tab) => void }) {
+  const router = useRouter();
+  const threads = useQuery(api.messages.getUserMessageThreads, { userId });
+  const [open, setOpen] = useState(false);
+  const [slots, setSlots] = useState<{ more: HTMLElement | null; msg: HTMLElement | null }>({ more: null, msg: null });
+  useEffect(() => {
+    setSlots({ more: document.getElementById("dashboard-more-slot"), msg: document.getElementById("dashboard-msg-slot") });
+  }, []);
+  const unread = Array.isArray(threads) ? threads.reduce((sum: number, t: { unreadCount?: number }) => sum + (t.unreadCount || 0), 0) : 0;
+  const row = (idx: number, active: boolean): React.CSSProperties => ({
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    width: "100%",
+    minHeight: 52,
+    padding: "0.85rem 0.9rem",
+    marginBottom: "0.55rem",
+    background: active ? "#fff8e1" : "#fff",
+    border: `2px solid ${menuRainbowColor(idx)}`,
+    borderLeft: `7px solid ${menuRainbowColor(idx)}`,
+    borderRadius: 10,
+    cursor: "pointer",
+    fontFamily: FONT,
+    fontSize: "1rem",
+    fontWeight: 600,
+    color: "#2c2c2c",
+    textAlign: "left",
+  });
+
+  const menu = (
+    <div style={{ display: "inline-block" }}>
+      <button type="button" onClick={() => setOpen((v) => !v)} title="Menu" aria-label="Menu" aria-expanded={open} className={`f2m-icon-btn${open ? " is-active" : ""}`}>
+        <MenuIcon />
+      </button>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 999 }} />
+          <div className="f2m-dropdown" style={{ padding: "0.6rem" }}>
+            {TABS.map((t, i) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  go(t.key);
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                style={row(i, tab === t.key)}
+              >
+                <span>{t.icon} {t.label}</span>
+                {tab === t.key && <span style={{ color: PROCESSOR_HEADING, fontSize: "0.78rem" }}>Open</span>}
+              </button>
+            ))}
+            {MENU_LINKS.map((l, i) => (
+              <button
+                key={l.href}
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  router.push(l.href);
+                }}
+                style={row(TABS.length + i, false)}
+              >
+                <span>{l.label}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+  const messages = (
+    <button type="button" onClick={() => router.push("/messages")} title="Messages" className="f2m-icon-btn" style={{ position: "relative" }}>
+      <EnvelopeIcon />
+      {unread > 0 && (
+        <span style={{ position: "absolute", top: -2, right: -2, background: "#d32f2f", color: "#fff", borderRadius: "50%", width: 20, height: 20, fontSize: "0.7rem", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", border: "1.5px solid #fff" }}>
+          {unread > 9 ? "9+" : unread}
+        </span>
+      )}
+    </button>
+  );
+  return (
+    <>
+      {slots.more && createPortal(menu, slots.more)}
+      {slots.msg && createPortal(messages, slots.msg)}
+    </>
+  );
+}
 
 export function ProcessorWorkspace({ userId }: { userId: Id<"users"> }) {
   const [today] = useState(() => ugandaDateFromInstant(Date.now()));
@@ -81,20 +188,10 @@ export function ProcessorWorkspace({ userId }: { userId: Id<"users"> }) {
           </span>
         </div>
       )}
+      <ProcessorHeaderMenu userId={userId} tab={tab} go={go} />
       {msg && <Notice tone={msg.tone}>{msg.text}</Notice>}
 
-      {/* Every tab is open for exploring; each says what it needs. */}
-      <div role="tablist" style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center", marginBottom: "0.75rem" }}>
-        {TABS.map((t) =>
-          t.key === "overview" ? (
-            <HomeTabButton key={t.key} active={tab === t.key} color={PROCESSOR_HEADING} label={t.label} onClick={() => go(t.key)} />
-          ) : (
-            <button key={t.key} role="tab" aria-selected={tab === t.key} style={tabButton(tab === t.key)} onClick={() => go(t.key)}>
-              {t.label}
-            </button>
-          )
-        )}
-      </div>
+      {/* Every tab is open for exploring, from the ☰ menu; each says what it needs. */}
       <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap", marginBottom: "1.25rem" }}>
         {tab !== "overview" && (
           <TabBackBar
@@ -109,7 +206,10 @@ export function ProcessorWorkspace({ userId }: { userId: Id<"users"> }) {
           />
         )}
         <div style={{ flex: 1, minWidth: 220, background: PROCESSOR_SOFT, border: `1px solid ${PROCESSOR_BORDER}`, borderRadius: 12, padding: "0.7rem 0.9rem", fontSize: "0.88rem", color: PROCESSOR_HEADING }}>
-          <b>This tab:</b> {TABS.find((t) => t.key === tab)?.needs}
+          <b>
+            {TABS.find((t) => t.key === tab)?.icon} {tabLabel(tab)}:
+          </b>{" "}
+          {TABS.find((t) => t.key === tab)?.needs} {tab === "overview" && <>Open the other parts from the ☰ menu at the top.</>}
         </div>
       </div>
 
@@ -126,7 +226,7 @@ export function ProcessorWorkspace({ userId }: { userId: Id<"users"> }) {
                 </>
               ) : (
                 <>
-                  You can explore every tab now. To start, join a community from Communities. The community admin accepts you, a Storage
+                  You can explore every part from the ☰ menu now. To start, join a community (☰ menu: Communities). The community admin accepts you, a Storage
                   Officer checks your facility, and a super admin completes your verification.
                 </>
               )}
@@ -148,8 +248,9 @@ export function ProcessorWorkspace({ userId }: { userId: Id<"users"> }) {
           {tab === "buying" && <BuyerOffersPanel userId={userId} />}
           {tab === "intake" && <ProcessorIntakeTab userId={userId} member={member} today={today} crops={processorCrops(ws)} setMsg={setMsg} />}
           {tab === "batches" && <ProcessorBatchesTab userId={userId} member={member} today={today} crops={processorCrops(ws)} setMsg={setMsg} />}
-          {tab === "sales" && <ProcessorSalesTab userId={userId} member={member} active={ws.isActiveProcessor} today={today} setMsg={setMsg} />}
-          {tab === "lots" && <ProcessorLotsTab userId={userId} />}
+          {tab === "sales" && <ProcessorSalesTab userId={userId} member={member} today={today} setMsg={setMsg} />}
+          {tab === "lots" && <ProcessorLotsTab userId={userId} go={go} />}
+          {tab === "records" && <ProcessorRecordsTab userId={userId} />}
         </>
       )}
     </div>
@@ -169,15 +270,6 @@ function processorCrops(ws: ProcessorWS) {
   const open = ws.crops.filter((c) => c.active);
   const mine = ws.profile ? open.filter((c) => ws.profile!.crops.includes(c.key)) : open;
   return (mine.length ? mine : open).map((c) => ({ key: c.key, label: c.label }));
-}
-
-export function tabButton(active: boolean): React.CSSProperties {
-  return {
-    ...button(active ? "primary" : "secondary"),
-    background: active ? PROCESSOR_ACCENT : "#fff",
-    borderColor: PROCESSOR_ACCENT,
-    color: active ? "#3e2723" : PROCESSOR_HEADING,
-  };
 }
 
 type CardProps = { ws: ProcessorWS; userId: Id<"users">; setMsg: (m: Msg) => void };
@@ -747,12 +839,17 @@ function DocumentSlot({ slot, userId, setMsg, canUpload }: { slot: ProcessorWS["
 }
 
 /** Lots: list them with payment steps on the lots page; follow orders and stock here. */
-function ProcessorLotsTab({ userId }: { userId: Id<"users"> }) {
+function ProcessorLotsTab({ userId, go }: { userId: Id<"users">; go: (t: Tab) => void }) {
   return (
     <>
       <div style={card}>
-        <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
-          <a href="/farmer/farm2market" style={{ color: PROCESSOR_HEADING, fontWeight: 700 }}>📒 List a lot for sale →</a>
+        {/* Lots sell on MarketSpace first; listing and buying follow */}
+        <a href="/marketspace?tab=mine" style={{ display: "block", textAlign: "center", padding: "0.8rem", borderRadius: 10, background: "#2e7d32", color: "#fff", fontWeight: 800, textDecoration: "none", marginBottom: "0.6rem" }}>
+          🗺️ My lots on MarketSpace
+        </a>
+        <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", marginBottom: "0.75rem", fontSize: "0.9rem" }}>
+          <button type="button" onClick={() => go("sales")} style={{ border: "none", background: "none", padding: 0, color: PROCESSOR_HEADING, fontWeight: 700, cursor: "pointer", fontFamily: FONT, fontSize: "inherit" }}>⚙️ Sell a processed batch →</button>
+          <a href="/farmer/farm2market" style={{ color: PROCESSOR_HEADING, fontWeight: 700 }}>📒 List other stock as lots →</a>
           <a href="/marketspace?view=produce" style={{ color: PROCESSOR_HEADING, fontWeight: 700 }}>🛒 Buy lots from farmers →</a>
         </div>
         <LotLedger userId={userId} />

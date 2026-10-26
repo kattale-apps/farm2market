@@ -7,6 +7,15 @@ import { FONT, formatUGX } from "./shared";
 
 export type MarketCardData = FunctionReturnType<typeof api.marketspace.discover>["page"][number];
 
+/** How Discover lays cards out: one per row, two small side by side, or one big card to swipe. */
+export type CardLayout = "list" | "grid" | "swipe";
+
+const SIZES: Record<CardLayout, { photo: number; title: string; text: string }> = {
+  list: { photo: 190, title: "1.05rem", text: "0.85rem" },
+  grid: { photo: 110, title: "0.88rem", text: "0.76rem" },
+  swipe: { photo: 300, title: "1.3rem", text: "0.95rem" },
+};
+
 const STOCK: Record<string, { text: string; bg: string; fg: string }> = {
   own_farm: { text: "From the farm", bg: "#e8f5e9", fg: "#1b5e20" },
   in_app: { text: "Traced", bg: "#e3f2fd", fg: "#0d47a1" },
@@ -19,7 +28,8 @@ function ago(createdAt: number, now: number): string {
 }
 
 /** One post on the Discover board. Lite cards show bands and a lock instead of the details. */
-export function MarketCard({ card, now }: { card: MarketCardData; now: number }) {
+export function MarketCard({ card, now, layout = "list" }: { card: MarketCardData; now: number; layout?: CardLayout }) {
+  const size = SIZES[layout];
   const stock = card.stockSource ? STOCK[card.stockSource] : null;
   const pill = (text: string, bg: string, fg: string) => (
     <span style={{ padding: "0.12rem 0.5rem", borderRadius: 999, background: bg, color: fg, fontSize: "0.68rem", fontWeight: 800, whiteSpace: "nowrap" }}>{text}</span>
@@ -38,9 +48,9 @@ export function MarketCard({ card, now }: { card: MarketCardData; now: number })
   return (
     <Link
       href={`/marketspace/p/${card.cardId}`}
-      style={{ display: "flex", flexDirection: "column", borderRadius: 14, overflow: "hidden", background: "#fff", border: "1px solid #e3e8e0", textDecoration: "none", color: "#222", fontFamily: FONT, boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}
+      style={{ display: "flex", flexDirection: "column", height: "100%", boxSizing: "border-box", borderRadius: 14, overflow: "hidden", background: "#fff", border: "1px solid #e3e8e0", textDecoration: "none", color: "#222", fontFamily: FONT, boxShadow: "0 4px 14px rgba(0,0,0,0.14)" }}
     >
-      <div style={{ position: "relative", height: 120, background: "#eef3ec" }}>
+      <div style={{ position: "relative", height: size.photo, flexShrink: 0, background: "#eef3ec" }}>
         {card.thumbUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={card.thumbUrl} alt={card.title} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
@@ -55,15 +65,15 @@ export function MarketCard({ card, now }: { card: MarketCardData; now: number })
         )}
       </div>
       <div style={{ padding: "0.55rem 0.65rem", display: "flex", flexDirection: "column", gap: "0.3rem" }}>
-        <div style={{ fontWeight: 800, fontSize: "0.95rem", lineHeight: 1.25 }}>{card.title}</div>
+        <div style={{ fontWeight: 800, fontSize: size.title, lineHeight: 1.25 }}>{card.title}</div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem" }}>
           {pill(card.sellerCategory, "#f1f3f0", "#333")}
           {card.isBulk && pill(`📦 Bulk${card.bulkLabel ? ` · ${card.bulkLabel}` : ""}`, "#ede7f6", "#4527a0")}
           {stock && pill(stock.text, stock.bg, stock.fg)}
         </div>
-        {price && <div style={{ fontWeight: 800, color: "#1b5e20", fontSize: "0.9rem" }}>{price}</div>}
-        {quantity && <div style={{ fontSize: "0.8rem", color: "#555" }}>{quantity}</div>}
-        <div style={{ fontSize: "0.75rem", color: "#777" }}>
+        {price && <div style={{ fontWeight: 800, color: "#1b5e20", fontSize: size.text }}>{price}</div>}
+        {quantity && <div style={{ fontSize: size.text, color: "#555" }}>{quantity}</div>}
+        <div style={{ fontSize: size.text, color: "#777" }}>
           📍 {card.district || "Uganda"} · {ago(card.createdAt, now)}
         </div>
       </div>

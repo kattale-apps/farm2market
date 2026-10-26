@@ -19,7 +19,7 @@ export default function VendorBuyingPage() {
         <Link href="/" style={{ color: "#fff", textDecoration: "none", fontSize: "1.3rem" }} aria-label="Back">
           ←
         </Link>
-        <h1 style={{ margin: 0, fontSize: "clamp(1rem, 4vw, 1.2rem)" }}>🧺 Buying from farmers</h1>
+        <h1 style={{ margin: 0, fontSize: "clamp(1rem, 4vw, 1.2rem)" }}>🧺 Post Price to Farmers</h1>
       </div>
       <div style={{ padding: "1rem", maxWidth: 760, margin: "0 auto" }}>
         <BuyerOffersPanel userId={userId} />

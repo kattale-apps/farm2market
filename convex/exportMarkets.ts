@@ -86,7 +86,7 @@ export async function requireExportCommunityAdmin(
   const community = await ctx.db.get(communityId);
   if (!community) throw new Error("Community not found");
   if (community.exportMarketsEnabled !== true) {
-    throw new Error("Export Markets is not switched on for this community");
+    throw new Error("Global Bulk Markets is not switched on for this community");
   }
   if (!adminManagesCommunity(admin, community)) {
     throw new Error("Not authorized to manage this exporter community");
@@ -456,7 +456,7 @@ export const getMyExporterWorkspace = query({
   args: { userId: v.id("users"), today: v.string() },
   handler: async (ctx, args) => {
     const user = await ctx.db.get(args.userId);
-    if (!user || user.role !== "trader") throw new Error("Only trader accounts can use Export Markets");
+    if (!user || user.role !== "trader") throw new Error("Only trader accounts can use Global Bulk Markets");
     const today = isIsoDate(args.today) ? args.today : todayUganda();
     const r = await exporterReadiness(ctx, user, today);
     const fees = await getFeeSettings(ctx);
@@ -531,7 +531,7 @@ export const saveExporterProfile = mutation({
     if (!user || user.role !== "trader") throw new Error("Only trader accounts can become exporters");
     const communities = await exportCommunitiesForMember(ctx, user._id);
     if (!communities.some((c) => c._id === args.communityId)) {
-      throw new Error("Your community admin must accept you for Export Markets first");
+      throw new Error("Your community admin must accept you for Global Bulk Markets first");
     }
 
     const clean = (s: string | undefined) => (s ?? "").trim();
@@ -768,7 +768,7 @@ export const submitExporterProfile = mutation({
     if (!r.profile) throw new Error("Save your exporter profile first");
     if (r.profile.status === "approved") throw new Error("Your exporter profile is already approved");
     if (r.profile.status === "suspended") throw new Error("Your exporter profile is suspended. Contact an admin.");
-    if (!r.checks.admittedAsExporter) throw new Error("Your community admin must accept you for Export Markets first");
+    if (!r.checks.admittedAsExporter) throw new Error("Your community admin must accept you for Global Bulk Markets first");
     // Submission is ongoing: the exporter can submit early and keep adding
     // documents; admins review each one as it arrives. Approval still needs
     // every required document verified and the fee paid.
@@ -905,8 +905,8 @@ export const addTraderToExportCommunity = mutation({
     await notify(
       ctx,
       args.traderId,
-      "Export Markets unlocked",
-      `You were admitted as an exporter in ${community.name}. Open Export Markets on your dashboard to set up your exporter profile and documents.`
+      "Global Bulk Markets unlocked",
+      `You were admitted as an exporter in ${community.name}. Open Global Bulk Markets on your dashboard to set up your exporter profile and documents.`
     );
     await audit(ctx, "member_added", args.adminId, { targetUserId: args.traderId, targetId: String(args.communityId) });
     return { success: true };
@@ -1147,7 +1147,7 @@ export const reviewExporterProfile = mutation({
     let status: Doc<"exporterProfiles">["status"];
     if (args.decision === "approve" || args.decision === "reinstate") {
       const r = await exporterReadiness(ctx, user, todayUganda());
-      if (!r.checks.admittedAsExporter) throw new Error("Accept the trader for Export Markets first");
+      if (!r.checks.admittedAsExporter) throw new Error("Accept the trader for Global Bulk Markets first");
       if (!r.checks.requiredDocsVerified) throw new Error("Verify every required document first");
       if (!r.checks.feeOk) throw new Error("The verification fee is not paid");
       if (args.decision === "reinstate" && profile.status !== "suspended") throw new Error("Only a suspended exporter can be reinstated");

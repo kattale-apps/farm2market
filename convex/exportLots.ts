@@ -53,6 +53,7 @@ import {
   outturnPercent,
 } from "./processorShared";
 import { batchIntakes } from "./processorOperations";
+import { originsOfStock, traceSummary } from "./traceChain";
 
 type Ctx = QueryCtx | MutationCtx;
 
@@ -194,23 +195,32 @@ export async function plotsForSource(ctx: Ctx, source: Doc<"exportLotSources">):
     return plots;
   }
   if (source.kind === "platform_purchase" && source.inventoryId) {
-    const inv = await ctx.db.get(source.inventoryId);
-    if (!inv) return [];
-    // Split the allocated kilos across the farmers who supplied the block.
-    const perFarmer = new Map<string, number>();
-    for (const unitId of inv.listingUnitIds.slice(0, 300)) {
-      const unit = await ctx.db.get(unitId);
-      if (!unit) continue;
-      const listing = await ctx.db.get(unit.listingId);
-      if (!listing?.farmerId) continue;
-      const key = String(listing.farmerId);
-      perFarmer.set(key, (perFarmer.get(key) ?? 0) + (listing.unitSize || 10));
-    }
-    const total = [...perFarmer.values()].reduce((a, b) => a + b, 0) || 1;
+    // Stock bought in the app: walk back through lot orders, processors' batches
+    // and farmer receipts to the farms (traceChain.ts), sharing out the kilos.
     const plots: FarmPlot[] = [];
-    for (const [farmerId, kg] of perFarmer) {
-      const farmer = await ctx.db.get(farmerId as Id<"users">);
-      plots.push(farmerPlot(source, farmer, Math.round((source.kilos * kg) / total)));
+    for (const origin of await originsOfStock(ctx, source.inventoryId, source.kilos)) {
+      if (origin.kind === "platform_farmer") {
+        plots.push(farmerPlot(source, await ctx.db.get(origin.farmerId), Math.round(origin.kilos)));
+      } else if (origin.kind === "declared_farm") {
+        const intake = await ctx.db.get(origin.intakeId);
+        const base = {
+          sourceId: source._id,
+          kind: source.kind,
+          label: `Declared farm: ${intake?.farmerName ?? "farmer"} (via processor)`,
+          district: intake?.district,
+          village: intake?.village,
+          lat: intake?.lat,
+          lng: intake?.lng,
+          areaHa: intake?.areaHa,
+          hasPolygon: !!intake?.polygonGeoJson,
+          polygonGeoJson: intake?.polygonGeoJson,
+          kilos: Math.round(origin.kilos),
+        };
+        plots.push({ ...base, eudrIssue: plotIssue(base) });
+      } else {
+        const base = { sourceId: source._id, kind: source.kind, label: `Not traced to a farm (${origin.reason})`, hasPolygon: false, kilos: Math.round(origin.kilos) };
+        plots.push({ ...base, eudrIssue: "not traced to a farm" });
+      }
     }
     return plots;
   }
@@ -229,6 +239,9 @@ export async function recomputeLotSummary(ctx: MutationCtx, lotId: Id<"exportLot
       const sale = await ctx.db.get(s.processorSaleId);
       const batch = sale ? await ctx.db.get(sale.batchId) : null;
       levels.push(batch?.traceLevel ?? "declared");
+    } else if (s.kind === "platform_purchase" && s.inventoryId) {
+      const t = traceSummary(await originsOfStock(ctx, s.inventoryId, s.kilos));
+      levels.push(t.declaredFarmsKg + t.untracedKg === 0 ? "platform_traced" : t.appFarmsKg > 0 ? "partly_declared" : "declared");
     } else levels.push("platform_traced");
   }
   const traceLevel = combineTraceLevels(levels);
@@ -666,6 +679,8 @@ export const addLotSource = mutation({
       const allocated = allocations.reduce((a, s) => a + s.kilos, 0);
       if (allocated + row.kilos > inv.totalKilos) throw new Error(`Only ${inv.totalKilos - allocated} kg of this block is left to allocate`);
       row.inventoryId = inv._id;
+      const viaBatch = (await originsOfStock(ctx, inv._id, row.kilos)).find((o) => o.kind !== "untraced" && o.batchId);
+      if (viaBatch && viaBatch.kind !== "untraced" && viaBatch.batchId) processorBatch = await ctx.db.get(viaBatch.batchId);
     } else if (args.kind === "advance_commitment") {
       if (!args.commitmentId) throw new Error("Choose a commitment");
       const c = await ctx.db.get(args.commitmentId);

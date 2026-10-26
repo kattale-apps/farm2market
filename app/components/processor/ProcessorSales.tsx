@@ -6,6 +6,10 @@ import type { FunctionReturnType } from "convex/server";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { formLabel } from "../../../convex/processorShared";
+import { EXPORT_CROPS } from "../../../convex/exportMarketsShared";
+import { defaultPlan, type PlanStep } from "../../../convex/lotOrdersShared";
+import { LotTermsFields, planProblem } from "../lots/LotTermsFields";
+import { useMarketspaceSession } from "../../marketspace/components/shared";
 import { card, input, label, button, StatusPill, Notice, errorText, formatUgx } from "../exportMarkets/ui";
 import { PhotoSetCapture, CapturedPhoto } from "../exportMarkets/PhotoSetCapture";
 import { PROCESSOR_HEADING, PROCESSOR_SOFT, PROCESSOR_BORDER, chip, uploadEvidencePhotos } from "./ProcessorWorkspace";
@@ -17,7 +21,7 @@ type Sellable = SalesData["sellable"][number];
 
 const MODE_TEXT: Record<string, string> = {
   direct: "Direct sale",
-  market: "PROCESSED MARKETS",
+  market: "Processed market (retired)",
   exporter_logged: "Logged by the exporter",
   off_app: "Sold outside the app",
 };
@@ -30,11 +34,11 @@ const STATUS_TEXT: Record<string, string> = {
   cancelled: "cancelled",
 };
 
-export function ProcessorSalesTab({ userId, member, active, today, setMsg }: { userId: Id<"users">; member: boolean; active: boolean; today: string; setMsg: (m: Msg) => void }) {
+export function ProcessorSalesTab({ userId, member, today, setMsg }: { userId: Id<"users">; member: boolean; today: string; setMsg: (m: Msg) => void }) {
   const data = useQuery(api.processorSales.listMySales, { userId });
   const respond = useMutation(api.processorSales.respondToSaleRequest);
   const cancel = useMutation(api.processorSales.cancelSale);
-  const [selling, setSelling] = useState<{ batch: Sellable; mode: "direct" | "off_app" } | null>(null);
+  const [selling, setSelling] = useState<{ batch: Sellable; mode: "marketspace" | "direct" | "off_app" } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const run = async (key: string, fn: () => Promise<unknown>, ok: string) => {
     setBusy(key);
@@ -51,11 +55,10 @@ export function ProcessorSalesTab({ userId, member, active, today, setMsg }: { u
   return (
     <>
       <div style={card}>
-        <h2 style={{ marginTop: 0, fontSize: "1.15rem", color: PROCESSOR_HEADING }}>Sell to exporters</h2>
+        <h2 style={{ marginTop: 0, fontSize: "1.15rem", color: PROCESSOR_HEADING }}>Sell your processed coffee</h2>
         <p style={{ fontSize: "0.85rem", color: "#607d8b", marginTop: 0 }}>
-          Nothing here is posted openly unless you choose to. Offer a batch straight to an exporter you deal with, log a sale you made outside the
-          app (the exporter can link it later with its sale code), or list a batch in <b>PROCESSED MARKETS</b>, which only verified exporters
-          see. If your company also exports, it uses a separate exporter account and can create lots there directly.
+          <b>MarketSpace</b> reaches every verified buyer, exporter, processor and vendor, who pay through escrow step by step. You can also
+          sell straight to an exporter you deal with, or log a sale you made outside the app. Nothing is listed until you choose.
         </p>
         {!member && <Notice tone="info">You can sell once a community admin accepts you as a processor.</Notice>}
         {data === undefined ? (
@@ -76,18 +79,27 @@ export function ProcessorSalesTab({ userId, member, active, today, setMsg }: { u
                 </span>
               </div>
               {member && (
-                <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginTop: "0.45rem" }}>
-                  <button style={button("primary")} onClick={() => setSelling({ batch: b, mode: "direct" })}>
-                    Offer to an exporter
+                <>
+                  {/* MarketSpace first; selling directly or off the app are the alternatives */}
+                  <button style={{ ...button("primary"), width: "100%", marginTop: "0.5rem", background: "#2e7d32", borderColor: "#2e7d32" }} onClick={() => setSelling({ batch: b, mode: "marketspace" })}>
+                    🗺️ Sell on MarketSpace
                   </button>
-                  <button style={button("secondary")} onClick={() => setSelling({ batch: b, mode: "off_app" })}>
-                    Log a sale outside the app
-                  </button>
-                </div>
+                  <div style={{ fontSize: "0.8rem", color: "#607d8b", margin: "0.5rem 0 0.3rem" }}>Or sell it yourself:</div>
+                  <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+                    <button style={button("secondary")} onClick={() => setSelling({ batch: b, mode: "direct" })}>
+                      Sell directly to an exporter
+                    </button>
+                    <button style={button("secondary")} onClick={() => setSelling({ batch: b, mode: "off_app" })}>
+                      Log a sale outside the app (vendor, buyer, anyone)
+                    </button>
+                  </div>
+                  <div style={{ fontSize: "0.78rem", color: "#78909c", marginTop: "0.35rem" }}>Not selling yet? Leave it here: it stays in your stock.</div>
+                </>
               )}
-              {member && <MarketListing batch={b} userId={userId} active={active} setMsg={setMsg} />}
               {selling?.batch._id === b._id &&
-                (selling.mode === "direct" ? (
+                (selling.mode === "marketspace" ? (
+                  <SellOnMarketSpace userId={userId} batch={b} setMsg={setMsg} onDone={() => setSelling(null)} />
+                ) : selling.mode === "direct" ? (
                   <DirectSaleForm userId={userId} batch={b} today={today} setMsg={setMsg} onDone={() => setSelling(null)} />
                 ) : (
                   <OffAppSaleForm userId={userId} batch={b} today={today} setMsg={setMsg} onDone={() => setSelling(null)} />
@@ -138,41 +150,163 @@ export function ProcessorSalesTab({ userId, member, active, today, setMsg }: { u
   );
 }
 
-function MarketListing({ batch, userId, active, setMsg }: { batch: Sellable; userId: Id<"users">; active: boolean; setMsg: (m: Msg) => void }) {
-  const setListing = useMutation(api.processorSales.setBatchMarketListing);
+const BAG_CHOICES = [50, 60];
+
+/**
+ * Put a processed batch on MarketSpace as lots: bag size, bags per lot, how
+ * many lots and the price. The lots hold the batch's kilos; buyers pay
+ * through escrow in the payment steps, which can be changed here.
+ */
+function SellOnMarketSpace({ userId, batch, setMsg, onDone }: { userId: Id<"users">; batch: Sellable; setMsg: (m: Msg) => void; onDone: () => void }) {
+  const session = useMarketspaceSession();
+  const createListing = useMutation(api.listings.createListing);
+  const vend = useMutation(api.marketspace.vendListing);
+  const [bagKg, setBagKg] = useState("60");
+  const [bagsPerLot, setBagsPerLot] = useState("1");
+  const lotKg = (Number(bagKg) || 0) * (Number(bagsPerLot) || 0);
+  const maxLots = lotKg > 0 ? Math.floor(batch.availableKg / lotKg) : 0;
+  const [lotCount, setLotCount] = useState("");
   const [price, setPrice] = useState(batch.askingPricePerKgUgx != null ? String(batch.askingPricePerKgUgx) : "");
+  const [days, setDays] = useState(14);
+  const [commitPercent, setCommitPercent] = useState(30);
+  const [steps, setSteps] = useState<PlanStep[]>(() => defaultPlan("store", 30));
+  const [changeSteps, setChangeSteps] = useState(false);
   const [busy, setBusy] = useState(false);
-  const save = async (listed: boolean) => {
+  const lots = Math.min(Number(lotCount) || maxLots, maxLots);
+  const crop = EXPORT_CROPS.find((c) => c.key === batch.crop)?.label ?? batch.crop;
+  const produceType = `${crop} ${formLabel(batch.outputForm)}`;
+
+  const submit = async () => {
+    const problem =
+      lots < 1
+        ? `A lot of ${lotKg} kg does not fit the ${batch.availableKg} kg left`
+        : !(Number(price) > 0)
+          ? "Enter your price per kg"
+          : batch.photoCount === 0
+            ? "Add photos to the batch (Processing) first: buyers see them"
+            : planProblem(steps, commitPercent);
+    if (problem) return setMsg({ tone: "error", text: problem });
     setBusy(true);
     try {
-      await setListing({ userId, batchId: batch._id, listed, askingPricePerKgUgx: price.trim() ? Number(price) : undefined });
-      setMsg({ tone: "success", text: listed ? "Listed in PROCESSED MARKETS." : "Removed from PROCESSED MARKETS." });
+      const created = await createListing({
+        farmerId: userId,
+        produceType,
+        pricePerKilo: Number(price),
+        qualityRating: batch.grade ?? undefined,
+        bagKg: Number(bagKg),
+        bagsPerLot: Number(bagsPerLot),
+        lotCount: lots,
+        commitPercent,
+        milestonePlan: steps,
+        processingBatchId: batch._id,
+      });
+      if (!session.token) {
+        setMsg({ tone: "info", text: `${lots} lot(s) listed. Put them on MarketSpace from MarketSpace → My posts.` });
+      } else {
+        try {
+          await vend({ sessionToken: session.token, listingId: created.listingId, days, expectedBulkCostFarmcoin: 0 });
+          setMsg({ tone: "success", text: `${lots} lot(s) of ${lotKg} kg are on MarketSpace for ${days} days. Manage them in MarketSpace → My posts.` });
+        } catch (e) {
+          setMsg({ tone: "info", text: `${lots} lot(s) listed, but not on MarketSpace yet (${errorText(e)}). Put them on from MarketSpace → My posts.` });
+        }
+      }
+      onDone();
     } catch (e) {
       setMsg({ tone: "error", text: errorText(e) });
     } finally {
       setBusy(false);
     }
   };
+
+  const pick = (on: boolean): React.CSSProperties => ({ ...button(on ? "primary" : "secondary"), minHeight: 40 });
   return (
-    <div style={{ marginTop: "0.45rem", fontSize: "0.82rem", display: "flex", gap: "0.4rem", alignItems: "center", flexWrap: "wrap" }}>
-      <span style={{ color: PROCESSOR_HEADING, fontWeight: 700 }}>PROCESSED MARKETS (optional):</span>
-      {batch.marketListed ? (
-        <>
-          <span>listed{batch.askingPricePerKgUgx != null ? ` at ${formatUgx(batch.askingPricePerKgUgx)}/kg` : ""}</span>
-          <button style={button("secondary", busy)} disabled={busy} onClick={() => save(false)}>
-            Remove listing
-          </button>
-        </>
-      ) : active ? (
-        <>
-          <input style={{ ...input, width: 150 }} inputMode="decimal" placeholder="Asking UGX/kg" value={price} onChange={(e) => setPrice(e.target.value)} />
-          <button style={button("secondary", busy)} disabled={busy} onClick={() => save(true)}>
-            List it
-          </button>
-        </>
+    <div style={{ marginTop: "0.6rem", padding: "0.75rem", border: "1.5px solid #a5d6a7", borderRadius: 10, background: "#f6fbf6", display: "grid", gap: "0.6rem" }}>
+      <b>
+        {produceType}
+        {batch.grade ? ` · ${batch.grade}` : ""} · {batch.availableKg} kg
+      </b>
+      <div>
+        <span style={label}>Bag size</span>
+        <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", alignItems: "center" }}>
+          {BAG_CHOICES.map((kg) => (
+            <button key={kg} type="button" style={pick(bagKg === String(kg))} onClick={() => setBagKg(String(kg))}>
+              {kg} kg
+            </button>
+          ))}
+          <input
+            style={{ ...input, width: 90 }}
+            inputMode="decimal"
+            aria-label="Other bag size in kg"
+            placeholder="Other kg"
+            value={BAG_CHOICES.includes(Number(bagKg)) ? "" : bagKg}
+            onChange={(e) => setBagKg(e.target.value)}
+          />
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
+        <label style={{ display: "grid", gap: 4 }}>
+          <span style={label}>Bags in one lot</span>
+          <input style={{ ...input, width: 110 }} inputMode="numeric" value={bagsPerLot} onChange={(e) => setBagsPerLot(e.target.value)} />
+        </label>
+        <label style={{ display: "grid", gap: 4 }}>
+          <span style={label}>Lots (up to {maxLots})</span>
+          <input style={{ ...input, width: 110 }} inputMode="numeric" placeholder={String(maxLots)} value={lotCount} onChange={(e) => setLotCount(e.target.value)} />
+        </label>
+        <label style={{ display: "grid", gap: 4 }}>
+          <span style={label}>Price per kg (UGX)</span>
+          <input style={{ ...input, width: 140 }} inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} />
+        </label>
+      </div>
+      <div style={{ fontSize: "0.85rem", color: "#33691e" }}>
+        {lots > 0 ? (
+          <>
+            {lots} lot{lots === 1 ? "" : "s"} of {lotKg} kg
+            {Number(price) > 0 ? <> · {formatUgx(lotKg * Number(price))} a lot</> : null}
+          </>
+        ) : (
+          `A lot of ${lotKg} kg does not fit what is left`
+        )}
+      </div>
+      <div>
+        <span style={label}>Stays on MarketSpace for</span>
+        <div style={{ display: "flex", gap: "0.4rem" }}>
+          {[7, 14, 30].map((d) => (
+            <button key={d} type="button" style={pick(days === d)} onClick={() => setDays(d)}>
+              {d} days
+            </button>
+          ))}
+        </div>
+      </div>
+      {changeSteps ? (
+        <LotTermsFields
+          sellerRole="store"
+          commitPercent={commitPercent}
+          steps={steps}
+          lotPrice={Number(price) > 0 ? Math.round(lotKg * Number(price)) : null}
+          onChange={(c, st) => {
+            setCommitPercent(c);
+            setSteps(st);
+          }}
+        />
       ) : (
-        <span style={{ color: "#78909c" }}>open once you are fully verified</span>
+        <div style={{ fontSize: "0.85rem", color: "#455a64" }}>
+          Buyers commit {commitPercent}% into escrow, then pay as you finish each step: {steps.map((st) => st.name).join(" → ")}.{" "}
+          <button type="button" onClick={() => setChangeSteps(true)} style={{ border: "none", background: "none", color: "#1565c0", fontWeight: 700, cursor: "pointer", padding: 0 }}>
+            Change payment steps
+          </button>
+        </div>
       )}
+      <div style={{ fontSize: "0.78rem", color: "#607d8b" }}>
+        Buyers see the batch photos. {batch.traceLevel === "platform_traced" ? "It shows as traced to the farms it came from." : "It shows as off-app stock."}
+      </div>
+      <div style={{ display: "flex", gap: "0.4rem" }}>
+        <button style={{ ...button("primary", busy), background: "#2e7d32", borderColor: "#2e7d32" }} disabled={busy} onClick={submit}>
+          {busy ? "Listing..." : "Put on MarketSpace"}
+        </button>
+        <button style={button("secondary")} onClick={onDone}>
+          Cancel
+        </button>
+      </div>
     </div>
   );
 }
@@ -206,7 +340,7 @@ function DirectSaleForm({ userId, batch, today, setMsg, onDone }: { userId: Id<"
             setBusy(true);
             try {
               const r = await offer({ userId, batchId: batch._id, exporterId: exporterId!, kilos: Number(f.kilos), pricePerKgUgx: f.price.trim() ? Number(f.price) : undefined, saleDate: f.saleDate, notes: f.notes || undefined });
-              setMsg({ tone: "success", text: `Offer ${r.saleCode} sent. The exporter accepts it from their Export Markets page.` });
+              setMsg({ tone: "success", text: `Offer ${r.saleCode} sent. The exporter accepts it from their Global Bulk Markets page.` });
               onDone();
             } catch (e) {
               setMsg({ tone: "error", text: errorText(e) });

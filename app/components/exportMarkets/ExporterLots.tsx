@@ -64,7 +64,7 @@ export function ExporterLots({
       {!isActiveExporter && (
         <Notice tone="info">You can prepare lots now. Listing them for buyers opens once you are an approved, live exporter.</Notice>
       )}
-      <ProcessorPurchasesPanel userId={userId} isActiveExporter={isActiveExporter} setMsg={setMsg} />
+      <ProcessorPurchasesPanel userId={userId} setMsg={setMsg} />
       <TracePipelineEditor userId={userId} setMsg={setMsg} />
       {creating ? (
         <LotForm

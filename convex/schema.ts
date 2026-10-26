@@ -164,6 +164,7 @@ export default defineSchema({
     farmerId: v.optional(v.id("users")), // Optional - can be null for trader listings
     traderId: v.optional(v.id("users")), // Optional - for trader listings (100kg blocks only)
     inventoryId: v.optional(v.id("traderInventory")), // For trader listings, reference to the 100kg inventory block
+    processingBatchId: v.optional(v.id("processingBatches")), // Processors: the processed batch these lots come from (its kilos are held while listed)
     utid: v.string(), // Generated when listing is created
     produceType: v.string(),
     totalKilos: v.number(),
@@ -230,6 +231,7 @@ export default defineSchema({
     .index("by_farmer", ["farmerId"])
     .index("by_trader", ["traderId"])
     .index("by_inventory", ["inventoryId"])
+    .index("by_processingBatch", ["processingBatchId"])
     .index("by_utid", ["utid"])
     .index("by_status", ["status"]),
 
@@ -450,6 +452,7 @@ export default defineSchema({
     ownerRole: v.optional(v.string()), // Owner's role when not an exporter (store, vendor)
     source: v.optional(v.union(v.literal("in_app"), v.literal("off_app"))), // in_app: bought through a lot order (traced to farms)
     lotOrderId: v.optional(v.id("lotOrders")), // The lot order this stock came from
+    receiptId: v.optional(v.id("purchaseReceipts")), // Exporters: bought straight from a farmer at a posted price
     reservedListingId: v.optional(v.id("listings")), // Listed as lots: not pooled into 100kg buyer blocks
   })
     .index("by_trader", ["traderId"])
@@ -3856,7 +3859,7 @@ export default defineSchema({
   // A processor's weekly buying price, or a vendor's buying offer, per crop.
   buyingOffers: defineTable({
     ownerId: v.id("users"),
-    ownerKind: v.union(v.literal("processor"), v.literal("vendor")),
+    ownerKind: v.union(v.literal("processor"), v.literal("vendor"), v.literal("exporter")),
     crop: v.string(), // EXPORT_CROPS key (processors) or VENDOR_CROPS key (vendors)
     form: v.optional(v.string()), // INTAKE_FORMS key, processors only (e.g. kiboko)
     unit: v.string(), // kg, bunch, bag...
@@ -3877,7 +3880,7 @@ export default defineSchema({
   deliveryBookings: defineTable({
     farmerId: v.id("users"),
     buyerId: v.id("users"),
-    buyerKind: v.union(v.literal("processor"), v.literal("vendor")),
+    buyerKind: v.union(v.literal("processor"), v.literal("vendor"), v.literal("exporter")),
     offerId: v.id("buyingOffers"),
     crop: v.string(),
     form: v.optional(v.string()),
@@ -3905,7 +3908,7 @@ export default defineSchema({
   purchaseReceipts: defineTable({
     receiptNumber: v.string(),
     buyerId: v.id("users"),
-    buyerKind: v.union(v.literal("processor"), v.literal("vendor")),
+    buyerKind: v.union(v.literal("processor"), v.literal("vendor"), v.literal("exporter")),
     buyerName: v.string(), // facility or market name when issued
     buyerDistrict: v.optional(v.string()),
     farmerId: v.optional(v.id("users")), // farmer on the app

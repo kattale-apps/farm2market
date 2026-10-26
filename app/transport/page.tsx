@@ -7,7 +7,7 @@ import { Id } from "../../convex/_generated/dataModel";
 import { useStoredUser } from "../hooks/useStoredUser";
 import { TransportDirectory } from "../components/transport/TransportDirectory";
 
-/** Find transport: the transporter directory, open to every role. */
+/** Book transport: the transporter directory, open to every role. */
 export default function TransportPage() {
   const { user, status } = useStoredUser();
   const userId = (user?.userId as Id<"users"> | undefined) ?? null;
@@ -19,7 +19,7 @@ export default function TransportPage() {
         <Link href="/" style={{ color: "#fff", textDecoration: "none", fontSize: "1.3rem" }} aria-label="Back">
           ←
         </Link>
-        <h1 style={{ margin: 0, fontSize: "clamp(1rem, 4vw, 1.2rem)" }}>🚚 Find transport</h1>
+        <h1 style={{ margin: 0, fontSize: "clamp(1rem, 4vw, 1.2rem)" }}>🚚 Book Transport</h1>
       </div>
       <div style={{ padding: "1rem", maxWidth: 760, margin: "0 auto" }}>
         <TransportDirectory userId={userId} />

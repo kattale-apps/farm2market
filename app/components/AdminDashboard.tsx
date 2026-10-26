@@ -1148,7 +1148,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
               >
                 <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>☕</div>
                 <div>
-                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Export Markets</h3>
+                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Global Bulk Markets</h3>
                   <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.95 }}>
                     Exporters, documents, trace evidence, sample desk and deals
                   </p>

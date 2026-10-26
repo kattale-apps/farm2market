@@ -40,7 +40,10 @@ export const gpsValidator = v.object({
   capturedAt: v.string(),
 });
 
-export const PURCHASER_ROLES = ["trader", "transporter", "store", "vendor", "buyer"] as const;
+// Transporters move goods; they do not buy lots (26 Oct 2026). Offers a
+// transporter made before can still be answered or cancelled until they close.
+export const PURCHASER_ROLES = ["trader", "store", "vendor", "buyer"] as const;
+export const OFFER_FOLLOW_UP_ROLES = [...PURCHASER_ROLES, "transporter"] as const;
 // Exporters ("trader") list lots from their stock with the same form.
 export const LOT_SELLER_ROLES = ["farmer", "vendor", "store", "trader"] as const;
 

@@ -1,18 +1,16 @@
 "use client";
 
-import { useQuery, useAction, useMutation } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { EnvelopeIcon, MenuIcon } from "./icons/HeaderIcons";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
-import { TraderListings } from "./TraderListings";
-import { LotLedger } from "./lots/LotLedger";
-import { CreateTraderListing } from "./CreateTraderListing";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { exportToExcel, exportToPDF, formatUTIDDataForExport } from "../utils/exportUtils";
 import { exportUTIDsByCategory, exportUTIDsByCategoryPDF, exportInventoryVolume, exportCapitalVolume } from "../utils/traderReports";
-import { formatUgandaDateTime, formatUgandaTimeOnly, getUgandaTime, inUgandaTime } from "../utils/timeUtils";
+import { getUgandaTime, inUgandaTime } from "../utils/timeUtils";
 import { ContactUs } from "./ContactUs";
+import { TraceRecords } from "./records/TraceRecords";
 import { savePdfFromJsPDF } from "../utils/pdfDownload";
 import { useRouter } from "next/navigation";
 import { menuAccentColor } from "../utils/menuAccentColors";
@@ -29,19 +27,15 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
   const exposure = useQuery(api.traderDashboard.getExposureStatus, { traderId: userId });
   const inventory = useQuery(api.traderDashboard.getInventoryWithProjectedLoss, { traderId: userId });
   const activeUTIDs = useQuery(api.traderDashboard.getTraderActiveUTIDs, { traderId: userId });
-  const initiateDeposit = useAction(api.pesapal.initiateTraderDeposit);
   // Export Markets card: for traders admitted as exporters, or who joined an
   // exporter community and are waiting to be admitted.
   const exportAccess = useQuery(api.exportMarkets.getMyExportAccess, userId ? { userId } : "skip");
-  const paymentTransactions = useQuery(api.pesapal.getUserPaymentTransactions, { userId });
   const buyOffers = useQuery(api.traderBuyerNegotiations.getTraderBuyOffers, { traderId: userId });
-  const traderSales = useQuery(api.traderDashboard.getTraderSales, { traderId: userId });
   const messageThreads = useQuery(api.messages.getUserMessageThreads, { userId });
   const acceptBuyerOffer = useMutation(api.traderBuyerNegotiations.acceptBuyerOffer);
   const rejectBuyerOffer = useMutation(api.traderBuyerNegotiations.rejectBuyerOffer);
   const counterBuyerOffer = useMutation(api.traderBuyerNegotiations.counterBuyerOffer);
   const farmcoinSummary = useQuery(api.farmcoin.getTraderFarmcoinSummary, { traderId: userId });
-  const sentifySummary = useQuery((api as any).farmcoin.getSentifyWalletSummary, { userId } as any);
   const traderDeliveryBatches = useQuery((api as any).buyers.getTraderDeliveryBatches, { traderId: userId } as any);
   const traderConfirmListingDelivery = useMutation((api as any).buyers.traderConfirmListingDelivery);
   const paginationPreferences = useQuery(
@@ -52,10 +46,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
     (api as any).userSettings.updatePaginationPreferences
   );
 
-  const [depositAmount, setDepositAmount] = useState<string>("");
-  const [isDepositing, setIsDepositing] = useState(false);
-  const [depositMessage, setDepositMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [sentifyMessage, setSentifyMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [deliveryMessage, setDeliveryMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [proView, setProView] = useState(false);
   const [counterPrices, setCounterPrices] = useState<{ [key: string]: string }>({});
   const [processingOffers, setProcessingOffers] = useState<{ [key: string]: boolean }>({});
@@ -94,51 +85,79 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
     setMsgSlot(document.getElementById("dashboard-msg-slot"));
     setMoreSlot(document.getElementById("dashboard-more-slot"));
   }, []);
-  const MORE_MENU_SECTIONS: Array<{ key: string; label: React.ReactNode }> = [
-    { key: "marketspace", label: "🗺️ MarketSpace" },
-    { key: "myLots", label: "📒 My lots & ledger" },
-    { key: "myWallet", label: "💰 My Wallet (sell FarmCoin, cash out)" },
-    { key: "wallet", label: "🏦 Trading capital (deposits)" },
-    { key: "sentify", label: <><FarmCoinIcon size={18} /> Sentify rewards cash-out</> },
-    {
-      key: "farmcoinTokens",
-      label: <><FarmCoinIcon size={18} /> FarmCoin Rewards{typeof farmcoinSummary?.balance === "number" ? ` (${farmcoinSummary.balance})` : ""}</>,
-    },
-    { key: "deliveryConfirmations", label: "🚚 Delivery Confirmations" },
-    { key: "openListings", label: "📋 Open Listings" },
-    { key: "todayActivity", label: "🗓️ Your Activity Today" },
-    { key: "buyOffers", label: "💬 Buy-Offers from Buyers" },
-    { key: "createListing", label: "📝 Create Listing" },
-    { key: "listingsNegotiations", label: "📑 Listings & Negotiations" },
-    { key: "lotOrders", label: "📒 Lot orders (escrow & steps)" },
-    { key: "inventoryStorage", label: "📦 Inventory in Storage" },
-    { key: "transactionsLog", label: "🧾 Transactions Log" },
-    { key: "reports", label: "📊 Comprehensive Reports" },
-    { key: "inventoryTable", label: "📋 Inventory Table" },
-    { key: "analytics", label: "📈 Exporter Analytics" },
-    { key: "analyticsCharts", label: "📉 Analytics Charts" },
-  ];
+  // Universal items first (MarketSpace, My Wallet and FarmCoin, Book Transport,
+  // My Communities), then the role's own. Older trading screens show only
+  // while something in them is still open.
+  const isTransporter = userRole === "transporter";
+  const olderPending =
+    (buyOffers?.negotiations ?? []).some((n: any) => n.status === "pending" || n.status === "countered") ||
+    (Array.isArray(traderDeliveryBatches) && traderDeliveryBatches.some((b: any) => !b.traderConfirmedAt));
+  const walletLabel = (
+    <>
+      💰 My Wallet and FarmCoin
+      {typeof farmcoinSummary?.balance === "number" ? <> (<FarmCoinIcon size={16} /> {farmcoinSummary.balance})</> : null}
+    </>
+  );
+  const MORE_MENU_SECTIONS: Array<{ key: string; label: React.ReactNode }> = isTransporter
+    ? [
+        { key: "transportServices", label: "🚚 Register Transport Services" },
+        { key: "marketspace", label: "🗺️ MarketSpace" },
+        { key: "myWallet", label: walletLabel },
+        { key: "communities", label: "🌾 My Communities" },
+        { key: "transportRecords", label: "📊 Records and Reports" },
+      ]
+    : [
+        { key: "marketspace", label: "🗺️ MarketSpace" },
+        { key: "myWallet", label: walletLabel },
+        { key: "bookTransport", label: "🚚 Book Transport" },
+        { key: "communities", label: "🌾 My Communities" },
+        { key: "globalBulk", label: "🌍 Global Bulk Markets" },
+        { key: "documentsVault", label: "📄 Documents Vault" },
+        { key: "myDeals", label: "🤝 My Deals" },
+        { key: "myLots", label: "📒 My Lots and Ledgers" },
+        { key: "postPrices", label: "🧺 Post Price to Farmers" },
+        { key: "records", label: "📊 Records and Reports" },
+        ...(olderPending ? [{ key: "older", label: "🗂️ Older Listings and Offers" }] : []),
+      ];
+  const MENU_ROUTES: Record<string, string> = {
+    marketspace: "/marketspace",
+    myWallet: "/wallet",
+    bookTransport: "/transport",
+    communities: "/farmer/communities",
+    globalBulk: "/trader/export",
+    documentsVault: "/trader/export?tab=documents",
+    myDeals: "/trader/export?tab=deals",
+    myLots: "/farmer/farm2market", // The same lot form, ledger and payment steps as every seller
+    postPrices: "/vendor/buying", // The same price board processors and vendors use
+    transportServices: "/transporter/services",
+    transportRecords: "/records",
+  };
+  // Menu entries that open several sections of this page together
+  const MENU_GROUPS: Record<string, string[]> = {
+    records: ["traceRecords", "transactionsLog", "reports", "analytics", "analyticsCharts"],
+    older: ["deliveryConfirmations", "buyOffers"],
+  };
   // A handful of sections only exist in the DOM for one of the two view modes
   // (Simple vs Pro) — switch the view automatically so the menu always finds
   // the section it just opened, instead of silently doing nothing.
-  const SIMPLE_VIEW_ONLY_KEYS = ["openListings", "todayActivity", "buyOffers", "deliveryConfirmations", "wallet", "sentify"];
-  const PRO_VIEW_ONLY_KEYS = ["createListing", "listingsNegotiations", "lotOrders"];
+  const SIMPLE_VIEW_ONLY_KEYS = ["buyOffers", "deliveryConfirmations"];
+  const PRO_VIEW_ONLY_KEYS = ["traceRecords", "transactionsLog", "reports", "analytics", "analyticsCharts"];
   const openSectionFromMenu = (key: string) => {
-    if (key === "marketspace" || key === "myWallet" || key === "myLots") {
+    if (MENU_ROUTES[key]) {
       setMoreMenuOpen(false);
-      // My lots: the same lot form, ledger and payment steps as every seller.
-      router.push(key === "marketspace" ? "/marketspace" : key === "myLots" ? "/farmer/farm2market" : "/wallet");
+      router.push(MENU_ROUTES[key]);
       return;
     }
-    if (SIMPLE_VIEW_ONLY_KEYS.includes(key)) {
+    const keys = MENU_GROUPS[key] ?? [key];
+    if (SIMPLE_VIEW_ONLY_KEYS.includes(keys[0])) {
       setProView(false);
-    } else if (PRO_VIEW_ONLY_KEYS.includes(key)) {
+    } else if (PRO_VIEW_ONLY_KEYS.includes(keys[0])) {
       setProView(true);
     }
-    setOpenSections((prev) => ({ ...prev, [key]: true }));
+    setOpenSections((prev) => ({ ...prev, ...Object.fromEntries(keys.map((k) => [k, true])) }));
     setMoreMenuOpen(false);
     setTimeout(() => {
-      document.getElementById(`section-${key}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      document.getElementById(`section-${keys[0]}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 50);
   };
   const hideSectionButtonStyle: React.CSSProperties = {
@@ -152,30 +171,6 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
     cursor: "pointer",
     padding: 0,
     fontFamily: '"Montserrat", sans-serif',
-  };
-  // The wallet (Sentify cash-out and Pesapal deposits) is hidden until opened
-  // from the Wallet button or the menu; "/?wallet=open" opens it directly,
-  // e.g. when another page sends the trader to top up.
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (new URLSearchParams(window.location.search).get("wallet") === "open") {
-      setProView(false);
-      setOpenSections((prev) => ({ ...prev, wallet: true }));
-      setTimeout(() => document.getElementById("section-walletDeposit")?.scrollIntoView({ behavior: "smooth", block: "start" }), 300);
-    }
-  }, []);
-  const openWallet = () => {
-    const next = !isSectionOpen("wallet");
-    setProView(false);
-    setOpenSections((prev) => ({ ...prev, wallet: next }));
-    if (next) {
-      setTimeout(() => document.getElementById("section-walletDeposit")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
-    }
-  };
-  const openSentify = () => {
-    const next = !isSectionOpen("sentify");
-    setOpenSections((prev) => ({ ...prev, sentify: next }));
-    if (next) setTimeout(() => document.getElementById("section-sentify")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   };
   const renderHideControl = (key: string) => (
     <button type="button" onClick={() => toggleSection(key)} style={hideSectionButtonStyle}>▲ Hide</button>
@@ -239,53 +234,15 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
     return new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX" }).format(amount);
   };
 
-  const handleDeposit = async () => {
-    const amount = parseFloat(depositAmount);
-    if (!depositAmount || isNaN(amount) || amount <= 0) {
-      setDepositMessage({ type: "error", text: "Please enter a valid amount" });
-      return;
-    }
-
-    setIsDepositing(true);
-    setDepositMessage(null);
-
-    try {
-      const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
-      const callbackUrl = `${baseUrl}/payment/callback`;
-      const cancelUrl = `${baseUrl}/`;
-
-      const result = await initiateDeposit({
-        traderId: userId,
-        amount: amount,
-        currency: "UGX",
-        callbackUrl,
-        cancelUrl,
-      });
-
-      // Redirect to Pesapal payment page
-      if (result.redirectUrl) {
-        window.location.href = result.redirectUrl;
-      } else {
-        throw new Error("No redirect URL received from Pesapal");
-      }
-    } catch (error: any) {
-      setDepositMessage({
-        type: "error",
-        text: `Failed to initiate payment: ${error.message}`,
-      });
-      setIsDepositing(false);
-    }
-  };
-
   const handleTraderDeliveryConfirm = async (batchUtid: string) => {
     try {
       await traderConfirmListingDelivery({
         traderId: userId,
         listingUtid: batchUtid,
       });
-      setSentifyMessage({ type: "success", text: "Delivery confirmed. Await buyer and superadmin confirmation." });
+      setDeliveryMessage({ type: "success", text: "Delivery confirmed. Await buyer and superadmin confirmation." });
     } catch (error: any) {
-      setSentifyMessage({ type: "error", text: error?.message || "Failed to confirm delivery" });
+      setDeliveryMessage({ type: "error", text: error?.message || "Failed to confirm delivery" });
     }
   };
 
@@ -466,7 +423,6 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
   };
 
   // Get open listings (from farmers)
-  const openListings = useQuery(api.listings.getActiveListings);
   const getSortTimestamp = (item: any) => {
     const raw =
       item?.timestamp ??
@@ -483,11 +439,6 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
     return Number.isNaN(parsed) ? 0 : parsed;
   };
 
-  const sortedOpenListings = useMemo(() => {
-    if (!openListings) return [];
-    return [...openListings].sort((a: any, b: any) => getSortTimestamp(b) - getSortTimestamp(a));
-  }, [openListings]);
-
   const sortedActiveUtids = useMemo(() => {
     if (!activeUTIDs?.utids) return [];
     return [...activeUTIDs.utids].sort((a: any, b: any) => getSortTimestamp(b) - getSortTimestamp(a));
@@ -496,19 +447,6 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
     if (!buyOffers?.negotiations) return [];
     return [...buyOffers.negotiations].sort((a: any, b: any) => getSortTimestamp(b) - getSortTimestamp(a));
   }, [buyOffers]);
-  const sortedInventory = useMemo(() => {
-    if (!inventory?.inventory) return [];
-    return [...inventory.inventory].sort((a: any, b: any) => getSortTimestamp(b) - getSortTimestamp(a));
-  }, [inventory]);
-
-  const openListingsTotal = sortedOpenListings.length;
-  const openListingsTotalPages = Math.max(1, Math.ceil(openListingsTotal / openListingsPageSize));
-  const openListingsStart = openListingsTotal === 0 ? 0 : (openListingsPage - 1) * openListingsPageSize + 1;
-  const openListingsEnd = Math.min(openListingsPage * openListingsPageSize, openListingsTotal);
-  const pagedOpenListings = sortedOpenListings.slice(
-    (openListingsPage - 1) * openListingsPageSize,
-    openListingsPage * openListingsPageSize
-  );
 
   const activeUtidsTotal = sortedActiveUtids.length;
   const activeUtidsTotalPages = Math.max(1, Math.ceil(activeUtidsTotal / activeUtidPageSize));
@@ -526,20 +464,6 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
     (buyOffersPage - 1) * buyOffersPageSize,
     buyOffersPage * buyOffersPageSize
   );
-  const inventoryTotal = sortedInventory.length;
-  const inventoryTotalPages = Math.max(1, Math.ceil(inventoryTotal / inventoryPageSize));
-  const inventoryStart = inventoryTotal === 0 ? 0 : (inventoryPage - 1) * inventoryPageSize + 1;
-  const inventoryEnd = Math.min(inventoryPage * inventoryPageSize, inventoryTotal);
-  const pagedInventory = sortedInventory.slice(
-    (inventoryPage - 1) * inventoryPageSize,
-    inventoryPage * inventoryPageSize
-  );
-
-  useEffect(() => {
-    if (openListingsPage > openListingsTotalPages) {
-      setOpenListingsPage(openListingsTotalPages);
-    }
-  }, [openListingsPage, openListingsTotalPages]);
 
   useEffect(() => {
     if (activeUtidPage > activeUtidsTotalPages) {
@@ -551,86 +475,6 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
       setBuyOffersPage(buyOffersTotalPages);
     }
   }, [buyOffersPage, buyOffersTotalPages]);
-  useEffect(() => {
-    if (inventoryPage > inventoryTotalPages) {
-      setInventoryPage(inventoryTotalPages);
-    }
-  }, [inventoryPage, inventoryTotalPages]);
-
-  // Calculate today's activity with UTIDs and Purchase/Sell status
-  const today = Date.now();
-  const dayStart = today - (today % (24 * 60 * 60 * 1000));
-  
-  // Get today's purchases (from farmers - unit locks)
-  const todayPurchases = (activeUTIDs?.utids || []).filter((utid: any) => {
-    return utid.timestamp && utid.timestamp >= dayStart && utid.type === "unit_lock";
-  }).map((utid: any) => {
-    let purchaseStatus = "Confirmed";
-    if (utid.status === "pending") {
-      purchaseStatus = "Pending Delivery";
-    } else if (utid.status === "delivered") {
-      purchaseStatus = "Confirmed";
-    }
-    return {
-      ...utid,
-      transactionType: "Purchase",
-      status: purchaseStatus,
-    };
-  });
-
-  // Get today's sales (to buyers - buyer purchases from trader inventory)
-  const todaySales = (traderSales?.sales || []).filter((sale: any) => {
-    return sale.purchasedAt && sale.purchasedAt >= dayStart;
-  }).map((sale: any) => {
-    return {
-      utid: sale.purchaseUtid,
-      timestamp: sale.purchasedAt,
-      transactionType: "Sell",
-      status: "Confirmed", // Sales are always confirmed once purchase is made
-      type: "buyer_purchase",
-      produceType: sale.produceType,
-      kilos: sale.kilos,
-      buyerAlias: sale.buyerAlias,
-    };
-  });
-
-  // Get today's trader-buyer negotiations (pending offers)
-  const todayNegotiations = (buyOffers?.negotiations || []).filter((neg: any) => {
-    return neg.lastUpdatedAt && neg.lastUpdatedAt >= dayStart;
-  }).map((neg: any) => {
-    let sellStatus = "Pending Acceptance/Rejection";
-    if (neg.status === "accepted") {
-      sellStatus = "Confirmed";
-    } else if (neg.status === "pending" || neg.status === "countered") {
-      sellStatus = "Pending Acceptance/Rejection";
-    }
-    return {
-      utid: neg.negotiationUtid,
-      timestamp: neg.lastUpdatedAt,
-      transactionType: "Sell",
-      status: sellStatus,
-      type: "trader_buyer_negotiation",
-      produceType: neg.produceType,
-      kilos: neg.kilos,
-      buyerAlias: neg.buyerAlias,
-    };
-  });
-
-  // Combine all activities
-  const todayActivity = [...todayPurchases, ...todaySales, ...todayNegotiations].sort((a, b) => b.timestamp - a.timestamp);
-  const todayActivityTotal = todayActivity.length;
-  const todayActivityTotalPages = Math.max(1, Math.ceil(todayActivityTotal / todayActivityPageSize));
-  const todayActivityStart = todayActivityTotal === 0 ? 0 : (todayActivityPage - 1) * todayActivityPageSize + 1;
-  const todayActivityEnd = Math.min(todayActivityPage * todayActivityPageSize, todayActivityTotal);
-  const pagedTodayActivity = todayActivity.slice(
-    (todayActivityPage - 1) * todayActivityPageSize,
-    todayActivityPage * todayActivityPageSize
-  );
-  useEffect(() => {
-    if (todayActivityPage > todayActivityTotalPages) {
-      setTodayActivityPage(todayActivityTotalPages);
-    }
-  }, [todayActivityPage, todayActivityTotalPages]);
 
   const unreadMessageCount = messageThreads
     ? messageThreads.reduce((sum, t) => sum + (t.unreadCount || 0), 0)
@@ -773,13 +617,13 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
         >
           <img src="/icons/cargo-ship.svg" alt="" width={44} height={44} style={{ flexShrink: 0 }} />
           <div style={{ minWidth: 0 }}>
-            <div>EXPORT MARKETS</div>
+            <div>GLOBAL BULK MARKETS</div>
             <div style={{ fontSize: "0.78rem", fontWeight: 500, color: "#0277bd" }}>
               {!exportAccess.hasModule
                 ? `Awaiting acceptance by the community admin (${exportAccess.communityNames.join(", ")})`
                 : exportAccess.awaiting === "verification"
                   ? `Accepted · awaiting super admin verification (${exportAccess.communityNames.join(", ")})`
-                  : `Exporter profile, documents and deals (${exportAccess.communityNames.join(", ")})`}
+                  : `Bulk lots for global buyers, from licensed exporters: your profile, documents and deals (${exportAccess.communityNames.join(", ")})`}
             </div>
           </div>
         </a>
@@ -788,12 +632,11 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
       <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginBottom: "0.75rem" }}>
         <button
           type="button"
-          onClick={openWallet}
-          aria-expanded={isSectionOpen("wallet")}
+          onClick={() => router.push("/wallet")}
           style={{
             padding: "0.5rem 1rem",
-            background: isSectionOpen("wallet") ? "#2e7d32" : "#e8f5e9",
-            color: isSectionOpen("wallet") ? "#fff" : "#1b5e20",
+            background: "#e8f5e9",
+            color: "#1b5e20",
             border: "1px solid #a5d6a7",
             borderRadius: "6px",
             cursor: "pointer",
@@ -801,72 +644,13 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
             fontWeight: "700",
           }}
         >
-          💰 {isSectionOpen("wallet") ? "Hide wallet" : "Wallet"}
+          💰 My Wallet and FarmCoin
         </button>
       </div>
 
       {!proView ? (
         /* Simple View (Default) */
         <>
-          {/* FarmCoin Tokens */}
-          {isSectionOpen("farmcoinTokens") && (
-          <div id="section-farmcoinTokens" style={{
-            marginBottom: "1.5rem",
-            padding: "clamp(1rem, 3vw, 1.5rem)",
-            background: "#fff",
-            borderRadius: "12px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-            border: "1px solid #e0e0e0"
-          }}>
-            {renderHideControl("farmcoinTokens")}
-            <h3 style={{
-              marginTop: 0,
-              marginBottom: "0.75rem",
-              fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)",
-              color: "#2c2c2c",
-              fontFamily: '"Montserrat", sans-serif',
-              fontWeight: "600",
-              letterSpacing: "-0.01em"
-            }}>
-              FarmCoin Tokens
-            </h3>
-            {farmcoinSummary === undefined ? (
-              <p style={{ color: "#999" }}>Loading FarmCoin balance...</p>
-            ) : (
-              <div>
-                <div style={{ marginBottom: "0.75rem" }}>
-                  <div style={{ color: "#666", fontSize: "0.9rem" }}>Balance</div>
-                  <div style={{ fontSize: "1.5rem", fontWeight: "600", color: "#2e7d32" }}>
-                    {farmcoinSummary.balance} Token(s)
-                  </div>
-                </div>
-                <div style={{ color: "#666", fontSize: "0.9rem", marginBottom: "0.5rem" }}>Last 10 transactions</div>
-                <div style={{ display: "grid", gap: "0.35rem" }}>
-                  {Array.isArray(farmcoinSummary?.recent) && farmcoinSummary.recent.length > 0 ? (
-                    farmcoinSummary.recent.map((entry: any, idx: number) => (
-                      <div key={idx} style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        fontSize: "0.85rem",
-                        color: "#4b5563",
-                        borderBottom: "1px solid #f1f5f9",
-                        paddingBottom: "0.3rem",
-                      }}>
-                        <span>{entry.source?.replace("_", " ")}</span>
-                        <span style={{ fontWeight: 600 }}>
-                          {entry.delta > 0 ? `+${entry.delta}` : entry.delta}
-                        </span>
-                      </div>
-                    ))
-                  ) : (
-                    <div style={{ fontSize: "0.85rem", color: "#999" }}>No FarmCoin transactions yet.</div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-          )}
-
 
           {/* Delivery Confirmation (Trader) */}
           {isSectionOpen("deliveryConfirmations") && (
@@ -879,6 +663,11 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
             border: "1px solid #e0e0e0"
           }}>
             {renderHideControl("deliveryConfirmations")}
+            {deliveryMessage && (
+              <div style={{ marginBottom: "0.75rem", padding: "0.6rem 0.75rem", borderRadius: 8, background: deliveryMessage.type === "success" ? "#e8f5e9" : "#ffebee", color: deliveryMessage.type === "success" ? "#1b5e20" : "#c62828", fontSize: "0.88rem" }}>
+                {deliveryMessage.text}
+              </div>
+            )}
             <h3 style={{
               marginTop: 0,
               marginBottom: "0.75rem",
@@ -930,373 +719,6 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
                     )}
                   </div>
                 ))}
-              </div>
-            )}
-          </div>
-          )}
-
-          {/* Open Listings */}
-          {isSectionOpen("openListings") && (
-          <div id="section-openListings" style={{
-            marginBottom: "1.5rem",
-            padding: "clamp(1rem, 3vw, 1.5rem)",
-            background: "#fff",
-            borderRadius: "12px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-            border: "1px solid #e0e0e0"
-          }}>
-            {renderHideControl("openListings")}
-            <h3 style={{
-              marginTop: 0,
-              marginBottom: "1rem",
-              fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)",
-              color: "#2c2c2c",
-              fontFamily: '"Montserrat", sans-serif',
-              fontWeight: "600",
-              letterSpacing: "-0.01em"
-            }}>
-              Open Listings
-            </h3>
-            <div style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              flexWrap: "wrap",
-              gap: "0.5rem",
-              marginBottom: "0.75rem"
-            }}>
-              <div style={{ fontSize: "0.85rem", color: "#666" }}>Per page:</div>
-              <select
-                value={openListingsPageSize}
-                onChange={(e) => {
-                  const nextSize = Number(e.target.value);
-                  setOpenListingsPageSize(nextSize);
-                  setOpenListingsPage(1);
-                  updatePaginationPreferences({
-                    userId,
-                    listKey: openListingsPageKey,
-                    pageSize: nextSize,
-                  } as any);
-                }}
-                style={{ padding: "0.4rem 0.6rem", borderRadius: 6, border: "1px solid #ddd", fontSize: "0.85rem" }}
-              >
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-              </select>
-            </div>
-            {openListings === undefined ? (
-              <p style={{ color: "#999" }}>Loading listings...</p>
-            ) : openListings.length === 0 ? (
-              <p style={{ color: "#666" }}>No open listings available</p>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                {pagedOpenListings.map((listing: any, idx: number) => (
-                  <div key={idx} style={{
-                    padding: "0.75rem",
-                    background: "#f5f5f5",
-                    borderRadius: "8px",
-                    fontSize: "0.9rem"
-                  }}>
-                    {isMobile && (
-                      <div style={{ fontSize: "0.8rem", color: "#64748b", marginBottom: "0.35rem" }}>
-                        Hint: Check quantity and deadline before buying.
-                      </div>
-                    )}
-                    <div style={{ fontWeight: "600", marginBottom: "0.25rem" }}>
-                      {listing.produceType} - {listing.totalKilos}kg
-                    </div>
-                    <div style={{ 
-                      marginTop: "0.5rem",
-                      padding: "0.5rem",
-                      background: "#f5f5f5",
-                      borderRadius: "6px",
-                      border: "1px solid #e0e0e0",
-                    }}>
-                      <div style={{
-                        fontSize: "clamp(0.9rem, 2.5vw, 1rem)",
-                        color: "#666",
-                        fontWeight: "600",
-                        marginBottom: "0.25rem",
-                        fontFamily: '"Montserrat", sans-serif',
-                      }}>
-                        UTID:
-                      </div>
-                      <div style={{
-                        fontSize: "clamp(0.84rem, 2.45vw, 1.05rem)",
-                        color: "#2c2c2c",
-                        fontFamily: "monospace",
-                        fontWeight: "700",
-                        letterSpacing: "0.05em",
-                        wordBreak: "break-all",
-                      }}>
-                        {listing.utid}
-                      </div>
-                    </div>
-                    <div style={{ fontSize: "0.8rem", color: "#999", marginTop: "0.25rem" }}>
-                      {listing.availableUnits} units available | {listing.farmerAlias}
-                    </div>
-                  </div>
-                ))}
-                {openListingsTotal > 0 && (
-                  <div style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    flexWrap: "wrap",
-                    gap: "0.5rem",
-                    marginTop: "0.25rem"
-                  }}>
-                    <div style={{ fontSize: "0.8rem", color: "#666" }}>
-                      Showing {openListingsStart}-{openListingsEnd} of {openListingsTotal}
-                    </div>
-                    {openListingsTotalPages > 1 && (
-                      <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap" }}>
-                        <button
-                          type="button"
-                          onClick={() => setOpenListingsPage((prev) => Math.max(1, prev - 1))}
-                          disabled={openListingsPage === 1}
-                          style={{
-                            padding: "0.3rem 0.6rem",
-                            background: openListingsPage === 1 ? "#e0e0e0" : "#f5f5f5",
-                            color: "#333",
-                            border: "1px solid #ddd",
-                            borderRadius: "4px",
-                            cursor: openListingsPage === 1 ? "not-allowed" : "pointer",
-                            fontSize: "0.8rem",
-                            fontWeight: "600"
-                          }}
-                        >
-                          Prev
-                        </button>
-                        {Array.from({ length: openListingsTotalPages }, (_, idx) => {
-                          const page = idx + 1;
-                          const isActive = page === openListingsPage;
-                          return (
-                            <button
-                              key={page}
-                              type="button"
-                              onClick={() => setOpenListingsPage(page)}
-                              style={{
-                                padding: "0.3rem 0.6rem",
-                                background: isActive ? "#1976d2" : "#f5f5f5",
-                                color: isActive ? "#fff" : "#333",
-                                border: "1px solid #ddd",
-                                borderRadius: "4px",
-                                cursor: "pointer",
-                                fontSize: "0.8rem",
-                                fontWeight: "600"
-                              }}
-                            >
-                              {page}
-                            </button>
-                          );
-                        })}
-                        <button
-                          type="button"
-                          onClick={() => setOpenListingsPage((prev) => Math.min(openListingsTotalPages, prev + 1))}
-                          disabled={openListingsPage === openListingsTotalPages}
-                          style={{
-                            padding: "0.3rem 0.6rem",
-                            background: openListingsPage === openListingsTotalPages ? "#e0e0e0" : "#f5f5f5",
-                            color: "#333",
-                            border: "1px solid #ddd",
-                            borderRadius: "4px",
-                            cursor: openListingsPage === openListingsTotalPages ? "not-allowed" : "pointer",
-                            fontSize: "0.8rem",
-                            fontWeight: "600"
-                          }}
-                        >
-                          Next
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-          )}
-
-          {/* Your Activity Today */}
-          {isSectionOpen("todayActivity") && (
-          <div id="section-todayActivity" style={{
-            padding: "clamp(1rem, 3vw, 1.5rem)",
-            background: "#fff",
-            borderRadius: "12px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-            border: "1px solid #e0e0e0",
-            marginBottom: "1.5rem"
-          }}>
-            {renderHideControl("todayActivity")}
-            <h3 style={{
-              marginTop: 0,
-              marginBottom: "1rem",
-              fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)",
-              color: "#2c2c2c",
-              fontFamily: '"Montserrat", sans-serif',
-              fontWeight: "600",
-              letterSpacing: "-0.01em"
-            }}>
-              Your Activity Today
-            </h3>
-            <div style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              flexWrap: "wrap",
-              gap: "0.5rem",
-              marginBottom: "0.75rem"
-            }}>
-              <div style={{ fontSize: "0.85rem", color: "#666" }}>Per page:</div>
-              <select
-                value={todayActivityPageSize}
-                onChange={(e) => {
-                  const nextSize = Number(e.target.value);
-                  setTodayActivityPageSize(nextSize);
-                  setTodayActivityPage(1);
-                  updatePaginationPreferences({
-                    userId,
-                    listKey: todayActivityPageKey,
-                    pageSize: nextSize,
-                  } as any);
-                }}
-                style={{ padding: "0.4rem 0.6rem", borderRadius: 6, border: "1px solid #ddd", fontSize: "0.85rem" }}
-              >
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-              </select>
-            </div>
-            {todayActivity.length === 0 ? (
-              <p style={{ color: "#666" }}>No activity today</p>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                {pagedTodayActivity.map((activity: any, idx: number) => (
-                  <div key={idx} style={{
-                    padding: "0.75rem",
-                    background: "#f5f5f5",
-                    borderRadius: "8px",
-                    fontSize: "0.85rem"
-                  }}>
-                    {isMobile && (
-                      <div style={{ fontSize: "0.8rem", color: "#64748b", marginBottom: "0.35rem" }}>
-                        Hint: Review each update before the day ends.
-                      </div>
-                    )}
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.25rem" }}>
-                        <div style={{ 
-                          fontFamily: "monospace", 
-                          wordBreak: "break-all", 
-                          fontSize: "clamp(1rem, 3vw, 1.2rem)",
-                          fontWeight: "700",
-                          letterSpacing: "0.05em",
-                          color: "#2c2c2c",
-                        }}>
-                        {activity.utid}
-                      </div>
-                      <div style={{
-                        padding: "0.25rem 0.5rem",
-                        background: activity.status === "Confirmed" ? "#d4edda" : "#fff3cd",
-                        color: activity.status === "Confirmed" ? "#155724" : "#856404",
-                        borderRadius: "4px",
-                        fontSize: "0.75rem",
-                        fontWeight: "600"
-                      }}>
-                        {activity.status}
-                      </div>
-                    </div>
-                    <div style={{ fontSize: "0.75rem", color: "#666", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                      <span><strong>{activity.transactionType}</strong></span>
-                      {activity.produceType && (
-                        <span>| {activity.produceType}</span>
-                      )}
-                      {activity.kilos && (
-                        <span>| {activity.kilos}kg</span>
-                      )}
-                      {activity.buyerAlias && (
-                        <span>| Buyer: {activity.buyerAlias}</span>
-                      )}
-                      {activity.type && (
-                        <span>| Type: {activity.type}</span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                {todayActivityTotal > 0 && (
-                  <div style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    flexWrap: "wrap",
-                    gap: "0.5rem"
-                  }}>
-                    <div style={{ fontSize: "0.8rem", color: "#666" }}>
-                      Showing {todayActivityStart}-{todayActivityEnd} of {todayActivityTotal}
-                    </div>
-                    {todayActivityTotalPages > 1 && (
-                      <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap" }}>
-                        <button
-                          type="button"
-                          onClick={() => setTodayActivityPage((prev) => Math.max(1, prev - 1))}
-                          disabled={todayActivityPage === 1}
-                          style={{
-                            padding: "0.3rem 0.6rem",
-                            background: todayActivityPage === 1 ? "#e0e0e0" : "#f5f5f5",
-                            color: "#333",
-                            border: "1px solid #ddd",
-                            borderRadius: "4px",
-                            cursor: todayActivityPage === 1 ? "not-allowed" : "pointer",
-                            fontSize: "0.8rem",
-                            fontWeight: "600"
-                          }}
-                        >
-                          Prev
-                        </button>
-                        {Array.from({ length: todayActivityTotalPages }, (_, idx) => {
-                          const page = idx + 1;
-                          const isActive = page === todayActivityPage;
-                          return (
-                            <button
-                              key={page}
-                              type="button"
-                              onClick={() => setTodayActivityPage(page)}
-                              style={{
-                                padding: "0.3rem 0.6rem",
-                                background: isActive ? "#1976d2" : "#f5f5f5",
-                                color: isActive ? "#fff" : "#333",
-                                border: "1px solid #ddd",
-                                borderRadius: "4px",
-                                cursor: "pointer",
-                                fontSize: "0.8rem",
-                                fontWeight: "600"
-                              }}
-                            >
-                              {page}
-                            </button>
-                          );
-                        })}
-                        <button
-                          type="button"
-                          onClick={() => setTodayActivityPage((prev) => Math.min(todayActivityTotalPages, prev + 1))}
-                          disabled={todayActivityPage === todayActivityTotalPages}
-                          style={{
-                            padding: "0.3rem 0.6rem",
-                            background: todayActivityPage === todayActivityTotalPages ? "#e0e0e0" : "#f5f5f5",
-                            color: "#333",
-                            border: "1px solid #ddd",
-                            borderRadius: "4px",
-                            cursor: todayActivityPage === todayActivityTotalPages ? "not-allowed" : "pointer",
-                            fontSize: "0.8rem",
-                            fontWeight: "600"
-                          }}
-                        >
-                          Next
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             )}
           </div>
@@ -1685,666 +1107,18 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
           </div>
           )}
 
-          {/* Deposit Funds Section - Simple View */}
-          {isSectionOpen("wallet") && (
-          <div id="section-walletDeposit" style={{
-            marginBottom: "1.5rem",
-            padding: "clamp(1rem, 3vw, 1.5rem)",
-            background: "#fff",
-            borderRadius: "12px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-            border: "1px solid #e0e0e0"
-          }}>
-            <h3 style={{ 
-              marginTop: 0, 
-              marginBottom: "1rem", 
-              fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", 
-              color: "#2c2c2c",
-              fontFamily: '"Montserrat", sans-serif',
-              fontWeight: "600",
-              letterSpacing: "-0.01em"
-            }}>
-              Deposit Funds via Pesapal
-            </h3>
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-              <div>
-                <label style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.9rem", color: "#666" }}>
-                  Amount (UGX)
-                </label>
-                <input
-                  type="number"
-                  value={depositAmount}
-                  onChange={(e) => setDepositAmount(e.target.value)}
-                  placeholder="Enter amount"
-                  min="1"
-                  step="1"
-                  disabled={isDepositing}
-                  style={{
-                    width: "100%",
-                    padding: "0.75rem",
-                    fontSize: "1rem",
-                    border: "1px solid #e0e0e0",
-                    borderRadius: "8px",
-                    boxSizing: "border-box"
-                  }}
-                />
-              </div>
-              <button
-                onClick={handleDeposit}
-                disabled={isDepositing || !depositAmount}
-                style={{
-                  padding: "0.75rem 1.5rem",
-                  background: isDepositing || !depositAmount ? "#ccc" : "#1976d2",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: "8px",
-                  cursor: isDepositing || !depositAmount ? "not-allowed" : "pointer",
-                  fontSize: "1rem",
-                  fontWeight: "600",
-                  transition: "background 0.2s"
-                }}
-              >
-                {isDepositing ? "Processing..." : "Deposit via Pesapal"}
-              </button>
-              {depositMessage && (
-                <div style={{
-                  padding: "0.75rem",
-                  borderRadius: "6px",
-                  background: depositMessage.type === "success" ? "#e8f5e9" : "#ffebee",
-                  color: depositMessage.type === "success" ? "#2e7d32" : "#d32f2f",
-                  fontSize: "0.9rem"
-                }}>
-                  {depositMessage.text}
-                </div>
-              )}
-            </div>
-            {paymentTransactions && paymentTransactions.length > 0 && (
-              <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid #e0e0e0" }}>
-                <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.5rem" }}>Recent Deposits</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                  {paymentTransactions.slice(0, 3).map((tx: any) => (
-                    <div key={tx.transactionId} style={{
-                      padding: "0.5rem",
-                      background: "#f9f9f9",
-                      borderRadius: "6px",
-                      fontSize: "0.85rem"
-                    }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.25rem" }}>
-                        <span style={{ fontWeight: "600" }}>{formatUGX(tx.amount)}</span>
-                        <span style={{
-                          color: tx.status === "completed" ? "#2e7d32" : tx.status === "pending" ? "#ff9800" : "#d32f2f",
-                          textTransform: "capitalize"
-                        }}>
-                          {tx.status}
-                        </span>
-                      </div>
-                      {tx.walletDepositUtid && (
-                        <div style={{ 
-                          marginTop: "0.5rem",
-                          padding: "0.5rem",
-                          background: "#f5f5f5",
-                          borderRadius: "6px",
-                          border: "1px solid #e0e0e0",
-                        }}>
-                          <div style={{
-                            fontSize: "clamp(0.9rem, 2.5vw, 1rem)",
-                            color: "#666",
-                            fontWeight: "600",
-                            marginBottom: "0.25rem",
-                            fontFamily: '"Montserrat", sans-serif',
-                          }}>
-                            UTID:
-                          </div>
-                          <div style={{
-                            fontSize: "clamp(1.2rem, 3.5vw, 1.5rem)",
-                            color: "#2c2c2c",
-                            fontFamily: "monospace",
-                            fontWeight: "700",
-                            letterSpacing: "0.05em",
-                            wordBreak: "break-all",
-                          }}>
-                            {tx.walletDepositUtid}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {/* Sentify is a silent, system-generated rewards wallet (FarmCoin to
-                mobile money), not a deposit wallet: a quiet link at the bottom. */}
-            <div style={{ marginTop: "1.25rem", paddingTop: "0.75rem", borderTop: "1px dashed #e0e0e0", textAlign: "right" }}>
-              <button
-                type="button"
-                onClick={openSentify}
-                style={{
-                  background: "none",
-                  border: "none",
-                  padding: 0,
-                  color: "#8d6e00",
-                  fontWeight: 600,
-                  fontSize: "0.8rem",
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "0.35rem",
-                }}
-              >
-                <FarmCoinIcon size={18} />
-                {isSectionOpen("sentify") ? "Hide Sentify rewards" : "Sentify rewards cash-out"}
-              </button>
-            </div>
-          </div>
-          )}
-
-          {/* Sentify Wallet */}
-          {isSectionOpen("sentify") && (
-          <div id="section-sentify" style={{
-            marginBottom: "1.5rem",
-            padding: "clamp(1rem, 3vw, 1.5rem)",
-            background: "#fff",
-            borderRadius: "12px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-            border: "1px solid #e0e0e0"
-          }}>
-            <h3 style={{
-              marginTop: 0,
-              marginBottom: "0.75rem",
-              fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)",
-              color: "#2c2c2c",
-              fontFamily: '"Montserrat", sans-serif',
-              fontWeight: "600",
-              letterSpacing: "-0.01em"
-            }}>
-              Sentify Wallet
-            </h3>
-            <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.75rem" }}>
-              Sentify is to turn your FarmCoin into cash via mobile money. Sell your FarmCoin in your Wallet, then cash out to any mobile money number.
-            </div>
-            <div style={{ marginBottom: "0.75rem" }}>
-              <div style={{ color: "#666", fontSize: "0.9rem" }}>Balance</div>
-              <div style={{ fontSize: "1.5rem", fontWeight: "600", color: "#2e7d32" }}>
-                {sentifySummary?.balance ?? 0} Token(s)
-              </div>
-            </div>
-            <div style={{ display: "grid", gap: "0.6rem", maxWidth: 520 }}>
-              <button
-                type="button"
-                onClick={() => router.push("/wallet")}
-                style={{
-                  padding: "0.6rem 1rem",
-                  borderRadius: 8,
-                  border: "none",
-                  background: "#1976d2",
-                  color: "#fff",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
-              >
-                Open Wallet to sell FarmCoin and cash out
-              </button>
-              {sentifyMessage && (
-                <div style={{
-                  padding: "0.6rem",
-                  borderRadius: "6px",
-                  fontSize: "0.85rem",
-                  background: sentifyMessage.type === "success" ? "#e8f5e9" : "#ffebee",
-                  color: sentifyMessage.type === "success" ? "#2e7d32" : "#c62828",
-                  border: `1px solid ${sentifyMessage.type === "success" ? "#c8e6c9" : "#ffcdd2"}`
-                }}>
-                  {sentifyMessage.text}
-                </div>
-              )}
-            </div>
-          </div>
-          )}
         </>
       ) : (
         /* Pro View */
         <>
-          {/* Create Listing from Inventory */}
-          {isSectionOpen("createListing") && (
-          <div id="section-createListing" style={{ marginBottom: "1.5rem" }}>
-            {renderHideControl("createListing")}
-            <CreateTraderListing userId={userId} />
-          </div>
-          )}
 
-          {/* Listings & Negotiations */}
-          {isSectionOpen("listingsNegotiations") && (
-          <div id="section-listingsNegotiations" style={{ marginBottom: "1.5rem" }}>
-            {renderHideControl("listingsNegotiations")}
-            <TraderListings userId={userId} />
-          </div>
-          )}
-
-          {/* Lot orders: lots bought with escrow and the seller's payment steps */}
-          {isSectionOpen("lotOrders") && (
-          <div id="section-lotOrders" style={{ marginBottom: "1.5rem", padding: "clamp(1rem, 3vw, 1.5rem)", background: "#fff", borderRadius: "12px", boxShadow: "0 2px 8px rgba(0,0,0,0.1)", border: "1px solid #e0e0e0" }}>
-            {renderHideControl("lotOrders")}
-            <h3 style={{ marginTop: 0, marginBottom: "0.75rem", fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", color: "#2c2c2c", fontFamily: '"Montserrat", sans-serif', fontWeight: "600" }}>
-              Lot orders
-            </h3>
-            <LotLedger userId={userId} />
-          </div>
-          )}
-
-          {/* FarmCoin Tokens */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))", gap: "1.5rem", marginBottom: "1.5rem" }}>
-            {isSectionOpen("farmcoinTokens") && (
-            <div id="section-farmcoinTokens" style={{
-              padding: "clamp(1rem, 3vw, 1.5rem)",
-              background: "#fff",
-              borderRadius: "12px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-              border: "1px solid #e0e0e0"
-            }}>
-              {renderHideControl("farmcoinTokens")}
-              <h3 style={{
-                marginTop: 0,
-                marginBottom: "0.75rem",
-                fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)",
-                color: "#2c2c2c",
-                fontFamily: '"Montserrat", sans-serif',
-                fontWeight: "600",
-                letterSpacing: "-0.01em"
-              }}>
-                FarmCoin Tokens
-              </h3>
-              {farmcoinSummary === undefined ? (
-                <p style={{ color: "#999" }}>Loading FarmCoin balance...</p>
-              ) : (
-                <div>
-                  <div style={{ marginBottom: "0.75rem" }}>
-                    <div style={{ color: "#666", fontSize: "0.9rem" }}>Balance</div>
-                    <div style={{ fontSize: "1.5rem", fontWeight: "600", color: "#2e7d32" }}>
-                      {farmcoinSummary.balance} Token(s)
-                    </div>
-                  </div>
-                  <div style={{ color: "#666", fontSize: "0.9rem", marginBottom: "0.5rem" }}>Last 10 transactions</div>
-                  <div style={{ display: "grid", gap: "0.35rem" }}>
-                    {Array.isArray(farmcoinSummary?.recent) && farmcoinSummary.recent.length > 0 ? (
-                      farmcoinSummary.recent.map((entry: any, idx: number) => (
-                        <div key={idx} style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          fontSize: "0.85rem",
-                          color: "#4b5563",
-                          borderBottom: "1px solid #f1f5f9",
-                          paddingBottom: "0.3rem",
-                        }}>
-                          <span>{entry.source?.replace("_", " ")}</span>
-                          <span style={{ fontWeight: 600 }}>
-                            {entry.delta > 0 ? `+${entry.delta}` : entry.delta}
-                          </span>
-                        </div>
-                      ))
-                    ) : (
-                      <div style={{ fontSize: "0.85rem", color: "#999" }}>No FarmCoin transactions yet.</div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-            )}
-
-            {/* Deposit Section */}
-            {isSectionOpen("wallet") && (
-            <div id="section-walletDepositPro" style={{
-              padding: "clamp(1rem, 3vw, 1.5rem)",
-              background: "#fff",
-              borderRadius: "12px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-              border: "1px solid #e0e0e0"
-            }}>
-              <h3 style={{ marginTop: 0, marginBottom: "1rem", fontSize: "clamp(1rem, 3vw, 1.2rem)", color: "#1a1a1a" }}>
-                Deposit Funds
-              </h3>
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                <div>
-                  <label style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.9rem", color: "#666" }}>
-                    Amount (UGX)
-                  </label>
-                  <input
-                    type="number"
-                    value={depositAmount}
-                    onChange={(e) => setDepositAmount(e.target.value)}
-                    placeholder="Enter amount"
-                    min="1"
-                    step="1"
-                    disabled={isDepositing}
-                    style={{
-                      width: "100%",
-                      padding: "0.75rem",
-                      fontSize: "1rem",
-                      border: "1px solid #e0e0e0",
-                      borderRadius: "8px",
-                      boxSizing: "border-box"
-                    }}
-                  />
-                </div>
-                <button
-                  onClick={handleDeposit}
-                  disabled={isDepositing || !depositAmount}
-                  style={{
-                    padding: "0.75rem 1.5rem",
-                    background: isDepositing || !depositAmount ? "#ccc" : "#1976d2",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: "8px",
-                    cursor: isDepositing || !depositAmount ? "not-allowed" : "pointer",
-                    fontSize: "1rem",
-                    fontWeight: "500",
-                    transition: "background 0.2s"
-                  }}
-                >
-                  {isDepositing ? "Processing..." : "Deposit via Pesapal"}
-                </button>
-                {depositMessage && (
-                  <div style={{
-                    padding: "0.75rem",
-                    borderRadius: "6px",
-                    background: depositMessage.type === "success" ? "#e8f5e9" : "#ffebee",
-                    color: depositMessage.type === "success" ? "#2e7d32" : "#d32f2f",
-                    fontSize: "0.9rem"
-                  }}>
-                    {depositMessage.text}
-                  </div>
-                )}
-              </div>
-              {paymentTransactions && paymentTransactions.length > 0 && (
-                <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid #e0e0e0" }}>
-                  <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.5rem" }}>Recent Deposits</div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                    {paymentTransactions.slice(0, 3).map((tx: any) => (
-                      <div key={tx.transactionId} style={{
-                        padding: "0.5rem",
-                        background: "#f9f9f9",
-                        borderRadius: "6px",
-                        fontSize: "0.85rem"
-                      }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.25rem" }}>
-                          <span style={{ fontWeight: "600" }}>{formatUGX(tx.amount)}</span>
-                          <span style={{
-                            color: tx.status === "completed" ? "#2e7d32" : tx.status === "pending" ? "#ff9800" : "#d32f2f",
-                            textTransform: "capitalize"
-                          }}>
-                            {tx.status}
-                          </span>
-                        </div>
-                        {tx.walletDepositUtid && (
-                          <div style={{ fontSize: "0.75rem", color: "#999", fontFamily: "monospace" }}>
-                            UTID: {tx.walletDepositUtid}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-            )}
-          </div>
-
-      {/* Inventory */}
-      {isSectionOpen("inventoryStorage") && (
-      <div id="section-inventoryStorage" style={{
-        marginBottom: "1.5rem",
-        padding: "clamp(1rem, 3vw, 1.5rem)",
-        background: "#fff",
-        borderRadius: "12px",
-        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        border: "1px solid #e0e0e0"
-      }}>
-        {renderHideControl("inventoryStorage")}
-        <h3 style={{ marginTop: 0, marginBottom: "1rem", fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", color: "#1a1a1a" }}>
-          Inventory in Storage
-        </h3>
-        <div style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: "0.5rem",
-          marginBottom: "0.75rem"
-        }}>
-          <div style={{ fontSize: "0.85rem", color: "#666" }}>Per page:</div>
-          <select
-            value={inventoryPageSize}
-            onChange={(e) => {
-              const nextSize = Number(e.target.value);
-              setInventoryPageSize(nextSize);
-              setInventoryPage(1);
-              updatePaginationPreferences({
-                userId,
-                listKey: inventoryPageKey,
-                pageSize: nextSize,
-              } as any);
-            }}
-            style={{ padding: "0.4rem 0.6rem", borderRadius: 6, border: "1px solid #ddd", fontSize: "0.85rem" }}
-          >
-            <option value={10}>10</option>
-            <option value={20}>20</option>
-            <option value={50}>50</option>
-          </select>
-        </div>
-        {inventory === undefined ? (
-          <p style={{ color: "#999" }}>Loading...</p>
-        ) : inventory.inventory.length === 0 ? (
-          <p style={{ color: "#666" }}>No inventory in storage</p>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-            {pagedInventory.map((item: any, index: number) => {
-              const totalPrice = item.originalPricePerKilo * item.totalKilos;
-              
-              return (
-                <div key={index} style={{
-                  padding: "clamp(1rem, 3vw, 1.5rem)",
-                  background: "#f9f9f9",
-                  borderRadius: "8px",
-                  border: "1px solid #e0e0e0",
-                  marginBottom: "0.5rem"
-                }}>
-                  {isMobile && (
-                    <div style={{ fontSize: "0.8rem", color: "#64748b", marginBottom: "0.35rem" }}>
-                      Hint: Check how long each block has been stored.
-                    </div>
-                  )}
-                  {/* Header with UTID */}
-                  <div style={{ 
-                    marginBottom: "1rem", 
-                    paddingBottom: "0.75rem", 
-                    borderBottom: "1px solid #e0e0e0" 
-                  }}>
-                    <div style={{
-                      fontSize: "clamp(0.9rem, 2.5vw, 1rem)",
-                      color: "#666",
-                      fontWeight: "600",
-                      marginBottom: "0.25rem",
-                      fontFamily: '"Montserrat", sans-serif',
-                    }}>
-                      Transaction UTID:
-                    </div>
-                    <div style={{ 
-                      fontSize: "clamp(0.98rem, 2.8vw, 1.26rem)", 
-                      color: "#2c2c2c", 
-                      fontFamily: "monospace",
-                      fontWeight: "700",
-                      letterSpacing: "0.05em",
-                      wordBreak: "break-all"
-                    }}>
-                      {item.utid}
-                    </div>
-                    {/* Delivery Location - Prominently Displayed */}
-                    {item.deliveryPoint && (
-                      <div style={{
-                        marginTop: "0.75rem",
-                        padding: "0.75rem",
-                        background: "#e3f2fd",
-                        borderRadius: "8px",
-                        border: "2px solid #1976d2",
-                      }}>
-                        <div style={{
-                          fontSize: "clamp(0.85rem, 2.5vw, 0.95rem)",
-                          color: "#1565c0",
-                          fontWeight: "700",
-                          marginBottom: "0.25rem",
-                          fontFamily: '"Montserrat", sans-serif',
-                          textTransform: "uppercase",
-                          letterSpacing: "0.5px"
-                        }}>
-                          Delivery Location:
-                        </div>
-                        <div style={{
-                          fontSize: "clamp(1rem, 3vw, 1.2rem)",
-                          color: "#1976d2",
-                          fontWeight: "700",
-                          fontFamily: '"Montserrat", sans-serif',
-                        }}>
-                          {item.deliveryPoint.name}, {item.deliveryPoint.district}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Produce Type and Quantity */}
-                  <div style={{ marginBottom: "1rem" }}>
-                    <div style={{ 
-                      fontSize: "1.1rem", 
-                      fontWeight: "600", 
-                      marginBottom: "0.5rem",
-                      color: "#1a1a1a"
-                    }}>
-                      {item.produceType}
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 140px), 1fr))", gap: "0.75rem" }}>
-                      <div>
-                        <div style={{ fontSize: "clamp(0.8rem, 2.5vw, 0.85rem)", color: "#666", marginBottom: "0.25rem" }}>
-                          Quantity
-                        </div>
-                        <div style={{ fontSize: "clamp(0.9rem, 3vw, 1rem)", fontWeight: "600", color: "#1976d2" }}>
-                          {item.totalKilos.toFixed(2)} kg
-                        </div>
-                        <div style={{ fontSize: "clamp(0.7rem, 2vw, 0.75rem)", color: "#999", marginTop: "0.25rem" }}>
-                          Original: {item.originalKilos.toFixed(2)} kg
-                        </div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: "clamp(0.8rem, 2.5vw, 0.85rem)", color: "#666", marginBottom: "0.25rem" }}>
-                          Price per Kilo
-                        </div>
-                        <div style={{ fontSize: "clamp(0.9rem, 3vw, 1rem)", fontWeight: "600", color: "#2e7d32" }}>
-                          {formatUGX(item.originalPricePerKilo)}
-                        </div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: "clamp(0.8rem, 2.5vw, 0.85rem)", color: "#666", marginBottom: "0.25rem" }}>
-                          Total Value
-                        </div>
-                        <div style={{ fontSize: "clamp(0.9rem, 3vw, 1rem)", fontWeight: "600", color: "#1a1a1a" }}>
-                          {formatUGX(totalPrice)}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Storage Details */}
-                  <div style={{ 
-                    padding: "0.75rem", 
-                    background: "#fff", 
-                    borderRadius: "6px",
-                    border: "1px solid #e0e0e0"
-                  }}>
-                    <div style={{ fontSize: "0.85rem", color: "#666", marginBottom: "0.5rem" }}>
-                      Storage Information
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 100px), 1fr))", gap: "0.5rem", fontSize: "clamp(0.75rem, 2.5vw, 0.85rem)" }}>
-                      <div>
-                        <div style={{ color: "#999", fontSize: "clamp(0.7rem, 2vw, 0.75rem)" }}>Days Stored</div>
-                        <div style={{ fontWeight: "600", color: "#1a1a1a", fontSize: "clamp(0.8rem, 2.5vw, 0.9rem)" }}>{item.daysInStorage.toFixed(1)}</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-            {inventoryTotal > 0 && (
-              <div style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                flexWrap: "wrap",
-                gap: "0.5rem"
-              }}>
-                <div style={{ fontSize: "0.8rem", color: "#666" }}>
-                  Showing {inventoryStart}-{inventoryEnd} of {inventoryTotal}
-                </div>
-                {inventoryTotalPages > 1 && (
-                  <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap" }}>
-                    <button
-                      type="button"
-                      onClick={() => setInventoryPage((prev) => Math.max(1, prev - 1))}
-                      disabled={inventoryPage === 1}
-                      style={{
-                        padding: "0.3rem 0.6rem",
-                        background: inventoryPage === 1 ? "#e0e0e0" : "#f5f5f5",
-                        color: "#333",
-                        border: "1px solid #ddd",
-                        borderRadius: "4px",
-                        cursor: inventoryPage === 1 ? "not-allowed" : "pointer",
-                        fontSize: "0.8rem",
-                        fontWeight: "600"
-                      }}
-                    >
-                      Prev
-                    </button>
-                    {Array.from({ length: inventoryTotalPages }, (_, idx) => {
-                      const page = idx + 1;
-                      const isActive = page === inventoryPage;
-                      return (
-                        <button
-                          key={page}
-                          type="button"
-                          onClick={() => setInventoryPage(page)}
-                          style={{
-                            padding: "0.3rem 0.6rem",
-                            background: isActive ? "#1976d2" : "#f5f5f5",
-                            color: isActive ? "#fff" : "#333",
-                            border: "1px solid #ddd",
-                            borderRadius: "4px",
-                            cursor: "pointer",
-                            fontSize: "0.8rem",
-                            fontWeight: "600"
-                          }}
-                        >
-                          {page}
-                        </button>
-                      );
-                    })}
-                    <button
-                      type="button"
-                      onClick={() => setInventoryPage((prev) => Math.min(inventoryTotalPages, prev + 1))}
-                      disabled={inventoryPage === inventoryTotalPages}
-                      style={{
-                        padding: "0.3rem 0.6rem",
-                        background: inventoryPage === inventoryTotalPages ? "#e0e0e0" : "#f5f5f5",
-                        color: "#333",
-                        border: "1px solid #ddd",
-                        borderRadius: "4px",
-                        cursor: inventoryPage === inventoryTotalPages ? "not-allowed" : "pointer",
-                        fontSize: "0.8rem",
-                        fontWeight: "600"
-                      }}
-                    >
-                      Next
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+      {/* Trace records: every lot bought, sold or held, back to the farms */}
+      {isSectionOpen("traceRecords") && (
+      <div id="section-traceRecords" style={{ marginBottom: "1.5rem", padding: "clamp(1rem, 3vw, 1.5rem)", background: "#fff", borderRadius: "12px", boxShadow: "0 2px 8px rgba(0,0,0,0.1)", border: "1px solid #e0e0e0" }}>
+        {renderHideControl("traceRecords")}
+        <h3 style={{ marginTop: 0, marginBottom: "0.5rem", fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", color: "#1a1a1a" }}>🌱 Trace Records</h3>
+        <p style={{ marginTop: 0, fontSize: "0.85rem", color: "#607d8b" }}>Every lot you bought or sold in the app, and your stock, traced back to the farms it came from.</p>
+        <TraceRecords userId={userId} />
       </div>
       )}
 
@@ -2802,134 +1576,6 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
         </div>
       </div>
       )}
-
-          {/* Pro View: Inventory Table */}
-          {isSectionOpen("inventoryTable") && (
-          <div id="section-inventoryTable" style={{
-            marginBottom: "1.5rem",
-            padding: "clamp(1rem, 3vw, 1.5rem)",
-            background: "#fff",
-            borderRadius: "12px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-            border: "1px solid #e0e0e0"
-          }}>
-            {renderHideControl("inventoryTable")}
-            <h3 style={{
-              marginTop: 0,
-              marginBottom: "1rem",
-              fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)",
-              color: "#2c2c2c",
-              fontFamily: '"Montserrat", sans-serif',
-              fontWeight: "600",
-              letterSpacing: "-0.01em"
-            }}>
-              Inventory Table
-            </h3>
-            {inventory === undefined ? (
-              <p style={{ color: "#999" }}>Loading...</p>
-            ) : inventory.inventory.length === 0 ? (
-              <p style={{ color: "#666" }}>No inventory</p>
-            ) : (
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead>
-                    <tr style={{ borderBottom: "2px solid #e0e0e0" }}>
-                      <th style={{ padding: "0.75rem", textAlign: "left", fontSize: "0.9rem", color: "#666" }}>Produce</th>
-                      <th style={{ padding: "0.75rem", textAlign: "left", fontSize: "0.9rem", color: "#666" }}>Qty</th>
-                      <th style={{ padding: "0.75rem", textAlign: "left", fontSize: "0.9rem", color: "#666" }}>Status</th>
-                      <th style={{ padding: "0.75rem", textAlign: "left", fontSize: "0.9rem", color: "#666" }}>Storage Days</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pagedInventory.map((item: any, idx: number) => (
-                      <tr key={idx} style={{ borderBottom: "1px solid #f0f0f0" }}>
-                        <td style={{ padding: "0.75rem", fontSize: "0.9rem" }}>{item.produceType}</td>
-                        <td style={{ padding: "0.75rem", fontSize: "0.9rem" }}>{item.totalKilos.toFixed(2)} kg</td>
-                        <td style={{ padding: "0.75rem", fontSize: "0.9rem" }}>In Storage</td>
-                        <td style={{ padding: "0.75rem", fontSize: "0.9rem" }}>{item.daysInStorage.toFixed(1)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {inventoryTotal > 0 && (
-                  <div style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    flexWrap: "wrap",
-                    gap: "0.5rem",
-                    marginTop: "0.75rem"
-                  }}>
-                    <div style={{ fontSize: "0.8rem", color: "#666" }}>
-                      Showing {inventoryStart}-{inventoryEnd} of {inventoryTotal}
-                    </div>
-                    {inventoryTotalPages > 1 && (
-                      <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap" }}>
-                        <button
-                          type="button"
-                          onClick={() => setInventoryPage((prev) => Math.max(1, prev - 1))}
-                          disabled={inventoryPage === 1}
-                          style={{
-                            padding: "0.3rem 0.6rem",
-                            background: inventoryPage === 1 ? "#e0e0e0" : "#f5f5f5",
-                            color: "#333",
-                            border: "1px solid #ddd",
-                            borderRadius: "4px",
-                            cursor: inventoryPage === 1 ? "not-allowed" : "pointer",
-                            fontSize: "0.8rem",
-                            fontWeight: "600"
-                          }}
-                        >
-                          Prev
-                        </button>
-                        {Array.from({ length: inventoryTotalPages }, (_, idx) => {
-                          const page = idx + 1;
-                          const isActive = page === inventoryPage;
-                          return (
-                            <button
-                              key={page}
-                              type="button"
-                              onClick={() => setInventoryPage(page)}
-                              style={{
-                                padding: "0.3rem 0.6rem",
-                                background: isActive ? "#1976d2" : "#f5f5f5",
-                                color: isActive ? "#fff" : "#333",
-                                border: "1px solid #ddd",
-                                borderRadius: "4px",
-                                cursor: "pointer",
-                                fontSize: "0.8rem",
-                                fontWeight: "600"
-                              }}
-                            >
-                              {page}
-                            </button>
-                          );
-                        })}
-                        <button
-                          type="button"
-                          onClick={() => setInventoryPage((prev) => Math.min(inventoryTotalPages, prev + 1))}
-                          disabled={inventoryPage === inventoryTotalPages}
-                          style={{
-                            padding: "0.3rem 0.6rem",
-                            background: inventoryPage === inventoryTotalPages ? "#e0e0e0" : "#f5f5f5",
-                            color: "#333",
-                            border: "1px solid #ddd",
-                            borderRadius: "4px",
-                            cursor: inventoryPage === inventoryTotalPages ? "not-allowed" : "pointer",
-                            fontSize: "0.8rem",
-                            fontWeight: "600"
-                          }}
-                        >
-                          Next
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-          )}
 
           {/* Pro View: Analytics */}
           {isSectionOpen("analytics") && (

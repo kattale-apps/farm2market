@@ -219,6 +219,12 @@ export default defineSchema({
     milestonePlan: v.optional(v.array(planStep)), // The seller's steps; each order keeps a copy
     stockSource: v.optional(v.union(v.literal("own_farm"), v.literal("in_app"), v.literal("off_app"))), // in_app: listed from stock bought in the app (traced)
     withdrawnAt: v.optional(v.number()), // The seller withdrew the unsold lots; lots from failed orders do not come back on the market
+    // Vended on MarketSpace (convex/marketCards.ts). The listing itself never expires; its card does.
+    vendedAt: v.optional(v.number()),
+    vendExpiresAt: v.optional(v.number()), // Card hides at this time unless refreshed; unset = not vended
+    vendRefreshDays: v.optional(v.number()),
+    isBulk: v.optional(v.boolean()), // Shown in Local Bulk (verified sellers only)
+    bulkRange: v.optional(v.string()), // marketspaceShared BULK_RANGES key
   })
     .index("by_farmer", ["farmerId"])
     .index("by_trader", ["traderId"])
@@ -443,6 +449,7 @@ export default defineSchema({
     ownerRole: v.optional(v.string()), // Owner's role when not an exporter (store, vendor)
     source: v.optional(v.union(v.literal("in_app"), v.literal("off_app"))), // in_app: bought through a lot order (traced to farms)
     lotOrderId: v.optional(v.id("lotOrders")), // The lot order this stock came from
+    reservedListingId: v.optional(v.id("listings")), // Listed as lots: not pooled into 100kg buyer blocks
   })
     .index("by_trader", ["traderId"])
     .index("by_status", ["status"])
@@ -4059,6 +4066,55 @@ export default defineSchema({
       filterFields: ["status", "groupId", "categoryId"],
     }),
 
+  /**
+   * MarketSpace cards: one small row per live post (a vended lot listing or
+   * a classified ad), so Discover reads one indexed table holding only what
+   * a card shows. Written by the mutations that change the source
+   * (convex/marketCards.ts); never edited directly.
+   */
+  marketCards: defineTable({
+    sourceKind: v.union(v.literal("listing"), v.literal("ad")),
+    listingId: v.optional(v.id("listings")),
+    adId: v.optional(v.id("marketspaceAds")),
+    view: v.union(v.literal("produce"), v.literal("lots"), v.literal("classifieds")), // produce: farmers; lots: vendors, processors, exporters
+    kind: v.union(v.literal("offer"), v.literal("wanted")),
+    isBulk: v.boolean(),
+    bulkRange: v.optional(v.string()),
+    title: v.string(),
+    groupId: v.optional(v.id("marketspaceGroups")), // Ads: hidden when the group or category is switched off
+    categoryId: v.optional(v.id("marketspaceCategories")),
+    sellerId: v.id("users"),
+    sellerRole: v.string(),
+    district: v.string(),
+    stockSource: v.optional(v.union(v.literal("own_farm"), v.literal("in_app"), v.literal("off_app"))),
+    lotKg: v.optional(v.number()),
+    bagKg: v.optional(v.number()),
+    bagsPerLot: v.optional(v.number()),
+    lotsAvailable: v.optional(v.number()),
+    qtyKg: v.optional(v.number()),
+    quantityText: v.optional(v.string()), // Ads: free-text quantity
+    pricePerKilo: v.optional(v.number()),
+    priceUGX: v.optional(v.number()), // Ads
+    priceUnit: v.optional(v.string()),
+    commitPercent: v.optional(v.number()),
+    qualityRating: v.optional(v.string()),
+    thumbStorageId: v.optional(v.id("_storage")),
+    status: v.union(v.literal("active"), v.literal("closed")), // Expiry is by time (expiresAt), not status
+    expiresAt: v.number(),
+    createdAt: v.number(), // When it was (last) put up
+    updatedAt: v.number(),
+  })
+    .index("by_status_created", ["status", "createdAt"])
+    .index("by_status_view_created", ["status", "view", "createdAt"])
+    .index("by_status_bulk_created", ["status", "isBulk", "createdAt"])
+    .index("by_listing", ["listingId"])
+    .index("by_ad", ["adId"])
+    .index("by_seller", ["sellerId", "createdAt"])
+    .searchIndex("search_title", {
+      searchField: "title",
+      filterFields: ["status", "view", "isBulk"],
+    }),
+
   marketspaceReports: defineTable({
     adId: v.id("marketspaceAds"),
     reason: v.union(
@@ -4091,6 +4147,8 @@ export default defineSchema({
     paidAdCostFarmcoin: v.optional(v.number()),
     maxPhotosPerAd: v.optional(v.number()),
     maxAdsPerDay: v.optional(v.number()),
+    maxVendDays: v.optional(v.number()), // Longest a vended listing stays up before a refresh
+    bulkVendCostFarmcoin: v.optional(v.number()), // FarmCoin to switch on "Sell in bulk"
     updatedBy: v.id("users"),
     updatedAt: v.number(),
   }),

@@ -80,6 +80,7 @@ import type * as locations from "../locations.js";
 import type * as lotOrders from "../lotOrders.js";
 import type * as lotOrdersDevCheck from "../lotOrdersDevCheck.js";
 import type * as lotOrdersShared from "../lotOrdersShared.js";
+import type * as marketCards from "../marketCards.js";
 import type * as marketOffers from "../marketOffers.js";
 import type * as marketOffersShared from "../marketOffersShared.js";
 import type * as marketPrices from "../marketPrices.js";
@@ -221,6 +222,7 @@ declare const fullApi: ApiFromModules<{
   lotOrders: typeof lotOrders;
   lotOrdersDevCheck: typeof lotOrdersDevCheck;
   lotOrdersShared: typeof lotOrdersShared;
+  marketCards: typeof marketCards;
   marketOffers: typeof marketOffers;
   marketOffersShared: typeof marketOffersShared;
   marketPrices: typeof marketPrices;

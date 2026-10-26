@@ -26,7 +26,6 @@
 
 import { v, ConvexError } from "convex/values";
 import { internalMutation, mutation, query, MutationCtx, QueryCtx } from "./_generated/server";
-import { internal } from "./_generated/api";
 import { Doc, Id } from "./_generated/dataModel";
 import { generateUTID, getUgandaTime, calculateTraderExposureInternal, getTraderCommissionPercentage } from "./utils";
 import { MAX_TRADER_EXPOSURE_UGX } from "./constants";
@@ -38,6 +37,7 @@ import { todayUganda } from "./exportMarkets";
 import { roleLabel } from "./roleLabels";
 import { assertEvidencePhotos, evidencePhotoValidator } from "./evidencePhotos";
 import { spendCapExceededError, throwAppError } from "./errors";
+import { syncListingCard } from "./marketCards";
 import {
   AUTO_SETTLE_MS,
   PAYMENT_GRACE_MS,
@@ -138,6 +138,16 @@ export async function refreshListingStatus(ctx: MutationCtx, listingId: Id<"list
           ? "delivered"
           : "cancelled";
   if (listing.status !== status) await ctx.db.patch(listingId, { status });
+
+  // Stock listed as lots: used up once every lot is delivered; free again if
+  // the listing closes with nothing sold.
+  if (listing.inventoryId && listing.farmerId && (status === "delivered" || status === "cancelled")) {
+    const stock = await ctx.db.get(listing.inventoryId);
+    if (stock?.reservedListingId === listingId) {
+      await ctx.db.patch(stock._id, status === "delivered" ? { status: "sold" } : { reservedListingId: undefined });
+    }
+  }
+  await syncListingCard(ctx, listingId);
 }
 
 /** Demo money held in an order's escrow, from its locks. */
@@ -212,10 +222,8 @@ async function addToStock(ctx: MutationCtx, order: Order, now: number) {
     source: "in_app",
     lotOrderId: order._id,
   });
-  // Only exporters' stock is pooled into 100kg blocks for buyers.
-  if (isExporter) {
-    await ctx.runMutation(internal.inventoryBlocks.checkAndCreate100kgBlocks, { traderId: order.buyerId });
-  }
+  // Stock bought through lot orders is not pooled into 100kg buyer blocks:
+  // its owner lists it as lots (with payment steps) instead.
 }
 
 /** The lot was collected: it is delivered on the unit and in both ledgers. */

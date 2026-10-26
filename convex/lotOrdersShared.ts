@@ -41,7 +41,8 @@ export const gpsValidator = v.object({
 });
 
 export const PURCHASER_ROLES = ["trader", "transporter", "store", "vendor", "buyer"] as const;
-export const LOT_SELLER_ROLES = ["farmer", "vendor", "store"] as const;
+// Exporters ("trader") list lots from their stock with the same form.
+export const LOT_SELLER_ROLES = ["farmer", "vendor", "store", "trader"] as const;
 
 export const MAX_PLAN_STEPS = 8;
 export const PAYMENT_GRACE_MS = 48 * 60 * 60 * 1000; // Buyer has 48 hours to pay a step's share
@@ -65,6 +66,23 @@ export function lotBuyingDecision(
   if (user.verificationStatus === "verified" || user.isVerifiedTrader === true) return { ok: true };
   if (user.role === "store" && approvedProcessor) return { ok: true };
   return { ok: false, reason: "Get verified by Farm2Market to buy lots. Ask the super admin to verify your account." };
+}
+
+/**
+ * Who can sell in bulk on MarketSpace: sellers the super admin verified.
+ * Exporters verified before the switch was widened, and processors whose
+ * facility the platform approved, count as verified.
+ */
+export function bulkSellingDecision(
+  user: { role: string; verificationStatus?: string; isVerifiedTrader?: boolean } | null,
+  approvedProcessor: boolean
+): { ok: boolean; reason?: string } {
+  if (!user || !(LOT_SELLER_ROLES as readonly string[]).includes(user.role)) {
+    return { ok: false, reason: "Only farmers, vendors, processors and exporters sell lots." };
+  }
+  if (user.verificationStatus === "verified" || user.isVerifiedTrader === true) return { ok: true };
+  if (user.role === "store" && approvedProcessor) return { ok: true };
+  return { ok: false, reason: "Selling in bulk is for verified sellers. Ask the super admin to verify your account." };
 }
 
 /** The steps a seller starts from: a farm for farmers, a store for vendors and processors. */

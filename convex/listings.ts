@@ -29,7 +29,8 @@ import { Id } from "./_generated/dataModel";
 import { deliveryPointOf, isActiveProcessor } from "./processors";
 import { todayUganda } from "./exportMarkets";
 import { assertEvidencePhotos, evidencePhotoValidator } from "./evidencePhotos";
-import { gpsValidator, lotTerms, planStepValidator } from "./lotOrdersShared";
+import { LOT_SELLER_ROLES, gpsValidator, lotTerms, planStepValidator } from "./lotOrdersShared";
+import { syncListingCard } from "./marketCards";
 
 /**
  * For vendor/store users, where buyers collect their listings, from their profile.
@@ -128,14 +129,14 @@ export const createListing = mutation({
     // so it must be blocked during pilot mode. The check happens FIRST to fail fast.
     await checkPilotMode(ctx);
 
-    // Verify user is a farmer
+    // Verify the seller: farmers, vendors, processors and exporters list lots
     const user = await ctx.db.get(args.farmerId);
-    if (!user || !["farmer", "vendor", "store"].includes(user.role)) {
+    if (!user || !(LOT_SELLER_ROLES as readonly string[]).includes(user.role)) {
       throwAppError(invalidRoleError("farmer"));
     }
 
-    // Check onboarding completion
-    if (!user.onboardingCompleted) {
+    // Check onboarding completion (exporters have their own profile, not this onboarding)
+    if (user.role !== "trader" && !user.onboardingCompleted) {
       throw new Error("Please complete your profile onboarding before creating listings. Go to the onboarding page to provide your location and farm size.");
     }
 
@@ -209,6 +210,8 @@ export const createListing = mutation({
       const inventory = await ctx.db.get(args.inventoryId);
       if (!inventory || inventory.traderId !== args.farmerId) throw new Error("Choose stock from your own inventory");
       if (inventory.status !== "in_storage") throw new Error("That stock is no longer in your store");
+      if (inventory.is100kgBlock) throw new Error("100 kg buyer blocks are already on sale to buyers; choose other stock");
+      if (inventory.reservedListingId) throw new Error("That stock is already listed");
       if (normalizedTotalKilos > inventory.totalKilos) {
         throw new Error(`That stock holds ${inventory.totalKilos} kg; list ${inventory.totalKilos} kg or less`);
       }
@@ -219,7 +222,8 @@ export const createListing = mutation({
       if (listed.some((l) => l.status === "active" || l.status === "partially_locked")) {
         throw new Error("That stock is already listed");
       }
-      stockSource = "in_app";
+      // Bought in the app (traced to farms), or declared by an exporter (off-app)
+      stockSource = inventory.source ?? (inventory.listingUnitIds.length > 0 ? "in_app" : "off_app");
     }
 
     // Generate UTID
@@ -314,6 +318,9 @@ export const createListing = mutation({
       collectionLocationText,
     });
 
+    // Stock listed as lots is reserved: it is not pooled into 100kg buyer blocks.
+    if (args.inventoryId) await ctx.db.patch(args.inventoryId, { reservedListingId: listingId });
+
     // Create individual units
     const unitIds = [];
     let remainingKilos = normalizedTotalKilos;
@@ -375,6 +382,8 @@ export const updateListingTerms = mutation({
       patch.photos = args.photos.length > 0 ? args.photos : undefined;
     }
     await ctx.db.patch(args.listingId, patch);
+    // A vended listing's MarketSpace card shows the new price, steps and photo at once.
+    await syncListingCard(ctx, args.listingId);
     return { success: true };
   },
 });

@@ -23,17 +23,21 @@ export const checkAndCreate100kgBlocks = internalMutation({
     traderId: v.id("users"),
   },
   handler: async (ctx, args) => {
-    // Get all inventory for this trader that is in_storage and not already a 100kg block
-    const allInventory = await ctx.db
-      .query("traderInventory")
-      .withIndex("by_trader", (q) => q.eq("traderId", args.traderId))
-      .filter((q) => 
-        q.and(
-          q.eq(q.field("status"), "in_storage"),
-          q.eq(q.field("is100kgBlock"), false)
+    // Get all inventory for this trader that is in_storage and not already a 100kg block.
+    // Stock bought through lot orders, or listed as lots, is sold as lots
+    // (convex/lotOrders.ts) and never pooled into blocks.
+    const allInventory = (
+      await ctx.db
+        .query("traderInventory")
+        .withIndex("by_trader", (q) => q.eq("traderId", args.traderId))
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("status"), "in_storage"),
+            q.eq(q.field("is100kgBlock"), false)
+          )
         )
-      )
-      .collect();
+        .collect()
+    ).filter((inv) => !inv.lotOrderId && !inv.reservedListingId);
 
     // Group by produce type and delivery point (blocks must be the same produce and place)
     const inventoryByProduceLocation = new Map<string, typeof allInventory>();

@@ -20,6 +20,8 @@ export type MarketspaceSettings = {
   extensionCostFarmcoin: number;
   maxPhotosPerAd: number;
   maxAdsPerDay: number; // Anti-spam: new ads one user can post in 24 hours
+  maxVendDays: number; // Longest a vended listing stays up before it must be refreshed
+  bulkVendCostFarmcoin: number; // FarmCoin to switch on "Sell in bulk" (0 = free)
 };
 
 /**
@@ -35,6 +37,8 @@ export const DEFAULT_SETTINGS: MarketspaceSettings = {
   extensionCostFarmcoin: 0,
   maxPhotosPerAd: 5,
   maxAdsPerDay: 5,
+  maxVendDays: 30,
+  bulkVendCostFarmcoin: 0,
 };
 
 /** Allowed range for each setting (whole numbers). */
@@ -47,6 +51,8 @@ export const SETTING_LIMITS: Record<keyof MarketspaceSettings, { min: number; ma
   extensionCostFarmcoin: { min: 0, max: 1_000_000, label: "Extension cost (FarmCoin)" },
   maxPhotosPerAd: { min: 1, max: 10, label: "Maximum photos per ad" },
   maxAdsPerDay: { min: 1, max: 100, label: "Maximum new ads per user per day" },
+  maxVendDays: { min: 7, max: 90, label: "Longest a vended listing stays up (days)" },
+  bulkVendCostFarmcoin: { min: 0, max: 1_000_000, label: "Sell in bulk cost (FarmCoin)" },
 };
 
 /** Saved settings with defaults filled in for anything not saved yet. */
@@ -192,4 +198,57 @@ export function validateAd(ad: AdInput, maxPhotos: number): string | null {
   if (ad.kind === "offer" && ad.neededBy) return "Only Wanted ads have a 'needed by' date.";
   if (ad.photoCount > maxPhotos) return `Add at most ${maxPhotos} photo${maxPhotos === 1 ? "" : "s"}.`;
   return null;
+}
+
+// ------------------------------------------------------------------
+// Vending lot listings on MarketSpace
+// ------------------------------------------------------------------
+
+/** How long a vended listing stays up before it must be refreshed (the "self-destruct timer"). */
+export function vendDayChoices(maxVendDays: number): number[] {
+  return [7, 14, 30, 60, 90].filter((d) => d <= maxVendDays);
+}
+
+/** Preset bulk ranges a verified seller picks from; the kilos for sale must fall in the range. */
+export const BULK_RANGES = [
+  { key: "100kg_1t", label: "100 kg – 1 tonne", minKg: 100, maxKg: 1000 },
+  { key: "1t_5t", label: "1 – 5 tonnes", minKg: 1000, maxKg: 5000 },
+  { key: "5t_20t", label: "5 – 20 tonnes", minKg: 5000, maxKg: 20000 },
+  { key: "over_20t", label: "Over 20 tonnes", minKg: 20000, maxKg: null as number | null },
+] as const;
+
+export type BulkRangeKey = (typeof BULK_RANGES)[number]["key"];
+
+export function bulkRange(key: string | undefined | null) {
+  return BULK_RANGES.find((r) => r.key === key) ?? null;
+}
+
+/** Why `kg` does not fit the range, or null when it does. */
+export function bulkRangeProblem(key: string, kg: number): string | null {
+  const range = bulkRange(key);
+  if (!range) return "Choose one of the bulk ranges.";
+  if (kg < range.minKg || (range.maxKg !== null && kg > range.maxKg)) {
+    return `This listing has ${kg.toLocaleString()} kg for sale, which is not in "${range.label}".`;
+  }
+  return null;
+}
+
+// ------------------------------------------------------------------
+// The lite card: what visitors and unverified viewers see
+// ------------------------------------------------------------------
+
+/** "UGX 1,000 – 1,500 /kg": a price band in steps of 500 (lite cards hide the exact price). */
+export function priceBand(pricePerKilo: number | undefined | null): string | null {
+  if (!pricePerKilo || pricePerKilo <= 0) return null;
+  const step = pricePerKilo < 2000 ? 500 : pricePerKilo < 10000 ? 1000 : 5000;
+  const low = Math.floor(pricePerKilo / step) * step;
+  return `UGX ${low.toLocaleString()} – ${(low + step).toLocaleString()} /kg`;
+}
+
+/** A rough quantity for lite cards: "under 100 kg", "1 – 5 tonnes", ... */
+export function quantityBand(kg: number | undefined | null): string | null {
+  if (!kg || kg <= 0) return null;
+  if (kg < 100) return "under 100 kg";
+  const range = BULK_RANGES.find((r) => kg >= r.minKg && (r.maxKg === null || kg <= r.maxKg));
+  return range?.label ?? null;
 }

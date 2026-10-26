@@ -23,18 +23,25 @@ import { internal } from "./_generated/api";
 import { Doc, Id } from "./_generated/dataModel";
 import { generateUTID, getUgandaTime } from "./utils";
 import {
+  BULK_RANGES,
   DAY_MS,
   STARTER_GROUPS,
+  bulkRangeProblem,
   daysText,
   extendedExpiry,
   nextAdTerms,
   normalizeUgandaPhone,
   validateAd,
   validateSettings,
+  vendDayChoices,
   walletForRole,
   withDefaults,
   type MarketspaceSettings,
 } from "./marketspaceShared";
+import { syncAdCard, syncListingCard } from "./marketCards";
+import { bulkSellingDecision, defaultPlan } from "./lotOrdersShared";
+import { isActiveProcessor } from "./processors";
+import { todayUganda } from "./exportMarkets";
 
 type Ctx = QueryCtx | MutationCtx;
 
@@ -569,6 +576,7 @@ export const createAd = mutation({
     };
     if (record) await ctx.db.patch(record._id, counts);
     else await ctx.db.insert("marketspacePosters", { userId: user._id, ...counts });
+    await syncAdCard(ctx, adId);
     return { adId, utid, days: terms.days, cost: terms.cost, paid: !terms.free };
   },
 });
@@ -585,6 +593,7 @@ export const updateAd = mutation({
       if (!clean.photoIds.includes(id)) await ctx.storage.delete(id);
     }
     await ctx.db.patch(ad._id, { ...clean, updatedAt: getUgandaTime() });
+    await syncAdCard(ctx, ad._id);
     return { success: true };
   },
 });
@@ -595,6 +604,7 @@ export const markSold = mutation({
     const { ad } = await requireOwnAd(ctx, args.sessionToken, args.adId);
     if (ad.status === "removed") throw new Error("An admin removed this ad.");
     await ctx.db.patch(ad._id, { status: "sold", updatedAt: getUgandaTime() });
+    await syncAdCard(ctx, ad._id);
     return { success: true };
   },
 });
@@ -607,6 +617,7 @@ export const deleteAd = mutation({
     const reports = await ctx.db.query("marketspaceReports").withIndex("by_adId", (q) => q.eq("adId", ad._id)).take(500);
     for (const r of reports) await ctx.db.delete(r._id);
     await ctx.db.delete(ad._id);
+    await syncAdCard(ctx, ad._id);
     return { success: true };
   },
 });
@@ -630,7 +641,189 @@ export const extendAd = mutation({
     const now = getUgandaTime();
     const expiresAt = extendedExpiry(ad.expiresAt, now, settings.extensionDays);
     await ctx.db.patch(ad._id, { status: "active", expiresAt, updatedAt: now });
+    await syncAdCard(ctx, ad._id);
     return { expiresAt, cost, days: settings.extensionDays };
+  },
+});
+
+// ------------------------------------------------------------------
+// Sellers: vend lot listings on MarketSpace
+//
+// Any lot listing (farmer, vendor, processor or exporter) can be vended.
+// Its card stays up for the days the seller chose and then hides unless
+// refreshed; the listing itself never expires. "Sell in bulk" puts it in
+// Local Bulk and is for verified sellers. The payment steps are edited with
+// listings.updateListingTerms, from the vend sheet or from My posts.
+// ------------------------------------------------------------------
+
+async function requireOwnListing(ctx: Ctx, token: string, listingId: Id<"listings">) {
+  const user = await requireUser(ctx, token);
+  const listing = await ctx.db.get(listingId);
+  if (!listing || listing.farmerId !== user._id) throw new Error("This listing is not yours.");
+  return { user, listing };
+}
+
+async function canSellBulk(ctx: Ctx, user: Doc<"users">) {
+  const approvedProcessor =
+    user.role === "store" && user.verificationStatus !== "verified" ? await isActiveProcessor(ctx, user._id, todayUganda()) : false;
+  return bulkSellingDecision(user, approvedProcessor);
+}
+
+async function lotsLeft(ctx: Ctx, listingId: Id<"listings">) {
+  const units = await ctx.db
+    .query("listingUnits")
+    .withIndex("by_listing", (q) => q.eq("listingId", listingId))
+    .collect();
+  return units.filter((u) => u.status === "available").length;
+}
+
+/** Put a lot listing on MarketSpace (or change how long it stays up, or its bulk setting). */
+export const vendListing = mutation({
+  args: {
+    sessionToken: v.string(),
+    listingId: v.id("listings"),
+    days: v.number(),
+    bulkRange: v.optional(v.string()), // marketspaceShared BULK_RANGES key; omit to sell normally
+    // The bulk cost the sheet showed; if the price changed meanwhile, vending is stopped.
+    expectedBulkCostFarmcoin: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const { user, listing } = await requireOwnListing(ctx, args.sessionToken, args.listingId);
+    if (listing.listingMode === "packaging") throw new Error("Packaged items are sold from your shop, not as lots.");
+    if (listing.withdrawnAt || (listing.status !== "active" && listing.status !== "partially_locked")) {
+      throw new Error("This listing is not for sale any more.");
+    }
+    const lots = await lotsLeft(ctx, listing._id);
+    if (lots === 0) throw new Error("Every lot of this listing is sold or in an order.");
+    if (!listing.photos?.length) throw new Error("Add at least one photo (Edit terms) before vending.");
+
+    const settings = await getSettings(ctx);
+    if (!vendDayChoices(settings.maxVendDays).includes(args.days)) {
+      throw new Error(`Choose how long it stays up: ${vendDayChoices(settings.maxVendDays).join(", ")} days.`);
+    }
+
+    const now = getUgandaTime();
+    let bulk: string | undefined;
+    if (args.bulkRange) {
+      const access = await canSellBulk(ctx, user);
+      if (!access.ok) throw new Error(access.reason);
+      const problem = bulkRangeProblem(args.bulkRange, lots * (listing.unitSize || 10));
+      if (problem) throw new Error(problem);
+      bulk = args.bulkRange;
+      // Switching bulk on may cost FarmCoin (a super admin setting, 0 = free).
+      const cost = listing.isBulk ? 0 : settings.bulkVendCostFarmcoin;
+      if (cost !== (listing.isBulk ? 0 : args.expectedBulkCostFarmcoin)) {
+        throw new Error(cost === 0 ? "Selling in bulk is now free. Please check and vend again." : `Selling in bulk now costs ${cost} FarmCoin. Please check and vend again.`);
+      }
+      if (cost > 0) {
+        await chargeFarmcoin(ctx, user, cost, { title: listing.produceType, utid: listing.utid }, "marketspace_paid_ad", `MarketSpace: sell in bulk (${listing.produceType})`);
+      }
+    }
+
+    const live = listing.vendExpiresAt !== undefined && listing.vendExpiresAt > now;
+    await ctx.db.patch(listing._id, {
+      vendedAt: live ? listing.vendedAt ?? now : now,
+      vendRefreshDays: args.days,
+      vendExpiresAt: now + args.days * DAY_MS,
+      isBulk: !!bulk,
+      bulkRange: bulk,
+    });
+    await syncListingCard(ctx, listing._id);
+    return { expiresAt: now + args.days * DAY_MS, isBulk: !!bulk };
+  },
+});
+
+/** Keep a vended listing up for another period of the days it was vended for. */
+export const refreshVend = mutation({
+  args: { sessionToken: v.string(), listingId: v.id("listings") },
+  handler: async (ctx, args) => {
+    const { listing } = await requireOwnListing(ctx, args.sessionToken, args.listingId);
+    if (listing.vendExpiresAt === undefined || !listing.vendRefreshDays) throw new Error("This listing is not on MarketSpace.");
+    const now = getUgandaTime();
+    const expiresAt = now + listing.vendRefreshDays * DAY_MS;
+    await ctx.db.patch(listing._id, { vendExpiresAt: expiresAt });
+    await syncListingCard(ctx, listing._id);
+    return { expiresAt };
+  },
+});
+
+/** Take a listing off MarketSpace. It stays in the seller's ledger and on sale to verified buyers. */
+export const stopVend = mutation({
+  args: { sessionToken: v.string(), listingId: v.id("listings") },
+  handler: async (ctx, args) => {
+    const { listing } = await requireOwnListing(ctx, args.sessionToken, args.listingId);
+    await ctx.db.patch(listing._id, { vendExpiresAt: undefined });
+    await syncListingCard(ctx, listing._id);
+    return { success: true };
+  },
+});
+
+/**
+ * The signed-in seller's lot listings for the vend sheet and My posts: what
+ * is vended and until when, the payment terms (editable), and whether they
+ * may sell in bulk.
+ */
+export const myLots = query({
+  args: { sessionToken: v.string() },
+  handler: async (ctx, args) => {
+    const user = await sessionUser(ctx, args.sessionToken);
+    if (!user) return null;
+    const settings = await getSettings(ctx);
+    const listings = await ctx.db
+      .query("listings")
+      .withIndex("by_farmer", (q) => q.eq("farmerId", user._id))
+      .order("desc")
+      .take(100);
+    const lots = [];
+    for (const l of listings) {
+      if (l.listingMode === "packaging" || l.withdrawnAt) continue;
+      if (l.status !== "active" && l.status !== "partially_locked") continue;
+      const commitPercent = l.commitPercent ?? 100;
+      lots.push({
+        listingId: l._id,
+        utid: l.utid,
+        produceType: l.produceType,
+        listingMode: l.listingMode ?? "unit",
+        unitSize: l.unitSize || 10,
+        bagKg: l.bagKg ?? null,
+        bagsPerLot: l.bagsPerLot ?? null,
+        lotsLeft: await lotsLeft(ctx, l._id),
+        pricePerKilo: l.pricePerKilo,
+        commitPercent: l.commitPercent ?? null,
+        milestonePlan: l.milestonePlan ?? defaultPlan(user.role, commitPercent),
+        hasCustomPlan: !!l.milestonePlan,
+        photoCount: l.photos?.length ?? 0,
+        stockSource: l.stockSource ?? null,
+        vendExpiresAt: l.vendExpiresAt ?? null,
+        vendRefreshDays: l.vendRefreshDays ?? null,
+        isBulk: !!l.isBulk,
+        bulkRange: l.bulkRange ?? null,
+      });
+    }
+    const bulk = await canSellBulk(ctx, user);
+    return {
+      userId: user._id,
+      role: user.role,
+      lots,
+      dayChoices: vendDayChoices(settings.maxVendDays),
+      bulkRanges: BULK_RANGES,
+      canSellBulk: bulk.ok,
+      bulkReason: bulk.reason ?? null,
+      bulkCostFarmcoin: settings.bulkVendCostFarmcoin,
+    };
+  },
+});
+
+/** One-off: give every live ad its card (run once after deploying cards). */
+export const backfillAdCards = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const ads = await ctx.db
+      .query("marketspaceAds")
+      .withIndex("by_status_and_createdAt", (q) => q.eq("status", "active"))
+      .take(2000);
+    for (const ad of ads) await syncAdCard(ctx, ad._id);
+    return { cards: ads.length };
   },
 });
 
@@ -808,6 +1001,8 @@ const settingsFields = {
   extensionCostFarmcoin: v.number(),
   maxPhotosPerAd: v.number(),
   maxAdsPerDay: v.number(),
+  maxVendDays: v.number(),
+  bulkVendCostFarmcoin: v.number(),
 };
 
 /** The settings in effect, and which ones are still on their default. */
@@ -905,6 +1100,7 @@ export const removeAd = mutation({
     if (!ad) throw new Error("Ad not found.");
     const now = getUgandaTime();
     await ctx.db.patch(ad._id, { status: "removed", removedBy: admin._id, removedReason: reason, removedAt: now, updatedAt: now });
+    await syncAdCard(ctx, ad._id);
     await resolveReports(ctx, ad._id, "actioned", admin._id);
     await ctx.db.insert("adminActions", {
       adminId: admin._id,
@@ -943,6 +1139,7 @@ export const expireAds = internalMutation({
       .take(200);
     for (const ad of due) {
       await ctx.db.patch(ad._id, { status: "expired", updatedAt: now });
+      await syncAdCard(ctx, ad._id);
       await notifyOwner(
         ctx,
         ad.ownerId,

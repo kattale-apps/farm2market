@@ -8,11 +8,34 @@ import { useRouter } from "next/navigation";
 import { FarmCoinReward, FarmCoinVideoPreloader } from "./FarmCoinAnimation";
 import { FarmCoinIcon } from "./icons/Brand";
 import { ugandaDateFromInstant } from "../../convex/exportMarketsShared";
+import { LOT_BAG_SIZES_KG } from "../../convex/constants";
 
 interface CreateListingProps {
   userId: Id<"users">;
   userRole?: "farmer" | "vendor" | "store";
 }
+
+// A blank listing form. Lots start at one lot of one bag; the seller picks the bag size.
+const EMPTY_FORM = {
+  produceType: "",
+  pricePerKilo: "",
+  qualityRating: "",
+  qualityComment: "",
+  deliveryProcessorId: "" as string | "",
+  // Lot fields (by weight)
+  bagKg: "",
+  bagsPerLot: "1",
+  lotCount: "1",
+  // Garden mode fields
+  gardenSize: "",
+  gardenLength: "",
+  gardenWidth: "",
+  totalPrice: "",
+  // Packaging mode fields
+  packagingType: "",
+  availableUnits: "",
+  pricePerUnit: "",
+};
 
 export function CreateListing({ userId, userRole }: CreateListingProps) {
   const router = useRouter();
@@ -67,23 +90,18 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
     "🥛","🧈","☕","🍵","🍯","🫒","🌰","🥜","🌻","🌿",
   ];
 
-  const [formData, setFormData] = useState({
-    produceType: "",
-    totalKilos: "",
-    pricePerKilo: "",
-    qualityRating: "",
-    qualityComment: "",
-    deliveryProcessorId: "" as string | "",
-    // Garden mode fields
-    gardenSize: "",
-    gardenLength: "",
-    gardenWidth: "",
-    totalPrice: "",
-    // Packaging mode fields
-    packagingType: "",
-    availableUnits: "",
-    pricePerUnit: "",
-  });
+  const [formData, setFormData] = useState(EMPTY_FORM);
+
+  // Lots (by weight): one lot is bagsPerLot bags of bagKg; buyers buy whole lots.
+  const lotPlan = useMemo(() => {
+    const bagKg = parseFloat(formData.bagKg);
+    const bagsPerLot = parseInt(formData.bagsPerLot, 10);
+    const lotCount = parseInt(formData.lotCount, 10);
+    if (!(bagKg > 0) || !(bagsPerLot >= 1) || !(lotCount >= 1)) return null;
+    const lotKg = Math.round(bagKg * bagsPerLot * 100) / 100;
+    return { bagKg, bagsPerLot, lotCount, lotKg, totalKilos: Math.round(lotKg * lotCount * 100) / 100 };
+  }, [formData.bagKg, formData.bagsPerLot, formData.lotCount]);
+  const [customBagSize, setCustomBagSize] = useState(false);
 
   // Load custom products and packaging from localStorage
   useEffect(() => {
@@ -270,11 +288,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
         });
 
         // Reset form
-        setFormData({
-          produceType: "", totalKilos: "", pricePerKilo: "", qualityRating: "", qualityComment: "",
-          deliveryProcessorId: "", gardenSize: "", gardenLength: "", gardenWidth: "", totalPrice: "",
-          packagingType: "", availableUnits: "", pricePerUnit: "",
-        });
+        setFormData(EMPTY_FORM);
         setCustomPackagingInput("");
         setListingMode("unit");
         setTimeout(() => { setShowForm(false); setMessage(null); }, 5000);
@@ -286,12 +300,12 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
       if (listingMode === "garden") {
         totalKilos = 1;
       } else {
-        totalKilos = parseFloat(formData.totalKilos);
-        if (isNaN(totalKilos) || totalKilos <= 0) {
-          setMessage({ type: "error", text: "Total kilos must be a positive number" });
+        if (!lotPlan) {
+          setMessage({ type: "error", text: "Choose a bag size, the bags in each lot and the number of lots" });
           setLoading(false);
           return;
         }
+        totalKilos = lotPlan.totalKilos;
       }
 
       let pricePerKilo: number;
@@ -341,10 +355,11 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
         }
       }
 
+      const lots = listingMode === "unit" ? lotPlan : null;
       const result = await createListing({
         farmerId: userId,
         produceType: formData.produceType.trim(),
-        totalKilos,
+        totalKilos: lots ? undefined : totalKilos,
         pricePerKilo,
         qualityRating: formData.qualityRating || undefined,
         qualityComment: formData.qualityComment.trim() || undefined,
@@ -353,29 +368,21 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
         gardenSize,
         gardenDimensions,
         totalPrice,
+        bagKg: lots?.bagKg,
+        bagsPerLot: lots?.bagsPerLot,
+        lotCount: lots?.lotCount,
       });
 
       setMessage({
         type: "success",
-        text: `Listing created successfully! UTID: ${result.utid}. ${result.totalUnits} unit(s) created.`,
+        text: lots
+          ? `Listing created! UTID: ${result.utid}. ${result.totalUnits} lot(s) of ${lots.lotKg} kg are now for sale.`
+          : `Listing created successfully! UTID: ${result.utid}. ${result.totalUnits} unit(s) created.`,
       });
 
       // Reset form
-      setFormData({
-        produceType: "",
-        totalKilos: "",
-        pricePerKilo: "",
-        qualityRating: "",
-        qualityComment: "",
-        deliveryProcessorId: "",
-        gardenSize: "",
-        gardenLength: "",
-        gardenWidth: "",
-        totalPrice: "",
-        packagingType: "",
-        availableUnits: "",
-        pricePerUnit: "",
-      });
+      setFormData(EMPTY_FORM);
+      setCustomBagSize(false);
       setListingMode("unit");
       setGardenSizeMode("acres");
 
@@ -639,21 +646,8 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
           onClick={() => {
             setShowForm(false);
             setMessage(null);
-            setFormData({
-              produceType: "",
-              totalKilos: "",
-              pricePerKilo: "",
-              qualityRating: "",
-              qualityComment: "",
-              deliveryProcessorId: "",
-              gardenSize: "",
-              gardenLength: "",
-              gardenWidth: "",
-              totalPrice: "",
-              packagingType: "",
-              availableUnits: "",
-              pricePerUnit: "",
-            });
+            setFormData(EMPTY_FORM);
+            setCustomBagSize(false);
             setListingMode("unit");
             setGardenSizeMode("acres");
           }}
@@ -732,7 +726,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
                   checked={listingMode === "unit"}
                   onChange={() => setListingMode("unit")}
                 />
-                <span>By Weight (kilos)</span>
+                <span>By weight (bags and lots)</span>
               </label>
               <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
                 <input
@@ -760,7 +754,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
                   checked={listingMode === "unit"}
                   onChange={(e) => setListingMode(e.target.value as "unit" | "garden")}
                 />
-                <span>Unit Sale (10kg units)</span>
+                <span>Sell in bags and lots</span>
               </label>
               <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
                 <input
@@ -1103,28 +1097,89 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
           </div>
 
           {listingMode !== "garden" && listingMode !== "packaging" && (
-            <div>
-              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
-                Total Kilos *
-              </label>
-              <input
-                type="number"
-                value={formData.totalKilos}
-                onChange={(e) => setFormData({ ...formData, totalKilos: e.target.value })}
-                placeholder="e.g., 50, 100, 150"
-                min="0.1"
-                step="0.1"
-                required
-                style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  border: "1px solid #ddd",
-                  borderRadius: "6px",
-                  fontSize: "1rem",
-                }}
-              />
-              <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.85rem", color: "#666" }}>
-                You can list any amount of kilos. Units will be created automatically (10kg each, or less if total is under 10kg).
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+              <div>
+                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                  Bag size *
+                </label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+                  {LOT_BAG_SIZES_KG.map((kg) => {
+                    const chosen = !customBagSize && formData.bagKg === String(kg);
+                    return (
+                      <button
+                        key={kg}
+                        type="button"
+                        onClick={() => { setCustomBagSize(false); setFormData({ ...formData, bagKg: String(kg) }); }}
+                        style={{ minHeight: 44, padding: "0 0.9rem", borderRadius: 999, border: `2px solid ${chosen ? "#2e7d32" : "#ddd"}`, background: chosen ? "#e8f5e9" : "#fff", color: "#222", fontWeight: 700, cursor: "pointer" }}
+                      >
+                        {kg} kg
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => { setCustomBagSize(true); setFormData({ ...formData, bagKg: "" }); }}
+                    style={{ minHeight: 44, padding: "0 0.9rem", borderRadius: 999, border: `2px solid ${customBagSize ? "#2e7d32" : "#ddd"}`, background: customBagSize ? "#e8f5e9" : "#fff", color: "#222", fontWeight: 700, cursor: "pointer" }}
+                  >
+                    Other
+                  </button>
+                </div>
+                {customBagSize && (
+                  <input
+                    type="number"
+                    value={formData.bagKg}
+                    onChange={(e) => setFormData({ ...formData, bagKg: e.target.value })}
+                    placeholder="Bag size in kg, e.g. 70"
+                    min="0.1"
+                    step="0.1"
+                    required
+                    style={{ width: "100%", marginTop: "0.5rem", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "6px", fontSize: "1rem" }}
+                  />
+                )}
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "0.75rem" }}>
+                <div>
+                  <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                    Bags in each lot *
+                  </label>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={formData.bagsPerLot}
+                    onChange={(e) => setFormData({ ...formData, bagsPerLot: e.target.value })}
+                    min="1"
+                    step="1"
+                    required
+                    style={{ width: "100%", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "6px", fontSize: "1rem" }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                    Number of lots *
+                  </label>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={formData.lotCount}
+                    onChange={(e) => setFormData({ ...formData, lotCount: e.target.value })}
+                    min="1"
+                    step="1"
+                    required
+                    style={{ width: "100%", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "6px", fontSize: "1rem" }}
+                  />
+                </div>
+              </div>
+
+              {lotPlan && (
+                <div style={{ padding: "0.75rem 0.9rem", borderRadius: 8, background: "#e8f5e9", border: "1px solid #a5d6a7", color: "#1b5e20", fontSize: "0.95rem", lineHeight: 1.5 }}>
+                  You are selling <strong>{lotPlan.lotCount} lot{lotPlan.lotCount === 1 ? "" : "s"}</strong>.
+                  {" "}Each lot is {lotPlan.bagsPerLot} bag{lotPlan.bagsPerLot === 1 ? "" : "s"} of {lotPlan.bagKg} kg = <strong>{lotPlan.lotKg.toLocaleString()} kg</strong>.
+                  {" "}Total: <strong>{lotPlan.totalKilos.toLocaleString()} kg</strong>.
+                </div>
+              )}
+              <p style={{ margin: 0, fontSize: "0.85rem", color: "#666" }}>
+                Buyers buy whole lots. Make one big lot for one buyer, or small lots so many buyers can buy.
               </p>
             </div>
           )}
@@ -1357,9 +1412,9 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
                   fontSize: "1rem",
                 }}
               />
-              {formData.totalKilos && formData.pricePerKilo && (
+              {lotPlan && parseFloat(formData.pricePerKilo) > 0 && (
                 <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.85rem", color: "#666" }}>
-                  Total Value: {formatUGX(parseFloat(formData.totalKilos || "0") * parseFloat(formData.pricePerKilo || "0"))}
+                  One lot: {formatUGX(lotPlan.lotKg * parseFloat(formData.pricePerKilo))} · All lots: {formatUGX(lotPlan.totalKilos * parseFloat(formData.pricePerKilo))}
                 </p>
               )}
             </div>
@@ -1441,21 +1496,8 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
               onClick={() => {
                 setShowForm(false);
                 setMessage(null);
-                setFormData({
-                  produceType: "",
-                  totalKilos: "",
-                  pricePerKilo: "",
-                  qualityRating: "",
-                  qualityComment: "",
-                  deliveryProcessorId: "",
-                  gardenSize: "",
-                  gardenLength: "",
-                  gardenWidth: "",
-                  totalPrice: "",
-                  packagingType: "",
-                  availableUnits: "",
-                  pricePerUnit: "",
-                });
+                setFormData(EMPTY_FORM);
+                setCustomBagSize(false);
                 setListingMode("unit");
               }}
               style={{

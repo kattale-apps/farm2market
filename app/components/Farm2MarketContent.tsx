@@ -18,6 +18,25 @@ interface Farm2MarketContentProps {
   isMobile: boolean;
 }
 
+/** "10 lots × 100 kg (2 bags of 50 kg)"; older listings read "10 units × 10 kg". */
+function lotSummary(l: { totalUnits: number; unitSize?: number; bagKg?: number | null; bagsPerLot?: number | null }) {
+  const size = l.unitSize || 10;
+  if (!l.bagKg) return `${l.totalUnits} unit${l.totalUnits === 1 ? "" : "s"} × ${size} kg`;
+  const bags = l.bagsPerLot ?? 1;
+  return `${l.totalUnits} lot${l.totalUnits === 1 ? "" : "s"} × ${size} kg (${bags} bag${bags === 1 ? "" : "s"} of ${l.bagKg} kg)`;
+}
+
+/** What the farmer reads on a listing, from its lot counts. */
+function listingStatus(l: { status: string; units: { available: number; locked: number; delivered: number } }) {
+  const sold = l.units.locked + l.units.delivered;
+  if (l.status === "cancelled") return { label: "Withdrawn", color: "#999" };
+  if (l.units.available > 0 && sold > 0) return { label: "Some lots sold", color: "#ff9800" };
+  if (l.units.available > 0) return { label: "Available", color: "#4caf50" };
+  if (l.units.locked > 0) return { label: "Locked", color: "#2196f3" };
+  if (l.units.delivered > 0) return { label: "Sold", color: "#2e7d32" };
+  return { label: "Withdrawn", color: "#999" };
+}
+
 export function Farm2MarketContent({ userId, userRole, isMobile }: Farm2MarketContentProps) {
   const effectiveRole = userRole || "farmer";
 
@@ -588,14 +607,11 @@ export function Farm2MarketContent({ userId, userRole, isMobile }: Farm2MarketCo
             {transactionsView === "list" ? (
               <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
                 {pagedTransactions.map((listing: any, index: number) => {
-                  let status = "Available", statusColor = "#4caf50";
-                  if (listing.units.locked > 0 && listing.units.available > 0) { status = "Partially Locked"; statusColor = "#ff9800"; }
-                  else if (listing.units.locked === listing.totalUnits) { status = "Locked"; statusColor = "#2196f3"; }
-                  else if (listing.units.delivered > 0) { status = "Sold"; statusColor = "#2e7d32"; }
+                  const { label: status, color: statusColor } = listingStatus(listing);
                   return (
                     <div key={index} onClick={() => setSelectedListing(listing)} style={{ padding: "0.75rem 1rem", background: "#f9f9f9", borderRadius: "8px", border: `1px solid ${statusColor}`, cursor: "pointer" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                        <div style={{ fontWeight: "600", color: "#2c2c2c" }}>{getProduceEmoji(listing.produceType)} {listing.produceType} • {listing.totalUnits} units</div>
+                        <div style={{ fontWeight: "600", color: "#2c2c2c" }}>{getProduceEmoji(listing.produceType)} {listing.produceType} • {lotSummary(listing)}</div>
                         <span style={{ padding: "0.2rem 0.6rem", borderRadius: "999px", fontSize: "0.75rem", fontWeight: "600", background: statusColor, color: "#fff" }}>{status}</span>
                       </div>
                       <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.35rem", fontFamily: "monospace" }}>UTID: {listing.utid}</div>
@@ -606,18 +622,17 @@ export function Farm2MarketContent({ userId, userRole, isMobile }: Farm2MarketCo
             ) : (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 200px), 1fr))", gap: "1rem" }}>
                 {pagedTransactions.map((listing: any, index: number) => {
-                  let status = "Available", statusColor = "#4caf50";
-                  if (listing.units.locked > 0 && listing.units.available > 0) { status = "Partially Locked"; statusColor = "#ff9800"; }
-                  else if (listing.units.locked === listing.totalUnits) { status = "Locked"; statusColor = "#2196f3"; }
-                  else if (listing.units.delivered > 0) { status = "Sold"; statusColor = "#2e7d32"; }
-                  const canCancel = listing.units.locked === 0 && listing.units.delivered === 0 && listing.status !== "cancelled";
+                  const { label: status, color: statusColor } = listingStatus(listing);
+                  // Unsold lots can always be withdrawn; sold lots stay with their buyers.
+                  const soldLots = listing.units.locked + listing.units.delivered;
+                  const canCancel = listing.units.available > 0 && listing.status !== "cancelled";
                   return (
                     <div key={index} style={{ padding: "1rem", background: "#f9f9f9", borderRadius: "12px", border: `2px solid ${statusColor}`, cursor: "pointer", transition: "transform 0.2s", position: "relative" }} onClick={() => setSelectedListing(listing)}
                       onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)"; }}
                       onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>
                       {canCancel && (
-                        <button onClick={async (e) => { e.stopPropagation(); if (window.confirm(`Are you sure you want to cancel this listing? This will cancel all ${listing.units.available} available unit(s) and cannot be undone.`)) { setCancellingListing(listing.listingId); try { await cancelListing({ farmerId: userId, listingId: listing.listingId }); setMessage({ type: "success", text: "Listing cancelled successfully." }); setTimeout(() => setMessage(null), 5000); } catch (error: any) { setMessage({ type: "error", text: `Failed to cancel listing: ${error.message}` }); setTimeout(() => setMessage(null), 5000); } finally { setCancellingListing(null); } } }} disabled={cancellingListing === listing.listingId} style={{ position: "absolute", top: "0.5rem", right: "0.5rem", padding: "0.4rem 0.8rem", background: cancellingListing === listing.listingId ? "#ccc" : "#d32f2f", color: "#fff", border: "none", borderRadius: "6px", cursor: cancellingListing === listing.listingId ? "not-allowed" : "pointer", fontSize: "0.75rem", fontWeight: "600", zIndex: 10 }}>
-                          {cancellingListing === listing.listingId ? "Cancelling..." : "✕ Cancel"}
+                        <button onClick={async (e) => { e.stopPropagation(); const question = soldLots > 0 ? `Withdraw the ${listing.units.available} unsold lot(s)? Your ${soldLots} sold lot(s) are not affected. This cannot be undone.` : `Cancel this listing? All ${listing.units.available} lot(s) will be withdrawn. This cannot be undone.`; if (window.confirm(question)) { setCancellingListing(listing.listingId); try { const result = await cancelListing({ farmerId: userId, listingId: listing.listingId }); setMessage({ type: "success", text: result?.message ?? "Listing cancelled successfully." }); setTimeout(() => setMessage(null), 5000); } catch (error: any) { setMessage({ type: "error", text: `Failed to withdraw lots: ${error.message}` }); setTimeout(() => setMessage(null), 5000); } finally { setCancellingListing(null); } } }} disabled={cancellingListing === listing.listingId} style={{ position: "absolute", top: "0.5rem", right: "0.5rem", padding: "0.4rem 0.8rem", background: cancellingListing === listing.listingId ? "#ccc" : "#d32f2f", color: "#fff", border: "none", borderRadius: "6px", cursor: cancellingListing === listing.listingId ? "not-allowed" : "pointer", fontSize: "0.75rem", fontWeight: "600", zIndex: 10 }}>
+                          {cancellingListing === listing.listingId ? "Withdrawing..." : soldLots > 0 ? "✕ Withdraw unsold" : "✕ Cancel"}
                         </button>
                       )}
                       <div style={{ marginBottom: "0.5rem", padding: "0.5rem", background: "#f5f5f5", borderRadius: "6px", border: "1px solid #e0e0e0" }}>
@@ -992,7 +1007,7 @@ export function Farm2MarketContent({ userId, userRole, isMobile }: Farm2MarketCo
                   {pagedLedgerItems.map((listing: any, listingIndex: number) => (
                     <div key={listingIndex} style={{ padding: "0.75rem 1rem", background: "#f9f9f9", borderRadius: "8px", border: "1px solid #e0e0e0" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                        <div style={{ fontWeight: "600" }}>{listing.produceType} • {listing.totalKilos} kg ({listing.totalUnits} units)</div>
+                        <div style={{ fontWeight: "600" }}>{listing.produceType} • {listing.totalKilos} kg ({lotSummary(listing)})</div>
                         <div style={{ fontSize: "0.8rem", color: "#666" }}>Open: {listing.totals.open} | Locked: {listing.totals.locked} | Delivered: {listing.totals.delivered}</div>
                       </div>
                       <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.35rem", fontFamily: "monospace" }}>UTID: {listing.listingUtid}</div>
@@ -1011,7 +1026,7 @@ export function Farm2MarketContent({ userId, userRole, isMobile }: Farm2MarketCo
                             <div style={{ flex: 1 }}>
                               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
                                 <span style={{ fontSize: "clamp(1rem, 3vw, 1.1rem)", fontWeight: "600" }}>{isExpanded ? "▼" : "▶"}</span>
-                                <h4 style={{ margin: 0, fontSize: "clamp(1rem, 3vw, 1.1rem)", color: "#2c2c2c", fontWeight: "600" }}>{listing.produceType} - {listing.totalKilos} kg ({listing.totalUnits} units)</h4>
+                                <h4 style={{ margin: 0, fontSize: "clamp(1rem, 3vw, 1.1rem)", color: "#2c2c2c", fontWeight: "600" }}>{listing.produceType} - {listing.totalKilos} kg ({lotSummary(listing)})</h4>
                               </div>
                               <div style={{ fontSize: "clamp(0.75rem, 2vw, 0.8rem)", color: "#666", marginBottom: "0.5rem" }}>Listed: {formatDate(listing.createdAt)} | Price: {formatUGX(listing.pricePerKilo)}/kg</div>
                               <div style={{ padding: "0.5rem", background: "#fff", borderRadius: "6px", border: "1px solid #e0e0e0" }}>
@@ -1033,7 +1048,7 @@ export function Farm2MarketContent({ userId, userRole, isMobile }: Farm2MarketCo
                             <table style={{ width: "100%", borderCollapse: "collapse" }}>
                               <thead>
                                 <tr style={{ background: "#f9f9f9", borderBottom: "2px solid #e0e0e0" }}>
-                                  <th style={{ padding: "0.75rem", textAlign: "left", fontSize: "clamp(0.8rem, 2.5vw, 0.85rem)", fontWeight: "600", color: "#2c2c2c" }}>Unit #</th>
+                                  <th style={{ padding: "0.75rem", textAlign: "left", fontSize: "clamp(0.8rem, 2.5vw, 0.85rem)", fontWeight: "600", color: "#2c2c2c" }}>{listing.bagKg ? "Lot #" : "Unit #"}</th>
                                   <th style={{ padding: "0.75rem", textAlign: "left", fontSize: "clamp(0.8rem, 2.5vw, 0.85rem)", fontWeight: "600", color: "#2c2c2c" }}>UTID</th>
                                   <th style={{ padding: "0.75rem", textAlign: "center", fontSize: "clamp(0.8rem, 2.5vw, 0.85rem)", fontWeight: "600", color: "#2c2c2c" }}>Status</th>
                                   <th style={{ padding: "0.75rem", textAlign: "right", fontSize: "clamp(0.8rem, 2.5vw, 0.85rem)", fontWeight: "600", color: "#2c2c2c" }}>Earnings</th>
@@ -1060,7 +1075,10 @@ export function Farm2MarketContent({ userId, userRole, isMobile }: Farm2MarketCo
                                         ) : <span style={{ color: "#999" }}>-</span>}
                                       </td>
                                       <td style={{ padding: "0.75rem", textAlign: "center" }}>
-                                        <span style={{ padding: "0.25rem 0.75rem", borderRadius: "12px", fontSize: "clamp(0.75rem, 2vw, 0.8rem)", fontWeight: "600", background: statusStyle.bg, color: statusStyle.text, display: "inline-block" }}>{statusStyle.label}</span>
+                                        <span style={{ padding: "0.25rem 0.75rem", borderRadius: "12px", fontSize: "clamp(0.75rem, 2vw, 0.8rem)", fontWeight: "600", background: statusStyle.bg, color: statusStyle.text, display: "inline-block" }}>{unit.missedDelivery ? "Not delivered" : statusStyle.label}</span>
+                                        {unit.soldTo && (
+                                          <div style={{ marginTop: "0.3rem", fontSize: "0.75rem", color: "#555" }}>Sold to {unit.soldTo}</div>
+                                        )}
                                       </td>
                                       <td style={{ padding: "0.75rem", textAlign: "right", fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", fontWeight: unit.earnings > 0 ? "600" : "400", color: unit.earnings > 0 ? "#2e7d32" : "#999" }}>
                                         {unit.earnings > 0 ? formatUGX(unit.earnings) : "-"}
@@ -1097,10 +1115,15 @@ export function Farm2MarketContent({ userId, userRole, isMobile }: Farm2MarketCo
                 <div style={{ padding: "1rem", background: "#e8f5e9", borderRadius: "8px", border: "2px solid #4caf50", marginTop: "1rem" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
                     <div>
-                      <div style={{ fontSize: "clamp(0.9rem, 2.5vw, 1rem)", fontWeight: "600", marginBottom: "0.5rem" }}>Grand Totals (All Listings)</div>
+                      <div style={{ fontSize: "clamp(0.9rem, 2.5vw, 1rem)", fontWeight: "600", marginBottom: "0.5rem" }}>My performance (all listings)</div>
                       <div style={{ fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", color: "#666" }}>
                         <span style={{ color: "#4caf50" }}>Open: {allUnitsLedger.grandTotals.open}</span> | <span style={{ color: "#2196f3" }}> Locked: {allUnitsLedger.grandTotals.locked}</span> | <span style={{ color: "#2e7d32" }}> Delivered: {allUnitsLedger.grandTotals.delivered}</span>
                         {allUnitsLedger.grandTotals.cancelled > 0 && <span style={{ color: "#999" }}> | Cancelled: {allUnitsLedger.grandTotals.cancelled}</span>}
+                      </div>
+                      <div style={{ fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", color: "#333", marginTop: "0.4rem", lineHeight: 1.5 }}>
+                        Delivered: <strong>{(allUnitsLedger.grandTotals.deliveredKilos ?? 0).toLocaleString()} kg</strong>
+                        {(allUnitsLedger.grandTotals.averagePricePerKilo ?? 0) > 0 && <> · Average price: <strong>{formatUGX(allUnitsLedger.grandTotals.averagePricePerKilo)}/kg</strong></>}
+                        {(allUnitsLedger.grandTotals.missed ?? 0) > 0 && <> · <span style={{ color: "#c62828" }}>Not delivered in time: {allUnitsLedger.grandTotals.missed}</span></>}
                       </div>
                     </div>
                     <div style={{ textAlign: "right" }}>
@@ -1128,7 +1151,7 @@ export function Farm2MarketContent({ userId, userRole, isMobile }: Farm2MarketCo
                 <div style={{ fontSize: "clamp(1.12rem, 3.5vw, 1.4rem)", fontFamily: "monospace", wordBreak: "break-all", color: "#2c2c2c", padding: "0.75rem", background: "#f5f5f5", borderRadius: "8px", fontWeight: "700", letterSpacing: "0.05em", border: "2px solid #e0e0e0" }}>{selectedListing.utid}</div>
               </div>
               <div><div style={{ fontSize: "clamp(0.75rem, 2vw, 0.8rem)", color: "#666", marginBottom: "0.25rem", fontWeight: "600" }}>Produce Type</div><div style={{ fontSize: "clamp(0.9rem, 2.5vw, 1rem)", color: "#1a1a1a", fontWeight: "500" }}>{getProduceEmoji(selectedListing.produceType)} {selectedListing.produceType}</div></div>
-              <div><div style={{ fontSize: "clamp(0.75rem, 2vw, 0.8rem)", color: "#666", marginBottom: "0.25rem", fontWeight: "600" }}>Quantity</div><div style={{ fontSize: "clamp(0.9rem, 2.5vw, 1rem)", color: "#1a1a1a", fontWeight: "500" }}>{selectedListing.totalKilos} kg ({selectedListing.totalUnits} units × {selectedListing.unitSize || 10} kg)</div></div>
+              <div><div style={{ fontSize: "clamp(0.75rem, 2vw, 0.8rem)", color: "#666", marginBottom: "0.25rem", fontWeight: "600" }}>Quantity</div><div style={{ fontSize: "clamp(0.9rem, 2.5vw, 1rem)", color: "#1a1a1a", fontWeight: "500" }}>{selectedListing.totalKilos} kg ({lotSummary(selectedListing)})</div></div>
               <div>
                 <div style={{ fontSize: "clamp(0.75rem, 2vw, 0.8rem)", color: "#666", marginBottom: "0.25rem", fontWeight: "600" }}>Price</div>
                 <div style={{ fontSize: "clamp(0.9rem, 2.5vw, 1rem)", color: "#1a1a1a", fontWeight: "500" }}>{formatUGX(selectedListing.pricePerKilo)}/kg</div>

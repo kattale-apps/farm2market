@@ -10,7 +10,13 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { generateUTID, getUgandaTime } from "./utils";
-import { LISTING_UNIT_SIZE_KG, BUYER_BLOCK_SIZE_KG } from "./constants";
+import {
+  LISTING_UNIT_SIZE_KG,
+  BUYER_BLOCK_SIZE_KG,
+  MAX_BAG_KG,
+  MAX_BAGS_PER_LOT,
+  MAX_LOTS_PER_LISTING,
+} from "./constants";
 import { checkPilotMode } from "./pilotMode";
 import { checkRateLimit } from "./rateLimits";
 import {
@@ -58,8 +64,28 @@ export const getCollectionPointForUser = query({
 });
 
 /**
- * Create a listing (farmer only)
- * Auto-splits into 10kg units
+ * Checks a lot plan and returns its sizes: one lot is `bagsPerLot` bags of
+ * `bagKg` each, and the listing has `lotCount` equal lots. Throws a plain
+ * message the seller can act on.
+ */
+export function planLots(bagKg: number, bagsPerLot: number, lotCount: number) {
+  if (!Number.isFinite(bagKg) || bagKg <= 0 || bagKg > MAX_BAG_KG) {
+    throw new Error(`Bag size must be more than 0 kg and at most ${MAX_BAG_KG} kg`);
+  }
+  if (!Number.isInteger(bagsPerLot) || bagsPerLot < 1 || bagsPerLot > MAX_BAGS_PER_LOT) {
+    throw new Error(`Bags in each lot must be a whole number from 1 to ${MAX_BAGS_PER_LOT}`);
+  }
+  if (!Number.isInteger(lotCount) || lotCount < 1 || lotCount > MAX_LOTS_PER_LISTING) {
+    throw new Error(`Number of lots must be a whole number from 1 to ${MAX_LOTS_PER_LISTING}`);
+  }
+  const lotKg = Math.round(bagKg * bagsPerLot * 100) / 100;
+  return { bagKg, bagsPerLot, lotCount, lotKg, totalKilos: Math.round(lotKg * lotCount * 100) / 100 };
+}
+
+/**
+ * Create a listing (farmer, vendor or processor)
+ * By weight: either the seller's own lots (bagKg × bagsPerLot, lotCount
+ * lots) or, for older callers, total kilos auto-split into 10kg units.
  */
 export const createListing = mutation({
   args: {
@@ -81,6 +107,10 @@ export const createListing = mutation({
     availableUnits: v.optional(v.number()),
     pricingUnit: v.optional(v.union(v.literal("per_package"), v.literal("per_kg"))),
     pricePerUnit: v.optional(v.number()),
+    // Lots (by-weight listings): buyers buy whole lots of bagsPerLot bags of bagKg
+    bagKg: v.optional(v.number()),
+    bagsPerLot: v.optional(v.number()),
+    lotCount: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     // ============================================================
@@ -107,11 +137,16 @@ export const createListing = mutation({
     // Check if farmer has exceeded listing creation rate limit.
     // This prevents spam and manipulation attempts.
     const listingMode = args.listingMode || "unit"; // Default to unit mode
+    const lots = listingMode === "unit" && args.bagKg !== undefined
+      ? planLots(args.bagKg, args.bagsPerLot ?? 1, args.lotCount ?? 1)
+      : null;
     const normalizedTotalKilos = listingMode === "garden"
       ? Math.max(args.totalKilos || 1, 1)
       : listingMode === "packaging"
         ? 0
-        : args.totalKilos || 0;
+        : lots
+          ? lots.totalKilos
+          : args.totalKilos || 0;
 
     await checkRateLimit(ctx, args.farmerId, user.role, "create_listing", {
       produceType: args.produceType,
@@ -145,8 +180,8 @@ export const createListing = mutation({
         args.pricePerKilo = args.totalPrice / normalizedTotalKilos;
       }
     } else {
-      // Unit mode: standard validation
-      if (!args.totalKilos || args.totalKilos <= 0) {
+      // Unit mode: standard validation (lots were checked by planLots)
+      if (!lots && (!args.totalKilos || args.totalKilos <= 0)) {
         throwAppError(invalidKilosError());
       }
       if (!args.pricePerKilo || args.pricePerKilo <= 0) {
@@ -169,8 +204,12 @@ export const createListing = mutation({
       // Garden mode: entire plot is 1 unit
       totalUnits = 1;
       actualUnitSize = normalizedTotalKilos; // Entire garden represented as one unit
+    } else if (lots) {
+      // Lots: each lot is one unit, all the same size
+      totalUnits = lots.lotCount;
+      actualUnitSize = lots.lotKg;
     } else {
-      // Unit mode: split into 10kg units
+      // Older callers: split into 10kg units
       totalUnits = normalizedTotalKilos < LISTING_UNIT_SIZE_KG 
         ? 1 
         : Math.floor(normalizedTotalKilos / LISTING_UNIT_SIZE_KG);
@@ -213,6 +252,8 @@ export const createListing = mutation({
       pricePerKilo: args.pricePerKilo || 0,
       unitSize: actualUnitSize,
       totalUnits,
+      bagKg: lots?.bagKg,
+      bagsPerLot: lots?.bagsPerLot,
       status: "active",
       createdAt: getUgandaTime(),
       deliverySLA: 0,
@@ -260,14 +301,23 @@ export const createListing = mutation({
 
 /**
  * Get active listings (traders can view)
+ * A listing stays on the market while it has lots left, including after
+ * some of its lots are sold (partially_locked).
  */
 export const getActiveListings = query({
   args: {},
   handler: async (ctx) => {
-    const listings = await ctx.db
-      .query("listings")
-      .withIndex("by_status", (q) => q.eq("status", "active"))
-      .collect();
+    const [openListings, partlySoldListings] = await Promise.all([
+      ctx.db
+        .query("listings")
+        .withIndex("by_status", (q) => q.eq("status", "active"))
+        .collect(),
+      ctx.db
+        .query("listings")
+        .withIndex("by_status", (q) => q.eq("status", "partially_locked"))
+        .collect(),
+    ]);
+    const listings = [...openListings, ...partlySoldListings];
 
     // Get farmer/trader aliases (anonymity) and unit availability
     const listingsWithAliases = await Promise.all(
@@ -299,6 +349,9 @@ export const getActiveListings = query({
           pricePerUnit: listing.pricePerUnit,
           unitSize: listing.unitSize || (listing.traderId ? BUYER_BLOCK_SIZE_KG : LISTING_UNIT_SIZE_KG), // Traders list in 100kg, farmers in 10kg
           totalUnits: listing.totalUnits,
+          bagKg: listing.bagKg ?? null,
+          bagsPerLot: listing.bagsPerLot ?? null,
+          status: listing.status,
           availableUnits: listing.availableUnits ?? availableUnits,
           lockedUnits,
           packagingTypeEnum: listing.packagingTypeEnum,
@@ -326,7 +379,8 @@ export const getActiveListings = query({
       })
     );
 
-    return listingsWithAliases;
+    // A partly sold listing shows only while it still has lots to sell.
+    return listingsWithAliases.filter((l) => l.status === "active" || l.availableUnits > 0);
   },
 });
 

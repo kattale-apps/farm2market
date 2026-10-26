@@ -12,6 +12,8 @@ import { useOfflineMutation } from "../hooks/useOfflineMutation";
 import { savePdfFromJsPDF } from "../utils/pdfDownload";
 import { VerifiedBadge } from "./icons/Brand";
 import { EditListingTerms } from "./lots/EditListingTerms";
+import { LotLedger } from "./lots/LotLedger";
+import { MyStock } from "./lots/MyStock";
 
 interface Farm2MarketContentProps {
   userId: Id<"users">;
@@ -574,6 +576,24 @@ export function Farm2MarketContent({ userId, userRole, isMobile }: Farm2MarketCo
 
       {/* Create Listing */}
       <CreateListing userId={userId} userRole={effectiveRole as "farmer" | "vendor" | "store"} />
+
+      {/* Lot orders: escrow, payment steps and settlement, sold and bought */}
+      <div style={{ marginBottom: "1.5rem", padding: "clamp(1rem, 3vw, 1.5rem)", background: "#fff", borderRadius: "12px", boxShadow: "0 2px 8px rgba(0,0,0,0.1)", border: "1px solid #e0e0e0" }}>
+        <h3 style={{ marginTop: 0, marginBottom: "0.75rem", fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", color: "#2c2c2c", fontFamily: '"Montserrat", sans-serif', fontWeight: "600" }}>
+          My lot orders
+        </h3>
+        <LotLedger userId={userId} />
+      </div>
+
+      {/* Vendors and processors: stock bought in the app, traced to its sellers */}
+      {effectiveRole !== "farmer" && (
+        <div style={{ marginBottom: "1.5rem", padding: "clamp(1rem, 3vw, 1.5rem)", background: "#fff", borderRadius: "12px", boxShadow: "0 2px 8px rgba(0,0,0,0.1)", border: "1px solid #e0e0e0" }}>
+          <h3 style={{ marginTop: 0, marginBottom: "0.75rem", fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", color: "#2c2c2c", fontFamily: '"Montserrat", sans-serif', fontWeight: "600" }}>
+            My stock
+          </h3>
+          <MyStock userId={userId} />
+        </div>
+      )}
 
       {/* Your Transactions */}
       <div style={{ marginBottom: "1.5rem", padding: "clamp(1rem, 3vw, 1.5rem)", background: "#fff", borderRadius: "12px", boxShadow: "0 2px 8px rgba(0,0,0,0.1)", border: "1px solid #e0e0e0" }}>

@@ -6,7 +6,7 @@ import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { defaultPlan, type PlanStep } from "../../../convex/lotOrdersShared";
 import { PhotoSetCapture, type CapturedPhoto } from "../exportMarkets/PhotoSetCapture";
-import { uploadEvidencePhotos } from "../processor/ProcessorWorkspace";
+import { uploadEvidencePhotos } from "../exportMarkets/PhotoSetCapture";
 import { LotTermsFields, planProblem } from "./LotTermsFields";
 
 /**

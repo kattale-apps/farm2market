@@ -18,6 +18,7 @@ import { menuAccentColor } from "../utils/menuAccentColors";
 import { IS_PRODUCTION_DEPLOYMENT } from "../utils/env";
 import { InfoTip } from "./exportMarkets/ui";
 import { VerifiedBadge, FarmCoinIcon } from "./icons/Brand";
+import { LotLedger } from "./lots/LotLedger";
 
 interface BuyerDashboardProps {
   userId: Id<"users">;
@@ -177,6 +178,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
     { key: "farmerInventory", label: "🌾 Farmer-sourced Inventory" },
     { key: "analytics", label: "📊 Buyer Analytics" },
     { key: "purchaseAnalytics", label: "📈 Purchase Analytics" },
+    { key: "lotOrders", label: "📒 My lot orders (escrow & steps)" },
     { key: "myOrders", label: "🧾 My Orders" },
     { key: "ledger", label: "🧮 Transaction Ledger" },
     { key: "walletReport", label: "📄 Wallet Report" },
@@ -2727,6 +2729,17 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
             [Graph: Inventory Age Distribution]
           </div>
         </div>
+      </div>
+      )}
+
+      {/* Lot orders: lots bought with escrow and the seller's payment steps */}
+      {isSectionOpen("lotOrders") && (
+      <div id="section-lotOrders" style={{ padding: "clamp(1rem, 3vw, 1.5rem)", background: "#fff", borderRadius: "12px", boxShadow: "0 2px 8px rgba(0,0,0,0.1)", border: "1px solid #e0e0e0", marginBottom: "1.5rem" }}>
+          {renderHideControl("lotOrders")}
+          <h3 style={{ marginTop: 0, marginBottom: "0.75rem", fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", color: "#2c2c2c", fontFamily: '"Montserrat", sans-serif', fontWeight: "600" }}>
+            My lot orders
+          </h3>
+          <LotLedger userId={userId} />
       </div>
       )}
 

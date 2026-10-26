@@ -978,6 +978,46 @@ export const myStock = query({
   },
 });
 
+async function sessionUser(ctx: Ctx, token: string | undefined): Promise<Doc<"users"> | null> {
+  if (!token || token.length < 10) return null;
+  const session = await ctx.db
+    .query("sessions")
+    .withIndex("by_token", (q) => q.eq("token", token))
+    .first();
+  if (!session || session.invalidated || session.expiresAt < Date.now()) return null;
+  const user = await ctx.db.get(session.userId);
+  if (!user || user.state !== "active") return null;
+  return user;
+}
+
+/**
+ * For the Wallet page: money in escrow that is not in the wallet yet, what
+ * the seller's finished steps have earned (pending), and payments due.
+ */
+export const myPending = query({
+  args: { sessionToken: v.string() },
+  handler: async (ctx, args) => {
+    const user = await sessionUser(ctx, args.sessionToken);
+    if (!user) return null;
+    const [sold, bought] = await Promise.all([
+      ctx.db.query("lotOrders").withIndex("by_seller", (q) => q.eq("sellerId", user._id)).order("desc").take(100),
+      ctx.db.query("lotOrders").withIndex("by_buyer", (q) => q.eq("buyerId", user._id)).order("desc").take(100),
+    ]);
+    const openSold = sold.filter((o) => OPEN_STATUSES.includes(o.status));
+    const openBought = bought.filter((o) => OPEN_STATUSES.includes(o.status));
+    return {
+      inEscrowAsBuyer: openBought.reduce((sum, o) => sum + o.paidAmount, 0),
+      inEscrowForMe: openSold.reduce((sum, o) => sum + o.paidAmount, 0),
+      earnedPending: openSold.reduce((sum, o) => sum + earnedSoFar(o.totalAmount, o.milestones), 0),
+      openSales: openSold.length,
+      openPurchases: openBought.length,
+      paymentsDue: openBought
+        .filter((o) => o.status === "payment_due")
+        .map((o) => ({ orderId: o._id, produceType: o.produceType, amount: o.paymentDueAmount ?? 0, by: o.paymentDueBy ?? 0 })),
+    };
+  },
+});
+
 /** Proof photos of an order's steps, for its buyer, its seller or an admin. */
 export const orderPhotos = query({
   args: { userId: v.id("users"), orderId: v.id("lotOrders") },

@@ -958,6 +958,12 @@ export const getFarm2MarketAccess = query({
     const email: string = (user as any)?.email ?? "";
     const isPilotExempt = email.toLowerCase().endsWith(PILOT_EMAIL_DOMAIN);
 
+    // The FarmCoin gate is a farmer incentive; vendors and processors list
+    // their lots and keep their ledger here without it.
+    if (user && user.role !== "farmer") {
+      return { allowed: true, isPilotExempt, balance: 0, requiredBalance: FARM2MARKET_REQUIRED_FARMCOINS, reason: null };
+    }
+
     // Fetch current farmer FarmCoin balance
     const latestEntry = await ctx.db
       .query("farmcoinLedger")

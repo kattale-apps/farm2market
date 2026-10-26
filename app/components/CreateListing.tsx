@@ -11,7 +11,7 @@ import { ugandaDateFromInstant } from "../../convex/exportMarketsShared";
 import { LOT_BAG_SIZES_KG } from "../../convex/constants";
 import { defaultPlan, type PlanStep } from "../../convex/lotOrdersShared";
 import { PhotoSetCapture, type CapturedPhoto } from "./exportMarkets/PhotoSetCapture";
-import { uploadEvidencePhotos } from "./processor/ProcessorWorkspace";
+import { uploadEvidencePhotos } from "./exportMarkets/PhotoSetCapture";
 import { getCurrentLocation } from "../utils/gps";
 import { LotTermsFields, planProblem } from "./lots/LotTermsFields";
 

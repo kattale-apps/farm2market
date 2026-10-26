@@ -123,6 +123,8 @@ export default function WalletPage() {
         )}
       </section>
 
+      {token && <PendingCard token={token} />}
+
       <section style={card}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700 }}>
           <FarmCoinIcon size={20} />
@@ -577,6 +579,49 @@ function Activity({ activity }: { activity: WalletData["activity"] }) {
             </div>
           );
         })}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Money in lot-order escrow: not in the wallet yet. It reaches the seller's
+ * wallet only when the lot is collected; what finished steps have earned
+ * shows here as pending.
+ */
+function PendingCard({ token }: { token: string }) {
+  const pending = useQuery(api.lotOrders.myPending, { sessionToken: token });
+  if (!pending || (pending.openSales === 0 && pending.openPurchases === 0)) return null;
+  return (
+    <section style={card}>
+      <div style={{ fontWeight: 800, marginBottom: "0.4rem" }}>Pending (not in your wallet yet)</div>
+      {pending.paymentsDue.map((due) => (
+        <div key={due.orderId} role="alert" style={{ margin: "0.4rem 0", padding: "0.55rem 0.7rem", borderRadius: 10, background: "#ffebee", color: "#b71c1c", fontWeight: 700, fontSize: "0.88rem" }}>
+          Payment due: {formatUGX(due.amount)} for {due.produceType} by {formatWhen(due.by)}. Top up below, then pay it in your lot orders.
+        </div>
+      ))}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8 }}>
+        {pending.openSales > 0 && (
+          <>
+            <div>
+              <div style={{ fontSize: "0.75rem", color: "#666" }}>For your lots, in escrow</div>
+              <div style={{ fontWeight: 800 }}>{formatUGX(pending.inEscrowForMe)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: "0.75rem", color: "#666" }}>Earned so far by your steps</div>
+              <div style={{ fontWeight: 800 }}>{formatUGX(pending.earnedPending)}</div>
+            </div>
+          </>
+        )}
+        {pending.openPurchases > 0 && (
+          <div>
+            <div style={{ fontSize: "0.75rem", color: "#666" }}>Your money held in escrow</div>
+            <div style={{ fontWeight: 800 }}>{formatUGX(pending.inEscrowAsBuyer)}</div>
+          </div>
+        )}
+      </div>
+      <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.4rem" }}>
+        Escrow money moves to the seller&apos;s wallet when the lot is collected. Then it can be cashed out.
       </div>
     </section>
   );

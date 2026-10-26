@@ -5,6 +5,7 @@ import { EnvelopeIcon, MenuIcon } from "./icons/HeaderIcons";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { TraderListings } from "./TraderListings";
+import { LotLedger } from "./lots/LotLedger";
 import { CreateTraderListing } from "./CreateTraderListing";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
@@ -108,6 +109,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
     { key: "buyOffers", label: "💬 Buy-Offers from Buyers" },
     { key: "createListing", label: "📝 Create Listing" },
     { key: "listingsNegotiations", label: "📑 Listings & Negotiations" },
+    { key: "lotOrders", label: "📒 Lot orders (escrow & steps)" },
     { key: "inventoryStorage", label: "📦 Inventory in Storage" },
     { key: "transactionsLog", label: "🧾 Transactions Log" },
     { key: "reports", label: "📊 Comprehensive Reports" },
@@ -119,7 +121,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
   // (Simple vs Pro) — switch the view automatically so the menu always finds
   // the section it just opened, instead of silently doing nothing.
   const SIMPLE_VIEW_ONLY_KEYS = ["openListings", "todayActivity", "buyOffers", "deliveryConfirmations", "wallet", "sentify"];
-  const PRO_VIEW_ONLY_KEYS = ["createListing", "listingsNegotiations"];
+  const PRO_VIEW_ONLY_KEYS = ["createListing", "listingsNegotiations", "lotOrders"];
   const openSectionFromMenu = (key: string) => {
     if (key === "marketspace" || key === "myWallet") {
       setMoreMenuOpen(false);
@@ -1912,6 +1914,17 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
           <div id="section-listingsNegotiations" style={{ marginBottom: "1.5rem" }}>
             {renderHideControl("listingsNegotiations")}
             <TraderListings userId={userId} />
+          </div>
+          )}
+
+          {/* Lot orders: lots bought with escrow and the seller's payment steps */}
+          {isSectionOpen("lotOrders") && (
+          <div id="section-lotOrders" style={{ marginBottom: "1.5rem", padding: "clamp(1rem, 3vw, 1.5rem)", background: "#fff", borderRadius: "12px", boxShadow: "0 2px 8px rgba(0,0,0,0.1)", border: "1px solid #e0e0e0" }}>
+            {renderHideControl("lotOrders")}
+            <h3 style={{ marginTop: 0, marginBottom: "0.75rem", fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", color: "#2c2c2c", fontFamily: '"Montserrat", sans-serif', fontWeight: "600" }}>
+              Lot orders
+            </h3>
+            <LotLedger userId={userId} />
           </div>
           )}
 

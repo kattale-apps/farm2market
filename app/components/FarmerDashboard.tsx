@@ -142,6 +142,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
       { key: "sellServices", label: "🏭 Sales & Services" },
     ] : []),
     ...(effectiveRole === "vendor" ? [
+      { key: "myLots", label: "📒 My lots & ledger" },
       { key: "vendorBuying", label: "🧺 Buying from farmers" },
       { key: "marketspace", label: "🗺️ MarketSpace" },
       { key: "findTransport", label: "🚚 Find transport" },
@@ -153,6 +154,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
     farmToolbox: "/farmer/toolbox",
     farmCalendar: "/farmer/planner",
     farm2market: "/farmer/farm2market",
+    myLots: "/farmer/farm2market",
     marketspace: "/marketspace",
     myWallet: "/wallet",
     advancePurchase: "/farmer/advance-purchase",

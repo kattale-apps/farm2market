@@ -15,6 +15,8 @@ const FONT = '"Montserrat", sans-serif';
 export default function Farm2MarketPage() {
   const { user, status: authStatus } = useStoredUser();
   const userId = (user?.userId as Id<"users"> | undefined) || null;
+  // Vendors, processors and exporters keep their lots and ledger here too.
+  const sellerRole = user?.role === "vendor" || user?.role === "store" || user?.role === "trader" ? user.role : "farmer";
   const [isMobile, setIsMobile] = useState(false);
 
   const farm2MarketAccess = useQuery(
@@ -156,13 +158,13 @@ export default function Farm2MarketPage() {
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
           <span style={{ fontSize: "1.4rem" }}>🛒</span>
           <h1 style={{ margin: 0, fontSize: "clamp(1rem, 4vw, 1.2rem)", fontWeight: 700, fontFamily: FONT }}>
-            {user?.role === "vendor" || user?.role === "store" ? "My lots & ledger" : "Farmers Produce Market"}
+            {sellerRole === "farmer" ? "Farmers Produce Market" : "My lots & ledger"}
           </h1>
         </div>
       </div>
 
       {/* Content */}
-      <Farm2MarketContent userId={userId} userRole={user?.role === "vendor" || user?.role === "store" ? user.role : "farmer"} isMobile={isMobile} />
+      <Farm2MarketContent userId={userId} userRole={sellerRole} isMobile={isMobile} />
     </div>
   );
 }

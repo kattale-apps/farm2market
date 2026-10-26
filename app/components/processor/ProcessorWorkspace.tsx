@@ -753,7 +753,7 @@ function ProcessorLotsTab({ userId }: { userId: Id<"users"> }) {
       <div style={card}>
         <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
           <a href="/farmer/farm2market" style={{ color: PROCESSOR_HEADING, fontWeight: 700 }}>📒 List a lot for sale →</a>
-          <a href="/lots" style={{ color: PROCESSOR_HEADING, fontWeight: 700 }}>🛒 Buy lots from farmers →</a>
+          <a href="/marketspace?view=produce" style={{ color: PROCESSOR_HEADING, fontWeight: 700 }}>🛒 Buy lots from farmers →</a>
         </div>
         <LotLedger userId={userId} />
       </div>

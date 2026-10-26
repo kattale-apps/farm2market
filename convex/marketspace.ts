@@ -271,14 +271,6 @@ async function toCard(ctx: Ctx, ad: Doc<"marketspaceAds">, tax: Taxonomy, allPho
   };
 }
 
-const boardFilters = {
-  now: v.number(), // Client's Uganda time (getUgandaTime), so the query does not read the clock
-  groupId: v.optional(v.id("marketspaceGroups")),
-  categoryId: v.optional(v.id("marketspaceCategories")),
-  kind: v.optional(v.union(v.literal("offer"), v.literal("wanted"))),
-  district: v.optional(v.string()),
-};
-
 // ------------------------------------------------------------------
 // Public board (no login)
 // ------------------------------------------------------------------
@@ -303,79 +295,6 @@ export const getBoardConfig = query({
       })),
       settings: await getSettings(ctx),
     };
-  },
-});
-
-/** Live ads, newest first, for the swipe deck and the grid. */
-export const listAds = query({
-  args: { paginationOpts: paginationOptsValidator, ...boardFilters },
-  handler: async (ctx, args) => {
-    const tax = await loadTaxonomy(ctx);
-    const base = args.categoryId
-      ? ctx.db
-          .query("marketspaceAds")
-          .withIndex("by_status_and_categoryId_and_createdAt", (q) => q.eq("status", "active").eq("categoryId", args.categoryId!))
-      : args.groupId
-        ? ctx.db
-            .query("marketspaceAds")
-            .withIndex("by_status_and_groupId_and_createdAt", (q) => q.eq("status", "active").eq("groupId", args.groupId!))
-        : ctx.db.query("marketspaceAds").withIndex("by_status_and_createdAt", (q) => q.eq("status", "active"));
-    const district = args.district?.trim();
-    const result = await base
-      .order("desc")
-      .filter((q) => {
-        const conditions = [q.gt(q.field("expiresAt"), args.now)];
-        if (args.kind) conditions.push(q.eq(q.field("kind"), args.kind));
-        if (district) conditions.push(q.eq(q.field("district"), district));
-        return q.and(...conditions);
-      })
-      .paginate(args.paginationOpts);
-    const page = [];
-    for (const ad of result.page) {
-      if (isVisible(ad, tax)) page.push(await toCard(ctx, ad, tax, false));
-    }
-    return { ...result, page };
-  },
-});
-
-/** Title search across live ads (best 40 matches). */
-export const searchAds = query({
-  args: { text: v.string(), ...boardFilters },
-  handler: async (ctx, args) => {
-    const text = args.text.trim();
-    if (!text) return [];
-    const tax = await loadTaxonomy(ctx);
-    const hits = await ctx.db
-      .query("marketspaceAds")
-      .withSearchIndex("search_title", (q) => {
-        let s = q.search("title", text).eq("status", "active");
-        if (args.categoryId) s = s.eq("categoryId", args.categoryId);
-        else if (args.groupId) s = s.eq("groupId", args.groupId);
-        return s;
-      })
-      .take(40);
-    const district = args.district?.trim();
-    const cards = [];
-    for (const ad of hits) {
-      if (ad.expiresAt <= args.now || !isVisible(ad, tax)) continue;
-      if (args.kind && ad.kind !== args.kind) continue;
-      if (district && ad.district !== district) continue;
-      cards.push(await toCard(ctx, ad, tax, false));
-    }
-    return cards;
-  },
-});
-
-/** One live ad with all its photos, or null when it is not on the board. */
-export const getAd = query({
-  args: { adId: v.string(), now: v.number() }, // A string, so a mistyped shared link shows "not found"
-  handler: async (ctx, args) => {
-    const adId = ctx.db.normalizeId("marketspaceAds", args.adId);
-    const ad = adId ? await ctx.db.get(adId) : null;
-    if (!ad || ad.status !== "active" || ad.expiresAt <= args.now) return null;
-    const tax = await loadTaxonomy(ctx);
-    if (!isVisible(ad, tax)) return null;
-    return await toCard(ctx, ad, tax, true);
   },
 });
 
@@ -1021,6 +940,7 @@ export const cardDetail = query({
     return {
       ...shaped,
       sourceKind: card.sourceKind,
+      adId: card.adId ?? null, // For reports
       live,
       photoUrls,
       steps,
@@ -1033,6 +953,29 @@ export const cardDetail = query({
       viewerTier: viewer.tier,
       viewerUserId: viewer.user?._id ?? null,
     };
+  },
+});
+
+/** The viewer's tier and id, for the board's filters and buy panels. */
+export const myTier = query({
+  args: { today: v.string(), sessionToken: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const viewer = await viewerOf(ctx, args.sessionToken, args.today);
+    return { tier: viewer.tier, userId: viewer.user?._id ?? null, role: viewer.user?.role ?? null };
+  },
+});
+
+/** The card of an ad, so old /marketspace/ad/<id> links open the card page. */
+export const cardIdForAd = query({
+  args: { adId: v.string() },
+  handler: async (ctx, args) => {
+    const adId = ctx.db.normalizeId("marketspaceAds", args.adId);
+    if (!adId) return null;
+    const card = await ctx.db
+      .query("marketCards")
+      .withIndex("by_ad", (q) => q.eq("adId", adId))
+      .first();
+    return card?._id ?? null;
   },
 });
 

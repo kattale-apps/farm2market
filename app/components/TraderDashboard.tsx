@@ -96,6 +96,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
   }, []);
   const MORE_MENU_SECTIONS: Array<{ key: string; label: React.ReactNode }> = [
     { key: "marketspace", label: "🗺️ MarketSpace" },
+    { key: "myLots", label: "📒 My lots & ledger" },
     { key: "myWallet", label: "💰 My Wallet (sell FarmCoin, cash out)" },
     { key: "wallet", label: "🏦 Trading capital (deposits)" },
     { key: "sentify", label: <><FarmCoinIcon size={18} /> Sentify rewards cash-out</> },
@@ -123,9 +124,10 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
   const SIMPLE_VIEW_ONLY_KEYS = ["openListings", "todayActivity", "buyOffers", "deliveryConfirmations", "wallet", "sentify"];
   const PRO_VIEW_ONLY_KEYS = ["createListing", "listingsNegotiations", "lotOrders"];
   const openSectionFromMenu = (key: string) => {
-    if (key === "marketspace" || key === "myWallet") {
+    if (key === "marketspace" || key === "myWallet" || key === "myLots") {
       setMoreMenuOpen(false);
-      router.push(key === "marketspace" ? "/marketspace" : "/wallet");
+      // My lots: the same lot form, ledger and payment steps as every seller.
+      router.push(key === "marketspace" ? "/marketspace" : key === "myLots" ? "/farmer/farm2market" : "/wallet");
       return;
     }
     if (SIMPLE_VIEW_ONLY_KEYS.includes(key)) {

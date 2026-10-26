@@ -3,6 +3,7 @@
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
+import Link from "next/link";
 import { CreateListing } from "./CreateListing";
 import { useEffect, useMemo, useState } from "react";
 import { exportToExcel, exportToPDF, formatUTIDDataForExport } from "../utils/exportUtils";
@@ -17,7 +18,7 @@ import { MyStock } from "./lots/MyStock";
 
 interface Farm2MarketContentProps {
   userId: Id<"users">;
-  userRole?: "farmer" | "vendor" | "store";
+  userRole?: "farmer" | "vendor" | "store" | "trader";
   isMobile: boolean;
 }
 
@@ -575,7 +576,16 @@ export function Farm2MarketContent({ userId, userRole, isMobile }: Farm2MarketCo
     <div style={{ padding: "1rem", maxWidth: "100%", boxSizing: "border-box" }}>
 
       {/* Create Listing */}
-      <CreateListing userId={userId} userRole={effectiveRole as "farmer" | "vendor" | "store"} />
+      <CreateListing userId={userId} userRole={effectiveRole} />
+
+      {/* Lots reach buyers across Uganda when vended on MarketSpace */}
+      <Link
+        href="/marketspace?tab=mine"
+        style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "1.5rem", padding: "0.85rem 1rem", background: "#e8f5e9", border: "1px solid #a5d6a7", borderRadius: "12px", color: "#1b5e20", fontWeight: 700, textDecoration: "none", fontFamily: '"Montserrat", sans-serif' }}
+      >
+        <span style={{ fontSize: "1.4rem" }}>🗺️</span>
+        <span>Put your lots on MarketSpace, keep them up and change their payment steps →</span>
+      </Link>
 
       {/* Lot orders: escrow, payment steps and settlement, sold and bought */}
       <div style={{ marginBottom: "1.5rem", padding: "clamp(1rem, 3vw, 1.5rem)", background: "#fff", borderRadius: "12px", boxShadow: "0 2px 8px rgba(0,0,0,0.1)", border: "1px solid #e0e0e0" }}>
@@ -585,7 +595,7 @@ export function Farm2MarketContent({ userId, userRole, isMobile }: Farm2MarketCo
         <LotLedger userId={userId} />
       </div>
 
-      {/* Vendors and processors: stock bought in the app, traced to its sellers */}
+      {/* Vendors, processors and exporters: stock bought in the app, traced to its sellers */}
       {effectiveRole !== "farmer" && (
         <div style={{ marginBottom: "1.5rem", padding: "clamp(1rem, 3vw, 1.5rem)", background: "#fff", borderRadius: "12px", boxShadow: "0 2px 8px rgba(0,0,0,0.1)", border: "1px solid #e0e0e0" }}>
           <h3 style={{ marginTop: 0, marginBottom: "0.75rem", fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", color: "#2c2c2c", fontFamily: '"Montserrat", sans-serif', fontWeight: "600" }}>

@@ -67,8 +67,8 @@ export const checkOnboardingStatus = query({
     if (!farmer) {
       throw new Error("User not found");
     }
-    // Vendor/store users have their own onboarding; treat them as completed
-    if (!(["farmer", "vendor", "store"] as string[]).includes(farmer.role)) {
+    // Vendors, processors and exporters have their own onboarding; treat them as completed
+    if (!(["farmer", "vendor", "store", "trader"] as string[]).includes(farmer.role)) {
       throw new Error("User is not a farmer");
     }
     if (farmer.role !== "farmer") {

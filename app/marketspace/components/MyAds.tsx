@@ -120,7 +120,7 @@ export function MyAds({
             neededBy: ad.neededBy,
             district: ad.district,
             locationDetail: ad.locationDetail,
-            contactPhone: ad.contactPhone,
+            contactPhone: ad.contactPhone ?? "", // My ads always include it
             photoIds: ad.photoIds,
             photoUrls: ad.photoUrls,
           };

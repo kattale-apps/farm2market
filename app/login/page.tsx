@@ -125,10 +125,14 @@ function LoginPageInner() {
     await saveAuth(user, sessionToken);
     saveLastCredential(activeIdentifier);
 
+    // Back to where the visitor was (e.g. a MarketSpace view): same-site paths only.
+    const returnTo = searchParams.get("returnTo");
+    const safeReturn = returnTo && /^\/(?![/\\])/.test(returnTo) ? returnTo : null;
+
     if (pendingCommunitySlug) {
       router.push(`/join/community/${pendingCommunitySlug}?from_signup=1`);
     } else {
-      router.push("/");
+      router.push(safeReturn ?? "/");
     }
   };
 

@@ -156,7 +156,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
     farmCalendar: "/farmer/planner",
     farm2market: "/farmer/farm2market",
     myLots: "/farmer/farm2market",
-    buyLots: "/lots",
+    buyLots: "/marketspace?view=produce",
     marketspace: "/marketspace",
     myWallet: "/wallet",
     advancePurchase: "/farmer/advance-purchase",

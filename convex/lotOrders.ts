@@ -49,6 +49,7 @@ import {
   earnedSoFar,
   nextStepIndex,
   penaltySplit,
+  stockRowSource,
 } from "./lotOrdersShared";
 
 type Ctx = QueryCtx | MutationCtx;
@@ -1006,7 +1007,7 @@ export const myStock = query({
         totalKilos: row.totalKilos,
         pricePerKilo: row.unitPrice,
         acquiredAt: row.acquiredAt,
-        source: row.source ?? (row.listingUnitIds.length > 0 ? "in_app" : "off_app"),
+        source: stockRowSource(row),
         sourceLots: row.listingUnitIds.length,
         sellerCount: sellers.size,
         listed: listings.some((l) => l.status === "active" || l.status === "partially_locked"),

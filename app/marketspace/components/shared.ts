@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { getStoredToken, getStoredUser, type StoredUser } from "../../utils/authStorage";
 import { fromStoredUgandaTime, getUgandaTime, inUgandaTime } from "../../utils/timeUtils";
 import { UG_DISTRICTS } from "../../../convex/ugandaLocationsData";
-import { whatsappNumber, SAFETY_NOTICE } from "../../../convex/marketspaceShared";
+import { SAFETY_NOTICE } from "../../../convex/marketspaceShared";
 
 export { SAFETY_NOTICE };
 
@@ -25,7 +25,7 @@ export type AdCardData = {
   neededBy: string | null;
   district: string;
   locationDetail: string | null;
-  contactPhone: string;
+  contactPhone: string | null; // Only the ad's owner and moderators get it
   photoUrls: string[];
   photoCount: number;
   groupId: string;
@@ -104,16 +104,6 @@ export function formatDate(storedUgandaTime: number): string {
 export function formatIsoDate(iso: string): string {
   const d = new Date(`${iso}T00:00:00Z`);
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
-}
-
-export function adLink(adId: string): string {
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
-  return `${origin}/marketspace/ad/${adId}`;
-}
-
-export function whatsappLink(ad: Pick<AdCardData, "_id" | "title" | "contactPhone" | "kind">): string {
-  const text = ad.kind === "wanted" ? `Hello, I can supply what you asked for on Farm2Market MarketSpace: "${ad.title}" ${adLink(ad._id)}` : `Hello, I saw your ad on Farm2Market MarketSpace: "${ad.title}" ${adLink(ad._id)}`;
-  return `https://wa.me/${whatsappNumber(ad.contactPhone)}?text=${encodeURIComponent(text)}`;
 }
 
 /** Pale tint of a hex colour, for card backgrounds. */

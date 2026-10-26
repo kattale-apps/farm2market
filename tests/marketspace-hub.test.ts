@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { BULK_RANGES, bulkRangeProblem, isLiteFor, priceBand, quantityBand, shapeCard, vendDayChoices, withDefaults } from "../convex/marketspaceShared";
 import { maskContactDetails } from "../convex/exportMarketsShared";
-import { LOT_SELLER_ROLES, bulkSellingDecision, defaultSteps } from "../convex/lotOrdersShared";
+import { LOT_SELLER_ROLES, bulkSellingDecision, defaultSteps, stockRowSource, stockSourceProblem } from "../convex/lotOrdersShared";
 
 test("exporters sell lots like farmers, vendors and processors", () => {
   assert.deepEqual([...LOT_SELLER_ROLES], ["farmer", "vendor", "store", "trader"]);
@@ -117,4 +117,32 @@ test("cards and posts carry no contact details", () => {
   for (const bad of ["call 0772 123 456", "WhatsApp +256772123456", "see www.mymaize.com", "email me at a@b.co.ug"]) {
     assert.equal(maskContactDetails(bad).masked, true, bad);
   }
+});
+
+test("stock bought in the app and off-app stock never mix", () => {
+  const inApp = { source: "in_app" as const, produceType: "Maize" };
+  const offApp = { source: "off_app" as const, produceType: "Maize" };
+  const base = { produceType: "Maize", listingMode: "unit" };
+  for (const sellerRole of ["vendor", "store", "trader"]) {
+    // In-app listings must be stock bought in the app
+    assert.equal(stockSourceProblem({ ...base, sellerRole, claimed: "in_app", stock: inApp }), null, `${sellerRole} in-app`);
+    assert.match(stockSourceProblem({ ...base, sellerRole, claimed: "in_app", stock: null }) ?? "", /Choose stock you bought in the app/);
+    assert.match(stockSourceProblem({ ...base, sellerRole, claimed: "in_app", stock: offApp }) ?? "", /Choose stock you bought in the app/);
+    // Off-app listings: new stock, or stock declared off-app, never stock bought in the app
+    assert.equal(stockSourceProblem({ ...base, sellerRole, claimed: "off_app", stock: null }), null);
+    assert.equal(stockSourceProblem({ ...base, sellerRole, claimed: "off_app", stock: offApp }), null);
+    assert.match(stockSourceProblem({ ...base, sellerRole, claimed: "off_app", stock: inApp }) ?? "", /bought in the app/);
+  }
+  // The stock's crop and selling in lots cannot be changed
+  assert.match(stockSourceProblem({ sellerRole: "vendor", claimed: "in_app", stock: inApp, produceType: "Coffee", listingMode: "unit" }) ?? "", /list it as Maize/);
+  assert.equal(stockSourceProblem({ sellerRole: "vendor", claimed: "in_app", stock: inApp, produceType: " maize ", listingMode: "unit" }), null);
+  assert.match(stockSourceProblem({ sellerRole: "vendor", claimed: "in_app", stock: inApp, produceType: "Maize", listingMode: "packaging" }) ?? "", /bags and lots/);
+  // Farmers sell their own farm's produce
+  assert.equal(stockSourceProblem({ ...base, sellerRole: "farmer", stock: null }), null);
+  assert.match(stockSourceProblem({ ...base, sellerRole: "farmer", stock: inApp }) ?? "", /own farm/);
+  // Stock rows: lot orders are in-app; declared stock is off-app; old rows read their source lots
+  assert.equal(stockRowSource({ source: "in_app", listingUnitIds: [] }), "in_app");
+  assert.equal(stockRowSource({ source: "off_app", listingUnitIds: ["u1"] }), "off_app");
+  assert.equal(stockRowSource({ listingUnitIds: ["u1"] }), "in_app");
+  assert.equal(stockRowSource({ listingUnitIds: [] }), "off_app");
 });

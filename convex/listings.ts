@@ -30,7 +30,7 @@ import { deliveryPointOf, isActiveProcessor } from "./processors";
 import { todayUganda } from "./exportMarkets";
 import { maskContactDetails } from "./exportMarketsShared";
 import { assertEvidencePhotos, evidencePhotoValidator } from "./evidencePhotos";
-import { LOT_SELLER_ROLES, gpsValidator, lotTerms, planStepValidator } from "./lotOrdersShared";
+import { LOT_SELLER_ROLES, gpsValidator, lotTerms, planStepValidator, stockRowSource, stockSourceProblem, type StockSource } from "./lotOrdersShared";
 import { syncListingCard } from "./marketCards";
 
 /**
@@ -120,7 +120,9 @@ export const createListing = mutation({
     gps: v.optional(gpsValidator),
     commitPercent: v.optional(v.number()),
     milestonePlan: v.optional(v.array(planStepValidator)),
-    inventoryId: v.optional(v.id("traderInventory")), // Vendors and processors: listing stock bought in the app
+    inventoryId: v.optional(v.id("traderInventory")), // Vendors, processors and exporters: the stock row being listed
+    // Vendors, processors and exporters say where the stock is from (stockSourceProblem)
+    stockSource: v.optional(v.union(v.literal("in_app"), v.literal("off_app"))),
   },
   handler: async (ctx, args) => {
     // ============================================================
@@ -209,11 +211,20 @@ export const createListing = mutation({
     }
 
     // Where the stock is from: the farmer's own farm, stock bought in the
-    // app (traced to farms), or stock bought outside the app.
-    let stockSource: "own_farm" | "in_app" | "off_app" = user.role === "farmer" ? "own_farm" : "off_app";
-    if (args.inventoryId) {
-      const inventory = await ctx.db.get(args.inventoryId);
-      if (!inventory || inventory.traderId !== args.farmerId) throw new Error("Choose stock from your own inventory");
+    // app (traced to farms), or stock bought outside the app. The two kinds
+    // of stock never mix (stockSourceProblem).
+    let stockSource: StockSource = user.role === "farmer" ? "own_farm" : "off_app";
+    const inventory = args.inventoryId ? await ctx.db.get(args.inventoryId) : null;
+    if (args.inventoryId && (!inventory || inventory.traderId !== args.farmerId)) throw new Error("Choose stock from your own inventory");
+    const stockProblem = stockSourceProblem({
+      sellerRole: user.role,
+      claimed: args.stockSource,
+      stock: inventory ? { source: stockRowSource(inventory), produceType: inventory.produceType } : null,
+      produceType: args.produceType,
+      listingMode,
+    });
+    if (stockProblem) throw new Error(stockProblem);
+    if (inventory) {
       if (inventory.status !== "in_storage") throw new Error("That stock is no longer in your store");
       if (inventory.is100kgBlock) throw new Error("100 kg buyer blocks are already on sale to buyers; choose other stock");
       if (inventory.reservedListingId) throw new Error("That stock is already listed");
@@ -222,13 +233,13 @@ export const createListing = mutation({
       }
       const listed = await ctx.db
         .query("listings")
-        .withIndex("by_inventory", (q) => q.eq("inventoryId", args.inventoryId))
+        .withIndex("by_inventory", (q) => q.eq("inventoryId", inventory._id))
         .take(20);
       if (listed.some((l) => l.status === "active" || l.status === "partially_locked")) {
         throw new Error("That stock is already listed");
       }
       // Bought in the app (traced to farms), or declared by an exporter (off-app)
-      stockSource = inventory.source ?? (inventory.listingUnitIds.length > 0 ? "in_app" : "off_app");
+      stockSource = stockRowSource(inventory);
     }
 
     // Generate UTID
@@ -693,7 +704,7 @@ export const createTraderListing = mutation({
       inventoryId: args.inventoryId,
       farmerId: undefined, // Not a farmer listing
       // Stock bought from farms in the app is traced; declared stock is off-app
-      stockSource: inventory.source ?? (inventory.listingUnitIds.length > 0 ? "in_app" : "off_app"),
+      stockSource: stockRowSource(inventory),
       utid,
       produceType: inventory.produceType,
       totalKilos: inventory.totalKilos,

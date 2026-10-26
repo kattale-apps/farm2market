@@ -85,6 +85,43 @@ export function bulkSellingDecision(
   return { ok: false, reason: "Selling in bulk is for verified sellers. Ask the super admin to verify your account." };
 }
 
+export type StockSource = "own_farm" | "in_app" | "off_app";
+
+/** Where a stock row is from: bought through the app (traced to farms) or declared off-app. */
+export function stockRowSource(row: { source?: "in_app" | "off_app"; listingUnitIds: unknown[] }): "in_app" | "off_app" {
+  return row.source ?? (row.listingUnitIds.length > 0 ? "in_app" : "off_app");
+}
+
+/**
+ * The rule that keeps in-app and off-app stock apart. Farmers sell their own
+ * farm's produce. Vendors, processors and exporters say where a listing's
+ * stock is from: "in_app" must be a stock row they bought through the app,
+ * of the same crop, sold in bags and lots; "off_app" can never use a row
+ * bought in the app. Returns the problem, or null when the listing is fine.
+ */
+export function stockSourceProblem(input: {
+  sellerRole: string;
+  claimed?: "in_app" | "off_app";
+  stock: { source: "in_app" | "off_app"; produceType: string } | null;
+  produceType: string;
+  listingMode: string;
+}): string | null {
+  const { sellerRole, claimed, stock } = input;
+  if (sellerRole === "farmer") return stock ? "Farmers sell produce from their own farm, not from stock" : null;
+  if (claimed === "in_app" && (!stock || stock.source !== "in_app")) {
+    return "Choose stock you bought in the app, or mark this listing as not bought in the app";
+  }
+  if (claimed === "off_app" && stock?.source === "in_app") {
+    return "That stock was bought in the app: mark the listing as bought in the app";
+  }
+  if (!stock) return null;
+  if (input.listingMode !== "unit") return "Stock from your store is sold in bags and lots";
+  if (stock.produceType.trim().toLowerCase() !== input.produceType.trim().toLowerCase()) {
+    return `That stock is ${stock.produceType}: list it as ${stock.produceType}`;
+  }
+  return null;
+}
+
 /** The steps a seller starts from: a farm for farmers, a store for vendors and processors. */
 export function defaultSteps(sellerRole: string): Omit<PlanStep, "payPercent">[] {
   if (sellerRole === "farmer") {

@@ -12,13 +12,11 @@ export function AdCard({
   now,
   variant,
   onOpen,
-  onContact,
 }: {
   ad: AdCardData;
   now: number;
   variant: "deck" | "grid";
   onOpen?: () => void;
-  onContact?: () => void;
 }) {
   const wanted = ad.kind === "wanted";
   const color = ad.groupColor;
@@ -137,33 +135,6 @@ export function AdCard({
           {variant === "deck" && ad.posterRole && <span>👤 {roleLabel(ad.posterRole)}</span>}
         </div>
       </div>
-
-      {onContact && (
-        <div style={{ padding: variant === "deck" ? "0 0.95rem 0.95rem" : "0 0.6rem 0.6rem" }}>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onContact();
-            }}
-            onPointerDown={(e) => e.stopPropagation()}
-            style={{
-              width: "100%",
-              minHeight: variant === "deck" ? 48 : 36,
-              borderRadius: 12,
-              border: "none",
-              background: wanted ? "#f6bf26" : color,
-              color: wanted ? "#1a1a1a" : "#fff",
-              fontWeight: 800,
-              fontSize: variant === "deck" ? "1rem" : "0.8rem",
-              fontFamily: FONT,
-              cursor: "pointer",
-            }}
-          >
-            📞 {wanted ? "I can supply this" : "Contact"}
-          </button>
-        </div>
-      )}
     </article>
   );
 }

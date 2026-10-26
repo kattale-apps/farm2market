@@ -16,16 +16,16 @@
 import { v } from "convex/values";
 import { mutation, query, QueryCtx, MutationCtx } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
-import { getUgandaTime } from "./utils";
+import { generateUTID, getUgandaTime } from "./utils";
 import { EXPORT_CROPS, addDaysToIsoDate, centsPerLbToUsdPerKg, isIsoDate, ugxPerUsd } from "./exportMarketsShared";
-import { INTAKE_FORM_KEYS } from "./processorShared";
+import { INTAKE_FORM_KEYS, formLabel } from "./processorShared";
 import { MAX_BOOKING_DAYS_AHEAD, OFFER_VALID_DAYS, VENDOR_CROPS, districtKey, latestBookingDate } from "./marketOffersShared";
-import { notify, todayUganda } from "./exportMarkets";
+import { isActiveExporter, notify, todayUganda } from "./exportMarkets";
 import { uniqueCode } from "./exportLots";
 import { getProcessorProfile, isActiveProcessor } from "./processors";
 
 type Ctx = QueryCtx | MutationCtx;
-type BuyerKind = "processor" | "vendor";
+type BuyerKind = "processor" | "vendor" | "exporter";
 
 /** Who a buyer is, as farmers see them: name, district and (for processors) the badge. */
 async function buyerInfo(ctx: Ctx, user: Doc<"users">): Promise<{ kind: BuyerKind; name: string; district: string | null; verified: boolean }> {
@@ -37,6 +37,11 @@ async function buyerInfo(ctx: Ctx, user: Doc<"users">): Promise<{ kind: BuyerKin
       district: p?.district ?? null,
       verified: p?.platformVerified === true && p.status === "approved",
     };
+  }
+  if (user.role === "trader") {
+    const p = await ctx.db.query("exporterProfiles").withIndex("by_userId", (q) => q.eq("userId", user._id)).first();
+    const district = user.districtText ?? (user.districtId ? (await ctx.db.get(user.districtId))?.name ?? null : null);
+    return { kind: "exporter", name: p?.tradingName ?? p?.legalName ?? `Exporter ${user.alias}`, district, verified: await isActiveExporter(ctx, user._id, todayUganda()) };
   }
   const vp = await ctx.db.query("vendorProfiles").withIndex("by_userId", (q) => q.eq("userId", user._id)).first();
   const district = user.districtText ?? (vp?.districtId ? (await ctx.db.get(vp.districtId))?.name ?? null : null);
@@ -51,7 +56,7 @@ async function farmerDistrict(ctx: Ctx, farmer: Doc<"users">): Promise<string | 
 
 async function requireBuyer(ctx: Ctx, userId: Id<"users">) {
   const user = await ctx.db.get(userId);
-  if (!user || (user.role !== "store" && user.role !== "vendor")) throw new Error("Only processors and vendors post buying offers");
+  if (!user || (user.role !== "store" && user.role !== "vendor" && user.role !== "trader")) throw new Error("Only processors, exporters and vendors post buying offers");
   return user;
 }
 
@@ -73,9 +78,9 @@ export const listMyOffers = query({
     return {
       kind: info.kind,
       district: info.district,
-      canPost: info.kind === "vendor" ? !!info.district : await isActiveProcessor(ctx, user._id, today),
+      canPost: info.kind === "vendor" ? !!info.district : info.kind === "exporter" ? info.verified && !!info.district : await isActiveProcessor(ctx, user._id, today),
       crops:
-        info.kind === "processor"
+        info.kind !== "vendor"
           ? EXPORT_CROPS.filter((c) => c.active).map((c) => ({ key: c.key, label: c.label, units: ["kg"] }))
           : VENDOR_CROPS,
       live: offers.filter((o) => isLive(o, today)),
@@ -100,11 +105,12 @@ export const postOffer = mutation({
     const today = todayUganda();
     const info = await buyerInfo(ctx, user);
     if (!info.district) throw new Error("Add your district to your profile first, so farmers near you can find you");
-    if (info.kind === "processor") {
-      if (!(await isActiveProcessor(ctx, user._id, today))) throw new Error("Only a verified, live processor can post prices");
+    if (info.kind === "processor" || info.kind === "exporter") {
+      if (info.kind === "processor" && !(await isActiveProcessor(ctx, user._id, today))) throw new Error("Only a verified, live processor can post prices");
+      if (info.kind === "exporter" && !info.verified) throw new Error("Only a verified, licensed exporter can post prices");
       if (!EXPORT_CROPS.some((c) => c.key === args.crop && c.active)) throw new Error("This crop is not open yet");
       if (!args.form || !INTAKE_FORM_KEYS.includes(args.form)) throw new Error("Choose the form you buy it in (e.g. kiboko)");
-      if (args.unit !== "kg") throw new Error("Processor prices are per kg");
+      if (args.unit !== "kg") throw new Error("Coffee prices are per kg");
     } else {
       const crop = VENDOR_CROPS.find((c) => c.key === args.crop);
       if (!crop) throw new Error("Choose a crop");
@@ -123,7 +129,7 @@ export const postOffer = mutation({
       ownerId: user._id,
       ownerKind: info.kind,
       crop: args.crop,
-      form: info.kind === "processor" ? args.form : undefined,
+      form: info.kind !== "vendor" ? args.form : undefined,
       unit: args.unit,
       priceUgx: Math.round(args.priceUgx),
       minQuantity: args.minQuantity,
@@ -175,8 +181,8 @@ export const listOffersNearMe = query({
         owners.set(key, owner && owner.state === "active" ? await buyerInfo(ctx, owner) : null);
       }
       const info = owners.get(key);
-      // Only verified, live processors are shown to farmers.
-      if (!info || (info.kind === "processor" && !(await isActiveProcessor(ctx, o.ownerId, today)))) continue;
+      // Only verified, live processors and exporters are shown to farmers.
+      if (!info || (info.kind === "processor" && !(await isActiveProcessor(ctx, o.ownerId, today))) || (info.kind === "exporter" && !info.verified)) continue;
       rows.push({ ...o, buyer: info, latestBookingDate: latestBookingDate(today, o.validUntil) });
     }
     rows.sort((a, b) => b.priceUgx - a.priceUgx);
@@ -364,13 +370,18 @@ export async function issueReceipt(
   return { receiptId, receiptNumber };
 }
 
-/** A vendor records buying from a farmer (on the app, or not) and issues the cash receipt. */
+/**
+ * A vendor or exporter records buying from a farmer (on the app, or not) and
+ * issues the cash receipt. For exporters the coffee also becomes stock that
+ * traces to the farmer through the receipt (traceChain.ts).
+ */
 export const recordVendorPurchase = mutation({
   args: {
     userId: v.id("users"),
     bookingId: v.optional(v.id("deliveryBookings")),
     farmerName: v.optional(v.string()), // when the farmer is not on the app
     crop: v.string(),
+    form: v.optional(v.string()), // exporters: the form bought in (INTAKE_FORMS key)
     unit: v.string(),
     quantity: v.number(),
     priceUgx: v.number(),
@@ -378,7 +389,9 @@ export const recordVendorPurchase = mutation({
   },
   handler: async (ctx, args) => {
     const buyer = await ctx.db.get(args.userId);
-    if (!buyer || buyer.role !== "vendor") throw new Error("Only vendor accounts can do this");
+    if (!buyer || (buyer.role !== "vendor" && buyer.role !== "trader")) throw new Error("Only vendor and exporter accounts can do this");
+    const exporter = buyer.role === "trader";
+    if (exporter && (args.unit !== "kg" || !args.form || !INTAKE_FORM_KEYS.includes(args.form))) throw new Error("Record coffee in kg and choose the form you bought it in");
     if (!isIsoDate(args.paidOn) || args.paidOn > todayUganda()) throw new Error("Choose the date paid (not in the future)");
     if (!(args.quantity > 0)) throw new Error("Quantity must be above 0");
     let farmerId: Id<"users"> | undefined;
@@ -390,7 +403,28 @@ export const recordVendorPurchase = mutation({
       farmerName = `Farmer ${(await ctx.db.get(b.farmerId))?.alias ?? ""}`.trim();
     }
     if (!farmerName) throw new Error("Name the farmer you paid");
-    return await issueReceipt(ctx, { buyer, farmerId, farmerName, crop: args.crop, unit: args.unit, quantity: args.quantity, priceUgx: args.priceUgx, paidOn: args.paidOn, bookingId: args.bookingId });
+    const receipt = await issueReceipt(ctx, { buyer, farmerId, farmerName, crop: args.crop, form: exporter ? args.form : undefined, unit: args.unit, quantity: args.quantity, priceUgx: args.priceUgx, paidOn: args.paidOn, bookingId: args.bookingId });
+    if (exporter) {
+      const now = getUgandaTime();
+      const crop = EXPORT_CROPS.find((c) => c.key === args.crop)?.label ?? args.crop;
+      await ctx.db.insert("traderInventory", {
+        traderId: buyer._id,
+        listingUnitIds: [],
+        totalKilos: args.quantity,
+        blockSize: args.quantity,
+        produceType: `${crop} ${formLabel(args.form!)}`,
+        unitPrice: Math.round(args.priceUgx),
+        acquiredAt: now,
+        storageStartTime: now,
+        status: "in_storage",
+        utid: generateUTID("trader"),
+        is100kgBlock: false,
+        // Paid to a farmer on the app: traced to the farm. A farmer off the app is declared, not traced.
+        source: farmerId ? "in_app" : "off_app",
+        receiptId: receipt.receiptId,
+      });
+    }
+    return receipt;
   },
 });
 
@@ -400,7 +434,7 @@ export const listMyReceipts = query({
   handler: async (ctx, args) => {
     const user = await ctx.db.get(args.userId);
     if (!user) return [];
-    if (user.role === "store" || user.role === "vendor") {
+    if (user.role === "store" || user.role === "vendor" || user.role === "trader") {
       return await ctx.db.query("purchaseReceipts").withIndex("by_buyerId", (q) => q.eq("buyerId", user._id)).order("desc").take(300);
     }
     return await ctx.db.query("purchaseReceipts").withIndex("by_farmerId", (q) => q.eq("farmerId", user._id)).order("desc").take(300);

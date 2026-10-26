@@ -33,14 +33,14 @@ type Tab = "overview" | "profile" | "documents" | "buying" | "intake" | "batches
 
 const TABS: { key: Tab; label: string; icon: string; needs: string }[] = [
   { key: "overview", label: "Overview", icon: "🏠", needs: "Your progress to becoming a verified processor, step by step." },
-  { key: "profile", label: "Facility profile", icon: "🏭", needs: "Business details, facility location with GPS, what you process, capacity, storage and facility photos." },
-  { key: "documents", label: "Documents & fee", icon: "📄", needs: "Business registration, TIN and processing licence, with expiry dates, and the verification fee." },
-  { key: "buying", label: "Post price to farmers", icon: "🧺", needs: "Post this week's buying price per form, answer farmers' delivery bookings and pay them in cash with a receipt." },
+  { key: "profile", label: "Facility Profile", icon: "🏭", needs: "Business details, facility location with GPS, what you process, capacity, storage and facility photos." },
+  { key: "documents", label: "Documents and Fee", icon: "📄", needs: "Business registration, TIN and processing licence, with expiry dates, and the verification fee." },
+  { key: "buying", label: "Post Price to Farmers", icon: "🧺", needs: "Post this week's buying price per form, answer farmers' delivery bookings and pay them in cash with a receipt." },
   { key: "intake", label: "Intake", icon: "⚖️", needs: "Record coffee you buy from farmers, on the app or not, with photos and the farm location." },
   { key: "batches", label: "Processing", icon: "⚙️", needs: "Turn intake into processed batches: weight in, weight out and the outturn, with photos." },
   { key: "sales", label: "Sales", icon: "🤝", needs: "Sell processed batches on MarketSpace first, or directly to an exporter, or log a sale made outside the app." },
-  { key: "lots", label: "Lots & ledger", icon: "📒", needs: "List lots for sale with payment steps, follow the lots you bought and sold, and see your stock and where it came from." },
-  { key: "records", label: "Records & reports", icon: "📊", needs: "What you bought, processed and sold, with totals and the outturn, and a spreadsheet to download." },
+  { key: "lots", label: "Lots and Ledgers", icon: "📒", needs: "List lots for sale with payment steps, follow the lots you bought and sold, and see your stock and where it came from." },
+  { key: "records", label: "Records and Reports", icon: "📊", needs: "What you bought, processed and sold, with totals and the outturn, and a spreadsheet to download." },
 ];
 
 /** Each checklist item and where the processor goes to act on it. */
@@ -61,8 +61,8 @@ export type ProcessorWS = FunctionReturnType<typeof api.processors.getMyProcesso
 /** Pages outside the workspace that processors use too. */
 const MENU_LINKS: { href: string; label: string }[] = [
   { href: "/marketspace", label: "🗺️ MarketSpace" },
-  { href: "/wallet", label: "💰 My Wallet & FarmCoin" },
-  { href: "/transport", label: "🚚 Book transport" },
+  { href: "/wallet", label: "💰 My Wallet and FarmCoin" },
+  { href: "/transport", label: "🚚 Book Transport" },
   { href: "/farmer/communities", label: "🌾 My Communities" },
 ];
 

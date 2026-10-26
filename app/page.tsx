@@ -407,13 +407,13 @@ export default function Home() {
                     </a>
                     <a href="/marketspace" style={profileMenuLinkStyle}>🗺️ MarketSpace</a>
                     {effectiveUser?.role && effectiveUser.role !== "admin" && (
-                      <a href="/wallet" style={profileMenuLinkStyle}>💰 My Wallet &amp; FarmCoin</a>
+                      <a href="/wallet" style={profileMenuLinkStyle}>💰 My Wallet and FarmCoin</a>
                     )}
                     {effectiveUser?.role && effectiveUser.role !== "admin" && effectiveUser.role !== "transporter" && (
-                      <a href="/transport" style={profileMenuLinkStyle}>🚚 Book transport</a>
+                      <a href="/transport" style={profileMenuLinkStyle}>🚚 Book Transport</a>
                     )}
                     {effectiveUser?.role === "transporter" && (
-                      <a href="/transporter/services" style={profileMenuLinkStyle}>🚚 Register transport services</a>
+                      <a href="/transporter/services" style={profileMenuLinkStyle}>🚚 Register Transport Services</a>
                     )}
                     <a href="/contact" style={profileMenuLinkStyle}>Contact Us</a>
                     <a href="/privacy-policy" style={profileMenuLinkStyle}>Privacy Policy</a>

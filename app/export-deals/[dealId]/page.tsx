@@ -672,7 +672,7 @@ function FeesStep({ data, userId, setMsg }: P) {
           {balance < myFee && (
             <div style={{ marginTop: "0.4rem" }}>
               <Link
-                href={role === "buyer" ? `/?deposit=${Math.ceil(myFee - balance)}&returnTo=/export-deals/${deal._id}` : "/?wallet=open"}
+                href={role === "buyer" ? `/?deposit=${Math.ceil(myFee - balance)}&returnTo=/export-deals/${deal._id}` : "/wallet"}
                 style={{ color: "#0d47a1", fontWeight: 700 }}
               >
                 Top up your wallet

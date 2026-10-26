@@ -158,7 +158,7 @@ export default function Farm2MarketPage() {
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
           <span style={{ fontSize: "1.4rem" }}>🛒</span>
           <h1 style={{ margin: 0, fontSize: "clamp(1rem, 4vw, 1.2rem)", fontWeight: 700, fontFamily: FONT }}>
-            {sellerRole === "farmer" ? "Farmers Produce Market" : "My lots & ledger"}
+            {sellerRole === "farmer" ? "Farmers Produce Market" : "My Lots and Ledgers"}
           </h1>
         </div>
       </div>

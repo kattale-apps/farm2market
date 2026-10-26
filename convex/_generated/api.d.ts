@@ -125,6 +125,8 @@ import type * as storeOnboarding from "../storeOnboarding.js";
 import type * as storeadminAudit from "../storeadminAudit.js";
 import type * as tempVerifyFarmerData from "../tempVerifyFarmerData.js";
 import type * as testUtils from "../testUtils.js";
+import type * as traceChain from "../traceChain.js";
+import type * as traceRecords from "../traceRecords.js";
 import type * as traderBuyerNegotiations from "../traderBuyerNegotiations.js";
 import type * as traderDashboard from "../traderDashboard.js";
 import type * as traderOnboarding from "../traderOnboarding.js";
@@ -270,6 +272,8 @@ declare const fullApi: ApiFromModules<{
   storeadminAudit: typeof storeadminAudit;
   tempVerifyFarmerData: typeof tempVerifyFarmerData;
   testUtils: typeof testUtils;
+  traceChain: typeof traceChain;
+  traceRecords: typeof traceRecords;
   traderBuyerNegotiations: typeof traderBuyerNegotiations;
   traderDashboard: typeof traderDashboard;
   traderOnboarding: typeof traderOnboarding;

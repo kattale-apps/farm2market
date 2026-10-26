@@ -6,7 +6,7 @@ import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { ugandaDateFromInstant } from "../../../convex/exportMarketsShared";
 import { formLabel } from "../../../convex/processorShared";
-import { card, input, label, button, Notice, errorText, formatUgx, EXPORT_HEADING } from "./ui";
+import { card, input, label, button, errorText, formatUgx, EXPORT_HEADING } from "./ui";
 import { TraceLevelPill } from "../processor/ProcessorOperations";
 
 type Msg = { tone: "error" | "success" | "info"; text: string } | null;
@@ -25,7 +25,7 @@ const STATUS_TEXT: Record<string, string> = {
  * purchase by batch code, link an off-app sale by its code, and (for live
  * exporters) PROCESSED MARKETS. Completed purchases become lot sources.
  */
-export function ProcessorPurchasesPanel({ userId, isActiveExporter, setMsg }: { userId: Id<"users">; isActiveExporter: boolean; setMsg: (m: Msg) => void }) {
+export function ProcessorPurchasesPanel({ userId, setMsg }: { userId: Id<"users">; setMsg: (m: Msg) => void }) {
   const purchases = useQuery(api.processorSales.listMyProcessorPurchases, { userId });
   const respond = useMutation(api.processorSales.respondToDirectOffer);
   const cancel = useMutation(api.processorSales.cancelSale);
@@ -61,13 +61,12 @@ export function ProcessorPurchasesPanel({ userId, isActiveExporter, setMsg }: { 
         <button style={button(open === "claim" ? "primary" : "secondary")} onClick={() => setOpen(open === "claim" ? "" : "claim")}>
           Link an off-app sale
         </button>
-        <button style={button(open === "market" ? "primary" : "secondary")} onClick={() => setOpen(open === "market" ? "" : "market")}>
-          PROCESSED MARKETS
-        </button>
+        <a href="/marketspace?view=lots" style={{ ...button("secondary"), textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
+          🗺️ Buy processed coffee on MarketSpace
+        </a>
       </div>
       {open === "log" && <LogPurchaseForm userId={userId} setMsg={setMsg} onDone={() => setOpen("")} />}
       {open === "claim" && <ClaimForm userId={userId} setMsg={setMsg} onDone={() => setOpen("")} />}
-      {open === "market" && <ProcessedMarket userId={userId} isActiveExporter={isActiveExporter} setMsg={setMsg} />}
 
       {(purchases ?? []).map((p) => (
         <div key={p._id} style={{ borderTop: "1px solid #eee", padding: "0.55rem 0", fontSize: "0.85rem" }}>
@@ -173,64 +172,6 @@ function ClaimForm({ userId, setMsg, onDone }: { userId: Id<"users">; setMsg: (m
           Link sale
         </button>
       </div>
-    </div>
-  );
-}
-
-function ProcessedMarket({ userId, isActiveExporter, setMsg }: { userId: Id<"users">; isActiveExporter: boolean; setMsg: (m: Msg) => void }) {
-  const [today] = useState(() => ugandaDateFromInstant(Date.now()));
-  const market = useQuery(api.processorSales.listProcessedMarket, isActiveExporter ? { userId, today } : "skip");
-  const request = useMutation(api.processorSales.requestFromProcessedMarket);
-  const [kilos, setKilos] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState<string | null>(null);
-  if (!isActiveExporter) return <Notice tone="info">PROCESSED MARKETS opens once you are a verified, live exporter.</Notice>;
-  if (market === undefined) return <div>Loading PROCESSED MARKETS...</div>;
-  if (market.listings.length === 0) return <Notice tone="info">No processed coffee is listed at the moment.</Notice>;
-  return (
-    <div style={{ display: "grid", gap: "0.5rem", marginBottom: "0.5rem" }}>
-      {market.listings.map((l) => (
-        <div key={l.batchId} style={{ border: "1px solid #ffe082", borderRadius: 10, padding: "0.65rem", display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
-          {l.coverUrl && <img src={l.coverUrl} alt="" style={{ width: 80, height: 64, objectFit: "cover", borderRadius: 6 }} />}
-          <div style={{ flex: 1, minWidth: 180, fontSize: "0.84rem" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: "0.4rem", flexWrap: "wrap" }}>
-              <b>
-                {formLabel(l.outputForm)}
-                {l.coffeeType ? ` ${l.coffeeType}` : ""}
-                {l.grade ? ` · ${l.grade}` : ""}
-              </b>
-              <TraceLevelPill level={l.traceLevel} />
-            </div>
-            <div style={{ color: "#455a64" }}>
-              {l.processor.facilityName ?? l.processor.alias}
-              {l.processor.district ? `, ${l.processor.district}` : ""} {l.processor.verified ? "✔" : ""} · {l.availableKg} kg
-              {l.outturnPercent != null ? ` · outturn ${l.outturnPercent}%` : ""}
-              {l.moisturePercent != null ? ` · moisture ${l.moisturePercent}%` : ""}
-              {l.askingPricePerKgUgx != null ? ` · asking ${formatUgx(l.askingPricePerKgUgx)}/kg` : ""}
-              {l.evidenceVerified ? " · processing verified" : ""}
-            </div>
-            <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.35rem", flexWrap: "wrap" }}>
-              <input style={{ ...input, maxWidth: 130 }} placeholder="Kilos" inputMode="decimal" value={kilos[l.batchId] ?? ""} onChange={(e) => setKilos({ ...kilos, [l.batchId]: e.target.value })} />
-              <button
-                style={button("primary", busy === l.batchId)}
-                disabled={busy === l.batchId}
-                onClick={async () => {
-                  setBusy(l.batchId);
-                  try {
-                    const r = await request({ userId, batchId: l.batchId, kilos: Number(kilos[l.batchId]) });
-                    setMsg({ tone: "success", text: `Request ${r.saleCode} sent. The processor confirms it.` });
-                  } catch (e) {
-                    setMsg({ tone: "error", text: errorText(e) });
-                  } finally {
-                    setBusy(null);
-                  }
-                }}
-              >
-                Request
-              </button>
-            </div>
-          </div>
-        </div>
-      ))}
     </div>
   );
 }

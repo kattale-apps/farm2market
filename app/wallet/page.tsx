@@ -22,6 +22,27 @@ const TABS: { key: Tab; title: string }[] = [
   { key: "cashout", title: "Cash out" },
 ];
 
+/** FarmCoin ledger sources in plain words (others show their key with spaces). */
+const COIN_SOURCES: Record<string, string> = {
+  grant: "Welcome FarmCoin",
+  posting_cost: "Listing cost",
+  admin_adjustment: "Set by Farm2Market",
+  transfer: "Transfer",
+  future_reward: "Reward",
+  sentify_receipt: "Sentify reward",
+  buyer_confirmation_reward: "Delivery confirmed",
+  sentify_cashout: "Cashed out",
+  buyer_reward_cashout: "Cashed out",
+  form_field_reward: "Farm data shared",
+  price_sheet_download: "Price sheet",
+  tracker_entry_reward: "Farm record kept",
+  transport_rating_reward: "Trip rated",
+  marketspace_ad_extension: "MarketSpace ad extended",
+  marketspace_paid_ad: "MarketSpace ad",
+  exchange_sell_escrow: "Put up for sale",
+  exchange_sell_cancel: "Sale cancelled",
+};
+
 /**
  * Every non-admin user's wallet: UGX they can cash out, their FarmCoin, and
  * the FarmCoin exchange (sell into the queue, buy from it). See
@@ -138,6 +159,29 @@ export default function WalletPage() {
           )}
         </div>
         <div style={{ fontSize: "0.82rem", color: "#666", marginTop: 4 }}>{wallet.queuedCoins.toLocaleString()} FarmCoin waiting to be sold</div>
+      </section>
+
+      {/* FarmCoin rewards live with the wallet for every role */}
+      <section style={card}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 800, marginBottom: "0.4rem" }}>
+          <FarmCoinIcon size={20} /> FarmCoin rewards
+        </div>
+        {wallet.farmcoinActivity.length === 0 ? (
+          <div style={{ fontSize: "0.85rem", color: "#666" }}>No FarmCoin yet. You earn it by sharing farm data, keeping records, rating trips and confirming deliveries.</div>
+        ) : (
+          wallet.farmcoinActivity.map((e) => (
+            <div key={e._id} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "0.35rem 0", borderTop: "1px solid #f1f1f1", fontSize: "0.88rem" }}>
+              <span>
+                {COIN_SOURCES[e.source] ?? e.source.replace(/_/g, " ")}
+                <span style={{ color: "#888", fontSize: "0.78rem" }}> · {formatWhen(e.createdAt)}</span>
+              </span>
+              <b style={{ color: e.delta >= 0 ? DARK_GREEN : "#c62828", whiteSpace: "nowrap" }}>
+                {e.delta >= 0 ? "+" : ""}
+                {e.delta.toLocaleString()}
+              </b>
+            </div>
+          ))
+        )}
       </section>
 
       {notice && (

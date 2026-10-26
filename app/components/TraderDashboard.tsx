@@ -94,51 +94,71 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
     setMsgSlot(document.getElementById("dashboard-msg-slot"));
     setMoreSlot(document.getElementById("dashboard-more-slot"));
   }, []);
-  const MORE_MENU_SECTIONS: Array<{ key: string; label: React.ReactNode }> = [
-    { key: "marketspace", label: "🗺️ MarketSpace" },
-    { key: "myLots", label: "📒 My lots & ledger" },
-    { key: "myWallet", label: "💰 My Wallet (sell FarmCoin, cash out)" },
-    { key: "wallet", label: "🏦 Trading capital (deposits)" },
-    { key: "sentify", label: <><FarmCoinIcon size={18} /> Sentify rewards cash-out</> },
-    {
-      key: "farmcoinTokens",
-      label: <><FarmCoinIcon size={18} /> FarmCoin Rewards{typeof farmcoinSummary?.balance === "number" ? ` (${farmcoinSummary.balance})` : ""}</>,
-    },
-    { key: "deliveryConfirmations", label: "🚚 Delivery Confirmations" },
-    { key: "openListings", label: "📋 Open Listings" },
-    { key: "todayActivity", label: "🗓️ Your Activity Today" },
-    { key: "buyOffers", label: "💬 Buy-Offers from Buyers" },
-    { key: "createListing", label: "📝 Create Listing" },
-    { key: "listingsNegotiations", label: "📑 Listings & Negotiations" },
-    { key: "lotOrders", label: "📒 Lot orders (escrow & steps)" },
-    { key: "inventoryStorage", label: "📦 Inventory in Storage" },
-    { key: "transactionsLog", label: "🧾 Transactions Log" },
-    { key: "reports", label: "📊 Comprehensive Reports" },
-    { key: "inventoryTable", label: "📋 Inventory Table" },
-    { key: "analytics", label: "📈 Exporter Analytics" },
-    { key: "analyticsCharts", label: "📉 Analytics Charts" },
-  ];
+  // Universal items first (MarketSpace, My Wallet & FarmCoin, Book transport,
+  // Communities), then the role's own. Older trading screens show only while
+  // something in them is still open.
+  const isTransporter = userRole === "transporter";
+  const olderPending =
+    (buyOffers?.negotiations ?? []).some((n: any) => n.status === "pending" || n.status === "countered") ||
+    (Array.isArray(traderDeliveryBatches) && traderDeliveryBatches.some((b: any) => !b.traderConfirmedAt));
+  const walletLabel = (
+    <>
+      💰 My Wallet & FarmCoin
+      {typeof farmcoinSummary?.balance === "number" ? <> (<FarmCoinIcon size={16} /> {farmcoinSummary.balance})</> : null}
+    </>
+  );
+  const MORE_MENU_SECTIONS: Array<{ key: string; label: React.ReactNode }> = isTransporter
+    ? [
+        { key: "transportServices", label: "🚚 Register transport services" },
+        { key: "marketspace", label: "🗺️ MarketSpace" },
+        { key: "myWallet", label: walletLabel },
+        { key: "communities", label: "🌾 My Communities" },
+      ]
+    : [
+        { key: "marketspace", label: "🗺️ MarketSpace" },
+        { key: "myWallet", label: walletLabel },
+        { key: "bookTransport", label: "🚚 Book transport" },
+        { key: "communities", label: "🌾 My Communities" },
+        { key: "globalBulk", label: "🌍 Global Bulk Markets" },
+        { key: "myLots", label: "📒 My lots & ledger" },
+        { key: "records", label: "📊 Records & reports" },
+        ...(olderPending ? [{ key: "older", label: "🗂️ Older listings & offers" }] : []),
+      ];
+  const MENU_ROUTES: Record<string, string> = {
+    marketspace: "/marketspace",
+    myWallet: "/wallet",
+    bookTransport: "/transport",
+    communities: "/farmer/communities",
+    globalBulk: "/trader/export",
+    myLots: "/farmer/farm2market", // The same lot form, ledger and payment steps as every seller
+    transportServices: "/transporter/services",
+  };
+  // Menu entries that open several sections of this page together
+  const MENU_GROUPS: Record<string, string[]> = {
+    records: ["transactionsLog", "reports", "analytics", "analyticsCharts"],
+    older: ["deliveryConfirmations", "buyOffers"],
+  };
   // A handful of sections only exist in the DOM for one of the two view modes
   // (Simple vs Pro) — switch the view automatically so the menu always finds
   // the section it just opened, instead of silently doing nothing.
   const SIMPLE_VIEW_ONLY_KEYS = ["openListings", "todayActivity", "buyOffers", "deliveryConfirmations", "wallet", "sentify"];
   const PRO_VIEW_ONLY_KEYS = ["createListing", "listingsNegotiations", "lotOrders"];
   const openSectionFromMenu = (key: string) => {
-    if (key === "marketspace" || key === "myWallet" || key === "myLots") {
+    if (MENU_ROUTES[key]) {
       setMoreMenuOpen(false);
-      // My lots: the same lot form, ledger and payment steps as every seller.
-      router.push(key === "marketspace" ? "/marketspace" : key === "myLots" ? "/farmer/farm2market" : "/wallet");
+      router.push(MENU_ROUTES[key]);
       return;
     }
-    if (SIMPLE_VIEW_ONLY_KEYS.includes(key)) {
+    const keys = MENU_GROUPS[key] ?? [key];
+    if (SIMPLE_VIEW_ONLY_KEYS.includes(keys[0])) {
       setProView(false);
-    } else if (PRO_VIEW_ONLY_KEYS.includes(key)) {
+    } else if (PRO_VIEW_ONLY_KEYS.includes(keys[0])) {
       setProView(true);
     }
-    setOpenSections((prev) => ({ ...prev, [key]: true }));
+    setOpenSections((prev) => ({ ...prev, ...Object.fromEntries(keys.map((k) => [k, true])) }));
     setMoreMenuOpen(false);
     setTimeout(() => {
-      document.getElementById(`section-${key}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      document.getElementById(`section-${keys[0]}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 50);
   };
   const hideSectionButtonStyle: React.CSSProperties = {
@@ -164,14 +184,6 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
       setTimeout(() => document.getElementById("section-walletDeposit")?.scrollIntoView({ behavior: "smooth", block: "start" }), 300);
     }
   }, []);
-  const openWallet = () => {
-    const next = !isSectionOpen("wallet");
-    setProView(false);
-    setOpenSections((prev) => ({ ...prev, wallet: next }));
-    if (next) {
-      setTimeout(() => document.getElementById("section-walletDeposit")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
-    }
-  };
   const openSentify = () => {
     const next = !isSectionOpen("sentify");
     setOpenSections((prev) => ({ ...prev, sentify: next }));
@@ -788,12 +800,11 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
       <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginBottom: "0.75rem" }}>
         <button
           type="button"
-          onClick={openWallet}
-          aria-expanded={isSectionOpen("wallet")}
+          onClick={() => router.push("/wallet")}
           style={{
             padding: "0.5rem 1rem",
-            background: isSectionOpen("wallet") ? "#2e7d32" : "#e8f5e9",
-            color: isSectionOpen("wallet") ? "#fff" : "#1b5e20",
+            background: "#e8f5e9",
+            color: "#1b5e20",
             border: "1px solid #a5d6a7",
             borderRadius: "6px",
             cursor: "pointer",
@@ -801,7 +812,7 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
             fontWeight: "700",
           }}
         >
-          💰 {isSectionOpen("wallet") ? "Hide wallet" : "Wallet"}
+          💰 My Wallet &amp; FarmCoin
         </button>
       </div>
 

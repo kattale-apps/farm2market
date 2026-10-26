@@ -156,13 +156,13 @@ export default function Farm2MarketPage() {
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
           <span style={{ fontSize: "1.4rem" }}>🛒</span>
           <h1 style={{ margin: 0, fontSize: "clamp(1rem, 4vw, 1.2rem)", fontWeight: 700, fontFamily: FONT }}>
-            Farmers Produce Market
+            {user?.role === "vendor" || user?.role === "store" ? "My lots & ledger" : "Farmers Produce Market"}
           </h1>
         </div>
       </div>
 
       {/* Content */}
-      <Farm2MarketContent userId={userId} isMobile={isMobile} />
+      <Farm2MarketContent userId={userId} userRole={user?.role === "vendor" || user?.role === "store" ? user.role : "farmer"} isMobile={isMobile} />
     </div>
   );
 }

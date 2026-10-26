@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { Id } from "../../../convex/_generated/dataModel";
 import { GeneralCameraCapture } from "../GeneralCameraCapture";
 import { inUgandaTime } from "../../utils/timeUtils";
-import { button } from "./ui";
+import { button, dataUrlToBlob } from "./ui";
 
 export type CapturedPhoto = {
   dataUrl: string;
@@ -28,6 +29,17 @@ export function evidencePhotoPayload<S extends string>(p: CapturedPhoto, storage
     locationSource: p.locationSource,
     manualEntry: p.manualEntry,
   };
+}
+
+/** Uploads captured photos and returns their evidence records (Rule 9 provenance kept). */
+export async function uploadEvidencePhotos(getUrl: () => Promise<string>, photos: CapturedPhoto[]) {
+  const uploaded = [];
+  for (const p of photos) {
+    const res = await fetch(await getUrl(), { method: "POST", body: dataUrlToBlob(p.dataUrl) });
+    const { storageId } = (await res.json()) as { storageId: Id<"_storage"> };
+    uploaded.push(evidencePhotoPayload(p, storageId));
+  }
+  return uploaded;
 }
 
 /**

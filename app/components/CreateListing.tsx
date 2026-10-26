@@ -9,6 +9,11 @@ import { FarmCoinReward, FarmCoinVideoPreloader } from "./FarmCoinAnimation";
 import { FarmCoinIcon } from "./icons/Brand";
 import { ugandaDateFromInstant } from "../../convex/exportMarketsShared";
 import { LOT_BAG_SIZES_KG } from "../../convex/constants";
+import { defaultPlan, type PlanStep } from "../../convex/lotOrdersShared";
+import { PhotoSetCapture, type CapturedPhoto } from "./exportMarkets/PhotoSetCapture";
+import { uploadEvidencePhotos } from "./exportMarkets/PhotoSetCapture";
+import { getCurrentLocation } from "../utils/gps";
+import { LotTermsFields, planProblem } from "./lots/LotTermsFields";
 
 interface CreateListingProps {
   userId: Id<"users">;
@@ -102,6 +107,43 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
     return { bagKg, bagsPerLot, lotCount, lotKg, totalKilos: Math.round(lotKg * lotCount * 100) / 100 };
   }, [formData.bagKg, formData.bagsPerLot, formData.lotCount]);
   const [customBagSize, setCustomBagSize] = useState(false);
+
+  // Photos (camera or gallery), the seller's live position, and the lot terms.
+  const generateUploadUrl = useMutation(api.files.generateUploadUrl);
+  const [photos, setPhotos] = useState<CapturedPhoto[]>([]);
+  const [gps, setGps] = useState<{ lat: number; lng: number; accuracy?: number; capturedAt: string } | null>(null);
+  const [gpsState, setGpsState] = useState<"reading" | "ok" | "none">("reading");
+  const [commitPercent, setCommitPercent] = useState(30);
+  const [steps, setSteps] = useState<PlanStep[]>(() => defaultPlan(effectiveRole, 30));
+  // Vendors and processors: stock bought in the app (traced) or not.
+  const myStock = useQuery(api.lotOrders.myStock, isVendorOrStore ? { userId } : "skip");
+  const [stockChoice, setStockChoice] = useState<"stock" | "off_app">("off_app");
+  const [stockId, setStockId] = useState("");
+
+  const readGps = () => {
+    setGpsState("reading");
+    getCurrentLocation()
+      .then((pos) => {
+        if (!pos) return setGpsState("none");
+        setGps({ lat: pos.latitude, lng: pos.longitude, accuracy: pos.accuracy, capturedAt: new Date().toISOString() });
+        setGpsState("ok");
+      })
+      .catch(() => setGpsState("none"));
+  };
+  // Read the position once each time the form opens.
+  useEffect(() => {
+    if (showForm) readGps();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showForm]);
+
+  const resetLotFields = () => {
+    setCustomBagSize(false);
+    setPhotos([]);
+    setCommitPercent(30);
+    setSteps(defaultPlan(effectiveRole, 30));
+    setStockChoice("off_app");
+    setStockId("");
+  };
 
   // Load custom products and packaging from localStorage
   useEffect(() => {
@@ -238,6 +280,23 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
         setLoading(false);
         return;
       }
+      if (photos.length === 0) {
+        setMessage({ type: "error", text: "Add at least one photo of what you are selling (camera or gallery)" });
+        setLoading(false);
+        return;
+      }
+      const termsProblem = listingMode === "packaging" ? null : planProblem(steps, commitPercent);
+      if (termsProblem) {
+        setMessage({ type: "error", text: `Payment steps: ${termsProblem}` });
+        setLoading(false);
+        return;
+      }
+      if (stockChoice === "stock" && !stockId) {
+        setMessage({ type: "error", text: "Choose the stock you are selling, or pick \"Not bought in the app\"" });
+        setLoading(false);
+        return;
+      }
+      const uploadedPhotos = await uploadEvidencePhotos(() => generateUploadUrl(), photos);
 
       // Packaging mode validation
       if (listingMode === "packaging") {
@@ -279,6 +338,8 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
           qualityRating: formData.qualityRating || undefined,
           qualityComment: formData.qualityComment.trim() || undefined,
           deliveryProcessorId: formData.deliveryProcessorId ? (formData.deliveryProcessorId as Id<"users">) : undefined,
+          photos: uploadedPhotos,
+          gps: gps ?? undefined,
         });
 
         const displayPkg = isCustomPkg ? customPackagingInput.trim() : formData.packagingType;
@@ -289,6 +350,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
 
         // Reset form
         setFormData(EMPTY_FORM);
+        resetLotFields();
         setCustomPackagingInput("");
         setListingMode("unit");
         setTimeout(() => { setShowForm(false); setMessage(null); }, 5000);
@@ -371,6 +433,11 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
         bagKg: lots?.bagKg,
         bagsPerLot: lots?.bagsPerLot,
         lotCount: lots?.lotCount,
+        photos: uploadedPhotos,
+        gps: gps ?? undefined,
+        commitPercent,
+        milestonePlan: steps,
+        inventoryId: stockChoice === "stock" && stockId ? (stockId as Id<"traderInventory">) : undefined,
       });
 
       setMessage({
@@ -382,7 +449,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
 
       // Reset form
       setFormData(EMPTY_FORM);
-      setCustomBagSize(false);
+      resetLotFields();
       setListingMode("unit");
       setGardenSizeMode("acres");
 
@@ -647,7 +714,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
             setShowForm(false);
             setMessage(null);
             setFormData(EMPTY_FORM);
-            setCustomBagSize(false);
+            resetLotFields();
             setListingMode("unit");
             setGardenSizeMode("acres");
           }}
@@ -1421,6 +1488,79 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
           )}
 
 
+          {/* Photos: camera or gallery, each with its GPS and time */}
+          <div>
+            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+              Photos *
+            </label>
+            <PhotoSetCapture photos={photos} onChange={setPhotos} max={6} />
+            <p style={{ margin: "0.4rem 0 0", fontSize: "0.85rem", color: gpsState === "ok" ? "#2e7d32" : "#666" }}>
+              {gpsState === "reading"
+                ? "📍 Reading your location..."
+                : gpsState === "ok"
+                  ? "📍 Your location is recorded with this listing."
+                  : <>📍 Could not read your location. That is OK. <button type="button" onClick={readGps} style={{ border: "none", background: "none", color: "#1565c0", fontWeight: 700, cursor: "pointer", padding: 0 }}>Try again</button></>}
+            </p>
+          </div>
+
+          {/* Vendors and processors: is this stock bought in the app (traced to farms)? */}
+          {isVendorOrStore && listingMode === "unit" && (
+            <div>
+              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                Where is this stock from? *
+              </label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+                {([["stock", "From my stock (bought in the app)"], ["off_app", "Not bought in the app"]] as const).map(([value, text]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => { setStockChoice(value); setStockId(""); }}
+                    style={{ minHeight: 44, padding: "0 0.9rem", borderRadius: 999, border: `2px solid ${stockChoice === value ? "#2e7d32" : "#ddd"}`, background: stockChoice === value ? "#e8f5e9" : "#fff", color: "#222", fontWeight: 700, cursor: "pointer" }}
+                  >
+                    {text}
+                  </button>
+                ))}
+              </div>
+              {stockChoice === "stock" && (
+                (myStock ?? []).filter((s) => !s.listed).length === 0 ? (
+                  <p style={{ margin: "0.5rem 0 0", fontSize: "0.85rem", color: "#666" }}>You have no unlisted stock bought in the app yet.</p>
+                ) : (
+                  <select
+                    value={stockId}
+                    onChange={(e) => {
+                      setStockId(e.target.value);
+                      const chosen = myStock?.find((s) => s.inventoryId === e.target.value);
+                      if (chosen && !formData.produceType) setFormData({ ...formData, produceType: chosen.produceType });
+                    }}
+                    style={{ width: "100%", marginTop: "0.5rem", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "6px", fontSize: "1rem", background: "#fff" }}
+                  >
+                    <option value="">-- Choose your stock --</option>
+                    {(myStock ?? []).filter((s) => !s.listed).map((s) => (
+                      <option key={s.inventoryId} value={s.inventoryId}>
+                        {s.produceType} · {s.totalKilos.toLocaleString()} kg · {s.source === "in_app" ? "traced" : "off-app"}
+                      </option>
+                    ))}
+                  </select>
+                )
+              )}
+            </div>
+          )}
+
+          {/* What the buyer commits up front, and the steps that bring in the rest */}
+          {listingMode !== "packaging" && (
+            <LotTermsFields
+              sellerRole={effectiveRole}
+              commitPercent={commitPercent}
+              steps={steps}
+              lotPrice={
+                listingMode === "garden"
+                  ? parseFloat(formData.totalPrice) > 0 ? parseFloat(formData.totalPrice) : null
+                  : lotPlan && parseFloat(formData.pricePerKilo) > 0 ? Math.round(lotPlan.lotKg * parseFloat(formData.pricePerKilo)) : null
+              }
+              onChange={(c, s) => { setCommitPercent(c); setSteps(s); }}
+            />
+          )}
+
           {/* Quality Rating Dropdown */}
           {qualityOptions && qualityOptions.length > 0 && (
             <div>
@@ -1497,7 +1637,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
                 setShowForm(false);
                 setMessage(null);
                 setFormData(EMPTY_FORM);
-                setCustomBagSize(false);
+                resetLotFields();
                 setListingMode("unit");
               }}
               style={{

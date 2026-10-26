@@ -71,10 +71,12 @@ function ConfigBuilder({ adminId, communityId, existing, onDone }: { adminId: Id
         }))
       : DEFAULT_MILESTONES
   );
+  // When the farmer is paid. Orders already funded keep the rule they were funded under.
+  const [settlementRule, setSettlementRule] = useState<"at_completion" | "per_milestone">(existing?.settlementRule ?? "at_completion");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const updateMilestone = (i: number, patch: Partial<(typeof milestones)[number]>) => {
+  const updateMilestone =(i: number, patch: Partial<(typeof milestones)[number]>) => {
     setMilestones((ms) => ms.map((m, idx) => (idx === i ? { ...m, ...patch } : m)));
   };
   const addMilestone = () => {
@@ -102,6 +104,7 @@ function ConfigBuilder({ adminId, communityId, existing, onDone }: { adminId: Id
         insuranceEnabled,
         insuranceLabel: insuranceEnabled ? insuranceLabel : undefined,
         insuranceAmount: insuranceEnabled && insuranceAmount ? Number(insuranceAmount) : undefined,
+        settlementRule,
         milestoneTemplate: milestones.map((m) => ({
           order: m.order,
           name: m.name,
@@ -254,6 +257,25 @@ function ConfigBuilder({ adminId, communityId, existing, onDone }: { adminId: Id
       <p style={{ fontSize: "0.8rem", color: totalPercent === 100 ? "#2e7d32" : "#d32f2f" }}>
         Release percentages total: {totalPercent}% (must equal 100%)
       </p>
+
+      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, color: "#333", margin: "0.4rem 0 0.3rem" }}>
+        When is the farmer paid?
+      </label>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", marginBottom: "0.6rem" }}>
+        {([
+          ["at_completion", "When all milestones are approved (recommended)", "Approved stages show as earned and pending; the buyer's money stays in escrow until the last stage."],
+          ["per_milestone", "At each approved milestone", "Each approved stage pays its % to the farmer's wallet straight away."],
+        ] as const).map(([value, title, help]) => (
+          <label key={value} style={{ display: "flex", gap: "0.5rem", alignItems: "flex-start", padding: "0.5rem", borderRadius: 8, border: settlementRule === value ? `2px solid ${BRAND}` : "1px solid #ddd", background: settlementRule === value ? "#e8f5e9" : "#fff", cursor: "pointer" }}>
+            <input type="radio" name="settlementRule" checked={settlementRule === value} onChange={() => setSettlementRule(value)} />
+            <span>
+              <strong>{title}</strong>
+              <span style={{ display: "block", fontSize: "0.8rem", color: "#666" }}>{help}</span>
+            </span>
+          </label>
+        ))}
+        {isEdit && <span style={{ fontSize: "0.78rem", color: "#666" }}>Orders already funded keep the rule they were funded under.</span>}
+      </div>
 
       {error && <p style={{ color: "#d32f2f", fontSize: "0.85rem" }}>{error}</p>}
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>

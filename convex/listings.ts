@@ -28,6 +28,8 @@ import {
 import { Id } from "./_generated/dataModel";
 import { deliveryPointOf, isActiveProcessor } from "./processors";
 import { todayUganda } from "./exportMarkets";
+import { assertEvidencePhotos, evidencePhotoValidator } from "./evidencePhotos";
+import { gpsValidator, lotTerms, planStepValidator } from "./lotOrdersShared";
 
 /**
  * For vendor/store users, where buyers collect their listings, from their profile.
@@ -111,6 +113,12 @@ export const createListing = mutation({
     bagKg: v.optional(v.number()),
     bagsPerLot: v.optional(v.number()),
     lotCount: v.optional(v.number()),
+    // Lot order terms (convex/lotOrdersShared.ts) and proof
+    photos: v.optional(v.array(evidencePhotoValidator)),
+    gps: v.optional(gpsValidator),
+    commitPercent: v.optional(v.number()),
+    milestonePlan: v.optional(v.array(planStepValidator)),
+    inventoryId: v.optional(v.id("traderInventory")), // Vendors and processors: listing stock bought in the app
   },
   handler: async (ctx, args) => {
     // ============================================================
@@ -189,6 +197,31 @@ export const createListing = mutation({
       }
     }
 
+    // Lot terms: what the buyer commits up front and the seller's steps.
+    // Packaged items are sold from the shop, not as lots.
+    const terms = listingMode === "packaging" ? null : lotTerms(user.role, args.commitPercent, args.milestonePlan);
+    if (args.photos && args.photos.length > 0) assertEvidencePhotos(args.photos, 6);
+
+    // Where the stock is from: the farmer's own farm, stock bought in the
+    // app (traced to farms), or stock bought outside the app.
+    let stockSource: "own_farm" | "in_app" | "off_app" = user.role === "farmer" ? "own_farm" : "off_app";
+    if (args.inventoryId) {
+      const inventory = await ctx.db.get(args.inventoryId);
+      if (!inventory || inventory.traderId !== args.farmerId) throw new Error("Choose stock from your own inventory");
+      if (inventory.status !== "in_storage") throw new Error("That stock is no longer in your store");
+      if (normalizedTotalKilos > inventory.totalKilos) {
+        throw new Error(`That stock holds ${inventory.totalKilos} kg; list ${inventory.totalKilos} kg or less`);
+      }
+      const listed = await ctx.db
+        .query("listings")
+        .withIndex("by_inventory", (q) => q.eq("inventoryId", args.inventoryId))
+        .take(20);
+      if (listed.some((l) => l.status === "active" || l.status === "partially_locked")) {
+        throw new Error("That stock is already listed");
+      }
+      stockSource = "in_app";
+    }
+
     // Generate UTID
     const utid = generateUTID(user.role);
 
@@ -254,6 +287,12 @@ export const createListing = mutation({
       totalUnits,
       bagKg: lots?.bagKg,
       bagsPerLot: lots?.bagsPerLot,
+      photos: args.photos && args.photos.length > 0 ? args.photos : undefined,
+      gps: args.gps,
+      commitPercent: terms?.commitPercent,
+      milestonePlan: terms?.milestonePlan,
+      stockSource,
+      inventoryId: args.inventoryId,
       status: "active",
       createdAt: getUgandaTime(),
       deliverySLA: 0,
@@ -296,6 +335,47 @@ export const createListing = mutation({
     }
 
     return { listingId, utid, totalUnits, unitIds };
+  },
+});
+
+/**
+ * The seller edits a listing's price, photos, commit % and steps. Changes
+ * apply to lots nobody has ordered yet: a lot already in an order keeps the
+ * terms it was ordered on (the order holds its own copy).
+ */
+export const updateListingTerms = mutation({
+  args: {
+    sellerId: v.id("users"),
+    listingId: v.id("listings"),
+    pricePerKilo: v.optional(v.number()),
+    commitPercent: v.number(),
+    milestonePlan: v.array(planStepValidator),
+    photos: v.optional(v.array(evidencePhotoValidator)),
+  },
+  handler: async (ctx, args) => {
+    const listing = await ctx.db.get(args.listingId);
+    if (!listing || listing.farmerId !== args.sellerId) throw new Error("This listing is not yours");
+    if (listing.status === "cancelled" || listing.withdrawnAt) throw new Error("This listing is closed");
+    if (listing.listingMode === "packaging") throw new Error("Packaged items have no payment steps");
+    const seller = await ctx.db.get(args.sellerId);
+    const terms = lotTerms(seller?.role ?? "farmer", args.commitPercent, args.milestonePlan)!;
+
+    const patch: {
+      commitPercent: number;
+      milestonePlan: typeof terms.milestonePlan;
+      pricePerKilo?: number;
+      photos?: typeof args.photos;
+    } = { commitPercent: terms.commitPercent, milestonePlan: terms.milestonePlan };
+    if (args.pricePerKilo !== undefined && listing.listingMode !== "garden") {
+      if (!(args.pricePerKilo > 0)) throw new Error("Enter a price above 0");
+      patch.pricePerKilo = args.pricePerKilo;
+    }
+    if (args.photos !== undefined) {
+      if (args.photos.length > 0) assertEvidencePhotos(args.photos, 6);
+      patch.photos = args.photos.length > 0 ? args.photos : undefined;
+    }
+    await ctx.db.patch(args.listingId, patch);
+    return { success: true };
   },
 });
 
@@ -598,6 +678,8 @@ export const createTraderListing = mutation({
       traderId: args.traderId,
       inventoryId: args.inventoryId,
       farmerId: undefined, // Not a farmer listing
+      // Stock bought from farms in the app is traced; declared stock is off-app
+      stockSource: inventory.source ?? (inventory.listingUnitIds.length > 0 ? "in_app" : "off_app"),
       utid,
       produceType: inventory.produceType,
       totalKilos: inventory.totalKilos,
@@ -696,6 +778,7 @@ export const createTraderPackagingListing = mutation({
       traderId: args.traderId,
       farmerId: undefined,
       inventoryId: undefined,
+      stockSource: "off_app", // Exporter-sourced, not bought in the app
       utid,
       produceType: args.produceType.trim(),
       productName: args.productName.trim(),
@@ -782,6 +865,7 @@ export const createTraderInventoryLot = mutation({
       status: "in_storage",
       utid,
       is100kgBlock: args.totalKilos === BUYER_BLOCK_SIZE_KG,
+      source: "off_app", // Declared by the exporter, not bought in the app
     });
 
     return { inventoryId, utid };

@@ -10,11 +10,13 @@ import { PROCESSING_CAPABILITIES, STORAGE_TYPES } from "../../../convex/processo
 import { formatUgandaDateTime } from "../../utils/timeUtils";
 import { LiveGps } from "./LiveGps";
 import { HomeTabButton, TabBackBar, useTabHistory } from "../nav/TabNav";
-import { FONT, card, input, label, button, StatusPill, Notice, PageHeader, formatUgx, uploadToConvex, errorText, dataUrlToBlob } from "../exportMarkets/ui";
-import { PhotoSetCapture, CapturedPhoto, evidencePhotoPayload } from "../exportMarkets/PhotoSetCapture";
+import { FONT, card, input, label, button, StatusPill, Notice, PageHeader, formatUgx, uploadToConvex, errorText } from "../exportMarkets/ui";
+import { PhotoSetCapture, CapturedPhoto, uploadEvidencePhotos } from "../exportMarkets/PhotoSetCapture";
 import { ProcessorIntakeTab, ProcessorBatchesTab } from "./ProcessorOperations";
 import { ProcessorSalesTab } from "./ProcessorSales";
 import { BuyerOffersPanel } from "../market/BuyerOffersPanel";
+import { LotLedger } from "../lots/LotLedger";
+import { MyStock } from "../lots/MyStock";
 
 export const PROCESSOR_HEADING = "#6d4c00";
 export const PROCESSOR_ACCENT = "#f9a825";
@@ -22,7 +24,7 @@ export const PROCESSOR_SOFT = "#fff8e1";
 export const PROCESSOR_BORDER = "#ffd54f";
 
 type Msg = { tone: "error" | "success" | "info"; text: string } | null;
-type Tab = "overview" | "profile" | "documents" | "buying" | "intake" | "batches" | "sales";
+type Tab = "overview" | "profile" | "documents" | "buying" | "intake" | "batches" | "sales" | "lots";
 
 const TABS: { key: Tab; label: string; needs: string }[] = [
   { key: "overview", label: "Overview", needs: "Your progress to becoming a verified processor, step by step." },
@@ -32,6 +34,7 @@ const TABS: { key: Tab; label: string; needs: string }[] = [
   { key: "intake", label: "Intake", needs: "Record coffee you buy from farmers, on the app or not, with photos and the farm location." },
   { key: "batches", label: "Processing", needs: "Turn intake into processed batches: weight in, weight out and the outturn, with photos." },
   { key: "sales", label: "Sales", needs: "Sell processed batches to exporters directly, log sales made outside the app, or list in PROCESSED MARKETS." },
+  { key: "lots", label: "Lots & ledger", needs: "List lots for sale with payment steps, follow the lots you bought and sold, and see your stock and where it came from." },
 ];
 
 /** Each checklist item and where the processor goes to act on it. */
@@ -146,6 +149,7 @@ export function ProcessorWorkspace({ userId }: { userId: Id<"users"> }) {
           {tab === "intake" && <ProcessorIntakeTab userId={userId} member={member} today={today} crops={processorCrops(ws)} setMsg={setMsg} />}
           {tab === "batches" && <ProcessorBatchesTab userId={userId} member={member} today={today} crops={processorCrops(ws)} setMsg={setMsg} />}
           {tab === "sales" && <ProcessorSalesTab userId={userId} member={member} active={ws.isActiveProcessor} today={today} setMsg={setMsg} />}
+          {tab === "lots" && <ProcessorLotsTab userId={userId} />}
         </>
       )}
     </div>
@@ -445,16 +449,8 @@ export function chip(on: boolean, muted: boolean): React.CSSProperties {
   };
 }
 
-/** Uploads captured photos and returns their evidence records (Rule 9 provenance kept). */
-export async function uploadEvidencePhotos(getUrl: () => Promise<string>, photos: CapturedPhoto[]) {
-  const uploaded = [];
-  for (const p of photos) {
-    const res = await fetch(await getUrl(), { method: "POST", body: dataUrlToBlob(p.dataUrl) });
-    const { storageId } = (await res.json()) as { storageId: Id<"_storage"> };
-    uploaded.push(evidencePhotoPayload(p, storageId));
-  }
-  return uploaded;
-}
+// Kept here too for the processor screens that import it from this file.
+export { uploadEvidencePhotos };
 
 function FacilityPhotosCard({ ws, userId, setMsg }: CardProps) {
   const getUrl = useMutation(api.processors.generateProcessorUploadUrl);
@@ -747,5 +743,24 @@ function DocumentSlot({ slot, userId, setMsg, canUpload }: { slot: ProcessorWS["
         </div>
       )}
     </div>
+  );
+}
+
+/** Lots: list them with payment steps on the lots page; follow orders and stock here. */
+function ProcessorLotsTab({ userId }: { userId: Id<"users"> }) {
+  return (
+    <>
+      <div style={card}>
+        <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
+          <a href="/farmer/farm2market" style={{ color: PROCESSOR_HEADING, fontWeight: 700 }}>📒 List a lot for sale →</a>
+          <a href="/lots" style={{ color: PROCESSOR_HEADING, fontWeight: 700 }}>🛒 Buy lots from farmers →</a>
+        </div>
+        <LotLedger userId={userId} />
+      </div>
+      <div style={card}>
+        <h3 style={{ marginTop: 0, color: PROCESSOR_HEADING }}>My stock</h3>
+        <MyStock userId={userId} />
+      </div>
+    </>
   );
 }

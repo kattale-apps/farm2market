@@ -12,6 +12,10 @@
  */
 import { NextResponse } from "next/server";
 
+// Stream on each request. Without this, `next build` prerenders the route
+// and downloads the whole APK during the build, which times out on slow networks.
+export const dynamic = "force-dynamic";
+
 const APK_DOWNLOAD_URL =
   "https://github.com/kattale-apps/farm2market/releases/download/android-v20260908/app-defaultCommunity-productionFlavors-release.apk";
 

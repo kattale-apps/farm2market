@@ -31,7 +31,7 @@ import { todayUganda } from "./exportMarkets";
 import { maskContactDetails } from "./exportMarketsShared";
 import { assertEvidencePhotos, evidencePhotoValidator } from "./evidencePhotos";
 import { availableKg as batchAvailableKg } from "./processorSales";
-import { LOT_SELLER_ROLES, gpsValidator, lotTerms, planStepValidator, stockRowSource, stockSourceProblem, type StockSource } from "./lotOrdersShared";
+import { LOT_SELLER_ROLES, PACKAGED_COMMIT_PERCENT, gpsValidator, lotTerms, packagedPlan, planStepValidator, stockRowSource, stockSourceProblem, type StockSource } from "./lotOrdersShared";
 import { syncListingCard } from "./marketCards";
 
 /**
@@ -112,6 +112,8 @@ export const createListing = mutation({
     availableUnits: v.optional(v.number()),
     pricingUnit: v.optional(v.union(v.literal("per_package"), v.literal("per_kg"))),
     pricePerUnit: v.optional(v.number()),
+    packagesPerBatch: v.optional(v.number()), // Packaged items: 1 = sold one by one (default); more = batches of that many (bulk)
+    takesOffers: v.optional(v.boolean()), // Packaged items: the seller's choice to take offers (default no)
     // Lots (by-weight listings): buyers buy whole lots of bagsPerLot bags of bagKg
     bagKg: v.optional(v.number()),
     bagsPerLot: v.optional(v.number()),
@@ -206,7 +208,15 @@ export const createListing = mutation({
 
     // Lot terms: what the buyer commits up front and the seller's steps.
     // Packaged items are sold from the shop, not as lots.
-    const terms = listingMode === "packaging" ? null : lotTerms(user.role, args.commitPercent, args.milestonePlan);
+    // Packaged items: no payment steps unless the seller switches them on (paid in full into escrow, then collected).
+    const terms =
+      listingMode === "packaging"
+        ? args.milestonePlan
+          ? lotTerms(user.role, args.commitPercent, args.milestonePlan)
+          : { commitPercent: PACKAGED_COMMIT_PERCENT, milestonePlan: packagedPlan() }
+        : lotTerms(user.role, args.commitPercent, args.milestonePlan);
+    const packagesPerBatch = listingMode === "packaging" ? Math.round(args.packagesPerBatch ?? 1) : undefined;
+    if (packagesPerBatch !== undefined && !(packagesPerBatch >= 1 && packagesPerBatch <= 10_000)) throw new Error("Items in one batch must be between 1 and 10,000");
     if (args.photos && args.photos.length > 0) assertEvidencePhotos(args.photos, 6);
     // Listings can go on MarketSpace, which is anonymous: no contact details in the comment.
     if (args.qualityComment && maskContactDetails(args.qualityComment).masked) {
@@ -347,6 +357,8 @@ export const createListing = mutation({
       packagingTypeEnum: args.packagingTypeEnum?.trim() || undefined,
       packagingTypeCustom: args.packagingTypeCustom?.trim() || undefined,
       availableUnits: listingMode === "packaging" ? args.availableUnits : undefined,
+      packagesPerBatch,
+      takesOffers: listingMode === "packaging" ? args.takesOffers === true : undefined,
       pricingUnit: args.pricingUnit,
       pricePerUnit: args.pricePerUnit,
       // Collection location
@@ -390,15 +402,16 @@ export const updateListingTerms = mutation({
     sellerId: v.id("users"),
     listingId: v.id("listings"),
     pricePerKilo: v.optional(v.number()),
+    pricePerUnit: v.optional(v.number()), // Packaged items: price per item
+    takesOffers: v.optional(v.boolean()), // Packaged items: take offers or not
     commitPercent: v.number(),
-    milestonePlan: v.array(planStepValidator),
+    milestonePlan: v.array(planStepValidator), // Packaged items with steps off: packagedPlan() at 100%
     photos: v.optional(v.array(evidencePhotoValidator)),
   },
   handler: async (ctx, args) => {
     const listing = await ctx.db.get(args.listingId);
     if (!listing || listing.farmerId !== args.sellerId) throw new Error("This listing is not yours");
     if (listing.status === "cancelled" || listing.withdrawnAt) throw new Error("This listing is closed");
-    if (listing.listingMode === "packaging") throw new Error("Packaged items have no payment steps");
     const seller = await ctx.db.get(args.sellerId);
     const terms = lotTerms(seller?.role ?? "farmer", args.commitPercent, args.milestonePlan)!;
 
@@ -406,9 +419,16 @@ export const updateListingTerms = mutation({
       commitPercent: number;
       milestonePlan: typeof terms.milestonePlan;
       pricePerKilo?: number;
+      pricePerUnit?: number;
+      takesOffers?: boolean;
       photos?: typeof args.photos;
     } = { commitPercent: terms.commitPercent, milestonePlan: terms.milestonePlan };
-    if (args.pricePerKilo !== undefined && listing.listingMode !== "garden") {
+    if (args.takesOffers !== undefined && listing.listingMode === "packaging") patch.takesOffers = args.takesOffers;
+    if (args.pricePerUnit !== undefined && listing.listingMode === "packaging") {
+      if (!(args.pricePerUnit > 0)) throw new Error("Enter a price above 0");
+      patch.pricePerUnit = args.pricePerUnit;
+    }
+    if (args.pricePerKilo !== undefined && listing.listingMode !== "garden" && listing.listingMode !== "packaging") {
       if (!(args.pricePerKilo > 0)) throw new Error("Enter a price above 0");
       patch.pricePerKilo = args.pricePerKilo;
     }

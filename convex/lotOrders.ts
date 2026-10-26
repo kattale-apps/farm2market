@@ -50,6 +50,11 @@ import {
   nextStepIndex,
   penaltySplit,
   stockRowSource,
+  PACKAGED_COMMIT_PERCENT,
+  packageLabel,
+  packagedPlan,
+  packagedUnitPrice,
+  packagesText,
 } from "./lotOrdersShared";
 
 type Ctx = QueryCtx | MutationCtx;
@@ -197,12 +202,25 @@ function assertMoneyAdmin(admin: Doc<"users"> | null) {
   if (!ok) throw new Error("Only a super admin or finance admin can settle lot orders");
 }
 
+/** Every unit an order covers: one lot, or the items or batches of a packaged purchase. */
+function orderUnits(order: Order): Id<"listingUnits">[] {
+  return [order.unitId, ...(order.extraUnitIds ?? [])];
+}
+
+/** What an order is for, in words: "100 kg Maize" or "3 crates Tomatoes". */
+function orderGoods(order: Order): string {
+  return order.packageCount !== undefined
+    ? `${packagesText(order.packageCount, order.packageLabel ?? "item")} ${order.produceType}`
+    : `${order.lotKg.toLocaleString()} kg ${order.produceType}`;
+}
+
 /**
  * A lot bought by an exporter, processor or vendor becomes their stock,
  * traced to the lot it came from (export lots read listingUnitIds).
  */
 async function addToStock(ctx: MutationCtx, order: Order, now: number) {
-  if (!STOCK_HOLDER_ROLES.includes(order.buyerRole)) return;
+  // Packaged items are shop goods, not produce stock by weight
+  if (!STOCK_HOLDER_ROLES.includes(order.buyerRole) || order.packageCount !== undefined) return;
   const listing = await ctx.db.get(order.listingId);
   const isExporter = order.buyerRole === "trader" || order.buyerRole === "transporter";
   await ctx.db.insert("traderInventory", {
@@ -229,7 +247,7 @@ async function addToStock(ctx: MutationCtx, order: Order, now: number) {
 
 /** The lot was collected: it is delivered on the unit and in both ledgers. */
 async function markDelivered(ctx: MutationCtx, order: Order, now: number) {
-  await ctx.db.patch(order.unitId, { status: "delivered", deliveryStatus: "delivered" });
+  for (const unitId of orderUnits(order)) await ctx.db.patch(unitId, { status: "delivered", deliveryStatus: "delivered" });
   await addToStock(ctx, order, now);
   await refreshListingStatus(ctx, order.listingId);
 }
@@ -237,16 +255,18 @@ async function markDelivered(ctx: MutationCtx, order: Order, now: number) {
 /** The order ended without a sale: the lot goes back on the market, unless the seller withdrew the listing. */
 async function releaseLot(ctx: MutationCtx, order: Order) {
   const listing = await ctx.db.get(order.listingId);
-  await ctx.db.patch(order.unitId, {
-    status: listing?.withdrawnAt ? "cancelled" : "available",
-    lockedBy: undefined,
-    lockedAt: undefined,
-    lockUtid: undefined,
-    deliveryDeadline: undefined,
-    deliveryStatus: undefined,
-    activeNegotiationId: undefined,
-    lotOrderId: undefined,
-  });
+  for (const unitId of orderUnits(order)) {
+    await ctx.db.patch(unitId, {
+      status: listing?.withdrawnAt ? "cancelled" : "available",
+      lockedBy: undefined,
+      lockedAt: undefined,
+      lockUtid: undefined,
+      deliveryDeadline: undefined,
+      deliveryStatus: undefined,
+      activeNegotiationId: undefined,
+      lotOrderId: undefined,
+    });
+  }
   await refreshListingStatus(ctx, order.listingId);
 }
 
@@ -307,7 +327,7 @@ async function settle(ctx: MutationCtx, order: Order, confirmedBy: Id<"users"> |
   });
   await markDelivered(ctx, order, now);
 
-  const kg = `${order.lotKg.toLocaleString()} kg ${order.produceType}`;
+  const kg = orderGoods(order);
   await notify(ctx, order.sellerId, "Paid for your lot",
     `${ugx(order.paidAmount)} for ${kg} is now in your wallet${confirmedBy ? "" : " (the buyer did not reply within 3 days)"}.`, order.utid);
   await notify(ctx, order.buyerId, "Lot collected",
@@ -364,11 +384,10 @@ export async function commitLots(ctx: MutationCtx, buyerId: Id<"users">, unitIds
     else if (listing._id !== unit.listingId) throw new Error("Choose lots from one listing at a time");
     if (!listing?.farmerId) throw new Error("Listing not found");
     if (listing.status !== "active" && listing.status !== "partially_locked") throw new Error("This listing is no longer for sale");
-    if (listing.listingMode === "packaging") throw new Error("Packaged items are bought from the shop, not as lots");
     if (listing.farmerId === buyerId) throw new Error("You cannot buy your own lots");
 
-    // The price: this buyer's accepted offer, otherwise the posted price.
-    let price = listing.pricePerKilo;
+    // The price: this buyer's accepted offer, otherwise the posted price (per item for packaged goods).
+    let price = listing.listingMode === "packaging" ? listing.pricePerUnit ?? 0 : listing.pricePerKilo;
     let negotiationId: Id<"negotiations"> | undefined;
     if (unit.activeNegotiationId) {
       const negotiation = await ctx.db.get(unit.activeNegotiationId);
@@ -391,12 +410,24 @@ export async function commitLots(ctx: MutationCtx, buyerId: Id<"users">, unitIds
   const seller = await ctx.db.get(listing.farmerId);
   if (!seller) throw new Error("Seller not found");
 
-  const commitPercent = listing.commitPercent ?? 100;
-  const plan = listing.milestonePlan ?? defaultPlan(seller.role, commitPercent);
-  const lotKg = listing.unitSize || 10;
-  const priced = lots.map((l) => {
-    const totalAmount = Math.round(l.price * lotKg);
-    return { ...l, totalAmount, committed: commitAmount(totalAmount, commitPercent) };
+  const packaged = listing.listingMode === "packaging";
+  const commitPercent = listing.commitPercent ?? (packaged ? PACKAGED_COMMIT_PERCENT : 100);
+  const plan = listing.milestonePlan ?? (packaged ? packagedPlan() : defaultPlan(seller.role, commitPercent));
+  const lotKg = packaged ? 0 : listing.unitSize || 10;
+  const perBatch = listing.packagesPerBatch ?? 1;
+  // One order per lot; a packaged purchase is one order for all its items or batches.
+  // Packaged items: each item keeps its own price (an accepted offer, or the posted price)
+  const groups = packaged
+    ? [{
+        units: lots.map((l) => l.unit),
+        price: Math.round(lots.reduce((a, l) => a + l.price, 0) / lots.length),
+        negotiationId: lots.find((l) => l.negotiationId)?.negotiationId,
+        packagedTotal: lots.reduce((a, l) => a + packagedUnitPrice(l.price, perBatch), 0),
+      }]
+    : lots.map((l) => ({ units: [l.unit], price: l.price, negotiationId: l.negotiationId, packagedTotal: 0 }));
+  const priced = groups.map((g) => {
+    const totalAmount = packaged ? g.packagedTotal : Math.round(g.price * lotKg);
+    return { ...g, unit: g.units[0], totalAmount, committed: commitAmount(totalAmount, commitPercent) };
   });
   const committedTotal = priced.reduce((sum, l) => sum + l.committed, 0);
 
@@ -431,6 +462,7 @@ export async function commitLots(ctx: MutationCtx, buyerId: Id<"users">, unitIds
       metadata: {
         type: "lot_order_commit",
         unitId: lot.unit._id,
+        units: lot.units.length,
         listingId: listing._id,
         produceType: listing.produceType,
         commitPercent,
@@ -441,6 +473,9 @@ export async function commitLots(ctx: MutationCtx, buyerId: Id<"users">, unitIds
       utid,
       listingId: listing._id,
       unitId: lot.unit._id,
+      extraUnitIds: packaged ? lot.units.slice(1).map((u) => u._id) : undefined,
+      packageCount: packaged ? lot.units.length * perBatch : undefined,
+      packageLabel: packaged ? packageLabel(listing) : undefined,
       sellerId: seller._id,
       buyerId,
       sellerRole: seller.role,
@@ -459,15 +494,17 @@ export async function commitLots(ctx: MutationCtx, buyerId: Id<"users">, unitIds
       createdAt: now,
       updatedAt: now,
     });
-    await ctx.db.patch(lot.unit._id, {
-      status: "locked",
-      lockedBy: buyerId,
-      lockedAt: now,
-      lockUtid: utid,
-      deliveryStatus: "pending",
-      activeNegotiationId: undefined,
-      lotOrderId: orderId,
-    });
+    for (const unit of lot.units) {
+      await ctx.db.patch(unit._id, {
+        status: "locked",
+        lockedBy: buyerId,
+        lockedAt: now,
+        lockUtid: utid,
+        deliveryStatus: "pending",
+        activeNegotiationId: undefined,
+        lotOrderId: orderId,
+      });
+    }
     orders.push({ orderId, utid, unitId: lot.unit._id, unitNumber: lot.unit.unitNumber, totalAmount: lot.totalAmount, committed: lot.committed });
   }
 
@@ -485,7 +522,7 @@ export async function commitLots(ctx: MutationCtx, buyerId: Id<"users">, unitIds
   await refreshListingStatus(ctx, listing._id);
 
   await notify(ctx, seller._id, "A buyer committed to your lots",
-    `${await partyLabel(ctx, buyerId)} put ${ugx(committedTotal)} (${commitPercent}%) into escrow for ${orders.length} lot(s) of ${listing.produceType}. ` +
+    `${await partyLabel(ctx, buyerId)} put ${ugx(committedTotal)} (${commitPercent}%) into escrow for ${packaged ? packagesText(lots.length * perBatch, packageLabel(listing)) : `${orders.length} lot(s)`} of ${listing.produceType}. ` +
       `Start with "${plan[0].name}" in your ledger; each step you finish brings in its share of the price.`, orders[0].utid);
 
   return {
@@ -644,7 +681,7 @@ export const markStepDone = mutation({
     let paidAmount = order.paidAmount;
     const lockUtids = [...order.lockUtids];
     const balance = await walletBalance(ctx, order.buyerId);
-    const kg = `${order.lotKg.toLocaleString()} kg ${order.produceType}`;
+    const kg = orderGoods(order);
 
     if (step.handover) {
       // The goods change hands only with the whole price in escrow.
@@ -898,6 +935,8 @@ function orderCard(order: Order, otherLabel: string) {
     listingId: order.listingId,
     produceType: order.produceType,
     lotKg: order.lotKg,
+    packageCount: order.packageCount ?? null, // Packaged items: prices below are per item
+    packageLabel: order.packageLabel ?? null,
     otherLabel,
     postedPricePerKilo: order.postedPricePerKilo,
     settledPricePerKilo: order.settledPricePerKilo,

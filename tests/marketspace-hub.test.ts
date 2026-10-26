@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { BULK_RANGES, bulkRangeProblem, isLiteFor, priceBand, quantityBand, shapeCard, vendDayChoices, withDefaults } from "../convex/marketspaceShared";
 import { maskContactDetails } from "../convex/exportMarketsShared";
-import { LOT_SELLER_ROLES, bulkSellingDecision, defaultSteps, stockRowSource, stockSourceProblem } from "../convex/lotOrdersShared";
+import { LOT_SELLER_ROLES, PACKAGED_COMMIT_PERCENT, bulkSellingDecision, defaultPlan, defaultSteps, isPackagedPlan, packageLabel, packagedPlan, packagedUnitPrice, packagesText, stockRowSource, stockSourceProblem, validatePlan } from "../convex/lotOrdersShared";
 
 test("exporters sell lots like farmers, vendors and processors", () => {
   assert.deepEqual([...LOT_SELLER_ROLES], ["farmer", "vendor", "store", "trader"]);
@@ -145,4 +145,32 @@ test("stock bought in the app and off-app stock never mix", () => {
   assert.equal(stockRowSource({ source: "off_app", listingUnitIds: ["u1"] }), "off_app");
   assert.equal(stockRowSource({ listingUnitIds: ["u1"] }), "in_app");
   assert.equal(stockRowSource({ listingUnitIds: [] }), "off_app");
+});
+
+test("packaged items: no payment steps by default, paid in full and then collected", () => {
+  const plan = packagedPlan();
+  assert.equal(PACKAGED_COMMIT_PERCENT, 100);
+  assert.deepEqual(validatePlan(plan, PACKAGED_COMMIT_PERCENT), plan, "a valid plan");
+  assert.equal(plan.length, 1);
+  assert.equal(plan[0].handover, true);
+  assert.equal(isPackagedPlan(plan, 100), true);
+  // Steps switched on: the usual plan
+  assert.equal(isPackagedPlan(defaultPlan("vendor", 30), 30), false);
+});
+
+test("packaged items are priced per item, or per batch of items", () => {
+  assert.equal(packagedUnitPrice(25000, 1), 25000, "a single item");
+  assert.equal(packagedUnitPrice(25000, 20), 500000, "a batch of 20");
+  assert.equal(packagedUnitPrice(25000, 0), 25000, "a batch is at least one item");
+});
+
+test("packaged items read plainly", () => {
+  assert.equal(packageLabel({ packagingTypeEnum: "crate" }), "crate");
+  assert.equal(packageLabel({ packagingTypeCustom: "Tray", packagingTypeEnum: "crate" }), "Tray");
+  assert.equal(packageLabel({}), "item");
+  assert.equal(packagesText(1, "crate"), "1 crate");
+  assert.equal(packagesText(3, "crate"), "3 crates");
+  assert.equal(packagesText(2, "bunch"), "2 bunches");
+  assert.equal(packagesText(4, "box"), "4 boxes");
+  assert.equal(packagesText(2, "Tin / Debe"), "2 × Tin / Debe");
 });

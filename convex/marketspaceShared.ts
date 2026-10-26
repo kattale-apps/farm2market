@@ -223,6 +223,9 @@ export function bulkRange(key: string | undefined | null) {
   return BULK_RANGES.find((r) => r.key === key) ?? null;
 }
 
+/** Packaged items sold in batches go under Local Bulk without a kilo range. */
+export const PACKAGED_BATCHES = { key: "batches", label: "Packaged batches" };
+
 /** Why `kg` does not fit the range, or null when it does. */
 export function bulkRangeProblem(key: string, kg: number): string | null {
   const range = bulkRange(key);
@@ -292,6 +295,7 @@ type CardSource = {
   lotsAvailable?: number;
   qtyKg?: number;
   quantityText?: string;
+  packaged?: boolean;
   pricePerKilo?: number;
   priceUGX?: number;
   priceUnit?: string;
@@ -312,7 +316,7 @@ export function shapeCard(
   extras: { thumbUrl: string | null; sellerAlias: string | null; sellerCategory: string }
 ) {
   const lite = isLiteFor(card.view, viewer.tier, viewer.isMine);
-  const range = bulkRange(card.bulkRange);
+  const range = card.bulkRange === PACKAGED_BATCHES.key ? PACKAGED_BATCHES : bulkRange(card.bulkRange);
   return {
     cardId: card._id,
     view: card.view,
@@ -324,6 +328,7 @@ export function shapeCard(
     stockSource: card.stockSource ?? null,
     isBulk: card.isBulk,
     bulkLabel: range?.label ?? null,
+    packaged: !!card.packaged, // Priced per item (priceUGX, priceUnit), counted in quantityText
     createdAt: card.createdAt,
     expiresAt: card.expiresAt,
     isMine: viewer.isMine,

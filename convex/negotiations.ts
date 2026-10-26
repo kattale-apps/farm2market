@@ -23,7 +23,7 @@ import {
 } from "./errors";
 import { Id } from "./_generated/dataModel";
 import { postWallet } from "./walletSplit";
-import { LOT_SELLER_ROLES, OFFER_FOLLOW_UP_ROLES, PURCHASER_ROLES } from "./lotOrdersShared";
+import { LOT_SELLER_ROLES, OFFER_FOLLOW_UP_ROLES, PURCHASER_ROLES, packageLabel } from "./lotOrdersShared";
 import { lotBuyingAccess } from "./lotOrders";
 import { todayUganda } from "./exportMarkets";
 import { roleLabel } from "./roleLabels";
@@ -101,6 +101,7 @@ export const makeOffer = mutation({
         if (!listing.farmerId) {
           throw new Error("Listing has no farmer ID");
         }
+        if (listing.listingMode === "packaging" && !listing.takesOffers) throw new Error("This seller sells at the posted price and does not take offers");
         if (listing.farmerId === args.traderId) {
           throw new Error("You cannot make an offer on your own lots");
         }
@@ -120,7 +121,9 @@ export const makeOffer = mutation({
     }
 
     const listing = Array.from(listings.values())[0];
-    const unitSize = listing.unitSize || LISTING_UNIT_SIZE_KG;
+    // Packaged items: the offer is per item, and a unit is one item or a batch
+    const packaged = listing.listingMode === "packaging";
+    const unitSize = packaged ? listing.packagesPerBatch ?? 1 : listing.unitSize || LISTING_UNIT_SIZE_KG;
     const unitPrice = args.offerPricePerKilo * unitSize;
 
     // Create negotiations and ledger entries for each unit
@@ -202,7 +205,7 @@ export const makeOffer = mutation({
         userId: listing.farmerId,
         type: "utid_specific",
         title: "New Offer Received",
-        message: `${roleLabel(user.role)} ${user.alias ?? ""} made an offer of ${new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX" }).format(args.offerPricePerKilo)}/kg on your ${listing.produceType} listing. UTID: ${utids[0]}`,
+        message: `${roleLabel(user.role)} ${user.alias ?? ""} made an offer of ${new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX" }).format(args.offerPricePerKilo)}${packaged ? ` per ${packageLabel(listing)}` : "/kg"} on your ${listing.produceType} listing. UTID: ${utids[0]}`,
         utid: utids[0],
         read: false,
         createdAt: getUgandaTime(),

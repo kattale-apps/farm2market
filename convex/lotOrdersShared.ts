@@ -125,6 +125,43 @@ export function stockSourceProblem(input: {
   return null;
 }
 
+// ------------------------------------------------------------------
+// Packaged items (crates, bunches, trays...): vendors and processors sell
+// them one by one, or in batches of a set number (bulk). A purchase is one
+// order however many items it covers. By default there are no payment steps:
+// the buyer pays in full into escrow, collects, and then the seller is paid;
+// the seller can switch payment steps on, for single items or batches.
+// ------------------------------------------------------------------
+
+export const PACKAGED_COMMIT_PERCENT = 100;
+
+/** No payment steps: one handover step, paid in full up front into escrow. */
+export function packagedPlan(): PlanStep[] {
+  return [{ name: "Collect from my shop", earnPercent: 100, payPercent: 0, handover: true }];
+}
+
+/** What one package is called: the seller's own word, or the preset type. */
+export function packageLabel(listing: { packagingTypeCustom?: string; packagingTypeEnum?: string }): string {
+  return (listing.packagingTypeCustom ?? listing.packagingTypeEnum ?? "item").trim() || "item";
+}
+
+/** "3 crates", "1 bunch", or "2 × Tin / Debe" when the name is not a single word. */
+export function packagesText(count: number, label: string): string {
+  if (!/^[a-z]+$/i.test(label)) return `${count} × ${label}`;
+  const word = label.toLowerCase();
+  return `${count} ${count === 1 ? word : /(s|x|ch|sh)$/.test(word) ? `${word}es` : `${word}s`}`;
+}
+
+/** True when a plan is the no-steps one (paid in full, then collected). */
+export function isPackagedPlan(steps: PlanStep[], commitPercent: number): boolean {
+  return commitPercent === PACKAGED_COMMIT_PERCENT && steps.length === 1 && steps[0].handover;
+}
+
+/** The price of one sellable unit: one item, or one batch of `perBatch` items. */
+export function packagedUnitPrice(pricePerItem: number, perBatch: number): number {
+  return Math.round(pricePerItem * Math.max(1, perBatch));
+}
+
 /** The steps a seller starts from: a farm for farmers, a store for vendors and processors. */
 export function defaultSteps(sellerRole: string): Omit<PlanStep, "payPercent">[] {
   if (sellerRole === "farmer") {

@@ -9,6 +9,7 @@ import { VendSheet, type MyLot } from "../../components/lots/VendSheet";
 import { ugandaDateFromInstant } from "../../../convex/exportMarketsShared";
 import { QuestionsSheet } from "./Questions";
 import { FONT, formatUGX } from "./shared";
+import { PACKAGED_COMMIT_PERCENT, isPackagedPlan, packagesText } from "../../../convex/lotOrdersShared";
 import { formatUgandaDateTime } from "../../utils/timeUtils";
 
 const SELLER_ROLES = ["farmer", "vendor", "store", "trader"];
@@ -76,7 +77,20 @@ export function MyLots({ token, now }: { token: string; now: number }) {
                 )}
               </div>
               <div style={{ fontSize: "0.85rem", color: "#555" }}>
-                {lot.lotsLeft} lot{lot.lotsLeft === 1 ? "" : "s"} of {lot.unitSize.toLocaleString()} kg · {formatUGX(lot.pricePerKilo)}/kg · buyer pays {lot.commitPercent ?? 100}% first
+                {lot.packaged ? (
+                  <>
+                    {(lot.packagesPerBatch ?? 1) > 1
+                      ? `${lot.lotsLeft} batch${lot.lotsLeft === 1 ? "" : "es"} of ${packagesText(lot.packagesPerBatch ?? 1, lot.packageLabel ?? "item")}`
+                      : packagesText(lot.lotsLeft, lot.packageLabel ?? "item")}{" "}
+                    · {formatUGX(lot.pricePerUnit ?? 0)} per {lot.packageLabel ?? "item"} ·{" "}
+                    {isPackagedPlan(lot.milestonePlan, lot.commitPercent ?? PACKAGED_COMMIT_PERCENT) ? "paid in full, no steps" : `buyer pays ${lot.commitPercent}% first`}
+                    {lot.takesOffers ? " · takes offers" : ""}
+                  </>
+                ) : (
+                  <>
+                    {lot.lotsLeft} lot{lot.lotsLeft === 1 ? "" : "s"} of {lot.unitSize.toLocaleString()} kg · {formatUGX(lot.pricePerKilo)}/kg · buyer pays {lot.commitPercent ?? 100}% first
+                  </>
+                )}
               </div>
               <div style={{ fontSize: "0.85rem", fontWeight: 700, color: live ? "#2e7d32" : "#777", margin: "0.3rem 0" }}>
                 {live

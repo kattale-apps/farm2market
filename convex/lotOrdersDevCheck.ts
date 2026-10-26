@@ -132,6 +132,7 @@ export const marketspaceSessions = internalMutation({
       buyer: await testUser(ctx, BUYER_EMAIL, "buyer", "LOTCHECK-B"),
       member: await testUser(ctx, MEMBER_EMAIL, "buyer", "LOTCHECK-M", false),
       exporter: await testUser(ctx, EXPORTER_EMAIL, "trader", "LOTCHECK-E", true),
+      vendor: await testUser(ctx, VENDOR_EMAIL, "vendor", "LOTCHECK-V"),
     };
     const tokens: Record<string, string> = {};
     for (const [who, userId] of Object.entries(users)) {

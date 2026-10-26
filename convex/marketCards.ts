@@ -14,6 +14,7 @@
 import { MutationCtx } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
 import { getUgandaTime } from "./utils";
+import { packageLabel, packagesText } from "./lotOrdersShared";
 
 /** A deleted post takes its questions, answers and wanted-ad responses with it (a post has a few dozen at most). */
 async function deleteCardQuestions(ctx: MutationCtx, cardId: Id<"marketCards">) {
@@ -52,7 +53,6 @@ export async function syncListingCard(ctx: MutationCtx, listingId: Id<"listings"
     !!listing?.farmerId &&
     listing.vendExpiresAt !== undefined &&
     !listing.withdrawnAt &&
-    listing.listingMode !== "packaging" &&
     (listing.status === "active" || listing.status === "partially_locked") &&
     lotsAvailable > 0;
 
@@ -62,7 +62,22 @@ export async function syncListingCard(ctx: MutationCtx, listingId: Id<"listings"
   }
 
   const seller = await ctx.db.get(listing.farmerId);
+  const packaged = listing.listingMode === "packaging";
   const lotKg = listing.unitSize || 10;
+  // Packaged items: priced per item, counted as items or batches
+  const label = packageLabel(listing);
+  const perBatch = listing.packagesPerBatch ?? 1;
+  const packagedFields = packaged
+    ? {
+        packaged: true,
+        priceUGX: listing.pricePerUnit,
+        priceUnit: `per ${label}`,
+        quantityText: perBatch > 1 ? `${lotsAvailable} batch${lotsAvailable === 1 ? "" : "es"} of ${packagesText(perBatch, label)}` : packagesText(lotsAvailable, label),
+        lotKg: undefined,
+        qtyKg: undefined,
+        pricePerKilo: undefined,
+      }
+    : { packaged: undefined };
   const fields = {
     sourceKind: "listing" as const,
     listingId,
@@ -81,6 +96,7 @@ export async function syncListingCard(ctx: MutationCtx, listingId: Id<"listings"
     lotsAvailable,
     qtyKg: lotsAvailable * lotKg,
     pricePerKilo: listing.pricePerKilo,
+    ...packagedFields,
     commitPercent: listing.commitPercent ?? 100,
     qualityRating: listing.qualityRating,
     thumbStorageId: listing.photos?.[0]?.storageId,

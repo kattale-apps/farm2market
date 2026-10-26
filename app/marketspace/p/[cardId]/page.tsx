@@ -68,6 +68,8 @@ export default function CardPage() {
   }
 
   const isLot = card.sourceKind === "listing";
+  // What one sellable unit is called: a lot by weight, or one item or batch of packaged goods
+  const unitWord = !card.packaged ? "lot" : (card.packagesPerBatch ?? 1) > 1 ? "batch" : card.unitLabel ?? "item";
   const free = card.freeUnitIds.length;
   const n = Math.min(free, Math.max(1, parseInt(lots, 10) || 1));
   const pays = card.steps?.map((s) => s.payPercent) ?? [];
@@ -126,16 +128,28 @@ export default function CardPage() {
         </div>
       ) : isLot ? (
         <div style={box}>
-          <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#1b5e20" }}>{formatUGX(card.pricePerKilo ?? 0)}/kg</div>
-          <div style={{ color: "#333", margin: "0.2rem 0" }}>
-            {card.lotsAvailable} lot{card.lotsAvailable === 1 ? "" : "s"} of {card.lotKg?.toLocaleString()} kg
-            {card.bagKg ? ` (${card.bagsPerLot ?? 1} × ${card.bagKg} kg bags)` : ""} · {formatUGX(card.lotPrice ?? 0)} a lot
-          </div>
+          {card.packaged ? (
+            <>
+              <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#1b5e20" }}>{formatUGX(card.priceUGX ?? 0)} {card.priceUnit}</div>
+              <div style={{ color: "#333", margin: "0.2rem 0" }}>
+                {card.quantityText} for sale
+                {(card.packagesPerBatch ?? 1) > 1 ? ` · ${formatUGX(card.lotPrice ?? 0)} a batch` : ""}
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#1b5e20" }}>{formatUGX(card.pricePerKilo ?? 0)}/kg</div>
+              <div style={{ color: "#333", margin: "0.2rem 0" }}>
+                {card.lotsAvailable} lot{card.lotsAvailable === 1 ? "" : "s"} of {card.lotKg?.toLocaleString()} kg
+                {card.bagKg ? ` (${card.bagsPerLot ?? 1} × ${card.bagKg} kg bags)` : ""} · {formatUGX(card.lotPrice ?? 0)} a lot
+              </div>
+            </>
+          )}
           {card.qualityRating && <div style={{ fontSize: "0.88rem" }}>Quality: <strong>{card.qualityRating}</strong></div>}
           {card.qualityComment && <div style={{ fontSize: "0.88rem", color: "#555" }}>{card.qualityComment}</div>}
           {card.steps && card.lotPrice !== null && (
             <div style={{ marginTop: "0.6rem" }}>
-              <div style={{ fontWeight: 800, marginBottom: "0.25rem" }}>How you pay for one lot</div>
+              <div style={{ fontWeight: 800, marginBottom: "0.25rem" }}>How you pay for one {unitWord}</div>
               <ol style={{ margin: 0, paddingLeft: "1.2rem", fontSize: "0.9rem", lineHeight: 1.6 }}>
                 <li>Commit {card.commitPercent}% now: <strong>{formatUGX(commitAmount(card.lotPrice, card.commitPercent ?? 100))}</strong> into escrow</li>
                 {card.steps.map((s, i) => (
@@ -145,7 +159,7 @@ export default function CardPage() {
                   </li>
                 ))}
               </ol>
-              <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.3rem" }}>Your money stays in escrow until you collect the lot.</div>
+              <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.3rem" }}>Your money stays in escrow until you collect.{card.packaged ? " However many you buy, it is one order." : ""}</div>
             </div>
           )}
 
@@ -157,7 +171,7 @@ export default function CardPage() {
             ) : (
               <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center", marginTop: "0.8rem" }}>
                 <label style={{ fontSize: "0.9rem" }}>
-                  Lots{" "}
+                  {card.packaged ? `How many ${(card.packagesPerBatch ?? 1) > 1 ? "batches" : card.unitLabel ?? "items"}?` : "Lots"}{" "}
                   <input type="number" inputMode="numeric" min={1} max={free} value={lots} onChange={(e) => setLots(e.target.value)} style={{ width: 70, minHeight: 42, padding: "0 0.5rem", border: "1px solid #ccc", borderRadius: 8 }} />
                 </label>
                 <button
@@ -165,13 +179,17 @@ export default function CardPage() {
                   disabled={busy}
                   onClick={() => run(async () => {
                     const r = await commitFromCard({ sessionToken: session.token!, cardId: card.cardId as Id<"marketCards">, lots: n });
-                    return `Committed ${formatUGX(r.committedTotal)} into escrow for ${n} lot(s). Follow the steps in your lot orders.`;
+                    return card.packaged
+                      ? `${formatUGX(r.committedTotal)} is in escrow for your order. Collect from the seller, then confirm in your lot orders.`
+                      : `Committed ${formatUGX(r.committedTotal)} into escrow for ${n} lot(s). Follow the steps in your lot orders.`;
                   })}
                   style={button("go")}
                 >
                   Buy · commit {formatUGX(commitAmount(card.lotPrice ?? 0, card.commitPercent ?? 100) * n)}
                 </button>
-                <button type="button" onClick={() => { setOffering((v) => !v); setOfferPrice(String(card.pricePerKilo ?? "")); }} style={button("plain")}>Make an offer</button>
+                {(!card.packaged || card.takesOffers) && (
+                  <button type="button" onClick={() => { setOffering((v) => !v); setOfferPrice(String((card.packaged ? card.priceUGX : card.pricePerKilo) ?? "")); }} style={button("plain")}>Make an offer</button>
+                )}
               </div>
             )
           ) : null}
@@ -179,7 +197,7 @@ export default function CardPage() {
           {offering && card.viewerUserId && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center", marginTop: "0.6rem", padding: "0.6rem", borderRadius: 10, background: "#f6f8f4" }}>
               <label style={{ fontSize: "0.9rem" }}>
-                Your price per kg{" "}
+                Your price per {card.packaged ? card.unitLabel ?? "item" : "kg"}{" "}
                 <input type="number" min={1} value={offerPrice} onChange={(e) => setOfferPrice(e.target.value)} style={{ width: 110, minHeight: 42, padding: "0 0.5rem", border: "1px solid #ccc", borderRadius: 8 }} />
               </label>
               <button

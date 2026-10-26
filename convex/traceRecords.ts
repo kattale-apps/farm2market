@@ -50,9 +50,10 @@ export const myTraceRecords = query({
     if (!user) return null;
     const records = [];
     const bought = await ctx.db.query("lotOrders").withIndex("by_buyer", (q) => q.eq("buyerId", user._id)).order("desc").take(40);
-    for (const o of bought) records.push(await record(ctx, "bought", o.utid, o.produceType, o.lotKg, o.createdAt, o.status, await originsOfListing(ctx, o.listingId, o.lotKg)));
+    // Packaged shop items (crates, bunches) are not produce lots by weight: they are not traced here
+    for (const o of bought.filter((x) => x.packageCount === undefined)) records.push(await record(ctx, "bought", o.utid, o.produceType, o.lotKg, o.createdAt, o.status, await originsOfListing(ctx, o.listingId, o.lotKg)));
     const sold = await ctx.db.query("lotOrders").withIndex("by_seller", (q) => q.eq("sellerId", user._id)).order("desc").take(40);
-    for (const o of sold) records.push(await record(ctx, "sold", o.utid, o.produceType, o.lotKg, o.createdAt, o.status, await originsOfListing(ctx, o.listingId, o.lotKg)));
+    for (const o of sold.filter((x) => x.packageCount === undefined)) records.push(await record(ctx, "sold", o.utid, o.produceType, o.lotKg, o.createdAt, o.status, await originsOfListing(ctx, o.listingId, o.lotKg)));
     const stock = await ctx.db.query("traderInventory").withIndex("by_trader", (q) => q.eq("traderId", user._id)).order("desc").take(40);
     for (const inv of stock) {
       if (inv.status !== "in_storage") continue;

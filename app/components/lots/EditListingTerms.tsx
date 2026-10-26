@@ -4,14 +4,15 @@ import { useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
-import { defaultPlan, type PlanStep } from "../../../convex/lotOrdersShared";
+import { PACKAGED_COMMIT_PERCENT, defaultPlan, packagedPlan, type PlanStep } from "../../../convex/lotOrdersShared";
 import { PhotoSetCapture, type CapturedPhoto } from "../exportMarkets/PhotoSetCapture";
 import { uploadEvidencePhotos } from "../exportMarkets/PhotoSetCapture";
-import { LotTermsFields, planProblem } from "./LotTermsFields";
+import { LotTermsFields, PackagedTermsFields, planProblem } from "./LotTermsFields";
 
 /**
  * The seller changes a listing's price, payment terms or photos. Lots
- * already in an order keep the terms they were ordered on.
+ * already in an order keep the terms they were ordered on. Packaged items
+ * are priced per item and have no payment steps unless switched on.
  */
 export function EditListingTerms({
   sellerId,
@@ -30,26 +31,32 @@ export function EditListingTerms({
     commitPercent: number | null;
     milestonePlan: PlanStep[] | null;
     photoCount: number;
+    pricePerUnit?: number | null; // Packaged items
+    packagesPerBatch?: number | null;
+    packageLabel?: string | null;
+    takesOffers?: boolean | null;
   };
   onClose: (message?: string) => void;
 }) {
   const updateTerms = useMutation(api.listings.updateListingTerms);
   const generateUploadUrl = useMutation(api.files.generateUploadUrl);
-  const startCommit = listing.commitPercent ?? 100;
+  const packaged = listing.listingMode === "packaging";
+  const startCommit = listing.commitPercent ?? (packaged ? PACKAGED_COMMIT_PERCENT : 100);
   const [commitPercent, setCommitPercent] = useState(startCommit);
-  const [steps, setSteps] = useState<PlanStep[]>(listing.milestonePlan ?? defaultPlan(sellerRole, startCommit));
-  const [price, setPrice] = useState(String(listing.pricePerKilo));
+  const [steps, setSteps] = useState<PlanStep[]>(listing.milestonePlan ?? (packaged ? packagedPlan() : defaultPlan(sellerRole, startCommit)));
+  const [price, setPrice] = useState(String(packaged ? listing.pricePerUnit ?? "" : listing.pricePerKilo));
+  const [takesOffers, setTakesOffers] = useState(listing.takesOffers === true);
   const [photos, setPhotos] = useState<CapturedPhoto[]>([]);
   const [replacePhotos, setReplacePhotos] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const byWeight = listing.listingMode !== "garden";
+  const byWeight = listing.listingMode !== "garden" && !packaged;
   const pricePerKilo = parseFloat(price);
 
   const save = async () => {
     const problem = planProblem(steps, commitPercent);
     if (problem) return setError(problem);
-    if (byWeight && !(pricePerKilo > 0)) return setError("Enter a price above 0");
+    if ((byWeight || packaged) && !(pricePerKilo > 0)) return setError("Enter a price above 0");
     if (replacePhotos && photos.length === 0) return setError("Add at least one photo, or keep the current photos");
     setSaving(true);
     setError(null);
@@ -58,6 +65,8 @@ export function EditListingTerms({
         sellerId,
         listingId: listing.listingId,
         pricePerKilo: byWeight ? pricePerKilo : undefined,
+        pricePerUnit: packaged ? pricePerKilo : undefined,
+        takesOffers: packaged ? takesOffers : undefined,
         commitPercent,
         milestonePlan: steps,
         photos: replacePhotos ? await uploadEvidencePhotos(() => generateUploadUrl(), photos) : undefined,
@@ -85,13 +94,34 @@ export function EditListingTerms({
           </div>
         )}
 
-        <LotTermsFields
-          sellerRole={sellerRole}
-          commitPercent={commitPercent}
-          steps={steps}
-          lotPrice={byWeight && pricePerKilo > 0 && listing.unitSize ? Math.round(pricePerKilo * listing.unitSize) : null}
-          onChange={(c, s) => { setCommitPercent(c); setSteps(s); }}
-        />
+        {packaged && (
+          <div>
+            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: 600, color: "#333" }}>Price per {listing.packageLabel ?? "item"} (UGX) *</label>
+            <input type="number" min={1} step={1} value={price} onChange={(e) => setPrice(e.target.value)} style={{ width: "100%", padding: "0.75rem", border: "1px solid #ddd", borderRadius: 6, fontSize: "1rem" }} />
+            <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontWeight: 600, color: "#333", marginTop: "0.6rem" }}>
+              <input type="checkbox" checked={takesOffers} onChange={(e) => setTakesOffers(e.target.checked)} />
+              Take offers from buyers
+            </label>
+          </div>
+        )}
+
+        {packaged ? (
+          <PackagedTermsFields
+            sellerRole={sellerRole}
+            commitPercent={commitPercent}
+            steps={steps}
+            lotPrice={pricePerKilo > 0 ? Math.round(pricePerKilo * (listing.packagesPerBatch ?? 1)) : null}
+            onChange={(c, s) => { setCommitPercent(c); setSteps(s); }}
+          />
+        ) : (
+          <LotTermsFields
+            sellerRole={sellerRole}
+            commitPercent={commitPercent}
+            steps={steps}
+            lotPrice={byWeight && pricePerKilo > 0 && listing.unitSize ? Math.round(pricePerKilo * listing.unitSize) : null}
+            onChange={(c, s) => { setCommitPercent(c); setSteps(s); }}
+          />
+        )}
 
         <div>
           <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontWeight: 600, color: "#333" }}>

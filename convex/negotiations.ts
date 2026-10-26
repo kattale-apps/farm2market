@@ -807,6 +807,7 @@ export const getAcceptedNegotiations = query({
           unitSize: listing?.unitSize || 10,
           finalPricePerKilo: neg.currentPricePerKilo,
           totalPrice: neg.currentPricePerKilo * (listing?.unitSize || 10),
+          commitPercent: listing?.commitPercent ?? 100, // Share the buyer commits into escrow (convex/lotOrders.ts)
           farmerAlias: farmer?.alias || null,
           isUnitAvailable,
           createdAt: neg.createdAt,

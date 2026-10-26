@@ -365,7 +365,7 @@ export function TraderListings({ userId }: TraderListingsProps) {
       
       setMessage({
         type: "success",
-        text: "Counter-offer accepted! You can now proceed to pay-to-lock.",
+        text: "Counter-offer accepted! You can now commit your share of the price into escrow.",
       });
       
       setTimeout(() => {
@@ -391,7 +391,7 @@ export function TraderListings({ userId }: TraderListingsProps) {
       
       setMessage({
         type: "success",
-        text: `Unit locked successfully! Balance after: ${formatUGX(result.balanceAfter)}. Delivery deadline: 6 hours from now.`,
+        text: `Committed ${formatUGX(result.unitPrice)} (${result.commitPercent}%) into escrow. Balance after: ${formatUGX(result.balanceAfter)}. Follow the seller's payment steps in "Lot orders".`,
       });
       
       setTimeout(() => {
@@ -400,7 +400,7 @@ export function TraderListings({ userId }: TraderListingsProps) {
     } catch (error: any) {
       setMessage({
         type: "error",
-        text: `Failed to lock unit: ${error.message}`,
+        text: `Failed to commit: ${error?.data?.message ?? error.message}`,
       });
     } finally {
       setLocking(null);
@@ -454,7 +454,7 @@ export function TraderListings({ userId }: TraderListingsProps) {
 
     setMessage({
       type: successCount > 0 ? "success" : "error",
-      text: `Batch pay-to-lock complete: ${successCount} succeeded${failureCount ? `, ${failureCount} failed` : ""}.`,
+      text: `Batch commit complete: ${successCount} succeeded${failureCount ? `, ${failureCount} failed` : ""}.`,
     });
     setSelectedNegotiations(new Set());
     setBatchProcessing(null);
@@ -851,7 +851,7 @@ export function TraderListings({ userId }: TraderListingsProps) {
                 fontSize: "0.85rem",
               }}
             >
-              {batchProcessing === "lock" ? "Locking..." : "Pay-to-Lock Selected"}
+              {batchProcessing === "lock" ? "Committing..." : "Commit to Selected"}
             </button>
             <button
               type="button"
@@ -1118,7 +1118,7 @@ export function TraderListings({ userId }: TraderListingsProps) {
         </div>
       )}
 
-      {/* Accepted Negotiations Ready for Pay-to-Lock */}
+      {/* Accepted offers ready to commit into escrow */}
       {acceptedNegotiations && acceptedNegotiations.negotiations.length > 0 && (
         <div style={{
           marginBottom: "1.5rem",
@@ -1206,8 +1206,8 @@ export function TraderListings({ userId }: TraderListingsProps) {
                               }}
                             >
                               {locking === neg.unitId
-                                ? "Locking..."
-                                : `Pay-to-Lock (${formatUGX(isGardenNegotiation ? finalGardenTotal : neg.totalPrice)})`}
+                                ? "Committing..."
+                                : `Commit ${neg.commitPercent ?? 100}% (${formatUGX(((isGardenNegotiation ? finalGardenTotal : neg.totalPrice) * (neg.commitPercent ?? 100)) / 100)})`}
                             </button>
                             <button
                               type="button"
@@ -1233,7 +1233,7 @@ export function TraderListings({ userId }: TraderListingsProps) {
                             </button>
                           </div>
                           <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.75rem", color: "#666" }}>
-                            ⚠️ After payment, farmer must deliver within 6 hours. Delivery countdown starts from payment time.
+                            ⚠️ The rest of the price is charged as the seller finishes each step. The seller is paid only when you collect the lot.
                           </p>
                         </div>
                       );
@@ -1779,7 +1779,7 @@ export function TraderListings({ userId }: TraderListingsProps) {
                           : "Make Offer"}
                       </button>
                       <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.8rem", color: "#999" }}>
-                        ⚠️ After farmer accepts your offer, you can pay-to-lock. Delivery deadline: 6 hours after payment.
+                        ⚠️ After the seller accepts your offer, you commit their share of the price into escrow. The rest is charged as the seller finishes each step, and the seller is paid when you collect the lot.
                       </p>
                     </div>
                   )}

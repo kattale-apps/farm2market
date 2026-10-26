@@ -178,6 +178,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
     { key: "farmerInventory", label: "🌾 Farmer-sourced Inventory" },
     { key: "analytics", label: "📊 Buyer Analytics" },
     { key: "purchaseAnalytics", label: "📈 Purchase Analytics" },
+    { key: "buyLots", label: "🛒 Buy lots from farmers" },
     { key: "lotOrders", label: "📒 My lot orders (escrow & steps)" },
     { key: "myOrders", label: "🧾 My Orders" },
     { key: "ledger", label: "🧮 Transaction Ledger" },
@@ -192,9 +193,9 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
     IS_PRODUCTION_DEPLOYMENT && PRODUCTION_LOCKED_SECTIONS.has(section.key) ? { ...section, label: <>🔐 {section.label}</>, disabled: true } : section
   ));
   const openSectionFromMenu = (key: string) => {
-    if (key === "marketspace" || key === "myWallet") {
+    if (key === "marketspace" || key === "myWallet" || key === "buyLots") {
       setMoreMenuOpen(false);
-      router.push(key === "marketspace" ? "/marketspace" : "/wallet");
+      router.push(key === "marketspace" ? "/marketspace" : key === "buyLots" ? "/lots" : "/wallet");
       return;
     }
     if (IS_PRODUCTION_DEPLOYMENT && PRODUCTION_LOCKED_SECTIONS.has(key)) return;

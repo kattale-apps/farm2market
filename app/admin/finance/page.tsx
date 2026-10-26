@@ -13,6 +13,7 @@ import { fromStoredUgandaTime, inUgandaTime } from "../../utils/timeUtils";
 import { ExportFeesPanel } from "../../components/exportMarkets/ExportFeesPanel";
 import { FarmCoinIcon } from "../../components/icons/Brand";
 import { ExchangeAdminPanel } from "../../wallet/ExchangeAdminPanel";
+import { AdminLotOrders } from "../../components/lots/AdminLotOrders";
 
 export default function FinanceDashboardPage() {
   const { user, status: authStatus } = useStoredUser();
@@ -473,7 +474,7 @@ export default function FinanceDashboardPage() {
 
         {isSuperAdmin && (
           <div style={{ marginTop: "1.5rem", display: "grid", gap: "0.75rem", maxWidth: 640 }}>
-            <div style={{ fontWeight: 600 }}>Exporter Verification Status</div>
+            <div style={{ fontWeight: 600 }}>Verification: who can buy lots (exporters, processors, vendors, buyers)</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "0.75rem" }}>
               <select
                 value={verificationFilter}
@@ -483,7 +484,7 @@ export default function FinanceDashboardPage() {
                 }}
                 style={{ padding: "0.6rem", borderRadius: 8, border: "1px solid #ddd" }}
               >
-                <option value="all">All traders</option>
+                <option value="all">All accounts</option>
                 <option value="verified">Verified only</option>
                 <option value="unverified">Not verified only</option>
               </select>
@@ -492,10 +493,10 @@ export default function FinanceDashboardPage() {
                 onChange={(e) => setVerificationTraderId(e.target.value)}
                 style={{ padding: "0.6rem", borderRadius: 8, border: "1px solid #ddd" }}
               >
-                <option value="">Select trader</option>
+                <option value="">Select account</option>
                 {verificationOptions.map((trader: any) => (
                   <option key={trader._id} value={trader._id}>
-                    {trader.alias || "Exporter"} • {trader.verificationStatus}
+                    {trader.alias || "Account"} • {trader.roleLabel ?? "Exporter"} • {trader.verificationStatus}
                   </option>
                 ))}
               </select>
@@ -1249,6 +1250,13 @@ export default function FinanceDashboardPage() {
           </div>
           </>
         )
+      )}
+
+      {/* ─── Lot orders: decisions and fines ─── */}
+      {(isSuperAdmin || isFinanceAdmin) && userId && (
+        <div style={{ background: "#fff", borderRadius: 14, padding: "1.25rem", boxShadow: "0 2px 8px rgba(0,0,0,0.08)", marginTop: "1.5rem", border: "1px solid #e0e0e0" }}>
+          <AdminLotOrders adminId={userId} />
+        </div>
       )}
 
       {/* ─── Farmer Form Rewards Section ─── */}

@@ -18,6 +18,7 @@ import { FONT, card, input, label, button, StatusPill, Notice, PageHeader, forma
 import { PhotoSetCapture, CapturedPhoto, uploadEvidencePhotos } from "../exportMarkets/PhotoSetCapture";
 import { ProcessorIntakeTab, ProcessorBatchesTab } from "./ProcessorOperations";
 import { ProcessorSalesTab } from "./ProcessorSales";
+import { ProcessorRecordsTab } from "./ProcessorRecords";
 import { BuyerOffersPanel } from "../market/BuyerOffersPanel";
 import { LotLedger } from "../lots/LotLedger";
 import { MyStock } from "../lots/MyStock";
@@ -28,17 +29,18 @@ export const PROCESSOR_SOFT = "#fff8e1";
 export const PROCESSOR_BORDER = "#ffd54f";
 
 type Msg = { tone: "error" | "success" | "info"; text: string } | null;
-type Tab = "overview" | "profile" | "documents" | "buying" | "intake" | "batches" | "sales" | "lots";
+type Tab = "overview" | "profile" | "documents" | "buying" | "intake" | "batches" | "sales" | "lots" | "records";
 
 const TABS: { key: Tab; label: string; icon: string; needs: string }[] = [
   { key: "overview", label: "Overview", icon: "🏠", needs: "Your progress to becoming a verified processor, step by step." },
   { key: "profile", label: "Facility profile", icon: "🏭", needs: "Business details, facility location with GPS, what you process, capacity, storage and facility photos." },
   { key: "documents", label: "Documents & fee", icon: "📄", needs: "Business registration, TIN and processing licence, with expiry dates, and the verification fee." },
-  { key: "buying", label: "Buying prices", icon: "🧺", needs: "Post this week's buying price per form, answer farmers' delivery bookings and pay them in cash with a receipt." },
+  { key: "buying", label: "Post price to farmers", icon: "🧺", needs: "Post this week's buying price per form, answer farmers' delivery bookings and pay them in cash with a receipt." },
   { key: "intake", label: "Intake", icon: "⚖️", needs: "Record coffee you buy from farmers, on the app or not, with photos and the farm location." },
   { key: "batches", label: "Processing", icon: "⚙️", needs: "Turn intake into processed batches: weight in, weight out and the outturn, with photos." },
-  { key: "sales", label: "Sales", icon: "🤝", needs: "Sell processed batches to exporters directly, log sales made outside the app, or list in PROCESSED MARKETS." },
+  { key: "sales", label: "Sales", icon: "🤝", needs: "Sell processed batches on MarketSpace first, or directly to an exporter, or log a sale made outside the app." },
   { key: "lots", label: "Lots & ledger", icon: "📒", needs: "List lots for sale with payment steps, follow the lots you bought and sold, and see your stock and where it came from." },
+  { key: "records", label: "Records & reports", icon: "📊", needs: "What you bought, processed and sold, with totals and the outturn, and a spreadsheet to download." },
 ];
 
 /** Each checklist item and where the processor goes to act on it. */
@@ -59,8 +61,9 @@ export type ProcessorWS = FunctionReturnType<typeof api.processors.getMyProcesso
 /** Pages outside the workspace that processors use too. */
 const MENU_LINKS: { href: string; label: string }[] = [
   { href: "/marketspace", label: "🗺️ MarketSpace" },
-  { href: "/wallet", label: "💰 My Wallet" },
-  { href: "/farmer/communities", label: "🌾 Communities" },
+  { href: "/wallet", label: "💰 My Wallet & FarmCoin" },
+  { href: "/transport", label: "🚚 Book transport" },
+  { href: "/farmer/communities", label: "🌾 My Communities" },
 ];
 
 /**
@@ -245,8 +248,9 @@ export function ProcessorWorkspace({ userId }: { userId: Id<"users"> }) {
           {tab === "buying" && <BuyerOffersPanel userId={userId} />}
           {tab === "intake" && <ProcessorIntakeTab userId={userId} member={member} today={today} crops={processorCrops(ws)} setMsg={setMsg} />}
           {tab === "batches" && <ProcessorBatchesTab userId={userId} member={member} today={today} crops={processorCrops(ws)} setMsg={setMsg} />}
-          {tab === "sales" && <ProcessorSalesTab userId={userId} member={member} active={ws.isActiveProcessor} today={today} setMsg={setMsg} />}
+          {tab === "sales" && <ProcessorSalesTab userId={userId} member={member} today={today} setMsg={setMsg} />}
           {tab === "lots" && <ProcessorLotsTab userId={userId} go={go} />}
+          {tab === "records" && <ProcessorRecordsTab userId={userId} />}
         </>
       )}
     </div>

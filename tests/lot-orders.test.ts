@@ -133,10 +133,12 @@ test("demo money follows the payouts and is never created", () => {
 
 test("who can buy lots: verified exporters, processors, vendors and business buyers", () => {
   const verified = { verificationStatus: "verified" };
-  for (const role of ["trader", "transporter", "store", "vendor", "buyer"]) {
+  for (const role of ["trader", "store", "vendor", "buyer"]) {
     assert.equal(lotBuyingDecision({ role, ...verified }, false).ok, true, `${role} verified`);
     assert.equal(lotBuyingDecision({ role }, false).ok, false, `${role} not verified`);
   }
+  // Transporters move goods; they do not buy lots, even verified
+  assert.equal(lotBuyingDecision({ role: "transporter", ...verified }, false).ok, false);
   // Exporters verified before the switch was widened
   assert.equal(lotBuyingDecision({ role: "trader", isVerifiedTrader: true }, false).ok, true);
   // A processor with an approved facility needs no separate switch

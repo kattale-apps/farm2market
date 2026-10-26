@@ -291,10 +291,23 @@ export const getMyWallet = query({
       .filter((q) => q.neq(q.field("type"), "incoming_purchase"))
       .take(30);
 
+    // FarmCoin rewards and spends, newest first: the wallet is where every role sees them
+    const coinRows = [
+      ...(await ctx.db.query("farmcoinLedger").withIndex("by_user", (q) => q.eq("userId", user._id)).order("desc").take(10)),
+      ...(await ctx.db.query("farmcoinLedger").withIndex("by_trader", (q) => q.eq("traderId", user._id)).order("desc").take(10)),
+    ];
+    const seenCoin = new Set<string>();
+    const farmcoinActivity = coinRows
+      .filter((e) => (seenCoin.has(e._id) ? false : (seenCoin.add(e._id), true)))
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, 10)
+      .map((e) => ({ _id: e._id, delta: e.delta, source: e.source, reason: e.reason ?? null, createdAt: e.createdAt }));
+
     return {
       status: "ok" as const,
       role: user.role,
       phoneNumber: user.phoneNumber ?? null,
+      farmcoinActivity,
       wallet: { ...wallet, sentifyUGX, otherRealUGX: wallet.availableUGX - sentifyUGX },
       demoWallet: user.demoWallet === true || wallet.demoUGX > 0,
       balances,

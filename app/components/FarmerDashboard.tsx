@@ -118,13 +118,15 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
     setMoreSlot(document.getElementById("dashboard-more-slot"));
   }, []);
   const farm2MarketLocked = !!farm2MarketAccess && !farm2MarketAccess.allowed;
+  // Universal items first (every role has them), then this role's own.
   const MORE_MENU_SECTIONS: Array<{ key: string; label: React.ReactNode; disabled?: boolean }> = [
     { key: "profile", label: "👤 Profile" },
+    { key: "marketspace", label: "🗺️ MarketSpace" },
     {
-      key: "farmcoinRewards",
-      label: <><FarmCoinIcon size={18} /> FarmCoin Rewards{typeof farmerFarmcoinBalance === "number" ? ` (${farmerFarmcoinBalance})` : ""}</>,
+      key: "myWallet",
+      label: <>💰 My Wallet & FarmCoin{typeof farmerFarmcoinBalance === "number" ? <> (<FarmCoinIcon size={16} /> {farmerFarmcoinBalance})</> : null}</>,
     },
-    { key: "myWallet", label: "💰 My Wallet" },
+    { key: "findTransport", label: "🚚 Book transport" },
     { key: "communities", label: "🌾 My Communities" },
     ...(effectiveRole === "farmer" ? [
       { key: "farmNeeds", label: "🧺 Farm Needs" },
@@ -137,16 +139,13 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
           : "🛒 Farmers Produce Market",
         disabled: farm2MarketLocked,
       },
-      { key: "marketspace", label: "🗺️ MarketSpace" },
       { key: "advancePurchase", label: "🌱 Contract Farming Market" },
       { key: "sellServices", label: "🏭 Sales & Services" },
     ] : []),
+    // Vendors buy farmers' lots through MarketSpace (Farmers Produce is a filter there), so no separate "Buy lots"
     ...(effectiveRole === "vendor" ? [
       { key: "myLots", label: "📒 My lots & ledger" },
-      { key: "buyLots", label: "🛒 Buy lots" },
-      { key: "vendorBuying", label: "🧺 Buying from farmers" },
-      { key: "marketspace", label: "🗺️ MarketSpace" },
-      { key: "findTransport", label: "🚚 Find transport" },
+      { key: "vendorBuying", label: "🧺 Post price to farmers" },
     ] : []),
   ];
   const ROUTE_MENU_KEYS: Record<string, string> = {
@@ -156,7 +155,6 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
     farmCalendar: "/farmer/planner",
     farm2market: "/farmer/farm2market",
     myLots: "/farmer/farm2market",
-    buyLots: "/marketspace?view=produce",
     marketspace: "/marketspace",
     myWallet: "/wallet",
     advancePurchase: "/farmer/advance-purchase",
@@ -1121,44 +1119,6 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
             <span style={{ display: "block", fontSize: "0.88rem", fontWeight: 500, color: "#33691e" }}>Buy farmers&apos; lots and sell yours</span>
           </span>
         </a>
-      )}
-
-      {isSectionOpen("farmcoinRewards") && (
-        <div id="section-farmcoinRewards" style={{
-          background: "#fff",
-          borderRadius: "10px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          border: "1px solid #e0e0e0",
-          padding: "1rem",
-          marginBottom: "1rem",
-        }}>
-          {renderHideControl("farmcoinRewards")}
-          <h3 style={{
-            margin: "0 0 0.75rem",
-            fontSize: "1.05rem",
-            fontWeight: 700,
-            color: "#2c2c2c",
-            fontFamily: '"Montserrat", sans-serif',
-          }}>
-            <FarmCoinIcon size={22} /> FarmCoin Rewards
-          </h3>
-          <div style={{
-            background: "linear-gradient(135deg, #fff8e1, #ffecb3)",
-            border: "1.5px solid #f9a825",
-            borderRadius: 12,
-            padding: "0.85rem 1rem",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}>
-            <span style={{ color: "#795548", fontSize: "0.9rem", fontWeight: 600, fontFamily: '"Montserrat", sans-serif' }}>
-              Balance
-            </span>
-            <span style={{ color: "#f57f17", fontSize: "1.1rem", fontWeight: 800, fontFamily: '"Montserrat", sans-serif' }}>
-              {typeof farmerFarmcoinBalance === "number" ? farmerFarmcoinBalance : 0} Token(s)
-            </span>
-          </div>
-        </div>
       )}
 
       {isSectionOpen("communities") && (

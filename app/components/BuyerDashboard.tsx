@@ -162,14 +162,15 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
     setMoreSlot(document.getElementById("dashboard-more-slot"));
     setProfileExtraSlot(document.getElementById("dashboard-profile-extra-slot"));
   }, []);
+  // Universal items first (every role has them), then the buyer's own.
   const RAW_MORE_MENU_SECTIONS: Array<{ key: string; label: React.ReactNode }> = [
     { key: "marketspace", label: "🗺️ MarketSpace" },
-    { key: "myWallet", label: "💰 My Wallet (sell FarmCoin, cash out)" },
-    { key: "communities", label: "🌾 My Communities" },
     {
-      key: "rewards",
-      label: <><FarmCoinIcon size={18} /> FarmCoin Rewards{typeof (buyerFarmcoinBalance as any)?.balance === "number" ? ` (${(buyerFarmcoinBalance as any).balance})` : ""}</>,
+      key: "myWallet",
+      label: <>💰 My Wallet & FarmCoin{typeof (buyerFarmcoinBalance as any)?.balance === "number" ? <> (<FarmCoinIcon size={16} /> {(buyerFarmcoinBalance as any).balance})</> : null}</>,
     },
+    { key: "bookTransport", label: "🚚 Book transport" },
+    { key: "communities", label: "🌾 My Communities" },
     { key: "feesInfo", label: "💰 Service Fee Info" },
     { key: "traderOrders", label: "📦 Exporter Listing Orders" },
     { key: "purchaseWindow", label: "🪟 Purchase Window Status" },
@@ -193,9 +194,10 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
     IS_PRODUCTION_DEPLOYMENT && PRODUCTION_LOCKED_SECTIONS.has(section.key) ? { ...section, label: <>🔐 {section.label}</>, disabled: true } : section
   ));
   const openSectionFromMenu = (key: string) => {
-    if (key === "marketspace" || key === "myWallet" || key === "buyLots") {
+    const routes: Record<string, string> = { marketspace: "/marketspace", myWallet: "/wallet", bookTransport: "/transport", buyLots: "/marketspace?view=produce" };
+    if (routes[key]) {
       setMoreMenuOpen(false);
-      router.push(key === "marketspace" ? "/marketspace" : key === "buyLots" ? "/marketspace?view=produce" : "/wallet");
+      router.push(routes[key]);
       return;
     }
     if (IS_PRODUCTION_DEPLOYMENT && PRODUCTION_LOCKED_SECTIONS.has(key)) return;

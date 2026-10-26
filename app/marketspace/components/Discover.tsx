@@ -170,7 +170,7 @@ export function Discover({
 
   return (
     <div>
-      {verified && me?.userId && me.role && ["trader", "transporter", "store", "vendor", "buyer"].includes(me.role) && (
+      {verified && me?.userId && me.role && ["trader", "store", "vendor", "buyer"].includes(me.role) && (
         <AcceptedOffers userId={me.userId} />
       )}
 

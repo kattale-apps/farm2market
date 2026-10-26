@@ -21,7 +21,7 @@ type Sellable = SalesData["sellable"][number];
 
 const MODE_TEXT: Record<string, string> = {
   direct: "Direct sale",
-  market: "PROCESSED MARKETS",
+  market: "Processed market (retired)",
   exporter_logged: "Logged by the exporter",
   off_app: "Sold outside the app",
 };
@@ -34,7 +34,7 @@ const STATUS_TEXT: Record<string, string> = {
   cancelled: "cancelled",
 };
 
-export function ProcessorSalesTab({ userId, member, active, today, setMsg }: { userId: Id<"users">; member: boolean; active: boolean; today: string; setMsg: (m: Msg) => void }) {
+export function ProcessorSalesTab({ userId, member, today, setMsg }: { userId: Id<"users">; member: boolean; today: string; setMsg: (m: Msg) => void }) {
   const data = useQuery(api.processorSales.listMySales, { userId });
   const respond = useMutation(api.processorSales.respondToSaleRequest);
   const cancel = useMutation(api.processorSales.cancelSale);
@@ -104,7 +104,6 @@ export function ProcessorSalesTab({ userId, member, active, today, setMsg }: { u
                 ) : (
                   <OffAppSaleForm userId={userId} batch={b} today={today} setMsg={setMsg} onDone={() => setSelling(null)} />
                 ))}
-              {member && <MarketListing batch={b} userId={userId} active={active} setMsg={setMsg} />}
             </div>
           ))
         )}
@@ -308,45 +307,6 @@ function SellOnMarketSpace({ userId, batch, setMsg, onDone }: { userId: Id<"user
           Cancel
         </button>
       </div>
-    </div>
-  );
-}
-
-function MarketListing({ batch, userId, active, setMsg }: { batch: Sellable; userId: Id<"users">; active: boolean; setMsg: (m: Msg) => void }) {
-  const setListing = useMutation(api.processorSales.setBatchMarketListing);
-  const [price, setPrice] = useState(batch.askingPricePerKgUgx != null ? String(batch.askingPricePerKgUgx) : "");
-  const [busy, setBusy] = useState(false);
-  const save = async (listed: boolean) => {
-    setBusy(true);
-    try {
-      await setListing({ userId, batchId: batch._id, listed, askingPricePerKgUgx: price.trim() ? Number(price) : undefined });
-      setMsg({ tone: "success", text: listed ? "Listed in PROCESSED MARKETS." : "Removed from PROCESSED MARKETS." });
-    } catch (e) {
-      setMsg({ tone: "error", text: errorText(e) });
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <div style={{ marginTop: "0.45rem", fontSize: "0.82rem", display: "flex", gap: "0.4rem", alignItems: "center", flexWrap: "wrap" }}>
-      <span style={{ color: PROCESSOR_HEADING, fontWeight: 700 }}>Also show to verified exporters only, in PROCESSED MARKETS (optional):</span>
-      {batch.marketListed ? (
-        <>
-          <span>listed{batch.askingPricePerKgUgx != null ? ` at ${formatUgx(batch.askingPricePerKgUgx)}/kg` : ""}</span>
-          <button style={button("secondary", busy)} disabled={busy} onClick={() => save(false)}>
-            Remove listing
-          </button>
-        </>
-      ) : active ? (
-        <>
-          <input style={{ ...input, width: 150 }} inputMode="decimal" placeholder="Asking UGX/kg" value={price} onChange={(e) => setPrice(e.target.value)} />
-          <button style={button("secondary", busy)} disabled={busy} onClick={() => save(true)}>
-            List it
-          </button>
-        </>
-      ) : (
-        <span style={{ color: "#78909c" }}>open once you are fully verified</span>
-      )}
     </div>
   );
 }

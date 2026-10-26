@@ -23,7 +23,7 @@ import {
 } from "./errors";
 import { Id } from "./_generated/dataModel";
 import { postWallet } from "./walletSplit";
-import { LOT_SELLER_ROLES, PURCHASER_ROLES } from "./lotOrdersShared";
+import { LOT_SELLER_ROLES, OFFER_FOLLOW_UP_ROLES, PURCHASER_ROLES } from "./lotOrdersShared";
 import { lotBuyingAccess } from "./lotOrders";
 import { todayUganda } from "./exportMarkets";
 import { roleLabel } from "./roleLabels";
@@ -430,7 +430,7 @@ export const acceptCounterOffer = mutation({
 
     // Verify user is a trader
     const user = await ctx.db.get(args.traderId);
-    if (!user || !(PURCHASER_ROLES as readonly string[]).includes(user.role)) {
+    if (!user || !(OFFER_FOLLOW_UP_ROLES as readonly string[]).includes(user.role)) {
       throwAppError(invalidRoleError("trader"));
     }
 
@@ -498,7 +498,7 @@ export const traderCounterOffer = mutation({
     await checkPilotMode(ctx);
 
     const user = await ctx.db.get(args.traderId);
-    if (!user || !(PURCHASER_ROLES as readonly string[]).includes(user.role)) {
+    if (!user || !(OFFER_FOLLOW_UP_ROLES as readonly string[]).includes(user.role)) {
       throwAppError(invalidRoleError("trader"));
     }
 
@@ -563,7 +563,7 @@ export const cancelNegotiation = mutation({
     await checkPilotMode(ctx);
 
     const user = await ctx.db.get(args.traderId);
-    if (!user || !(PURCHASER_ROLES as readonly string[]).includes(user.role)) {
+    if (!user || !(OFFER_FOLLOW_UP_ROLES as readonly string[]).includes(user.role)) {
       throwAppError(invalidRoleError("trader"));
     }
 
@@ -633,7 +633,7 @@ export const getTraderNegotiations = query({
   handler: async (ctx, args) => {
     // Verify user is a trader
     const user = await ctx.db.get(args.traderId);
-    if (!user || !(PURCHASER_ROLES as readonly string[]).includes(user.role)) {
+    if (!user || !(OFFER_FOLLOW_UP_ROLES as readonly string[]).includes(user.role)) {
       throw new Error("User is not a trader");
     }
 
@@ -775,7 +775,7 @@ export const getAcceptedNegotiations = query({
   handler: async (ctx, args) => {
     // Verify user is a trader
     const user = await ctx.db.get(args.traderId);
-    if (!user || !(PURCHASER_ROLES as readonly string[]).includes(user.role)) {
+    if (!user || !(OFFER_FOLLOW_UP_ROLES as readonly string[]).includes(user.role)) {
       throw new Error("User is not a trader");
     }
 

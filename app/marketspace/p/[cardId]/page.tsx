@@ -16,7 +16,7 @@ import { PhotoGallery } from "../../components/PhotoGallery";
 import { CardQuestions } from "../../components/Questions";
 import { ReportSheet, SafetyNotice } from "../../components/Sheets";
 import { TopBar } from "../../components/TopBar";
-import { FONT, formatUGX, useMarketspaceSession } from "../../components/shared";
+import { FONT, GLASS, formatUGX, useMarketspaceSession } from "../../components/shared";
 
 /** A Convex error's readable message (ConvexError data first). */
 function errorMessage(e: unknown): { text: string; needsTopUp: boolean } {
@@ -52,15 +52,15 @@ export default function CardPage() {
   const [showQr, setShowQr] = useState(false);
 
   const shell = (children: React.ReactNode) => (
-    <div style={{ minHeight: "100vh", background: "#f6f8f4", fontFamily: FONT }}>
+    <div style={{ minHeight: "100vh", background: "transparent", fontFamily: FONT }}>
       <TopBar status={session.status} backHref="/marketspace?view=all" />
       <main style={{ maxWidth: 720, margin: "0 auto", padding: "1rem" }}>{children}</main>
     </div>
   );
-  if (card === undefined) return shell(<p style={{ color: "#777" }}>Loading…</p>);
+  if (card === undefined) return shell(<p style={{ ...GLASS, padding: "1rem", color: "#555" }}>Loading…</p>);
   if (card === null) {
     return shell(
-      <div style={{ textAlign: "center", padding: "2rem 1rem" }}>
+      <div style={{ ...GLASS, textAlign: "center", padding: "2rem 1rem" }}>
         <p style={{ fontWeight: 700 }}>This post is no longer on MarketSpace.</p>
         <Link href="/marketspace?view=all" style={{ color: "#1b5e20", fontWeight: 800 }}>Discover other posts →</Link>
       </div>
@@ -102,7 +102,7 @@ export default function CardPage() {
   return shell(
     <>
       {card.photoUrls.length > 0 && <PhotoGallery urls={card.photoUrls} title={card.title} height={260} zoomable={!card.lite} />}
-      <div style={{ marginTop: "0.8rem" }}>
+      <div style={{ ...GLASS, marginTop: "0.8rem", padding: "0.8rem" }}>
         {card.kind === "wanted" && <span style={{ padding: "0.15rem 0.55rem", borderRadius: 999, background: "#f6bf26", fontWeight: 800, fontSize: "0.75rem" }}>WANTED</span>}
         <h1 style={{ margin: "0.3rem 0", fontSize: "1.4rem" }}>{card.title}</h1>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", fontSize: "0.8rem" }}>
@@ -226,7 +226,7 @@ export default function CardPage() {
         </div>
       )}
 
-      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.8rem" }}>
+      <div style={{ ...GLASS, display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.8rem", padding: "0.6rem" }}>
         <button type="button" onClick={() => setShowQr((v) => !v)} style={button("plain")}>{showQr ? "Hide QR code" : "QR code for this post"}</button>
         {card.adId && !card.isMine && <button type="button" onClick={() => setReporting(true)} style={button("plain")}>Report</button>}
       </div>

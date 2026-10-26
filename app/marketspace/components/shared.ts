@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { getStoredToken, getStoredUser, type StoredUser } from "../../utils/authStorage";
 import { fromStoredUgandaTime, getUgandaTime, inUgandaTime } from "../../utils/timeUtils";
 import { UG_DISTRICTS } from "../../../convex/ugandaLocationsData";
@@ -9,6 +9,15 @@ import { SAFETY_NOTICE } from "../../../convex/marketspaceShared";
 export { SAFETY_NOTICE };
 
 export const FONT = '"Montserrat", sans-serif';
+
+/** MarketSpace pages show the app's farm photo; text on it sits on this frosted panel to stay readable. */
+export const GLASS: CSSProperties = {
+  background: "rgba(255, 255, 255, 0.9)",
+  backdropFilter: "blur(10px)",
+  WebkitBackdropFilter: "blur(10px)",
+  borderRadius: 16,
+  boxShadow: "0 4px 18px rgba(0,0,0,0.12)",
+};
 export const DISTRICTS: string[] = [...new Set(UG_DISTRICTS.map((d) => d.name))].sort((a, b) => a.localeCompare(b));
 
 /** The ad card shape returned by the MarketSpace queries. */

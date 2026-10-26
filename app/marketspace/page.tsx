@@ -14,7 +14,7 @@ import { Discover, type Chip } from "./components/Discover";
 import { MyAds } from "./components/MyAds";
 import { MyLots } from "./components/MyLots";
 import { TopBar } from "./components/TopBar";
-import { FONT, useMarketspaceSession, useUgandaNow } from "./components/shared";
+import { FONT, GLASS, useMarketspaceSession, useUgandaNow } from "./components/shared";
 
 // The QR decoder loads only when someone taps Scan QR, so the board stays light on slow phones.
 const QrScanSheet = nextDynamic(() => import("./components/QrScanSheet").then((m) => m.QrScanSheet), { ssr: false });
@@ -97,12 +97,12 @@ function MarketspaceInner() {
     fontFamily: FONT,
     color: "#1b5e20",
     cursor: "pointer",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+    boxShadow: "0 6px 20px rgba(0,0,0,0.18)",
   };
-  const section: React.CSSProperties = { padding: "1rem", borderRadius: 14, background: "#fff", border: "1px solid #e3e8e0", marginBottom: "1rem" };
+  const section: React.CSSProperties = { ...GLASS, padding: "1rem", borderRadius: 14, marginBottom: "1rem" };
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f6f8f4", fontFamily: FONT }}>
+    <div style={{ minHeight: "100vh", background: "transparent", fontFamily: FONT }}>
       <TopBar status={viewerStatus} showAdmin={!!me?.canModerate || !!me?.isSuperAdmin} />
 
       {isUser && (
@@ -120,7 +120,7 @@ function MarketspaceInner() {
 
         {tab === "discover" && !onBoard && (
           <div style={{ display: "flex", flexDirection: "column", gap: "0.9rem", maxWidth: 520, margin: "1.5rem auto" }}>
-            <p style={{ margin: 0, textAlign: "center", color: "#444" }}>Farm produce, bulk lots and services from across Uganda.</p>
+            <p style={{ ...GLASS, margin: 0, padding: "0.7rem 1rem", textAlign: "center", color: "#1b5e20", fontWeight: 700 }}>Farm produce, bulk lots and services from across Uganda.</p>
             <div style={{ display: "flex", gap: "0.9rem" }}>
               <button type="button" onClick={() => setScanning(true)} style={bigTile}>
                 <span style={{ fontSize: "2.4rem" }}>📷</span>

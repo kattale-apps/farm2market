@@ -3,6 +3,7 @@
 export const dynamic = "force-dynamic";
 
 import { Suspense, useEffect, useState } from "react";
+import nextDynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
@@ -12,9 +13,11 @@ import { AdForm, type EditableAd } from "./components/AdForm";
 import { Discover, type Chip } from "./components/Discover";
 import { MyAds } from "./components/MyAds";
 import { MyLots } from "./components/MyLots";
-import { QrScanSheet } from "./components/QrScanSheet";
 import { TopBar } from "./components/TopBar";
 import { FONT, useMarketspaceSession, useUgandaNow } from "./components/shared";
+
+// The QR decoder loads only when someone taps Scan QR, so the board stays light on slow phones.
+const QrScanSheet = nextDynamic(() => import("./components/QrScanSheet").then((m) => m.QrScanSheet), { ssr: false });
 
 type Tab = "discover" | "post" | "mine";
 const CHIPS: Chip[] = ["all", "produce", "bulk", "lots", "classifieds"];

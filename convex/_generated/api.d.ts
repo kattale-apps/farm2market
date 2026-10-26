@@ -21,6 +21,7 @@ import type * as auth_index from "../auth/index.js";
 import type * as auth_types from "../auth/types.js";
 import type * as authentication_index from "../authentication/index.js";
 import type * as authentication_types from "../authentication/types.js";
+import type * as batchLots from "../batchLots.js";
 import type * as branding from "../branding.js";
 import type * as buyerDashboard from "../buyerDashboard.js";
 import type * as buyerOnboarding from "../buyerOnboarding.js";
@@ -165,6 +166,7 @@ declare const fullApi: ApiFromModules<{
   "auth/types": typeof auth_types;
   "authentication/index": typeof authentication_index;
   "authentication/types": typeof authentication_types;
+  batchLots: typeof batchLots;
   branding: typeof branding;
   buyerDashboard: typeof buyerDashboard;
   buyerOnboarding: typeof buyerOnboarding;

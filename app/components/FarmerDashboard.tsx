@@ -1096,6 +1096,33 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
         )}
       </div>
 
+      {/* Vendors buy and sell on MarketSpace: one tap from the home screen */}
+      {effectiveRole === "vendor" && (
+        <a
+          href="/marketspace"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.9rem",
+            padding: "1rem 1.1rem",
+            marginBottom: "1rem",
+            background: "#fff",
+            border: "2px solid #2e7d32",
+            borderRadius: "14px",
+            boxShadow: "0 4px 14px rgba(0,0,0,0.12)",
+            textDecoration: "none",
+            color: "#1b5e20",
+            fontFamily: '"Montserrat", sans-serif',
+          }}
+        >
+          <span style={{ fontSize: "2.2rem" }} aria-hidden="true">🗺️</span>
+          <span>
+            <span style={{ display: "block", fontWeight: 800, fontSize: "1.15rem" }}>MarketSpace</span>
+            <span style={{ display: "block", fontSize: "0.88rem", fontWeight: 500, color: "#33691e" }}>Buy farmers&apos; lots and sell yours</span>
+          </span>
+        </a>
+      )}
+
       {isSectionOpen("farmcoinRewards") && (
         <div id="section-farmcoinRewards" style={{
           background: "#fff",

@@ -72,14 +72,14 @@ export default function ExporterWorkspacePage() {
 
   if (authStatus === "loading") return <div style={{ padding: "2rem", fontFamily: FONT }}>Loading...</div>;
   if (!user || user.role !== "trader" || !userId) {
-    return <div style={{ padding: "2rem", fontFamily: FONT }}>Export Markets is available to trader accounts.</div>;
+    return <div style={{ padding: "2rem", fontFamily: FONT }}>Global Bulk Markets is available to trader accounts.</div>;
   }
   const member = !!ws && ws.checks.admittedAsExporter;
 
   return (
     <div style={{ padding: "1rem", maxWidth: 900, margin: "0 auto", fontFamily: FONT }}>
       <PageHeader
-        title="Export Markets"
+        title="Global Bulk Markets"
         backHref="/"
         subtitle="Sell in export volumes to verified international buyers. Buyers see your alias, rating and delivery record until the platform fees on a deal are paid."
         right={ws ? <StatusPill state={ws.isActiveExporter ? "approved" : ws.profile?.status ?? "draft"} /> : null}

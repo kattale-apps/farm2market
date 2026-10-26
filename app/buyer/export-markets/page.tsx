@@ -36,12 +36,12 @@ export default function BuyerExportMarketsPage() {
   return (
     <div style={{ padding: "1rem", maxWidth: 960, margin: "0 auto", fontFamily: FONT }}>
       <PageHeader
-        title="Export Markets"
+        title="Global Bulk Markets"
         backHref="/"
         right={
           <InfoTip
             align="right"
-            label="How Export Markets works"
+            label="How Global Bulk Markets works"
             text="Ask verified exporters for a price, approve a sample the platform sends you, agree the contract, and follow payment, shipment and delivery. Company names are shared once platform fees are paid."
           />
         }

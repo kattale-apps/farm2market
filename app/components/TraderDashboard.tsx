@@ -773,13 +773,13 @@ export function TraderDashboard({ userId, userRole }: TraderDashboardProps) {
         >
           <img src="/icons/cargo-ship.svg" alt="" width={44} height={44} style={{ flexShrink: 0 }} />
           <div style={{ minWidth: 0 }}>
-            <div>EXPORT MARKETS</div>
+            <div>GLOBAL BULK MARKETS</div>
             <div style={{ fontSize: "0.78rem", fontWeight: 500, color: "#0277bd" }}>
               {!exportAccess.hasModule
                 ? `Awaiting acceptance by the community admin (${exportAccess.communityNames.join(", ")})`
                 : exportAccess.awaiting === "verification"
                   ? `Accepted · awaiting super admin verification (${exportAccess.communityNames.join(", ")})`
-                  : `Exporter profile, documents and deals (${exportAccess.communityNames.join(", ")})`}
+                  : `Bulk lots for global buyers, from licensed exporters: your profile, documents and deals (${exportAccess.communityNames.join(", ")})`}
             </div>
           </div>
         </a>

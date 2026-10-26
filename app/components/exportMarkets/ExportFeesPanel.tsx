@@ -54,7 +54,7 @@ export function ExportFeesPanel({ adminId }: { adminId: Id<"users"> }) {
 
   return (
     <div style={{ ...card, padding: "1.5rem", marginBottom: "2rem" }}>
-      <h2 style={{ fontSize: "1.3rem", margin: "0 0 0.25rem", color: EXPORT_HEADING }}>🚢 Export Markets fees</h2>
+      <h2 style={{ fontSize: "1.3rem", margin: "0 0 0.25rem", color: EXPORT_HEADING }}>🚢 Global Bulk Markets fees</h2>
       <p style={{ fontSize: "0.85rem", color: "#555", marginTop: 0 }}>
         Exporters pay the success fee once contract terms are agreed, and buyer and exporter names are revealed only after
         the platform fees are paid. Fees are collected in UGX through the wallet. Set any fee to 0 to switch it off.

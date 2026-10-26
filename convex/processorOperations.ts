@@ -23,6 +23,7 @@ import { audit, notify, todayUganda } from "./exportMarkets";
 import { issueReceipt } from "./marketOffers";
 import { recomputeLotSummary, uniqueCode } from "./exportLots";
 import { getProcessorProfile, processorCommunities, requireProcessorUser, requireStorageOfficer } from "./processors";
+import { lotListedKg } from "./batchLots";
 
 type Ctx = QueryCtx | MutationCtx;
 
@@ -406,7 +407,8 @@ export const completeBatch = mutation({
     if (args.weightOutKg > batch.weightInKg * (1 + MASS_BALANCE_TOLERANCE)) {
       throw new Error(`Weight out (${args.weightOutKg} kg) cannot be more than weight in (${batch.weightInKg} kg)`);
     }
-    if (args.weightOutKg < batch.soldKg) throw new Error(`${batch.soldKg} kg of this batch is already sold`);
+    const inLots = await lotListedKg(ctx, batch._id);
+    if (args.weightOutKg < batch.soldKg + inLots) throw new Error(`${batch.soldKg + inLots} kg of this batch is sold or listed as lots on MarketSpace`);
     if (!isIsoDate(args.completedDate) || args.completedDate < batch.startedDate || args.completedDate > todayUganda()) {
       throw new Error("The completion date must be between the start date and today");
     }

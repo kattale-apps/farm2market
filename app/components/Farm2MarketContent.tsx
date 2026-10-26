@@ -13,6 +13,7 @@ import { useOfflineMutation } from "../hooks/useOfflineMutation";
 import { savePdfFromJsPDF } from "../utils/pdfDownload";
 import { VerifiedBadge } from "./icons/Brand";
 import { EditListingTerms } from "./lots/EditListingTerms";
+import { packagesText } from "../../convex/lotOrdersShared";
 import { LotLedger } from "./lots/LotLedger";
 import { MyStock } from "./lots/MyStock";
 
@@ -671,9 +672,9 @@ export function Farm2MarketContent({ userId, userRole, isMobile }: Farm2MarketCo
                         <div style={{ fontSize: "clamp(0.9rem, 2.5vw, 1rem)", color: "#666", fontWeight: "600", marginBottom: "0.25rem", fontFamily: '"Montserrat", sans-serif' }}>UTID:</div>
                         <div style={{ fontSize: "clamp(0.84rem, 2.45vw, 1.05rem)", color: "#2c2c2c", fontFamily: "monospace", fontWeight: "700", letterSpacing: "0.05em", wordBreak: "break-all" }}>{listing.utid}</div>
                       </div>
-                      <div style={{ fontWeight: "600", marginBottom: "0.5rem", fontSize: "clamp(1rem, 3vw, 1.1rem)", color: "#1a1a1a" }}>{getProduceEmoji(listing.produceType)} {listing.totalKilos}kg {listing.produceType}</div>
+                      <div style={{ fontWeight: "600", marginBottom: "0.5rem", fontSize: "clamp(1rem, 3vw, 1.1rem)", color: "#1a1a1a" }}>{getProduceEmoji(listing.produceType)} {listing.listingMode === "packaging" ? `${packagesText(listing.units.total * (listing.packagesPerBatch ?? 1), listing.packageLabel ?? "item")}${(listing.packagesPerBatch ?? 1) > 1 ? ` in batches of ${listing.packagesPerBatch}` : ""}` : `${listing.totalKilos}kg`} {listing.produceType}</div>
                       <div style={{ fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", fontWeight: "600", color: statusColor }}>Status: {status}</div>
-                      {listing.listingMode !== "packaging" && canCancel && (
+                      {canCancel && (
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); setEditingTerms(listing); }}

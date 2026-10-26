@@ -7,6 +7,7 @@ import { Id } from "../../../convex/_generated/dataModel";
 import { formatUgandaDateTime, getUgandaTime } from "../../utils/timeUtils";
 import { PhotoSetCapture, type CapturedPhoto } from "../exportMarkets/PhotoSetCapture";
 import { uploadEvidencePhotos } from "../exportMarkets/PhotoSetCapture";
+import { packagesText } from "../../../convex/lotOrdersShared";
 
 const formatUGX = (n: number) => `UGX ${Math.round(n).toLocaleString()}`;
 
@@ -164,7 +165,7 @@ function OrderCard({ order: o, side, userId }: { order: LedgerOrder; side: "sell
     <div style={{ border: `2px solid ${status.color}33`, borderRadius: 12, padding: "0.9rem", background: "#fff", display: "flex", flexDirection: "column", gap: "0.6rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
         <div style={{ fontWeight: 700, color: "#222" }}>
-          {o.produceType} · {o.lotKg.toLocaleString()} kg
+          {o.produceType} · {o.packageCount !== null ? packagesText(o.packageCount, o.packageLabel ?? "item") : `${o.lotKg.toLocaleString()} kg`}
           <div style={{ fontSize: "0.8rem", color: "#666", fontWeight: 500 }}>
             {side === "seller" ? "Bought by" : "Sold by"} {o.otherLabel || "a member"} · {formatUgandaDateTime(o.createdAt)}
           </div>
@@ -173,7 +174,7 @@ function OrderCard({ order: o, side, userId }: { order: LedgerOrder; side: "sell
       </div>
 
       <div style={{ fontSize: "0.9rem", color: "#333" }}>
-        Posted {formatUGX(o.postedPricePerKilo)}/kg
+        Posted {formatUGX(o.postedPricePerKilo)}/{o.packageCount !== null ? o.packageLabel ?? "item" : "kg"}
         {o.settledPricePerKilo !== o.postedPricePerKilo && <> → agreed <strong>{formatUGX(o.settledPricePerKilo)}/kg</strong></>}
         {" "}· Total <strong>{formatUGX(o.totalAmount)}</strong>
       </div>

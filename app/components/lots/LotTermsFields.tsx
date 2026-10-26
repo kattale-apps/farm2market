@@ -3,9 +3,12 @@
 import { useState } from "react";
 import {
   COMMIT_PERCENT_CHOICES,
+  PACKAGED_COMMIT_PERCENT,
   chargeForStep,
   commitAmount,
   defaultPlan,
+  isPackagedPlan,
+  packagedPlan,
   proRatePay,
   validatePlan,
   type PlanStep,
@@ -27,6 +30,46 @@ export function planProblem(steps: PlanStep[], commitPercent: number): string | 
 export function respread(steps: PlanStep[], commitPercent: number): PlanStep[] {
   const pay = proRatePay(steps, commitPercent);
   return steps.map((s, i) => ({ ...s, payPercent: pay[i] }));
+}
+
+/**
+ * Packaged items: no payment steps unless the seller switches them on. Off,
+ * the buyer pays in full into escrow and the seller is paid when the buyer
+ * collects. On, it is the usual editor (commit % and steps).
+ */
+export function PackagedTermsFields({
+  sellerRole,
+  commitPercent,
+  steps,
+  lotPrice,
+  onChange,
+}: {
+  sellerRole: string;
+  commitPercent: number;
+  steps: PlanStep[];
+  lotPrice: number | null;
+  onChange: (commitPercent: number, steps: PlanStep[]) => void;
+}) {
+  const usingSteps = !isPackagedPlan(steps, commitPercent);
+  return (
+    <div style={{ display: "grid", gap: "0.5rem" }}>
+      <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontWeight: 700, color: "#333" }}>
+        <input
+          type="checkbox"
+          checked={usingSteps}
+          onChange={(e) => (e.target.checked ? onChange(30, defaultPlan(sellerRole, 30)) : onChange(PACKAGED_COMMIT_PERCENT, packagedPlan()))}
+        />
+        Use payment steps
+      </label>
+      {usingSteps ? (
+        <LotTermsFields sellerRole={sellerRole} commitPercent={commitPercent} steps={steps} lotPrice={lotPrice} onChange={onChange} />
+      ) : (
+        <p style={{ margin: 0, fontSize: "0.85rem", color: "#555" }}>
+          No steps: the buyer pays in full into escrow, collects from you, and you are paid then. Switch steps on for big orders.
+        </p>
+      )}
+    </div>
+  );
 }
 
 /**

@@ -189,6 +189,8 @@ export default defineSchema({
     productName: v.optional(v.string()),
     packagingTypeEnum: v.optional(v.string()),
     packagingTypeCustom: v.optional(v.string()),
+    packagesPerBatch: v.optional(v.number()), // Packaged items: items in one sellable unit (1 = single items; more = a batch, sold in bulk)
+    takesOffers: v.optional(v.boolean()), // Packaged items: the seller takes offers (price per item); lots by weight always do
     availableUnits: v.optional(v.number()),
     pricingUnit: v.optional(v.union(v.literal("per_package"), v.literal("per_kg"))),
     pricePerUnit: v.optional(v.number()),
@@ -245,6 +247,9 @@ export default defineSchema({
     utid: v.string(), // Also written to listingUnits.lockUtid
     listingId: v.id("listings"),
     unitId: v.id("listingUnits"),
+    extraUnitIds: v.optional(v.array(v.id("listingUnits"))), // Packaged items: the other items or batches bought in the same order
+    packageCount: v.optional(v.number()), // Packaged items: how many items the order covers (lotKg is 0)
+    packageLabel: v.optional(v.string()), // Packaged items: what one item is called (crate, bunch...)
     sellerId: v.id("users"),
     buyerId: v.id("users"),
     sellerRole: v.string(),
@@ -4098,7 +4103,8 @@ export default defineSchema({
     bagsPerLot: v.optional(v.number()),
     lotsAvailable: v.optional(v.number()),
     qtyKg: v.optional(v.number()),
-    quantityText: v.optional(v.string()), // Ads: free-text quantity
+    quantityText: v.optional(v.string()), // Ads: free-text quantity; packaged items: "12 crates"
+    packaged: v.optional(v.boolean()), // Packaged items (priceUGX per item, quantityText), not lots by weight
     pricePerKilo: v.optional(v.number()),
     priceUGX: v.optional(v.number()), // Ads
     priceUnit: v.optional(v.string()),

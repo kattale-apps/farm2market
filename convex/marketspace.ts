@@ -40,9 +40,10 @@ import {
   type CardView,
   type MarketspaceSettings,
   type ViewerTier,
+  PACKAGED_BATCHES,
 } from "./marketspaceShared";
 import { syncAdCard, syncListingCard } from "./marketCards";
-import { bulkSellingDecision, defaultPlan } from "./lotOrdersShared";
+import { PACKAGED_COMMIT_PERCENT, bulkSellingDecision, defaultPlan, packageLabel, packagedPlan, packagedUnitPrice } from "./lotOrdersShared";
 import { isActiveProcessor } from "./processors";
 import { todayUganda } from "./exportMarkets";
 import { maskContactDetails } from "./exportMarketsShared";
@@ -634,7 +635,6 @@ export const vendListing = mutation({
   },
   handler: async (ctx, args) => {
     const { user, listing } = await requireOwnListing(ctx, args.sessionToken, args.listingId);
-    if (listing.listingMode === "packaging") throw new Error("Packaged items are sold from your shop, not as lots.");
     if (listing.withdrawnAt || (listing.status !== "active" && listing.status !== "partially_locked")) {
       throw new Error("This listing is not for sale any more.");
     }
@@ -652,7 +652,15 @@ export const vendListing = mutation({
     if (args.bulkRange) {
       const access = await canSellBulk(ctx, user);
       if (!access.ok) throw new Error(access.reason);
-      const problem = bulkRangeProblem(args.bulkRange, lots * (listing.unitSize || 10));
+      // Packaged items: bulk means batches (several items to a unit), with no kilo range
+      const problem =
+        listing.listingMode === "packaging"
+          ? args.bulkRange !== PACKAGED_BATCHES.key || (listing.packagesPerBatch ?? 1) < 2
+            ? "Packaged items sell in bulk as batches: list them in batches of 2 or more items"
+            : null
+          : args.bulkRange === PACKAGED_BATCHES.key
+            ? "Choose a bulk range"
+            : bulkRangeProblem(args.bulkRange, lots * (listing.unitSize || 10));
       if (problem) throw new Error(problem);
       bulk = args.bulkRange;
       // Switching bulk on may cost FarmCoin (a super admin setting, 0 = free).
@@ -721,9 +729,10 @@ export const myLots = query({
       .take(100);
     const lots = [];
     for (const l of listings) {
-      if (l.listingMode === "packaging" || l.withdrawnAt) continue;
+      if (l.withdrawnAt) continue;
       if (l.status !== "active" && l.status !== "partially_locked") continue;
-      const commitPercent = l.commitPercent ?? 100;
+      const packaged = l.listingMode === "packaging";
+      const commitPercent = l.commitPercent ?? (packaged ? PACKAGED_COMMIT_PERCENT : 100);
       const card = await ctx.db
         .query("marketCards")
         .withIndex("by_listing", (q) => q.eq("listingId", l._id))
@@ -739,8 +748,14 @@ export const myLots = query({
         lotsLeft: await lotsLeft(ctx, l._id),
         pricePerKilo: l.pricePerKilo,
         commitPercent: l.commitPercent ?? null,
-        milestonePlan: l.milestonePlan ?? defaultPlan(user.role, commitPercent),
+        milestonePlan: l.milestonePlan ?? (packaged ? packagedPlan() : defaultPlan(user.role, commitPercent)),
         hasCustomPlan: !!l.milestonePlan,
+        // Packaged items: sold per item (pricePerUnit), one by one or in batches of packagesPerBatch
+        packaged,
+        packageLabel: packaged ? packageLabel(l) : null,
+        packagesPerBatch: packaged ? l.packagesPerBatch ?? 1 : null,
+        pricePerUnit: packaged ? l.pricePerUnit ?? 0 : null,
+        takesOffers: packaged ? l.takesOffers === true : true,
         photoCount: l.photos?.length ?? 0,
         stockSource: l.stockSource ?? null,
         vendExpiresAt: l.vendExpiresAt ?? null,
@@ -920,6 +935,9 @@ export const cardDetail = query({
     const photoIds: Id<"_storage">[] = [];
     let steps = null;
     let lotPrice: number | null = null;
+    let packagesPerBatch: number | null = null;
+    let takesOffers = false;
+    let unitLabel: string | null = null;
     let freeUnitIds: Id<"listingUnits">[] = [];
     let description: string | null = null;
     let qualityComment: string | null = null;
@@ -931,9 +949,14 @@ export const cardDetail = query({
       if (!listing) return null;
       photoIds.push(...(listing.photos ?? []).map((p) => p.storageId));
       if (!shaped.lite) {
-        const commit = listing.commitPercent ?? 100;
-        steps = listing.milestonePlan ?? defaultPlan(card.sellerRole, commit);
-        lotPrice = Math.round(listing.pricePerKilo * (listing.unitSize || 10));
+        const packaged = listing.listingMode === "packaging";
+        const commit = listing.commitPercent ?? (packaged ? PACKAGED_COMMIT_PERCENT : 100);
+        steps = listing.milestonePlan ?? (packaged ? packagedPlan() : defaultPlan(card.sellerRole, commit));
+        // One sellable unit: a lot by weight, or one item or batch of packaged items
+        lotPrice = packaged ? packagedUnitPrice(listing.pricePerUnit ?? 0, listing.packagesPerBatch ?? 1) : Math.round(listing.pricePerKilo * (listing.unitSize || 10));
+        packagesPerBatch = packaged ? listing.packagesPerBatch ?? 1 : null;
+        takesOffers = packaged ? listing.takesOffers === true : true;
+        unitLabel = packaged ? packageLabel(listing) : null;
         qualityComment = listing.qualityComment ?? null;
         if (viewer.tier === "verified" && !isMine) {
           const units = await ctx.db
@@ -966,6 +989,9 @@ export const cardDetail = query({
       photoUrls,
       steps,
       lotPrice,
+      packagesPerBatch,
+      unitLabel,
+      takesOffers,
       freeUnitIds,
       description,
       qualityComment,

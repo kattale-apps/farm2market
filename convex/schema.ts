@@ -163,8 +163,10 @@ export default defineSchema({
     produceType: v.string(),
     totalKilos: v.number(),
     pricePerKilo: v.number(), // In UGX
-    unitSize: v.number(), // 10kg for farmer listings, 100kg for trader listings
-    totalUnits: v.number(), // totalKilos / unitSize
+    unitSize: v.number(), // Lot size in kg for lot listings (bagKg × bagsPerLot), 10kg for older farmer listings, 100kg for trader listings
+    totalUnits: v.number(), // totalKilos / unitSize (the number of lots)
+    bagKg: v.optional(v.number()), // Lot listings: the bag size the seller packs, in kg
+    bagsPerLot: v.optional(v.number()), // Lot listings: bags in each lot
     status: v.union(
       v.literal("active"),
       v.literal("partially_locked"),

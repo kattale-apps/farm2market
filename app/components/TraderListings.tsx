@@ -1424,7 +1424,7 @@ export function TraderListings({ userId }: TraderListingsProps) {
                         <strong>Total:</strong>{" "}
                         {isGardenListing
                           ? `Garden • ${listing.gardenSize || "N/A"} acres`
-                          : `${listing.totalKilos} kg (${listing.totalUnits} ${listing.isTraderListing ? "lot" : "units"})`}
+                          : `${listing.totalKilos} kg (${listing.totalUnits} ${listing.isTraderListing || listing.bagKg ? "lot" : "units"}${listing.bagKg && listing.totalUnits !== 1 ? "s" : ""})`}
                       </div>
                       <div>
                         <strong>Price:</strong>{" "}
@@ -1436,7 +1436,7 @@ export function TraderListings({ userId }: TraderListingsProps) {
                         <strong>Available:</strong>{" "}
                         {isGardenListing
                           ? "1 garden"
-                          : `${listing.availableUnits || listing.totalUnits} ${listing.isTraderListing ? "lot" : "units"}`}
+                          : `${listing.availableUnits || listing.totalUnits} ${listing.isTraderListing ? "lot" : listing.bagKg ? "lot(s)" : "units"}`}
                       </div>
                       <div>
                         <strong>Listed:</strong> {formatDate(listing.createdAt)}
@@ -1481,7 +1481,11 @@ export function TraderListings({ userId }: TraderListingsProps) {
                     marginBottom: "0.75rem",
                   }}>
                     <div>
-                      <strong>Unit Size:</strong> {isGardenListing ? "Garden" : `${listing.unitSize}kg`}
+                      {listing.bagKg ? (
+                        <><strong>Lot size:</strong> {listing.unitSize} kg ({listing.bagsPerLot ?? 1} bag{(listing.bagsPerLot ?? 1) === 1 ? "" : "s"} of {listing.bagKg} kg)</>
+                      ) : (
+                        <><strong>Unit Size:</strong> {isGardenListing ? "Garden" : `${listing.unitSize}kg`}</>
+                      )}
                     </div>
                     <div>
                       <strong>Unit Price:</strong>{" "}

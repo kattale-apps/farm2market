@@ -13,8 +13,18 @@ export const MAX_TRADER_EXPOSURE_UGX = 1_000_000;
 /**
  * Unit sizes
  */
-export const LISTING_UNIT_SIZE_KG = 10; // Farmers list in 10kg units
+export const LISTING_UNIT_SIZE_KG = 10; // Older farmer listings were split into 10kg units
 export const BUYER_BLOCK_SIZE_KG = 100; // Traders aggregate into 100kg blocks
+
+/**
+ * Lots: a seller packs bags and sells them in equal lots (one lot = one
+ * listing unit). Buyers buy whole lots. Limits keep a listing to a size one
+ * mutation can create.
+ */
+export const LOT_BAG_SIZES_KG = [10, 25, 50, 60, 90, 100] as const; // Preset bag sizes shown on the form
+export const MAX_BAG_KG = 1000;
+export const MAX_BAGS_PER_LOT = 1000;
+export const MAX_LOTS_PER_LISTING = 500;
 
 /**
  * Time-based SLAs (in milliseconds)

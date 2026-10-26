@@ -1030,7 +1030,7 @@ export const toggleCommunityCrmEnabled = mutation({
 });
 
 /**
- * Turn an optional community module ("Advanced Markets", "Fertilizer" or
+ * Turn an optional community module ("Contract Farming Market", "Fertilizer" or
  * "Cost Templates") on or off for a single community. Only super admins may change these flags, so a
  * junior community admin cannot open a module for their own community.
  */

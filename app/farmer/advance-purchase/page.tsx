@@ -382,7 +382,7 @@ export default function FarmerAdvancePurchasePage() {
   const [creatingFor, setCreatingFor] = useState<string | null>(null);
 
   if (status === "loading" || configs === undefined || myOffers === undefined) {
-    return <div style={{ padding: "2rem", fontFamily: FONT }}>Loading Advanced Markets...</div>;
+    return <div style={{ padding: "2rem", fontFamily: FONT }}>Loading Contract Farming Market...</div>;
   }
   if (!user || !["farmer", "vendor", "store"].includes(user.role)) {
     return <div style={{ padding: "2rem", fontFamily: FONT }}>Please log in as a farmer.</div>;
@@ -416,10 +416,10 @@ export default function FarmerAdvancePurchasePage() {
           ← Back to Dashboard
         </Link>
         <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "#fff", marginBottom: "0.25rem" }}>
-          🌱 Advanced Markets
+          🌱 Contract Farming Market
         </h1>
         <p style={{ color: "#eee", fontSize: "0.9rem", margin: 0 }}>
-          Payments in Advanced Markets are based on milestones reached.
+          Payments in the Contract Farming Market are based on milestones reached.
         </p>
       </div>
 
@@ -430,7 +430,7 @@ export default function FarmerAdvancePurchasePage() {
           <h2 style={{ fontSize: "1.05rem", fontWeight: 700, marginBottom: "0.5rem" }}>Create a new offer</h2>
           {configs.length === 0 && (
             <div style={{ padding: "1rem", background: "#fafafa", border: "1px dashed #ccc", borderRadius: 10, color: "#777", fontSize: "0.88rem" }}>
-              No Advanced Markets form configured for your communities yet.
+              No Contract Farming form configured for your communities yet.
             </div>
           )}
           <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
@@ -471,7 +471,7 @@ export default function FarmerAdvancePurchasePage() {
       )}
       {myOffers.length === 0 ? (
         <div style={{ padding: "1rem", background: "#fafafa", border: "1px dashed #ccc", borderRadius: 10, color: "#777", fontSize: "0.88rem" }}>
-          You have no active Advanced Markets offers.
+          You have no active Contract Farming offers.
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>

@@ -123,7 +123,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   const [depositAmount, setDepositAmount] = useState<string>("");
   const [isDepositing, setIsDepositing] = useState(false);
   // Where to send the buyer once the deposit clears. Set when they arrive here
-  // from a flow that needs a funded wallet first (e.g. Advanced Markets).
+  // from a flow that needs a funded wallet first (e.g. Contract Farming Market).
   const [depositReturnTo, setDepositReturnTo] = useState<string | null>(null);
   // Collapsed by default so the wallet card stays short; opened on demand, or
   // automatically when the buyer was sent here specifically to top up.
@@ -134,7 +134,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   const [listingPurchaseMessage, setListingPurchaseMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   // Section collapse state — every major dashboard section is reached only
   // via the "☰ More" menu; the main dashboard body always shows just the
-  // Advanced Markets link and the Wallet section.
+  // Contract Farming Market link and the Wallet section.
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
   const toggleSection = (key: string) =>
     setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -1053,7 +1053,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       {profileExtraSlot && createPortal(<UserProfileCard userId={userId} />, profileExtraSlot)}
 
       {/* Export Markets quick link: same glow and travelling arrow as
-          Advanced Markets, in the sky-blue export theme. */}
+          Contract Farming Market, in the sky-blue export theme. */}
       <Link href="/buyer/export-markets" style={{
         display: "flex",
         alignItems: "center",
@@ -1083,7 +1083,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
         </span>
       </Link>
 
-      {/* Advanced Markets quick link */}
+      {/* Contract Farming Market quick link */}
       <Link href="/buyer/advance-purchase" style={{
         display: "flex",
         alignItems: "center",
@@ -1118,7 +1118,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
         <div style={{ minWidth: 0 }}>
           <div style={{ whiteSpace: "nowrap" }}>ADVANCED MARKETS</div>
           <div style={{ fontSize: "0.78rem", fontWeight: 500, color: "#8e24aa" }}>
-            Payments in Advanced Markets are based on milestones reached
+            Payments in the Contract Farming Market are based on milestones reached
           </div>
         </div>
         {/* Sits at the far right and keeps travelling, so the box reads as

@@ -28,6 +28,37 @@ export const ROLE_LABELS_PLURAL = {
 // Member roles in value-chain order: farm → processing → export → buyer.
 export const VALUE_CHAIN_ROLES = ["farmer", "store", "trader", "buyer", "transporter", "vendor"] as const;
 
+/**
+ * The informer beside each category button at sign-up: who belongs in the
+ * category and what it lets them do. Plain words, for first-time users.
+ */
+export const ROLE_INFO: Record<(typeof VALUE_CHAIN_ROLES)[number], { who: string; does: string }> = {
+  farmer: {
+    who: "You grow crops or keep animals, alone or in a farmer group.",
+    does: "Sell your produce in the Farmers Produce Market, keep your farm records and take contract farming orders.",
+  },
+  store: {
+    who: "Agro-processors: millers, hullers, dryers, stores and warehouses, roasters, packers and others who process or store produce.",
+    does: "Buy from farmers, post your buying prices and sell processed produce to exporters.",
+  },
+  trader: {
+    who: "Licensed exporters. Every exporter is a trader, but local traders who do not export join as a Vendor.",
+    does: "Buy from farmers and processors, list export lots and sell to buyers abroad.",
+  },
+  buyer: {
+    who: "Homes, shops, hotels, schools and companies that buy produce.",
+    does: "Buy produce and fund farmers' crops in the Contract Farming Market.",
+  },
+  transporter: {
+    who: "Trucks, pickups, motorbikes and other transport.",
+    does: "Get delivery jobs moving produce for farmers, vendors and buyers.",
+  },
+  vendor: {
+    who: "Market vendors, shops and local traders who buy and resell produce.",
+    does: "Buy from farmers, post on MarketSpace and find transport.",
+  },
+};
+
 export const STORAGE_OFFICER_LABEL = "Storage and Transport Officer";
 
 export function roleLabel(role?: string | null): string {

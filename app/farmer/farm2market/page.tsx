@@ -77,7 +77,7 @@ export default function Farm2MarketPage() {
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
             <span style={{ fontSize: "1.4rem" }}>🛒</span>
             <h1 style={{ margin: 0, fontSize: "clamp(1rem, 4vw, 1.2rem)", fontWeight: 700, fontFamily: FONT }}>
-              Farm 2 Market
+              Farmers Produce Market
             </h1>
           </div>
         </div>
@@ -103,10 +103,10 @@ export default function Farm2MarketPage() {
           }}>
             <div style={{ fontSize: "3rem", marginBottom: "0.5rem" }}>🔒</div>
             <h2 style={{ margin: "0 0 0.5rem", fontSize: "1.2rem", fontWeight: 700, color: "#2c2c2c", fontFamily: FONT }}>
-              Farm 2 Market Locked
+              Farmers Produce Market Locked
             </h2>
             <p style={{ margin: "0 0 1rem", color: "#555", fontSize: "0.95rem", lineHeight: 1.5, fontFamily: FONT }}>
-              You need <strong>500 FarmCoins</strong> to unlock Farm 2 Market.<br />
+              You need <strong>500 FarmCoins</strong> to unlock the Farmers Produce Market.<br />
               Earn FarmCoins by completing farm data submissions.
             </p>
             {/* Progress bar */}
@@ -156,7 +156,7 @@ export default function Farm2MarketPage() {
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
           <span style={{ fontSize: "1.4rem" }}>🛒</span>
           <h1 style={{ margin: 0, fontSize: "clamp(1rem, 4vw, 1.2rem)", fontWeight: 700, fontFamily: FONT }}>
-            Farm 2 Market
+            Farmers Produce Market
           </h1>
         </div>
       </div>

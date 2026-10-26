@@ -56,7 +56,7 @@ async function assertCommunityAdmin(
   const isAssignedAdmin = assigned.includes(String(communityId));
 
   if (!isDirectAdmin && !isAssignedAdmin) {
-    throw new Error("Not authorized to manage the Advanced Markets configuration for this community");
+    throw new Error("Not authorized to manage the Contract Farming configuration for this community");
   }
   return admin;
 }
@@ -382,11 +382,11 @@ export const createOffer = mutation({
     await checkPilotMode(ctx);
     const farmer = await ctx.db.get(args.farmerId);
     if (!farmer || !["farmer", "vendor", "store"].includes(farmer.role)) {
-      throw new Error("Only farmers can create an Advanced Markets offer");
+      throw new Error("Only farmers can create a Contract Farming offer");
     }
     const config = await ctx.db.get(args.configId);
     if (!config || !config.isActive) {
-      throw new Error("This Advanced Markets configuration is not available");
+      throw new Error("This Contract Farming configuration is not available");
     }
     await assertCommunityMember(ctx, args.farmerId, config.communityId);
 
@@ -913,7 +913,7 @@ export const createProposal = mutation({
     await notifyUser(
       ctx,
       offer.farmerId,
-      "New Advanced Markets proposal",
+      "New Contract Farming proposal",
       `A buyer proposed new terms for your "${offer.productName}" offer.`,
       offer.utid
     );
@@ -947,7 +947,7 @@ export const respondToProposal = mutation({
       proposal.buyerId,
       args.accept ? "Your proposal was accepted" : "Your proposal was rejected",
       args.accept
-        ? `The farmer accepted your proposed terms for "${offer.productName}". You can now fund it on Advanced Markets.`
+        ? `The farmer accepted your proposed terms for "${offer.productName}". You can now fund it in the Contract Farming Market.`
         : `The farmer rejected your proposed terms for "${offer.productName}".`,
       offer.utid
     );
@@ -968,7 +968,7 @@ export const createCommitment = mutation({
   handler: async (ctx, args) => {
     await checkPilotMode(ctx);
     const buyer = await ctx.db.get(args.buyerId);
-    if (!buyer || buyer.role !== "buyer") throw new Error("Only buyers can fund an Advanced Markets offer");
+    if (!buyer || buyer.role !== "buyer") throw new Error("Only buyers can fund a Contract Farming offer");
     const offer = await ctx.db.get(args.offerId);
     if (!offer || offer.status !== "published") throw new Error("Offer is not available");
     if (offer.expiresAt && getUgandaTime() > offer.expiresAt) {
@@ -1097,7 +1097,7 @@ export const createCommitment = mutation({
     await notifyUser(
       ctx,
       offer.farmerId,
-      "Advanced Markets order funded",
+      "Contract Farming order funded",
       `A buyer funded ${args.quantity} ${offer.unit} of your "${offer.productName}" offer.`,
       utid
     );
@@ -1183,7 +1183,7 @@ async function loadCommitmentForBuyer(
   const commitment = await ctx.db.get(commitmentId);
   if (!commitment) throw new Error("Order not found");
   if (String(commitment.buyerId) !== String(buyerId)) {
-    throw new Error("You can only change your own Advanced Markets order");
+    throw new Error("You can only change your own Contract Farming order");
   }
   const offer = await ctx.db.get(commitment.offerId);
   if (!offer) throw new Error("Offer not found");
@@ -1227,7 +1227,7 @@ export const cancelCommitment = mutation({
     await notifyUser(
       ctx,
       offer.farmerId,
-      "Advanced Markets order cancelled",
+      "Contract Farming order cancelled",
       `A buyer cancelled their order of ${commitment.quantity} ${offer.unit} of "${offer.productName}". ` +
         `That quantity is available to other buyers again.`,
       offer.utid
@@ -1260,7 +1260,7 @@ export const forfeitCommitment = mutation({
     await notifyUser(
       ctx,
       offer.farmerId,
-      "Advanced Markets order forfeited",
+      "Contract Farming order forfeited",
       `A buyer forfeited their order of ${commitment.quantity} ${offer.unit} of "${offer.productName}". ` +
         `The UGX ${Math.round(result.forfeitedToFarmer).toLocaleString()} already released for approved ` +
         `milestones stays with you, and that quantity is available to other buyers again.`,
@@ -1400,7 +1400,7 @@ export const submitMilestoneEvidence = mutation({
       await notifyUser(
         ctx,
         community.communityAdminId,
-        "Advanced Markets proof picture submitted",
+        "Contract Farming proof picture submitted",
         `A proof picture was submitted for "${milestone.name}" on offer "${offer.productName}".`,
         offer.utid
       );
@@ -1587,7 +1587,7 @@ export const reviewMilestoneEvidence = mutation({
           await notifyUser(
             ctx,
             c.buyerId,
-            "Advanced Markets milestone approved",
+            "Contract Farming milestone approved",
             `"${milestone.name}" was approved for "${offer.productName}". UGX ${releaseAmount.toLocaleString()} released to the farmer.`,
             offer.utid
           );

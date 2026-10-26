@@ -104,7 +104,7 @@ export default function AdvancePurchaseOfferDetailPage() {
   const baseTotal = offer.unitPrice * quantity;
   const grandTotal = baseTotal + deliveryFee + insuranceFee;
 
-  // Advanced Markets is funded out of the buyer's wallet, so a buyer who has
+  // Contract Farming Market is funded out of the buyer's wallet, so a buyer who has
   // never deposited cannot commit. Rather than dead-ending them on an
   // "insufficient balance" error, send them to the wallet top-up with the
   // shortfall pre-filled and a return path back to this offer.
@@ -121,7 +121,7 @@ export default function AdvancePurchaseOfferDetailPage() {
     router.push(
       `/?deposit=${Math.ceil(amountNeeded)}` +
         `&returnTo=${encodeURIComponent(returnTo)}` +
-        `&depositReason=${encodeURIComponent(`Fund "${offer.productName}" in Advanced Markets`)}`
+        `&depositReason=${encodeURIComponent(`Fund "${offer.productName}" in the Contract Farming Market`)}`
     );
   };
 
@@ -198,7 +198,7 @@ export default function AdvancePurchaseOfferDetailPage() {
             marginBottom: "0.6rem",
           }}
         >
-          ← Advanced Markets
+          ← Contract Farming Market
         </Link>
 
         <h1 style={{ fontSize: "1.4rem", fontWeight: 700, marginBottom: "0.1rem", color: "#fff" }}>{offer.productName}</h1>

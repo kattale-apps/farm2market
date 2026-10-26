@@ -6,7 +6,7 @@
  * example when a licence expires.
  *
  * Sources say where a lot's coffee came from: platform purchases (the
- * trader's own inventory bought from farmers here), Advanced Markets
+ * trader's own inventory bought from farmers here), Contract Farming Market
  * commitments, or declared off-platform farms. Lots whose coffee is all
  * platform-traced are labelled differently from declared ones.
  *

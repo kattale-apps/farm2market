@@ -12,7 +12,7 @@ const FONT = '"Montserrat", sans-serif';
 /**
  * Text that sits directly on the app's photographic background, with no card
  * behind it, needs a white halo to stay readable over both the bright and the
- * dark parts of the photo. Matches the other Advanced Markets headers.
+ * dark parts of the photo. Matches the other Contract Farming Market headers.
  */
 const ON_PHOTO_SHADOW = "0 1px 2px rgba(255,255,255,0.95), 0 0 8px rgba(255,255,255,0.9)";
 
@@ -40,12 +40,12 @@ export default function AdvancePurchaseMarketPage() {
   );
 
   if (status === "loading" || offers === undefined) {
-    return <div style={{ padding: "2rem", fontFamily: FONT }}>Loading Advanced Markets...</div>;
+    return <div style={{ padding: "2rem", fontFamily: FONT }}>Loading Contract Farming Market...</div>;
   }
   if (status === "unauthenticated" || !user || user.role !== "buyer") {
     return (
       <div style={{ padding: "2rem", fontFamily: FONT }}>
-        <p>Please log in as a buyer to view Advanced Markets.</p>
+        <p>Please log in as a buyer to view the Contract Farming Market.</p>
         <Link href="/" style={{ color: "#1976d2" }}>Back to home</Link>
       </div>
     );
@@ -82,17 +82,17 @@ export default function AdvancePurchaseMarketPage() {
           ← Back to Dashboard
         </Link>
         <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "#fff", marginBottom: "0.25rem" }}>
-          🌱 Advanced Markets
+          🌱 Contract Farming Market
         </h1>
         <p style={{ color: "#eee", fontSize: "0.9rem", margin: 0 }}>
-          Payments in Advanced Markets are based on milestones reached.
+          Payments in the Contract Farming Market are based on milestones reached.
         </p>
       </div>
 
       {myCommitments && myCommitments.length > 0 && (
         <div style={{ marginBottom: "1.5rem" }}>
           <h2 style={{ fontSize: "1.05rem", fontWeight: 700, marginBottom: "0.15rem", color: "#1a1a1a", textShadow: ON_PHOTO_SHADOW }}>
-            My Advanced Market Purchases
+            My Contract Farming Purchases
           </h2>
           <p style={{ fontSize: "0.8rem", color: "#333", fontWeight: 600, margin: "0 0 0.6rem", textShadow: ON_PHOTO_SHADOW }}>
             Tap a purchase to follow its milestones and download the order form.

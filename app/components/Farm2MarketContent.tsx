@@ -704,7 +704,7 @@ export function Farm2MarketContent({ userId, userRole, isMobile }: Farm2MarketCo
                           const totalCurrentOffer = batch.currentPricePerKilo * totalKg;
                           return (
                             <div>
-                              <div style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", padding: "0.4rem 0.75rem", background: "#e8f5e9", borderRadius: "999px", border: "1px solid #4caf50", color: "#2e7d32", fontWeight: "700", fontSize: "clamp(0.85rem, 2.5vw, 0.95rem)" }}>Total Trader Offer: {formatUGX(totalTraderOffer)}</div>
+                              <div style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", padding: "0.4rem 0.75rem", background: "#e8f5e9", borderRadius: "999px", border: "1px solid #4caf50", color: "#2e7d32", fontWeight: "700", fontSize: "clamp(0.85rem, 2.5vw, 0.95rem)" }}>Total Exporter Offer: {formatUGX(totalTraderOffer)}</div>
                               {totalCurrentOffer !== totalTraderOffer && <div style={{ marginTop: "0.4rem", display: "inline-flex", alignItems: "center", gap: "0.5rem", padding: "0.35rem 0.7rem", background: "#fff3cd", borderRadius: "999px", border: "1px solid #ffc107", color: "#856404", fontWeight: "700", fontSize: "clamp(0.8rem, 2.3vw, 0.9rem)" }}>Current Offer: {formatUGX(totalCurrentOffer)}</div>}
                               <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.35rem" }}>{batch.items.length} unit{batch.items.length !== 1 ? "s" : ""} × {unitSize}kg each</div>
                             </div>

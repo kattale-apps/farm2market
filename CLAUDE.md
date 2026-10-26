@@ -5,3 +5,7 @@ When working on Convex code, **always read `convex/_generated/ai/guidelines.md` 
 
 Convex agent skills for common tasks can be installed by running `npx convex ai-files install`.
 <!-- convex-ai-end -->
+
+## Keep it simple
+
+Design every screen for the basic, semi-literate user first: few choices, presets over free text, plain words, and light data (paginated, thumbnail-only lists). Build the data model so it can expand for more comprehensive users without a redesign. Protect both the buyer and the seller in every money or contact flow.

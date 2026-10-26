@@ -24,6 +24,7 @@ import { Id } from "./_generated/dataModel";
 import { generateUTID, getUgandaTime } from "./utils";
 import { assertTestMode } from "./testUtils";
 import { postWallet } from "./walletSplit";
+import { resyncFarmerCards } from "./marketCards";
 
 const FARMER_EMAIL = "lotcheck.farmer@pilot.farm2market"; // Pilot domain: no FarmCoin gate
 const BUYER_EMAIL = "lotcheck.buyer@local";
@@ -133,6 +134,7 @@ export const marketspaceSessions = internalMutation({
       member: await testUser(ctx, MEMBER_EMAIL, "buyer", "LOTCHECK-M", false),
       exporter: await testUser(ctx, EXPORTER_EMAIL, "trader", "LOTCHECK-E", true),
       vendor: await testUser(ctx, VENDOR_EMAIL, "vendor", "LOTCHECK-V"),
+      admin: await testUser(ctx, ADMIN_EMAIL, "admin", "LOTCHECK-A"), // Super admin: checks commercial profiles
     };
     const tokens: Record<string, string> = {};
     for (const [who, userId] of Object.entries(users)) {
@@ -216,6 +218,28 @@ export const ageBuyingPrice = internalMutation({
     const d = new Date(`${offer.validFrom}T00:00:00Z`);
     d.setUTCDate(d.getUTCDate() - 2);
     await ctx.db.patch(offer._id, { validFrom: d.toISOString().slice(0, 10), validUntil: d.toISOString().slice(0, 10) });
+  },
+});
+
+/**
+ * Gives the test farmer a commercial profile with this status straight away (no document photo), so
+ * walkthroughs that vend farmer lots can run; the commercial farmer walkthrough drives the real flow.
+ */
+export const setTestCommercialProfile = internalMutation({
+  args: { mode: v.string(), status: v.union(v.literal("pending"), v.literal("verified"), v.literal("rejected")) },
+  handler: async (ctx, args) => {
+    assertTestMode(args.mode);
+    const farmerId = await testUser(ctx, FARMER_EMAIL, "farmer", "LOTCHECK-F");
+    const now = getUgandaTime();
+    const existing = await ctx.db
+      .query("commercialProfiles")
+      .withIndex("by_userId", (q) => q.eq("userId", farmerId))
+      .first();
+    const fields = { tradingName: "LOTCHECK Farm Traders", documents: [{ kind: "tin" as const, number: "1000000000" }], status: args.status, updatedAt: now };
+    if (existing) await ctx.db.patch(existing._id, fields);
+    else await ctx.db.insert("commercialProfiles", { userId: farmerId, ...fields, createdAt: now });
+    await resyncFarmerCards(ctx, farmerId);
+    return { farmerId };
   },
 });
 
@@ -334,6 +358,11 @@ export const cleanup = internalMutation({
       for (const row of await ctx.db.query("notifications").withIndex("by_user", (q) => q.eq("userId", user._id)).collect()) {
         await ctx.db.delete(row._id);
         count("notifications");
+      }
+      for (const profile of await ctx.db.query("commercialProfiles").withIndex("by_userId", (q) => q.eq("userId", user._id)).collect()) {
+        for (const d of profile.documents) if (d.photo) await ctx.storage.delete(d.photo.storageId).catch(() => undefined);
+        await ctx.db.delete(profile._id);
+        count("commercialProfiles");
       }
       for (const code of await ctx.db.query("goodsCodes").withIndex("by_owner_and_goodKey", (q) => q.eq("ownerId", user._id)).collect()) {
         for (const scan of await ctx.db.query("goodsCodeScans").withIndex("by_code_and_at", (q) => q.eq("codeId", code._id)).collect()) {

@@ -4117,7 +4117,10 @@ export default defineSchema({
     commitPercent: v.optional(v.number()),
     qualityRating: v.optional(v.string()),
     thumbStorageId: v.optional(v.id("_storage")),
-    status: v.union(v.literal("active"), v.literal("closed")), // Expiry is by time (expiresAt), not status
+    sellerCommercial: v.optional(v.union(v.literal("pending"), v.literal("verified"))), // Farmers: their commercial profile; absent = none (produceVisible)
+    // Expiry is by time (expiresAt), not status. farm_gate: a farmer's lot for sale but not on MarketSpace,
+    // seen only by verified processors and exporters as a farm-gate source (it does not expire)
+    status: v.union(v.literal("active"), v.literal("closed"), v.literal("farm_gate")),
     expiresAt: v.number(),
     createdAt: v.number(), // When it was (last) put up
     updatedAt: v.number(),
@@ -4125,6 +4128,7 @@ export default defineSchema({
     .index("by_status_created", ["status", "createdAt"])
     .index("by_status_view_created", ["status", "view", "createdAt"])
     .index("by_status_bulk_created", ["status", "isBulk", "createdAt"])
+    .index("by_status_view_expiresAt", ["status", "view", "expiresAt"])
     .index("by_listing", ["listingId"])
     .index("by_ad", ["adId"])
     .index("by_seller", ["sellerId", "createdAt"])
@@ -4132,6 +4136,29 @@ export default defineSchema({
       searchField: "title",
       filterFields: ["status", "view", "isBulk"],
     }),
+
+  // Commercial farmers (convex/commercialFarmers.ts): a farmer puts lots on MarketSpace only with
+  // a trading name and one commercial document. The trading name is private: the farmer and
+  // the super admin who checks the document see it; MarketSpace shows the alias and a badge.
+  commercialProfiles: defineTable({
+    userId: v.id("users"),
+    tradingName: v.string(),
+    documents: v.array(
+      v.object({
+        kind: v.union(v.literal("trading_licence"), v.literal("business_registration"), v.literal("tin")),
+        number: v.optional(v.string()),
+        photo: v.optional(evidencePhotoValidator), // Camera or gallery
+      })
+    ), // One for now; a list so more can be added later
+    status: v.union(v.literal("pending"), v.literal("verified"), v.literal("rejected")),
+    reviewNote: v.optional(v.string()), // Why it was not accepted (REJECT_REASONS)
+    reviewedBy: v.optional(v.id("users")),
+    reviewedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_status_and_updatedAt", ["status", "updatedAt"]),
 
   // Goods QR codes (goodsCodesCore.ts): issued by the platform for every lot
   // listing, processing batch and export lot; permanent, scan-counted, and

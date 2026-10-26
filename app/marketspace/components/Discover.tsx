@@ -10,11 +10,12 @@ import { AcceptedOffers } from "../../components/lots/AcceptedOffers";
 import { MarketCard, type CardLayout, type MarketCardData } from "./MarketCard";
 import { DISTRICTS, FONT, GLASS, tint } from "./shared";
 
-export type Chip = "all" | "produce" | "bulk" | "lots" | "classifieds";
+export type Chip = "all" | "produce" | "farmgate" | "bulk" | "lots" | "classifieds";
 
 const CHIPS: { key: Chip; label: string }[] = [
   { key: "all", label: "All" },
   { key: "produce", label: "🌾 Farmers Produce" },
+  { key: "farmgate", label: "🚜 Farm Gate" }, // Verified processors and exporters only: farmers' lots not on MarketSpace
   { key: "bulk", label: "📦 Local Bulk" },
   { key: "lots", label: "🏪 Vendors and Processors" },
   { key: "classifieds", label: "📰 Classifieds" },
@@ -139,12 +140,16 @@ export function Discover({
   };
 
   const verified = me?.tier === "verified";
+  // Verified processors and exporters buy at the farm gate: they see every farmer's lots
+  const seesFarmGate = verified && (me?.role === "store" || me?.role === "trader");
+  const chips = CHIPS.filter((c) => c.key !== "farmgate" || seesFarmGate);
   const filters = {
     now: boardNow,
     today,
     sessionToken: token ?? undefined,
     view: chip === "produce" || chip === "lots" || chip === "classifieds" ? chip : undefined,
     bulk: chip === "bulk" ? true : undefined,
+    farmGate: chip === "farmgate" ? true : undefined,
     kind: chip === "classifieds" && kind !== "all" ? kind : undefined,
     categoryId: chip === "classifieds" && categoryId ? (categoryId as Id<"marketspaceCategories">) : undefined,
     district: district || undefined,
@@ -194,12 +199,18 @@ export function Discover({
       />
 
       <div style={{ display: "flex", gap: "0.45rem", overflowX: "auto", padding: "0.7rem 0 0.2rem" }}>
-        {CHIPS.map((c) => (
+        {chips.map((c) => (
           <button key={c.key} type="button" onClick={() => pickChip(c.key)} style={chipStyle(chip === c.key)}>
             {c.label}
           </button>
         ))}
       </div>
+
+      {chip === "farmgate" && (
+        <p style={{ margin: "0.5rem 0 0", fontSize: "0.85rem", color: "#555" }}>
+          Farmers&apos; lots that are not on MarketSpace. Only verified processors and exporters see them, to buy at the farm gate.
+        </p>
+      )}
 
       {chip === "lots" && (
         <div style={{ display: "flex", gap: "0.45rem", overflowX: "auto", padding: "0.4rem 0 0.1rem" }}>

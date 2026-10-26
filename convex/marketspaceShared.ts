@@ -272,6 +272,35 @@ export function isLiteFor(view: CardView, tier: ViewerTier, isMine = false): boo
   return tier === "public" || view !== "classifieds";
 }
 
+/**
+ * Farmers' produce (the commercial farmer rule). Verified processors and
+ * exporters see every farmer's lots, including farm-gate cards (lots not on
+ * MarketSpace); vendors and business buyers see lots that commercial farmers
+ * put on MarketSpace; visitors and unverified members see only verified
+ * commercial farmers' lots. Other posts and a seller's own lots are not
+ * affected.
+ */
+export function produceVisible(
+  card: { view: CardView; status: string; sellerCommercial?: "pending" | "verified" },
+  viewer: { tier: ViewerTier; role: string | null; isMine: boolean }
+): boolean {
+  if (card.view !== "produce" || viewer.isMine) return true;
+  if (seesFarmGate(viewer)) return true;
+  if (card.status === "farm_gate") return false;
+  if (viewer.tier === "verified") return card.sellerCommercial !== undefined;
+  return card.sellerCommercial === "verified";
+}
+
+/** Verified processors and exporters: they buy at the farm gate, so they see every farmer's lots. */
+export function seesFarmGate(viewer: { tier: ViewerTier; role: string | null }): boolean {
+  return viewer.tier === "verified" && (viewer.role === "store" || viewer.role === "trader");
+}
+
+/** Whether a card can be opened and bought from now: on MarketSpace and in time, or a farm-gate card. */
+export function cardIsLive(card: { status: string; expiresAt: number }, now: number): boolean {
+  return (card.status === "active" && card.expiresAt > now) || card.status === "farm_gate";
+}
+
 /** The line a lite card shows instead of the details. */
 export function liteReason(tier: ViewerTier): string {
   return tier === "public"
@@ -301,6 +330,8 @@ type CardSource = {
   priceUnit?: string;
   commitPercent?: number;
   qualityRating?: string;
+  status?: string;
+  sellerCommercial?: "pending" | "verified";
   expiresAt: number;
   createdAt: number;
 };
@@ -329,6 +360,8 @@ export function shapeCard(
     isBulk: card.isBulk,
     bulkLabel: range?.label ?? null,
     packaged: !!card.packaged, // Priced per item (priceUGX, priceUnit), counted in quantityText
+    farmGate: card.status === "farm_gate", // Not on MarketSpace: seen by verified processors and exporters as a farm-gate source
+    commercialFarmer: card.view === "produce" && card.sellerCommercial === "verified", // The "Commercial Farmer" badge
     createdAt: card.createdAt,
     expiresAt: card.expiresAt,
     isMine: viewer.isMine,

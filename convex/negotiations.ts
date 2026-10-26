@@ -25,6 +25,7 @@ import { Id } from "./_generated/dataModel";
 import { postWallet } from "./walletSplit";
 import { LOT_SELLER_ROLES, OFFER_FOLLOW_UP_ROLES, PURCHASER_ROLES, packageLabel } from "./lotOrdersShared";
 import { lotBuyingAccess } from "./lotOrders";
+import { farmerLotProblem } from "./marketCards";
 import { todayUganda } from "./exportMarkets";
 import { roleLabel } from "./roleLabels";
 
@@ -105,6 +106,9 @@ export const makeOffer = mutation({
         if (listing.farmerId === args.traderId) {
           throw new Error("You cannot make an offer on your own lots");
         }
+        // The commercial farmer rule (vendors and business buyers: commercial farmers on MarketSpace only)
+        const closed = await farmerLotProblem(ctx, listing._id, user);
+        if (closed) throw new Error(closed);
         listings.set(unit.listingId, listing);
       }
 

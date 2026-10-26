@@ -181,7 +181,8 @@ export const expireCard = internalMutation({
     const card = await ctx.db.get(args.cardId);
     if (!card) throw new Error("Card not found");
     if (!(await ctx.db.get(card.sellerId))?.isTestUser) throw new Error("Only test cards can be moved in time");
-    const past = getUgandaTime() - 1;
+    // Minutes back, not 1 ms: Discover compares with the viewer's clock, which can run a little behind the server's
+    const past = getUgandaTime() - 5 * 60 * 1000;
     await ctx.db.patch(card._id, { expiresAt: past });
     if (card.listingId) await ctx.db.patch(card.listingId, { vendExpiresAt: past });
   },

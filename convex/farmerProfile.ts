@@ -5,7 +5,7 @@
  */
 
 import { v } from "convex/values";
-import { query, mutation } from "./_generated/server";
+import { internalMutation, query, mutation } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { getUgandaTime } from "./utils";
 import { calculateFarmSizeAcres } from "./farmerOnboarding";
@@ -327,6 +327,28 @@ export const getActiveSupplyChainRoles = query({
       { id: "trader", label: "Trader" },
       { id: "other", label: "Other (please specify)" },
     ];
+  },
+});
+
+/**
+ * One-off: undo the short-lived "Miller" rename (live from 18 Oct 2026) in
+ * saved supply-chain roles: "Miller" (community profile list) goes back to
+ * "Agroprocessor", and "miller" (the role id above) back to "processor".
+ * Pages through users; run again with continueCursor until isDone.
+ */
+export const restoreProcessorSupplyChainRoles = internalMutation({
+  args: { cursor: v.union(v.string(), v.null()) },
+  handler: async (ctx, args) => {
+    const page = await ctx.db.query("users").paginate({ numItems: 500, cursor: args.cursor });
+    let fixed = 0;
+    for (const user of page.page) {
+      const restored = user.supplyChainRole === "Miller" ? "Agroprocessor" : user.supplyChainRole === "miller" ? "processor" : null;
+      if (restored) {
+        await ctx.db.patch(user._id, { supplyChainRole: restored });
+        fixed++;
+      }
+    }
+    return { fixed, isDone: page.isDone, continueCursor: page.continueCursor };
   },
 });
 

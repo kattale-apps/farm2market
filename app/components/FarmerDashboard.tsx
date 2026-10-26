@@ -133,15 +133,17 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
       {
         key: "farm2market",
         label: farm2MarketLocked
-          ? <>🔒 Farm 2 Market (<FarmCoinIcon size={16} /> {farm2MarketAccess?.balance ?? 0}/{farm2MarketAccess?.requiredBalance ?? 0})</>
-          : "🛒 Farm 2 Market",
+          ? <>🔒 Farmers Produce Market (<FarmCoinIcon size={16} /> {farm2MarketAccess?.balance ?? 0}/{farm2MarketAccess?.requiredBalance ?? 0})</>
+          : "🛒 Farmers Produce Market",
         disabled: farm2MarketLocked,
       },
       { key: "marketspace", label: "🗺️ MarketSpace" },
-      { key: "advancePurchase", label: "🌱 Advanced Markets" },
+      { key: "advancePurchase", label: "🌱 Contract Farming Market" },
       { key: "sellServices", label: "🏭 Sales & Services" },
     ] : []),
     ...(effectiveRole === "vendor" ? [
+      { key: "myLots", label: "📒 My lots & ledger" },
+      { key: "buyLots", label: "🛒 Buy lots" },
       { key: "vendorBuying", label: "🧺 Buying from farmers" },
       { key: "marketspace", label: "🗺️ MarketSpace" },
       { key: "findTransport", label: "🚚 Find transport" },
@@ -153,6 +155,8 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
     farmToolbox: "/farmer/toolbox",
     farmCalendar: "/farmer/planner",
     farm2market: "/farmer/farm2market",
+    myLots: "/farmer/farm2market",
+    buyLots: "/marketspace?view=produce",
     marketspace: "/marketspace",
     myWallet: "/wallet",
     advancePurchase: "/farmer/advance-purchase",

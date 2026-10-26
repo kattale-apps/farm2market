@@ -532,7 +532,7 @@ function LotSources({ userId, data, setMsg }: { userId: Id<"users">; data: LotDe
                 : source.kind === "platform_purchase"
                   ? "Platform purchase"
                   : source.kind === "advance_commitment"
-                    ? "Advanced Markets commitment"
+                    ? "Contract Farming commitment"
                     : "Declared farm"}{" "}
               ·{" "}
               {source.kilos.toLocaleString()} kg
@@ -569,7 +569,7 @@ function LotSources({ userId, data, setMsg }: { userId: Id<"users">; data: LotDe
         <select style={{ ...input, marginBottom: "0.5rem" }} value={kind} onChange={(e) => setKind(e.target.value as typeof kind)}>
           <option value="processor_purchase">Coffee I bought from a processor</option>
           <option value="platform_purchase">Coffee I bought on the platform</option>
-          <option value="advance_commitment">My Advanced Markets commitment</option>
+          <option value="advance_commitment">My Contract Farming commitment</option>
           <option value="declared">A farm outside the platform (declared)</option>
         </select>
         {kind === "processor_purchase" && (

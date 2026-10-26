@@ -5,7 +5,7 @@ import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { useRouter, useSearchParams } from "next/navigation";
 import { saveAuth, getLastCredential, saveLastCredential } from "../utils/authStorage";
-import { VALUE_CHAIN_ROLES, roleLabel } from "../../convex/roleLabels";
+import { ROLE_INFO, VALUE_CHAIN_ROLES, roleLabel } from "../../convex/roleLabels";
 import { MarketspaceLoginBanner } from "../marketspace/components/MarketspaceLoginBanner";
 
 type IdentifierMode = "phone" | "email";
@@ -64,6 +64,8 @@ function LoginPageInner() {
   // No category is preselected — the user must choose one explicitly so
   // nobody signs up under a role they never picked.
   const [selectedRole, setSelectedRole] = useState<SignupRole | null>(null);
+  // The category whose informer (ⓘ) is open, if any.
+  const [infoRole, setInfoRole] = useState<SignupRole | null>(null);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -123,10 +125,14 @@ function LoginPageInner() {
     await saveAuth(user, sessionToken);
     saveLastCredential(activeIdentifier);
 
+    // Back to where the visitor was (e.g. a MarketSpace view): same-site paths only.
+    const returnTo = searchParams.get("returnTo");
+    const safeReturn = returnTo && /^\/(?![/\\])/.test(returnTo) ? returnTo : null;
+
     if (pendingCommunitySlug) {
       router.push(`/join/community/${pendingCommunitySlug}?from_signup=1`);
     } else {
-      router.push("/");
+      router.push(safeReturn ?? "/");
     }
   };
 
@@ -371,42 +377,88 @@ function LoginPageInner() {
                 const isSelected = selectedRole === entry.value;
                 const roleStyle = ROLE_STYLES[entry.value];
                 return (
-                  <button
-                    key={entry.value}
-                    type="button"
-                    disabled={!entry.signupEnabled}
-                    onClick={() => setSelectedRole(entry.value)}
-                    className={isSelected ? "f2m-role-glow" : undefined}
-                    style={{
-                      padding: "0.6rem 0.6rem",
-                      borderRadius: "9px",
-                      border: `1.5px solid ${!entry.signupEnabled ? (isSelected ? "#f6bf26" : "#e0d8b0") : (isSelected ? roleStyle.border : roleStyle.borderUnselected)}`,
-                      background: !entry.signupEnabled
-                        ? (isSelected ? "#fff8e1" : "#fbfaf3")
-                        : (isSelected ? roleStyle.bgSelected : roleStyle.bgUnselected),
-                      color: !entry.signupEnabled
-                        ? (isSelected ? "#ef6c00" : "#8a7f4a")
-                        : roleStyle.text,
-                      fontWeight: isSelected ? 700 : 600,
-                      fontSize: "0.9rem",
-                      cursor: !entry.signupEnabled ? "not-allowed" : "pointer",
-                      opacity: !entry.signupEnabled && !isSelected ? 0.85 : 1,
-                      boxShadow: isSelected ? undefined : `0 1px 3px ${roleStyle.text}1a`,
-                      transition: "all 0.15s ease",
-                      ...(isSelected
-                        ? ({
-                            "--glow-color": `${!entry.signupEnabled ? "#f6bf26" : roleStyle.border}80`,
-                            "--glow-shadow": `${!entry.signupEnabled ? "#f6bf26" : roleStyle.text}40`,
-                          } as React.CSSProperties)
-                        : {}),
-                    }}
-                    title={entry.signupEnabled ? "Enabled for signup" : "Signup currently disabled"}
-                  >
-                    {isSelected ? "✓ " : ""}{entry.signupEnabled ? entry.label : `🔐 ${entry.label}`}
-                  </button>
+                  <div key={entry.value} style={{ position: "relative", display: "flex" }}>
+                    <button
+                      type="button"
+                      disabled={!entry.signupEnabled}
+                      onClick={() => setSelectedRole(entry.value)}
+                      className={isSelected ? "f2m-role-glow" : undefined}
+                      style={{
+                        flex: 1,
+                        padding: "0.6rem 1.9rem 0.6rem 0.6rem",
+                        borderRadius: "9px",
+                        border: `1.5px solid ${!entry.signupEnabled ? (isSelected ? "#f6bf26" : "#e0d8b0") : (isSelected ? roleStyle.border : roleStyle.borderUnselected)}`,
+                        background: !entry.signupEnabled
+                          ? (isSelected ? "#fff8e1" : "#fbfaf3")
+                          : (isSelected ? roleStyle.bgSelected : roleStyle.bgUnselected),
+                        color: !entry.signupEnabled
+                          ? (isSelected ? "#ef6c00" : "#8a7f4a")
+                          : roleStyle.text,
+                        fontWeight: isSelected ? 700 : 600,
+                        fontSize: "0.9rem",
+                        cursor: !entry.signupEnabled ? "not-allowed" : "pointer",
+                        opacity: !entry.signupEnabled && !isSelected ? 0.85 : 1,
+                        boxShadow: isSelected ? undefined : `0 1px 3px ${roleStyle.text}1a`,
+                        transition: "all 0.15s ease",
+                        ...(isSelected
+                          ? ({
+                              "--glow-color": `${!entry.signupEnabled ? "#f6bf26" : roleStyle.border}80`,
+                              "--glow-shadow": `${!entry.signupEnabled ? "#f6bf26" : roleStyle.text}40`,
+                            } as React.CSSProperties)
+                          : {}),
+                      }}
+                      title={entry.signupEnabled ? "Enabled for signup" : "Signup currently disabled"}
+                    >
+                      {isSelected ? "✓ " : ""}{entry.signupEnabled ? entry.label : `🔐 ${entry.label}`}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setInfoRole(infoRole === entry.value ? null : entry.value)}
+                      aria-label={`Who can join as ${entry.label}`}
+                      aria-expanded={infoRole === entry.value}
+                      style={{
+                        position: "absolute",
+                        right: 4,
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        width: 24,
+                        height: 24,
+                        borderRadius: 999,
+                        border: `1.5px solid ${roleStyle.text}`,
+                        background: infoRole === entry.value ? roleStyle.text : "#fff",
+                        color: infoRole === entry.value ? "#fff" : roleStyle.text,
+                        fontWeight: 800,
+                        fontSize: "0.75rem",
+                        lineHeight: 1,
+                        padding: 0,
+                        cursor: "pointer",
+                      }}
+                    >
+                      i
+                    </button>
+                  </div>
                 );
               })}
             </div>
+            {infoRole && (
+              <div
+                role="note"
+                style={{
+                  marginTop: "0.45rem",
+                  padding: "0.55rem 0.7rem",
+                  borderRadius: 9,
+                  border: `1.5px solid ${ROLE_STYLES[infoRole].borderUnselected}`,
+                  background: ROLE_STYLES[infoRole].bgUnselected,
+                  color: "#333",
+                  fontSize: "0.82rem",
+                  lineHeight: 1.45,
+                }}
+              >
+                <strong style={{ color: ROLE_STYLES[infoRole].text }}>{roleLabel(infoRole)}</strong>
+                <div><strong>Who:</strong> {ROLE_INFO[infoRole].who}</div>
+                <div><strong>You can:</strong> {ROLE_INFO[infoRole].does}</div>
+              </div>
+            )}
             {selectedRole && !isSelectedRoleSignupEnabled && (
               <p style={{ marginTop: "0.3rem", marginBottom: 0, fontSize: "0.78rem", color: "#ef6c00", fontWeight: 600 }}>
                   New account creation is currently disabled for {selectedRoleLabel}. Existing accounts can still log in.

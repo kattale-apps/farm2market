@@ -47,10 +47,11 @@ export const getStoreAdminUTIDs = query({
     }
 
     // Get all locked units with farmer_confirmed status
-    const allUnits = await ctx.db.query("listingUnits").collect();
-    const confirmedUnits = allUnits.filter(
-      (u) => u.status === "locked" && u.deliveryStatus === "farmer_confirmed"
-    );
+    const farmerConfirmed = await ctx.db
+      .query("listingUnits")
+      .withIndex("by_delivery_status", (q) => q.eq("deliveryStatus", "farmer_confirmed"))
+      .collect();
+    const confirmedUnits = farmerConfirmed.filter((u) => u.status === "locked" && !u.lotOrderId);
 
     if (!isDeliveryOfficer(adminUser)) {
       throw new Error("Only a Storage and Transport Officer or super admin can verify deliveries");
@@ -128,11 +129,12 @@ export const verifyDeliveryWithProof = mutation({
       throw new Error("Reason is required");
     }
 
-    // Find all units locked with this UTID
-    const allUnits = await ctx.db.query("listingUnits").collect();
-    const lockedUnits = allUnits.filter(
-      (u) => u.status === "locked" && u.lockUtid === args.lockUtid
-    );
+    // Find all units locked with this UTID (lot orders are delivered through their steps)
+    const unitsForUtid = await ctx.db
+      .query("listingUnits")
+      .withIndex("by_lock_utid", (q) => q.eq("lockUtid", args.lockUtid))
+      .collect();
+    const lockedUnits = unitsForUtid.filter((u) => u.status === "locked" && !u.lotOrderId);
 
     if (lockedUnits.length === 0) {
       throw new Error(`No locked units found with UTID: ${args.lockUtid}`);
@@ -199,11 +201,12 @@ export const linkDeliveryPDF = mutation({
       throw new Error("User is not an admin");
     }
 
-    // Find all units locked with this UTID
-    const allUnits = await ctx.db.query("listingUnits").collect();
-    const lockedUnits = allUnits.filter(
-      (u) => u.status === "locked" && u.lockUtid === args.lockUtid
-    );
+    // Find all units locked with this UTID (lot orders are delivered through their steps)
+    const unitsForUtid = await ctx.db
+      .query("listingUnits")
+      .withIndex("by_lock_utid", (q) => q.eq("lockUtid", args.lockUtid))
+      .collect();
+    const lockedUnits = unitsForUtid.filter((u) => u.status === "locked" && !u.lotOrderId);
 
     if (lockedUnits.length === 0) {
       throw new Error(`No locked units found with UTID: ${args.lockUtid}`);

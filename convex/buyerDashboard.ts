@@ -825,9 +825,9 @@ export const getBuyerWalletReport = query({
         : entry.metadata?.source === "demo_seed"
         ? "Demo seed deposit"
         : entry.metadata?.type === "advance_purchase_commitment"
-        ? `Advanced Markets order: ${entry.metadata.offerUtid || "offer"}`
+        ? `Contract Farming order: ${entry.metadata.offerUtid || "offer"}`
         : entry.metadata?.type === "advance_purchase_refund"
-        ? `Advanced Markets refund: ${entry.metadata.productName || entry.metadata.offerUtid || "order"}` +
+        ? `Contract Farming refund: ${entry.metadata.productName || entry.metadata.offerUtid || "order"}` +
           (entry.metadata.reason === "buyer_forfeited" ? " (forfeited)" : " (cancelled)")
         : entry.metadata?.type === "buyer_purchase"
         ? `Purchase: ${entry.metadata.produceType || "Unknown"} (${entry.metadata.kilos || 0} kg)`

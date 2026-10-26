@@ -11,6 +11,7 @@ import { mutation, query, internalMutation } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { generateUTID, getUgandaTime } from "./utils";
 import { verifyAdminRole } from "./auth";
+import { roleLabel } from "./roleLabels";
 
 const DEFAULT_POSTING_COST = 1;
 const DEFAULT_ETA_CHANGE_COST = 1;
@@ -773,6 +774,10 @@ export const getUnverifiedTraders = query({
   },
 });
 
+// Accounts the super admin verifies so they can buy lots (convex/lotOrders.ts).
+const VERIFIABLE_ROLES = ["trader", "transporter", "store", "vendor", "buyer", "farmer"] as const; // Farmers: to sell in bulk on MarketSpace
+const isExporterRole = (role: string) => role === "trader" || role === "transporter";
+
 export const getTraderVerificationList = query({
   args: { adminId: v.id("users") },
   handler: async (ctx, args) => {
@@ -785,15 +790,23 @@ export const getTraderVerificationList = query({
       throw new Error("Only Superadmin can view traders");
     }
 
-    const traders = await ctx.db
-      .query("users")
-      .withIndex("by_role", (q: any) => q.eq("role", "trader"))
-      .collect();
+    // Everyone who can buy lots once verified: exporters, processors, vendors and business buyers.
+    const accounts = [];
+    for (const role of VERIFIABLE_ROLES) {
+      accounts.push(
+        ...(await ctx.db
+          .query("users")
+          .withIndex("by_role", (q: any) => q.eq("role", role))
+          .take(1000))
+      );
+    }
 
-    return traders.map((t: any) => ({
+    return accounts.map((t: any) => ({
       _id: t._id,
       alias: t.alias,
       email: t.email,
+      role: t.role,
+      roleLabel: roleLabel(t.role),
       isVerifiedTrader: t.isVerifiedTrader ?? false,
       verificationStatus: t.verificationStatus ?? "pending",
     }));
@@ -816,12 +829,12 @@ export const verifyTrader = mutation({
     }
 
     const trader = await ctx.db.get(args.traderId);
-    if (!trader || !["trader", "transporter"].includes(trader.role)) {
-      throw new Error("User is not a trader");
+    if (!trader || !(VERIFIABLE_ROLES as readonly string[]).includes(trader.role)) {
+      throw new Error("Only exporters, processors, vendors, buyers and farmers can be verified here");
     }
 
     await ctx.db.patch(args.traderId, {
-      isVerifiedTrader: true,
+      ...(isExporterRole(trader.role) ? { isVerifiedTrader: true } : {}),
       verificationStatus: "verified",
       verifiedBy: args.adminId,
       verifiedAt: getUgandaTime(),
@@ -889,22 +902,22 @@ export const setTraderVerificationStatus = mutation({
     }
 
     const trader = await ctx.db.get(args.traderId);
-    if (!trader || !["trader", "transporter"].includes(trader.role)) {
-      throw new Error("User is not a trader");
+    if (!trader || !(VERIFIABLE_ROLES as readonly string[]).includes(trader.role)) {
+      throw new Error("Only exporters, processors, vendors, buyers and farmers can be verified here");
     }
 
     const now = getUgandaTime();
 
     if (args.status === "verified") {
       await ctx.db.patch(args.traderId, {
-        isVerifiedTrader: true,
+        ...(isExporterRole(trader.role) ? { isVerifiedTrader: true } : {}),
         verificationStatus: "verified",
         verifiedBy: args.adminId,
         verifiedAt: now,
       });
     } else {
       await ctx.db.patch(args.traderId, {
-        isVerifiedTrader: false,
+        ...(isExporterRole(trader.role) ? { isVerifiedTrader: false } : {}),
         verificationStatus: "pending",
         verifiedBy: undefined,
         verifiedAt: undefined,
@@ -926,13 +939,13 @@ export const setTraderVerificationStatus = mutation({
 
 // ─── Farmer Form Field Rewards ───────────────────────────────────────
 
-// ─── Farm 2 Market Access Gate ────────────────────────────────────────
+// ─── Farmers Produce Market Access Gate ────────────────────────────────────────
 
 const FARM2MARKET_REQUIRED_FARMCOINS = 1000;
 const PILOT_EMAIL_DOMAIN = "@pilot.farm2market";
 
 /**
- * Evaluate whether a farmer is allowed to access Farm 2 Market.
+ * Evaluate whether a farmer is allowed to access the Farmers Produce Market.
  * Criteria:
  *   - Farmer has >= 500 FarmCoins, OR
  *   - Farmer's email ends with @pilot.farm2market (pilot users are always allowed)
@@ -944,6 +957,12 @@ export const getFarm2MarketAccess = query({
     const user = await ctx.db.get(args.farmerId);
     const email: string = (user as any)?.email ?? "";
     const isPilotExempt = email.toLowerCase().endsWith(PILOT_EMAIL_DOMAIN);
+
+    // The FarmCoin gate is a farmer incentive; vendors and processors list
+    // their lots and keep their ledger here without it.
+    if (user && user.role !== "farmer") {
+      return { allowed: true, isPilotExempt, balance: 0, requiredBalance: FARM2MARKET_REQUIRED_FARMCOINS, reason: null };
+    }
 
     // Fetch current farmer FarmCoin balance
     const latestEntry = await ctx.db
@@ -964,7 +983,7 @@ export const getFarm2MarketAccess = query({
       requiredBalance: FARM2MARKET_REQUIRED_FARMCOINS,
       reason: allowed
         ? null
-        : `You need ${FARM2MARKET_REQUIRED_FARMCOINS - balance} more FarmCoin${FARM2MARKET_REQUIRED_FARMCOINS - balance === 1 ? "" : "s"} to unlock Farm 2 Market.`,
+        : `You need ${FARM2MARKET_REQUIRED_FARMCOINS - balance} more FarmCoin${FARM2MARKET_REQUIRED_FARMCOINS - balance === 1 ? "" : "s"} to unlock the Farmers Produce Market.`,
     };
   },
 });

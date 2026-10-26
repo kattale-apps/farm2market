@@ -18,6 +18,7 @@ import { menuAccentColor } from "../utils/menuAccentColors";
 import { IS_PRODUCTION_DEPLOYMENT } from "../utils/env";
 import { InfoTip } from "./exportMarkets/ui";
 import { VerifiedBadge, FarmCoinIcon } from "./icons/Brand";
+import { LotLedger } from "./lots/LotLedger";
 
 interface BuyerDashboardProps {
   userId: Id<"users">;
@@ -123,7 +124,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   const [depositAmount, setDepositAmount] = useState<string>("");
   const [isDepositing, setIsDepositing] = useState(false);
   // Where to send the buyer once the deposit clears. Set when they arrive here
-  // from a flow that needs a funded wallet first (e.g. Advanced Markets).
+  // from a flow that needs a funded wallet first (e.g. Contract Farming Market).
   const [depositReturnTo, setDepositReturnTo] = useState<string | null>(null);
   // Collapsed by default so the wallet card stays short; opened on demand, or
   // automatically when the buyer was sent here specifically to top up.
@@ -134,7 +135,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
   const [listingPurchaseMessage, setListingPurchaseMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   // Section collapse state — every major dashboard section is reached only
   // via the "☰ More" menu; the main dashboard body always shows just the
-  // Advanced Markets link and the Wallet section.
+  // Contract Farming Market link and the Wallet section.
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
   const toggleSection = (key: string) =>
     setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -177,6 +178,8 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
     { key: "farmerInventory", label: "🌾 Farmer-sourced Inventory" },
     { key: "analytics", label: "📊 Buyer Analytics" },
     { key: "purchaseAnalytics", label: "📈 Purchase Analytics" },
+    { key: "buyLots", label: "🛒 Buy lots from farmers" },
+    { key: "lotOrders", label: "📒 My lot orders (escrow & steps)" },
     { key: "myOrders", label: "🧾 My Orders" },
     { key: "ledger", label: "🧮 Transaction Ledger" },
     { key: "walletReport", label: "📄 Wallet Report" },
@@ -190,9 +193,9 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
     IS_PRODUCTION_DEPLOYMENT && PRODUCTION_LOCKED_SECTIONS.has(section.key) ? { ...section, label: <>🔐 {section.label}</>, disabled: true } : section
   ));
   const openSectionFromMenu = (key: string) => {
-    if (key === "marketspace" || key === "myWallet") {
+    if (key === "marketspace" || key === "myWallet" || key === "buyLots") {
       setMoreMenuOpen(false);
-      router.push(key === "marketspace" ? "/marketspace" : "/wallet");
+      router.push(key === "marketspace" ? "/marketspace" : key === "buyLots" ? "/marketspace?view=produce" : "/wallet");
       return;
     }
     if (IS_PRODUCTION_DEPLOYMENT && PRODUCTION_LOCKED_SECTIONS.has(key)) return;
@@ -1053,7 +1056,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       {profileExtraSlot && createPortal(<UserProfileCard userId={userId} />, profileExtraSlot)}
 
       {/* Export Markets quick link: same glow and travelling arrow as
-          Advanced Markets, in the sky-blue export theme. */}
+          Contract Farming Market, in the sky-blue export theme. */}
       <Link href="/buyer/export-markets" style={{
         display: "flex",
         alignItems: "center",
@@ -1083,7 +1086,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
         </span>
       </Link>
 
-      {/* Advanced Markets quick link */}
+      {/* Contract Farming Market quick link */}
       <Link href="/buyer/advance-purchase" style={{
         display: "flex",
         alignItems: "center",
@@ -1118,7 +1121,7 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
         <div style={{ minWidth: 0 }}>
           <div style={{ whiteSpace: "nowrap" }}>ADVANCED MARKETS</div>
           <div style={{ fontSize: "0.78rem", fontWeight: 500, color: "#8e24aa" }}>
-            Payments in Advanced Markets are based on milestones reached
+            Payments in the Contract Farming Market are based on milestones reached
           </div>
         </div>
         {/* Sits at the far right and keeps travelling, so the box reads as
@@ -2727,6 +2730,17 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
             [Graph: Inventory Age Distribution]
           </div>
         </div>
+      </div>
+      )}
+
+      {/* Lot orders: lots bought with escrow and the seller's payment steps */}
+      {isSectionOpen("lotOrders") && (
+      <div id="section-lotOrders" style={{ padding: "clamp(1rem, 3vw, 1.5rem)", background: "#fff", borderRadius: "12px", boxShadow: "0 2px 8px rgba(0,0,0,0.1)", border: "1px solid #e0e0e0", marginBottom: "1.5rem" }}>
+          {renderHideControl("lotOrders")}
+          <h3 style={{ marginTop: 0, marginBottom: "0.75rem", fontSize: "clamp(1.1rem, 3.5vw, 1.3rem)", color: "#2c2c2c", fontFamily: '"Montserrat", sans-serif', fontWeight: "600" }}>
+            My lot orders
+          </h3>
+          <LotLedger userId={userId} />
       </div>
       )}
 

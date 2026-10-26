@@ -4,7 +4,7 @@ export const GOODS_CATEGORIES: Array<{ value: "crop" | "livestock"; label: strin
 ];
 
 // Common farm extension services a community admin can offer as a
-// milestoned, pre-funded "service" on Advanced Markets. Admins can also
+// milestoned, pre-funded "service" in the Contract Farming Market. Admins can also
 // type a custom service name not in this list.
 export const FARM_SERVICE_OPTIONS: string[] = [
   "Land Preparation",

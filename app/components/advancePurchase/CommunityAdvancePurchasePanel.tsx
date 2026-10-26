@@ -71,10 +71,12 @@ function ConfigBuilder({ adminId, communityId, existing, onDone }: { adminId: Id
         }))
       : DEFAULT_MILESTONES
   );
+  // When the farmer is paid. Orders already funded keep the rule they were funded under.
+  const [settlementRule, setSettlementRule] = useState<"at_completion" | "per_milestone">(existing?.settlementRule ?? "at_completion");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const updateMilestone = (i: number, patch: Partial<(typeof milestones)[number]>) => {
+  const updateMilestone =(i: number, patch: Partial<(typeof milestones)[number]>) => {
     setMilestones((ms) => ms.map((m, idx) => (idx === i ? { ...m, ...patch } : m)));
   };
   const addMilestone = () => {
@@ -102,6 +104,7 @@ function ConfigBuilder({ adminId, communityId, existing, onDone }: { adminId: Id
         insuranceEnabled,
         insuranceLabel: insuranceEnabled ? insuranceLabel : undefined,
         insuranceAmount: insuranceEnabled && insuranceAmount ? Number(insuranceAmount) : undefined,
+        settlementRule,
         milestoneTemplate: milestones.map((m) => ({
           order: m.order,
           name: m.name,
@@ -133,7 +136,7 @@ function ConfigBuilder({ adminId, communityId, existing, onDone }: { adminId: Id
   return (
     <div style={{ background: "#fff", border: "1px solid #e0e0e0", borderRadius: 12, padding: "1rem", marginBottom: "1rem" }}>
       <h3 style={{ margin: "0 0 0.75rem" }}>
-        {isEdit ? `Edit "${existing.name}"` : "New Advanced Markets configuration"}
+        {isEdit ? `Edit "${existing.name}"` : "New Contract Farming configuration"}
       </h3>
       <input placeholder="Program name (e.g. Coffee Seedlings)" value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} />
 
@@ -254,6 +257,25 @@ function ConfigBuilder({ adminId, communityId, existing, onDone }: { adminId: Id
       <p style={{ fontSize: "0.8rem", color: totalPercent === 100 ? "#2e7d32" : "#d32f2f" }}>
         Release percentages total: {totalPercent}% (must equal 100%)
       </p>
+
+      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, color: "#333", margin: "0.4rem 0 0.3rem" }}>
+        When is the farmer paid?
+      </label>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", marginBottom: "0.6rem" }}>
+        {([
+          ["at_completion", "When all milestones are approved (recommended)", "Approved stages show as earned and pending; the buyer's money stays in escrow until the last stage."],
+          ["per_milestone", "At each approved milestone", "Each approved stage pays its % to the farmer's wallet straight away."],
+        ] as const).map(([value, title, help]) => (
+          <label key={value} style={{ display: "flex", gap: "0.5rem", alignItems: "flex-start", padding: "0.5rem", borderRadius: 8, border: settlementRule === value ? `2px solid ${BRAND}` : "1px solid #ddd", background: settlementRule === value ? "#e8f5e9" : "#fff", cursor: "pointer" }}>
+            <input type="radio" name="settlementRule" checked={settlementRule === value} onChange={() => setSettlementRule(value)} />
+            <span>
+              <strong>{title}</strong>
+              <span style={{ display: "block", fontSize: "0.8rem", color: "#666" }}>{help}</span>
+            </span>
+          </label>
+        ))}
+        {isEdit && <span style={{ fontSize: "0.78rem", color: "#666" }}>Orders already funded keep the rule they were funded under.</span>}
+      </div>
 
       {error && <p style={{ color: "#d32f2f", fontSize: "0.85rem" }}>{error}</p>}
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
@@ -546,9 +568,9 @@ function VerifiedMembersManager({ adminId, communityId }: { adminId: Id<"users">
 }
 
 /**
- * Shared Advanced Markets config + proof-picture-review panel for a single
+ * Shared Contract Farming config + proof-picture-review panel for a single
  * community. Used both by the standalone /admin/advance-purchase page
- * (which adds its own community picker) and by the "Advanced Markets"
+ * (which adds its own community picker) and by the "Contract Farming Market"
  * tab inside the per-community community-dashboard console.
  */
 export function CommunityAdvancePurchasePanel({ adminId, communityId }: { adminId: Id<"users">; communityId: Id<"communities"> }) {
@@ -614,7 +636,7 @@ export function CommunityAdvancePurchasePanel({ adminId, communityId }: { adminI
           {configs === undefined ? (
             <p>Loading configurations...</p>
           ) : configs.length === 0 ? (
-            <p style={{ color: "#777", fontSize: "0.9rem" }}>No Advanced Markets form configured.</p>
+            <p style={{ color: "#777", fontSize: "0.9rem" }}>No Contract Farming form configured.</p>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
               {configs.map((c: any) => (

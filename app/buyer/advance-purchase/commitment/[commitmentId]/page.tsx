@@ -121,7 +121,7 @@ export default function CommitmentDetailPage() {
           href="/buyer/advance-purchase"
           style={{ color: "#0d47a1", fontWeight: 700, fontSize: "0.9rem", textShadow: ON_PHOTO_SHADOW }}
         >
-          ← Advanced Markets
+          ← Contract Farming Market
         </Link>
       </div>
 
@@ -181,7 +181,10 @@ export default function CommitmentDetailPage() {
         <div style={{ fontSize: "0.9rem", lineHeight: 1.7 }}>
           <div>Total committed: <strong>{ugx(detail.totalAmount)}</strong></div>
           <div>Released to farmer: <strong style={{ color: "#2e7d32" }}>{ugx(detail.releasedAmount)}</strong></div>
-          <div>Pending: <strong>{ugx(detail.pendingAmount)}</strong></div>
+          {detail.earnedAmount > detail.releasedAmount && (
+            <div>Earned by approved milestones (paid when all are approved): <strong>{ugx(detail.earnedAmount)}</strong></div>
+          )}
+          <div>Still in escrow: <strong>{ugx(detail.pendingAmount)}</strong></div>
         </div>
       </div>
 
@@ -217,8 +220,8 @@ export default function CommitmentDetailPage() {
             <>
               <p style={{ fontSize: "0.85rem", color: "#666", margin: "0 0 0.75rem" }}>
                 Production has started on this order. You can still walk away, but the{" "}
-                {ugx(detail.releasedAmount)} already released for approved milestones stays
-                with the farmer. Only the remaining {ugx(detail.pendingAmount)} comes back
+                {ugx(detail.earnedAmount)} earned by approved milestones goes
+                to the farmer. Only the remaining {ugx(detail.refundOnForfeit)} comes back
                 to your wallet.
               </p>
               <button
@@ -323,12 +326,12 @@ export default function CommitmentDetailPage() {
               </div>
               <div style={{ marginTop: "0.5rem" }}>
                 Refunded to your wallet:{" "}
-                <strong style={{ color: "#2e7d32" }}>{ugx(detail.pendingAmount)}</strong>
+                <strong style={{ color: "#2e7d32" }}>{ugx(detail.refundOnForfeit)}</strong>
               </div>
               {confirming === "forfeit" && (
                 <div>
                   Kept by the farmer:{" "}
-                  <strong style={{ color: "#c62828" }}>{ugx(detail.releasedAmount)}</strong>
+                  <strong style={{ color: "#c62828" }}>{ugx(detail.earnedAmount)}</strong>
                 </div>
               )}
               <div style={{ marginTop: "0.5rem", color: "#777" }}>

@@ -6,10 +6,12 @@ import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { daysLeft, daysText, type MarketspaceSettings } from "../../../convex/marketspaceShared";
 import { FarmCoinIcon } from "../../components/icons/Brand";
+import { ugandaDateFromInstant } from "../../../convex/exportMarketsShared";
 import type { EditableAd } from "./AdForm";
+import { QuestionsSheet } from "./Questions";
 import { FONT, formatDate, priceLine, type AdCardData } from "./shared";
 
-type MyAd = AdCardData & { photoIds: string[]; hidden: boolean; removedReason: string | null };
+type MyAd = AdCardData & { photoIds: string[]; hidden: boolean; removedReason: string | null; cardId: string | null; waitingQuestions: number };
 
 const STATUS: Record<string, { label: string; color: string; bg: string }> = {
   active: { label: "Live", color: "#1b5e20", bg: "#e8f5e9" },
@@ -40,6 +42,8 @@ export function MyAds({
   const deleteAd = useMutation(api.marketspace.deleteAd);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [questionsFor, setQuestionsFor] = useState<string | null>(null);
+  const [today] = useState(() => ugandaDateFromInstant(Date.now()));
 
   const run = async (adId: string, action: () => Promise<unknown>, done: string) => {
     setBusy(adId);
@@ -120,7 +124,7 @@ export function MyAds({
             neededBy: ad.neededBy,
             district: ad.district,
             locationDetail: ad.locationDetail,
-            contactPhone: ad.contactPhone,
+            contactPhone: ad.contactPhone ?? "", // My ads always include it
             photoIds: ad.photoIds,
             photoUrls: ad.photoUrls,
           };
@@ -167,6 +171,11 @@ export function MyAds({
                       {statusKey === "expired" ? "↺ Bring back" : `⏩ Extend ${extension}`} ({costText})
                     </button>
                   )}
+                  {ad.cardId && live && (
+                    <button type="button" onClick={() => setQuestionsFor(ad.cardId)} style={btn(ad.waitingQuestions > 0 ? "#e65100" : "#00695c")}>
+                      {ad.kind === "wanted" ? "📨 Responses" : `❓ Questions${ad.waitingQuestions > 0 ? ` (${ad.waitingQuestions} waiting)` : ""}`}
+                    </button>
+                  )}
                   {ad.status !== "removed" && (
                     <button type="button" onClick={() => onEdit(editable)} style={btn("#1565c0")}>
                       ✏️ Edit
@@ -202,6 +211,7 @@ export function MyAds({
           );
         })}
       </div>
+      {questionsFor && <QuestionsSheet cardId={questionsFor} token={sessionToken} today={today} now={now} onClose={() => setQuestionsFor(null)} />}
     </div>
   );
 }

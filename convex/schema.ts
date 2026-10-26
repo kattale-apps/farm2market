@@ -14,6 +14,8 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { evidencePhotoValidator } from "./evidencePhotos";
+import { gpsValidator, planStepValidator } from "./lotOrdersShared";
+import { answerTypeValidator, answerValidator, audienceValidator } from "./enquiriesShared";
 
 const imageMetadata = {
   storageId: v.id("_storage"),
@@ -23,6 +25,9 @@ const imageMetadata = {
   accuracy: v.optional(v.number()),
   capturedAt: v.string(), // ISO 8601 string
 };
+
+// One step of a seller's lot plan (convex/lotOrdersShared.ts PlanStep)
+const planStep = planStepValidator;
 
 // Reusable livestock section template
 const livestockSection = v.object({
@@ -163,8 +168,10 @@ export default defineSchema({
     produceType: v.string(),
     totalKilos: v.number(),
     pricePerKilo: v.number(), // In UGX
-    unitSize: v.number(), // 10kg for farmer listings, 100kg for trader listings
-    totalUnits: v.number(), // totalKilos / unitSize
+    unitSize: v.number(), // Lot size in kg for lot listings (bagKg × bagsPerLot), 10kg for older farmer listings, 100kg for trader listings
+    totalUnits: v.number(), // totalKilos / unitSize (the number of lots)
+    bagKg: v.optional(v.number()), // Lot listings: the bag size the seller packs, in kg
+    bagsPerLot: v.optional(v.number()), // Lot listings: bags in each lot
     status: v.union(
       v.literal("active"),
       v.literal("partially_locked"),
@@ -206,12 +213,91 @@ export default defineSchema({
     gardenDimensions: v.optional(v.any()), // Raw garden dimensions (for garden mode)
     totalPrice: v.optional(v.number()), // Total price for entire garden (for garden mode, in UGX)
     collectionLocationText: v.optional(v.string()), // Vendor/store collection location text for buyers
+    // Lot order terms (convex/lotOrdersShared.ts). Older listings: 100% to commit and the default steps.
+    photos: v.optional(v.array(evidencePhotoValidator)), // Listing photos, each with its own GPS and time (camera or gallery)
+    gps: v.optional(gpsValidator), // Read live on the form; best effort
+    commitPercent: v.optional(v.number()), // Share of the price the buyer commits up front (1-100)
+    milestonePlan: v.optional(v.array(planStep)), // The seller's steps; each order keeps a copy
+    stockSource: v.optional(v.union(v.literal("own_farm"), v.literal("in_app"), v.literal("off_app"))), // in_app: listed from stock bought in the app (traced)
+    withdrawnAt: v.optional(v.number()), // The seller withdrew the unsold lots; lots from failed orders do not come back on the market
+    // Vended on MarketSpace (convex/marketCards.ts). The listing itself never expires; its card does.
+    vendedAt: v.optional(v.number()),
+    vendExpiresAt: v.optional(v.number()), // Card hides at this time unless refreshed; unset = not vended
+    vendRefreshDays: v.optional(v.number()),
+    isBulk: v.optional(v.boolean()), // Shown in Local Bulk (verified sellers only)
+    bulkRange: v.optional(v.string()), // marketspaceShared BULK_RANGES key
   })
     .index("by_farmer", ["farmerId"])
     .index("by_trader", ["traderId"])
     .index("by_inventory", ["inventoryId"])
     .index("by_utid", ["utid"])
     .index("by_status", ["status"]),
+
+  /**
+   * Lot orders: one per lot bought from a farmer, vendor or processor
+   * listing. The buyer's money sits in escrow (their capital_lock entries)
+   * while the seller works through the steps; it settles to the seller only
+   * when the lot is collected. Rules: convex/lotOrdersShared.ts.
+   */
+  lotOrders: defineTable({
+    utid: v.string(), // Also written to listingUnits.lockUtid
+    listingId: v.id("listings"),
+    unitId: v.id("listingUnits"),
+    sellerId: v.id("users"),
+    buyerId: v.id("users"),
+    sellerRole: v.string(),
+    buyerRole: v.string(),
+    produceType: v.string(),
+    lotKg: v.number(),
+    postedPricePerKilo: v.number(), // The listing price when the order was made
+    settledPricePerKilo: v.number(), // The price agreed: posted, or an accepted offer
+    totalAmount: v.number(), // UGX, settledPricePerKilo × lotKg; every step amount is a % of this
+    negotiationId: v.optional(v.id("negotiations")),
+    commitPercent: v.number(),
+    paidAmount: v.number(), // UGX in escrow
+    lockUtids: v.array(v.string()), // The buyer's capital_lock entries
+    milestones: v.array(v.object({
+      ...planStep.fields,
+      doneAt: v.optional(v.number()),
+      doneBy: v.optional(v.id("users")),
+      photos: v.optional(v.array(evidencePhotoValidator)), // Proof the seller did the step (camera or gallery)
+      handedOverAt: v.optional(v.number()), // Handover step: the seller handed over; done when the buyer confirms
+    })),
+    status: v.union(
+      v.literal("in_progress"),
+      v.literal("payment_due"), // A step's share is unpaid; the buyer has until paymentDueBy
+      v.literal("awaiting_collection_confirm"), // Handed over; settles on the buyer's confirmation or after 3 days
+      v.literal("disputed"), // Waiting for an admin
+      v.literal("settled"),
+      v.literal("cancelled"),
+      v.literal("penalised") // The buyer missed a payment
+    ),
+    paymentDueAmount: v.optional(v.number()),
+    paymentDueBy: v.optional(v.number()),
+    paymentDueStep: v.optional(v.number()),
+    handedOverAt: v.optional(v.number()),
+    disputeReason: v.optional(v.string()),
+    disputeKind: v.optional(v.union(v.literal("cancel"), v.literal("problem"))),
+    disputedBy: v.optional(v.id("users")),
+    disputedAt: v.optional(v.number()),
+    toSeller: v.optional(v.number()), // Paid to the seller when the order closed
+    toBuyer: v.optional(v.number()), // Returned to the buyer
+    fineToSeller: v.optional(v.number()),
+    fineToPlatform: v.optional(v.number()),
+    settleUtid: v.optional(v.string()),
+    resolvedBy: v.optional(v.id("users")),
+    resolutionNote: v.optional(v.string()),
+    closedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_seller", ["sellerId", "createdAt"])
+    .index("by_buyer", ["buyerId", "createdAt"])
+    .index("by_unit", ["unitId"])
+    .index("by_utid", ["utid"])
+    .index("by_status", ["status", "updatedAt"])
+    .index("by_status_handover", ["status", "handedOverAt"])
+    .index("by_status_due", ["status", "paymentDueBy"]),
 
   /**
    * Listing units (10kg each)
@@ -249,6 +335,7 @@ export default defineSchema({
     deliveryComment: v.optional(v.string()), // StoreAdmin comment about delivery condition
     deliveryPhotos: v.optional(v.array(v.string())), // Array of photo storage IDs (3 photos: weighing, checking, in-storage)
     deliveryPdfId: v.optional(v.string()), // PDF document ID (stored in Convex file storage or external)
+    lotOrderId: v.optional(v.id("lotOrders")), // Locked by a lot order (escrow and milestones), not the older pay-to-lock
   })
     .index("by_listing", ["listingId"])
     .index("by_status", ["status"])
@@ -359,6 +446,11 @@ export default defineSchema({
     ),
     utid: v.string(), // References the transaction that created this inventory
     is100kgBlock: v.boolean(), // Whether this is a 100kg block created for buyers
+    // Exporters, processors and vendors all hold stock; traderId is the owner.
+    ownerRole: v.optional(v.string()), // Owner's role when not an exporter (store, vendor)
+    source: v.optional(v.union(v.literal("in_app"), v.literal("off_app"))), // in_app: bought through a lot order (traced to farms)
+    lotOrderId: v.optional(v.id("lotOrders")), // The lot order this stock came from
+    reservedListingId: v.optional(v.id("listings")), // Listed as lots: not pooled into 100kg buyer blocks
   })
     .index("by_trader", ["traderId"])
     .index("by_status", ["status"])
@@ -859,7 +951,7 @@ export default defineSchema({
     showFertilizerPlanner: v.optional(v.boolean()), // Controls whether farmers can see the Bio Farm fertilizer planner
     farmNeedsEnabled: v.optional(v.boolean()), // Whether farm needs/requests feature is enabled for this community
     crmEnabled: v.optional(v.boolean()), // Feature flag for enabling Community CRM module in this community
-    advancedMarketsEnabled: v.optional(v.boolean()), // SuperAdmin flag: show the Advanced Markets module in this community's dashboard
+    advancedMarketsEnabled: v.optional(v.boolean()), // SuperAdmin flag: show the Contract Farming Market module in this community's dashboard
     fertilizerEnabled: v.optional(v.boolean()), // SuperAdmin flag: show the Fertilizer module in this community's dashboard
     costTemplatesEnabled: v.optional(v.boolean()), // SuperAdmin flag: show the Cost Templates module in this community's dashboard
     activeFarmsEnabled: v.optional(v.boolean()), // SuperAdmin flag: show the Active Farms module (members' Farm Record Book entries) in this community's dashboard
@@ -2767,6 +2859,8 @@ export default defineSchema({
     negotiationAllowed: v.boolean(),
     buyerCanProposePrice: v.boolean(),
     advancePercentage: v.optional(v.number()), // % of total due at funding vs balance later (display/config only in MVP)
+    // When the farmer is paid: once, when all milestones are approved (default), or at each approved milestone
+    settlementRule: v.optional(v.union(v.literal("at_completion"), v.literal("per_milestone"))),
     minCommitmentQty: v.optional(v.number()),
     maxCommitmentQty: v.optional(v.number()),
     offerExpiryDays: v.optional(v.number()),
@@ -2957,6 +3051,8 @@ export default defineSchema({
     walletUtid: v.optional(v.string()), // walletLedger utid for the funding debit
     releasedAmount: v.number(), // sum of milestone-release credits to the farmer for this commitment
     releasedDemoAmount: v.optional(v.number()), // demo part of releasedAmount (see convex/walletSplitShared.ts)
+    settlementRule: v.optional(v.union(v.literal("at_completion"), v.literal("per_milestone"))), // The config's rule when funded; missing = at_completion
+    earnedAmount: v.optional(v.number()), // Earned by approved milestones (paid and pending); missing = releasedAmount
     quantityDelivered: v.number(),
     fundedAt: v.optional(v.number()),
     createdAt: v.number(),
@@ -3971,6 +4067,106 @@ export default defineSchema({
       filterFields: ["status", "groupId", "categoryId"],
     }),
 
+  /**
+   * MarketSpace cards: one small row per live post (a vended lot listing or
+   * a classified ad), so Discover reads one indexed table holding only what
+   * a card shows. Written by the mutations that change the source
+   * (convex/marketCards.ts); never edited directly.
+   */
+  marketCards: defineTable({
+    sourceKind: v.union(v.literal("listing"), v.literal("ad")),
+    listingId: v.optional(v.id("listings")),
+    adId: v.optional(v.id("marketspaceAds")),
+    view: v.union(v.literal("produce"), v.literal("lots"), v.literal("classifieds")), // produce: farmers; lots: vendors, processors, exporters
+    kind: v.union(v.literal("offer"), v.literal("wanted")),
+    isBulk: v.boolean(),
+    bulkRange: v.optional(v.string()),
+    title: v.string(),
+    groupId: v.optional(v.id("marketspaceGroups")), // Ads: hidden when the group or category is switched off
+    categoryId: v.optional(v.id("marketspaceCategories")),
+    sellerId: v.id("users"),
+    sellerRole: v.string(),
+    district: v.string(),
+    stockSource: v.optional(v.union(v.literal("own_farm"), v.literal("in_app"), v.literal("off_app"))),
+    lotKg: v.optional(v.number()),
+    bagKg: v.optional(v.number()),
+    bagsPerLot: v.optional(v.number()),
+    lotsAvailable: v.optional(v.number()),
+    qtyKg: v.optional(v.number()),
+    quantityText: v.optional(v.string()), // Ads: free-text quantity
+    pricePerKilo: v.optional(v.number()),
+    priceUGX: v.optional(v.number()), // Ads
+    priceUnit: v.optional(v.string()),
+    commitPercent: v.optional(v.number()),
+    qualityRating: v.optional(v.string()),
+    thumbStorageId: v.optional(v.id("_storage")),
+    status: v.union(v.literal("active"), v.literal("closed")), // Expiry is by time (expiresAt), not status
+    expiresAt: v.number(),
+    createdAt: v.number(), // When it was (last) put up
+    updatedAt: v.number(),
+  })
+    .index("by_status_created", ["status", "createdAt"])
+    .index("by_status_view_created", ["status", "view", "createdAt"])
+    .index("by_status_bulk_created", ["status", "isBulk", "createdAt"])
+    .index("by_listing", ["listingId"])
+    .index("by_ad", ["adId"])
+    .index("by_seller", ["sellerId", "createdAt"])
+    .searchIndex("search_title", {
+      searchField: "title",
+      filterFields: ["status", "view", "isBulk"],
+    }),
+
+  // MarketSpace questions (convex/enquiriesShared.ts): the pool the super admin keeps
+  enquiryQuestions: defineTable({
+    text: v.string(),
+    answerType: answerTypeValidator,
+    unit: v.optional(v.string()), // Number answers: kg, %, UGX, lots
+    choices: v.optional(v.array(v.string())), // Choice answers
+    appliesTo: v.array(audienceValidator),
+    active: v.boolean(),
+    sortOrder: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_active_and_sortOrder", ["active", "sortOrder"]),
+
+  // One question on one post: asked by buyers (or answered before anyone asked),
+  // answered by the poster, shown to every viewer allowed to see the post
+  enquiries: defineTable({
+    cardId: v.id("marketCards"),
+    questionId: v.id("enquiryQuestions"),
+    sellerId: v.id("users"),
+    askCount: v.number(), // 0 when the poster answered it before anyone asked
+    lastAskedAt: v.optional(v.number()),
+    answer: v.optional(answerValidator),
+    answeredAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_card_and_question", ["cardId", "questionId"])
+    .index("by_card_and_answeredAt", ["cardId", "answeredAt"]),
+
+  // Who asked which question, so each hears the answer and asks it only once
+  enquiryAsks: defineTable({
+    enquiryId: v.id("enquiries"),
+    cardId: v.id("marketCards"),
+    askerId: v.id("users"),
+    createdAt: v.number(),
+  })
+    .index("by_enquiry", ["enquiryId"])
+    .index("by_asker_and_card", ["askerId", "cardId"])
+    .index("by_card", ["cardId"]),
+
+  // A supplier's typed answers to a wanted ad; only the poster and the supplier see it
+  wantedResponses: defineTable({
+    cardId: v.id("marketCards"),
+    posterId: v.id("users"),
+    responderId: v.id("users"),
+    answers: v.array(v.object({ questionId: v.id("enquiryQuestions"), answer: answerValidator })),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_card_and_updatedAt", ["cardId", "updatedAt"])
+    .index("by_card_and_responder", ["cardId", "responderId"]),
+
   marketspaceReports: defineTable({
     adId: v.id("marketspaceAds"),
     reason: v.union(
@@ -4003,6 +4199,8 @@ export default defineSchema({
     paidAdCostFarmcoin: v.optional(v.number()),
     maxPhotosPerAd: v.optional(v.number()),
     maxAdsPerDay: v.optional(v.number()),
+    maxVendDays: v.optional(v.number()), // Longest a vended listing stays up before a refresh
+    bulkVendCostFarmcoin: v.optional(v.number()), // FarmCoin to switch on "Sell in bulk"
     updatedBy: v.id("users"),
     updatedAt: v.number(),
   }),

@@ -37,6 +37,7 @@ export const checkExpiredUTIDs = internalMutation({
       .collect();
 
     const expiredUnits = lockedUnits.filter((unit) => {
+      if (unit.lotOrderId) return false; // Lot orders have their own payment deadlines (convex/lotOrders.ts)
       if (!unit.deliveryDeadline) return false;
       if (unit.deliveryStatus === "delivered") return false; // Already delivered
       if (unit.archived) return false; // Already archived

@@ -242,7 +242,7 @@ export function Notice({ tone, children }: { tone: "error" | "success" | "info";
 
 /**
  * Tells buyers the two markets apart: Export Markets (bean to cup) versus
- * Advanced Markets (seedling to harvest).
+ * Contract Farming Market (seedling to harvest).
  */
 export function MarketsHelper({ highlight }: { highlight?: "export" | "advanced" }) {
   const items = [

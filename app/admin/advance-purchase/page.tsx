@@ -30,7 +30,7 @@ export default function AdvancePurchaseAdminPage() {
   const [selectedCommunityId, setSelectedCommunityId] = useState<Id<"communities"> | null>(null);
 
   const allCommunities = useQuery(api.introspection.getCommunitiesForAdmin, userId ? { adminId: userId } : "skip");
-  // Advanced Markets is an optional module: only communities a super admin has
+  // Contract Farming Market is an optional module: only communities a super admin has
   // switched it on for can be configured here.
   const communities = allCommunities?.filter((c: any) => c?.advancedMarketsEnabled === true);
 
@@ -44,10 +44,10 @@ export default function AdvancePurchaseAdminPage() {
       <div style={{ marginBottom: "1rem" }}>
         <Link href="/" style={{ color: "#0d47a1", fontWeight: 700, fontSize: "0.9rem", textDecoration: "none", textShadow: ON_PHOTO_SHADOW }}>← Back to Dashboard</Link>
       </div>
-      <h1 style={{ fontSize: "1.4rem", fontWeight: 700, marginBottom: "0.25rem", color: "#1a1a1a", textShadow: ON_PHOTO_SHADOW }}>Advanced Markets — Community Admin</h1>
+      <h1 style={{ fontSize: "1.4rem", fontWeight: 700, marginBottom: "0.25rem", color: "#1a1a1a", textShadow: ON_PHOTO_SHADOW }}>Contract Farming Market — Community Admin</h1>
       <p style={{ color: "#333", fontWeight: 600, fontSize: "0.88rem", marginBottom: "1rem", textShadow: ON_PHOTO_SHADOW }}>
         Configure product fields, milestones and payment release rules, then review submitted milestone proof pictures.
-        This is also available as an &quot;Advanced Markets&quot; tab inside each community&apos;s dashboard.
+        This is also available as a &quot;Contract Farming Market&quot; tab inside each community&apos;s dashboard.
       </p>
 
       <select
@@ -63,7 +63,7 @@ export default function AdvancePurchaseAdminPage() {
 
       {communities && communities.length === 0 && (
         <p style={{ color: "#333", fontWeight: 600, fontSize: "0.88rem", textShadow: ON_PHOTO_SHADOW }}>
-          No community has the Advanced Markets module enabled yet. A super admin can enable it per
+          No community has the Contract Farming Market module enabled yet. A super admin can enable it per
           community from the Community Dashboard.
         </p>
       )}

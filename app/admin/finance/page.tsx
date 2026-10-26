@@ -13,6 +13,7 @@ import { fromStoredUgandaTime, inUgandaTime } from "../../utils/timeUtils";
 import { ExportFeesPanel } from "../../components/exportMarkets/ExportFeesPanel";
 import { FarmCoinIcon } from "../../components/icons/Brand";
 import { ExchangeAdminPanel } from "../../wallet/ExchangeAdminPanel";
+import { AdminLotOrders } from "../../components/lots/AdminLotOrders";
 
 export default function FinanceDashboardPage() {
   const { user, status: authStatus } = useStoredUser();
@@ -24,6 +25,7 @@ export default function FinanceDashboardPage() {
   const [grantAmount, setGrantAmount] = useState<string>("");
   const [grantReason, setGrantReason] = useState("");
   const [verificationFilter, setVerificationFilter] = useState<"all" | "verified" | "unverified">("all");
+  const [verificationRole, setVerificationRole] = useState<string>("all");
   const [verificationTraderId, setVerificationTraderId] = useState<string>("");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [selectedSentifyBatches, setSelectedSentifyBatches] = useState<Set<string>>(new Set());
@@ -164,6 +166,7 @@ export default function FinanceDashboardPage() {
   const verificationOptions = useMemo(() => {
     const traders = traderVerificationList ? [...traderVerificationList] : [];
     const filtered = traders.filter((trader: any) => {
+      if (verificationRole !== "all" && trader.role !== verificationRole) return false;
       if (verificationFilter === "verified") {
         return trader.verificationStatus === "verified";
       }
@@ -173,7 +176,7 @@ export default function FinanceDashboardPage() {
       return true;
     });
     return filtered.sort((a, b) => (a.alias || "").localeCompare(b.alias || ""));
-  }, [traderVerificationList, verificationFilter]);
+  }, [traderVerificationList, verificationFilter, verificationRole]);
 
   const handleToggleSentifyBatch = (batchUtid: string) => {
     const updated = new Set(selectedSentifyBatches);
@@ -473,8 +476,24 @@ export default function FinanceDashboardPage() {
 
         {isSuperAdmin && (
           <div style={{ marginTop: "1.5rem", display: "grid", gap: "0.75rem", maxWidth: 640 }}>
-            <div style={{ fontWeight: 600 }}>Exporter Verification Status</div>
+            <div style={{ fontWeight: 600 }}>Verification: who can buy lots, and sell in bulk on MarketSpace</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "0.75rem" }}>
+              <select
+                value={verificationRole}
+                onChange={(e) => {
+                  setVerificationRole(e.target.value);
+                  setVerificationTraderId("");
+                }}
+                style={{ padding: "0.6rem", borderRadius: 8, border: "1px solid #ddd" }}
+                aria-label="Category"
+              >
+                <option value="all">All categories</option>
+                <option value="trader">Exporters</option>
+                <option value="store">Processors</option>
+                <option value="vendor">Vendors</option>
+                <option value="buyer">Buyers</option>
+                <option value="farmer">Farmers</option>
+              </select>
               <select
                 value={verificationFilter}
                 onChange={(e) => {
@@ -483,7 +502,7 @@ export default function FinanceDashboardPage() {
                 }}
                 style={{ padding: "0.6rem", borderRadius: 8, border: "1px solid #ddd" }}
               >
-                <option value="all">All traders</option>
+                <option value="all">All accounts</option>
                 <option value="verified">Verified only</option>
                 <option value="unverified">Not verified only</option>
               </select>
@@ -492,10 +511,10 @@ export default function FinanceDashboardPage() {
                 onChange={(e) => setVerificationTraderId(e.target.value)}
                 style={{ padding: "0.6rem", borderRadius: 8, border: "1px solid #ddd" }}
               >
-                <option value="">Select trader</option>
+                <option value="">Select account</option>
                 {verificationOptions.map((trader: any) => (
                   <option key={trader._id} value={trader._id}>
-                    {trader.alias || "Exporter"} • {trader.verificationStatus}
+                    {trader.alias || "Account"} • {trader.roleLabel ?? "Exporter"} • {trader.verificationStatus}
                   </option>
                 ))}
               </select>
@@ -1249,6 +1268,13 @@ export default function FinanceDashboardPage() {
           </div>
           </>
         )
+      )}
+
+      {/* ─── Lot orders: decisions and fines ─── */}
+      {(isSuperAdmin || isFinanceAdmin) && userId && (
+        <div style={{ background: "#fff", borderRadius: 14, padding: "1.25rem", boxShadow: "0 2px 8px rgba(0,0,0,0.08)", marginTop: "1.5rem", border: "1px solid #e0e0e0" }}>
+          <AdminLotOrders adminId={userId} />
+        </div>
       )}
 
       {/* ─── Farmer Form Rewards Section ─── */}

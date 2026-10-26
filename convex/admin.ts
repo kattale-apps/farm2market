@@ -13,7 +13,7 @@ import { internal } from "./_generated/api";
 import { generateUTID, getBuyerServiceFeePercentage, getTraderCommissionPercentage, getUgandaTime } from "./utils";
 import { MAX_TRADER_EXPOSURE_UGX, DEFAULT_BUYER_SERVICE_FEE_PERCENTAGE } from "./constants";
 import { Id } from "./_generated/dataModel";
-import { hasDemoWallet, lockDemoShare, postWallet, realMoneyAtRisk } from "./walletSplit";
+import { findLock, hasDemoWallet, lockDemoShare, postWallet, realMoneyAtRisk } from "./walletSplit";
 
 /**
  * Verify user is admin
@@ -366,11 +366,13 @@ export const depositDemoFunds = mutation({
  * Storage and Transport Officers (admin) and by the processor at the facility.
  */
 export async function confirmDeliveryCore(ctx: MutationCtx, input: { lockUtid: string; deliveryPhotos?: string[] }) {
-    // Find all units locked with this UTID
-    const allUnits = await ctx.db.query("listingUnits").collect();
-    const lockedUnits = allUnits.filter(
-      (u) => u.status === "locked" && u.lockUtid === input.lockUtid
-    );
+    // Find all units locked with this UTID. Lots bought through a lot order
+    // are delivered through their own steps (convex/lotOrders.ts).
+    const unitsForUtid = await ctx.db
+      .query("listingUnits")
+      .withIndex("by_lock_utid", (q) => q.eq("lockUtid", input.lockUtid))
+      .collect();
+    const lockedUnits = unitsForUtid.filter((u) => u.status === "locked" && !u.lotOrderId);
 
     if (lockedUnits.length === 0) {
       throw new Error(`No locked units found with UTID: ${input.lockUtid}`);
@@ -475,9 +477,9 @@ export async function confirmDeliveryCore(ctx: MutationCtx, input: { lockUtid: s
           is100kgBlock: false, // Will be set to true when 100kg block is created
         });
 
-        // Update units to delivered status
+        // Update units to delivered status (the unit itself too, so ledgers count it)
         for (const unit of group.units) {
-          const patch: any = { deliveryStatus: "delivered" };
+          const patch: any = { status: "delivered", deliveryStatus: "delivered" };
           if (deliveryPhotos && deliveryPhotos.length > 0 && (!unit.deliveryPhotos || unit.deliveryPhotos.length === 0)) {
             patch.deliveryPhotos = deliveryPhotos;
           }
@@ -575,6 +577,9 @@ export const reverseDeliveryFailure = mutation({
     if (!unit.lockUtid) {
       throw new Error("Unit has no lock UTID");
     }
+    if (unit.lotOrderId) {
+      throw new Error("This lot was bought with payment steps. Settle it from the disputed lot orders list.");
+    }
 
     const deliveryStatus = unit.deliveryStatus;
     if (deliveryStatus !== "late" && deliveryStatus !== "cancelled") {
@@ -591,9 +596,10 @@ export const reverseDeliveryFailure = mutation({
       throw new Error("Unit has no lockedBy trader");
     }
 
-    // Calculate refund amount (use listing's unitSize)
-    const unitSize = listing.unitSize || 10;
-    const unitPrice = listing.pricePerKilo * unitSize;
+    // Refund exactly what was locked (the agreed price may differ from the
+    // listing price). Escrow never touched the seller's wallet.
+    const lock = await findLock(ctx, unit.lockUtid);
+    const unitPrice = lock?.amount ?? listing.pricePerKilo * (listing.unitSize || 10);
 
     // Generate UTID for reversal
     const utid = await logAdminAction(

@@ -5,7 +5,7 @@ import { useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { REPORT_REASONS } from "../../../convex/marketspaceShared";
-import { FONT, SAFETY_NOTICE, whatsappLink, type AdCardData } from "./shared";
+import { FONT, SAFETY_NOTICE } from "./shared";
 
 /** A bottom sheet on phones, a centred dialog on wider screens. */
 export function Sheet({ onClose, title, children }: { onClose: () => void; title: string; children: React.ReactNode }) {
@@ -64,28 +64,7 @@ const actionStyle: React.CSSProperties = {
   fontFamily: FONT,
 };
 
-/** Call or WhatsApp the advertiser, with the safety notice above. */
-export function ContactSheet({ ad, onClose }: { ad: AdCardData; onClose: () => void }) {
-  return (
-    <Sheet onClose={onClose} title={ad.kind === "wanted" ? "Offer to supply" : "Contact advertiser"}>
-      <p style={{ margin: "0 0 0.75rem", color: "#444", fontSize: "0.9rem" }}>
-        {ad.kind === "wanted" ? "Looking for: " : ""}
-        <strong>{ad.title}</strong> · 📍 {ad.district}
-      </p>
-      <SafetyNotice />
-      <div style={{ display: "grid", gap: "0.6rem", marginTop: "0.9rem" }}>
-        <a href={`tel:${ad.contactPhone}`} style={{ ...actionStyle, background: "#2e7d32", color: "#fff" }}>
-          📞 Call {ad.contactPhone}
-        </a>
-        <a href={whatsappLink(ad)} target="_blank" rel="noopener noreferrer" style={{ ...actionStyle, background: "#25d366", color: "#fff" }}>
-          💬 WhatsApp
-        </a>
-      </div>
-    </Sheet>
-  );
-}
-
-export function ReportSheet({ ad, sessionToken, onClose }: { ad: AdCardData; sessionToken: string | null; onClose: () => void }) {
+export function ReportSheet({ ad, sessionToken, onClose }: { ad: { _id: string; title: string }; sessionToken: string | null; onClose: () => void }) {
   const reportAd = useMutation(api.marketspace.reportAd);
   const [reason, setReason] = useState<(typeof REPORT_REASONS)[number]["value"]>("scam");
   const [details, setDetails] = useState("");

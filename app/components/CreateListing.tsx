@@ -8,23 +8,54 @@ import { useRouter } from "next/navigation";
 import { FarmCoinReward, FarmCoinVideoPreloader } from "./FarmCoinAnimation";
 import { FarmCoinIcon } from "./icons/Brand";
 import { ugandaDateFromInstant } from "../../convex/exportMarketsShared";
+import { LOT_BAG_SIZES_KG } from "../../convex/constants";
+import { defaultPlan, type PlanStep } from "../../convex/lotOrdersShared";
+import { PhotoSetCapture, type CapturedPhoto } from "./exportMarkets/PhotoSetCapture";
+import { uploadEvidencePhotos } from "./exportMarkets/PhotoSetCapture";
+import { getCurrentLocation } from "../utils/gps";
+import { LotTermsFields, planProblem } from "./lots/LotTermsFields";
 
 interface CreateListingProps {
   userId: Id<"users">;
-  userRole?: "farmer" | "vendor" | "store";
+  userRole?: "farmer" | "vendor" | "store" | "trader";
 }
+
+// A blank listing form. Lots start at one lot of one bag; the seller picks the bag size.
+const EMPTY_FORM = {
+  produceType: "",
+  pricePerKilo: "",
+  qualityRating: "",
+  qualityComment: "",
+  deliveryProcessorId: "" as string | "",
+  // Lot fields (by weight)
+  bagKg: "",
+  bagsPerLot: "1",
+  lotCount: "1",
+  // Garden mode fields
+  gardenSize: "",
+  gardenLength: "",
+  gardenWidth: "",
+  totalPrice: "",
+  // Packaging mode fields
+  packagingType: "",
+  availableUnits: "",
+  pricePerUnit: "",
+};
 
 export function CreateListing({ userId, userRole }: CreateListingProps) {
   const router = useRouter();
   const effectiveRole = userRole || "farmer";
   const isVendorOrStore = effectiveRole === "vendor" || effectiveRole === "store";
+  // Exporters list stock they hold as lots, like vendors and processors.
+  const isExporter = effectiveRole === "trader";
+  const sellsStock = isVendorOrStore || isExporter;
   const createListing = useMutation(api.listings.createListing);
   const submitVendorPrice = useMutation((api as any).marketPrices.submitVendorPrice);
   const qualityOptions = useQuery(api.listings.getActiveQualityOptions, {});
   const produceOptions = useQuery(api.listings.getActiveProduceOptions, {});
   const [today] = useState(() => ugandaDateFromInstant(Date.now()));
   // Farmers may name a verified processor as the delivery point (optional).
-  const deliveryProcessors = useQuery(api.processors.listDeliveryProcessors, !isVendorOrStore ? { userId, today } : "skip");
+  const deliveryProcessors = useQuery(api.processors.listDeliveryProcessors, effectiveRole === "farmer" ? { userId, today } : "skip");
   const collectionPoint = useQuery(api.listings.getCollectionPointForUser, isVendorOrStore ? { userId } : "skip");
   const onboardingStatus = useQuery(api.farmerOnboarding.checkOnboardingStatus, { farmerId: userId });  // supports farmer/vendor/store
   const recentCommodities = useQuery(
@@ -67,23 +98,59 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
     "🥛","🧈","☕","🍵","🍯","🫒","🌰","🥜","🌻","🌿",
   ];
 
-  const [formData, setFormData] = useState({
-    produceType: "",
-    totalKilos: "",
-    pricePerKilo: "",
-    qualityRating: "",
-    qualityComment: "",
-    deliveryProcessorId: "" as string | "",
-    // Garden mode fields
-    gardenSize: "",
-    gardenLength: "",
-    gardenWidth: "",
-    totalPrice: "",
-    // Packaging mode fields
-    packagingType: "",
-    availableUnits: "",
-    pricePerUnit: "",
-  });
+  const [formData, setFormData] = useState(EMPTY_FORM);
+
+  // Lots (by weight): one lot is bagsPerLot bags of bagKg; buyers buy whole lots.
+  const lotPlan = useMemo(() => {
+    const bagKg = parseFloat(formData.bagKg);
+    const bagsPerLot = parseInt(formData.bagsPerLot, 10);
+    const lotCount = parseInt(formData.lotCount, 10);
+    if (!(bagKg > 0) || !(bagsPerLot >= 1) || !(lotCount >= 1)) return null;
+    const lotKg = Math.round(bagKg * bagsPerLot * 100) / 100;
+    return { bagKg, bagsPerLot, lotCount, lotKg, totalKilos: Math.round(lotKg * lotCount * 100) / 100 };
+  }, [formData.bagKg, formData.bagsPerLot, formData.lotCount]);
+  const [customBagSize, setCustomBagSize] = useState(false);
+
+  // Photos (camera or gallery), the seller's live position, and the lot terms.
+  const generateUploadUrl = useMutation(api.files.generateUploadUrl);
+  const [photos, setPhotos] = useState<CapturedPhoto[]>([]);
+  const [gps, setGps] = useState<{ lat: number; lng: number; accuracy?: number; capturedAt: string } | null>(null);
+  const [gpsState, setGpsState] = useState<"reading" | "ok" | "none">("reading");
+  const [commitPercent, setCommitPercent] = useState(30);
+  const [steps, setSteps] = useState<PlanStep[]>(() => defaultPlan(effectiveRole, 30));
+  // Vendors, processors and exporters: stock bought in the app (traced) or not.
+  const myStock = useQuery(api.lotOrders.myStock, sellsStock ? { userId } : "skip");
+  const [stockChoice, setStockChoice] = useState<"stock" | "off_app">("off_app");
+  const [stockId, setStockId] = useState("");
+  // Listable stock rows, kept apart by where they came from (100 kg buyer blocks are on the buyer catalogue)
+  const freeStock = (myStock ?? []).filter((s) => !s.listed && !s.isBuyerBlock);
+  const inAppStock = freeStock.filter((s) => s.source === "in_app");
+  const offAppStock = freeStock.filter((s) => s.source === "off_app");
+
+  const readGps = () => {
+    setGpsState("reading");
+    getCurrentLocation()
+      .then((pos) => {
+        if (!pos) return setGpsState("none");
+        setGps({ lat: pos.latitude, lng: pos.longitude, accuracy: pos.accuracy, capturedAt: new Date().toISOString() });
+        setGpsState("ok");
+      })
+      .catch(() => setGpsState("none"));
+  };
+  // Read the position once each time the form opens.
+  useEffect(() => {
+    if (showForm) readGps();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showForm]);
+
+  const resetLotFields = () => {
+    setCustomBagSize(false);
+    setPhotos([]);
+    setCommitPercent(30);
+    setSteps(defaultPlan(effectiveRole, 30));
+    setStockChoice("off_app");
+    setStockId("");
+  };
 
   // Load custom products and packaging from localStorage
   useEffect(() => {
@@ -220,6 +287,28 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
         setLoading(false);
         return;
       }
+      if (photos.length === 0) {
+        setMessage({ type: "error", text: "Add at least one photo of what you are selling (camera or gallery)" });
+        setLoading(false);
+        return;
+      }
+      if (sellsStock && listingMode === "unit" && stockChoice === "stock" && !stockId) {
+        setMessage({ type: "error", text: "Choose the stock you bought in the app, or choose \"Not bought in the app\"" });
+        setLoading(false);
+        return;
+      }
+      const termsProblem = listingMode === "packaging" ? null : planProblem(steps, commitPercent);
+      if (termsProblem) {
+        setMessage({ type: "error", text: `Payment steps: ${termsProblem}` });
+        setLoading(false);
+        return;
+      }
+      if (stockChoice === "stock" && !stockId) {
+        setMessage({ type: "error", text: "Choose the stock you are selling, or pick \"Not bought in the app\"" });
+        setLoading(false);
+        return;
+      }
+      const uploadedPhotos = await uploadEvidencePhotos(() => generateUploadUrl(), photos);
 
       // Packaging mode validation
       if (listingMode === "packaging") {
@@ -261,6 +350,8 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
           qualityRating: formData.qualityRating || undefined,
           qualityComment: formData.qualityComment.trim() || undefined,
           deliveryProcessorId: formData.deliveryProcessorId ? (formData.deliveryProcessorId as Id<"users">) : undefined,
+          photos: uploadedPhotos,
+          gps: gps ?? undefined,
         });
 
         const displayPkg = isCustomPkg ? customPackagingInput.trim() : formData.packagingType;
@@ -270,11 +361,8 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
         });
 
         // Reset form
-        setFormData({
-          produceType: "", totalKilos: "", pricePerKilo: "", qualityRating: "", qualityComment: "",
-          deliveryProcessorId: "", gardenSize: "", gardenLength: "", gardenWidth: "", totalPrice: "",
-          packagingType: "", availableUnits: "", pricePerUnit: "",
-        });
+        setFormData(EMPTY_FORM);
+        resetLotFields();
         setCustomPackagingInput("");
         setListingMode("unit");
         setTimeout(() => { setShowForm(false); setMessage(null); }, 5000);
@@ -286,12 +374,12 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
       if (listingMode === "garden") {
         totalKilos = 1;
       } else {
-        totalKilos = parseFloat(formData.totalKilos);
-        if (isNaN(totalKilos) || totalKilos <= 0) {
-          setMessage({ type: "error", text: "Total kilos must be a positive number" });
+        if (!lotPlan) {
+          setMessage({ type: "error", text: "Choose a bag size, the bags in each lot and the number of lots" });
           setLoading(false);
           return;
         }
+        totalKilos = lotPlan.totalKilos;
       }
 
       let pricePerKilo: number;
@@ -341,10 +429,11 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
         }
       }
 
+      const lots = listingMode === "unit" ? lotPlan : null;
       const result = await createListing({
         farmerId: userId,
         produceType: formData.produceType.trim(),
-        totalKilos,
+        totalKilos: lots ? undefined : totalKilos,
         pricePerKilo,
         qualityRating: formData.qualityRating || undefined,
         qualityComment: formData.qualityComment.trim() || undefined,
@@ -353,29 +442,27 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
         gardenSize,
         gardenDimensions,
         totalPrice,
+        bagKg: lots?.bagKg,
+        bagsPerLot: lots?.bagsPerLot,
+        lotCount: lots?.lotCount,
+        photos: uploadedPhotos,
+        gps: gps ?? undefined,
+        commitPercent,
+        milestonePlan: steps,
+        inventoryId: sellsStock && listingMode === "unit" && stockId ? (stockId as Id<"traderInventory">) : undefined,
+        stockSource: sellsStock && listingMode === "unit" ? (stockChoice === "stock" ? "in_app" : "off_app") : undefined,
       });
 
       setMessage({
         type: "success",
-        text: `Listing created successfully! UTID: ${result.utid}. ${result.totalUnits} unit(s) created.`,
+        text: lots
+          ? `Listing created! UTID: ${result.utid}. ${result.totalUnits} lot(s) of ${lots.lotKg} kg are now for sale.`
+          : `Listing created successfully! UTID: ${result.utid}. ${result.totalUnits} unit(s) created.`,
       });
 
       // Reset form
-      setFormData({
-        produceType: "",
-        totalKilos: "",
-        pricePerKilo: "",
-        qualityRating: "",
-        qualityComment: "",
-        deliveryProcessorId: "",
-        gardenSize: "",
-        gardenLength: "",
-        gardenWidth: "",
-        totalPrice: "",
-        packagingType: "",
-        availableUnits: "",
-        pricePerUnit: "",
-      });
+      setFormData(EMPTY_FORM);
+      resetLotFields();
       setListingMode("unit");
       setGardenSizeMode("acres");
 
@@ -639,21 +726,8 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
           onClick={() => {
             setShowForm(false);
             setMessage(null);
-            setFormData({
-              produceType: "",
-              totalKilos: "",
-              pricePerKilo: "",
-              qualityRating: "",
-              qualityComment: "",
-              deliveryProcessorId: "",
-              gardenSize: "",
-              gardenLength: "",
-              gardenWidth: "",
-              totalPrice: "",
-              packagingType: "",
-              availableUnits: "",
-              pricePerUnit: "",
-            });
+            setFormData(EMPTY_FORM);
+            resetLotFields();
             setListingMode("unit");
             setGardenSizeMode("acres");
           }}
@@ -717,8 +791,8 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
       <form onSubmit={handleSubmit}>
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
           
-          {/* Listing Mode Selection */}
-          {isVendorOrStore ? (
+          {/* Listing Mode Selection (exporters sell by weight only) */}
+          {isExporter ? null : isVendorOrStore ? (
           <div>
             <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
               Listing Mode *
@@ -732,7 +806,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
                   checked={listingMode === "unit"}
                   onChange={() => setListingMode("unit")}
                 />
-                <span>By Weight (kilos)</span>
+                <span>By weight (bags and lots)</span>
               </label>
               <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
                 <input
@@ -760,7 +834,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
                   checked={listingMode === "unit"}
                   onChange={(e) => setListingMode(e.target.value as "unit" | "garden")}
                 />
-                <span>Unit Sale (10kg units)</span>
+                <span>Sell in bags and lots</span>
               </label>
               <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
                 <input
@@ -777,7 +851,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
           )}
 
           {/* STEP 1: Collection point (vendors) or delivery point (farmers, optional) */}
-          {isVendorOrStore ? (
+          {isExporter ? null : isVendorOrStore ? (
             <div>
               <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
                 Collection Location
@@ -1103,28 +1177,89 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
           </div>
 
           {listingMode !== "garden" && listingMode !== "packaging" && (
-            <div>
-              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
-                Total Kilos *
-              </label>
-              <input
-                type="number"
-                value={formData.totalKilos}
-                onChange={(e) => setFormData({ ...formData, totalKilos: e.target.value })}
-                placeholder="e.g., 50, 100, 150"
-                min="0.1"
-                step="0.1"
-                required
-                style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  border: "1px solid #ddd",
-                  borderRadius: "6px",
-                  fontSize: "1rem",
-                }}
-              />
-              <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.85rem", color: "#666" }}>
-                You can list any amount of kilos. Units will be created automatically (10kg each, or less if total is under 10kg).
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+              <div>
+                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                  Bag size *
+                </label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+                  {LOT_BAG_SIZES_KG.map((kg) => {
+                    const chosen = !customBagSize && formData.bagKg === String(kg);
+                    return (
+                      <button
+                        key={kg}
+                        type="button"
+                        onClick={() => { setCustomBagSize(false); setFormData({ ...formData, bagKg: String(kg) }); }}
+                        style={{ minHeight: 44, padding: "0 0.9rem", borderRadius: 999, border: `2px solid ${chosen ? "#2e7d32" : "#ddd"}`, background: chosen ? "#e8f5e9" : "#fff", color: "#222", fontWeight: 700, cursor: "pointer" }}
+                      >
+                        {kg} kg
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => { setCustomBagSize(true); setFormData({ ...formData, bagKg: "" }); }}
+                    style={{ minHeight: 44, padding: "0 0.9rem", borderRadius: 999, border: `2px solid ${customBagSize ? "#2e7d32" : "#ddd"}`, background: customBagSize ? "#e8f5e9" : "#fff", color: "#222", fontWeight: 700, cursor: "pointer" }}
+                  >
+                    Other
+                  </button>
+                </div>
+                {customBagSize && (
+                  <input
+                    type="number"
+                    value={formData.bagKg}
+                    onChange={(e) => setFormData({ ...formData, bagKg: e.target.value })}
+                    placeholder="Bag size in kg, e.g. 70"
+                    min="0.1"
+                    step="0.1"
+                    required
+                    style={{ width: "100%", marginTop: "0.5rem", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "6px", fontSize: "1rem" }}
+                  />
+                )}
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "0.75rem" }}>
+                <div>
+                  <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                    Bags in each lot *
+                  </label>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={formData.bagsPerLot}
+                    onChange={(e) => setFormData({ ...formData, bagsPerLot: e.target.value })}
+                    min="1"
+                    step="1"
+                    required
+                    style={{ width: "100%", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "6px", fontSize: "1rem" }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                    Number of lots *
+                  </label>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={formData.lotCount}
+                    onChange={(e) => setFormData({ ...formData, lotCount: e.target.value })}
+                    min="1"
+                    step="1"
+                    required
+                    style={{ width: "100%", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "6px", fontSize: "1rem" }}
+                  />
+                </div>
+              </div>
+
+              {lotPlan && (
+                <div style={{ padding: "0.75rem 0.9rem", borderRadius: 8, background: "#e8f5e9", border: "1px solid #a5d6a7", color: "#1b5e20", fontSize: "0.95rem", lineHeight: 1.5 }}>
+                  You are selling <strong>{lotPlan.lotCount} lot{lotPlan.lotCount === 1 ? "" : "s"}</strong>.
+                  {" "}Each lot is {lotPlan.bagsPerLot} bag{lotPlan.bagsPerLot === 1 ? "" : "s"} of {lotPlan.bagKg} kg = <strong>{lotPlan.lotKg.toLocaleString()} kg</strong>.
+                  {" "}Total: <strong>{lotPlan.totalKilos.toLocaleString()} kg</strong>.
+                </div>
+              )}
+              <p style={{ margin: 0, fontSize: "0.85rem", color: "#666" }}>
+                Buyers buy whole lots. Make one big lot for one buyer, or small lots so many buyers can buy.
               </p>
             </div>
           )}
@@ -1357,14 +1492,92 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
                   fontSize: "1rem",
                 }}
               />
-              {formData.totalKilos && formData.pricePerKilo && (
+              {lotPlan && parseFloat(formData.pricePerKilo) > 0 && (
                 <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.85rem", color: "#666" }}>
-                  Total Value: {formatUGX(parseFloat(formData.totalKilos || "0") * parseFloat(formData.pricePerKilo || "0"))}
+                  One lot: {formatUGX(lotPlan.lotKg * parseFloat(formData.pricePerKilo))} · All lots: {formatUGX(lotPlan.totalKilos * parseFloat(formData.pricePerKilo))}
                 </p>
               )}
             </div>
           )}
 
+
+          {/* Photos: camera or gallery, each with its GPS and time */}
+          <div>
+            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+              Photos *
+            </label>
+            <PhotoSetCapture photos={photos} onChange={setPhotos} max={6} />
+            <p style={{ margin: "0.4rem 0 0", fontSize: "0.85rem", color: gpsState === "ok" ? "#2e7d32" : "#666" }}>
+              {gpsState === "reading"
+                ? "📍 Reading your location..."
+                : gpsState === "ok"
+                  ? "📍 Your location is recorded with this listing."
+                  : <>📍 Could not read your location. That is OK. <button type="button" onClick={readGps} style={{ border: "none", background: "none", color: "#1565c0", fontWeight: 700, cursor: "pointer", padding: 0 }}>Try again</button></>}
+            </p>
+          </div>
+
+          {/* Vendors, processors and exporters: is this stock bought in the app (traced to farms)? */}
+          {sellsStock && listingMode === "unit" && (
+            <div>
+              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                Where is this stock from? *
+              </label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+                {([["stock", "From my stock (bought in the app)"], ["off_app", "Not bought in the app"]] as const).map(([value, text]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => { setStockChoice(value); setStockId(""); }}
+                    style={{ minHeight: 44, padding: "0 0.9rem", borderRadius: 999, border: `2px solid ${stockChoice === value ? "#2e7d32" : "#ddd"}`, background: stockChoice === value ? "#e8f5e9" : "#fff", color: "#222", fontWeight: 700, cursor: "pointer" }}
+                  >
+                    {text}
+                  </button>
+                ))}
+              </div>
+              {stockChoice === "stock" && inAppStock.length === 0 && (
+                <p style={{ margin: "0.5rem 0 0", fontSize: "0.85rem", color: "#666" }}>You have no unlisted stock bought in the app yet.</p>
+              )}
+              {/* Each choice lists only its own stock, so the two never mix (the server checks too) */}
+              {(stockChoice === "stock" ? inAppStock : offAppStock).length > 0 && (
+                <select
+                  value={stockId}
+                  onChange={(e) => {
+                    setStockId(e.target.value);
+                    const chosen = myStock?.find((s) => s.inventoryId === e.target.value);
+                    if (chosen) setFormData({ ...formData, produceType: chosen.produceType });
+                  }}
+                  style={{ width: "100%", marginTop: "0.5rem", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "6px", fontSize: "1rem", background: "#fff" }}
+                >
+                  <option value="">{stockChoice === "stock" ? "-- Choose your stock --" : "-- New stock (not in my records) --"}</option>
+                  {(stockChoice === "stock" ? inAppStock : offAppStock).map((s) => (
+                    <option key={s.inventoryId} value={s.inventoryId}>
+                      {s.produceType} · {s.totalKilos.toLocaleString()} kg{s.sellerCount > 0 ? ` · from ${s.sellerCount} seller${s.sellerCount === 1 ? "" : "s"}` : ""}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <p style={{ margin: "0.4rem 0 0", fontSize: "0.8rem", color: "#666" }}>
+                {stockChoice === "stock"
+                  ? "Buyers see it as traced: bought in the app, back to the farms it came from."
+                  : "Buyers see it as off-app stock."}
+              </p>
+            </div>
+          )}
+
+          {/* What the buyer commits up front, and the steps that bring in the rest */}
+          {listingMode !== "packaging" && (
+            <LotTermsFields
+              sellerRole={effectiveRole}
+              commitPercent={commitPercent}
+              steps={steps}
+              lotPrice={
+                listingMode === "garden"
+                  ? parseFloat(formData.totalPrice) > 0 ? parseFloat(formData.totalPrice) : null
+                  : lotPlan && parseFloat(formData.pricePerKilo) > 0 ? Math.round(lotPlan.lotKg * parseFloat(formData.pricePerKilo)) : null
+              }
+              onChange={(c, s) => { setCommitPercent(c); setSteps(s); }}
+            />
+          )}
 
           {/* Quality Rating Dropdown */}
           {qualityOptions && qualityOptions.length > 0 && (
@@ -1441,21 +1654,8 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
               onClick={() => {
                 setShowForm(false);
                 setMessage(null);
-                setFormData({
-                  produceType: "",
-                  totalKilos: "",
-                  pricePerKilo: "",
-                  qualityRating: "",
-                  qualityComment: "",
-                  deliveryProcessorId: "",
-                  gardenSize: "",
-                  gardenLength: "",
-                  gardenWidth: "",
-                  totalPrice: "",
-                  packagingType: "",
-                  availableUnits: "",
-                  pricePerUnit: "",
-                });
+                setFormData(EMPTY_FORM);
+                resetLotFields();
                 setListingMode("unit");
               }}
               style={{

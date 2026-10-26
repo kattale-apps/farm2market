@@ -263,7 +263,7 @@ export default function Home() {
           outline: 3px solid rgba(255, 255, 255, 0.9);
           outline-offset: 2px;
         }
-        /* Advanced Markets quick link on the dashboards: a travelling arrow
+        /* Contract Farming Market quick link on the dashboards: a travelling arrow
            pinned to the right end of the box. Drawn as SVG because the
            self-hosted Montserrat subset does not cover U+2192, so a "→"
            character would fall back to whatever the device has. */

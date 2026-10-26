@@ -12,7 +12,10 @@ import { query, mutation } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { getUgandaTime, generateUTID } from "./utils";
 import { deliveryPointOf } from "./processors";
-import { postWallet } from "./walletSplit";
+import { findLock, postWallet } from "./walletSplit";
+import { roleLabel } from "./roleLabels";
+import { refreshListingStatus } from "./lotOrders";
+import { LOT_SELLER_ROLES } from "./lotOrdersShared";
 
 /**
  * Get farmer's listings
@@ -27,7 +30,7 @@ export const getFarmerListings = query({
   handler: async (ctx, args) => {
     // Verify user is a farmer
     const user = await ctx.db.get(args.farmerId);
-    if (!user || !["farmer", "vendor", "store"].includes(user.role)) {
+    if (!user || !(LOT_SELLER_ROLES as readonly string[]).includes(user.role)) {
       throw new Error("User is not a farmer");
     }
 
@@ -45,9 +48,11 @@ export const getFarmerListings = query({
           .withIndex("by_listing", (q) => q.eq("listingId", listing._id))
           .collect();
 
+        // Older deliveries kept status "locked" with deliveryStatus "delivered"
+        const isDelivered = (u: (typeof units)[number]) => u.status === "delivered" || u.deliveryStatus === "delivered";
         const availableCount = units.filter((u) => u.status === "available").length;
-        const lockedCount = units.filter((u) => u.status === "locked").length;
-        const deliveredCount = units.filter((u) => u.status === "delivered").length;
+        const lockedCount = units.filter((u) => u.status === "locked" && !isDelivered(u)).length;
+        const deliveredCount = units.filter(isDelivered).length;
         const cancelledCount = units.filter((u) => u.status === "cancelled").length;
 
         // Where the farmer delivers (a processor facility), if chosen
@@ -61,6 +66,15 @@ export const getFarmerListings = query({
           pricePerKilo: listing.pricePerKilo,
           unitSize: listing.unitSize,
           totalUnits: listing.totalUnits,
+          bagKg: listing.bagKg ?? null,
+          bagsPerLot: listing.bagsPerLot ?? null,
+          // Lot terms, for "Edit terms" (older listings: none stored)
+          listingMode: listing.listingMode ?? "unit",
+          commitPercent: listing.commitPercent ?? null,
+          milestonePlan: listing.milestonePlan ?? null,
+          stockSource: listing.stockSource ?? null,
+          photoCount: listing.photos?.length ?? 0,
+          withdrawn: !!listing.withdrawnAt,
           status: listing.status,
           createdAt: listing.createdAt,
           deliverySLA: listing.deliverySLA,
@@ -103,7 +117,7 @@ export const getActiveNegotiations = query({
   handler: async (ctx, args) => {
     // Verify user is a farmer
     const user = await ctx.db.get(args.farmerId);
-    if (!user || !["farmer", "vendor", "store"].includes(user.role)) {
+    if (!user || !(LOT_SELLER_ROLES as readonly string[]).includes(user.role)) {
       throw new Error("User is not a farmer");
     }
 
@@ -125,7 +139,7 @@ export const getActiveNegotiations = query({
 
     // Filter to only units from this farmer's listings
     const farmerLockedUnits = allLockedUnits.filter((unit) =>
-      listingIds.includes(unit.listingId)
+      listingIds.includes(unit.listingId) && !unit.lotOrderId
     );
 
     // Enrich with listing and trader information
@@ -154,7 +168,7 @@ export const getActiveNegotiations = query({
           listingUtid: listing?.utid,
           produceType: listing?.produceType,
           pricePerKilo: listing?.pricePerKilo,
-          unitPrice: listing ? listing.pricePerKilo * 10 : 0, // 10kg per unit
+          unitPrice: listing ? listing.pricePerKilo * (listing.unitSize || 10) : 0, // One lot (older listings: 10kg units)
           // Pay-to-lock confirmation
           lockUtid: unit.lockUtid, // UTID of the payment that locked this unit
           lockedAt: unit.lockedAt,
@@ -203,7 +217,7 @@ export const getPayToLockConfirmations = query({
   handler: async (ctx, args) => {
     // Verify user is a farmer
     const user = await ctx.db.get(args.farmerId);
-    if (!user || !["farmer", "vendor", "store"].includes(user.role)) {
+    if (!user || !(LOT_SELLER_ROLES as readonly string[]).includes(user.role)) {
       throw new Error("User is not a farmer");
     }
 
@@ -223,7 +237,7 @@ export const getPayToLockConfirmations = query({
 
     // Filter to only units from this farmer's listings
     const farmerLockedUnits = allLockedUnits.filter((unit) =>
-      listingIds.includes(unit.listingId)
+      listingIds.includes(unit.listingId) && !unit.lotOrderId
     );
 
     // Enrich with payment confirmation details
@@ -291,7 +305,7 @@ export const getDeliveryDeadlines = query({
   handler: async (ctx, args) => {
     // Verify user is a farmer
     const user = await ctx.db.get(args.farmerId);
-    if (!user || !["farmer", "vendor", "store"].includes(user.role)) {
+    if (!user || !(LOT_SELLER_ROLES as readonly string[]).includes(user.role)) {
       throw new Error("User is not a farmer");
     }
 
@@ -313,7 +327,7 @@ export const getDeliveryDeadlines = query({
 
     // Filter to only units from this farmer's listings
     const farmerLockedUnits = allLockedUnits.filter((unit) =>
-      listingIds.includes(unit.listingId) && unit.deliveryDeadline
+      listingIds.includes(unit.listingId) && unit.deliveryDeadline && !unit.lotOrderId
     );
 
     // Enrich with deadline countdown (server-calculated)
@@ -401,7 +415,7 @@ export const getDeliveryStatus = query({
   handler: async (ctx, args) => {
     // Verify user is a farmer
     const user = await ctx.db.get(args.farmerId);
-    if (!user || !["farmer", "vendor", "store"].includes(user.role)) {
+    if (!user || !(LOT_SELLER_ROLES as readonly string[]).includes(user.role)) {
       throw new Error("User is not a farmer");
     }
 
@@ -423,7 +437,7 @@ export const getDeliveryStatus = query({
 
     // Filter to only units from this farmer's listings
     const farmerLockedUnits = allLockedUnits.filter((unit) =>
-      listingIds.includes(unit.listingId)
+      listingIds.includes(unit.listingId) && !unit.lotOrderId
     );
 
     // Group by delivery status
@@ -507,7 +521,7 @@ export const getExpiredUTIDs = query({
   handler: async (ctx, args) => {
     // Verify user is a farmer
     const user = await ctx.db.get(args.farmerId);
-    if (!user || !["farmer", "vendor", "store"].includes(user.role)) {
+    if (!user || !(LOT_SELLER_ROLES as readonly string[]).includes(user.role)) {
       throw new Error("User is not a farmer");
     }
 
@@ -530,7 +544,7 @@ export const getExpiredUTIDs = query({
     // Filter to only units from this farmer's listings that are expired
     // Expired means: deadline has passed by more than 1 hour
     const expiredUnits = allLockedUnits.filter((unit) => {
-      if (!listingIds.includes(unit.listingId)) return false;
+      if (!listingIds.includes(unit.listingId) || unit.lotOrderId) return false;
       if (!unit.deliveryDeadline) return false;
       const expirationTime = unit.deliveryDeadline + (60 * 60 * 1000); // Deadline + 1 hour
       if (now < expirationTime) return false; // Not expired yet (need 1 hour past deadline)
@@ -594,7 +608,7 @@ export const archiveUTID = mutation({
   handler: async (ctx, args) => {
     // Verify user is a farmer
     const user = await ctx.db.get(args.farmerId);
-    if (!user || !["farmer", "vendor", "store"].includes(user.role)) {
+    if (!user || !(LOT_SELLER_ROLES as readonly string[]).includes(user.role)) {
       throw new Error("User is not a farmer");
     }
 
@@ -648,7 +662,7 @@ export const getSuccessfulTransactionsLedger = query({
   handler: async (ctx, args) => {
     // Verify user is a farmer
     const user = await ctx.db.get(args.farmerId);
-    if (!user || !["farmer", "vendor", "store"].includes(user.role)) {
+    if (!user || !(LOT_SELLER_ROLES as readonly string[]).includes(user.role)) {
       throw new Error("User is not a farmer");
     }
 
@@ -658,19 +672,17 @@ export const getSuccessfulTransactionsLedger = query({
       .withIndex("by_farmer", (q) => q.eq("farmerId", args.farmerId))
       .collect();
 
-    const listingIds = listings.map((l) => l._id);
     const listingsMap = new Map(listings.map((l) => [l._id, l]));
 
-    // Get all delivered units from these listings
-    const allDeliveredUnits = await ctx.db
-      .query("listingUnits")
-      .withIndex("by_status", (q) => q.eq("status", "delivered"))
-      .collect();
-
-    // Filter to only units from this farmer's listings
-    const farmerDeliveredUnits = allDeliveredUnits.filter((unit) =>
-      listingIds.includes(unit.listingId) && unit.deliveryStatus === "delivered"
-    );
+    // Delivered units of this farmer's listings (read per listing, not the whole table)
+    const farmerDeliveredUnits = [];
+    for (const listing of listings) {
+      const units = await ctx.db
+        .query("listingUnits")
+        .withIndex("by_listing", (q) => q.eq("listingId", listing._id))
+        .collect();
+      farmerDeliveredUnits.push(...units.filter((u) => u.status === "delivered" || u.deliveryStatus === "delivered"));
+    }
 
     // Build successful transactions
     const transactions = await Promise.all(
@@ -734,10 +746,14 @@ export const getSuccessfulTransactionsLedger = query({
           }
         }
 
-        // Use negotiated price if available, otherwise use listing price
-        const finalPricePerKilo = negotiationHistory?.currentPricePerKilo || listing.pricePerKilo;
+        // The price paid: a lot order's settled price, else the amount locked
+        // for the unit, else the negotiated or listing price.
         const kilos = listing.unitSize || 10;
-        const totalEarned = finalPricePerKilo * kilos;
+        const order = unit.lotOrderId ? await ctx.db.get(unit.lotOrderId) : null;
+        const lock = order ? null : await findLock(ctx, unit.lockUtid);
+        const finalPricePerKilo = order?.settledPricePerKilo
+          ?? (lock ? Math.round((lock.amount / kilos) * 100) / 100 : negotiationHistory?.currentPricePerKilo || listing.pricePerKilo);
+        const totalEarned = order ? (order.toSeller ?? 0) : finalPricePerKilo * kilos;
 
         return {
           unitId: unit._id,
@@ -747,8 +763,8 @@ export const getSuccessfulTransactionsLedger = query({
           lockUtid: unit.lockUtid,
           produceType: listing.produceType,
           kilos,
-          // Price information
-          desiredPricePerKilo: listing.pricePerKilo,
+          // Price information: the posted price is kept next to the final one
+          desiredPricePerKilo: order?.postedPricePerKilo ?? listing.pricePerKilo,
           negotiatedPricePerKilo: negotiationHistory?.currentPricePerKilo || listing.pricePerKilo,
           finalPricePerKilo: finalSalePrice || finalPricePerKilo,
           totalEarned,
@@ -814,7 +830,7 @@ export const cancelOverdueUTID = mutation({
   handler: async (ctx, args) => {
     // Verify user is a farmer
     const user = await ctx.db.get(args.farmerId);
-    if (!user || !["farmer", "vendor", "store"].includes(user.role)) {
+    if (!user || !(LOT_SELLER_ROLES as readonly string[]).includes(user.role)) {
       throw new Error("User is not a farmer");
     }
 
@@ -833,6 +849,9 @@ export const cancelOverdueUTID = mutation({
     // Verify unit is locked
     if (unit.status !== "locked") {
       throw new Error("Unit is not locked");
+    }
+    if (unit.lotOrderId) {
+      throw new Error("Lots bought with payment steps are cancelled by an admin. Use 'Ask admin to cancel' in your ledger.");
     }
 
     // Verify unit has a delivery deadline
@@ -942,7 +961,7 @@ export const farmerConfirmDelivery = mutation({
   handler: async (ctx, args) => {
     // Verify user is a farmer
     const user = await ctx.db.get(args.farmerId);
-    if (!user || !["farmer", "vendor", "store"].includes(user.role)) {
+    if (!user || !(LOT_SELLER_ROLES as readonly string[]).includes(user.role)) {
       throw new Error("User is not a farmer");
     }
 
@@ -961,6 +980,9 @@ export const farmerConfirmDelivery = mutation({
     // Verify unit is locked
     if (unit.status !== "locked") {
       throw new Error("Unit is not locked");
+    }
+    if (unit.lotOrderId) {
+      throw new Error("This lot was bought with payment steps. Mark the steps done in your ledger.");
     }
 
     // Verify unit has deliveryStatus of "pending"
@@ -1029,7 +1051,7 @@ export const getAllUnitsLedger = query({
   handler: async (ctx, args) => {
     // Verify user is a farmer
     const user = await ctx.db.get(args.farmerId);
-    if (!user || !["farmer", "vendor", "store"].includes(user.role)) {
+    if (!user || !(LOT_SELLER_ROLES as readonly string[]).includes(user.role)) {
       throw new Error("User is not a farmer");
     }
 
@@ -1039,23 +1061,26 @@ export const getAllUnitsLedger = query({
       .withIndex("by_farmer", (q) => q.eq("farmerId", args.farmerId))
       .collect();
 
-    const listingIds = listings.map((l) => l._id);
-    const listingsMap = new Map(listings.map((l) => [l._id, l]));
-
-    // Get all units from these listings
-    const allUnits = await ctx.db
-      .query("listingUnits")
-      .collect();
-
-    const farmerUnits = allUnits.filter((unit) =>
-      listingIds.includes(unit.listingId)
-    );
+    // Who bought a lot, as the farmer sees them: category and alias only.
+    const buyerLabels = new Map<Id<"users">, string | null>();
+    const buyerLabel = async (buyerId: Id<"users"> | undefined) => {
+      if (!buyerId) return null;
+      if (!buyerLabels.has(buyerId)) {
+        const buyer = await ctx.db.get(buyerId);
+        buyerLabels.set(buyerId, buyer ? `${roleLabel(buyer.role)} ${buyer.alias ?? ""}`.trim() : null);
+      }
+      return buyerLabels.get(buyerId) ?? null;
+    };
 
     // Group units by listing and enrich with status and earnings
     const listingsWithUnits = await Promise.all(
       listings.map(async (listing) => {
-        const listingUnits = farmerUnits.filter((u) => u.listingId === listing._id);
-        
+        const listingUnits = await ctx.db
+          .query("listingUnits")
+          .withIndex("by_listing", (q) => q.eq("listingId", listing._id))
+          .collect();
+        const unitSize = listing.unitSize || 10;
+
         // Sort units by unit number
         listingUnits.sort((a, b) => a.unitNumber - b.unitNumber);
 
@@ -1064,7 +1089,8 @@ export const getAllUnitsLedger = query({
           listingUnits.map(async (unit) => {
             // Determine status
             let status: "open" | "locked" | "delivered" | "cancelled" = "open";
-            if (unit.status === "delivered") {
+            // Older deliveries kept status "locked" with deliveryStatus "delivered"
+            if (unit.status === "delivered" || unit.deliveryStatus === "delivered") {
               status = "delivered";
             } else if (unit.status === "locked") {
               status = "locked";
@@ -1074,35 +1100,23 @@ export const getAllUnitsLedger = query({
               status = "open";
             }
 
-            // Calculate earnings (only for delivered units)
+            // The price paid: a lot order's settled price (earnings are what
+            // it paid out), else the amount the buyer locked for the lot (the
+            // offer is cleared from the unit once it locks). Older rows
+            // without a lock entry fall back to the listing price.
             let earnings = 0;
             let pricePerKilo = listing.pricePerKilo;
             let lockUtid = unit.lockUtid || null;
+            const sold = status === "locked" || status === "delivered";
+            const order = unit.lotOrderId ? await ctx.db.get(unit.lotOrderId) : null;
 
-            if (status === "delivered") {
-              // Get negotiation history if available
-              let negotiationHistory = null;
-              if (unit.activeNegotiationId) {
-                const negotiation = await ctx.db.get(unit.activeNegotiationId);
-                if (negotiation) {
-                  negotiationHistory = {
-                    currentPricePerKilo: negotiation.currentPricePerKilo,
-                  };
-                }
-              }
-
-              // Use negotiated price if available, otherwise use listing price
-              pricePerKilo = negotiationHistory?.currentPricePerKilo || listing.pricePerKilo;
-              const kilos = listing.unitSize || 10;
-              earnings = pricePerKilo * kilos;
-            } else if (status === "locked") {
-              // For locked units, get the negotiated price if available
-              if (unit.activeNegotiationId) {
-                const negotiation = await ctx.db.get(unit.activeNegotiationId);
-                if (negotiation) {
-                  pricePerKilo = negotiation.currentPricePerKilo;
-                }
-              }
+            if (order) {
+              pricePerKilo = order.settledPricePerKilo;
+              if (status === "delivered") earnings = order.toSeller ?? 0;
+            } else if (sold) {
+              const lock = await findLock(ctx, unit.lockUtid);
+              if (lock) pricePerKilo = Math.round((lock.amount / unitSize) * 100) / 100;
+              if (status === "delivered") earnings = pricePerKilo * unitSize;
             }
 
             return {
@@ -1112,6 +1126,9 @@ export const getAllUnitsLedger = query({
               lockUtid,
               pricePerKilo,
               earnings,
+              soldTo: sold ? await buyerLabel(unit.lockedBy) : null,
+              // Paid for, then cancelled because it was not delivered in time
+              missedDelivery: status === "cancelled" && !!unit.lockUtid,
               lockedAt: unit.lockedAt || null,
               deliveryDeadline: unit.deliveryDeadline || null,
             };
@@ -1123,6 +1140,7 @@ export const getAllUnitsLedger = query({
         const lockedCount = unitsData.filter((u) => u.status === "locked").length;
         const deliveredCount = unitsData.filter((u) => u.status === "delivered").length;
         const cancelledCount = unitsData.filter((u) => u.status === "cancelled").length;
+        const missedCount = unitsData.filter((u) => u.missedDelivery).length;
         const totalEarnings = unitsData.reduce((sum, u) => sum + u.earnings, 0);
 
         return {
@@ -1131,7 +1149,9 @@ export const getAllUnitsLedger = query({
           produceType: listing.produceType,
           totalKilos: listing.totalKilos,
           totalUnits: listing.totalUnits,
-          unitSize: listing.unitSize || 10,
+          unitSize,
+          bagKg: listing.bagKg ?? null,
+          bagsPerLot: listing.bagsPerLot ?? null,
           pricePerKilo: listing.pricePerKilo,
           createdAt: listing.createdAt,
           units: unitsData,
@@ -1140,42 +1160,52 @@ export const getAllUnitsLedger = query({
             locked: lockedCount,
             delivered: deliveredCount,
             cancelled: cancelledCount,
+            missed: missedCount,
+            deliveredKilos: deliveredCount * unitSize,
             totalEarnings,
           },
         };
       })
     );
 
-    // Calculate grand totals
+    // Calculate grand totals: the farmer's performance over all listings
     const grandTotals = listingsWithUnits.reduce(
       (acc, listing) => ({
         open: acc.open + listing.totals.open,
         locked: acc.locked + listing.totals.locked,
         delivered: acc.delivered + listing.totals.delivered,
         cancelled: acc.cancelled + listing.totals.cancelled,
+        missed: acc.missed + listing.totals.missed,
+        deliveredKilos: acc.deliveredKilos + listing.totals.deliveredKilos,
         totalEarnings: acc.totalEarnings + listing.totals.totalEarnings,
       }),
-      { open: 0, locked: 0, delivered: 0, cancelled: 0, totalEarnings: 0 }
+      { open: 0, locked: 0, delivered: 0, cancelled: 0, missed: 0, deliveredKilos: 0, totalEarnings: 0 }
     );
 
     return {
       listings: listingsWithUnits,
-      grandTotals,
+      grandTotals: {
+        ...grandTotals,
+        averagePricePerKilo: grandTotals.deliveredKilos > 0
+          ? Math.round(grandTotals.totalEarnings / grandTotals.deliveredKilos)
+          : 0,
+      },
     };
   },
 });
 
 /**
- * Cancel/Close listing (farmer only)
- * 
- * Allows farmers to cancel listings that have no locked units.
- * This is for cases where the farmer changes their mind before
- * any units are purchased.
- * 
+ * Withdraw a listing's unsold lots (farmer only)
+ *
+ * Only available (unsold) lots are withdrawn. Lots a buyer has paid to
+ * lock, and delivered lots, are never touched, so buyers stay protected
+ * and the farmer's ledger keeps every sale. With no lots sold the whole
+ * listing is cancelled; otherwise it leaves the market and keeps tracking
+ * its sold lots.
+ *
  * Requirements:
  * - Listing must belong to the farmer
- * - No units can be locked (to protect trader interests)
- * - Only available/open units can be cancelled
+ * - At least one lot must still be unsold
  */
 export const cancelListing = mutation({
   args: {
@@ -1185,7 +1215,7 @@ export const cancelListing = mutation({
   handler: async (ctx, args) => {
     // Verify user is a farmer
     const user = await ctx.db.get(args.farmerId);
-    if (!user || !["farmer", "vendor", "store"].includes(user.role)) {
+    if (!user || !(LOT_SELLER_ROLES as readonly string[]).includes(user.role)) {
       throw new Error("User is not a farmer");
     }
 
@@ -1211,37 +1241,29 @@ export const cancelListing = mutation({
       .withIndex("by_listing", (q) => q.eq("listingId", args.listingId))
       .collect();
 
-    // Check if any units are locked
-    const lockedUnits = allUnits.filter((u) => u.status === "locked");
-    if (lockedUnits.length > 0) {
-      throw new Error(
-        `Cannot cancel listing: ${lockedUnits.length} unit(s) are locked. Only listings with no locked units can be cancelled.`
-      );
+    const availableUnits = allUnits.filter((u) => u.status === "available");
+    if (availableUnits.length === 0) {
+      throw new Error("There are no unsold lots to withdraw from this listing.");
     }
-
-    // Check if any units are delivered
-    const deliveredUnits = allUnits.filter((u) => u.status === "delivered");
-    if (deliveredUnits.length > 0) {
-      throw new Error(
-        `Cannot cancel listing: ${deliveredUnits.length} unit(s) have been delivered. Only listings with no delivered units can be cancelled.`
-      );
-    }
+    const lockedCount = allUnits.filter((u) => u.status === "locked").length;
+    const deliveredCount = allUnits.filter((u) => u.status === "delivered").length;
+    const soldCount = lockedCount + deliveredCount;
 
     // Generate UTID for cancellation
     const cancellationUtid = generateUTID("farmer");
 
-    // Cancel all available units
-    const availableUnits = allUnits.filter((u) => u.status === "available");
+    // Withdraw the unsold lots only
     for (const unit of availableUnits) {
       await ctx.db.patch(unit._id, {
         status: "cancelled",
       });
     }
 
-    // Mark listing as cancelled
-    await ctx.db.patch(args.listingId, {
-      status: "cancelled",
-    });
+    // Off the market. A listing with sold lots keeps tracking them: still
+    // awaiting delivery (fully_locked) or all delivered. A lot from an order
+    // that fails later does not come back on the market.
+    await ctx.db.patch(args.listingId, { withdrawnAt: getUgandaTime() });
+    await refreshListingStatus(ctx, args.listingId);
 
     return {
       success: true,
@@ -1249,7 +1271,9 @@ export const cancelListing = mutation({
       listingId: listing._id,
       listingUtid: listing.utid,
       unitsCancelled: availableUnits.length,
-      message: `Listing cancelled successfully. ${availableUnits.length} unit(s) have been cancelled.`,
+      message: soldCount > 0
+        ? `${availableUnits.length} unsold lot(s) withdrawn. Your ${soldCount} sold lot(s) are not affected.`
+        : `Listing cancelled. ${availableUnits.length} lot(s) withdrawn.`,
     };
   },
 });

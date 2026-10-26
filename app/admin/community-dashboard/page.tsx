@@ -667,7 +667,7 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
   const [builderFields, setBuilderFields] = useState<any[]>([
     { fieldType: "text", label: "", required: true, helpText: "", placeholder: "", options: [], farmerEditable: true },
   ]);
-  // Advanced Markets-only settings (formPurpose === "advance_purchase")
+  // Contract Farming Market-only settings (formPurpose === "advance_purchase")
   const [apOfferKind, setApOfferKind] = useState<"goods" | "services">("goods");
   const [apGoodsCategory, setApGoodsCategory] = useState<"crop" | "livestock">("crop");
   const [apServiceCategory, setApServiceCategory] = useState(FARM_SERVICE_OPTIONS[0]);
@@ -754,7 +754,7 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
 
     if (builderPurpose === "advance_purchase") {
       if (!apProductCategory.trim()) {
-        setMsg({ type: "error", text: "Product category is required for an Advanced Markets form" });
+        setMsg({ type: "error", text: "Product category is required for a Contract Farming form" });
         return;
       }
       if (Math.round(apMilestoneTotal) !== 100) {
@@ -802,7 +802,7 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
             releasePercent: Number(m.releasePercent),
           })),
         });
-        setMsg({ type: "success", text: "Advanced Markets form created!" });
+        setMsg({ type: "success", text: "Contract Farming form created!" });
         resetBuilder();
         setTimeout(() => setMsg(null), 4000);
       } catch (e: any) {
@@ -1025,7 +1025,7 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
                         transition: "all 0.2s",
                       }}
                     >
-                      {purpose === "tracker" ? "📊 Tracker Form" : purpose === "profile" ? "👤 Profile Form" : purpose === "extension_work" ? "🧑‍🌾 Extension Work" : "🌾 Advanced Markets"}
+                      {purpose === "tracker" ? "📊 Tracker Form" : purpose === "profile" ? "👤 Profile Form" : purpose === "extension_work" ? "🧑‍🌾 Extension Work" : "🌾 Contract Farming Market"}
                     </button>
                   );
                 })}
@@ -1037,7 +1037,7 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
                     ? "Profile forms appear in the community Profile tab for member info"
                     : builderPurpose === "extension_work"
                       ? "Extension work forms can collect a payment before the member submits the form"
-                      : "Advanced Markets forms let farmers publish pre-funded offers with a milestone-based payment release tracker"}
+                      : "Contract Farming forms let farmers publish pre-funded offers with a milestone-based payment release tracker"}
               </p>
             </div>
             {builderPurpose === "extension_work" && (
@@ -1084,7 +1084,7 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
             {builderPurpose === "advance_purchase" && (
               <div style={{ marginBottom: "1rem", padding: "0.8rem", borderRadius: "8px", border: "1px solid #e1bee7", background: "#faf3fb" }}>
                 <label style={{ fontSize: "0.8rem", fontWeight: 700, color: "#6a1b9a", display: "flex", alignItems: "center", gap: "0.35rem", marginBottom: "0.5rem" }}>
-                  🌾 Advanced Markets Settings
+                  🌾 Contract Farming Settings
                 </label>
 
                 <label style={{ fontSize: "0.78rem", fontWeight: 600, color: "#333", display: "block", marginBottom: "0.3rem" }}>Offer type</label>
@@ -1494,11 +1494,11 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
           </div>
         )}
 
-        {/* Advanced Markets Forms (separate schema/backend, listed here so all forms are managed in one place) */}
+        {/* Contract Farming Forms (separate schema/backend, listed here so all forms are managed in one place) */}
         {apConfigs !== undefined && apConfigs.length > 0 && (
           <div style={{ marginTop: "1.5rem" }}>
             <h5 style={{ margin: "0 0 0.75rem 0", fontSize: "0.95rem", fontWeight: 700, color: "#6a1b9a" }}>
-              🌾 Advanced Markets Forms
+              🌾 Contract Farming Forms
             </h5>
             <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
               {apConfigs.map((cfg: any) => {
@@ -1515,7 +1515,7 @@ function FormsTab({ communityId, userId }: { communityId: Id<"communities">; use
                     >
                       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
                         <span style={{ padding: "0.1rem 0.4rem", borderRadius: "999px", fontSize: "0.68rem", fontWeight: 600, background: "#6a1b9a", color: "#fff" }}>
-                          🌾 Advanced Markets
+                          🌾 Contract Farming Market
                         </span>
                         {cfg.offerKind && (
                           <span style={{ padding: "0.1rem 0.4rem", borderRadius: "999px", fontSize: "0.68rem", fontWeight: 600, background: "#e8f5e9", color: "#2e7d32" }}>
@@ -3149,7 +3149,7 @@ export default function CommunityDashboardPage() {
 
     const moduleLabel =
       moduleKey === "advancedMarkets"
-        ? "Advanced Markets"
+        ? "Contract Farming Market"
         : moduleKey === "costTemplates"
           ? "Cost Templates"
           : moduleKey === "diagnostics"
@@ -3460,7 +3460,7 @@ export default function CommunityDashboardPage() {
                 const colour = menuRainbowColor(idx);
                 const logo = getCommunityLogo(c);
                 const modules = [
-                  c?.advancedMarketsEnabled && "Advanced Markets",
+                  c?.advancedMarketsEnabled && "Contract Farming Market",
                   c?.exportMarketsEnabled && "Export Markets",
                   c?.diagnosticsEnabled && "Diagnostics",
                   c?.fertilizerEnabled && "Fertilizer",
@@ -3568,7 +3568,7 @@ export default function CommunityDashboardPage() {
         ) : (
           [selectedCommunity].map((community: any) => {
             const communityId = community?._id ?? community?.id;
-            // Advanced Markets and Fertilizer are optional modules: a super admin
+            // Contract Farming Market and Fertilizer are optional modules: a super admin
             // opens them per community, and they stay hidden everywhere else.
             const advancedMarketsEnabled = community?.advancedMarketsEnabled === true;
             // getActiveCommunities resolves the module flags before returning
@@ -3834,7 +3834,7 @@ export default function CommunityDashboardPage() {
                             }}
                             style={{ width: "16px", height: "16px", cursor: "pointer" }}
                           />
-                          Enable Advanced Markets module
+                          Enable Contract Farming Market module
                         </label>
                         <label
                           style={{
@@ -4046,7 +4046,7 @@ export default function CommunityDashboardPage() {
                   {(visibleTabs).map((tab, idx) => {
                     const active = activeTab === tab;
                     const color = menuRainbowColor(idx);
-                    const labels: Record<CommunityTab, string> = { members: "Members", noticeboard: "Noticeboard", messages: "Messages", forms: "Forms", insights: "📊 Insights", fertilizer: "🌱 Fertilizer", costTemplates: "🌾 Cost Templates", advancePurchase: "🌱 Advanced Markets", diagnostics: "🔬 Diagnostics", exportMarkets: "🚢 Export Markets", processors: "🏭 Processors" };
+                    const labels: Record<CommunityTab, string> = { members: "Members", noticeboard: "Noticeboard", messages: "Messages", forms: "Forms", insights: "📊 Insights", fertilizer: "🌱 Fertilizer", costTemplates: "🌾 Cost Templates", advancePurchase: "🌱 Contract Farming Market", diagnostics: "🔬 Diagnostics", exportMarkets: "🚢 Export Markets", processors: "🏭 Processors" };
                     return (
                       <button
                         key={tab}
@@ -4165,7 +4165,7 @@ export default function CommunityDashboardPage() {
                 />
               )}
 
-              {/* ── Advanced Markets Tab ── */}
+              {/* ── Contract Farming Market Tab ── */}
               {activeTab === "advancePurchase" && (
                 <div style={{ padding: "1.5rem" }}>
                   <CommunityAdvancePurchasePanel adminId={userId!} communityId={communityId} />

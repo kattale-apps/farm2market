@@ -56,7 +56,7 @@ async function assertCommunityAdmin(
   const isAssignedAdmin = assigned.includes(String(communityId));
 
   if (!isDirectAdmin && !isAssignedAdmin) {
-    throw new Error("Not authorized to manage the Advanced Markets configuration for this community");
+    throw new Error("Not authorized to manage the Contract Farming configuration for this community");
   }
   return admin;
 }
@@ -109,6 +109,29 @@ const deliveryOptionValidator = v.object({
   feeUnit: v.string(),
 });
 
+// When the farmer is paid. at_completion (the default): approved milestones are
+// earned and shown as pending; the farmer is paid once, when the last one is
+// approved. per_milestone: each approved milestone pays its share at once.
+const settlementRuleValidator = v.union(v.literal("at_completion"), v.literal("per_milestone"));
+
+/**
+ * What one approved milestone means for a commitment: the stage's share,
+ * the new earned total, and how much is paid to the farmer now. With
+ * at_completion nothing is paid until the last stage, which pays everything
+ * not yet paid; with per_milestone each stage pays its share at once.
+ */
+export function milestoneRelease(
+  c: { totalAmount: number; releasedAmount: number; earnedAmount?: number; settlementRule?: "at_completion" | "per_milestone" },
+  releasePercent: number,
+  isFinalStage: boolean
+) {
+  const stageAmount = Math.round((c.totalAmount * releasePercent) / 100);
+  const earned = Math.min(c.totalAmount, (c.earnedAmount ?? c.releasedAmount) + stageAmount);
+  const atCompletion = (c.settlementRule ?? "at_completion") === "at_completion";
+  const releaseAmount = atCompletion ? (isFinalStage ? Math.max(0, c.totalAmount - c.releasedAmount) : 0) : stageAmount;
+  return { stageAmount, earned, releaseAmount, atCompletion };
+}
+
 const milestoneTemplateValidator = v.object({
   order: v.number(),
   name: v.string(),
@@ -135,6 +158,7 @@ export const createConfig = mutation({
     negotiationAllowed: v.boolean(),
     buyerCanProposePrice: v.boolean(),
     advancePercentage: v.optional(v.number()),
+    settlementRule: v.optional(settlementRuleValidator), // When the farmer is paid (default: when all milestones are approved)
     minCommitmentQty: v.optional(v.number()),
     maxCommitmentQty: v.optional(v.number()),
     offerExpiryDays: v.optional(v.number()),
@@ -189,6 +213,7 @@ export const updateConfig = mutation({
     negotiationAllowed: v.optional(v.boolean()),
     buyerCanProposePrice: v.optional(v.boolean()),
     advancePercentage: v.optional(v.number()),
+    settlementRule: v.optional(settlementRuleValidator), // When the farmer is paid (default: when all milestones are approved)
     minCommitmentQty: v.optional(v.number()),
     maxCommitmentQty: v.optional(v.number()),
     offerExpiryDays: v.optional(v.number()),
@@ -382,11 +407,11 @@ export const createOffer = mutation({
     await checkPilotMode(ctx);
     const farmer = await ctx.db.get(args.farmerId);
     if (!farmer || !["farmer", "vendor", "store"].includes(farmer.role)) {
-      throw new Error("Only farmers can create an Advanced Markets offer");
+      throw new Error("Only farmers can create a Contract Farming offer");
     }
     const config = await ctx.db.get(args.configId);
     if (!config || !config.isActive) {
-      throw new Error("This Advanced Markets configuration is not available");
+      throw new Error("This Contract Farming configuration is not available");
     }
     await assertCommunityMember(ctx, args.farmerId, config.communityId);
 
@@ -913,7 +938,7 @@ export const createProposal = mutation({
     await notifyUser(
       ctx,
       offer.farmerId,
-      "New Advanced Markets proposal",
+      "New Contract Farming proposal",
       `A buyer proposed new terms for your "${offer.productName}" offer.`,
       offer.utid
     );
@@ -947,7 +972,7 @@ export const respondToProposal = mutation({
       proposal.buyerId,
       args.accept ? "Your proposal was accepted" : "Your proposal was rejected",
       args.accept
-        ? `The farmer accepted your proposed terms for "${offer.productName}". You can now fund it on Advanced Markets.`
+        ? `The farmer accepted your proposed terms for "${offer.productName}". You can now fund it in the Contract Farming Market.`
         : `The farmer rejected your proposed terms for "${offer.productName}".`,
       offer.utid
     );
@@ -968,7 +993,7 @@ export const createCommitment = mutation({
   handler: async (ctx, args) => {
     await checkPilotMode(ctx);
     const buyer = await ctx.db.get(args.buyerId);
-    if (!buyer || buyer.role !== "buyer") throw new Error("Only buyers can fund an Advanced Markets offer");
+    if (!buyer || buyer.role !== "buyer") throw new Error("Only buyers can fund a Contract Farming offer");
     const offer = await ctx.db.get(args.offerId);
     if (!offer || offer.status !== "published") throw new Error("Offer is not available");
     if (offer.expiresAt && getUgandaTime() > offer.expiresAt) {
@@ -1082,6 +1107,9 @@ export const createCommitment = mutation({
       insuranceAmount,
       status: "funded",
       walletUtid: utid,
+      // The rule when funded: editing the config later never changes this order.
+      settlementRule: config?.settlementRule ?? "at_completion",
+      earnedAmount: 0,
       releasedAmount: 0,
       quantityDelivered: 0,
       fundedAt: now,
@@ -1097,7 +1125,7 @@ export const createCommitment = mutation({
     await notifyUser(
       ctx,
       offer.farmerId,
-      "Advanced Markets order funded",
+      "Contract Farming order funded",
       `A buyer funded ${args.quantity} ${offer.unit} of your "${offer.productName}" offer.`,
       utid
     );
@@ -1129,13 +1157,39 @@ async function refundCommitmentToBuyer(
   reason: "buyer_cancelled" | "buyer_forfeited"
 ) {
   const now = getUgandaTime();
-  const refundAmount = Math.max(0, commitment.totalAmount - commitment.releasedAmount);
+  // What approved milestones earned the farmer. Under at_completion part of it
+  // may not be paid yet; the order ends here, so it is paid now.
+  const earned = Math.min(commitment.totalAmount, Math.max(commitment.earnedAmount ?? 0, commitment.releasedAmount));
+  const unpaidEarned = Math.max(0, earned - commitment.releasedAmount);
+  const refundAmount = Math.max(0, commitment.totalAmount - earned);
   const refundUtid = generateUTID("buyer");
+  const lock = await findLock(ctx, commitment.walletUtid);
+  let demoLeft = Math.max(0, (lock?.demoAmount ?? 0) - (commitment.releasedDemoAmount ?? 0));
+
+  let farmerDemo = 0;
+  if (unpaidEarned > 0) {
+    farmerDemo = lock ? Math.min(demoLeft, shareOf(lock.demoAmount ?? 0, lock.amount, unpaidEarned)) : 0;
+    demoLeft -= farmerDemo;
+    await postWallet(ctx, {
+      userId: offer.farmerId,
+      utid: `${refundUtid}-F`,
+      type: "profit_credit",
+      amount: unpaidEarned,
+      rule: { kind: "exact", demoAmount: farmerDemo },
+      timestamp: now,
+      metadata: {
+        type: "advance_purchase_settlement",
+        reason,
+        offerId: offer._id,
+        offerUtid: offer.utid,
+        commitmentId: commitment._id,
+      },
+    });
+  }
 
   if (refundAmount > 0) {
-    // The buyer gets back whatever demo money was not already paid out.
-    const lock = await findLock(ctx, commitment.walletUtid);
-    const refundDemo = Math.min(refundAmount, Math.max(0, (lock?.demoAmount ?? 0) - (commitment.releasedDemoAmount ?? 0)));
+    // The buyer gets back whatever demo money was not paid to the farmer.
+    const refundDemo = Math.min(refundAmount, demoLeft);
 
     await postWallet(ctx, {
       userId: commitment.buyerId,
@@ -1155,13 +1209,15 @@ async function refundCommitmentToBuyer(
         reversedLockUtid: commitment.walletUtid,
         totalAmount: commitment.totalAmount,
         // Kept by the farmer for milestones already approved — 0 on a cancel.
-        forfeitedToFarmer: commitment.releasedAmount,
+        forfeitedToFarmer: earned,
       },
     });
   }
 
   await ctx.db.patch(commitment._id, {
     status: "cancelled" as const,
+    releasedAmount: commitment.releasedAmount + unpaidEarned,
+    releasedDemoAmount: (commitment.releasedDemoAmount ?? 0) + farmerDemo,
     updatedAt: now,
   });
 
@@ -1172,7 +1228,7 @@ async function refundCommitmentToBuyer(
     updatedAt: now,
   });
 
-  return { refundAmount, refundUtid, forfeitedToFarmer: commitment.releasedAmount };
+  return { refundAmount, refundUtid, forfeitedToFarmer: earned };
 }
 
 async function loadCommitmentForBuyer(
@@ -1183,7 +1239,7 @@ async function loadCommitmentForBuyer(
   const commitment = await ctx.db.get(commitmentId);
   if (!commitment) throw new Error("Order not found");
   if (String(commitment.buyerId) !== String(buyerId)) {
-    throw new Error("You can only change your own Advanced Markets order");
+    throw new Error("You can only change your own Contract Farming order");
   }
   const offer = await ctx.db.get(commitment.offerId);
   if (!offer) throw new Error("Offer not found");
@@ -1227,7 +1283,7 @@ export const cancelCommitment = mutation({
     await notifyUser(
       ctx,
       offer.farmerId,
-      "Advanced Markets order cancelled",
+      "Contract Farming order cancelled",
       `A buyer cancelled their order of ${commitment.quantity} ${offer.unit} of "${offer.productName}". ` +
         `That quantity is available to other buyers again.`,
       offer.utid
@@ -1260,10 +1316,10 @@ export const forfeitCommitment = mutation({
     await notifyUser(
       ctx,
       offer.farmerId,
-      "Advanced Markets order forfeited",
+      "Contract Farming order forfeited",
       `A buyer forfeited their order of ${commitment.quantity} ${offer.unit} of "${offer.productName}". ` +
-        `The UGX ${Math.round(result.forfeitedToFarmer).toLocaleString()} already released for approved ` +
-        `milestones stays with you, and that quantity is available to other buyers again.`,
+        `The UGX ${Math.round(result.forfeitedToFarmer).toLocaleString()} earned by your approved ` +
+        `milestones is in your wallet, and that quantity is available to other buyers again.`,
       offer.utid
     );
 
@@ -1319,6 +1375,11 @@ export const getCommitmentDetail = query({
       offer: offer ? { ...offer, photoUrls } : offer,
       milestones: milestonesWithProof,
       pendingAmount: commitment.totalAmount - commitment.releasedAmount,
+      // Earned by approved milestones (paid, or pending until the last one under at_completion);
+      // a forfeit pays the farmer this and returns the rest.
+      earnedAmount: Math.max(commitment.earnedAmount ?? 0, commitment.releasedAmount),
+      refundOnForfeit: commitment.totalAmount - Math.max(commitment.earnedAmount ?? 0, commitment.releasedAmount),
+      settlementRule: commitment.settlementRule ?? "at_completion",
     };
   },
 });
@@ -1400,7 +1461,7 @@ export const submitMilestoneEvidence = mutation({
       await notifyUser(
         ctx,
         community.communityAdminId,
-        "Advanced Markets proof picture submitted",
+        "Contract Farming proof picture submitted",
         `A proof picture was submitted for "${milestone.name}" on offer "${offer.productName}".`,
         offer.utid
       );
@@ -1552,32 +1613,44 @@ export const reviewMilestoneEvidence = mutation({
           (m: any) => m._id === milestone._id || m.status === "approved"
         );
 
+        let paidToFarmer = 0;
+        let earnedThisStage = 0;
         for (const c of releasable) {
-          const releaseAmount = Math.round((c.totalAmount * milestone.releasePercent) / 100);
-          // The farmer is paid with the demo share the buyer funded with.
-          const lock = await findLock(ctx, c.walletUtid);
-          const releaseDemo = lock
-            ? Math.min(shareOf(lock.demoAmount ?? 0, lock.amount, releaseAmount), Math.max(0, (lock.demoAmount ?? 0) - (c.releasedDemoAmount ?? 0)))
-            : 0;
-          await postWallet(ctx, {
-            userId: offer.farmerId,
-            utid: releaseUtid,
-            type: "profit_credit",
-            amount: releaseAmount,
-            rule: { kind: "exact", demoAmount: releaseDemo },
-            timestamp: now,
-            metadata: {
-              type: "advance_purchase_milestone_release",
-              offerId: offer._id,
-              offerUtid: offer.utid,
-              commitmentId: c._id,
-              milestoneId: milestone._id,
-              milestoneName: milestone.name,
-              releasePercent: milestone.releasePercent,
-            },
-          });
+          // at_completion (the default for orders funded under it): this stage is
+          // earned and stays pending; the last stage pays everything not yet paid.
+          // per_milestone: this stage's share is paid now.
+          const { stageAmount, earned, releaseAmount, atCompletion } = milestoneRelease(c, milestone.releasePercent, isFinalStage);
+          earnedThisStage += stageAmount;
+
+          let releaseDemo = 0;
+          if (releaseAmount > 0) {
+            // The farmer is paid with the demo share the buyer funded with.
+            const lock = await findLock(ctx, c.walletUtid);
+            releaseDemo = lock
+              ? Math.min(shareOf(lock.demoAmount ?? 0, lock.amount, releaseAmount), Math.max(0, (lock.demoAmount ?? 0) - (c.releasedDemoAmount ?? 0)))
+              : 0;
+            await postWallet(ctx, {
+              userId: offer.farmerId,
+              utid: releaseUtid,
+              type: "profit_credit",
+              amount: releaseAmount,
+              rule: { kind: "exact", demoAmount: releaseDemo },
+              timestamp: now,
+              metadata: {
+                type: atCompletion ? "advance_purchase_settlement" : "advance_purchase_milestone_release",
+                offerId: offer._id,
+                offerUtid: offer.utid,
+                commitmentId: c._id,
+                milestoneId: milestone._id,
+                milestoneName: milestone.name,
+                releasePercent: milestone.releasePercent,
+              },
+            });
+            paidToFarmer += releaseAmount;
+          }
 
           await ctx.db.patch(c._id, {
+            earnedAmount: earned,
             releasedAmount: c.releasedAmount + releaseAmount,
             releasedDemoAmount: (c.releasedDemoAmount ?? 0) + releaseDemo,
             status: isFinalStage ? "ready_for_delivery" : "in_production",
@@ -1587,8 +1660,10 @@ export const reviewMilestoneEvidence = mutation({
           await notifyUser(
             ctx,
             c.buyerId,
-            "Advanced Markets milestone approved",
-            `"${milestone.name}" was approved for "${offer.productName}". UGX ${releaseAmount.toLocaleString()} released to the farmer.`,
+            "Contract Farming milestone approved",
+            releaseAmount > 0
+              ? `"${milestone.name}" was approved for "${offer.productName}". UGX ${releaseAmount.toLocaleString()} paid to the farmer.`
+              : `"${milestone.name}" was approved for "${offer.productName}". The farmer has earned UGX ${stageAmount.toLocaleString()}; it is paid when every milestone is approved.`,
             offer.utid
           );
         }
@@ -1596,8 +1671,10 @@ export const reviewMilestoneEvidence = mutation({
         await notifyUser(
           ctx,
           offer.farmerId,
-          "Milestone approved — payment released",
-          `Your "${milestone.name}" evidence was approved. Payment has been released to your wallet.`,
+          paidToFarmer > 0 ? "Milestone approved — payment released" : "Milestone approved — earned, payment pending",
+          paidToFarmer > 0
+            ? `Your "${milestone.name}" evidence was approved. UGX ${paidToFarmer.toLocaleString()} has been paid to your wallet.`
+            : `Your "${milestone.name}" evidence was approved. You have earned UGX ${earnedThisStage.toLocaleString()} more; you are paid when the last milestone is approved.`,
           offer.utid
         );
       }

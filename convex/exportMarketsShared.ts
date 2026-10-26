@@ -253,7 +253,7 @@ export const MARKETS_HELPER = {
       "shipment step by step, with a traceability report back to the farms.",
   },
   advanced: {
-    title: "Advanced Markets",
+    title: "Contract Farming Market",
     tagline: "Seedling to harvest",
     body:
       "Fund production before it happens - from seedlings through to harvest - under contract " +

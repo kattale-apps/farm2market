@@ -1115,7 +1115,7 @@ export async function exportFormSubmissionsToPDF(
 }
 
 // =====================================================================
-// Advanced Markets — buyer's order record
+// Contract Farming Market — buyer's order record
 // =====================================================================
 
 type CaptionedPhoto = {
@@ -1213,7 +1213,7 @@ function milestoneStatusLabel(status: string): string {
 }
 
 /**
- * The buyer's downloadable record of one Advanced Markets order: what was
+ * The buyer's downloadable record of one Contract Farming order: what was
  * bought, what it cost, how much has been released to the farmer, the product
  * gallery, and every production milestone with the proof pictures the farmer
  * submitted for it.
@@ -1255,7 +1255,7 @@ export async function exportAdvanceMarketCommitmentToPDF(
   await addWatermark(doc, logoBase64);
   addReportHeader(
     doc,
-    "Advanced Markets Order",
+    "Contract Farming Order",
     `${offer.productName || "Order"}  |  ${detail.utid || ""}`
   );
 
@@ -1371,7 +1371,7 @@ export async function exportAdvanceMarketCommitmentToPDF(
   if (galleryPhotos.length) {
     onProgress?.(`Adding ${galleryPhotos.length} product photo${galleryPhotos.length === 1 ? "" : "s"}...`);
     let y = autoTableEndY(doc) + 8;
-    if (y > pageHeight - 70) y = newPage("Advanced Markets Order — Product Photos");
+    if (y > pageHeight - 70) y = newPage("Contract Farming Order — Product Photos");
     await renderPhotosAdaptivePaged({
       doc,
       photos: galleryPhotos,
@@ -1380,7 +1380,7 @@ export async function exportAdvanceMarketCommitmentToPDF(
       contentWidth,
       pageHeight,
       sectionTitle: "Product photos",
-      prepareContinuationPage: async () => newPage("Advanced Markets Order — Product Photos (cont.)"),
+      prepareContinuationPage: async () => newPage("Contract Farming Order — Product Photos (cont.)"),
     });
   }
 
@@ -1409,12 +1409,12 @@ export async function exportAdvanceMarketCommitmentToPDF(
     await renderCaptionedPhotoGrid({
       doc,
       photos: proofPhotos,
-      startY: newPage("Advanced Markets Order — Milestone Proof Pictures"),
+      startY: newPage("Contract Farming Order — Milestone Proof Pictures"),
       margin,
       contentWidth,
       pageHeight,
       sectionTitle: "Milestone proof pictures",
-      prepareContinuationPage: () => newPage("Advanced Markets Order — Milestone Proof Pictures (cont.)"),
+      prepareContinuationPage: () => newPage("Contract Farming Order — Milestone Proof Pictures (cont.)"),
     });
   }
 

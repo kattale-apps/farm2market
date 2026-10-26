@@ -24,6 +24,14 @@ const imageMetadata = {
   capturedAt: v.string(), // ISO 8601 string
 };
 
+// One step of a seller's lot plan (convex/lotOrdersShared.ts PlanStep)
+const planStep = v.object({
+  name: v.string(),
+  earnPercent: v.number(),
+  payPercent: v.number(),
+  handover: v.boolean(),
+});
+
 // Reusable livestock section template
 const livestockSection = v.object({
   present: v.boolean(),
@@ -208,12 +216,85 @@ export default defineSchema({
     gardenDimensions: v.optional(v.any()), // Raw garden dimensions (for garden mode)
     totalPrice: v.optional(v.number()), // Total price for entire garden (for garden mode, in UGX)
     collectionLocationText: v.optional(v.string()), // Vendor/store collection location text for buyers
+    // Lot order terms (convex/lotOrdersShared.ts). Older listings: 100% to commit and the default steps.
+    photos: v.optional(v.array(evidencePhotoValidator)), // Listing photos, each with its own GPS and time (camera or gallery)
+    gps: v.optional(v.object({ lat: v.number(), lng: v.number(), accuracy: v.optional(v.number()), capturedAt: v.string() })), // Read live on the form; best effort
+    commitPercent: v.optional(v.number()), // Share of the price the buyer commits up front (1-100)
+    milestonePlan: v.optional(v.array(planStep)), // The seller's steps; each order keeps a copy
+    stockSource: v.optional(v.union(v.literal("own_farm"), v.literal("in_app"), v.literal("off_app"))), // in_app: listed from stock bought in the app (traced)
+    withdrawnAt: v.optional(v.number()), // The seller withdrew the unsold lots; lots from failed orders do not come back on the market
   })
     .index("by_farmer", ["farmerId"])
     .index("by_trader", ["traderId"])
     .index("by_inventory", ["inventoryId"])
     .index("by_utid", ["utid"])
     .index("by_status", ["status"]),
+
+  /**
+   * Lot orders: one per lot bought from a farmer, vendor or processor
+   * listing. The buyer's money sits in escrow (their capital_lock entries)
+   * while the seller works through the steps; it settles to the seller only
+   * when the lot is collected. Rules: convex/lotOrdersShared.ts.
+   */
+  lotOrders: defineTable({
+    utid: v.string(), // Also written to listingUnits.lockUtid
+    listingId: v.id("listings"),
+    unitId: v.id("listingUnits"),
+    sellerId: v.id("users"),
+    buyerId: v.id("users"),
+    sellerRole: v.string(),
+    buyerRole: v.string(),
+    produceType: v.string(),
+    lotKg: v.number(),
+    postedPricePerKilo: v.number(), // The listing price when the order was made
+    settledPricePerKilo: v.number(), // The price agreed: posted, or an accepted offer
+    totalAmount: v.number(), // UGX, settledPricePerKilo × lotKg; every step amount is a % of this
+    negotiationId: v.optional(v.id("negotiations")),
+    commitPercent: v.number(),
+    paidAmount: v.number(), // UGX in escrow
+    lockUtids: v.array(v.string()), // The buyer's capital_lock entries
+    milestones: v.array(v.object({
+      ...planStep.fields,
+      doneAt: v.optional(v.number()),
+      doneBy: v.optional(v.id("users")),
+      photos: v.optional(v.array(evidencePhotoValidator)), // Proof the seller did the step (camera or gallery)
+      handedOverAt: v.optional(v.number()), // Handover step: the seller handed over; done when the buyer confirms
+    })),
+    status: v.union(
+      v.literal("in_progress"),
+      v.literal("payment_due"), // A step's share is unpaid; the buyer has until paymentDueBy
+      v.literal("awaiting_collection_confirm"), // Handed over; settles on the buyer's confirmation or after 3 days
+      v.literal("disputed"), // Waiting for an admin
+      v.literal("settled"),
+      v.literal("cancelled"),
+      v.literal("penalised") // The buyer missed a payment
+    ),
+    paymentDueAmount: v.optional(v.number()),
+    paymentDueBy: v.optional(v.number()),
+    paymentDueStep: v.optional(v.number()),
+    handedOverAt: v.optional(v.number()),
+    disputeReason: v.optional(v.string()),
+    disputeKind: v.optional(v.union(v.literal("cancel"), v.literal("problem"))),
+    disputedBy: v.optional(v.id("users")),
+    disputedAt: v.optional(v.number()),
+    toSeller: v.optional(v.number()), // Paid to the seller when the order closed
+    toBuyer: v.optional(v.number()), // Returned to the buyer
+    fineToSeller: v.optional(v.number()),
+    fineToPlatform: v.optional(v.number()),
+    settleUtid: v.optional(v.string()),
+    resolvedBy: v.optional(v.id("users")),
+    resolutionNote: v.optional(v.string()),
+    closedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_seller", ["sellerId", "createdAt"])
+    .index("by_buyer", ["buyerId", "createdAt"])
+    .index("by_unit", ["unitId"])
+    .index("by_utid", ["utid"])
+    .index("by_status", ["status", "updatedAt"])
+    .index("by_status_handover", ["status", "handedOverAt"])
+    .index("by_status_due", ["status", "paymentDueBy"]),
 
   /**
    * Listing units (10kg each)
@@ -251,6 +332,7 @@ export default defineSchema({
     deliveryComment: v.optional(v.string()), // StoreAdmin comment about delivery condition
     deliveryPhotos: v.optional(v.array(v.string())), // Array of photo storage IDs (3 photos: weighing, checking, in-storage)
     deliveryPdfId: v.optional(v.string()), // PDF document ID (stored in Convex file storage or external)
+    lotOrderId: v.optional(v.id("lotOrders")), // Locked by a lot order (escrow and milestones), not the older pay-to-lock
   })
     .index("by_listing", ["listingId"])
     .index("by_status", ["status"])
@@ -361,6 +443,10 @@ export default defineSchema({
     ),
     utid: v.string(), // References the transaction that created this inventory
     is100kgBlock: v.boolean(), // Whether this is a 100kg block created for buyers
+    // Exporters, processors and vendors all hold stock; traderId is the owner.
+    ownerRole: v.optional(v.string()), // Owner's role when not an exporter (store, vendor)
+    source: v.optional(v.union(v.literal("in_app"), v.literal("off_app"))), // in_app: bought through a lot order (traced to farms)
+    lotOrderId: v.optional(v.id("lotOrders")), // The lot order this stock came from
   })
     .index("by_trader", ["traderId"])
     .index("by_status", ["status"])

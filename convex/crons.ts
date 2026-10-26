@@ -80,6 +80,13 @@ crons.interval(
   internal.exportPrices.refreshIcoComposite,
 );
 
+// Lot orders: settle lots 3 days after handover; penalise payments 48 hours overdue.
+crons.interval(
+  "lot orders: settle and penalise",
+  { hours: 1 },
+  internal.lotOrders.runScheduled,
+);
+
 // MarketSpace: hide ads that have reached their expiry.
 crons.interval(
   "expire marketspace ads",

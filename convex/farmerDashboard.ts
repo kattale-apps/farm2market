@@ -14,6 +14,7 @@ import { getUgandaTime, generateUTID } from "./utils";
 import { deliveryPointOf } from "./processors";
 import { findLock, postWallet } from "./walletSplit";
 import { roleLabel } from "./roleLabels";
+import { refreshListingStatus } from "./lotOrders";
 
 /**
  * Get farmer's listings
@@ -46,9 +47,11 @@ export const getFarmerListings = query({
           .withIndex("by_listing", (q) => q.eq("listingId", listing._id))
           .collect();
 
+        // Older deliveries kept status "locked" with deliveryStatus "delivered"
+        const isDelivered = (u: (typeof units)[number]) => u.status === "delivered" || u.deliveryStatus === "delivered";
         const availableCount = units.filter((u) => u.status === "available").length;
-        const lockedCount = units.filter((u) => u.status === "locked").length;
-        const deliveredCount = units.filter((u) => u.status === "delivered").length;
+        const lockedCount = units.filter((u) => u.status === "locked" && !isDelivered(u)).length;
+        const deliveredCount = units.filter(isDelivered).length;
         const cancelledCount = units.filter((u) => u.status === "cancelled").length;
 
         // Where the farmer delivers (a processor facility), if chosen
@@ -128,7 +131,7 @@ export const getActiveNegotiations = query({
 
     // Filter to only units from this farmer's listings
     const farmerLockedUnits = allLockedUnits.filter((unit) =>
-      listingIds.includes(unit.listingId)
+      listingIds.includes(unit.listingId) && !unit.lotOrderId
     );
 
     // Enrich with listing and trader information
@@ -226,7 +229,7 @@ export const getPayToLockConfirmations = query({
 
     // Filter to only units from this farmer's listings
     const farmerLockedUnits = allLockedUnits.filter((unit) =>
-      listingIds.includes(unit.listingId)
+      listingIds.includes(unit.listingId) && !unit.lotOrderId
     );
 
     // Enrich with payment confirmation details
@@ -316,7 +319,7 @@ export const getDeliveryDeadlines = query({
 
     // Filter to only units from this farmer's listings
     const farmerLockedUnits = allLockedUnits.filter((unit) =>
-      listingIds.includes(unit.listingId) && unit.deliveryDeadline
+      listingIds.includes(unit.listingId) && unit.deliveryDeadline && !unit.lotOrderId
     );
 
     // Enrich with deadline countdown (server-calculated)
@@ -426,7 +429,7 @@ export const getDeliveryStatus = query({
 
     // Filter to only units from this farmer's listings
     const farmerLockedUnits = allLockedUnits.filter((unit) =>
-      listingIds.includes(unit.listingId)
+      listingIds.includes(unit.listingId) && !unit.lotOrderId
     );
 
     // Group by delivery status
@@ -533,7 +536,7 @@ export const getExpiredUTIDs = query({
     // Filter to only units from this farmer's listings that are expired
     // Expired means: deadline has passed by more than 1 hour
     const expiredUnits = allLockedUnits.filter((unit) => {
-      if (!listingIds.includes(unit.listingId)) return false;
+      if (!listingIds.includes(unit.listingId) || unit.lotOrderId) return false;
       if (!unit.deliveryDeadline) return false;
       const expirationTime = unit.deliveryDeadline + (60 * 60 * 1000); // Deadline + 1 hour
       if (now < expirationTime) return false; // Not expired yet (need 1 hour past deadline)
@@ -661,19 +664,17 @@ export const getSuccessfulTransactionsLedger = query({
       .withIndex("by_farmer", (q) => q.eq("farmerId", args.farmerId))
       .collect();
 
-    const listingIds = listings.map((l) => l._id);
     const listingsMap = new Map(listings.map((l) => [l._id, l]));
 
-    // Get all delivered units from these listings
-    const allDeliveredUnits = await ctx.db
-      .query("listingUnits")
-      .withIndex("by_status", (q) => q.eq("status", "delivered"))
-      .collect();
-
-    // Filter to only units from this farmer's listings
-    const farmerDeliveredUnits = allDeliveredUnits.filter((unit) =>
-      listingIds.includes(unit.listingId) && unit.deliveryStatus === "delivered"
-    );
+    // Delivered units of this farmer's listings (read per listing, not the whole table)
+    const farmerDeliveredUnits = [];
+    for (const listing of listings) {
+      const units = await ctx.db
+        .query("listingUnits")
+        .withIndex("by_listing", (q) => q.eq("listingId", listing._id))
+        .collect();
+      farmerDeliveredUnits.push(...units.filter((u) => u.status === "delivered" || u.deliveryStatus === "delivered"));
+    }
 
     // Build successful transactions
     const transactions = await Promise.all(
@@ -737,10 +738,14 @@ export const getSuccessfulTransactionsLedger = query({
           }
         }
 
-        // Use negotiated price if available, otherwise use listing price
-        const finalPricePerKilo = negotiationHistory?.currentPricePerKilo || listing.pricePerKilo;
+        // The price paid: a lot order's settled price, else the amount locked
+        // for the unit, else the negotiated or listing price.
         const kilos = listing.unitSize || 10;
-        const totalEarned = finalPricePerKilo * kilos;
+        const order = unit.lotOrderId ? await ctx.db.get(unit.lotOrderId) : null;
+        const lock = order ? null : await findLock(ctx, unit.lockUtid);
+        const finalPricePerKilo = order?.settledPricePerKilo
+          ?? (lock ? Math.round((lock.amount / kilos) * 100) / 100 : negotiationHistory?.currentPricePerKilo || listing.pricePerKilo);
+        const totalEarned = order ? (order.toSeller ?? 0) : finalPricePerKilo * kilos;
 
         return {
           unitId: unit._id,
@@ -750,8 +755,8 @@ export const getSuccessfulTransactionsLedger = query({
           lockUtid: unit.lockUtid,
           produceType: listing.produceType,
           kilos,
-          // Price information
-          desiredPricePerKilo: listing.pricePerKilo,
+          // Price information: the posted price is kept next to the final one
+          desiredPricePerKilo: order?.postedPricePerKilo ?? listing.pricePerKilo,
           negotiatedPricePerKilo: negotiationHistory?.currentPricePerKilo || listing.pricePerKilo,
           finalPricePerKilo: finalSalePrice || finalPricePerKilo,
           totalEarned,
@@ -836,6 +841,9 @@ export const cancelOverdueUTID = mutation({
     // Verify unit is locked
     if (unit.status !== "locked") {
       throw new Error("Unit is not locked");
+    }
+    if (unit.lotOrderId) {
+      throw new Error("Lots bought with payment steps are cancelled by an admin. Use 'Ask admin to cancel' in your ledger.");
     }
 
     // Verify unit has a delivery deadline
@@ -965,6 +973,9 @@ export const farmerConfirmDelivery = mutation({
     if (unit.status !== "locked") {
       throw new Error("Unit is not locked");
     }
+    if (unit.lotOrderId) {
+      throw new Error("This lot was bought with payment steps. Mark the steps done in your ledger.");
+    }
 
     // Verify unit has deliveryStatus of "pending"
     if (unit.deliveryStatus !== "pending") {
@@ -1070,7 +1081,8 @@ export const getAllUnitsLedger = query({
           listingUnits.map(async (unit) => {
             // Determine status
             let status: "open" | "locked" | "delivered" | "cancelled" = "open";
-            if (unit.status === "delivered") {
+            // Older deliveries kept status "locked" with deliveryStatus "delivered"
+            if (unit.status === "delivered" || unit.deliveryStatus === "delivered") {
               status = "delivered";
             } else if (unit.status === "locked") {
               status = "locked";
@@ -1080,15 +1092,20 @@ export const getAllUnitsLedger = query({
               status = "open";
             }
 
-            // The price paid is the amount the buyer locked for the lot
-            // (the offer is cleared from the unit once it locks). Older rows
+            // The price paid: a lot order's settled price (earnings are what
+            // it paid out), else the amount the buyer locked for the lot (the
+            // offer is cleared from the unit once it locks). Older rows
             // without a lock entry fall back to the listing price.
             let earnings = 0;
             let pricePerKilo = listing.pricePerKilo;
             let lockUtid = unit.lockUtid || null;
             const sold = status === "locked" || status === "delivered";
+            const order = unit.lotOrderId ? await ctx.db.get(unit.lotOrderId) : null;
 
-            if (sold) {
+            if (order) {
+              pricePerKilo = order.settledPricePerKilo;
+              if (status === "delivered") earnings = order.toSeller ?? 0;
+            } else if (sold) {
               const lock = await findLock(ctx, unit.lockUtid);
               if (lock) pricePerKilo = Math.round((lock.amount / unitSize) * 100) / 100;
               if (status === "delivered") earnings = pricePerKilo * unitSize;
@@ -1235,10 +1252,10 @@ export const cancelListing = mutation({
     }
 
     // Off the market. A listing with sold lots keeps tracking them: still
-    // awaiting delivery (fully_locked) or all delivered.
-    await ctx.db.patch(args.listingId, {
-      status: lockedCount > 0 ? "fully_locked" : deliveredCount > 0 ? "delivered" : "cancelled",
-    });
+    // awaiting delivery (fully_locked) or all delivered. A lot from an order
+    // that fails later does not come back on the market.
+    await ctx.db.patch(args.listingId, { withdrawnAt: getUgandaTime() });
+    await refreshListingStatus(ctx, args.listingId);
 
     return {
       success: true,

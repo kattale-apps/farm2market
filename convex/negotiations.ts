@@ -23,6 +23,10 @@ import {
 } from "./errors";
 import { Id } from "./_generated/dataModel";
 import { postWallet } from "./walletSplit";
+import { PURCHASER_ROLES } from "./lotOrdersShared";
+import { lotBuyingAccess } from "./lotOrders";
+import { todayUganda } from "./exportMarkets";
+import { roleLabel } from "./roleLabels";
 
 /**
  * Make an offer on one or more units (trader only)
@@ -45,9 +49,12 @@ export const makeOffer = mutation({
 
     // Verify user is a trader
     const user = await ctx.db.get(args.traderId);
-    if (!user || !["trader", "transporter"].includes(user.role)) {
+    if (!user || !(PURCHASER_ROLES as readonly string[]).includes(user.role)) {
       throwAppError(invalidRoleError("trader"));
     }
+    // Only verified exporters, processors, vendors and business buyers buy lots.
+    const access = await lotBuyingAccess(ctx, user, todayUganda());
+    if (!access.ok) throw new Error(access.reason);
 
     // Validate inputs
     if (args.unitIds.length === 0) {
@@ -93,6 +100,9 @@ export const makeOffer = mutation({
         }
         if (!listing.farmerId) {
           throw new Error("Listing has no farmer ID");
+        }
+        if (listing.farmerId === args.traderId) {
+          throw new Error("You cannot make an offer on your own lots");
         }
         listings.set(unit.listingId, listing);
       }
@@ -192,7 +202,7 @@ export const makeOffer = mutation({
         userId: listing.farmerId,
         type: "utid_specific",
         title: "New Offer Received",
-        message: `Exporter made an offer of ${new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX" }).format(args.offerPricePerKilo)}/kg on your ${listing.produceType} listing. UTID: ${utids[0]}`,
+        message: `${roleLabel(user.role)} ${user.alias ?? ""} made an offer of ${new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX" }).format(args.offerPricePerKilo)}/kg on your ${listing.produceType} listing. UTID: ${utids[0]}`,
         utid: utids[0],
         read: false,
         createdAt: getUgandaTime(),
@@ -267,7 +277,7 @@ export const acceptOffer = mutation({
         userId: negotiation.traderId,
         type: "utid_specific",
         title: "Offer Accepted",
-        message: `Your offer of ${new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX" }).format(negotiation.currentPricePerKilo)}/kg has been accepted. You can now proceed to pay-to-lock. UTID: ${acceptedUtid}`,
+        message: `Your offer of ${new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX" }).format(negotiation.currentPricePerKilo)}/kg has been accepted. Commit your share of the price into escrow to secure the lot. UTID: ${acceptedUtid}`,
         utid: acceptedUtid,
         read: false,
         createdAt: getUgandaTime(),
@@ -278,7 +288,7 @@ export const acceptOffer = mutation({
       negotiationId: args.negotiationId,
       acceptedUtid,
       finalPricePerKilo: negotiation.currentPricePerKilo,
-      message: "Offer accepted. Exporter can now proceed to pay-to-lock.",
+      message: "Offer accepted. The buyer can now commit their share of the price into escrow.",
     };
   },
 });
@@ -420,7 +430,7 @@ export const acceptCounterOffer = mutation({
 
     // Verify user is a trader
     const user = await ctx.db.get(args.traderId);
-    if (!user || !["trader", "transporter"].includes(user.role)) {
+    if (!user || !(PURCHASER_ROLES as readonly string[]).includes(user.role)) {
       throwAppError(invalidRoleError("trader"));
     }
 
@@ -468,7 +478,7 @@ export const acceptCounterOffer = mutation({
       negotiationId: args.negotiationId,
       acceptedUtid,
       finalPricePerKilo: negotiation.currentPricePerKilo,
-      message: "Counter-offer accepted. You can now proceed to pay-to-lock.",
+      message: "Counter-offer accepted. You can now commit your share of the price into escrow.",
     };
   },
 });
@@ -488,7 +498,7 @@ export const traderCounterOffer = mutation({
     await checkPilotMode(ctx);
 
     const user = await ctx.db.get(args.traderId);
-    if (!user || !["trader", "transporter"].includes(user.role)) {
+    if (!user || !(PURCHASER_ROLES as readonly string[]).includes(user.role)) {
       throwAppError(invalidRoleError("trader"));
     }
 
@@ -553,7 +563,7 @@ export const cancelNegotiation = mutation({
     await checkPilotMode(ctx);
 
     const user = await ctx.db.get(args.traderId);
-    if (!user || !["trader", "transporter"].includes(user.role)) {
+    if (!user || !(PURCHASER_ROLES as readonly string[]).includes(user.role)) {
       throwAppError(invalidRoleError("trader"));
     }
 
@@ -623,7 +633,7 @@ export const getTraderNegotiations = query({
   handler: async (ctx, args) => {
     // Verify user is a trader
     const user = await ctx.db.get(args.traderId);
-    if (!user || !["trader", "transporter"].includes(user.role)) {
+    if (!user || !(PURCHASER_ROLES as readonly string[]).includes(user.role)) {
       throw new Error("User is not a trader");
     }
 
@@ -765,7 +775,7 @@ export const getAcceptedNegotiations = query({
   handler: async (ctx, args) => {
     // Verify user is a trader
     const user = await ctx.db.get(args.traderId);
-    if (!user || !["trader", "transporter"].includes(user.role)) {
+    if (!user || !(PURCHASER_ROLES as readonly string[]).includes(user.role)) {
       throw new Error("User is not a trader");
     }
 

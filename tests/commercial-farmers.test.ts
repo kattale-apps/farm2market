@@ -7,7 +7,7 @@ import { cardIsLive, produceVisible, seesFarmGate, type ViewerTier } from "../co
 const viewer = (tier: ViewerTier, role: string | null, isMine = false) => ({ tier, role, isMine });
 const farmer = (status: string, sellerCommercial?: "pending" | "verified") => ({ view: "produce" as const, status, sellerCommercial });
 
-test("verified buyers (exporters, processors, vendors, business buyers) see every farmer lot, at the farm gate too", () => {
+test("verified purchasers (exporters, processors, vendors, business buyers) see every farmer lot, at the farm gate too", () => {
   for (const role of ["store", "trader", "vendor", "buyer"]) {
     const v = viewer("verified", role);
     assert.ok(seesFarmGate(v));
@@ -15,7 +15,7 @@ test("verified buyers (exporters, processors, vendors, business buyers) see ever
     assert.ok(produceVisible(farmer("active"), v), "a non-commercial farmer's vended lot");
     assert.ok(produceVisible(farmer("active", "pending"), v));
     assert.ok(produceVisible(farmer("active", "verified"), v));
-    assert.ok(!seesFarmGate(viewer("member", role)), "an unverified buyer is like a visitor");
+    assert.ok(!seesFarmGate(viewer("member", role)), "an unverified purchaser is like a visitor");
     assert.ok(!produceVisible(farmer("farm_gate"), viewer("member", role)));
   }
 });

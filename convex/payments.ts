@@ -37,7 +37,7 @@ async function lockUnitInternal(ctx: MutationCtx, traderId: Id<"users">, unitId:
 }
 
 /**
- * Lock a lot by committing into escrow (exporters and other verified buyers).
+ * Lock a lot by committing into escrow (exporters and other verified purchasers).
  * Kept for older screens; new screens call lotOrders.commit.
  */
 export const lockUnit = mutation({

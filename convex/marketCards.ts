@@ -9,7 +9,7 @@
  *
  * Farmers' lots follow the commercial farmer rule (marketspaceShared
  * produceVisible): a farmer's lot for sale always has a card, "active" while
- * it is on MarketSpace and "farm_gate" otherwise, so verified buyers can
+ * it is on MarketSpace and "farm_gate" otherwise, so verified purchasers can
  * find every farmer lot. Cards carry the farmer's commercial profile status,
  * so Discover decides who sees them without extra reads.
  *

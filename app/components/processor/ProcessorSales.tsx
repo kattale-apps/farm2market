@@ -57,7 +57,7 @@ export function ProcessorSalesTab({ userId, member, today, setMsg }: { userId: I
       <div style={card}>
         <h2 style={{ marginTop: 0, fontSize: "1.15rem", color: PROCESSOR_HEADING }}>Sell your processed coffee</h2>
         <p style={{ fontSize: "0.85rem", color: "#607d8b", marginTop: 0 }}>
-          <b>MarketSpace</b> reaches every verified buyer, exporter, processor and vendor, who pay through escrow step by step. You can also
+          <b>MarketSpace</b> reaches every verified purchaser (exporters, processors, vendors and business buyers), who pay through escrow step by step. You can also
           sell straight to an exporter you deal with, or log a sale you made outside the app. Nothing is listed until you choose.
         </p>
         {!member && <Notice tone="info">You can sell once a community admin accepts you as a processor.</Notice>}

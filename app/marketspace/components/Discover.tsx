@@ -16,7 +16,7 @@ export type Chip = "all" | "produce" | "farmgate" | "bulk" | "lots" | "classifie
 const CHIPS: { key: Chip; label: string }[] = [
   { key: "all", label: "All" },
   { key: "produce", label: "🌾 Farmers Produce" },
-  { key: "farmgate", label: "🚜 Farm Gate" }, // Verified buyers only: farmers' lots not on MarketSpace
+  { key: "farmgate", label: "🚜 Farm Gate" }, // Verified purchasers only: farmers' lots not on MarketSpace
   { key: "bulk", label: "📦 Local Bulk" },
   { key: "lots", label: "🏪 Vendors and Processors" },
   { key: "classifieds", label: "📰 Classifieds" },
@@ -141,7 +141,7 @@ export function Discover({
   };
 
   const verified = me?.tier === "verified";
-  // Verified buyers buy at the farm gate: they see every farmer's lots
+  // Verified purchasers buy at the farm gate: they see every farmer's lots
   const seesFarmGate = farmGateFor({ tier: me?.tier ?? "public", role: me?.role ?? null });
   const chips = CHIPS.filter((c) => c.key !== "farmgate" || seesFarmGate);
   const filters = {
@@ -209,7 +209,7 @@ export function Discover({
 
       {chip === "farmgate" && (
         <p style={{ margin: "0.5rem 0 0", fontSize: "0.85rem", color: "#555" }}>
-          Farmers&apos; lots that are not on MarketSpace. Only verified buyers see them, to buy at the farm gate.
+          Farmers&apos; lots that are not on MarketSpace. Only verified purchasers see them, to buy at the farm gate.
         </p>
       )}
 
@@ -282,7 +282,7 @@ export function Discover({
               <input type="number" min={0} value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} placeholder="Max UGX/kg" aria-label="Highest price per kg" style={{ ...select, padding: "0 0.5rem" }} />
             </div>
           ) : (
-            <div style={{ fontSize: "0.8rem", color: "#666", alignSelf: "center" }}>Price filters are for verified buyers.</div>
+            <div style={{ fontSize: "0.8rem", color: "#666", alignSelf: "center" }}>Price filters are for verified purchasers.</div>
           )}
           {filtersOn > 0 && (
             <button type="button" onClick={() => { setDistrict(""); setStockSource(""); setSellerRole(""); setMinPrice(""); setMaxPrice(""); }} style={{ ...chipStyle(false), minHeight: 42 }}>

@@ -5,7 +5,7 @@
  *
  * The scan page follows MarketSpace's viewer levels: anyone sees what the
  * good is, the seller's category and district, how much of it traces to farms
- * and the live post; verified buyers also see the seller's alias and the
+ * and the live post; verified purchasers also see the seller's alias and the
  * farms' districts; the owner also sees the scan counts.
  */
 
@@ -55,7 +55,7 @@ async function photoUrl(ctx: Ctx, storageId: Id<"_storage"> | undefined) {
   return storageId ? await ctx.storage.getUrl(storageId) : null;
 }
 
-/** How much of the good traces to farms, and (for verified buyers) where the farms are. */
+/** How much of the good traces to farms, and (for verified purchasers) where the farms are. */
 async function traceDigest(ctx: Ctx, origins: FarmOrigin[], withDistricts: boolean) {
   const totals = traceSummary(origins);
   const total = totals.appFarmsKg + totals.declaredFarmsKg + totals.untracedKg;

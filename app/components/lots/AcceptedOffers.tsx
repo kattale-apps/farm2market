@@ -17,7 +17,7 @@ function errorMessage(e: unknown): { text: string; needsTopUp: boolean } {
 
 /**
  * Offers a seller accepted, waiting for the buyer to commit their share of
- * the price into escrow. Shown to verified buyers on MarketSpace.
+ * the price into escrow. Shown to verified purchasers on MarketSpace.
  */
 export function AcceptedOffers({ userId }: { userId: Id<"users"> }) {
   const accepted = useQuery(api.negotiations.getAcceptedNegotiations, { traderId: userId });

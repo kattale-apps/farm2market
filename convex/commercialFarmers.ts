@@ -191,7 +191,7 @@ export const review = mutation({
 
 /**
  * A farmer's lot whose MarketSpace time ran out goes back to the farm gate,
- * where verified buyers still see it (runs every 30
+ * where verified purchasers still see it (runs every 30
  * minutes, after the card's time has passed).
  */
 export const farmGateAfterVendEnds = internalMutation({
@@ -251,7 +251,7 @@ export const applyCommercialFarmerRule = internalMutation({
         ctx,
         farmer._id,
         ADD_PROFILE_TITLE,
-        "Your lots are no longer shown to visitors on MarketSpace. Add your trading name and a commercial document in MarketSpace → My lots to put them back. Verified buyers can still see and buy your lots at the farm gate."
+        "Your lots are no longer shown to visitors on MarketSpace. Add your trading name and a commercial document in MarketSpace → My lots to put them back. Verified purchasers can still see and buy your lots at the farm gate."
       );
       told++;
     }

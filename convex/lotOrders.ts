@@ -2,7 +2,7 @@
  * Lot orders: buying a lot from a farmer, vendor or processor listing.
  *
  * The journey (rules and maths in convex/lotOrdersShared.ts):
- *   1. A verified buyer commits the seller's share of the price from their
+ *   1. A verified purchaser commits the seller's share of the price from their
  *      wallet into escrow (capital_lock), at the posted price or an accepted
  *      offer. The lot is locked to them.
  *   2. The seller marks each step done with a photo. Each finished step
@@ -872,7 +872,7 @@ export const runScheduled = internalMutation({
 // Reads
 // ------------------------------------------------------------------
 
-/** Lots for sale from farmers, vendors and processors, for verified buyers only. */
+/** Lots for sale from farmers, vendors and processors, for verified purchasers only. */
 export const marketLots = query({
   args: { userId: v.id("users"), today: v.string() },
   handler: async (ctx, args) => {

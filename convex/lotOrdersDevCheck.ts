@@ -121,7 +121,7 @@ export const ageHandover = internalMutation({
 /**
  * MarketSpace walkthrough: the extra test accounts and a one-day session for
  * each, so session-token functions (discover, cardDetail, vendListing,
- * enquiries.*) can be called as a farmer, a verified buyer, an unverified
+ * enquiries.*) can be called as a farmer, a verified business buyer, an unverified
  * member and a verified exporter. Visitors are calls without a token.
  */
 export const marketspaceSessions = internalMutation({

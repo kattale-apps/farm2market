@@ -80,8 +80,10 @@ const BADGE = 120; // The logo badge on the QR's free corner
 const BANNER = 260; // The QR head banner: square pictures above the name and the code
 const BANNER_GAP = 24;
 const GREEN = "#1b5e20";
+const SITE_LINES = ["Visit farm2marketuganda.com", "and check the MarketSpace"]; // The label's bottom line, in two lines to stay readable when printed
+const SITE_BLOCK = 24 + 42 + 38; // Divider gap and the two lines
 
-/** Draws the label: the QR head banner and the name, the QR with the good's icon in the middle and the Farm2Market logo on its free corner, and the code to type in. */
+/** Draws the label: the QR head banner and the name, the QR with the good's icon in the middle and the Farm2Market logo on its free corner, the code to type in, and the website to visit. */
 async function drawLabel(url: string, code: string, label: string, photoUrl: string | null, bannerUrl: string): Promise<string> {
   const icon = goodsIcon(label);
   const name = label.trim();
@@ -98,7 +100,7 @@ async function drawLabel(url: string, code: string, label: string, photoUrl: str
   const measure = canvas.getContext("2d")!;
   measure.font = "800 56px Montserrat, Arial, sans-serif";
   const lines = nameLines(measure, name, W - 80);
-  const H = 40 + (banner.length > 0 ? BANNER + 24 : 0) + lines.length * 66 + 16 + QR + BADGE / 2 + 20 + 64 + 44 + 36;
+  const H = 40 + (banner.length > 0 ? BANNER + 24 : 0) + lines.length * 66 + 16 + QR + BADGE / 2 + 20 + 64 + 44 + SITE_BLOCK + 36;
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext("2d")!;
@@ -173,6 +175,23 @@ async function drawLabel(url: string, code: string, label: string, photoUrl: str
   ctx.fillStyle = "#444";
   ctx.font = "600 26px Montserrat, Arial, sans-serif";
   ctx.fillText("Scan to see where it comes from · Farm2Market", W / 2, y);
+  y += 44;
+
+  // The bottom line: where to find MarketSpace without scanning
+  ctx.strokeStyle = "#c8e6c9";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(80, y + 6);
+  ctx.lineTo(W - 80, y + 6);
+  ctx.stroke();
+  y += 24;
+  ctx.fillStyle = GREEN;
+  ctx.font = "800 32px Montserrat, Arial, sans-serif";
+  ctx.fillText(SITE_LINES[0], W / 2, y);
+  y += 42;
+  ctx.fillStyle = "#333";
+  ctx.font = "700 28px Montserrat, Arial, sans-serif";
+  ctx.fillText(SITE_LINES[1], W / 2, y);
 
   return canvas.toDataURL("image/png");
 }

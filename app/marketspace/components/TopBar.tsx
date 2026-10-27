@@ -1,14 +1,19 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { UgandaMapIcon } from "./UgandaMapIcon";
 import { FONT } from "./shared";
 
 /**
- * MarketSpace header. Guests always see Log in / Sign up; signed-in users get
- * a way back to their dashboard, and admins a link to moderation.
+ * MarketSpace header. Guests always see Log in / Sign up, which signs a new
+ * visitor up as a buyer and brings them back to the page they were on;
+ * signed-in users get a way back to their dashboard, and admins a link to
+ * moderation.
  */
 export function TopBar({ status, showAdmin, backHref }: { status: "loading" | "guest" | "user"; showAdmin?: boolean; backHref?: string }) {
+  const [returnTo, setReturnTo] = useState("/marketspace");
+  useEffect(() => setReturnTo(window.location.pathname + window.location.search), []);
   const pill: React.CSSProperties = {
     display: "inline-flex",
     alignItems: "center",
@@ -55,7 +60,7 @@ export function TopBar({ status, showAdmin, backHref }: { status: "loading" | "g
           </Link>
         )}
         {status === "guest" && (
-          <Link href="/login" style={{ ...pill, background: "#2e7d32", color: "#fff" }}>
+          <Link href={`/login?role=buyer&returnTo=${encodeURIComponent(returnTo)}`} style={{ ...pill, background: "#2e7d32", color: "#fff" }}>
             Log in / Sign up
           </Link>
         )}

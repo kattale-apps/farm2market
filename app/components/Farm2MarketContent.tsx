@@ -24,12 +24,13 @@ interface Farm2MarketContentProps {
   isMobile: boolean;
 }
 
-/** "10 lots × 100 kg (2 bags of 50 kg)"; older listings read "10 units × 10 kg". */
-function lotSummary(l: { totalUnits: number; unitSize?: number; bagKg?: number | null; bagsPerLot?: number | null }) {
+/** "10 lots × 100 kg (2 bags of 50 kg)", "3 lots × 160 kg (2 animals of about 80 kg)"; older listings read "10 units × 10 kg". */
+function lotSummary(l: { totalUnits: number; unitSize?: number; bagKg?: number | null; bagsPerLot?: number | null; produceKind?: string }) {
   const size = l.unitSize || 10;
   if (!l.bagKg) return `${l.totalUnits} unit${l.totalUnits === 1 ? "" : "s"} × ${size} kg`;
   const bags = l.bagsPerLot ?? 1;
-  return `${l.totalUnits} lot${l.totalUnits === 1 ? "" : "s"} × ${size} kg (${bags} bag${bags === 1 ? "" : "s"} of ${l.bagKg} kg)`;
+  const each = l.produceKind === "animal" ? `animal${bags === 1 ? "" : "s"} of about` : `bag${bags === 1 ? "" : "s"} of`;
+  return `${l.totalUnits} lot${l.totalUnits === 1 ? "" : "s"} × ${size} kg (${bags} ${each} ${l.bagKg} kg)`;
 }
 
 /** What the farmer reads on a listing, from its lot counts. */

@@ -30,6 +30,17 @@ export function goodsIcon(label: string): string {
     [["egg"], "🥚"],
     [["milk"], "🥛"],
     [["honey"], "🍯"],
+    [["cowpea", "pigeon"], "🫘"], // Crops, not animals: cowpeas are not cows, pigeon peas are not pigs
+    // Animals (convex/produceKinds.ts)
+    [["cattle", "cow", "bull", "heifer"], "🐮"],
+    [["goat"], "🐐"],
+    [["sheep"], "🐑"],
+    [["pig"], "🐷"],
+    [["chicken", "hen", "broiler", "layer", "kuroiler"], "🐔"],
+    [["duck"], "🦆"],
+    [["turkey"], "🦃"],
+    [["rabbit"], "🐇"],
+    [["fish", "tilapia", "mukene", "nile perch"], "🐟"],
   ];
   return icons.find(([words]) => words.some((w) => key.includes(w)))?.[1] ?? "🌾";
 }

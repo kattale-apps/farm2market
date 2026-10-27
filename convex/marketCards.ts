@@ -144,6 +144,7 @@ export async function syncListingCard(ctx: MutationCtx, listingId: Id<"listings"
     qualityRating: listing.qualityRating,
     thumbStorageId: listing.photos?.[0]?.storageId,
     sellerCommercial: PROFILE_ON_CARD_ROLES.includes(seller?.role ?? "") ? await commercialStatusOf(ctx, listing.farmerId) : undefined,
+    produceKind: listing.produceKind,
     status: farmGate ? ("farm_gate" as const) : ("active" as const),
     expiresAt: listing.vendExpiresAt ?? listing.createdAt, // Farm-gate cards do not expire
     createdAt: farmGate ? listing.createdAt : listing.vendedAt ?? now,

@@ -150,6 +150,20 @@ test("who can buy lots: verified exporters, processors, vendors and business buy
   assert.equal(lotBuyingDecision(null, false).ok, false);
 });
 
+test("purchasers not verified yet buy lots on MarketSpace that are not bulk", () => {
+  const open = { bulk: false, onMarketSpace: true };
+  for (const role of ["trader", "store", "vendor", "buyer"]) {
+    assert.equal(lotBuyingDecision({ role }, false, open).ok, true, `${role} buys a lot that is not bulk`);
+    const bulk = lotBuyingDecision({ role }, false, { bulk: true, onMarketSpace: true });
+    assert.equal(bulk.ok, false, `${role} needs verification for bulk`);
+    assert.match(bulk.reason ?? "", /Bulk lots are for verified purchasers/);
+    assert.equal(lotBuyingDecision({ role }, false, { bulk: false, onMarketSpace: false }).ok, false, `${role} needs verification at the farm gate`);
+  }
+  assert.equal(lotBuyingDecision({ role: "buyer", verificationStatus: "verified" }, false, { bulk: true, onMarketSpace: false }).ok, true, "verified purchasers buy every lot");
+  assert.equal(lotBuyingDecision({ role: "farmer" }, false, open).ok, false, "farmers still do not buy lots");
+  assert.equal(lotBuyingDecision({ role: "transporter" }, false, open).ok, false);
+});
+
 test("listing terms: defaults from a commit %, nothing stored for older callers", () => {
   assert.equal(lotTerms("farmer"), null);
   const terms = lotTerms("farmer", 20)!;

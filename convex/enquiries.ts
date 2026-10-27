@@ -93,7 +93,7 @@ export const forCard = query({
     const isMine = !!viewer.user && viewer.user._id === card.sellerId;
     if (!isMine && !cardIsLive(card, args.now)) return null;
     if (!produceVisible(card, { tier: viewer.tier, role: viewer.user?.role ?? null, isMine })) return null; // The commercial farmer rule
-    const full = !isLiteFor(card.view, viewer.tier, isMine);
+    const full = !isLiteFor(card, { tier: viewer.tier, role: viewer.user?.role ?? null, isMine });
     const mode = questionMode(card);
     const pool = (await activeQuestions(ctx)).filter((q) => questionFits(q.appliesTo, audiencesOf(card)));
     const questions = new Map(pool.map((q) => [q._id, q]));
@@ -120,7 +120,7 @@ export const forCard = query({
     let reason: string | null = null;
     if (!isMine) {
       if (viewer.tier === "public") reason = mode === "ask" ? "Sign up as a buyer to ask questions." : "Log in to respond to this wanted ad.";
-      else if (!full) reason = liteReason(viewer.tier);
+      else if (!full) reason = liteReason(viewer.tier, card);
     }
     const canAct = !isMine && reason === null;
 
@@ -208,7 +208,7 @@ export const ask = mutation({
     if (card.sellerId === user._id) throw new Error("This is your own post.");
     if (questionMode(card) !== "ask") throw new Error("Wanted ads take responses, not questions.");
     const tier = (await lotBuyingAccess(ctx, user, todayUganda())).ok ? "verified" : "member";
-    if (isLiteFor(card.view, tier)) throw new Error(liteReason(tier));
+    if (isLiteFor(card, { tier, role: user.role })) throw new Error(liteReason(tier, card));
     if (!produceVisible(card, { tier, role: user.role, isMine: false })) throw new Error("This post is no longer on MarketSpace.");
 
     const ids = [...new Set(args.questionIds)];

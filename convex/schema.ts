@@ -185,6 +185,7 @@ export default defineSchema({
     qualityRating: v.optional(v.string()), // Quality rating from admin-managed dropdown (e.g., "Premium", "Good", "Fair")
     qualityComment: v.optional(v.string()), // Farmer's text comment about produce quality
     deliveryProcessorId: v.optional(v.id("users")), // Processor facility the produce is delivered to (optional)
+    produceKind: v.optional(v.union(v.literal("crop"), v.literal("animal"))), // What it sells (convex/produceKinds.ts); absent = crop
     // Trader packaging-based listing fields (optional for backward compatibility)
     productName: v.optional(v.string()),
     packagingTypeEnum: v.optional(v.string()),
@@ -4120,6 +4121,7 @@ export default defineSchema({
     qualityRating: v.optional(v.string()),
     thumbStorageId: v.optional(v.id("_storage")),
     sellerCommercial: v.optional(v.union(v.literal("pending"), v.literal("verified"))), // Farmers and vendors: their commercial profile; absent = none (farmers: produceVisible; vendors: the Verified Vendor badge)
+    produceKind: v.optional(v.union(v.literal("crop"), v.literal("animal"))), // Lots: a crop or live animals (a lot by weight is animals, not bags)
     // Expiry is by time (expiresAt), not status. farm_gate: a farmer's lot for sale but not on MarketSpace,
     // seen only by verified purchasers as a farm-gate source (it does not expire)
     status: v.union(v.literal("active"), v.literal("closed"), v.literal("farm_gate")),

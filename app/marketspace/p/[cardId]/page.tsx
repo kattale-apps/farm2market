@@ -30,11 +30,12 @@ function errorMessage(e: unknown): { text: string; needsTopUp: boolean } {
 const STOCK: Record<string, string> = { own_farm: "From the farm", in_app: "Traced (bought in the app)", off_app: "Off-app stock" };
 
 /**
- * One MarketSpace post: what QR codes and cards open. Visitors and
- * unverified members see the preview; verified purchasers see the price, the
- * payment steps and can buy or make an offer. Every lot post has a Purchase
- * now button: it buys for verified purchasers, signs visitors up as buyers
- * and tells unverified members how to get verified. Never shows a phone number.
+ * One MarketSpace post: what QR codes and cards open. Visitors see the
+ * preview. Purchasers see the price and the payment steps and can buy or make
+ * an offer: verified ones on every lot, the others on lots that are not bulk
+ * (isLiteFor). Every lot post has a Purchase now button: it buys for them,
+ * signs visitors up as buyers and tells the rest how to get verified. Never
+ * shows a phone number.
  */
 export default function CardPage() {
   const params = useParams<{ cardId: string }>();
@@ -167,7 +168,7 @@ export default function CardPage() {
               <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#1b5e20" }}>{formatUGX(card.pricePerKilo ?? 0)}/kg</div>
               <div style={{ color: "#333", margin: "0.2rem 0" }}>
                 {card.lotsAvailable} lot{card.lotsAvailable === 1 ? "" : "s"} of {card.lotKg?.toLocaleString()} kg
-                {card.bagKg ? ` (${card.bagsPerLot ?? 1} × ${card.bagKg} kg bags)` : ""} · {formatUGX(card.lotPrice ?? 0)} a lot
+                {card.bagKg ? (card.animal ? ` (${card.bagsPerLot ?? 1} animal${(card.bagsPerLot ?? 1) === 1 ? "" : "s"} of about ${card.bagKg} kg)` : ` (${card.bagsPerLot ?? 1} × ${card.bagKg} kg bags)`) : ""} · {formatUGX(card.lotPrice ?? 0)} a lot
               </div>
             </>
           )}
@@ -191,7 +192,7 @@ export default function CardPage() {
 
           {card.isMine ? (
             <Link href="/marketspace?tab=mine" style={{ display: "inline-block", marginTop: "0.7rem", color: "#1b5e20", fontWeight: 800 }}>This is your post: manage it in My posts →</Link>
-          ) : card.viewerTier === "verified" ? (
+          ) : card.canBuy ? (
             free === 0 ? (
               <div style={{ marginTop: "0.7rem", color: "#8d6e00" }}>Every free lot has an offer waiting for the seller.</div>
             ) : (

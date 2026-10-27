@@ -425,7 +425,7 @@ export async function commitLots(ctx: MutationCtx, buyerId: Id<"users">, unitIds
 
   const packaged = listing.listingMode === "packaging";
   const commitPercent = listing.commitPercent ?? (packaged ? PACKAGED_COMMIT_PERCENT : 100);
-  const plan = listing.milestonePlan ?? (packaged ? packagedPlan() : defaultPlan(seller.role, commitPercent));
+  const plan = listing.milestonePlan ?? (packaged ? packagedPlan(seller.role) : defaultPlan(seller.role, commitPercent));
   const lotKg = packaged ? 0 : listing.unitSize || 10;
   const perBatch = listing.packagesPerBatch ?? 1;
   // One order per lot; a packaged purchase is one order for all its items or batches.

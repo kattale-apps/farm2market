@@ -146,8 +146,10 @@ export function stockSourceProblem(input: {
 export const PACKAGED_COMMIT_PERCENT = 100;
 
 /** No payment steps: one handover step, paid in full up front into escrow. */
-export function packagedPlan(): PlanStep[] {
-  return [{ name: "Collect from my shop", earnPercent: 100, payPercent: 0, handover: true }];
+export function packagedPlan(sellerRole?: string): PlanStep[] {
+  // A farmer's items (animals sold per animal) are collected at the farm gate; everyone else's at the shop
+  const name = sellerRole === "farmer" ? "Collect from farm gate" : "Collect from my shop";
+  return [{ name, earnPercent: 100, payPercent: 0, handover: true }];
 }
 
 /** What one package is called: the seller's own word, or the preset type. */

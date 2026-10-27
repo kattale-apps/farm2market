@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { ANIMAL_OPTIONS, ANIMAL_UNIT, isAnimalOption } from "../convex/produceKinds";
-import { packagesText } from "../convex/lotOrdersShared";
+import { packagedPlan, packagesText } from "../convex/lotOrdersShared";
 
 test("the animal choices carry their own icons: cows are cattle 🐮, a pig is 🐷", () => {
   const icon = (value: string) => ANIMAL_OPTIONS.find((a) => a.value === value)?.icon;
@@ -20,4 +20,11 @@ test("admin produce options in an animal category show under Animal, the rest un
 test("an animal sold per animal is counted in heads", () => {
   assert.equal(packagesText(1, ANIMAL_UNIT), "1 head");
   assert.equal(packagesText(3, ANIMAL_UNIT), "3 heads");
+});
+
+test("an animal a farmer sells per animal is collected at the farm gate, a vendor's items at the shop", () => {
+  assert.equal(packagedPlan("farmer")[0].name, "Collect from farm gate");
+  assert.equal(packagedPlan("vendor")[0].name, "Collect from my shop");
+  assert.equal(packagedPlan()[0].name, "Collect from my shop");
+  assert.equal(packagedPlan("farmer")[0].handover, true);
 });

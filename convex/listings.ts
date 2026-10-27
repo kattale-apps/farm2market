@@ -217,7 +217,7 @@ export const createListing = mutation({
       listingMode === "packaging"
         ? args.milestonePlan
           ? lotTerms(user.role, args.commitPercent, args.milestonePlan)
-          : { commitPercent: PACKAGED_COMMIT_PERCENT, milestonePlan: packagedPlan() }
+          : { commitPercent: PACKAGED_COMMIT_PERCENT, milestonePlan: packagedPlan(user.role) }
         : lotTerms(user.role, args.commitPercent, args.milestonePlan);
     const packagesPerBatch = listingMode === "packaging" ? Math.round(args.packagesPerBatch ?? 1) : undefined;
     if (packagesPerBatch !== undefined && !(packagesPerBatch >= 1 && packagesPerBatch <= 10_000)) throw new Error("Items in one batch must be between 1 and 10,000");

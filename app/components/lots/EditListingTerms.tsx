@@ -43,7 +43,7 @@ export function EditListingTerms({
   const packaged = listing.listingMode === "packaging";
   const startCommit = listing.commitPercent ?? (packaged ? PACKAGED_COMMIT_PERCENT : 100);
   const [commitPercent, setCommitPercent] = useState(startCommit);
-  const [steps, setSteps] = useState<PlanStep[]>(listing.milestonePlan ?? (packaged ? packagedPlan() : defaultPlan(sellerRole, startCommit)));
+  const [steps, setSteps] = useState<PlanStep[]>(listing.milestonePlan ?? (packaged ? packagedPlan(sellerRole) : defaultPlan(sellerRole, startCommit)));
   const [price, setPrice] = useState(String(packaged ? listing.pricePerUnit ?? "" : listing.pricePerKilo));
   const [takesOffers, setTakesOffers] = useState(listing.takesOffers === true);
   const [photos, setPhotos] = useState<CapturedPhoto[]>([]);

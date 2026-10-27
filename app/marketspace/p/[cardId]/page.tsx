@@ -75,7 +75,8 @@ export default function CardPage() {
 
   const isLot = card.sourceKind === "listing";
   // What one sellable unit is called: a lot by weight, or one item or batch of packaged goods
-  const unitWord = !card.packaged ? "lot" : (card.packagesPerBatch ?? 1) > 1 ? "batch" : card.unitLabel ?? "item";
+  // Animals sold per animal read "animal" and "group", not "head" and "batch"
+  const unitWord = !card.packaged ? "lot" : (card.packagesPerBatch ?? 1) > 1 ? (card.animal ? "group" : "batch") : card.animal ? "animal" : card.unitLabel ?? "item";
   const free = card.freeUnitIds.length;
   const n = Math.min(free, Math.max(1, parseInt(lots, 10) || 1));
   const pays = card.steps?.map((s) => s.payPercent) ?? [];
@@ -198,7 +199,7 @@ export default function CardPage() {
             ) : (
               <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center", marginTop: "0.8rem" }}>
                 <label style={{ fontSize: "0.9rem" }}>
-                  {card.packaged ? `How many ${(card.packagesPerBatch ?? 1) > 1 ? "batches" : card.unitLabel ?? "items"}?` : "Lots"}{" "}
+                  {card.packaged ? `How many ${(card.packagesPerBatch ?? 1) > 1 ? (card.animal ? "groups" : "batches") : card.animal ? "animals" : card.unitLabel ?? "items"}?` : "Lots"}{" "}
                   <input type="number" inputMode="numeric" min={1} max={free} value={lots} onChange={(e) => setLots(e.target.value)} style={{ width: 70, minHeight: 42, padding: "0 0.5rem", border: "1px solid #ccc", borderRadius: 8 }} />
                 </label>
                 <button
@@ -224,7 +225,7 @@ export default function CardPage() {
           {offering && card.viewerUserId && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center", marginTop: "0.6rem", padding: "0.6rem", borderRadius: 10, background: "#f6f8f4" }}>
               <label style={{ fontSize: "0.9rem" }}>
-                Your price per {card.packaged ? card.unitLabel ?? "item" : "kg"}{" "}
+                Your price per {card.packaged ? (card.animal ? "animal" : card.unitLabel ?? "item") : "kg"}{" "}
                 <input type="number" min={1} value={offerPrice} onChange={(e) => setOfferPrice(e.target.value)} style={{ width: 110, minHeight: 42, padding: "0 0.5rem", border: "1px solid #ccc", borderRadius: 8 }} />
               </label>
               <button

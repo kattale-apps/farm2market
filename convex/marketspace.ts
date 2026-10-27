@@ -757,7 +757,7 @@ export const myLots = query({
         lotsLeft: await lotsLeft(ctx, l._id),
         pricePerKilo: l.pricePerKilo,
         commitPercent: l.commitPercent ?? null,
-        milestonePlan: l.milestonePlan ?? (packaged ? packagedPlan() : defaultPlan(user.role, commitPercent)),
+        milestonePlan: l.milestonePlan ?? (packaged ? packagedPlan(user.role) : defaultPlan(user.role, commitPercent)),
         hasCustomPlan: !!l.milestonePlan,
         // Packaged items: sold per item (pricePerUnit), one by one or in batches of packagesPerBatch
         packaged,
@@ -1047,7 +1047,7 @@ export const cardDetail = query({
       if (!shaped.lite) {
         const packaged = listing.listingMode === "packaging";
         const commit = listing.commitPercent ?? (packaged ? PACKAGED_COMMIT_PERCENT : 100);
-        steps = listing.milestonePlan ?? (packaged ? packagedPlan() : defaultPlan(card.sellerRole, commit));
+        steps = listing.milestonePlan ?? (packaged ? packagedPlan(card.sellerRole) : defaultPlan(card.sellerRole, commit));
         // One sellable unit: a lot by weight, or one item or batch of packaged items
         lotPrice = packaged ? packagedUnitPrice(listing.pricePerUnit ?? 0, listing.packagesPerBatch ?? 1) : Math.round(listing.pricePerKilo * (listing.unitSize || 10));
         packagesPerBatch = packaged ? listing.packagesPerBatch ?? 1 : null;

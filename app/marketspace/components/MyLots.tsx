@@ -8,19 +8,21 @@ import { EditListingTerms } from "../../components/lots/EditListingTerms";
 import { VendSheet, type MyLot } from "../../components/lots/VendSheet";
 import { ugandaDateFromInstant } from "../../../convex/exportMarketsShared";
 import { QuestionsSheet } from "./Questions";
-import { FONT, formatUGX } from "./shared";
+import { FONT, formatDate, formatUGX } from "./shared";
 import { PACKAGED_COMMIT_PERCENT, isPackagedPlan, packagesText } from "../../../convex/lotOrdersShared";
-import { formatUgandaDateTime } from "../../utils/timeUtils";
 import { GoodsQr } from "../../components/qr/GoodsQr";
 import { CommercialProfileSheet, commercialStatusText } from "./CommercialProfile";
+import { SECTION_LABELS, lotSections } from "../../../convex/marketspaceShared";
 
 const SELLER_ROLES = ["farmer", "vendor", "store", "trader"];
 
 /**
  * The seller's lot listings: put them on MarketSpace, keep them up, take
  * them off, and edit their payment steps (every poster can, bulk included).
+ * "toPost" (New post › My Ledger) lists the lots not on MarketSpace and
+ * where they will show; "posted" (My posts) lists the lots on it now.
  */
-export function MyLots({ token, now }: { token: string; now: number }) {
+export function MyLots({ token, now, show, onGo }: { token: string; now: number; show: "toPost" | "posted"; onGo?: (where: "post" | "mine") => void }) {
   const info = useQuery(api.marketspace.myLots, { sessionToken: token });
   const refresh = useMutation(api.marketspace.refreshVend);
   const stop = useMutation(api.marketspace.stopVend);
@@ -59,10 +61,45 @@ export function MyLots({ token, now }: { token: string; now: number }) {
     cursor: "pointer",
   });
 
+  const isLive = (lot: MyLot) => lot.vendExpiresAt !== null && lot.vendExpiresAt > now;
+  const lots = info.lots.filter((lot) => (show === "posted" ? isLive(lot) : !isLive(lot)));
+  const farmer = info.role === "farmer";
+  const goButton = (where: "post" | "mine", text: string) =>
+    onGo && (
+      <button type="button" onClick={() => onGo(where)} style={{ ...button("plain"), border: "1.5px solid #2e7d32", color: "#1b5e20", alignSelf: "flex-start" }}>
+        {text}
+      </button>
+    );
+  const createLink = (
+    <Link href="/farmer/farm2market" style={{ color: "#1b5e20", fontWeight: 700 }}>
+      Create a lot listing →
+    </Link>
+  );
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
       {msg && <div style={{ fontWeight: 600, color: msg.ok ? "#2e7d32" : "#c62828" }}>{msg.text}</div>}
-      {info.commercialStatus && (
+      {show === "toPost" && (
+        <div style={{ padding: "0.7rem 0.8rem", borderRadius: 12, background: "#f1f8e9", border: "1px solid #c5e1a5", fontSize: "0.88rem", color: "#222", lineHeight: 1.5 }}>
+          <div style={{ fontWeight: 800, marginBottom: 2 }}>Where your lots show in Discover</div>
+          <div>
+            <b>{farmer ? SECTION_LABELS.produce : SECTION_LABELS.lots}</b>: lots you put on MarketSpace
+          </div>
+          {info.canSellBulk && (
+            <div>
+              <b>{SECTION_LABELS.bulk}</b>: also there, if you sell in bulk
+            </div>
+          )}
+          {farmer ? (
+            <div>
+              <b>{SECTION_LABELS.farmgate}</b>: your other lots. Only verified purchasers see them.
+            </div>
+          ) : (
+            <div>Lots not on MarketSpace stay in your ledger. Nobody else sees them.</div>
+          )}
+        </div>
+      )}
+      {show === "toPost" && info.commercialStatus && (
         <div style={{ padding: "0.7rem 0.8rem", borderRadius: 12, background: info.commercialStatus === "verified" ? "#e8f5e9" : "#fff8e1", border: `1px solid ${info.commercialStatus === "verified" ? "#a5d6a7" : "#ffe082"}` }}>
           <div style={{ fontSize: "0.88rem", color: "#333" }}>{commercialStatusText(info.commercialStatus)}</div>
           <button type="button" onClick={() => setProfileOpen(true)} style={{ ...button(info.commercialStatus === "none" || info.commercialStatus === "rejected" ? "go" : "plain"), marginTop: "0.5rem" }}>
@@ -70,13 +107,23 @@ export function MyLots({ token, now }: { token: string; now: number }) {
           </button>
         </div>
       )}
-      {info.lots.length === 0 ? (
-        <p style={{ margin: 0, color: "#666" }}>
-          You have no lots for sale. <Link href="/farmer/farm2market" style={{ color: "#1b5e20", fontWeight: 700 }}>Create a lot listing →</Link>
-        </p>
-      ) : (
-        info.lots.map((lot) => {
-          const live = lot.vendExpiresAt !== null && lot.vendExpiresAt > now;
+      {lots.length === 0 &&
+        (show === "posted" ? (
+          <>
+            <p style={{ margin: 0, color: "#444" }}>None of your lots is on MarketSpace now.</p>
+            {goButton("post", "📒 Post a lot from My Ledger")}
+          </>
+        ) : info.lots.length === 0 ? (
+          <p style={{ margin: 0, color: "#444" }}>You have no lots for sale in your ledger. {createLink}</p>
+        ) : (
+          <>
+            <p style={{ margin: 0, color: "#444" }}>All your lots are on MarketSpace now. {createLink}</p>
+            {goButton("mine", "📋 See them in My posts")}
+          </>
+        ))}
+      {lots.map((lot) => {
+          const live = isLive(lot);
+          const sections = lotSections(info.role, { bulk: live && lot.isBulk, farmGate: false }).join(" · ");
           return (
             <div key={lot.listingId} style={{ padding: "0.75rem", borderRadius: 12, border: `2px solid ${live ? "#a5d6a7" : "#e0e0e0"}`, background: "#fff" }}>
               <div style={{ fontWeight: 800 }}>
@@ -99,18 +146,18 @@ export function MyLots({ token, now }: { token: string; now: number }) {
                   </>
                 ) : (
                   <>
-                    {lot.lotsLeft} lot{lot.lotsLeft === 1 ? "" : "s"} of {lot.unitSize.toLocaleString()} kg · {formatUGX(lot.pricePerKilo)}/kg · buyer pays {lot.commitPercent ?? 100}% first
+                    {lot.lotsLeft} lot{lot.lotsLeft === 1 ? "" : "s"} of {lot.unitSize.toLocaleString()} kg · {formatUGX(lot.pricePerKilo)}/kg · purchaser pays {lot.commitPercent ?? 100}% first
                   </>
                 )}
               </div>
-              <div style={{ fontSize: "0.85rem", fontWeight: 700, color: live ? "#2e7d32" : "#777", margin: "0.3rem 0" }}>
+              <div style={{ fontSize: "0.85rem", fontWeight: 700, color: live ? "#2e7d32" : "#444", margin: "0.3rem 0" }}>
                 {live
-                  ? `🗺️ On MarketSpace until ${formatUgandaDateTime(lot.vendExpiresAt!)}${lot.isBulk ? " · 📦 Local Bulk" : ""}`
+                  ? `🟢 Shows in ${sections} until ${formatDate(lot.vendExpiresAt!)}`
                   : lot.vendExpiresAt !== null
-                    ? "Its MarketSpace time ran out: refresh to show it again"
-                    : "Not on MarketSpace"}
-                {lot.farmGate && (
-                  <div style={{ fontWeight: 400, color: "#8d5300" }}>🚜 Verified purchasers still see it, to buy at the farm gate.</div>
+                    ? `Its time on MarketSpace ran out. Refresh it to show it in ${sections} again.`
+                    : `Not on MarketSpace yet. Put it on to show it in ${sections}.`}
+                {!live && lot.farmGate && (
+                  <div style={{ fontWeight: 400, color: "#8d5300" }}>{SECTION_LABELS.farmgate}: verified purchasers still see it, to buy at the farm gate.</div>
                 )}
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
@@ -142,8 +189,7 @@ export function MyLots({ token, now }: { token: string; now: number }) {
               <GoodsQr goodsCode={lot.goodsCode} sessionToken={token} />
             </div>
           );
-        })
-      )}
+        })}
 
       {vending && (
         <VendSheet
@@ -152,7 +198,8 @@ export function MyLots({ token, now }: { token: string; now: number }) {
           info={info}
           onClose={(text) => {
             setVending(null);
-            if (text) setMsg({ ok: true, text });
+            // A lot put on MarketSpace leaves My Ledger for My posts
+            if (text) setMsg({ ok: true, text: show === "toPost" ? `${text} See it in My posts.` : text });
           }}
         />
       )}

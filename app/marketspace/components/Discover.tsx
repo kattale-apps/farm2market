@@ -6,7 +6,7 @@ import { usePaginatedQuery, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
-import { seesFarmGate as farmGateFor } from "../../../convex/marketspaceShared";
+import { SECTION_LABELS, seesFarmGate as farmGateFor } from "../../../convex/marketspaceShared";
 import { AcceptedOffers } from "../../components/lots/AcceptedOffers";
 import { MarketCard, type CardLayout, type MarketCardData } from "./MarketCard";
 import { DISTRICTS, FONT, GLASS, tint } from "./shared";
@@ -14,12 +14,12 @@ import { DISTRICTS, FONT, GLASS, tint } from "./shared";
 export type Chip = "all" | "produce" | "farmgate" | "bulk" | "lots" | "classifieds";
 
 const CHIPS: { key: Chip; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "produce", label: "🌾 Farmers Produce" },
-  { key: "farmgate", label: "🚜 Farm Gate" }, // Verified purchasers only: farmers' lots not on MarketSpace
-  { key: "bulk", label: "📦 Local Bulk" },
-  { key: "lots", label: "🏪 Vendors and Processors" },
-  { key: "classifieds", label: "📰 Classifieds" },
+  { key: "all", label: SECTION_LABELS.all },
+  { key: "produce", label: SECTION_LABELS.produce },
+  { key: "farmgate", label: SECTION_LABELS.farmgate }, // Verified purchasers only: farmers' lots not on MarketSpace
+  { key: "bulk", label: SECTION_LABELS.bulk },
+  { key: "lots", label: SECTION_LABELS.lots },
+  { key: "classifieds", label: SECTION_LABELS.classifieds },
 ];
 
 type Groups = NonNullable<FunctionReturnType<typeof api.marketspace.getBoardConfig>>["groups"];
@@ -299,7 +299,7 @@ export function Discover({
               🔒 You see a preview. <Link href={`/login?role=buyer&returnTo=${encodeURIComponent(`/marketspace?view=${chip}`)}`} style={{ color: "#1b5e20", fontWeight: 800 }}>Sign up as a buyer</Link> to see prices and full details.
             </>
           ) : (
-            <>🔒 Farm produce and lots show a preview until Farm2Market verifies you as a buyer.</>
+            <>🔒 Farm produce and lots show a preview until Farm2Market verifies you as a purchaser.</>
           )}
         </div>
       )}

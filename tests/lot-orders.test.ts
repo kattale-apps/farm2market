@@ -5,6 +5,7 @@ import {
   chargeForStep,
   commitAmount,
   commitTotal,
+  lotsToRestock,
   defaultPlan,
   defaultSteps,
   demoShares,
@@ -182,4 +183,16 @@ test("the wallet's escrow preview matches the commit: one order per lot, one ord
   // Packaged items: one order for all, committed on the total
   assert.equal(commitTotal(250_000, 3, 100, true), commitAmount(750_000, 100));
   assert.equal(commitTotal(1_001, 3, 30, true), commitAmount(3_003, 30));
+});
+
+test("repeat orders: a post gets new lots after each purchase, so it never shows sold out", () => {
+  const post = { totalUnits: 3, freeLots: 3, withdrawn: false };
+  assert.equal(lotsToRestock(post), 0, "nothing bought yet");
+  assert.equal(lotsToRestock({ ...post, freeLots: 1 }), 2, "two bought: two new lots");
+  assert.equal(lotsToRestock({ ...post, freeLots: 0 }), 3, "all bought: the post offers 3 again");
+  assert.equal(lotsToRestock({ ...post, freeLots: 0, stockSource: "off_app" }), 3);
+  assert.equal(lotsToRestock({ ...post, freeLots: 0, stockSource: "own_farm" }), 3);
+  // Traced stock bought in the app is real and limited; a withdrawn post is down for good
+  assert.equal(lotsToRestock({ ...post, freeLots: 0, stockSource: "in_app" }), 0);
+  assert.equal(lotsToRestock({ ...post, freeLots: 0, withdrawn: true }), 0);
 });

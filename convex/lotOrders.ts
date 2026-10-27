@@ -43,6 +43,7 @@ import {
   AUTO_SETTLE_MS,
   PAYMENT_GRACE_MS,
   lotBuyingDecision,
+  lotsToRestock,
   chargeForStep,
   commitAmount,
   commitTotal,
@@ -85,6 +86,32 @@ export async function lotBuyingAccess(
     ? await isActiveProcessor(ctx, user._id, today)
     : false;
   return lotBuyingDecision(user, approvedProcessor, lot);
+}
+
+/**
+ * Repeat orders: after a purchase the listing gets new lots, so its post keeps
+ * offering as many as it first did and never shows sold out (lotsToRestock).
+ * The seller fills each order in turn; one they cannot supply goes to a
+ * dispute, where the buyer's escrow can be refunded.
+ */
+export async function restockLots(ctx: MutationCtx, listingId: Id<"listings">) {
+  const listing = await ctx.db.get(listingId);
+  if (!listing || listing.status === "cancelled") return 0;
+  const units = await ctx.db
+    .query("listingUnits")
+    .withIndex("by_listing", (q) => q.eq("listingId", listingId))
+    .collect();
+  const missing = lotsToRestock({
+    totalUnits: listing.totalUnits,
+    freeLots: units.filter((u) => u.status === "available").length,
+    stockSource: listing.stockSource,
+    withdrawn: !!listing.withdrawnAt,
+  });
+  let next = units.reduce((max, u) => Math.max(max, u.unitNumber), 0) + 1;
+  for (let i = 0; i < missing; i++) {
+    await ctx.db.insert("listingUnits", { listingId, unitNumber: next++, status: "available" });
+  }
+  return missing;
 }
 
 /** What lotBuyingAccess needs to know about a listing: bulk, and on MarketSpace now. */
@@ -533,6 +560,8 @@ export async function commitLots(ctx: MutationCtx, buyerId: Id<"users">, unitIds
       metadata: { mainUtid: orders[0].utid, listingId: listing._id, commissionPercentage },
     });
   }
+  // Repeat orders: the post gets new lots, so it keeps offering as many as before
+  await restockLots(ctx, listing._id);
   await refreshListingStatus(ctx, listing._id);
 
   // Both sides are told; each wallet shows the money in escrow (myPending)

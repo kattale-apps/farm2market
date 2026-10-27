@@ -278,6 +278,17 @@ export function commitAmount(total: number, commitPercent: number): number {
 }
 
 /**
+ * Repeat orders: how many new lots a listing gets after a purchase, so it
+ * keeps offering as many as it first did (`totalUnits`) and buyers can order
+ * the same post again. Lots listed from stock bought in the app ("in_app")
+ * stay limited to that traced stock; a withdrawn listing gets none.
+ */
+export function lotsToRestock(listing: { totalUnits: number; freeLots: number; stockSource?: string; withdrawn: boolean }): number {
+  if (listing.withdrawn || listing.stockSource === "in_app") return 0;
+  return Math.max(0, listing.totalUnits - listing.freeLots);
+}
+
+/**
  * What buying `count` units moves into escrow: lots by weight are one order
  * each; packaged items (or batches) are one order for all. `unitPrice` is one
  * lot's or one item's (or batch's) price. Used by the commit and its preview.

@@ -453,7 +453,7 @@ export function shapeCard(
     farmGate: card.status === "farm_gate", // Not on MarketSpace: seen by verified purchasers as a farm-gate source
     commercialFarmer: card.view === "produce" && card.sellerCommercial === "verified", // The "Commercial Farmer" badge
     verifiedVendor: card.sellerRole === "vendor" && card.sellerCommercial === "verified", // The "Verified Vendor" badge: business documents approved
-    soldOut: card.view !== "classifieds" && card.lotsAvailable === 0, // A lot post stays up when sold out (listingCardStatus)
+    soldOut: card.view !== "classifieds" && card.lotsAvailable === 0, // Only traced stock runs out: other posts get new lots after each order (lotsToRestock)
     createdAt: card.createdAt,
     expiresAt: card.expiresAt,
     isMine: viewer.isMine,

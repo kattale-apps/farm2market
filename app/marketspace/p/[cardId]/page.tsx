@@ -161,7 +161,7 @@ export default function CardPage() {
             <>
               <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#1b5e20" }}>{formatUGX(card.priceUGX ?? 0)} {card.priceUnit}</div>
               <div style={{ color: "#333", margin: "0.2rem 0" }}>
-                {card.quantityText} for sale
+                {card.soldOut ? "None left for now" : `${card.quantityText} for sale`}
                 {(card.packagesPerBatch ?? 1) > 1 ? ` · ${formatUGX(card.lotPrice ?? 0)} a batch` : ""}
               </div>
             </>
@@ -169,7 +169,7 @@ export default function CardPage() {
             <>
               <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#1b5e20" }}>{formatUGX(card.pricePerKilo ?? 0)}/kg</div>
               <div style={{ color: "#333", margin: "0.2rem 0" }}>
-                {card.lotsAvailable} lot{card.lotsAvailable === 1 ? "" : "s"} of {card.lotKg?.toLocaleString()} kg
+                {card.soldOut ? "Lots" : `${card.lotsAvailable} lot${card.lotsAvailable === 1 ? "" : "s"}`} of {card.lotKg?.toLocaleString()} kg
                 {card.bagKg ? (card.animal ? ` (${card.bagsPerLot ?? 1} animal${(card.bagsPerLot ?? 1) === 1 ? "" : "s"} of about ${card.bagKg} kg)` : ` (${card.bagsPerLot ?? 1} × ${card.bagKg} kg bags)`) : ""} · {formatUGX(card.lotPrice ?? 0)} a lot
               </div>
             </>

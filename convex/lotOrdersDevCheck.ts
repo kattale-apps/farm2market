@@ -140,6 +140,11 @@ export const marketspaceSessions = internalMutation({
       vendor: await testUser(ctx, VENDOR_EMAIL, "vendor", "LOTCHECK-V"),
       admin: await testUser(ctx, ADMIN_EMAIL, "admin", "LOTCHECK-A"), // Super admin: checks commercial profiles
     };
+    // The business buyers have finished onboarding, so their dashboard opens (not the onboarding form)
+    for (const buyerId of [users.buyer, users.member]) {
+      const profile = await ctx.db.query("buyerProfiles").withIndex("by_userId", (q) => q.eq("userId", buyerId)).first();
+      if (!profile) await ctx.db.insert("buyerProfiles", { userId: buyerId, businessName: "LOTCHECK Buyers", onboardingCompleted: true, createdAt: getUgandaTime() });
+    }
     const tokens: Record<string, string> = {};
     for (const [who, userId] of Object.entries(users)) {
       const token = `lotcheck-${crypto.randomUUID()}`;
@@ -401,6 +406,10 @@ export const cleanup = internalMutation({
       for (const row of await ctx.db.query("vendorProfiles").withIndex("by_userId", (q) => q.eq("userId", user._id)).collect()) {
         await ctx.db.delete(row._id);
         count("vendorProfiles");
+      }
+      for (const row of await ctx.db.query("buyerProfiles").withIndex("by_userId", (q) => q.eq("userId", user._id)).collect()) {
+        await ctx.db.delete(row._id);
+        count("buyerProfiles");
       }
       // Transport: the transporter's profile, vehicles, drivers and trips, and trips the test accounts booked
       for (const row of await ctx.db.query("transporterProfiles").withIndex("by_userId", (q) => q.eq("userId", user._id)).collect()) {

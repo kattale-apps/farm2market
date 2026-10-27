@@ -24,7 +24,7 @@ import { Id } from "./_generated/dataModel";
 import { generateUTID, getUgandaTime } from "./utils";
 import { assertTestMode } from "./testUtils";
 import { postWallet } from "./walletSplit";
-import { resyncFarmerCards } from "./marketCards";
+import { resyncSellerCards } from "./marketCards";
 
 const FARMER_EMAIL = "lotcheck.farmer@pilot.farm2market"; // Pilot domain: no FarmCoin gate
 const BUYER_EMAIL = "lotcheck.buyer@local";
@@ -238,7 +238,7 @@ export const setTestCommercialProfile = internalMutation({
     const fields = { tradingName: "LOTCHECK Farm Traders", documents: [{ kind: "tin" as const, number: "1000000000" }], status: args.status, updatedAt: now };
     if (existing) await ctx.db.patch(existing._id, fields);
     else await ctx.db.insert("commercialProfiles", { userId: farmerId, ...fields, createdAt: now });
-    await resyncFarmerCards(ctx, farmerId);
+    await resyncSellerCards(ctx, farmerId);
     return { farmerId };
   },
 });

@@ -1051,7 +1051,7 @@ export function AdminDashboard({ userId }: AdminDashboardProps) {
                 <div>
                   <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.1rem" }}>Finance Dashboard</h3>
                   <p style={{ margin: 0, fontSize: "0.9rem", opacity: 0.95 }}>
-                    View commission earnings and financial reports
+                    Commission, financial reports, and verifying exporters, processors, vendors, buyers and farmers
                   </p>
                 </div>
               </div>

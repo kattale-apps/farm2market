@@ -9,8 +9,20 @@ import { FONT } from "./shared";
 
 export type CommercialStatus = "none" | "pending" | "verified" | "rejected";
 
-/** One line on where the farmer's commercial profile stands, and what it means for their lots. */
-export function commercialStatusText(status: CommercialStatus): string {
+/** One line on where the seller's commercial profile stands, and what it means for their lots (a vendor's business profile verifies them). */
+export function commercialStatusText(status: CommercialStatus, role: string): string {
+  if (role === "vendor") {
+    switch (status) {
+      case "verified":
+        return "✔ Verified Vendor: you can buy lots, and your posts carry the badge.";
+      case "pending":
+        return "⏳ Farm2Market is checking your document.";
+      case "rejected":
+        return "Your business profile was not accepted. Fix it and send it again.";
+      default:
+        return "Get verified: add your business name and one document. When Farm2Market approves it, you can buy lots and your posts show ✔ Verified Vendor.";
+    }
+  }
   switch (status) {
     case "verified":
       return "✔ Commercial Farmer: everyone on MarketSpace can see your lots.";
@@ -24,10 +36,11 @@ export function commercialStatusText(status: CommercialStatus): string {
 }
 
 /**
- * The farmer's commercial profile: a trading name and one commercial
+ * The seller's commercial profile: a trading name and one commercial
  * document (trading licence, business registration or TIN). Only
  * Farm2Market sees the trading name; MarketSpace shows the alias and a
- * "Commercial Farmer" badge once it is verified.
+ * "Commercial Farmer" or "Verified Vendor" badge once it is verified. For
+ * vendors it is their business profile, started from their business name.
  */
 export function CommercialProfileSheet({ token, onClose }: { token: string; onClose: (message?: string) => void }) {
   const data = useQuery(api.commercialFarmers.myProfile, { sessionToken: token });
@@ -42,14 +55,19 @@ export function CommercialProfileSheet({ token, onClose }: { token: string; onCl
   const [error, setError] = useState<string | null>(null);
 
   const profile = data?.profile ?? null;
-  // Start from what the farmer sent before
+  const vendor = data?.role === "vendor";
+  // Start from what the seller sent before, or a vendor's business name from onboarding
   useEffect(() => {
-    if (filled || !profile) return;
-    setTradingName(profile.tradingName);
-    if (profile.kind) setKind(profile.kind);
-    setNumber(profile.number ?? "");
+    if (filled || !data) return;
+    if (profile) {
+      setTradingName(profile.tradingName);
+      if (profile.kind) setKind(profile.kind);
+      setNumber(profile.number ?? "");
+    } else if (data.businessName) {
+      setTradingName(data.businessName);
+    }
     setFilled(true);
-  }, [profile, filled]);
+  }, [data, profile, filled]);
 
   const keptPhoto = profile?.kind === kind ? profile.photoUrl : null;
   const doc = COMMERCIAL_DOCUMENTS.find((d) => d.key === kind)!;
@@ -62,7 +80,7 @@ export function CommercialProfileSheet({ token, onClose }: { token: string; onCl
     try {
       const [photo] = photos.length > 0 ? await uploadEvidencePhotos(() => generateUploadUrl(), photos) : [];
       await save({ sessionToken: token, tradingName, kind, number: number.trim() || undefined, photo });
-      onClose("Commercial profile sent. You can put your lots on MarketSpace now.");
+      onClose(vendor ? "Business profile sent. Farm2Market will check it." : "Commercial profile sent. You can put your lots on MarketSpace now.");
     } catch (e) {
       setError((e as Error).message.replace(/^.*Uncaught Error: /, "").split("\n")[0]);
       setBusy(false);
@@ -84,22 +102,22 @@ export function CommercialProfileSheet({ token, onClose }: { token: string; onCl
   const label: React.CSSProperties = { display: "block", fontWeight: 700, marginBottom: "0.35rem" };
 
   return (
-    <div role="dialog" aria-modal="true" aria-label="Commercial profile" onClick={() => onClose()} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "1rem" }}>
+    <div role="dialog" aria-modal="true" aria-label={vendor ? "Business profile" : "Commercial profile"} onClick={() => onClose()} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "1rem" }}>
       <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 12, padding: "1.25rem", maxWidth: 560, width: "100%", maxHeight: "90vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: "1rem", fontFamily: FONT }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h3 style={{ margin: 0, fontSize: "1.15rem" }}>🧑‍🌾 Commercial Profile</h3>
+          <h3 style={{ margin: 0, fontSize: "1.15rem" }}>{vendor ? "🏪 Business Profile" : "🧑‍🌾 Commercial Profile"}</h3>
           <button type="button" onClick={() => onClose()} aria-label="Close" style={{ border: "none", background: "#f1f1f1", borderRadius: 999, width: 36, height: 36, cursor: "pointer" }}>✕</button>
         </div>
         {data === undefined ? (
           <p style={{ margin: 0, color: "#777" }}>Loading…</p>
         ) : (
           <>
-            <p style={{ margin: 0, fontSize: "0.9rem", color: "#444" }}>{commercialStatusText(profile?.status ?? "none")}</p>
+            <p style={{ margin: 0, fontSize: "0.9rem", color: "#444" }}>{commercialStatusText(profile?.status ?? "none", data?.role ?? "farmer")}</p>
             {profile?.status === "rejected" && profile.reviewNote && (
               <p style={{ margin: 0, padding: "0.6rem 0.75rem", borderRadius: 10, background: "#ffebee", color: "#c62828", fontWeight: 600 }}>Reason: {profile.reviewNote}</p>
             )}
             <div>
-              <label style={label}>Trading Name</label>
+              <label style={label}>{vendor ? "Business Name" : "Trading Name"}</label>
               <input value={tradingName} onChange={(e) => setTradingName(e.target.value)} maxLength={80} placeholder="The name on your document" style={input} />
               <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.3rem" }}>🔒 Only Farm2Market sees it. MarketSpace shows your alias.</div>
             </div>

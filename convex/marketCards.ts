@@ -11,7 +11,8 @@
  * produceVisible): a farmer's lot for sale always has a card, "active" while
  * it is on MarketSpace and "farm_gate" otherwise, so verified purchasers can
  * find every farmer lot. Cards carry the farmer's commercial profile status,
- * so Discover decides who sees them without extra reads.
+ * so Discover decides who sees them without extra reads. Vendors' cards
+ * carry theirs too, for the Verified Vendor badge (it does not hide anything).
  *
  * Helpers only (no registered functions), so marketspace.ts and
  * lotOrders.ts can both call them without importing each other.
@@ -44,15 +45,26 @@ export async function commercialStatusOf(ctx: QueryCtx | MutationCtx, userId: Id
   return profile && profile.status !== "rejected" ? profile.status : undefined;
 }
 
-/** After a farmer's commercial profile changes: every card of their lots for sale picks it up. */
-export async function resyncFarmerCards(ctx: MutationCtx, farmerId: Id<"users">) {
+/** Whose cards carry their commercial profile: farmers (Commercial Farmer) and vendors (Verified Vendor). */
+const PROFILE_ON_CARD_ROLES = ["farmer", "vendor"];
+
+/** After a seller's commercial profile changes: every card of their lots for sale, and of their live ads, picks it up. */
+export async function resyncSellerCards(ctx: MutationCtx, sellerId: Id<"users">) {
   const listings = await ctx.db
     .query("listings")
-    .withIndex("by_farmer", (q) => q.eq("farmerId", farmerId))
+    .withIndex("by_farmer", (q) => q.eq("farmerId", sellerId))
     .order("desc")
     .take(200);
   for (const l of listings) {
     if (l.status === "active" || l.status === "partially_locked") await syncListingCard(ctx, l._id);
+  }
+  const ads = await ctx.db
+    .query("marketspaceAds")
+    .withIndex("by_ownerId_and_createdAt", (q) => q.eq("ownerId", sellerId))
+    .order("desc")
+    .take(100);
+  for (const ad of ads) {
+    if (ad.status === "active") await syncAdCard(ctx, ad._id);
   }
 }
 
@@ -131,7 +143,7 @@ export async function syncListingCard(ctx: MutationCtx, listingId: Id<"listings"
     commitPercent: listing.commitPercent ?? 100,
     qualityRating: listing.qualityRating,
     thumbStorageId: listing.photos?.[0]?.storageId,
-    sellerCommercial: isFarmer ? await commercialStatusOf(ctx, listing.farmerId) : undefined,
+    sellerCommercial: PROFILE_ON_CARD_ROLES.includes(seller?.role ?? "") ? await commercialStatusOf(ctx, listing.farmerId) : undefined,
     status: farmGate ? ("farm_gate" as const) : ("active" as const),
     expiresAt: listing.vendExpiresAt ?? listing.createdAt, // Farm-gate cards do not expire
     createdAt: farmGate ? listing.createdAt : listing.vendedAt ?? now,
@@ -173,6 +185,7 @@ export async function syncAdCard(ctx: MutationCtx, adId: Id<"marketspaceAds">) {
     priceUGX: ad.priceUGX,
     priceUnit: ad.priceUnit,
     thumbStorageId: ad.photoIds[0],
+    sellerCommercial: owner?.role === "vendor" ? await commercialStatusOf(ctx, ad.ownerId) : undefined, // Verified Vendor badge
     status: ad.status === "active" ? ("active" as const) : ("closed" as const),
     expiresAt: ad.expiresAt,
     createdAt: ad.createdAt,

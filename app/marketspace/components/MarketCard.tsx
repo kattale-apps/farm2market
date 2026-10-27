@@ -72,6 +72,7 @@ export function MarketCard({ card, now, layout = "list" }: { card: MarketCardDat
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem" }}>
           {pill(card.sellerCategory, "#f1f3f0", "#333")}
           {card.commercialFarmer && pill("✔ Commercial Farmer", "#e3f2fd", "#0d47a1")}
+          {card.verifiedVendor && pill("✔ Verified Vendor", "#e3f2fd", "#0d47a1")}
           {card.farmGate && pill("🚜 Farm gate", "#fff3e0", "#8d5300")}
           {card.isBulk && pill(`📦 Bulk${card.bulkLabel ? ` · ${card.bulkLabel}` : ""}`, "#ede7f6", "#4527a0")}
           {stock && pill(stock.text, stock.bg, stock.fg)}

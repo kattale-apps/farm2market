@@ -19,7 +19,7 @@ type Section = "moderation" | "commercial" | "categories" | "questions" | "setti
 
 const errorText = (e: any) => e?.message?.replace(/^.*Uncaught Error: /, "").split("\n")[0] ?? "Something went wrong.";
 
-/** MarketSpace admin: moderation for admins; commercial farmer checks, categories and settings for the super admin. */
+/** MarketSpace admin: moderation for admins; farmer and vendor document checks, categories and settings for the super admin. */
 export default function MarketspaceAdminPage() {
   const session = useMarketspaceSession();
   const token = session.token;
@@ -42,7 +42,7 @@ export default function MarketspaceAdminPage() {
 
   const sections: { key: Section; label: string; show: boolean }[] = [
     { key: "moderation", label: "🚩 Moderation", show: me.canModerate },
-    { key: "commercial", label: "🧑‍🌾 Commercial Farmers", show: me.isSuperAdmin },
+    { key: "commercial", label: "🧾 Farmer & Vendor Documents", show: me.isSuperAdmin },
     { key: "categories", label: "🗂️ Groups & categories", show: me.isSuperAdmin },
     { key: "questions", label: "❓ Question pool", show: me.isSuperAdmin },
     { key: "settings", label: "⚙️ Settings", show: me.isSuperAdmin },

@@ -352,6 +352,23 @@ export function liteReason(tier: ViewerTier): string {
     : "Get verified to see prices, ask questions and buy.";
 }
 
+/**
+ * What Purchase now on a lot tells a signed-in member who cannot buy yet:
+ * a vendor gets verified by sending their business profile from My Ledger
+ * (ledger: true); other purchasers wait for Farm2Market to verify them;
+ * everyone else does not buy lots.
+ */
+export function purchaseHelp(role: string | null): { text: string; ledger: boolean } {
+  const why = "Only verified purchasers can buy, to keep your money and the seller's goods safe.";
+  if (role === "vendor") {
+    return { text: `${why} Send your business profile (business name and one document) from My Ledger. When Farm2Market approves it, you can buy.`, ledger: true };
+  }
+  if ((PURCHASER_ROLES as readonly string[]).includes(role ?? "")) {
+    return { text: `${why} Farm2Market has not verified your account yet. Once it does, come back here to buy.`, ledger: false };
+  }
+  return { text: "Buying lots is for vendors, processors, exporters and business buyers.", ledger: false };
+}
+
 type CardSource = {
   _id: string;
   view: CardView;
@@ -406,6 +423,7 @@ export function shapeCard(
     packaged: !!card.packaged, // Priced per item (priceUGX, priceUnit), counted in quantityText
     farmGate: card.status === "farm_gate", // Not on MarketSpace: seen by verified purchasers as a farm-gate source
     commercialFarmer: card.view === "produce" && card.sellerCommercial === "verified", // The "Commercial Farmer" badge
+    verifiedVendor: card.sellerRole === "vendor" && card.sellerCommercial === "verified", // The "Verified Vendor" badge: business documents approved
     createdAt: card.createdAt,
     expiresAt: card.expiresAt,
     isMine: viewer.isMine,

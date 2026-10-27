@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { BULK_RANGES, bulkRangeProblem, isLiteFor, priceBand, quantityBand, shapeCard, vendDayChoices, withDefaults } from "../convex/marketspaceShared";
+import { BULK_RANGES, bulkRangeProblem, isLiteFor, priceBand, purchaseHelp, quantityBand, shapeCard, vendDayChoices, withDefaults } from "../convex/marketspaceShared";
 import { maskContactDetails } from "../convex/exportMarketsShared";
 import { LOT_SELLER_ROLES, PACKAGED_COMMIT_PERCENT, bulkSellingDecision, defaultPlan, defaultSteps, isPackagedPlan, packageLabel, packagedPlan, packagedUnitPrice, packagesText, stockRowSource, stockSourceProblem, validatePlan } from "../convex/lotOrdersShared";
 
@@ -173,4 +173,28 @@ test("packaged items read plainly", () => {
   assert.equal(packagesText(2, "bunch"), "2 bunches");
   assert.equal(packagesText(4, "box"), "4 boxes");
   assert.equal(packagesText(2, "Tin / Debe"), "2 × Tin / Debe");
+});
+
+test("only a vendor whose business documents were approved shows Verified Vendor", () => {
+  const vendorCard = { ...lotCard, view: "lots" as const, sellerRole: "vendor" };
+  assert.equal(shapeCard({ ...vendorCard, sellerCommercial: "verified" }, { tier: "public", isMine: false }, extras).verifiedVendor, true);
+  assert.equal(shapeCard({ ...vendorCard, sellerCommercial: "pending" }, { tier: "public", isMine: false }, extras).verifiedVendor, false);
+  assert.equal(shapeCard(vendorCard, { tier: "public", isMine: false }, extras).verifiedVendor, false);
+  const farmer = shapeCard({ ...lotCard, sellerCommercial: "verified" }, { tier: "public", isMine: false }, extras);
+  assert.equal(farmer.verifiedVendor, false, "a farmer gets the Commercial Farmer badge instead");
+  assert.equal(farmer.commercialFarmer, true);
+});
+
+test("Purchase now tells an unverified member what to do next", () => {
+  const vendor = purchaseHelp("vendor");
+  assert.equal(vendor.ledger, true, "vendors get verified with their business profile in My Ledger");
+  assert.match(vendor.text, /business profile/);
+  for (const role of ["trader", "store", "buyer"]) {
+    const help = purchaseHelp(role);
+    assert.equal(help.ledger, false);
+    assert.match(help.text, /not verified your account yet/, role);
+  }
+  for (const role of ["farmer", "transporter", null]) {
+    assert.match(purchaseHelp(role).text, /Buying lots is for vendors, processors, exporters and business buyers/, String(role));
+  }
 });

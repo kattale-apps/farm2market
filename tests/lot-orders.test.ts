@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   chargeForStep,
   commitAmount,
+  commitTotal,
   defaultPlan,
   defaultSteps,
   demoShares,
@@ -172,4 +173,13 @@ test("listing terms: defaults from a commit %, nothing stored for older callers"
   // A seller's own plan is checked
   assert.throws(() => lotTerms("farmer", 20, [{ name: "Collect", earnPercent: 100, payPercent: 0, handover: true }]), /add up to 100%/);
   assert.equal(lotTerms("vendor", 50, [{ name: "Collect from my store", earnPercent: 100, payPercent: 50, handover: true }])!.commitPercent, 50);
+});
+
+test("the wallet's escrow preview matches the commit: one order per lot, one order for packaged items", () => {
+  // Lots by weight: each lot is its own order, committed separately
+  assert.equal(commitTotal(300_000, 2, 30, false), 2 * commitAmount(300_000, 30));
+  assert.equal(commitTotal(300_000, 1, 100, false), 300_000);
+  // Packaged items: one order for all, committed on the total
+  assert.equal(commitTotal(250_000, 3, 100, true), commitAmount(750_000, 100));
+  assert.equal(commitTotal(1_001, 3, 30, true), commitAmount(3_003, 30));
 });

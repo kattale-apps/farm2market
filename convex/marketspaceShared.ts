@@ -303,6 +303,26 @@ export function seesFarmGate(viewer: { tier: ViewerTier; role: string | null }):
   return viewer.tier === "verified" && (PURCHASER_ROLES as readonly string[]).includes(viewer.role ?? "");
 }
 
+/**
+ * A lot listing's card. A post the seller put on MarketSpace stays up
+ * ("active") while it is vended, sold out or not: lots can come back (a
+ * missed payment puts them back on the market), and only the seller takes a
+ * post down, or its time runs out. A farmer's lots for sale that are not on
+ * MarketSpace are a farm-gate card. Anything else (withdrawn, cancelled, not
+ * vended) is closed.
+ */
+export function listingCardStatus(listing: {
+  open: boolean; // Not withdrawn or cancelled
+  lotsAvailable: number;
+  isFarmer: boolean;
+  vended: boolean; // Put on MarketSpace (its time may have run out)
+  vendedNow: boolean; // On MarketSpace and in time
+}): "active" | "farm_gate" | "closed" {
+  if (!listing.open) return "closed";
+  if (listing.isFarmer) return listing.vendedNow ? "active" : listing.lotsAvailable > 0 ? "farm_gate" : "closed";
+  return listing.vended ? "active" : "closed"; // When its time runs out, expiresAt hides it
+}
+
 /** Whether a card can be opened and bought from now: on MarketSpace and in time, or a farm-gate card. */
 export function cardIsLive(card: { status: string; expiresAt: number }, now: number): boolean {
   return (card.status === "active" && card.expiresAt > now) || card.status === "farm_gate";
@@ -433,6 +453,7 @@ export function shapeCard(
     farmGate: card.status === "farm_gate", // Not on MarketSpace: seen by verified purchasers as a farm-gate source
     commercialFarmer: card.view === "produce" && card.sellerCommercial === "verified", // The "Commercial Farmer" badge
     verifiedVendor: card.sellerRole === "vendor" && card.sellerCommercial === "verified", // The "Verified Vendor" badge: business documents approved
+    soldOut: card.view !== "classifieds" && card.lotsAvailable === 0, // A lot post stays up when sold out (listingCardStatus)
     createdAt: card.createdAt,
     expiresAt: card.expiresAt,
     isMine: viewer.isMine,

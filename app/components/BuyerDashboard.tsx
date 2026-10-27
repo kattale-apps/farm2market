@@ -883,6 +883,28 @@ export function BuyerDashboard({ userId }: BuyerDashboardProps) {
       {moreSlot && createPortal(moreContent, moreSlot)}
       {profileExtraSlot && createPortal(<UserProfileCard userId={userId} />, profileExtraSlot)}
 
+      {/* MarketSpace: every market in one place, each one a filter there */}
+      <Link
+        href="/marketspace"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "0.9rem",
+          padding: "1rem 1.1rem",
+          marginBottom: "1.5rem",
+          background: "#fff",
+          border: "2px solid #2e7d32",
+          borderRadius: "14px",
+          boxShadow: "0 4px 14px rgba(0,0,0,0.12)",
+          textDecoration: "none",
+          color: "#1b5e20",
+          fontFamily: '"Montserrat", sans-serif',
+        }}
+      >
+        <span style={{ fontSize: "2.2rem" }} aria-hidden="true">🗺️</span>
+        <span style={{ fontWeight: 800, fontSize: "1.3rem" }}>MarketSpace</span>
+      </Link>
+
       {/* Export Markets quick link: same glow and travelling arrow as
           Contract Farming Market, in the sky-blue export theme. */}
       <Link href="/buyer/export-markets" style={{

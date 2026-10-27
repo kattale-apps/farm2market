@@ -129,7 +129,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
   const [takesOffers, setTakesOffers] = useState(false);
   const [qr, setQr] = useState<Id<"goodsCodes"> | "new" | undefined>(undefined);
   const [pkgCommit, setPkgCommit] = useState(PACKAGED_COMMIT_PERCENT);
-  const [pkgSteps, setPkgSteps] = useState<PlanStep[]>(() => packagedPlan());
+  const [pkgSteps, setPkgSteps] = useState<PlanStep[]>(() => packagedPlan(effectiveRole));
   const [steps, setSteps] = useState<PlanStep[]>(() => defaultPlan(effectiveRole, 30));
   // Vendors, processors and exporters: stock bought in the app (traced) or not.
   const myStock = useQuery(api.lotOrders.myStock, sellsStock ? { userId } : "skip");
@@ -167,7 +167,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
     setTakesOffers(false);
     setQr(undefined);
     setPkgCommit(PACKAGED_COMMIT_PERCENT);
-    setPkgSteps(packagedPlan());
+    setPkgSteps(packagedPlan(effectiveRole));
   };
 
   // Load custom products and packaging from localStorage

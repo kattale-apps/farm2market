@@ -57,7 +57,7 @@ export function PackagedTermsFields({
         <input
           type="checkbox"
           checked={usingSteps}
-          onChange={(e) => (e.target.checked ? onChange(30, defaultPlan(sellerRole, 30)) : onChange(PACKAGED_COMMIT_PERCENT, packagedPlan()))}
+          onChange={(e) => (e.target.checked ? onChange(30, defaultPlan(sellerRole, 30)) : onChange(PACKAGED_COMMIT_PERCENT, packagedPlan(sellerRole)))}
         />
         Use payment steps
       </label>

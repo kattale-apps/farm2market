@@ -80,7 +80,7 @@ crons.interval(
   internal.exportPrices.refreshIcoComposite,
 );
 
-// Lot orders: settle lots 3 days after handover; penalise payments 48 hours overdue.
+// Lot orders: settle lots 3 days after handover; penalise payments 48 hours overdue; give back escrow on orders not confirmed in 2 hours.
 crons.interval(
   "lot orders: settle and penalise",
   { hours: 1 },

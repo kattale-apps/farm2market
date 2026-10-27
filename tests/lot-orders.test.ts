@@ -6,6 +6,9 @@ import {
   commitAmount,
   commitTotal,
   lotsToRestock,
+  confirmLapsed,
+  takesRepeatOrders,
+  SELLER_CONFIRM_MS,
   defaultPlan,
   defaultSteps,
   demoShares,
@@ -195,4 +198,24 @@ test("repeat orders: a post gets new lots after each purchase, so it never shows
   // Traced stock bought in the app is real and limited; a withdrawn post is down for good
   assert.equal(lotsToRestock({ ...post, freeLots: 0, stockSource: "in_app" }), 0);
   assert.equal(lotsToRestock({ ...post, freeLots: 0, withdrawn: true }), 0);
+});
+
+test("a new order the seller does not confirm within 2 hours goes back to the buyer", () => {
+  assert.equal(SELLER_CONFIRM_MS, 2 * 60 * 60 * 1000);
+  const made = 1_000_000;
+  const order = { status: "in_progress", confirmBy: made + SELLER_CONFIRM_MS };
+  assert.equal(confirmLapsed(order, made + SELLER_CONFIRM_MS - 1), false, "still within the 2 hours");
+  assert.equal(confirmLapsed(order, made + SELLER_CONFIRM_MS), true, "2 hours up, not confirmed");
+  assert.equal(confirmLapsed({ ...order, confirmedAt: made + 60_000 }, made + 10 * SELLER_CONFIRM_MS), false, "confirmed in time: never lapses");
+  assert.equal(confirmLapsed({ status: "in_progress" }, made + 10 * SELLER_CONFIRM_MS), false, "orders from before the rule have no deadline");
+  for (const status of ["disputed", "settled", "cancelled", "payment_due"]) {
+    assert.equal(confirmLapsed({ ...order, status }, made + 10 * SELLER_CONFIRM_MS), false, status);
+  }
+});
+
+test("posts take repeat orders unless they are traced stock or withdrawn", () => {
+  assert.equal(takesRepeatOrders({ withdrawn: false }), true);
+  assert.equal(takesRepeatOrders({ stockSource: "off_app", withdrawn: false }), true);
+  assert.equal(takesRepeatOrders({ stockSource: "in_app", withdrawn: false }), false);
+  assert.equal(takesRepeatOrders({ withdrawn: true }), false);
 });

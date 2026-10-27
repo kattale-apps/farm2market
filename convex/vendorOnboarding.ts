@@ -36,6 +36,7 @@ export const checkOnboardingStatus = query({
       parishId: profile?.parishId,
       marketType: profile?.marketType,
       marketName: profile?.marketName,
+      businessName: profile?.businessName,
       stallNumber: profile?.stallNumber,
     };
   },
@@ -60,6 +61,7 @@ export const completeOnboarding = mutation({
       v.literal("village_market")
     ),
     marketName: v.string(),
+    businessName: v.optional(v.string()), // Shop or business name, if any (only Farm2Market sees it)
     stallNumber: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -102,6 +104,7 @@ export const completeOnboarding = mutation({
         ...(args.parishId ? { parishId: args.parishId } : {}),
         marketType: args.marketType,
         marketName: args.marketName,
+        businessName: args.businessName?.trim() || undefined,
         stallNumber: args.stallNumber,
         onboardingCompleted: true,
       });
@@ -114,6 +117,7 @@ export const completeOnboarding = mutation({
         ...(args.parishId ? { parishId: args.parishId } : {}),
         marketType: args.marketType,
         marketName: args.marketName,
+        businessName: args.businessName?.trim() || undefined,
         stallNumber: args.stallNumber,
         onboardingCompleted: true,
         createdAt: Date.now(),

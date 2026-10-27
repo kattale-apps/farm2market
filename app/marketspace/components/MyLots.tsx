@@ -105,9 +105,9 @@ export function MyLots({ token, now, show, onGo }: { token: string; now: number;
       )}
       {show === "toPost" && info.commercialStatus && (
         <div style={{ padding: "0.7rem 0.8rem", borderRadius: 12, background: info.commercialStatus === "verified" ? "#e8f5e9" : "#fff8e1", border: `1px solid ${info.commercialStatus === "verified" ? "#a5d6a7" : "#ffe082"}` }}>
-          <div style={{ fontSize: "0.88rem", color: "#333" }}>{commercialStatusText(info.commercialStatus)}</div>
+          <div style={{ fontSize: "0.88rem", color: "#333" }}>{commercialStatusText(info.commercialStatus, info.role)}</div>
           <button type="button" onClick={() => setProfileOpen(true)} style={{ ...button(info.commercialStatus === "none" || info.commercialStatus === "rejected" ? "go" : "plain"), marginTop: "0.5rem" }}>
-            {info.commercialStatus === "none" ? "Add Commercial Profile" : info.commercialStatus === "rejected" ? "Fix My Profile" : "My Commercial Profile"}
+            {info.commercialStatus === "rejected" ? "Fix My Profile" : `${info.commercialStatus === "none" ? "Add" : "My"} ${farmer ? "Commercial" : "Business"} Profile`}
           </button>
         </div>
       )}
@@ -167,8 +167,8 @@ export function MyLots({ token, now, show, onGo }: { token: string; now: number;
               <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
                 <button
                   type="button"
-                  // Farmers need a commercial profile to put lots on MarketSpace
-                  onClick={() => (info.commercialStatus === "none" || info.commercialStatus === "rejected" ? setProfileOpen(true) : setVending(lot))}
+                  // Farmers need a commercial profile to put lots on MarketSpace (vendors' business profile is optional)
+                  onClick={() => (farmer && (info.commercialStatus === "none" || info.commercialStatus === "rejected") ? setProfileOpen(true) : setVending(lot))}
                   style={button(live ? "plain" : "go")}
                 >
                   {live ? "Change" : "Put on MarketSpace"}

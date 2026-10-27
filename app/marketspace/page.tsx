@@ -57,7 +57,8 @@ function MarketspaceInner() {
   const [tab, setTab] = useState<Tab>(tabParam === "post" || tabParam === "mine" ? tabParam : "discover");
   const [onBoard, setOnBoard] = useState(!!viewParam);
   const [scanning, setScanning] = useState(false);
-  const [postKind, setPostKind] = useState<"choose" | "lots" | "ad">("choose");
+  // ?tab=post&from=ledger opens My Ledger straight away (Purchase now sends vendors there for their business profile)
+  const [postKind, setPostKind] = useState<"choose" | "lots" | "ad">(params.get("from") === "ledger" ? "lots" : "choose");
   const [editing, setEditing] = useState<EditableAd | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 

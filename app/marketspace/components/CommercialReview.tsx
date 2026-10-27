@@ -9,8 +9,9 @@ import { FONT, formatDate } from "./shared";
 const errorText = (e: unknown) => ((e as Error)?.message ?? "Something went wrong.").replace(/^.*Uncaught Error: /, "").split("\n")[0];
 
 /**
- * Super admin: check farmers' commercial documents. A verified farmer's lots
- * show to everyone on MarketSpace with the Commercial Farmer badge; a
+ * Super admin: check farmers' and vendors' commercial documents. A verified farmer's lots
+ * show to everyone on MarketSpace with the Commercial Farmer badge; a verified
+ * vendor is verified (can buy lots) and shows the Verified Vendor badge; a
  * rejected one is told why (preset reasons) and can send it again.
  */
 export function CommercialReview({ token }: { token: string }) {
@@ -27,7 +28,7 @@ export function CommercialReview({ token }: { token: string }) {
     setMessage(null);
     try {
       await review({ sessionToken: token, profileId, decision, reason });
-      setMessage({ ok: true, text: decision === "verified" ? "Verified. The farmer was told." : "Not accepted. The farmer was told why." });
+      setMessage({ ok: true, text: decision === "verified" ? "Verified. They were told." : "Not accepted. They were told why." });
       setRejecting(null);
     } catch (e) {
       setMessage({ ok: false, text: errorText(e) });
@@ -55,7 +56,7 @@ export function CommercialReview({ token }: { token: string }) {
         </div>
       )}
       <p style={{ marginTop: 0, color: "#555", fontSize: "0.9rem" }}>
-        Farmers need a commercial profile to put lots on MarketSpace. Check that the trading name matches the document. The trading name is never shown on MarketSpace.
+        Farmers need a commercial profile to put lots on MarketSpace. Vendors send one to be verified: verifying it lets them buy lots and gives their posts the Verified Vendor badge. Check that the name matches the document. The name is never shown on MarketSpace.
       </p>
       <h2 style={{ fontSize: "1.05rem" }}>Waiting to be checked ({queue.waiting.length})</h2>
       {queue.waiting.length === 0 && <p style={{ color: "#666" }}>Nothing waiting.</p>}
@@ -74,7 +75,7 @@ export function CommercialReview({ token }: { token: string }) {
               <div style={{ fontWeight: 800, fontSize: "1.05rem" }}>{p.tradingName}</div>
               <div style={{ fontSize: "0.88rem", color: "#444", margin: "0.2rem 0 0.6rem" }}>
                 {p.document}
-                {p.number ? ` · ${p.number}` : ""} · {p.farmer} · {p.district ?? "District not set"} · sent {formatDate(p.updatedAt)}
+                {p.number ? ` · ${p.number}` : ""} · {p.seller} · {p.district ?? "District not set"} · sent {formatDate(p.updatedAt)}
               </div>
               {rejecting === p.profileId ? (
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
@@ -107,7 +108,7 @@ export function CommercialReview({ token }: { token: string }) {
       <ul style={{ paddingLeft: "1.1rem", fontSize: "0.9rem" }}>
         {queue.decided.map((p) => (
           <li key={p.profileId} style={{ marginBottom: "0.3rem" }}>
-            <strong>{p.tradingName}</strong> · {p.farmer} · {p.status === "verified" ? "✔ verified" : `not accepted (${p.reviewNote})`} · {formatDate(p.updatedAt)}
+            <strong>{p.tradingName}</strong> · {p.seller} · {p.status === "verified" ? "✔ verified" : `not accepted (${p.reviewNote})`} · {formatDate(p.updatedAt)}
           </li>
         ))}
       </ul>

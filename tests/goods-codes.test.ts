@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { goodKeyOf, newGoodsCodeText } from "../convex/goodsCodesCore";
+import { goodKeyOf, newGoodsCodeText, placeLine } from "../convex/goodsCodesCore";
 import { batchGoodLabel } from "../convex/processorShared";
 import { exportLotGoodLabel } from "../convex/exportMarketsShared";
 
@@ -27,4 +27,13 @@ test("batches and export lots name their good the same way every time", () => {
   assert.equal(batchGoodLabel("coffee", "green"), "Coffee Graded green beans");
   assert.equal(exportLotGoodLabel({ coffeeType: "Robusta", grade: "Screen 18" }), "Coffee Robusta Screen 18");
   assert.equal(exportLotGoodLabel({ crop: "coffee", coffeeType: "Arabica", grade: "Bugisu AA" }), "Coffee Arabica Bugisu AA");
+});
+
+test("the label says where the goods are sold: district, then subcounty", () => {
+  assert.equal(placeLine("Mukono", "Goma"), "Mukono District · Goma Subcounty");
+  assert.equal(placeLine("Kampala", "Nakawa Division"), "Kampala District · Nakawa Division", "a division keeps its own name");
+  assert.equal(placeLine("Buikwe", "Lugazi Municipality"), "Buikwe District · Lugazi Municipality");
+  assert.equal(placeLine("Masaka", null), "Masaka District");
+  assert.equal(placeLine(null, " Goma "), "Goma Subcounty");
+  assert.equal(placeLine(" ", undefined), null, "nothing known: no line on the label");
 });

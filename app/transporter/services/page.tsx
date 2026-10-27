@@ -9,7 +9,7 @@ import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { ugandaDateFromInstant } from "../../../convex/exportMarketsShared";
 import { useStoredUser } from "../../hooks/useStoredUser";
-import { VEHICLE_LABEL } from "../../components/transport/TransportDirectory";
+import { VEHICLE_LABEL, vehicleIcon } from "../../components/transport/TransportDirectory";
 import { PhotoPickButtons } from "../../components/PhotoPickButtons";
 
 const FONT = '"Montserrat", sans-serif';
@@ -54,10 +54,12 @@ export default function TransporterServicesPage() {
         ) : (
           <>
             <div style={{ ...box, background: ws.listed ? "#e8f5e9" : "#fff8e1" }}>
-              <b>{ws.listed ? "✔ You are listed in the transport directory." : "Not listed yet."}</b>
+              <b>
+                {!ws.listed ? "Not in Book Transport: switch on “I am taking bookings”." : ws.verified ? "✔ You are in Book Transport as Verified." : "You are in Book Transport as ⏳ Not verified yet."}
+              </b>
               <div style={{ fontSize: "0.84rem", color: "#455a64", marginTop: 4 }}>
-                To be listed you need at least one verified vehicle with valid insurance, one verified driver with a valid licence, and
-                &quot;available&quot; switched on. A Storage and Transport Officer verifies vehicles and drivers.
+                Customers can book you while &quot;I am taking bookings&quot; is on, boda bodas included. To show ✔ Verified, add one vehicle with
+                valid insurance and one driver with a valid licence below; a Storage and Transport Officer checks them.
               </div>
               <div style={{ fontSize: "0.84rem", marginTop: 6 }}>
                 🪙 {ws.averageFarmcoins !== null ? `${ws.averageFarmcoins}/10 FarmCoins per trip from ${ws.ratings} rating(s)` : "No ratings yet"} · {ws.completedTrips} trips done
@@ -127,7 +129,7 @@ function Fleet({ userId, vehicles, drivers, say }: { userId: Id<"users">; vehicl
   const addVehicle = useMutation(api.transport.addVehicle);
   const addDriver = useMutation(api.transport.addDriver);
   const remove = useMutation(api.transport.removeVehicleOrDriver);
-  const [v, setV] = useState({ plate: "", type: "open_pickup", capacity: "", insuranceExpiry: "" });
+  const [v, setV] = useState({ plate: "", type: "motorcycle", capacity: "", insuranceExpiry: "" });
   const [vFiles, setVFiles] = useState<{ logbook?: File; insurance?: File; photo?: File }>({});
   const [d, setD] = useState({ name: "", licence: "", licenceClass: "", expiry: "" });
   const [dFile, setDFile] = useState<File | undefined>();
@@ -147,7 +149,7 @@ function Fleet({ userId, vehicles, drivers, say }: { userId: Id<"users">; vehicl
       {vehicles.map((x) => (
         <div key={x._id} style={{ borderTop: "1px solid #eee", padding: "0.45rem 0", fontSize: "0.86rem", display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
           <span>
-            🚚 <b>{x.plateNumber}</b> · {VEHICLE_LABEL[x.vehicleType] ?? x.vehicleType} {x.capacityTonnes} t · insured to {x.insuranceExpiry} · {statusText(x.status, x.reviewNotes)}
+            {vehicleIcon([x.vehicleType])} <b>{x.plateNumber}</b> · {VEHICLE_LABEL[x.vehicleType] ?? x.vehicleType} {x.capacityTonnes} t · insured to {x.insuranceExpiry} · {statusText(x.status, x.reviewNotes)}
           </span>
           <button style={btn(RED, true)} onClick={() => remove({ userId, vehicleId: x._id }).catch((e) => say(false, errorText(e)))}>
             Remove
@@ -175,7 +177,7 @@ function Fleet({ userId, vehicles, drivers, say }: { userId: Id<"users">; vehicl
             </option>
           ))}
         </select>
-        <input style={field} placeholder="Capacity (tonnes)" inputMode="decimal" value={v.capacity} onChange={(e) => setV({ ...v, capacity: e.target.value })} />
+        <input style={field} placeholder="Capacity in tonnes (boda boda: 0.2)" inputMode="decimal" value={v.capacity} onChange={(e) => setV({ ...v, capacity: e.target.value })} />
         <label style={{ fontSize: "0.8rem" }}>
           Insurance expiry
           <input style={field} type="date" value={v.insuranceExpiry} onChange={(e) => setV({ ...v, insuranceExpiry: e.target.value })} />
@@ -194,7 +196,7 @@ function Fleet({ userId, vehicles, drivers, say }: { userId: Id<"users">; vehicl
             const insuranceStorageId = await upload(await getUrl({ userId }), vFiles.insurance!);
             const photoStorageId = vFiles.photo ? await upload(await getUrl({ userId }), vFiles.photo) : undefined;
             await addVehicle({ userId, plateNumber: v.plate, vehicleType: v.type, capacityTonnes: Number(v.capacity), insuranceExpiry: v.insuranceExpiry, logbookStorageId, insuranceStorageId, photoStorageId });
-            setV({ plate: "", type: "open_pickup", capacity: "", insuranceExpiry: "" });
+            setV({ plate: "", type: "motorcycle", capacity: "", insuranceExpiry: "" });
             setVFiles({});
             say(true, "Vehicle sent for verification.");
           } catch (e) {

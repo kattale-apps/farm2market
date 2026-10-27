@@ -79,6 +79,7 @@ export default function VendorOnboardingPage() {
   // Vendor-specific
   const [marketType, setMarketType] = useState("");
   const [marketName, setMarketName] = useState("");
+  const [businessName, setBusinessName] = useState("");
   const [stallNumber, setStallNumber] = useState("");
 
   const completeOnboarding = useMutation(api.vendorOnboarding.completeOnboarding);
@@ -96,9 +97,10 @@ export default function VendorOnboardingPage() {
     if (onboardingStatus && !onboardingStatus.completed && onboardingStatus.hasLocation) {
       if (onboardingStatus.marketType && !marketType) setMarketType(onboardingStatus.marketType);
       if (onboardingStatus.marketName && !marketName) setMarketName(onboardingStatus.marketName);
+      if (onboardingStatus.businessName && !businessName) setBusinessName(onboardingStatus.businessName);
       if (onboardingStatus.stallNumber && !stallNumber) setStallNumber(onboardingStatus.stallNumber);
     }
-  }, [onboardingStatus, router, marketType, marketName, stallNumber]);
+  }, [onboardingStatus, router, marketType, marketName, businessName, stallNumber]);
 
   // Reset cascading location
   useEffect(() => { setSelectedDistrictId(""); setSelectedSubcountyId(""); setSelectedParishId(""); }, [selectedRegionKey]);
@@ -124,6 +126,7 @@ export default function VendorOnboardingPage() {
         parishId: selectedParishId ? selectedParishId as Id<"parishes"> : undefined,
         marketType: marketType as any,
         marketName: marketName.trim(),
+        businessName: businessName.trim() || undefined,
         stallNumber: stallNumber.trim() || undefined,
       });
       setMessage({ type: "success", text: `Onboarding complete! UTID: ${result.utid}` });
@@ -237,6 +240,21 @@ export default function VendorOnboardingPage() {
                 style={inputStyle}
               />
               <p style={{ margin: "0.25rem 0 0", fontSize: "0.8rem", color: "#888" }}>Enter the name of the market where you sell</p>
+            </div>
+
+            <div style={{ marginBottom: "1rem" }}>
+              <label style={labelStyle}>Business Name (if you have one)</label>
+              <input
+                type="text"
+                value={businessName}
+                onChange={(e) => setBusinessName(e.target.value)}
+                placeholder="e.g. Nakato Fresh Foods"
+                maxLength={80}
+                style={inputStyle}
+              />
+              <p style={{ margin: "0.25rem 0 0", fontSize: "0.8rem", color: "#888" }}>
+                The name of your shop or business. Only Farm2Market sees it. Send it with one document in MarketSpace → My Ledger to become a ✔ Verified Vendor.
+              </p>
             </div>
 
             <div style={{ marginBottom: "1rem" }}>

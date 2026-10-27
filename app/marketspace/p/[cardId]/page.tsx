@@ -10,6 +10,7 @@ import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { ugandaDateFromInstant } from "../../../../convex/exportMarketsShared";
 import { chargeForStep, commitAmount } from "../../../../convex/lotOrdersShared";
+import { purchaseHelp } from "../../../../convex/marketspaceShared";
 import { getUgandaTime } from "../../../utils/timeUtils";
 import { QrCodeDisplay } from "../../../components/qr/QrCodeDisplay";
 import { GoodsLabel } from "../../../components/qr/GoodsLabel";
@@ -31,7 +32,9 @@ const STOCK: Record<string, string> = { own_farm: "From the farm", in_app: "Trac
 /**
  * One MarketSpace post: what QR codes and cards open. Visitors and
  * unverified members see the preview; verified purchasers see the price, the
- * payment steps and can buy or make an offer. Never shows a phone number.
+ * payment steps and can buy or make an offer. Every lot post has a Purchase
+ * now button: it buys for verified purchasers, signs visitors up as buyers
+ * and tells unverified members how to get verified. Never shows a phone number.
  */
 export default function CardPage() {
   const params = useParams<{ cardId: string }>();
@@ -51,6 +54,7 @@ export default function CardPage() {
   const [msg, setMsg] = useState<{ ok: boolean; text: string; topUp?: boolean } | null>(null);
   const [reporting, setReporting] = useState(false);
   const [showQr, setShowQr] = useState(false);
+  const [buyHelp, setBuyHelp] = useState(false);
 
   const shell = (children: React.ReactNode) => (
     <div style={{ minHeight: "100vh", background: "transparent", fontFamily: FONT }}>
@@ -111,6 +115,7 @@ export default function CardPage() {
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", fontSize: "0.8rem" }}>
           <span style={{ padding: "0.15rem 0.6rem", borderRadius: 999, background: "#f1f3f0", fontWeight: 700 }}>{card.sellerAlias ?? card.sellerCategory}</span>
           {card.commercialFarmer && <span style={{ padding: "0.15rem 0.6rem", borderRadius: 999, background: "#e3f2fd", color: "#0d47a1", fontWeight: 700 }}>✔ Commercial Farmer</span>}
+          {card.verifiedVendor && <span style={{ padding: "0.15rem 0.6rem", borderRadius: 999, background: "#e3f2fd", color: "#0d47a1", fontWeight: 700 }}>✔ Verified Vendor</span>}
           {card.farmGate && <span style={{ padding: "0.15rem 0.6rem", borderRadius: 999, background: "#fff3e0", color: "#8d5300", fontWeight: 700 }}>🚜 Farm gate: not on MarketSpace</span>}
           {card.isBulk && <span style={{ padding: "0.15rem 0.6rem", borderRadius: 999, background: "#ede7f6", color: "#4527a0", fontWeight: 700 }}>📦 Bulk{card.bulkLabel ? ` · ${card.bulkLabel}` : ""}</span>}
           {card.stockSource && <span style={{ padding: "0.15rem 0.6rem", borderRadius: 999, background: "#e8f5e9", color: "#1b5e20", fontWeight: 700 }}>{STOCK[card.stockSource]}</span>}
@@ -123,10 +128,28 @@ export default function CardPage() {
         <div style={{ ...box, background: "#fff8e1", borderColor: "#ffe082" }}>
           <div style={{ fontWeight: 800 }}>{card.priceBand ?? "Price for buyers"} {card.quantityBand ? `· ${card.quantityBand}` : ""}</div>
           <p style={{ margin: "0.4rem 0", color: "#6d4c00" }}>🔒 {card.liteReason}</p>
-          {card.viewerTier === "public" && (
+          {card.viewerTier === "public" ? (
             <Link href={`/login?role=buyer&returnTo=${encodeURIComponent(`/marketspace/p/${card.cardId}`)}`} style={{ display: "inline-block", ...button("go"), lineHeight: "46px", textDecoration: "none" }}>
-              Sign up as a buyer
+              {isLot ? "🛒 Purchase now" : "Sign up as a buyer"}
             </Link>
+          ) : (
+            isLot && (
+              <>
+                <button type="button" onClick={() => setBuyHelp((v) => !v)} style={button("go")}>
+                  🛒 Purchase now
+                </button>
+                {buyHelp && (
+                  <div style={{ marginTop: "0.6rem", padding: "0.6rem 0.75rem", borderRadius: 10, background: "#fff", border: "1px solid #ffe082", color: "#333", fontSize: "0.92rem", lineHeight: 1.5 }}>
+                    {purchaseHelp(card.viewerRole).text}
+                    {purchaseHelp(card.viewerRole).ledger && (
+                      <Link href="/marketspace?tab=post&from=ledger" style={{ display: "block", marginTop: "0.4rem", color: "#1b5e20", fontWeight: 800 }}>
+                        Open My Ledger →
+                      </Link>
+                    )}
+                  </div>
+                )}
+              </>
+            )
           )}
         </div>
       ) : isLot ? (
@@ -188,7 +211,7 @@ export default function CardPage() {
                   })}
                   style={button("go")}
                 >
-                  Buy · commit {formatUGX(commitAmount(card.lotPrice ?? 0, card.commitPercent ?? 100) * n)}
+                  🛒 Purchase now · commit {formatUGX(commitAmount(card.lotPrice ?? 0, card.commitPercent ?? 100) * n)}
                 </button>
                 {(!card.packaged || card.takesOffers) && (
                   <button type="button" onClick={() => { setOffering((v) => !v); setOfferPrice(String((card.packaged ? card.priceUGX : card.pricePerKilo) ?? "")); }} style={button("plain")}>Make an offer</button>
@@ -255,7 +278,7 @@ export default function CardPage() {
         <div style={box}>
           {card.goodsCode ? (
             <>
-              <GoodsLabel code={card.goodsCode} name={card.title} photoUrl={card.photoUrls[0] ?? null} />
+              <GoodsLabel code={card.goodsCode} name={card.title} photoUrl={card.photoUrls[0] ?? null} place={card.place} />
               <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.4rem" }}>
                 {card.goodsCode} · made by Farm2Market for these goods. Scanning it shows where they come from and opens this post while it is up.
               </div>

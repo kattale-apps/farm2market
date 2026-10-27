@@ -8,8 +8,12 @@
  * buyers (exporters, processors, vendors and business buyers) see every
  * farmer lot, at the farm gate too.
  *
+ * Vendors send the same profile (their business name and one document) to
+ * be verified: when the super admin approves it, the vendor is verified (they
+ * can buy lots and sell in bulk) and their posts carry the Verified Vendor badge.
+ *
  * Who is acting always comes from the session token. The trading name and
- * the document go only to the farmer and the super admin.
+ * the document go only to the seller and the super admin.
  */
 
 import { v } from "convex/values";
@@ -20,10 +24,13 @@ import { getUgandaTime } from "./utils";
 import { evidencePhotoValidator } from "./evidencePhotos";
 import { REJECT_REASONS, commercialProfileProblem, documentLabel } from "./commercialFarmersShared";
 import { notifyOwner, requireSuperAdmin, requireUser, sessionUser } from "./marketspace";
-import { resyncFarmerCards, syncListingCard } from "./marketCards";
+import { resyncSellerCards, syncListingCard } from "./marketCards";
 import { roleLabel } from "./roleLabels";
 
 const documentKind = v.union(v.literal("trading_licence"), v.literal("business_registration"), v.literal("tin"));
+
+/** Who sends a commercial profile: farmers (to put lots on MarketSpace) and vendors (to be verified). */
+const PROFILE_ROLES = ["farmer", "vendor"];
 
 async function photoUrlOf(ctx: QueryCtx | MutationCtx, profile: Doc<"commercialProfiles">) {
   const storageId = profile.documents[0]?.photo?.storageId;
@@ -31,22 +38,30 @@ async function photoUrlOf(ctx: QueryCtx | MutationCtx, profile: Doc<"commercialP
 }
 
 // ------------------------------------------------------------------
-// The farmer
+// The farmer or vendor
 // ------------------------------------------------------------------
 
-/** The signed-in farmer's commercial profile, to fill in or check. */
+/** The signed-in farmer's or vendor's commercial profile, to fill in or check. */
 export const myProfile = query({
   args: { sessionToken: v.string() },
   handler: async (ctx, args) => {
     const user = await sessionUser(ctx, args.sessionToken);
-    if (!user || user.role !== "farmer") return null;
+    if (!user || !PROFILE_ROLES.includes(user.role)) return null;
     const profile = await ctx.db
       .query("commercialProfiles")
       .withIndex("by_userId", (q) => q.eq("userId", user._id))
       .first();
-    if (!profile) return { profile: null };
+    if (!profile) {
+      // A vendor's first profile starts from the business name they gave at onboarding
+      const vendor = user.role === "vendor"
+        ? await ctx.db.query("vendorProfiles").withIndex("by_userId", (q) => q.eq("userId", user._id)).first()
+        : null;
+      return { role: user.role, businessName: vendor?.businessName ?? null, profile: null };
+    }
     const doc = profile.documents[0];
     return {
+      role: user.role,
+      businessName: null,
       profile: {
         tradingName: profile.tradingName,
         kind: doc?.kind ?? null,
@@ -61,10 +76,10 @@ export const myProfile = query({
 });
 
 /**
- * Saves the farmer's commercial profile and sends it for checking. Their lots
- * can go on MarketSpace straight away (vendors and business buyers see
- * them); visitors see them once the super admin has verified the document.
- * Changing a verified profile sends it to be checked again.
+ * Saves the farmer's or vendor's commercial profile and sends it for
+ * checking. A farmer's lots can go on MarketSpace straight away (verified
+ * purchasers see them); visitors see them once the super admin has verified
+ * the document. Changing a verified profile sends it to be checked again.
  */
 export const saveProfile = mutation({
   args: {
@@ -76,7 +91,7 @@ export const saveProfile = mutation({
   },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx, args.sessionToken);
-    if (user.role !== "farmer") throw new Error("Commercial profiles are for farmers.");
+    if (!PROFILE_ROLES.includes(user.role)) throw new Error("Commercial profiles are for farmers and vendors.");
     const existing = await ctx.db
       .query("commercialProfiles")
       .withIndex("by_userId", (q) => q.eq("userId", user._id))
@@ -100,7 +115,7 @@ export const saveProfile = mutation({
     if (oldPhoto && oldPhoto !== photo?.storageId) await ctx.storage.delete(oldPhoto);
     if (existing) await ctx.db.patch(existing._id, fields);
     else await ctx.db.insert("commercialProfiles", { userId: user._id, ...fields, createdAt: now });
-    await resyncFarmerCards(ctx, user._id);
+    await resyncSellerCards(ctx, user._id);
     return { status: "pending" as const };
   },
 });
@@ -124,12 +139,12 @@ export const reviewQueue = query({
       ...(await ctx.db.query("commercialProfiles").withIndex("by_status_and_updatedAt", (q) => q.eq("status", "rejected")).order("desc").take(10)),
     ].sort((a, b) => b.updatedAt - a.updatedAt);
     const row = async (p: Doc<"commercialProfiles">) => {
-      const farmer = await ctx.db.get(p.userId);
-      const district = farmer?.districtId ? (await ctx.db.get(farmer.districtId))?.name : farmer?.districtText;
+      const seller = await ctx.db.get(p.userId);
+      const district = seller?.districtId ? (await ctx.db.get(seller.districtId))?.name : seller?.districtText;
       const doc = p.documents[0];
       return {
         profileId: p._id,
-        farmer: farmer ? `${roleLabel(farmer.role)} ${farmer.alias ?? ""}`.trim() : "Farmer (account removed)",
+        seller: seller ? `${roleLabel(seller.role)} ${seller.alias ?? ""}`.trim() : "Account removed",
         district: district ?? null,
         tradingName: p.tradingName,
         document: doc ? documentLabel(doc.kind) : null,
@@ -148,7 +163,10 @@ export const reviewQueue = query({
   },
 });
 
-/** Verify the document, or say why it is not accepted. The farmer is told either way. */
+/**
+ * Verify the document, or say why it is not accepted. The seller is told
+ * either way. Verifying a vendor's document verifies the vendor too.
+ */
 export const review = mutation({
   args: {
     sessionToken: v.string(),
@@ -172,15 +190,24 @@ export const review = mutation({
       reviewedAt: now,
       updatedAt: now,
     });
-    await resyncFarmerCards(ctx, profile.userId);
-    await notifyOwner(
-      ctx,
-      profile.userId,
-      args.decision === "verified" ? "Commercial profile verified" : "Commercial profile not accepted",
-      args.decision === "verified"
-        ? "Farm2Market checked your document. Your lots on MarketSpace now carry the Commercial Farmer badge and everyone can see them."
-        : `Farm2Market could not accept your commercial profile: ${reason}. Fix it in MarketSpace → My lots and send it again. Until then your lots are hidden from vendors and visitors.`
-    );
+    const seller = await ctx.db.get(profile.userId);
+    const vendor = seller?.role === "vendor";
+    if (vendor && args.decision === "verified") {
+      await ctx.db.patch(profile.userId, { verificationStatus: "verified", verifiedBy: admin._id, verifiedAt: now });
+    }
+    await resyncSellerCards(ctx, profile.userId);
+    let message: string;
+    if (args.decision === "verified") {
+      message = vendor
+        ? "Farm2Market checked your document. You are a Verified Vendor: you can buy lots, and your posts on MarketSpace carry the Verified Vendor badge."
+        : "Farm2Market checked your document. Your lots on MarketSpace now carry the Commercial Farmer badge and everyone can see them.";
+    } else {
+      message = vendor
+        ? `Farm2Market could not accept your business profile: ${reason}. Fix it in MarketSpace → My Ledger and send it again.`
+        : `Farm2Market could not accept your commercial profile: ${reason}. Fix it in MarketSpace → My Ledger and send it again. Until then your lots are hidden from visitors.`;
+    }
+    const what = vendor ? "Business profile" : "Commercial profile";
+    await notifyOwner(ctx, profile.userId, args.decision === "verified" ? `${what} verified` : `${what} not accepted`, message);
     return { status: args.decision };
   },
 });

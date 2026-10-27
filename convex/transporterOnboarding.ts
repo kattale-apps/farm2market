@@ -49,7 +49,8 @@ export const completeOnboarding = mutation({
     vehicleType: v.union(
       v.literal("cold_storage"),
       v.literal("open_pickup"),
-      v.literal("box_body")
+      v.literal("box_body"),
+      v.literal("motorcycle") // Boda boda
     ),
     vehicleTypeCustom: v.optional(v.string()),
     weightCapacityTonnes: v.number(),

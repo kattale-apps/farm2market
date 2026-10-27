@@ -9,14 +9,16 @@ import { ugandaDateFromInstant } from "../../../convex/exportMarketsShared";
 const GREEN = "#2e7d32";
 const FONT = '"Montserrat", sans-serif';
 export const VEHICLE_LABEL: Record<string, string> = {
+  motorcycle: "🏍️ Boda boda (motorcycle)",
   open_pickup: "Open pickup",
   box_body: "Box body",
   cold_storage: "Cold truck",
   lorry: "Lorry",
   tipper: "Tipper",
-  motorcycle: "Motorcycle",
   other: "Other",
 };
+/** 🏍️ for a transporter with only boda bodas, 🚚 otherwise. */
+export const vehicleIcon = (types: string[]) => (types.length > 0 && types.every((t) => t === "motorcycle") ? "🏍️" : "🚚");
 const field: React.CSSProperties = { minHeight: 44, borderRadius: 8, border: "1px solid #ccc", padding: "0 0.5rem", fontFamily: FONT, width: "100%", boxSizing: "border-box" };
 const btn = (bg: string, outline = false): React.CSSProperties => ({
   minHeight: 40,
@@ -35,8 +37,9 @@ function errorText(e: unknown) {
 }
 
 /**
- * Find verified transporters, book a trip in the app and rate it in
- * FarmCoins afterwards. Payment is agreed with the transporter off the app.
+ * Find transporters (boda bodas included), book a trip in the app and rate
+ * it in FarmCoins afterwards. Verified transporters come first; the others
+ * show as not verified yet. Payment is agreed with the transporter off the app.
  */
 export function TransportDirectory({ userId }: { userId: Id<"users"> }) {
   const [today] = useState(() => ugandaDateFromInstant(Date.now()));
@@ -47,9 +50,10 @@ export function TransportDirectory({ userId }: { userId: Id<"users"> }) {
   const [msg, setMsg] = useState<string | null>(null);
   return (
     <div style={{ fontFamily: FONT }}>
-      <div style={{ background: "#fff8e1", border: "1px solid #ffe082", borderRadius: 12, padding: "0.65rem 0.8rem", fontSize: "0.8rem", marginBottom: 10 }}>
-        Transporters here have verified vehicles, insurance, drivers and licences. Book and give feedback in the app; agree the price and pay
-        the transporter directly.
+      <div style={{ background: "#fff8e1", border: "1px solid #ffe082", borderRadius: 12, padding: "0.65rem 0.8rem", fontSize: "0.8rem", marginBottom: 10, lineHeight: 1.5 }}>
+        <div>✔ Verified: Farm2Market checked the vehicle, insurance, driver and licence.</div>
+        <div>⏳ Not verified yet: still being checked. Look at the vehicle before you load.</div>
+        <div>Book and give feedback in the app; agree the price and pay the transporter directly.</div>
       </div>
       {msg && <div style={{ background: "#e8f5e9", borderRadius: 8, padding: "0.5rem 0.7rem", fontSize: "0.85rem", marginBottom: 8 }}>{msg}</div>}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8, marginBottom: 10 }}>
@@ -66,19 +70,28 @@ export function TransportDirectory({ userId }: { userId: Id<"users"> }) {
       {list === undefined ? (
         <div>Loading transporters...</div>
       ) : list.length === 0 ? (
-        <div style={{ background: "#fff", borderRadius: 12, padding: "0.9rem", fontSize: "0.88rem" }}>No available transporters match. Try another district.</div>
+        <div style={{ background: "#fff", borderRadius: 12, padding: "0.9rem", fontSize: "0.88rem" }}>No transporters match. Try another district or vehicle.</div>
       ) : (
         list.map((t) => (
           <div key={t.transporterId} style={{ background: "#fff", border: "1px solid #e0e0e0", borderRadius: 12, padding: "0.75rem 0.85rem", marginBottom: 8 }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-              <b>🚚 {t.alias} ✔</b>
+              <span style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                <b>
+                  {vehicleIcon(t.vehicles.map((x) => x.vehicleType))} {t.alias}
+                </b>
+                {t.verified ? (
+                  <span style={{ padding: "0.1rem 0.5rem", borderRadius: 999, background: "#e8f5e9", color: "#1b5e20", fontSize: "0.72rem", fontWeight: 800 }}>✔ Verified</span>
+                ) : (
+                  <span style={{ padding: "0.1rem 0.5rem", borderRadius: 999, background: "#fff3e0", color: "#8d5300", fontSize: "0.72rem", fontWeight: 800 }}>⏳ Not verified yet</span>
+                )}
+              </span>
               <span style={{ fontSize: "0.8rem", color: "#6d4c00" }}>
                 {t.averageFarmcoins !== null ? `🪙 ${t.averageFarmcoins}/10 per trip (${t.ratings})` : "No ratings yet"} · {t.completedTrips} trips
               </span>
             </div>
             <div style={{ fontSize: "0.82rem", color: "#455a64" }}>
               {t.vehicles.map((x) => `${VEHICLE_LABEL[x.vehicleType] ?? x.vehicleType} ${x.capacityTonnes} t`).join(", ")}
-              <div>Serves: {t.districtsServed.join(", ")}</div>
+              {t.districtsServed.length > 0 && <div>Serves: {t.districtsServed.join(", ")}</div>}
               {t.availableFrom && <div>Available from {t.availableFrom}</div>}
               {t.priceGuide && <div>Price guide: {t.priceGuide}</div>}
             </div>

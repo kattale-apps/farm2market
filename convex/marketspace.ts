@@ -53,7 +53,7 @@ import { todayUganda } from "./exportMarkets";
 import { maskContactDetails } from "./exportMarketsShared";
 import { lotBuyingAccess } from "./lotOrders";
 import { roleLabel } from "./roleLabels";
-import { goodsCodeSummary } from "./goodsCodesCore";
+import { goodsCodeSummary, sellerPlace } from "./goodsCodesCore";
 
 type Ctx = QueryCtx | MutationCtx;
 
@@ -778,8 +778,9 @@ export const myLots = query({
       });
     }
     const bulk = await canSellBulk(ctx, user);
+    const sendsProfile = user.role === "farmer" || user.role === "vendor";
     const commercial =
-      user.role === "farmer"
+      sendsProfile
         ? await ctx.db
             .query("commercialProfiles")
             .withIndex("by_userId", (q) => q.eq("userId", user._id))
@@ -793,8 +794,8 @@ export const myLots = query({
       bulkRanges: BULK_RANGES,
       canSellBulk: bulk.ok,
       bulkReason: bulk.reason ?? null,
-      // Farmers: their commercial profile, needed to vend ("none" until they fill it in)
-      commercialStatus: user.role === "farmer" ? (commercial?.status ?? ("none" as const)) : null,
+      // Farmers: their commercial profile, needed to vend; vendors: their business profile, to be verified ("none" until they fill it in)
+      commercialStatus: sendsProfile ? (commercial?.status ?? ("none" as const)) : null,
       bulkCostFarmcoin: settings.bulkVendCostFarmcoin,
     };
   },
@@ -1035,12 +1036,14 @@ export const cardDetail = query({
     let neededBy: string | null = null;
     let negotiable: boolean | null = null;
     let goodsCode: string | null = null; // The listing's goods QR (/g/<code>), printed on the goods
+    let place: string | null = null; // The seller's district and subcounty, printed on the label
 
     if (card.sourceKind === "listing" && card.listingId) {
       const listing = await ctx.db.get(card.listingId);
       if (!listing) return null;
       photoIds.push(...(listing.photos ?? []).map((p) => p.storageId));
       goodsCode = (await goodsCodeSummary(ctx, listing.goodsCodeId))?.code ?? null;
+      if (goodsCode) place = await sellerPlace(ctx, card.sellerId);
       if (!shaped.lite) {
         const packaged = listing.listingMode === "packaging";
         const commit = listing.commitPercent ?? (packaged ? PACKAGED_COMMIT_PERCENT : 100);
@@ -1079,6 +1082,7 @@ export const cardDetail = query({
       sourceKind: card.sourceKind,
       adId: card.adId ?? null, // For reports
       goodsCode,
+      place,
       live,
       photoUrls,
       steps,
@@ -1093,6 +1097,7 @@ export const cardDetail = query({
       negotiable,
       viewerTier: viewer.tier,
       viewerUserId: viewer.user?._id ?? null,
+      viewerRole: viewer.user?.role ?? null, // What Purchase now tells an unverified member
     };
   },
 });

@@ -26,6 +26,7 @@ const REGION_GROUPS = [
 ];
 
 const VEHICLE_TYPES = [
+  { value: "motorcycle", label: "🏍️ Boda Boda (Motorcycle)" },
   { value: "cold_storage", label: "Cold Storage / Refrigerated" },
   { value: "open_pickup", label: "Open Pickup Truck" },
   { value: "box_body", label: "Box Body / Covered Truck" },
@@ -195,6 +196,7 @@ export default function TransporterOnboardingPage() {
                   required
                   style={inputStyle}
                 />
+                <p style={{ margin: "0.25rem 0 0", fontSize: "0.8rem", color: "#666" }}>A boda boda carries about 0.2 tonnes</p>
               </div>
               <div>
                 <label style={labelStyle}>Number of Vehicles *</label>

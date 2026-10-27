@@ -191,6 +191,7 @@ export const getVendorProfile = query({
     return {
       marketType: vp.marketType,
       marketName: vp.marketName,
+      businessName: vp.businessName,
       stallNumber: vp.stallNumber,
     };
   },
@@ -231,6 +232,7 @@ export const updateVendorProfile = mutation({
       v.literal("village_market")
     )),
     marketName: v.optional(v.string()),
+    businessName: v.optional(v.string()), // Shop or business name; "" clears it
     stallNumber: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -246,6 +248,7 @@ export const updateVendorProfile = mutation({
     const updates: any = {};
     if (args.marketType !== undefined) updates.marketType = args.marketType;
     if (args.marketName !== undefined) updates.marketName = args.marketName.trim() || undefined;
+    if (args.businessName !== undefined) updates.businessName = args.businessName.trim() || undefined;
     if (args.stallNumber !== undefined) updates.stallNumber = args.stallNumber.trim() || undefined;
 
     if (existing) {
@@ -255,6 +258,7 @@ export const updateVendorProfile = mutation({
         userId: args.userId,
         marketType: args.marketType || "village_market",
         marketName: args.marketName?.trim(),
+        businessName: args.businessName?.trim() || undefined,
         stallNumber: args.stallNumber?.trim(),
         onboardingCompleted: true,
         createdAt: getUgandaTime(),

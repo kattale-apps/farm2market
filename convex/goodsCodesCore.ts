@@ -41,6 +41,30 @@ function targetFields(target: GoodsTarget) {
   };
 }
 
+// Unit names that already say what they are ("Nakawa Division", "Lugazi Municipality")
+const DISTRICT_WORD = /\b(district|city)\b/i;
+const SUBCOUNTY_WORD = /\b(sub-?county|division|town council|municipality|ward|city)\b/i;
+
+/** "Mukono District · Goma Subcounty": where the goods are sold, for the printed label; null when neither is known. */
+export function placeLine(district: string | null | undefined, subcounty: string | null | undefined): string | null {
+  const d = district?.trim();
+  const s = subcounty?.trim();
+  const parts = [
+    d ? (DISTRICT_WORD.test(d) ? d : `${d} District`) : null,
+    s ? (SUBCOUNTY_WORD.test(s) ? s : `${s} Subcounty`) : null,
+  ].filter((p): p is string => p !== null);
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+/** The seller's district and subcounty from their profile (a vendor's market, a farmer's farm). */
+export async function sellerPlace(ctx: QueryCtx | MutationCtx, userId: Id<"users">): Promise<string | null> {
+  const user = await ctx.db.get(userId);
+  if (!user) return null;
+  const district = user.districtId ? (await ctx.db.get(user.districtId))?.name : undefined;
+  const subcounty = user.subcountyId ? (await ctx.db.get(user.subcountyId))?.name : undefined;
+  return placeLine(district ?? user.districtText, subcounty ?? user.subCountyText);
+}
+
 /** What a seller's list shows next to a listing, batch or export lot: its QR and how often it was scanned. */
 export async function goodsCodeSummary(ctx: QueryCtx | MutationCtx, codeId: Id<"goodsCodes"> | undefined) {
   const code = codeId ? await ctx.db.get(codeId) : null;

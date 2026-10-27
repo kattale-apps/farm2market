@@ -7,6 +7,10 @@
  * carries bookings and feedback. Phone numbers are not shown; booking and
  * feedback happen in the app, payment is agreed off it.
  *
+ * Every transporter taking bookings is listed and can be booked, boda bodas
+ * included; those not checked yet show as "not verified yet"
+ * (convex/transportShared.ts directoryEntry).
+ *
  * After a completed trip the person who booked rates it in FarmCoins, 0 to
  * 10, and those coins are credited to the transporter as a reward.
  *
@@ -19,10 +23,12 @@ import { Doc, Id } from "./_generated/dataModel";
 import { generateUTID, getUgandaTime } from "./utils";
 import { isIsoDate } from "./exportMarketsShared";
 import { notify, todayUganda, isStorageOfficer, requireAdmin } from "./exportMarkets";
+import { directoryEntry, servedDistricts, servesDistrict } from "./transportShared";
 
 type Ctx = QueryCtx | MutationCtx;
 
-export const TRANSPORT_VEHICLE_TYPES = ["open_pickup", "box_body", "cold_storage", "lorry", "tipper", "motorcycle", "other"];
+export const TRANSPORT_VEHICLE_TYPES = ["motorcycle", "open_pickup", "box_body", "cold_storage", "lorry", "tipper", "other"];
+const MAX_LISTED = 50; // Transporters one directory search shows
 export const MAX_TRIP_FARMCOINS = 10;
 
 async function requireTransporter(ctx: Ctx, userId: Id<"users">) {
@@ -41,15 +47,17 @@ async function profileOf(ctx: Ctx, userId: Id<"users">) {
   return await ctx.db.query("transporterProfiles").withIndex("by_userId", (q) => q.eq("userId", userId)).first();
 }
 
-/** Verified vehicles with valid insurance and verified drivers with valid licences. */
-async function verifiedFleet(ctx: Ctx, transporterId: Id<"users">, today: string) {
-  const vehicles = (await ctx.db.query("transportVehicles").withIndex("by_transporterId", (q) => q.eq("transporterId", transporterId)).take(100)).filter(
-    (x) => x.status === "verified" && x.insuranceExpiry >= today
-  );
-  const drivers = (await ctx.db.query("transportDrivers").withIndex("by_transporterId", (q) => q.eq("transporterId", transporterId)).take(100)).filter(
-    (x) => x.status === "verified" && x.licenceExpiry >= today
-  );
-  return { vehicles, drivers, listed: vehicles.length > 0 && drivers.length > 0 };
+/** How a transporter shows in the directory: listed while taking bookings, verified once a vehicle and a driver are checked. */
+async function directoryEntryOf(ctx: Ctx, profile: Doc<"transporterProfiles">, today: string) {
+  const vehicles = await ctx.db.query("transportVehicles").withIndex("by_transporterId", (q) => q.eq("transporterId", profile.userId)).take(100);
+  const drivers = await ctx.db.query("transportDrivers").withIndex("by_transporterId", (q) => q.eq("transporterId", profile.userId)).take(100);
+  return directoryEntry({
+    available: profile.available,
+    vehicles,
+    drivers,
+    onboardingVehicle: { vehicleType: profile.vehicleType, capacityTonnes: profile.weightCapacityTonnes },
+    today,
+  });
 }
 
 async function tripStats(ctx: Ctx, transporterId: Id<"users">) {
@@ -73,28 +81,31 @@ export const listTransporters = query({
     if (!viewer) return [];
     const today = isIsoDate(args.today) ? args.today : todayUganda();
     const transporters = await ctx.db.query("users").withIndex("by_role", (q) => q.eq("role", "transporter")).take(1000);
-    const want = (args.district ?? "").trim().toLowerCase();
-    const rows = [];
+    const found = [];
     for (const t of transporters) {
       if (t.state !== "active" || t._id === viewer._id) continue;
       const profile = await profileOf(ctx, t._id);
-      if (!profile?.available) continue;
-      const fleet = await verifiedFleet(ctx, t._id, today);
-      if (!fleet.listed) continue;
-      const served = profile.districtsServed ?? [];
-      if (want && !served.some((d) => d.toLowerCase() === want)) continue;
-      if (args.vehicleType && !fleet.vehicles.some((x) => x.vehicleType === args.vehicleType)) continue;
-      rows.push({
+      if (!profile) continue; // Not onboarded yet
+      const entry = await directoryEntryOf(ctx, profile, today);
+      if (!entry.shown) continue;
+      const served = servedDistricts(profile.districtsServed, t.districtText ?? null);
+      if (!servesDistrict(served, args.district ?? "")) continue;
+      if (args.vehicleType && !entry.vehicles.some((x) => x.vehicleType === args.vehicleType)) continue;
+      found.push({
         transporterId: t._id,
         alias: `Transporter ${t.alias}`,
+        verified: entry.verified,
         availableFrom: profile.availableFrom && profile.availableFrom > today ? profile.availableFrom : null,
         districtsServed: served,
         priceGuide: profile.priceGuide ?? null,
-        vehicles: fleet.vehicles.map((x) => ({ vehicleType: x.vehicleType, capacityTonnes: x.capacityTonnes })),
-        ...(await tripStats(ctx, t._id)),
+        vehicles: entry.vehicles,
       });
     }
-    rows.sort((a, b) => (b.averageFarmcoins ?? -1) - (a.averageFarmcoins ?? -1));
+    // Verified transporters first; trip ratings only for the ones shown
+    found.sort((a, b) => Number(b.verified) - Number(a.verified));
+    const rows = [];
+    for (const row of found.slice(0, MAX_LISTED)) rows.push({ ...row, ...(await tripStats(ctx, row.transporterId)) });
+    rows.sort((a, b) => Number(b.verified) - Number(a.verified) || (b.averageFarmcoins ?? -1) - (a.averageFarmcoins ?? -1));
     return rows;
   },
 });
@@ -115,8 +126,12 @@ export const bookTransport = mutation({
     if (!requester || requester.state !== "active") throw new Error("Please log in again");
     if (requester._id === args.transporterId) throw new Error("You cannot book yourself");
     const today = todayUganda();
+    // Verified or not yet: the directory shows which, so the person booking knows
+    const transporter = await ctx.db.get(args.transporterId);
     const profile = await profileOf(ctx, args.transporterId);
-    if (!profile?.available || !(await verifiedFleet(ctx, args.transporterId, today)).listed) throw new Error("This transporter is not taking bookings");
+    if (transporter?.role !== "transporter" || transporter.state !== "active" || !profile || profile.available === false) {
+      throw new Error("This transporter is not taking bookings");
+    }
     if (!isIsoDate(args.pickupDate) || args.pickupDate < today) throw new Error("Choose a pickup date from today");
     if (!args.fromDistrict.trim() || !args.toDistrict.trim() || !args.load.trim()) throw new Error("Say where from, where to and what is being moved");
     if (args.weightKg !== undefined && !(args.weightKg > 0)) throw new Error("Weight looks wrong");
@@ -233,11 +248,13 @@ export const getMyTransportWorkspace = query({
     const vehicles = await ctx.db.query("transportVehicles").withIndex("by_transporterId", (q) => q.eq("transporterId", user._id)).take(100);
     const drivers = await ctx.db.query("transportDrivers").withIndex("by_transporterId", (q) => q.eq("transporterId", user._id)).take(100);
     const trips = await ctx.db.query("transportBookings").withIndex("by_transporterId", (q) => q.eq("transporterId", user._id)).order("desc").take(200);
+    const entry = profile ? await directoryEntryOf(ctx, profile, today) : null;
     return {
       profile: profile
-        ? { available: profile.available ?? false, availableFrom: profile.availableFrom ?? null, districtsServed: profile.districtsServed ?? [], priceGuide: profile.priceGuide ?? "" }
+        ? { available: profile.available !== false, availableFrom: profile.availableFrom ?? null, districtsServed: profile.districtsServed ?? [], priceGuide: profile.priceGuide ?? "" }
         : null,
-      listed: (await verifiedFleet(ctx, user._id, today)).listed && profile?.available === true,
+      listed: entry?.shown ?? false, // In Book Transport while taking bookings
+      verified: entry?.verified ?? false, // A vehicle and a driver checked: shows ✔ Verified
       vehicles,
       drivers,
       trips: await tripRows(ctx, trips),

@@ -299,7 +299,7 @@ export function Discover({
               🔒 You see a preview. <Link href={`/login?role=buyer&returnTo=${encodeURIComponent(`/marketspace?view=${chip}`)}`} style={{ color: "#1b5e20", fontWeight: 800 }}>Sign up as a buyer</Link> to see prices and full details.
             </>
           ) : (
-            <>🔒 Farm produce and lots show a preview until Farm2Market verifies you as a buyer.</>
+            <>🔒 Farm produce and lots show a preview until Farm2Market verifies you as a purchaser.</>
           )}
         </div>
       )}

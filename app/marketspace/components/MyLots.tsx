@@ -8,9 +8,8 @@ import { EditListingTerms } from "../../components/lots/EditListingTerms";
 import { VendSheet, type MyLot } from "../../components/lots/VendSheet";
 import { ugandaDateFromInstant } from "../../../convex/exportMarketsShared";
 import { QuestionsSheet } from "./Questions";
-import { FONT, formatUGX } from "./shared";
+import { FONT, formatDate, formatUGX } from "./shared";
 import { PACKAGED_COMMIT_PERCENT, isPackagedPlan, packagesText } from "../../../convex/lotOrdersShared";
-import { formatUgandaDateTime } from "../../utils/timeUtils";
 import { GoodsQr } from "../../components/qr/GoodsQr";
 import { CommercialProfileSheet, commercialStatusText } from "./CommercialProfile";
 import { SECTION_LABELS, lotSections } from "../../../convex/marketspaceShared";
@@ -153,7 +152,7 @@ export function MyLots({ token, now, show, onGo }: { token: string; now: number;
               </div>
               <div style={{ fontSize: "0.85rem", fontWeight: 700, color: live ? "#2e7d32" : "#444", margin: "0.3rem 0" }}>
                 {live
-                  ? `🟢 Shows in ${sections} until ${formatUgandaDateTime(lot.vendExpiresAt!)}`
+                  ? `🟢 Shows in ${sections} until ${formatDate(lot.vendExpiresAt!)}`
                   : lot.vendExpiresAt !== null
                     ? `Its time on MarketSpace ran out. Refresh it to show it in ${sections} again.`
                     : `Not on MarketSpace yet. Put it on to show it in ${sections}.`}

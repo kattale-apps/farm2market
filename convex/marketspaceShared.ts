@@ -258,15 +258,15 @@ export function quantityBand(kg: number | undefined | null): string | null {
   return range?.label ?? null;
 }
 
-/** Who is looking at a card: not signed in, signed in, or a verified buyer (convex/lotOrders lotBuyingAccess). */
+/** Who is looking at a card: not signed in, signed in, or a verified purchaser (convex/lotOrders lotBuyingAccess). */
 export type ViewerTier = "public" | "member" | "verified";
 
 export type CardView = "produce" | "lots" | "classifieds";
 
 /**
- * Lite cards hide what only buyers should see. Visitors get lite cards
+ * Lite cards hide what only verified purchasers should see. Visitors get lite cards
  * everywhere; signed-in members get full classified ads but lite produce
- * and lots until they are verified buyers. A seller always sees their own
+ * and lots until they are verified purchasers. A seller always sees their own
  * card in full.
  */
 export function isLiteFor(view: CardView, tier: ViewerTier, isMine = false): boolean {
@@ -275,7 +275,7 @@ export function isLiteFor(view: CardView, tier: ViewerTier, isMine = false): boo
 }
 
 /**
- * Farmers' produce (the commercial farmer rule). Verified buyers (exporters,
+ * Farmers' produce (the commercial farmer rule). Verified purchasers (exporters,
  * processors, vendors and business buyers) see every farmer's lots,
  * including farm-gate cards (lots not on MarketSpace); visitors and
  * unverified members see only verified commercial farmers' lots. Other posts
@@ -291,7 +291,7 @@ export function produceVisible(
   return card.sellerCommercial === "verified";
 }
 
-/** Verified buyers (exporters, processors, vendors and business buyers) buy at the farm gate, so they see every farmer's lots. */
+/** Verified purchasers (exporters, processors, vendors and business buyers) buy at the farm gate, so they see every farmer's lots. */
 export function seesFarmGate(viewer: { tier: ViewerTier; role: string | null }): boolean {
   return viewer.tier === "verified" && (PURCHASER_ROLES as readonly string[]).includes(viewer.role ?? "");
 }
@@ -360,7 +360,7 @@ export function shapeCard(
     isBulk: card.isBulk,
     bulkLabel: range?.label ?? null,
     packaged: !!card.packaged, // Priced per item (priceUGX, priceUnit), counted in quantityText
-    farmGate: card.status === "farm_gate", // Not on MarketSpace: seen by verified buyers as a farm-gate source
+    farmGate: card.status === "farm_gate", // Not on MarketSpace: seen by verified purchasers as a farm-gate source
     commercialFarmer: card.view === "produce" && card.sellerCommercial === "verified", // The "Commercial Farmer" badge
     createdAt: card.createdAt,
     expiresAt: card.expiresAt,

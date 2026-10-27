@@ -110,7 +110,7 @@ export function MyLots({ token, now }: { token: string; now: number }) {
                     ? "Its MarketSpace time ran out: refresh to show it again"
                     : "Not on MarketSpace"}
                 {lot.farmGate && (
-                  <div style={{ fontWeight: 400, color: "#8d5300" }}>🚜 Verified buyers still see it, to buy at the farm gate.</div>
+                  <div style={{ fontWeight: 400, color: "#8d5300" }}>🚜 Verified purchasers still see it, to buy at the farm gate.</div>
                 )}
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>

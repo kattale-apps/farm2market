@@ -30,7 +30,7 @@ const STOCK: Record<string, string> = { own_farm: "From the farm", in_app: "Trac
 
 /**
  * One MarketSpace post: what QR codes and cards open. Visitors and
- * unverified members see the preview; verified buyers see the price, the
+ * unverified members see the preview; verified purchasers see the price, the
  * payment steps and can buy or make an offer. Never shows a phone number.
  */
 export default function CardPage() {

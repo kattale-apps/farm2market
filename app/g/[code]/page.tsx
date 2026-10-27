@@ -30,7 +30,7 @@ const KIND: Record<string, string> = { listing: "Listing", batch: "Processing ba
 
 /**
  * What a goods QR opens: what the good is, who sells it (category and
- * district), how much traces to farms, and the live post. Verified buyers
+ * district), how much traces to farms, and the live post. Verified purchasers
  * also see the seller's alias and the farms' districts; the owner sees the
  * scans. Never shows a phone number.
  */

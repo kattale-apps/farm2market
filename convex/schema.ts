@@ -4119,7 +4119,7 @@ export default defineSchema({
     thumbStorageId: v.optional(v.id("_storage")),
     sellerCommercial: v.optional(v.union(v.literal("pending"), v.literal("verified"))), // Farmers: their commercial profile; absent = none (produceVisible)
     // Expiry is by time (expiresAt), not status. farm_gate: a farmer's lot for sale but not on MarketSpace,
-    // seen only by verified buyers as a farm-gate source (it does not expire)
+    // seen only by verified purchasers as a farm-gate source (it does not expire)
     status: v.union(v.literal("active"), v.literal("closed"), v.literal("farm_gate")),
     expiresAt: v.number(),
     createdAt: v.number(), // When it was (last) put up

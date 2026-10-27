@@ -738,14 +738,16 @@ export const myLots = query({
       .take(100);
     const lots = [];
     for (const l of listings) {
-      if (l.withdrawnAt) continue;
-      if (l.status !== "active" && l.status !== "partially_locked") continue;
-      const packaged = l.listingMode === "packaging";
-      const commitPercent = l.commitPercent ?? (packaged ? PACKAGED_COMMIT_PERCENT : 100);
+      if (l.withdrawnAt || l.status === "cancelled") continue;
       const card = await ctx.db
         .query("marketCards")
         .withIndex("by_listing", (q) => q.eq("listingId", l._id))
         .first();
+      // Sold out (every lot in an order or delivered): kept while its post is up, so the seller can take it off
+      const forSale = l.status === "active" || l.status === "partially_locked";
+      if (!forSale && card?.status !== "active") continue;
+      const packaged = l.listingMode === "packaging";
+      const commitPercent = l.commitPercent ?? (packaged ? PACKAGED_COMMIT_PERCENT : 100);
       lots.push({
         listingId: l._id,
         utid: l.utid,
@@ -1136,6 +1138,33 @@ export const backfillAdCards = internalMutation({
       .take(2000);
     for (const ad of ads) await syncAdCard(ctx, ad._id);
     return { cards: ads.length };
+  },
+});
+
+/**
+ * One-off when sold-out posts started staying up (listingCardStatus): posts
+ * that sold out earlier and are still within their time come back, sold out,
+ * until the seller takes them off. 100 listings a status at a time; it
+ * schedules itself until done.
+ * Run: npx convex run marketspace:reopenSoldOutPosts '{"status":"fully_locked","cursor":null}'
+ */
+export const reopenSoldOutPosts = internalMutation({
+  args: { status: v.union(v.literal("fully_locked"), v.literal("delivered")), cursor: v.union(v.string(), v.null()) },
+  handler: async (ctx, args) => {
+    const now = getUgandaTime();
+    const page = await ctx.db
+      .query("listings")
+      .withIndex("by_status", (q) => q.eq("status", args.status))
+      .paginate({ numItems: 100, cursor: args.cursor });
+    let reopened = 0;
+    for (const listing of page.page) {
+      if (listing.withdrawnAt || listing.vendExpiresAt === undefined || listing.vendExpiresAt <= now) continue;
+      await syncListingCard(ctx, listing._id);
+      reopened++;
+    }
+    if (!page.isDone) await ctx.scheduler.runAfter(0, internal.marketspace.reopenSoldOutPosts, { status: args.status, cursor: page.continueCursor });
+    else if (args.status === "fully_locked") await ctx.scheduler.runAfter(0, internal.marketspace.reopenSoldOutPosts, { status: "delivered", cursor: null });
+    return { reopened, done: page.isDone };
   },
 });
 

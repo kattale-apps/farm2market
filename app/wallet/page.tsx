@@ -10,6 +10,8 @@ import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { guessNetwork, priceFill, type FarmcoinAccount, type MobileNetwork } from "../../convex/farmcoinExchangeShared";
 import { normalizeUgandaPhone } from "../../convex/marketspaceShared";
+import { ugandaDateFromInstant } from "../../convex/exportMarketsShared";
+import { getUgandaTime } from "../utils/timeUtils";
 import { FarmCoinIcon } from "../components/icons/Brand";
 import { DARK_GREEN, FONT, GREEN, button, card, errorText, formatUGX, formatWhen, input, label, useSessionToken } from "./shared";
 
@@ -53,6 +55,36 @@ export default function WalletPage() {
   const wallet = useQuery(api.farmcoinExchange.getMyWallet, token ? { sessionToken: token } : "skip");
   const [tab, setTab] = useState<Tab>("sell");
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
+  const [purchase, setPurchase] = useState<PendingPurchase | null>(null);
+  const [topUpFor, setTopUpFor] = useState<number | null>(null);
+
+  // Purchase now on MarketSpace opens the wallet with ?buy=<cardId>&lots=<n>. The buyer confirms the
+  // escrow here; a purchase waiting on a top-up is kept for this tab, since Pesapal returns to /wallet.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const cardId = params.get("buy");
+    let next: PendingPurchase | null = null;
+    if (cardId) next = { cardId, lots: Math.max(1, parseInt(params.get("lots") ?? "1", 10) || 1) };
+    else {
+      try {
+        const saved = sessionStorage.getItem(PENDING_PURCHASE_KEY);
+        if (saved) next = JSON.parse(saved) as PendingPurchase;
+      } catch {}
+    }
+    if (next) {
+      try {
+        sessionStorage.setItem(PENDING_PURCHASE_KEY, JSON.stringify(next));
+      } catch {}
+    }
+    setPurchase(next);
+  }, []);
+  // Committed or cancelled: forget it, so a reload does not offer it again
+  const forgetPurchase = () => {
+    try {
+      sessionStorage.removeItem(PENDING_PURCHASE_KEY);
+    } catch {}
+    if (window.location.search.includes("buy=")) window.history.replaceState(null, "", "/wallet");
+  };
 
   // Back from Pesapal after a top-up.
   useEffect(() => {
@@ -115,6 +147,23 @@ export default function WalletPage() {
 
   return (
     <Shell>
+      {purchase && token && (
+        <PurchaseCard
+          token={token}
+          purchase={purchase}
+          onTopUp={(short) => {
+            setTopUpFor(short);
+            setTab("topup");
+            setTimeout(() => document.getElementById("wallet-tabs")?.scrollIntoView({ behavior: "smooth" }), 50);
+          }}
+          onCommitted={forgetPurchase}
+          onCancel={() => {
+            forgetPurchase();
+            setPurchase(null);
+          }}
+        />
+      )}
+
       <section style={{ ...card, background: `linear-gradient(135deg, ${GREEN}, ${DARK_GREEN})`, color: "#fff" }}>
         <div style={{ fontSize: "0.8rem", opacity: 0.85, textTransform: "uppercase", letterSpacing: "0.06em" }}>Real money · can be cashed out</div>
         <div style={{ fontSize: "2rem", fontWeight: 800, margin: "0.2rem 0 0.6rem" }}>{formatUGX(wallet.wallet.availableUGX)}</div>
@@ -190,7 +239,7 @@ export default function WalletPage() {
         </div>
       )}
 
-      <div role="tablist" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, marginBottom: "0.8rem" }}>
+      <div id="wallet-tabs" role="tablist" style={{ scrollMarginTop: "1rem", display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, marginBottom: "0.8rem" }}>
         {TABS.map((t) => (
           <button
             key={t.key}
@@ -221,7 +270,7 @@ export default function WalletPage() {
       <section style={card}>
         {tab === "sell" && <SellForm token={token!} wallet={wallet} onDone={setNotice} />}
         {tab === "buy" && <BuyForm token={token!} wallet={wallet} onDone={setNotice} />}
-        {tab === "topup" && <TopUpForm token={token!} onDone={setNotice} />}
+        {tab === "topup" && <TopUpForm token={token!} onDone={setNotice} startAmount={topUpFor ?? undefined} />}
         {tab === "cashout" && <CashoutForm token={token!} wallet={wallet} onDone={setNotice} />}
       </section>
 
@@ -234,6 +283,121 @@ export default function WalletPage() {
 
 type WalletData = Extract<FunctionReturnType<typeof api.farmcoinExchange.getMyWallet>, { status: "ok" }>;
 type Done = (n: { ok: boolean; text: string }) => void;
+
+type PendingPurchase = { cardId: string; lots: number };
+const PENDING_PURCHASE_KEY = "f2m_pending_purchase";
+
+/**
+ * Purchase now from MarketSpace: what moves from the wallet into escrow, and
+ * the buyer's confirmation. Short of money, the buyer tops up first (the
+ * purchase waits). After the commit both sides are told and each wallet shows
+ * the money in escrow (PendingCard); the seller is paid only on collection.
+ */
+function PurchaseCard({
+  token,
+  purchase,
+  onTopUp,
+  onCommitted,
+  onCancel,
+}: {
+  token: string;
+  purchase: PendingPurchase;
+  onTopUp: (short: number) => void;
+  onCommitted: () => void;
+  onCancel: () => void;
+}) {
+  const [now] = useState(() => Math.floor(getUgandaTime() / 60000) * 60000);
+  const [today] = useState(() => ugandaDateFromInstant(Date.now()));
+  const [done, setDone] = useState<{ committed: number; what: string; title: string } | null>(null);
+  const preview = useQuery(api.lotOrders.commitPreview, done ? "skip" : { sessionToken: token, cardId: purchase.cardId, lots: purchase.lots, now, today });
+  const commit = useMutation(api.lotOrders.commitFromCard);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const postLink = `/marketspace/p/${purchase.cardId}`;
+  const linkStyle: React.CSSProperties = { color: DARK_GREEN, fontWeight: 800 };
+
+  if (done) {
+    return (
+      <section style={{ ...card, background: "#e8f5e9", border: `2px solid ${GREEN}` }}>
+        <div style={{ fontWeight: 800, fontSize: "1.05rem", color: DARK_GREEN }}>✔ {formatUGX(done.committed)} is in escrow</div>
+        <div style={{ fontSize: "0.92rem", lineHeight: 1.5, margin: "0.4rem 0 0.6rem" }}>
+          For {done.what} of {done.title}. The seller was told, and you both see it in your wallets below. The seller is paid only when you
+          collect. Follow the steps in My Lot Orders on your dashboard.
+        </div>
+        <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+          <Link href="/" style={linkStyle}>My dashboard →</Link>
+          <Link href={postLink} style={linkStyle}>Back to the post →</Link>
+        </div>
+      </section>
+    );
+  }
+  if (preview === undefined) return <section style={{ ...card, color: "#777" }}>Getting your purchase ready…</section>;
+  if (preview === null) return null; // Signed out: the wallet page says so
+  if (!preview.ok) {
+    return (
+      <section style={{ ...card, background: "#fff3e0" }}>
+        <div style={{ fontWeight: 800 }}>🛒 This purchase cannot go ahead</div>
+        <div style={{ fontSize: "0.9rem", margin: "0.3rem 0 0.6rem" }}>{preview.problem}</div>
+        <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+          <Link href={postLink} style={linkStyle}>Back to the post →</Link>
+          <button type="button" onClick={onCancel} style={{ border: "none", background: "none", color: "#555", fontWeight: 700, cursor: "pointer", padding: 0 }}>
+            Close
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  const confirm = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await commit({ sessionToken: token, cardId: purchase.cardId as Id<"marketCards">, lots: preview.count });
+      setDone({ committed: r.committedTotal + r.commission, what: preview.what, title: preview.title });
+      onCommitted();
+    } catch (e) {
+      setError(errorText(e, "Could not commit. Try again."));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section style={{ ...card, border: `2px solid ${GREEN}` }}>
+      <div style={{ fontWeight: 800, fontSize: "1.05rem", color: DARK_GREEN }}>🛒 Commit to escrow</div>
+      <div style={{ fontSize: "0.95rem", fontWeight: 700, margin: "0.3rem 0" }}>
+        {preview.title} · {preview.what}
+      </div>
+      <Row left={`Into escrow now (${preview.commitPercent}% of the price)`} right={formatUGX(preview.committed)} />
+      {preview.commission > 0 && <Row left="Farm2Market commission" right={formatUGX(preview.commission)} />}
+      <Row left="Your wallet" right={formatUGX(preview.balance)} />
+      <div style={{ fontSize: "0.8rem", color: "#555", margin: "0.4rem 0 0.7rem" }}>
+        The money stays in escrow. The seller is paid only when you collect.
+      </div>
+      {preview.short > 0 ? (
+        <>
+          <div style={{ color: "#8d4b00", fontWeight: 700, fontSize: "0.9rem", marginBottom: "0.5rem" }}>
+            Add {formatUGX(preview.short)} to your wallet first. This purchase waits here.
+          </div>
+          <button type="button" onClick={() => onTopUp(preview.short)} style={button(GREEN)}>
+            Top up {formatUGX(preview.short)}
+          </button>
+        </>
+      ) : (
+        <button type="button" onClick={confirm} disabled={busy} style={button(GREEN, busy)}>
+          {busy ? "Committing…" : `Commit ${formatUGX(preview.total)} to escrow`}
+        </button>
+      )}
+      {error && <div style={{ color: "#c62828", fontSize: "0.85rem", marginTop: "0.4rem" }}>{error}</div>}
+      <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", marginTop: "0.6rem" }}>
+        <Link href={postLink} style={linkStyle}>Back to the post</Link>
+        <button type="button" onClick={onCancel} style={{ border: "none", background: "none", color: "#555", fontWeight: 700, cursor: "pointer", padding: 0 }}>
+          Cancel
+        </button>
+      </div>
+    </section>
+  );
+}
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
@@ -392,9 +556,10 @@ function BuyForm({ token, wallet, onDone }: { token: string; wallet: WalletData;
   );
 }
 
-function TopUpForm({ token, onDone }: { token: string; onDone: Done }) {
+function TopUpForm({ token, onDone, startAmount }: { token: string; onDone: Done; startAmount?: number }) {
   const topUp = useAction(api.pesapal.initiateWalletTopUp);
-  const [amountRaw, setAmountRaw] = useState("");
+  // A purchase waiting on a top-up starts from what is missing
+  const [amountRaw, setAmountRaw] = useState(startAmount ? String(startAmount) : "");
   const [busy, setBusy] = useState(false);
   const amount = wholeNumber(amountRaw);
 

@@ -206,6 +206,13 @@ export function Discover({
             {c.label}
           </button>
         ))}
+        {/* Business buyers' other markets have their own pages: listed with the filters, so every market starts here */}
+        {me?.role === "buyer" &&
+          ([["/buyer/export-markets", "🚢 Global Bulk Markets"], ["/buyer/advance-purchase", "🌱 Contract Farming"]] as const).map(([href, text]) => (
+            <Link key={href} href={href} style={{ ...chipStyle(false), display: "inline-flex", alignItems: "center", textDecoration: "none" }}>
+              {text} ↗
+            </Link>
+          ))}
       </div>
 
       {chip === "farmgate" && (

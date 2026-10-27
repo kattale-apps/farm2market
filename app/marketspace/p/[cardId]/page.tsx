@@ -4,12 +4,12 @@ export const dynamic = "force-dynamic";
 
 import { useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { ugandaDateFromInstant } from "../../../../convex/exportMarketsShared";
-import { chargeForStep, commitAmount } from "../../../../convex/lotOrdersShared";
+import { chargeForStep, commitAmount, commitTotal } from "../../../../convex/lotOrdersShared";
 import { purchaseHelp } from "../../../../convex/marketspaceShared";
 import { getUgandaTime } from "../../../utils/timeUtils";
 import { QrCodeDisplay } from "../../../components/qr/QrCodeDisplay";
@@ -39,6 +39,7 @@ const STOCK: Record<string, string> = { own_farm: "From the farm", in_app: "Trac
  */
 export default function CardPage() {
   const params = useParams<{ cardId: string }>();
+  const router = useRouter();
   const session = useMarketspaceSession();
   const [boardNow] = useState(() => Math.floor(getUgandaTime() / 60000) * 60000);
   const [today] = useState(() => ugandaDateFromInstant(Date.now()));
@@ -46,7 +47,6 @@ export default function CardPage() {
     api.marketspace.cardDetail,
     params?.cardId && session.status !== "loading" ? { cardId: params.cardId, now: boardNow, today, sessionToken: session.token ?? undefined } : "skip"
   );
-  const commitFromCard = useMutation(api.lotOrders.commitFromCard);
   const makeOffer = useMutation(api.negotiations.makeOffer);
   const [lots, setLots] = useState("1");
   const [offering, setOffering] = useState(false);
@@ -118,6 +118,7 @@ export default function CardPage() {
           <span style={{ padding: "0.15rem 0.6rem", borderRadius: 999, background: "#f1f3f0", fontWeight: 700 }}>{card.sellerAlias ?? card.sellerCategory}</span>
           {card.commercialFarmer && <span style={{ padding: "0.15rem 0.6rem", borderRadius: 999, background: "#e3f2fd", color: "#0d47a1", fontWeight: 700 }}>✔ Commercial Farmer</span>}
           {card.verifiedVendor && <span style={{ padding: "0.15rem 0.6rem", borderRadius: 999, background: "#e3f2fd", color: "#0d47a1", fontWeight: 700 }}>✔ Verified Vendor</span>}
+          {card.soldOut && <span style={{ padding: "0.15rem 0.6rem", borderRadius: 999, background: "#ffebee", color: "#c62828", fontWeight: 800 }}>Sold out for now</span>}
           {card.farmGate && <span style={{ padding: "0.15rem 0.6rem", borderRadius: 999, background: "#fff3e0", color: "#8d5300", fontWeight: 700 }}>🚜 Farm gate: not on MarketSpace</span>}
           {card.isBulk && <span style={{ padding: "0.15rem 0.6rem", borderRadius: 999, background: "#ede7f6", color: "#4527a0", fontWeight: 700 }}>📦 Bulk{card.bulkLabel ? ` · ${card.bulkLabel}` : ""}</span>}
           {card.stockSource && <span style={{ padding: "0.15rem 0.6rem", borderRadius: 999, background: "#e8f5e9", color: "#1b5e20", fontWeight: 700 }}>{STOCK[card.stockSource]}</span>}
@@ -195,7 +196,9 @@ export default function CardPage() {
             <Link href="/marketspace?tab=mine" style={{ display: "inline-block", marginTop: "0.7rem", color: "#1b5e20", fontWeight: 800 }}>This is your post: manage it in My posts →</Link>
           ) : card.canBuy ? (
             free === 0 ? (
-              <div style={{ marginTop: "0.7rem", color: "#8d6e00" }}>Every free lot has an offer waiting for the seller.</div>
+              <div style={{ marginTop: "0.7rem", color: "#8d6e00", fontWeight: 700 }}>
+                {card.soldOut ? "Sold out for now. The seller keeps this post up, so check back or ask a question below." : "Every free lot has an offer waiting for the seller."}
+              </div>
             ) : (
               <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center", marginTop: "0.8rem" }}>
                 <label style={{ fontSize: "0.9rem" }}>
@@ -205,15 +208,11 @@ export default function CardPage() {
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() => run(async () => {
-                    const r = await commitFromCard({ sessionToken: session.token!, cardId: card.cardId as Id<"marketCards">, lots: n });
-                    return card.packaged
-                      ? `${formatUGX(r.committedTotal)} is in escrow for your order. Collect from the seller, then confirm in your lot orders.`
-                      : `Committed ${formatUGX(r.committedTotal)} into escrow for ${n} lot(s). Follow the steps in your lot orders.`;
-                  })}
+                  // The wallet shows what moves into escrow; the buyer confirms there (or deposits first)
+                  onClick={() => router.push(`/wallet?buy=${card.cardId}&lots=${n}`)}
                   style={button("go")}
                 >
-                  🛒 Purchase now · commit {formatUGX(commitAmount(card.lotPrice ?? 0, card.commitPercent ?? 100) * n)}
+                  🛒 Purchase now · commit {formatUGX(commitTotal(card.lotPrice ?? 0, n, card.commitPercent ?? 100, card.packaged))}
                 </button>
                 {(!card.packaged || card.takesOffers) && (
                   <button type="button" onClick={() => { setOffering((v) => !v); setOfferPrice(String((card.packaged ? card.priceUGX : card.pricePerKilo) ?? "")); }} style={button("plain")}>Make an offer</button>

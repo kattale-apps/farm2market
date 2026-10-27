@@ -278,6 +278,15 @@ export function commitAmount(total: number, commitPercent: number): number {
 }
 
 /**
+ * What buying `count` units moves into escrow: lots by weight are one order
+ * each; packaged items (or batches) are one order for all. `unitPrice` is one
+ * lot's or one item's (or batch's) price. Used by the commit and its preview.
+ */
+export function commitTotal(unitPrice: number, count: number, commitPercent: number, packaged: boolean): number {
+  return packaged ? commitAmount(unitPrice * count, commitPercent) : count * commitAmount(unitPrice, commitPercent);
+}
+
+/**
  * UGX that should be in escrow once steps 0..index are done. Cumulative so
  * the parts never leak a shilling: once the last step is done it is exactly
  * the total.

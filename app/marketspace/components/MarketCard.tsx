@@ -66,6 +66,9 @@ export function MarketCard({ card, now, layout = "list" }: { card: MarketCardDat
         {card.lite && (
           <span style={{ position: "absolute", top: 6, right: 6, padding: "0.15rem 0.5rem", borderRadius: 999, background: "rgba(0,0,0,0.65)", color: "#fff", fontSize: "0.68rem", fontWeight: 800 }}>🔒 Buyers</span>
         )}
+        {card.soldOut && (
+          <span style={{ position: "absolute", bottom: 6, left: 6, padding: "0.15rem 0.55rem", borderRadius: 999, background: "#c62828", color: "#fff", fontSize: "0.7rem", fontWeight: 800 }}>Sold out for now</span>
+        )}
       </div>
       <div style={{ padding: "0.55rem 0.65rem", display: "flex", flexDirection: "column", gap: "0.3rem" }}>
         <div style={{ fontWeight: 800, fontSize: size.title, lineHeight: 1.25 }}>{card.title}</div>

@@ -18,6 +18,14 @@ export const GLASS: CSSProperties = {
   borderRadius: 16,
   boxShadow: "0 4px 18px rgba(0,0,0,0.12)",
 };
+/** A solid panel for forms and lists, so every line stays readable on the farm photo. */
+export const PANEL: CSSProperties = {
+  background: "#fff",
+  borderRadius: 16,
+  boxShadow: "0 4px 18px rgba(0,0,0,0.18)",
+  padding: "1rem",
+  marginBottom: "1rem",
+};
 export const DISTRICTS: string[] = [...new Set(UG_DISTRICTS.map((d) => d.name))].sort((a, b) => a.localeCompare(b));
 
 /** The ad card shape returned by the MarketSpace queries. */

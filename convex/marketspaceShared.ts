@@ -301,6 +301,50 @@ export function cardIsLive(card: { status: string; expiresAt: number }, now: num
   return (card.status === "active" && card.expiresAt > now) || card.status === "farm_gate";
 }
 
+/** Discover's sections as its chips name them; "where it shows" lines use the same words. */
+export const SECTION_LABELS = {
+  all: "All",
+  produce: "🌾 Farmers Produce",
+  farmgate: "🚜 Farm Gate",
+  bulk: "📦 Local Bulk",
+  lots: "🏪 Vendors and Processors",
+  classifieds: "📰 Classifieds",
+} as const;
+
+/**
+ * Where a seller's lot shows in Discover: a farmer's in Farmers Produce (at
+ * the Farm Gate while it is not on MarketSpace), everyone else's in Vendors
+ * and Processors, and in Local Bulk too when it sells in bulk.
+ */
+export function lotSections(role: string, lot: { bulk: boolean; farmGate: boolean }): string[] {
+  if (role === "farmer" && lot.farmGate) return [SECTION_LABELS.farmgate];
+  const main = role === "farmer" ? SECTION_LABELS.produce : SECTION_LABELS.lots;
+  return lot.bulk ? [main, SECTION_LABELS.bulk] : [main];
+}
+
+export type PastLotOutcome = "sold" | "withdrawn" | "taken_off" | "time_ran_out" | "all_ordered";
+
+export const PAST_LOT_OUTCOMES: Record<PastLotOutcome, string> = {
+  sold: "Sold out",
+  withdrawn: "Withdrawn",
+  taken_off: "Taken off",
+  time_ran_out: "Time ran out",
+  all_ordered: "All lots ordered",
+};
+
+/** Why a lot post is no longer on MarketSpace, for My posts' past posts. */
+export function pastLotOutcome(
+  card: { status: string; expiresAt: number },
+  listing: { status: string; withdrawnAt?: number; vendExpiresAt?: number } | null,
+  now: number
+): PastLotOutcome {
+  if (listing && (listing.status === "fully_locked" || listing.status === "delivered")) return "sold";
+  if (!listing || listing.status === "cancelled" || listing.withdrawnAt !== undefined) return "withdrawn";
+  if (listing.vendExpiresAt === undefined) return "taken_off";
+  if (card.status === "active" && card.expiresAt <= now) return "time_ran_out";
+  return "all_ordered"; // Closed while still vended: every lot left is in an order
+}
+
 /** The line a lite card shows instead of the details. */
 export function liteReason(tier: ViewerTier): string {
   return tier === "public"

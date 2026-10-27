@@ -62,7 +62,8 @@ export function MyLots({ token, now, show, onGo }: { token: string; now: number;
   });
 
   const isLive = (lot: MyLot) => lot.vendExpiresAt !== null && lot.vendExpiresAt > now;
-  const lots = info.lots.filter((lot) => (show === "posted" ? isLive(lot) : !isLive(lot)));
+  // A sold-out post stays in My posts while it is up; once it is down there is nothing left to post from My Ledger
+  const lots = info.lots.filter((lot) => (show === "posted" ? isLive(lot) : !isLive(lot) && lot.lotsLeft > 0));
   const farmer = info.role === "farmer";
   const goButton = (where: "post" | "mine", text: string) =>
     onGo && (
@@ -141,21 +142,25 @@ export function MyLots({ token, now, show, onGo }: { token: string; now: number;
               <div style={{ fontSize: "0.85rem", color: "#555" }}>
                 {lot.packaged ? (
                   <>
-                    {(lot.packagesPerBatch ?? 1) > 1
-                      ? `${lot.lotsLeft} batch${lot.lotsLeft === 1 ? "" : "es"} of ${packagesText(lot.packagesPerBatch ?? 1, lot.packageLabel ?? "item")}`
-                      : packagesText(lot.lotsLeft, lot.packageLabel ?? "item")}{" "}
+                    {lot.lotsLeft === 0
+                      ? "Sold out"
+                      : (lot.packagesPerBatch ?? 1) > 1
+                        ? `${lot.lotsLeft} batch${lot.lotsLeft === 1 ? "" : "es"} of ${packagesText(lot.packagesPerBatch ?? 1, lot.packageLabel ?? "item")}`
+                        : packagesText(lot.lotsLeft, lot.packageLabel ?? "item")}{" "}
                     · {formatUGX(lot.pricePerUnit ?? 0)} per {lot.packageLabel ?? "item"} ·{" "}
                     {isPackagedPlan(lot.milestonePlan, lot.commitPercent ?? PACKAGED_COMMIT_PERCENT) ? "paid in full, no steps" : `buyer pays ${lot.commitPercent}% first`}
                     {lot.takesOffers ? " · takes offers" : ""}
                   </>
                 ) : (
                   <>
-                    {lot.lotsLeft} lot{lot.lotsLeft === 1 ? "" : "s"} of {lot.unitSize.toLocaleString()} kg · {formatUGX(lot.pricePerKilo)}/kg · purchaser pays {lot.commitPercent ?? 100}% first
+                    {lot.lotsLeft === 0 ? "Sold out · lots" : `${lot.lotsLeft} lot${lot.lotsLeft === 1 ? "" : "s"}`} of {lot.unitSize.toLocaleString()} kg · {formatUGX(lot.pricePerKilo)}/kg · purchaser pays {lot.commitPercent ?? 100}% first
                   </>
                 )}
               </div>
               <div style={{ fontSize: "0.85rem", fontWeight: 700, color: live ? "#2e7d32" : "#444", margin: "0.3rem 0" }}>
-                {live
+                {live && lot.lotsLeft === 0
+                  ? `🟢 Sold out for now. The post stays in ${sections} until ${formatDate(lot.vendExpiresAt!)}, or until you take it off.`
+                  : live
                   ? `🟢 Shows in ${sections} until ${formatDate(lot.vendExpiresAt!)}`
                   : lot.vendExpiresAt !== null
                     ? `Its time on MarketSpace ran out. Refresh it to show it in ${sections} again.`
@@ -165,6 +170,7 @@ export function MyLots({ token, now, show, onGo }: { token: string; now: number;
                 )}
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
+                {lot.lotsLeft > 0 && (
                 <button
                   type="button"
                   // Farmers need a commercial profile to put lots on MarketSpace (vendors' business profile is optional)
@@ -173,6 +179,7 @@ export function MyLots({ token, now, show, onGo }: { token: string; now: number;
                 >
                   {live ? "Change" : "Put on MarketSpace"}
                 </button>
+                )}
                 {lot.vendExpiresAt !== null && (
                   <button type="button" disabled={busy === lot.listingId} onClick={() => act(lot.listingId, () => refresh({ sessionToken: token, listingId: lot.listingId }), `${lot.produceType} refreshed for ${lot.vendRefreshDays} days.`)} style={button("plain")}>
                     Refresh

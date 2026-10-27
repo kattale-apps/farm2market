@@ -40,7 +40,10 @@ export function MarketCard({ card, now, layout = "list" }: { card: MarketCardDat
   else if (card.packaged) price = card.priceUGX !== null ? `${formatUGX(card.priceUGX)} ${card.priceUnit ?? "each"}` : null;
   else if (isLot) price = card.pricePerKilo ? `${formatUGX(card.pricePerKilo)}/kg` : null;
   else price = card.priceUGX !== null ? `${formatUGX(card.priceUGX)}${card.priceUnit ? ` ${card.priceUnit}` : ""}` : null;
-  const quantity = card.lite
+  // A sold-out post says so on its photo; no "0 lots" line
+  const quantity = card.soldOut
+    ? null
+    : card.lite
     ? card.quantityBand
     : card.packaged
       ? card.quantityText

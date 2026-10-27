@@ -51,7 +51,7 @@ import { PACKAGED_COMMIT_PERCENT, bulkSellingDecision, defaultPlan, packageLabel
 import { isActiveProcessor } from "./processors";
 import { todayUganda } from "./exportMarkets";
 import { maskContactDetails } from "./exportMarketsShared";
-import { lotBuyingAccess } from "./lotOrders";
+import { lotBuyingAccess, refreshListingStatus, restockLots } from "./lotOrders";
 import { roleLabel } from "./roleLabels";
 import { goodsCodeSummary, sellerPlace } from "./goodsCodesCore";
 
@@ -738,14 +738,16 @@ export const myLots = query({
       .take(100);
     const lots = [];
     for (const l of listings) {
-      if (l.withdrawnAt) continue;
-      if (l.status !== "active" && l.status !== "partially_locked") continue;
-      const packaged = l.listingMode === "packaging";
-      const commitPercent = l.commitPercent ?? (packaged ? PACKAGED_COMMIT_PERCENT : 100);
+      if (l.withdrawnAt || l.status === "cancelled") continue;
       const card = await ctx.db
         .query("marketCards")
         .withIndex("by_listing", (q) => q.eq("listingId", l._id))
         .first();
+      // Sold out (every lot in an order or delivered): kept while its post is up, so the seller can take it off
+      const forSale = l.status === "active" || l.status === "partially_locked";
+      if (!forSale && card?.status !== "active") continue;
+      const packaged = l.listingMode === "packaging";
+      const commitPercent = l.commitPercent ?? (packaged ? PACKAGED_COMMIT_PERCENT : 100);
       lots.push({
         listingId: l._id,
         utid: l.utid,
@@ -1136,6 +1138,61 @@ export const backfillAdCards = internalMutation({
       .take(2000);
     for (const ad of ads) await syncAdCard(ctx, ad._id);
     return { cards: ads.length };
+  },
+});
+
+/**
+ * One-off when posts started taking repeat orders (restockLots): posts that
+ * sold out earlier and are still within their time get their lots back and
+ * show again. 100 listings a status at a time; it schedules itself until done.
+ * Run: npx convex run marketspace:restoreSoldOutPosts '{"status":"fully_locked","cursor":null}'
+ */
+export const restoreSoldOutPosts = internalMutation({
+  args: { status: v.union(v.literal("fully_locked"), v.literal("delivered")), cursor: v.union(v.string(), v.null()) },
+  handler: async (ctx, args) => {
+    const now = getUgandaTime();
+    const page = await ctx.db
+      .query("listings")
+      .withIndex("by_status", (q) => q.eq("status", args.status))
+      .paginate({ numItems: 100, cursor: args.cursor });
+    const restored: string[] = [];
+    for (const listing of page.page) {
+      if (listing.withdrawnAt || listing.vendExpiresAt === undefined || listing.vendExpiresAt <= now) continue;
+      if ((await restockLots(ctx, listing._id)) === 0) continue; // Traced stock: nothing to add
+      await refreshListingStatus(ctx, listing._id);
+      restored.push(listing.produceType);
+    }
+    if (!page.isDone) await ctx.scheduler.runAfter(0, internal.marketspace.restoreSoldOutPosts, { status: args.status, cursor: page.continueCursor });
+    else if (args.status === "fully_locked") await ctx.scheduler.runAfter(0, internal.marketspace.restoreSoldOutPosts, { status: "delivered", cursor: null });
+    return { restored, done: page.isDone };
+  },
+});
+
+/**
+ * One-off: put chosen posts back on MarketSpace with their lots, for posts
+ * that disappeared when they sold out and whose time has since run out too.
+ * Each goes back up for its usual number of days. Withdrawn listings are left alone.
+ * Run: npx convex run marketspace:restorePosts '{"listingIds":["..."]}'
+ */
+export const restorePosts = internalMutation({
+  args: { listingIds: v.array(v.id("listings")) },
+  handler: async (ctx, args) => {
+    const now = getUgandaTime();
+    const result = [];
+    for (const listingId of args.listingIds) {
+      const listing = await ctx.db.get(listingId);
+      if (!listing || listing.withdrawnAt || listing.status === "cancelled") {
+        result.push({ listingId, restored: false, why: "missing, withdrawn or cancelled" });
+        continue;
+      }
+      const added = await restockLots(ctx, listingId);
+      if (listing.vendExpiresAt === undefined || listing.vendExpiresAt <= now) {
+        await ctx.db.patch(listingId, { vendExpiresAt: now + (listing.vendRefreshDays ?? 7) * DAY_MS, vendedAt: listing.vendedAt ?? now });
+      }
+      await refreshListingStatus(ctx, listingId);
+      result.push({ listingId, restored: true, produceType: listing.produceType, lotsAdded: added });
+    }
+    return result;
   },
 });
 

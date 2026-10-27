@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { BULK_RANGES, bulkRangeProblem, isLiteFor, priceBand, purchaseHelp, quantityBand, shapeCard, vendDayChoices, withDefaults } from "../convex/marketspaceShared";
+import { BULK_RANGES, bulkRangeProblem, isLiteFor, listingCardStatus, priceBand, purchaseHelp, quantityBand, shapeCard, vendDayChoices, withDefaults } from "../convex/marketspaceShared";
 import { maskContactDetails } from "../convex/exportMarketsShared";
 import { LOT_SELLER_ROLES, PACKAGED_COMMIT_PERCENT, bulkSellingDecision, defaultPlan, defaultSteps, isPackagedPlan, packageLabel, packagedPlan, packagedUnitPrice, packagesText, stockRowSource, stockSourceProblem, validatePlan } from "../convex/lotOrdersShared";
 
@@ -221,4 +221,25 @@ test("Purchase now tells an unverified member what to do next", () => {
 test("an animal lot sold by weight says animals, a crop lot says bags", () => {
   assert.equal(shapeCard({ ...lotCard, produceKind: "animal" }, { tier: "verified", role: "buyer", isMine: false }, extras).animal, true);
   assert.equal(shapeCard(lotCard, { tier: "verified", role: "buyer", isMine: false }, extras).animal, false, "no kind stored: a crop");
+});
+
+test("a post stays up when it sells out, until the seller takes it off or its time ends", () => {
+  const base = { open: true, lotsAvailable: 0, isFarmer: false, vended: true, vendedNow: true };
+  assert.equal(listingCardStatus(base), "active", "sold out, still on MarketSpace: repeat sales");
+  assert.equal(listingCardStatus({ ...base, lotsAvailable: 3 }), "active");
+  assert.equal(listingCardStatus({ ...base, vended: false, vendedNow: false }), "closed", "taken off by the seller");
+  assert.equal(listingCardStatus({ ...base, open: false }), "closed", "withdrawn by the seller");
+  // Farmers: sold out on MarketSpace stays up; off MarketSpace it is a farm-gate card only while lots are for sale
+  const farmer = { ...base, isFarmer: true };
+  assert.equal(listingCardStatus(farmer), "active");
+  assert.equal(listingCardStatus({ ...farmer, vendedNow: false, lotsAvailable: 2 }), "farm_gate");
+  assert.equal(listingCardStatus({ ...farmer, vendedNow: false, lotsAvailable: 0 }), "closed");
+  assert.equal(listingCardStatus({ ...farmer, vended: false, vendedNow: false, lotsAvailable: 2 }), "farm_gate");
+});
+
+test("a sold-out lot post says so to everyone; classified ads never do", () => {
+  const viewer = { tier: "public" as const, role: null, isMine: false };
+  assert.equal(shapeCard({ ...lotCard, lotsAvailable: 0 }, viewer, extras).soldOut, true);
+  assert.equal(shapeCard(lotCard, viewer, extras).soldOut, false);
+  assert.equal(shapeCard({ ...lotCard, view: "classifieds" as const, lotsAvailable: undefined }, viewer, extras).soldOut, false);
 });

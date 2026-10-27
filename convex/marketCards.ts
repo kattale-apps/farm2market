@@ -22,6 +22,7 @@ import { MutationCtx, QueryCtx } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
 import { getUgandaTime } from "./utils";
 import { packageLabel, packagesText } from "./lotOrdersShared";
+import { listingCardStatus } from "./marketspaceShared";
 
 /** A deleted post takes its questions, answers and wanted-ad responses with it (a post has a few dozen at most). */
 async function deleteCardQuestions(ctx: MutationCtx, cardId: Id<"marketCards">) {
@@ -69,8 +70,9 @@ export async function resyncSellerCards(ctx: MutationCtx, sellerId: Id<"users">)
 }
 
 /**
- * The card of a lot listing: live while the listing is vended, not
- * withdrawn and has lots left; closed otherwise. Expiry is by time
+ * The card of a lot listing (marketspaceShared listingCardStatus): live while
+ * the listing is vended and not withdrawn, even sold out, so the post stays
+ * up until the seller takes it off; closed otherwise. Expiry is by time
  * (expiresAt), so a card that runs out simply stops showing. A farmer's lot
  * for sale that is not on MarketSpace (or whose time ran out) is a
  * farm-gate card instead.
@@ -92,19 +94,20 @@ export async function syncListingCard(ctx: MutationCtx, listingId: Id<"listings"
   const lotsAvailable = units.filter((u) => u.status === "available").length;
   const seller = listing?.farmerId ? await ctx.db.get(listing.farmerId) : null;
   const isFarmer = seller?.role === "farmer";
-  const forSale =
-    !!listing?.farmerId &&
-    !listing.withdrawnAt &&
-    (listing.status === "active" || listing.status === "partially_locked") &&
-    lotsAvailable > 0;
-  // Farmers' lots for sale always have a card (farm-gate when not on MarketSpace); other sellers' only once vended
-  const live = forSale && (isFarmer || listing?.vendExpiresAt !== undefined);
+  // A post stays up while vended, sold out or not; farmers' lots for sale not on MarketSpace are farm-gate cards
+  const cardStatus = listingCardStatus({
+    open: !!listing?.farmerId && !listing.withdrawnAt && listing.status !== "cancelled",
+    lotsAvailable,
+    isFarmer,
+    vended: listing?.vendExpiresAt !== undefined,
+    vendedNow: listing?.vendExpiresAt !== undefined && listing.vendExpiresAt > now,
+  });
 
-  if (!live || !listing?.farmerId) {
+  if (cardStatus === "closed" || !listing?.farmerId) {
     if (existing && existing.status !== "closed") await ctx.db.patch(existing._id, { status: "closed", updatedAt: now });
     return;
   }
-  const farmGate = isFarmer && !(listing.vendExpiresAt !== undefined && listing.vendExpiresAt > now);
+  const farmGate = cardStatus === "farm_gate";
   const packaged = listing.listingMode === "packaging";
   const lotKg = listing.unitSize || 10;
   // Packaged items: priced per item, counted as items or batches

@@ -43,8 +43,10 @@ import {
   AUTO_SETTLE_MS,
   PAYMENT_GRACE_MS,
   lotBuyingDecision,
+  lotsToRestock,
   chargeForStep,
   commitAmount,
+  commitTotal,
   defaultPlan,
   demoShares,
   earnedSoFar,
@@ -84,6 +86,32 @@ export async function lotBuyingAccess(
     ? await isActiveProcessor(ctx, user._id, today)
     : false;
   return lotBuyingDecision(user, approvedProcessor, lot);
+}
+
+/**
+ * Repeat orders: after a purchase the listing gets new lots, so its post keeps
+ * offering as many as it first did and never shows sold out (lotsToRestock).
+ * The seller fills each order in turn; one they cannot supply goes to a
+ * dispute, where the buyer's escrow can be refunded.
+ */
+export async function restockLots(ctx: MutationCtx, listingId: Id<"listings">) {
+  const listing = await ctx.db.get(listingId);
+  if (!listing || listing.status === "cancelled") return 0;
+  const units = await ctx.db
+    .query("listingUnits")
+    .withIndex("by_listing", (q) => q.eq("listingId", listingId))
+    .collect();
+  const missing = lotsToRestock({
+    totalUnits: listing.totalUnits,
+    freeLots: units.filter((u) => u.status === "available").length,
+    stockSource: listing.stockSource,
+    withdrawn: !!listing.withdrawnAt,
+  });
+  let next = units.reduce((max, u) => Math.max(max, u.unitNumber), 0) + 1;
+  for (let i = 0; i < missing; i++) {
+    await ctx.db.insert("listingUnits", { listingId, unitNumber: next++, status: "available" });
+  }
+  return missing;
 }
 
 /** What lotBuyingAccess needs to know about a listing: bulk, and on MarketSpace now. */
@@ -532,11 +560,18 @@ export async function commitLots(ctx: MutationCtx, buyerId: Id<"users">, unitIds
       metadata: { mainUtid: orders[0].utid, listingId: listing._id, commissionPercentage },
     });
   }
+  // Repeat orders: the post gets new lots, so it keeps offering as many as before
+  await restockLots(ctx, listing._id);
   await refreshListingStatus(ctx, listing._id);
 
+  // Both sides are told; each wallet shows the money in escrow (myPending)
+  const what = `${packaged ? packagesText(lots.length * perBatch, packageLabel(listing)) : `${orders.length} lot(s)`} of ${listing.produceType}`;
   await notify(ctx, seller._id, "A buyer committed to your lots",
-    `${await partyLabel(ctx, buyerId)} put ${ugx(committedTotal)} (${commitPercent}%) into escrow for ${packaged ? packagesText(lots.length * perBatch, packageLabel(listing)) : `${orders.length} lot(s)`} of ${listing.produceType}. ` +
+    `${await partyLabel(ctx, buyerId)} put ${ugx(committedTotal)} (${commitPercent}%) into escrow for ${what}. ` +
       `Start with "${plan[0].name}" in your ledger; each step you finish brings in its share of the price.`, orders[0].utid);
+  await notify(ctx, buyerId, "Your money is in escrow",
+    `${ugx(committedTotal)} left your wallet into escrow for ${what} from ${await partyLabel(ctx, seller._id)}. ` +
+      `The seller is paid only when you collect. Follow the steps in your lot orders.`, orders[0].utid);
 
   return {
     orders,
@@ -587,6 +622,65 @@ export const commitFromCard = mutation({
     const free = units.filter((u) => u.status === "available" && !u.activeNegotiationId);
     if (free.length < n) throw new Error(`Only ${free.length} lot(s) are free to buy right now.`);
     return await commitLots(ctx, buyer._id, free.slice(0, n).map((u) => u._id));
+  },
+});
+
+/**
+ * What Purchase now will move from the buyer's wallet into escrow, for the
+ * wallet page to show before the buyer confirms (commitFromCard). Nothing
+ * moves here. An exporter's commission is included; `short` is how much to
+ * deposit first.
+ */
+export const commitPreview = query({
+  args: { sessionToken: v.string(), cardId: v.string(), lots: v.number(), now: v.number(), today: v.string() },
+  handler: async (ctx, args) => {
+    const buyer = await sessionUser(ctx, args.sessionToken);
+    if (!buyer) return null;
+    const cardId = ctx.db.normalizeId("marketCards", args.cardId);
+    const card = cardId ? await ctx.db.get(cardId) : null;
+    const listing = card?.listingId ? await ctx.db.get(card.listingId) : null;
+    if (!card || !listing || card.sourceKind !== "listing" || !cardIsLive(card, args.now)) {
+      return { ok: false as const, problem: "This lot is no longer on MarketSpace." };
+    }
+    if (listing.farmerId === buyer._id) return { ok: false as const, problem: "You cannot buy your own lots." };
+    const access = await lotBuyingAccess(ctx, buyer, args.today, lotForBuying(listing, args.now));
+    if (!access.ok) return { ok: false as const, problem: access.reason ?? "You cannot buy this lot." };
+
+    const units = await ctx.db
+      .query("listingUnits")
+      .withIndex("by_listing", (q) => q.eq("listingId", listing._id))
+      .collect();
+    const free = units.filter((u) => u.status === "available" && !u.activeNegotiationId).length;
+    const count = Math.floor(args.lots);
+    if (free === 0) return { ok: false as const, problem: "Sold out for now." };
+    if (!(count >= 1) || count > free) return { ok: false as const, problem: `Only ${free} can be bought right now.` };
+
+    const packaged = listing.listingMode === "packaging";
+    const perBatch = listing.packagesPerBatch ?? 1;
+    const unitPrice = packaged ? packagedUnitPrice(listing.pricePerUnit ?? 0, perBatch) : Math.round(listing.pricePerKilo * (listing.unitSize || 10));
+    const commitPercent = listing.commitPercent ?? (packaged ? PACKAGED_COMMIT_PERCENT : 100);
+    const committed = commitTotal(unitPrice, count, commitPercent, packaged);
+    const isExporter = buyer.role === "trader" || buyer.role === "transporter";
+    const commissionPercentage = isExporter ? await getTraderCommissionPercentage({ db: ctx.db }) : 0;
+    const commission = commissionPercentage > 0 ? Math.round((unitPrice * count * commissionPercentage) / 100) : 0;
+    const balance = await walletBalance(ctx, buyer._id);
+    const label = packageLabel(listing);
+    return {
+      ok: true as const,
+      title: listing.produceType,
+      what: packaged
+        ? perBatch > 1
+          ? `${count} batch${count === 1 ? "" : "es"} of ${packagesText(perBatch, label)}`
+          : packagesText(count, label)
+        : `${count} lot${count === 1 ? "" : "s"} of ${(listing.unitSize || 10).toLocaleString()} kg`,
+      count,
+      commitPercent,
+      committed,
+      commission,
+      total: committed + commission,
+      balance,
+      short: Math.max(0, committed + commission - balance),
+    };
   },
 });
 

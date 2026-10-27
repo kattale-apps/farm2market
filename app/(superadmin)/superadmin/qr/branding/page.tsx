@@ -2,12 +2,13 @@
 
 export const dynamic = "force-dynamic";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useStoredUser } from "@/app/hooks/useStoredUser";
 import { validateImageFile } from "@/app/utils/imageValidation";
+import { PhotoPickButtons } from "@/app/components/PhotoPickButtons";
 import { QrNav } from "../QrNav";
 import { sectionStyle, sectionHeading, inputStyle, labelStyle, buttonStyle } from "../qrUiStyles";
 
@@ -24,7 +25,6 @@ export default function BrandingPage() {
   const [secondaryColor, setSecondaryColor] = useState("#2e7d32");
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [status, setStatus] = useState<{ type: "idle" | "saving" | "error"; message?: string }>({ type: "idle" });
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!branding) return;
@@ -33,9 +33,7 @@ export default function BrandingPage() {
     setSecondaryColor(branding.secondaryColor ?? "#2e7d32");
   }, [branding]);
 
-  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleLogoChange = ([file]: File[]) => {
     const result = validateImageFile(file);
     if (!result.valid) {
       setStatus({ type: "error", message: result.error });
@@ -95,10 +93,13 @@ export default function BrandingPage() {
           <input type="text" value={orgName} onChange={(e) => setOrgName(e.target.value)} style={inputStyle} />
         </label>
 
-        <label style={labelStyle}>
+        <div style={labelStyle}>
           Logo
-          <input ref={fileInputRef} type="file" accept="image/*" onChange={handleLogoChange} />
-        </label>
+          <div style={{ marginTop: "0.4rem", maxWidth: 320 }}>
+            <PhotoPickButtons size="small" onPick={handleLogoChange} />
+          </div>
+          {logoFile && <div style={{ marginTop: 4, fontWeight: 400 }}>✓ {logoFile.name}</div>}
+        </div>
 
         <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
           <label style={{ ...labelStyle, flex: 1 }}>

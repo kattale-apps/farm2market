@@ -5,6 +5,7 @@ import { useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { validateImageFile } from "../../utils/imageValidation";
+import { PhotoPickButtons } from "../PhotoPickButtons";
 
 export function AddOfferPhotos({ farmerId, offerId }: { farmerId: Id<"users">; offerId: Id<"advancePurchaseOffers"> }) {
   const generateUploadUrl = useMutation(api.files.generateUploadUrl);
@@ -12,10 +13,7 @@ export function AddOfferPhotos({ farmerId, offerId }: { farmerId: Id<"users">; o
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    e.target.value = "";
-    if (files.length === 0) return;
+  const handleSelect = async (files: File[]) => {
     setBusy(true);
     setError(null);
     try {
@@ -42,21 +40,8 @@ export function AddOfferPhotos({ farmerId, offerId }: { farmerId: Id<"users">; o
   };
 
   return (
-    <div style={{ marginTop: "0.6rem" }}>
-      <label style={{
-        display: "inline-block",
-        padding: "0.4rem 0.75rem",
-        background: busy ? "#eee" : "#e8f5e9",
-        border: "1px solid #a5d6a7",
-        borderRadius: 8,
-        color: "#2e7d32",
-        fontSize: "0.78rem",
-        fontWeight: 700,
-        cursor: busy ? "not-allowed" : "pointer",
-      }}>
-        {busy ? "Uploading…" : "+ Add gallery photos"}
-        <input type="file" accept="image/*" multiple disabled={busy} onChange={handleSelect} style={{ display: "none" }} />
-      </label>
+    <div style={{ marginTop: "0.6rem", maxWidth: 320 }}>
+      <PhotoPickButtons multiple size="small" onPick={handleSelect} disabled={busy} label={busy ? "Uploading…" : "🖼️ Add photos"} />
       {error && <p style={{ color: "#d32f2f", fontSize: "0.75rem", margin: "0.3rem 0 0" }}>{error}</p>}
     </div>
   );

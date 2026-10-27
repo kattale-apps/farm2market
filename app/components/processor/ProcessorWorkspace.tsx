@@ -22,6 +22,7 @@ import { ProcessorRecordsTab } from "./ProcessorRecords";
 import { BuyerOffersPanel } from "../market/BuyerOffersPanel";
 import { LotLedger } from "../lots/LotLedger";
 import { MyStock } from "../lots/MyStock";
+import { PhotoPickButtons } from "../PhotoPickButtons";
 
 export const PROCESSOR_HEADING = "#6d4c00";
 export const PROCESSOR_ACCENT = "#f9a825";
@@ -775,8 +776,11 @@ function DocumentSlot({ slot, userId, setMsg, canUpload }: { slot: ProcessorWS["
         </button>
       ) : (
         <div style={{ marginTop: "0.6rem", background: "#fafafa", border: "1px solid #eee", borderRadius: 8, padding: "0.75rem" }}>
-          <label style={label}>File (PDF or photo, from your files or gallery) *</label>
-          <input type="file" accept="application/pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} style={{ marginBottom: "0.6rem", fontFamily: FONT, maxWidth: "100%" }} />
+          <label style={label}>File (PDF or photo) *</label>
+          <div style={{ marginBottom: "0.6rem", maxWidth: 360 }}>
+            <PhotoPickButtons documents size="small" onPick={([f]) => setFile(f)} label={file ? "📄 Change file" : undefined} />
+            {file && <div style={{ fontSize: "0.8rem", color: "#333", marginTop: 4, fontFamily: FONT }}>✓ {file.name}</div>}
+          </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "0.5rem" }}>
             <div>
               <label style={label}>Document number</label>

@@ -1116,10 +1116,7 @@ export function FarmerDashboard({ userId, userRole }: FarmerDashboardProps) {
           }}
         >
           <span style={{ fontSize: "2.2rem" }} aria-hidden="true">🗺️</span>
-          <span>
-            <span style={{ display: "block", fontWeight: 800, fontSize: "1.15rem" }}>MarketSpace</span>
-            <span style={{ display: "block", fontSize: "0.88rem", fontWeight: 500, color: "#33691e" }}>Buy farmers&apos; lots and sell yours</span>
-          </span>
+          <span style={{ fontWeight: 800, fontSize: "1.3rem" }}>MarketSpace</span>
         </a>
       )}
 

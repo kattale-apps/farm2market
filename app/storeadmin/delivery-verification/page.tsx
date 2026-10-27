@@ -10,6 +10,7 @@ import jsPDF from "jspdf";
 import Link from "next/link";
 import { useStoredUser } from "../../hooks/useStoredUser";
 import { inUgandaTime } from "../../utils/timeUtils";
+import { PhotoPickButtons } from "../../components/PhotoPickButtons";
 
 export default function DeliveryVerificationPage() {
   const { user, status: authStatus } = useStoredUser();
@@ -27,12 +28,10 @@ export default function DeliveryVerificationPage() {
   const verifyDelivery = useMutation(api.storeAdmin.verifyDeliveryWithProof);
   const linkPDF = useMutation(api.storeAdmin.linkDeliveryPDF);
 
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const files = Array.from(e.target.files);
-      setPhotos(files);
-      setMessage(null);
-    }
+  // Each pick (gallery or camera) adds to the set; Clear starts again
+  const handlePhotoChange = (files: File[]) => {
+    setPhotos((p) => [...p, ...files]);
+    setMessage(null);
   };
 
   const generatePDF = async (lockUtid: string): Promise<string> => {
@@ -228,22 +227,13 @@ export default function DeliveryVerificationPage() {
           <p style={{ fontSize: "0.9rem", color: "#666", marginBottom: "0.5rem" }}>
             Upload photos (weighing, checking quality, in-storage) if available
           </p>
-          <input
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={handlePhotoChange}
-            style={{
-              width: "100%",
-              padding: "0.75rem",
-              fontSize: "1rem",
-              border: "1px solid #ddd",
-              borderRadius: "4px",
-            }}
-          />
+          <PhotoPickButtons multiple onPick={handlePhotoChange} />
           {photos.length > 0 && (
             <p style={{ marginTop: "0.5rem", fontSize: "0.9rem", color: photos.length === 3 ? "#28a745" : "#dc3545" }}>
-              {photos.length} photo(s) selected
+              {photos.length} photo(s) selected{" "}
+              <button type="button" onClick={() => setPhotos([])} style={{ border: "none", background: "none", color: "#1565c0", fontWeight: 700, cursor: "pointer", padding: 0 }}>
+                Clear
+              </button>
             </p>
           )}
         </div>

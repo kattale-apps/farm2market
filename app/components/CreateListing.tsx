@@ -12,7 +12,7 @@ import { LOT_BAG_SIZES_KG } from "../../convex/constants";
 import { defaultPlan, type PlanStep, PACKAGED_COMMIT_PERCENT, isPackagedPlan, packagedPlan } from "../../convex/lotOrdersShared";
 import { PhotoSetCapture, type CapturedPhoto } from "./exportMarkets/PhotoSetCapture";
 import { uploadEvidencePhotos } from "./exportMarkets/PhotoSetCapture";
-import { getCurrentLocation } from "../utils/gps";
+import { watchLocation } from "../utils/gps";
 import { LotTermsFields, PackagedTermsFields, planProblem } from "./lots/LotTermsFields";
 import { GoodsQrChooser, reuseCodeOf } from "./qr/GoodsQr";
 
@@ -116,7 +116,8 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
   const generateUploadUrl = useMutation(api.files.generateUploadUrl);
   const [photos, setPhotos] = useState<CapturedPhoto[]>([]);
   const [gps, setGps] = useState<{ lat: number; lng: number; accuracy?: number; capturedAt: string } | null>(null);
-  const [gpsState, setGpsState] = useState<"reading" | "ok" | "none">("reading");
+  const [gpsState, setGpsState] = useState<"reading" | "ok" | "weak" | "off">("reading");
+  const [gpsTry, setGpsTry] = useState(0);
   const [commitPercent, setCommitPercent] = useState(30);
   // Packaged items: single items or batches, and no payment steps unless switched on
   const [packSellAs, setPackSellAs] = useState<"single" | "batches">("single");
@@ -135,21 +136,20 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
   const inAppStock = freeStock.filter((s) => s.source === "in_app");
   const offAppStock = freeStock.filter((s) => s.source === "off_app");
 
-  const readGps = () => {
-    setGpsState("reading");
-    getCurrentLocation()
-      .then((pos) => {
-        if (!pos) return setGpsState("none");
-        setGps({ lat: pos.latitude, lng: pos.longitude, accuracy: pos.accuracy, capturedAt: new Date().toISOString() });
-        setGpsState("ok");
-      })
-      .catch(() => setGpsState("none"));
-  };
-  // Read the position once each time the form opens.
+  // Live location while the form is open: it keeps updating, so the listing carries where the seller is now.
+  // "Turn on location" (gpsTry) asks for the permission again and restarts the watch.
   useEffect(() => {
-    if (showForm) readGps();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showForm]);
+    if (!showForm) return;
+    setGpsState("reading");
+    return watchLocation(
+      (pos) => {
+        setGps({ lat: pos.latitude, lng: pos.longitude, accuracy: pos.accuracy, capturedAt: new Date(pos.at).toISOString() });
+        setGpsState("ok");
+      },
+      // A fix already found stays; the watch keeps trying. Off: no permission or location switched off.
+      (message) => setGpsState((s) => (s === "ok" ? s : /denied|disabled|not enabled|cannot/i.test(message) ? "off" : "weak"))
+    );
+  }, [showForm, gpsTry]);
 
   const resetLotFields = () => {
     setCustomBagSize(false);
@@ -1595,12 +1595,21 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
               Photos *
             </label>
             <PhotoSetCapture photos={photos} onChange={setPhotos} max={6} />
-            <p style={{ margin: "0.4rem 0 0", fontSize: "0.85rem", color: gpsState === "ok" ? "#2e7d32" : "#666" }}>
+            <p style={{ margin: "0.5rem 0 0", fontSize: "0.9rem", fontWeight: 600, color: gpsState === "ok" ? "#2e7d32" : gpsState === "off" ? "#c62828" : "#555" }}>
               {gpsState === "reading"
-                ? "📍 Reading your location..."
+                ? "📍 Finding your location…"
                 : gpsState === "ok"
-                  ? "📍 Your location is recorded with this listing."
-                  : <>📍 Could not read your location. That is OK. <button type="button" onClick={readGps} style={{ border: "none", background: "none", color: "#1565c0", fontWeight: 700, cursor: "pointer", padding: 0 }}>Try again</button></>}
+                  ? `📍 Live location on${gps?.accuracy ? ` (±${Math.round(gps.accuracy)} m)` : ""}`
+                  : gpsState === "weak"
+                    ? "📍 No GPS signal yet. Stand in the open; it keeps trying."
+                    : (
+                    <>
+                      📍 Location is off.{" "}
+                      <button type="button" onClick={() => setGpsTry((n) => n + 1)} style={{ minHeight: 36, padding: "0 0.8rem", marginLeft: "0.3rem", borderRadius: 8, border: "none", background: "#1565c0", color: "#fff", fontWeight: 700, cursor: "pointer" }}>
+                        Turn on location
+                      </button>
+                    </>
+                  )}
             </p>
           </div>
 

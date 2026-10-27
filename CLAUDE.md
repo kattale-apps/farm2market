@@ -10,7 +10,7 @@ Convex agent skills for common tasks can be installed by running `npx convex ai-
 
 Design every screen for the basic, semi-literate user first: few choices, presets over free text, plain words, and light data (paginated, thumbnail-only lists). Build the data model so it can expand for more comprehensive users without a redesign. Protect both the buyer and the seller in every money or contact flow.
 
-Photo inputs always offer camera and gallery upload together (use `GeneralCameraCapture` or `PhotoSetCapture`), so a user who cannot take a picture can still upload one.
+Photo inputs always offer camera and gallery upload together, the same way everywhere: `PhotoPickButtons` (🖼️ Gallery first, 📷 opens the phone's own camera app; `documents` adds PDFs) for plain uploads, and `GeneralCameraCapture` or `PhotoSetCapture` for GPS- and time-stamped evidence. Never use an in-page camera (`getUserMedia`): the Android app has no camera permission for it.
 
 ## Deployment rules
 

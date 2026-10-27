@@ -17,6 +17,7 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { DIAGNOSTIC_HOSTS, FLAG_REASONS, SYMPTOMS, hostGroup, isUnderReview } from "@/convex/diagnosticsRules";
 import { compressImage, uploadToConvex } from "@/app/utils/imageCompress";
+import { PhotoPickButtons } from "@/app/components/PhotoPickButtons";
 import { formatUgandaDateTime } from "@/app/utils/timeUtils";
 
 const BRAND = "#166534";
@@ -151,8 +152,8 @@ function PhotoFields({
   onSource: (patch: Partial<PhotoSource>) => void;
 }) {
   const [previews, setPreviews] = useState<string[]>([]);
-  const pick = (list: FileList | null) => {
-    const next = [...files, ...Array.from(list ?? [])].slice(0, MAX_PHOTOS_PER_BATCH);
+  const pick = (list: File[]) => {
+    const next = [...files, ...list].slice(0, MAX_PHOTOS_PER_BATCH);
     previews.forEach((u) => URL.revokeObjectURL(u));
     setPreviews(next.map((f) => URL.createObjectURL(f)));
     onFiles(next);
@@ -164,19 +165,7 @@ function PhotoFields({
   };
   return (
     <div style={{ display: "grid", gap: 8 }}>
-      <label style={{ ...buttonStyle(), textAlign: "center", display: "block" }}>
-        📷 Add photos ({files.length}/{MAX_PHOTOS_PER_BATCH})
-        <input
-          type="file"
-          accept="image/*"
-          multiple
-          onChange={(e) => {
-            pick(e.target.files);
-            e.target.value = "";
-          }}
-          style={{ display: "none" }}
-        />
-      </label>
+      <PhotoPickButtons multiple onPick={pick} disabled={files.length >= MAX_PHOTOS_PER_BATCH} label={`🖼️ Add photos (${files.length}/${MAX_PHOTOS_PER_BATCH})`} />
       {files.length > 0 && (
         <>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(80px, 1fr))", gap: 6 }}>

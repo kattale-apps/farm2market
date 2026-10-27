@@ -10,6 +10,7 @@ import { Id } from "@/convex/_generated/dataModel";
 import CommunityTabBar from "@/app/components/CommunityTabBar";
 import { useOfflineQuery } from "@/app/hooks/useOfflineQuery";
 import { useStoredUser } from "@/app/hooks/useStoredUser";
+import { PhotoPickButtons } from "@/app/components/PhotoPickButtons";
 import { fromStoredUgandaTime, getUgandaTime, inUgandaTime } from "../../../utils/timeUtils";
 
 const COMMUNITY_TAB_BAR_HEIGHT = 84;
@@ -281,35 +282,8 @@ function MessageComposer({ communityId, userId, replyToMessage, onClearReply }: 
             disabled={isSubmitting}
           />
 
-          {/* Camera / Attach Button */}
-          <label
-            style={{
-              width: 48,
-              height: 48,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "linear-gradient(135deg, #ff9800, #f57c00)",
-              borderRadius: "50%",
-              cursor: isSubmitting ? "not-allowed" : "pointer",
-              opacity: isSubmitting ? 0.5 : 1,
-              flexShrink: 0,
-              boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
-            }}
-          >
-            <span style={{ fontSize: "1.3rem" }}>📷</span>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleImageSelect(file);
-                e.target.value = "";
-              }}
-              disabled={isSubmitting}
-              style={{ display: "none" }}
-            />
-          </label>
+          {/* Attach a photo: gallery or the phone's camera */}
+          <PhotoPickButtons size="icon" disabled={isSubmitting} onPick={([file]) => handleImageSelect(file)} />
 
           {/* Send Button */}
           <button

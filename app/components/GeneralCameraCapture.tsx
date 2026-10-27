@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useRef, useState, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import { validateImageFile, fileToBase64DataUrl } from "../utils/imageValidation";
+import { PhotoPickButtons } from "./PhotoPickButtons";
 import { getCurrentLocation } from "../utils/gps";
 import { inUgandaTime } from "../utils/timeUtils";
 import { readExifLocationTime } from "../utils/exif";
@@ -18,6 +19,9 @@ interface GeneralCameraCaptureProps {
 
 type PendingGallery = { dataUrl: string; lat: string; lng: string; when: string; missing: string[] };
 
+// A photo back from the camera is minutes old at most; an older file was picked from storage
+const CAMERA_FRESH_MS = 10 * 60 * 1000;
+
 /** "2026-09-27T14:05" (Uganda wall clock) for a datetime-local input. */
 function ugandaLocalInput(iso: string | null): string {
   if (!iso) return "";
@@ -25,7 +29,7 @@ function ugandaLocalInput(iso: string | null): string {
 }
 
 /** Draw the photo onto a canvas with the same GPS and time stamp as a camera photo. */
-async function stampImage(dataUrl: string, stampText: string): Promise<string> {
+export async function stampImage(dataUrl: string, stampText: string): Promise<string> {
   const img = await new Promise<HTMLImageElement>((resolve, reject) => {
     const i = new Image();
     i.onload = () => resolve(i);
@@ -51,15 +55,12 @@ async function stampImage(dataUrl: string, stampText: string): Promise<string> {
 }
 
 /**
- * Decoupled camera component for form builder camera fields.
- * Captures a photo with GPS + timestamp stamp, returns a JSON string
- * containing the base64 data URL and metadata.
+ * Photo input for forms and evidence: Gallery first, and a camera button that
+ * opens the phone's own camera (no in-page camera permission needed, so it
+ * works inside the app). A camera photo is stamped with the live GPS position
+ * and the time; returns a JSON string with the data URL and its metadata.
  */
 export function GeneralCameraCapture({ onCapture, evidence = false }: GeneralCameraCaptureProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const galleryInputRef = useRef<HTMLInputElement>(null);
-  const [stream, setStream] = useState<MediaStream | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -88,47 +89,10 @@ export function GeneralCameraCapture({ onCapture, evidence = false }: GeneralCam
     [onCapture]
   );
 
-  const startCamera = useCallback(async () => {
-    setError(null);
-    try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
-        audio: false,
-      });
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
-      }
-      setStream(mediaStream);
-      setPreview(null);
-    } catch (err) {
-      console.error("Camera access denied:", err);
-      setError("Camera access is required. Please enable it in your settings.");
-    }
-  }, []);
-
-  const stopCamera = useCallback(() => {
-    stream?.getTracks().forEach((track) => track.stop());
-    setStream(null);
-  }, [stream]);
-
-  const handleGallerySelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setError(null);
-    setIsCapturing(true);
-
-    try {
-      // Validate file
-      const validation = validateImageFile(file);
-      if (!validation.valid) {
-        setError(validation.error || "Invalid file");
-        setIsCapturing(false);
-        return;
-      }
-
+  /** A gallery photo: evidence takes where and when from the file itself; other forms add the current GPS. */
+  const addGalleryFile = useCallback(
+    async (file: File) => {
       if (evidence) {
-        // Where and when the photo was taken, from the file itself.
         const exif = await readExifLocationTime(file);
         const dataUrl = await fileToBase64DataUrl(file);
         if (exif.lat !== null && exif.lng !== null && exif.capturedAt) {
@@ -163,42 +127,19 @@ export function GeneralCameraCapture({ onCapture, evidence = false }: GeneralCam
       } catch {
         // GPS unavailable — continue without it
       }
-
-      const capturedAt = new Date();
-
-      // Convert image to base64 data URL
       const dataUrl = await fileToBase64DataUrl(file);
-
-      // Build JSON value with same structure as camera capture
-      const result = JSON.stringify({
-        dataUrl,
-        lat: latitude,
-        lng: longitude,
-        accuracy,
-        capturedAt: capturedAt.toISOString(),
-      });
-
       setPreview(dataUrl);
-      onCapture(result);
-    } catch (err) {
-      console.error("Gallery upload failed:", err);
-      setError(`Gallery upload failed: ${(err as Error).message}`);
-    } finally {
-      setIsCapturing(false);
-      // Reset input
-      if (galleryInputRef.current) {
-        galleryInputRef.current.value = "";
-      }
-    }
-  }, [onCapture, evidence, finishEvidenceGallery]);
+      onCapture(JSON.stringify({ dataUrl, lat: latitude, lng: longitude, accuracy, capturedAt: new Date().toISOString() }));
+    },
+    [onCapture, evidence, finishEvidenceGallery]
+  );
 
-  const handleCapture = async () => {
-    if (!videoRef.current || !canvasRef.current) return;
-    setIsCapturing(true);
-    setError(null);
+  /** A photo just taken with the phone's camera: stamped with the live GPS position and the time. */
+  const addCameraFile = useCallback(
+    async (file: File) => {
+      // Not taken just now (picked from storage instead): it goes the gallery way
+      if (evidence && Date.now() - file.lastModified > CAMERA_FRESH_MS) return addGalleryFile(file);
 
-    try {
-      // 1. Get GPS location (best-effort — if denied, stamp without GPS)
       let latitude: number | null = null;
       let longitude: number | null = null;
       let accuracy: number | null = null;
@@ -210,57 +151,36 @@ export function GeneralCameraCapture({ onCapture, evidence = false }: GeneralCam
           accuracy = gpsData.accuracy;
         }
       } catch {
-        // GPS unavailable — continue without it
+        // GPS unavailable — stamp without it
       }
-
       const capturedAt = new Date();
-
-      // 2. Draw video frame to canvas
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      const maxDimension = 1280;
-      const rawWidth = video.videoWidth;
-      const rawHeight = video.videoHeight;
-      const scale = Math.min(1, maxDimension / Math.max(rawWidth, rawHeight));
-      canvas.width = Math.round(rawWidth * scale);
-      canvas.height = Math.round(rawHeight * scale);
-      const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("Could not get canvas context");
-
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-      // 3. Stamp metadata on the image
       const gpsText = latitude !== null ? `GPS: ${latitude.toFixed(5)}, ${longitude!.toFixed(5)}` : "GPS: unavailable";
-      const stampText = `${gpsText} | ${capturedAt.toLocaleString(undefined, inUgandaTime())}`;
-      const fontSize = Math.max(14, Math.round(canvas.width * 0.02));
-      ctx.font = `${fontSize}px Arial`;
-      const textWidth = ctx.measureText(stampText).width;
-      const padding = 8;
-      const boxHeight = fontSize + 10;
-      ctx.fillStyle = "rgba(0,0,0,0.6)";
-      ctx.fillRect(6, canvas.height - boxHeight - 6, textWidth + padding * 2, boxHeight);
-      ctx.fillStyle = "white";
-      ctx.fillText(stampText, 6 + padding, canvas.height - 10);
-
-      // 4. Get data URL from canvas
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
-
-      // 5. Build JSON value and pass upstream
-      const result = JSON.stringify({
-        dataUrl,
-        lat: latitude,
-        lng: longitude,
-        accuracy,
-        capturedAt: capturedAt.toISOString(),
-        ...(evidence ? { source: "camera", locationSource: latitude !== null ? "live" : "none", manualEntry: false } : {}),
-      });
-
+      const dataUrl = await stampImage(await fileToBase64DataUrl(file), `${gpsText} | ${capturedAt.toLocaleString(undefined, inUgandaTime())}`);
       setPreview(dataUrl);
-      stopCamera();
-      onCapture(result);
+      onCapture(
+        JSON.stringify({
+          dataUrl,
+          lat: latitude,
+          lng: longitude,
+          accuracy,
+          capturedAt: capturedAt.toISOString(),
+          ...(evidence ? { source: "camera", locationSource: latitude !== null ? "live" : "none", manualEntry: false } : {}),
+        })
+      );
+    },
+    [onCapture, evidence, addGalleryFile]
+  );
+
+  const handlePick = async ([file]: File[], source: "gallery" | "camera") => {
+    setError(null);
+    const validation = validateImageFile(file);
+    if (!validation.valid) return setError(validation.error || "Invalid file");
+    setIsCapturing(true);
+    try {
+      await (source === "camera" ? addCameraFile(file) : addGalleryFile(file));
     } catch (err) {
-      console.error("Capture failed:", err);
-      setError(`Capture failed: ${(err as Error).message}`);
+      console.error("Photo failed:", err);
+      setError(`Could not add the photo: ${(err as Error).message}`);
     } finally {
       setIsCapturing(false);
     }
@@ -268,33 +188,15 @@ export function GeneralCameraCapture({ onCapture, evidence = false }: GeneralCam
 
   return (
     <div>
-      {preview && !stream && (
+      {preview && (
         <div style={{ marginBottom: "0.5rem" }}>
           <img src={preview} alt="Captured" style={{ width: "100%", maxWidth: 400, borderRadius: 8 }} />
-          <button
-            type="button"
-            onClick={startCamera}
-            style={{
-              display: "block",
-              marginTop: "0.5rem",
-              padding: "0.5rem 1rem",
-              background: "#1976d2",
-              color: "#fff",
-              border: "none",
-              borderRadius: "6px",
-              cursor: "pointer",
-              fontSize: "0.85rem",
-            }}
-          >
-            📷 Retake Photo
-          </button>
         </div>
       )}
 
-      {evidence && !stream && !preview && !pendingGallery && (
-        <div role="note" style={{ background: "#e3f2fd", border: "1px solid #90caf9", borderRadius: 8, padding: "0.5rem 0.7rem", fontSize: "0.8rem", color: "#0d47a1", marginBottom: "0.5rem" }}>
-          ℹ️ Gallery photos must carry the location and date they were taken. Turn on location in your camera settings so your photos
-          are saved with GPS. If a photo has none, you will be asked to enter them, and the photo is marked as entered by hand for review.
+      {evidence && !preview && !pendingGallery && (
+        <div role="note" style={{ background: "#e3f2fd", border: "1px solid #90caf9", borderRadius: 8, padding: "0.5rem 0.7rem", fontSize: "0.9rem", fontWeight: 600, color: "#0d47a1", marginBottom: "0.5rem" }}>
+          📍 Post a timestamped picture.
         </div>
       )}
 
@@ -373,92 +275,10 @@ export function GeneralCameraCapture({ onCapture, evidence = false }: GeneralCam
         </div>
       )}
 
-      {!stream && !preview && !pendingGallery && (
-        <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-          <button
-            type="button"
-            onClick={startCamera}
-            style={{
-              padding: "0.75rem 1.25rem",
-              background: "#1976d2",
-              color: "#fff",
-              border: "none",
-              borderRadius: "8px",
-              cursor: "pointer",
-              fontSize: "1rem",
-            }}
-          >
-            📷 Open Camera
-          </button>
-          <button
-            type="button"
-            onClick={() => galleryInputRef.current?.click()}
-            disabled={isCapturing}
-            style={{
-              padding: "0.75rem 1.25rem",
-              background: "#1976d2",
-              color: "#fff",
-              border: "none",
-              borderRadius: "8px",
-              cursor: isCapturing ? "not-allowed" : "pointer",
-              fontSize: "1rem",
-              opacity: isCapturing ? 0.6 : 1,
-            }}
-          >
-            📁 Choose from Gallery
-          </button>
-        </div>
+      {!pendingGallery && (
+        <PhotoPickButtons onPick={handlePick} disabled={isCapturing} label={isCapturing ? "Adding photo…" : preview ? "🖼️ Change photo" : undefined} />
       )}
 
-      {/* Hidden gallery input */}
-      <input
-        ref={galleryInputRef}
-        type="file"
-        accept="image/*"
-        onChange={handleGallerySelect}
-        style={{ display: "none" }}
-      />
-
-      {stream && (
-        <div>
-          <video ref={videoRef} autoPlay playsInline style={{ width: "100%", maxWidth: 480, borderRadius: 8 }} />
-          <div style={{ marginTop: "0.5rem", display: "flex", gap: "0.5rem" }}>
-            <button
-              type="button"
-              onClick={handleCapture}
-              disabled={isCapturing}
-              style={{
-                padding: "0.5rem 1rem",
-                background: isCapturing ? "#ccc" : "#16a34a",
-                color: "#fff",
-                border: "none",
-                borderRadius: "6px",
-                cursor: isCapturing ? "not-allowed" : "pointer",
-                fontSize: "0.9rem",
-              }}
-            >
-              {isCapturing ? "Capturing..." : "📸 Take Photo"}
-            </button>
-            <button
-              type="button"
-              onClick={stopCamera}
-              style={{
-                padding: "0.5rem 1rem",
-                background: "#999",
-                color: "#fff",
-                border: "none",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontSize: "0.9rem",
-              }}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      <canvas ref={canvasRef} style={{ display: "none" }} />
       {error && <p style={{ color: "#d32f2f", fontSize: "0.85rem", marginTop: "0.5rem" }}>{error}</p>}
     </div>
   );

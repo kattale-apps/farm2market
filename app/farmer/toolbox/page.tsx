@@ -11,6 +11,7 @@ import Link from "next/link";
 import { exportSubmissionsToPDF } from "@/app/utils/exportUtils";
 import { getCurrentLocation } from "@/app/utils/gps";
 import SubmissionPhotoGallery from "@/app/components/SubmissionPhotoGallery";
+import { PhotoPickButtons } from "@/app/components/PhotoPickButtons";
 import { useStoredUser } from "@/app/hooks/useStoredUser";
 import { fromStoredUgandaTime, inUgandaTime } from "../../utils/timeUtils";
 import { FarmCoinIcon } from "@/app/components/icons/Brand";
@@ -349,8 +350,6 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate, onBackToTe
   const deleteEntry = useOfflineMutation<any>((api as any).farmToolbox.deleteEntry);
   const generateUploadUrl = useMutation(api.files.generateUploadUrl);
   const convex = useConvex();
-  const cameraInputRef = useRef<HTMLInputElement>(null);
-  const galleryInputRef = useRef<HTMLInputElement>(null);
   const [photoStorageIds, setPhotoStorageIds] = useState<string[]>([]);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [deletingEntryId, setDeletingEntryId] = useState<string | null>(null);
@@ -906,22 +905,9 @@ function LogEntryTab({ userId, selectedTemplate, setSelectedTemplate, onBackToTe
               </div>
             ) : field.fieldType === "photo" ? (
               <div>
-                <input ref={galleryInputRef} type="file" accept="image/*" style={{ display: "none" }}
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePhotoUpload(f); }} />
-                <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }}
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePhotoUpload(f); }} />
-                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                  <button type="button" onClick={() => cameraInputRef.current?.click()} disabled={photoUploading}
-                    style={ACTION_BUTTON}>
-                    {photoUploading ? "Uploading…" : "📷 Camera"}
-                  </button>
-                  <button type="button" onClick={() => galleryInputRef.current?.click()} disabled={photoUploading}
-                    style={ACTION_BUTTON}>
-                    {photoUploading ? "Uploading…" : "🖼 Gallery"}
-                  </button>
-                  <span style={{ fontSize: "0.75rem", color: photoStorageIds.length > 0 ? BRAND : "#666", alignSelf: "center" }}>
-                    {photoStorageIds.length > 0 ? `${photoStorageIds.length} photo(s) uploaded` : "No photo uploaded yet"}
-                  </span>
+                <PhotoPickButtons onPick={([f]) => handlePhotoUpload(f)} disabled={photoUploading} label={photoUploading ? "Uploading…" : undefined} />
+                <div style={{ fontSize: "0.75rem", color: photoStorageIds.length > 0 ? BRAND : "#666", marginTop: "0.35rem" }}>
+                  {photoStorageIds.length > 0 ? `${photoStorageIds.length} photo(s) uploaded` : "No photo uploaded yet"}
                 </div>
               </div>
             ) : field.fieldType === "gps" ? (

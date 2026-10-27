@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import jsQR from "jsqr";
+import { PhotoPickButtons } from "../../components/PhotoPickButtons";
 import { Sheet } from "./Sheets";
 import { FONT } from "./shared";
 
@@ -32,80 +33,29 @@ function decode(ctx: CanvasRenderingContext2D, width: number, height: number): s
 }
 
 /**
- * Scan a Farm2Market QR code: with the camera, from a photo in the gallery,
- * or by pasting the link. Camera and gallery always come together.
+ * Scan a Farm2Market QR code: a photo of it from the gallery or the phone's
+ * camera (the same photo buttons as every form), or paste the link.
  */
 export function QrScanSheet({ onClose }: { onClose: () => void }) {
   const router = useRouter();
-  const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const galleryRef = useRef<HTMLInputElement>(null);
-  const [scanning, setScanning] = useState(false);
+  const [reading, setReading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [pasted, setPasted] = useState("");
 
-  const stopCamera = useCallback(() => {
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
-    setScanning(false);
-  }, []);
-
-  const open = useCallback(
-    (text: string) => {
-      const target = targetOf(text);
-      if (!target) {
-        setMessage("That is not a Farm2Market product code.");
-        return false;
-      }
-      stopCamera();
-      onClose();
-      router.push(target);
-      return true;
-    },
-    [onClose, router, stopCamera]
-  );
-
-  // Read camera frames a few times a second until a code is found.
-  useEffect(() => {
-    if (!scanning) return;
-    const id = window.setInterval(() => {
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      if (!video || !canvas || video.readyState < 2) return;
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext("2d", { willReadFrequently: true });
-      if (!ctx) return;
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const text = decode(ctx, canvas.width, canvas.height);
-      if (text) open(text);
-    }, 300);
-    return () => window.clearInterval(id);
-  }, [scanning, open]);
-
-  useEffect(() => stopCamera, [stopCamera]);
-
-  const startCamera = async () => {
-    setMessage(null);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-      streamRef.current = stream;
-      setScanning(true);
-      requestAnimationFrame(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          void videoRef.current.play();
-        }
-      });
-    } catch {
-      setMessage("The camera is not available. Choose a photo of the QR code instead.");
+  const open = (text: string) => {
+    const target = targetOf(text);
+    if (!target) {
+      setMessage("That is not a Farm2Market product code.");
+      return;
     }
+    onClose();
+    router.push(target);
   };
 
-  const fromPhoto = async (file: File | undefined) => {
-    if (!file) return;
+  const fromPhoto = async (file: File) => {
     setMessage(null);
+    setReading(true);
     try {
       const bitmap = await createImageBitmap(file);
       const canvas = canvasRef.current ?? document.createElement("canvas");
@@ -121,31 +71,16 @@ export function QrScanSheet({ onClose }: { onClose: () => void }) {
     } catch {
       setMessage("Could not read that photo.");
     } finally {
-      if (galleryRef.current) galleryRef.current.value = "";
+      setReading(false);
     }
   };
 
   const big: React.CSSProperties = { minHeight: 50, borderRadius: 12, border: "none", background: "#2e7d32", color: "#fff", fontWeight: 800, fontFamily: FONT, cursor: "pointer", fontSize: "1rem" };
 
   return (
-    <Sheet
-      title="Scan a QR code"
-      onClose={() => {
-        stopCamera();
-        onClose();
-      }}
-    >
+    <Sheet title="Scan a QR code" onClose={onClose}>
       <div style={{ display: "grid", gap: "0.7rem", fontFamily: FONT }}>
-        {scanning ? (
-          <>
-            <video ref={videoRef} playsInline muted style={{ width: "100%", borderRadius: 12, background: "#000" }} />
-            <button type="button" onClick={stopCamera} style={{ ...big, background: "#757575" }}>Stop camera</button>
-          </>
-        ) : (
-          <button type="button" onClick={startCamera} style={big}>📷 Open camera</button>
-        )}
-        <button type="button" onClick={() => galleryRef.current?.click()} style={{ ...big, background: "#1565c0" }}>📁 Choose a photo of a QR code</button>
-        <input ref={galleryRef} type="file" accept="image/*" onChange={(e) => fromPhoto(e.target.files?.[0])} style={{ display: "none" }} />
+        <PhotoPickButtons onPick={([file]) => fromPhoto(file)} disabled={reading} label={reading ? "Reading the code…" : undefined} />
         <canvas ref={canvasRef} style={{ display: "none" }} />
         <div style={{ display: "flex", gap: "0.5rem" }}>
           <input

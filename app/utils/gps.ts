@@ -32,7 +32,15 @@ export async function requestLocationPermission(): Promise<boolean> {
   }
 }
 
+// The newest position a live watch has seen. A photo taken while a form is watching uses it at
+// once: a second, one-off read while a watch runs can wait out its whole timeout.
+const LIVE_FIX_MAX_AGE_MS = 2 * 60 * 1000;
+let liveFix: (GpsPosition & { at: number }) | null = null;
+
 export async function getCurrentLocation(): Promise<GpsPosition | null> {
+  if (liveFix && Date.now() - liveFix.at <= LIVE_FIX_MAX_AGE_MS) {
+    return { latitude: liveFix.latitude, longitude: liveFix.longitude, accuracy: liveFix.accuracy };
+  }
   if (Capacitor.isNativePlatform()) {
     const permissionGranted = await requestLocationPermission();
     if (!permissionGranted) {
@@ -69,10 +77,14 @@ export async function getCurrentLocation(): Promise<GpsPosition | null> {
  * Follows the device location as it changes. Returns a function that stops
  * watching. Errors go to onError; the watch keeps running where it can.
  */
-export function watchLocation(onFix: (pos: GpsPosition & { at: number }) => void, onError: (message: string) => void): () => void {
+export function watchLocation(onFixed: (pos: GpsPosition & { at: number }) => void, onError: (message: string) => void): () => void {
   let stopped = false;
   let stop: () => void = () => {};
   const options = { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 };
+  const onFix = (pos: GpsPosition & { at: number }) => {
+    liveFix = pos;
+    onFixed(pos);
+  };
 
   if (Capacitor.isNativePlatform()) {
     requestLocationPermission()

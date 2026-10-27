@@ -70,9 +70,13 @@ export function MyLots({ token, now, show, onGo }: { token: string; now: number;
         {text}
       </button>
     );
-  const createLink = (
-    <Link href="/farmer/farm2market" style={{ color: "#1b5e20", fontWeight: 700 }}>
-      Create a lot listing →
+  // Always at the bottom of My Ledger: a new lot is one tap away
+  const createButton = (
+    <Link
+      href="/farmer/farm2market"
+      style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem", minHeight: 52, marginTop: "0.3rem", borderRadius: 12, background: "#2e7d32", color: "#fff", fontWeight: 800, fontSize: "1.05rem", fontFamily: FONT, textDecoration: "none", boxShadow: "0 3px 10px rgba(46,125,50,0.35)" }}
+    >
+      Create +
     </Link>
   );
 
@@ -114,10 +118,10 @@ export function MyLots({ token, now, show, onGo }: { token: string; now: number;
             {goButton("post", "📒 Post a lot from My Ledger")}
           </>
         ) : info.lots.length === 0 ? (
-          <p style={{ margin: 0, color: "#444" }}>You have no lots for sale in your ledger. {createLink}</p>
+          <p style={{ margin: 0, color: "#444" }}>You have no lots for sale in your ledger.</p>
         ) : (
           <>
-            <p style={{ margin: 0, color: "#444" }}>All your lots are on MarketSpace now. {createLink}</p>
+            <p style={{ margin: 0, color: "#444" }}>All your lots are on MarketSpace now.</p>
             {goButton("mine", "📋 See them in My posts")}
           </>
         ))}
@@ -190,6 +194,7 @@ export function MyLots({ token, now, show, onGo }: { token: string; now: number;
             </div>
           );
         })}
+      {show === "toPost" && createButton}
 
       {vending && (
         <VendSheet

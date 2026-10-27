@@ -35,6 +35,7 @@ import {
   validateSettings,
   shapeCard,
   cardIsLive,
+  pastLotOutcome,
   produceVisible,
   seesFarmGate,
   vendDayChoices,
@@ -796,6 +797,50 @@ export const myLots = query({
       commercialStatus: user.role === "farmer" ? (commercial?.status ?? ("none" as const)) : null,
       bulkCostFarmcoin: settings.bulkVendCostFarmcoin,
     };
+  },
+});
+
+/**
+ * My posts: the seller's lot posts that are no longer on MarketSpace, newest
+ * first, with the price they had and why they ended. Farm-gate cards are
+ * left out: those lots are still for sale, under New post › My Ledger.
+ */
+export const myPastLotPosts = query({
+  args: { sessionToken: v.string(), now: v.number(), paginationOpts: paginationOptsValidator },
+  handler: async (ctx, args) => {
+    const user = await sessionUser(ctx, args.sessionToken);
+    if (!user) return { page: [], isDone: true, continueCursor: "" };
+    const result = await ctx.db
+      .query("marketCards")
+      .withIndex("by_seller", (q) => q.eq("sellerId", user._id))
+      .order("desc")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("sourceKind"), "listing"),
+          q.or(q.eq(q.field("status"), "closed"), q.and(q.eq(q.field("status"), "active"), q.lte(q.field("expiresAt"), args.now)))
+        )
+      )
+      .paginate(args.paginationOpts);
+    const page = [];
+    for (const card of result.page) {
+      const listing = card.listingId ? await ctx.db.get(card.listingId) : null;
+      page.push({
+        cardId: card._id,
+        title: card.title,
+        thumbUrl: card.thumbStorageId ? await ctx.storage.getUrl(card.thumbStorageId) : null,
+        sellerRole: card.sellerRole,
+        isBulk: card.isBulk,
+        packaged: !!card.packaged,
+        pricePerKilo: card.pricePerKilo ?? null,
+        priceUGX: card.priceUGX ?? null,
+        priceUnit: card.priceUnit ?? null,
+        lotKg: card.lotKg ?? null,
+        postedAt: card.createdAt,
+        endedAt: card.status === "closed" ? card.updatedAt : card.expiresAt,
+        outcome: pastLotOutcome(card, listing, args.now),
+      });
+    }
+    return { ...result, page };
   },
 });
 

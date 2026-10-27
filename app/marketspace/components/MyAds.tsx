@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
-import { daysLeft, daysText, type MarketspaceSettings } from "../../../convex/marketspaceShared";
+import { SECTION_LABELS, daysLeft, daysText, type MarketspaceSettings } from "../../../convex/marketspaceShared";
 import { FarmCoinIcon } from "../../components/icons/Brand";
 import { ugandaDateFromInstant } from "../../../convex/exportMarketsShared";
 import type { EditableAd } from "./AdForm";
@@ -20,10 +20,11 @@ const STATUS: Record<string, { label: string; color: string; bg: string }> = {
   removed: { label: "Removed by admin", color: "#c62828", bg: "#ffebee" },
 };
 
-/** The signed-in user's ads: edit, mark sold, delete, extend or revive. */
+/** The signed-in user's ads, live or past (expired, sold, removed): edit, mark sold, delete, extend or revive. */
 export function MyAds({
   sessionToken,
   now,
+  show,
   farmcoinBalance,
   settings,
   onEdit,
@@ -31,6 +32,7 @@ export function MyAds({
 }: {
   sessionToken: string;
   now: number;
+  show: "live" | "past";
   farmcoinBalance: number | null;
   settings: MarketspaceSettings;
   onEdit: (ad: EditableAd) => void;
@@ -58,8 +60,10 @@ export function MyAds({
     }
   };
 
-  if (ads === undefined) return <p style={{ fontFamily: FONT, textAlign: "center", color: "#777" }}>Loading your ads…</p>;
+  if (ads === undefined) return <p style={{ fontFamily: FONT, margin: 0, color: "#555" }}>Loading your ads…</p>;
 
+  const isLive = (ad: MyAd) => ad.status === "active" && ad.expiresAt > now;
+  const shown = ads.filter((ad) => (show === "live" ? isLive(ad) : !isLive(ad)));
   const extensionCost = settings.extensionCostFarmcoin;
   const extension = daysText(settings.extensionDays);
   const costText = extensionCost > 0 ? `${extensionCost} FarmCoin` : "free";
@@ -77,20 +81,30 @@ export function MyAds({
   });
 
   return (
-    <div style={{ fontFamily: FONT, maxWidth: 640, margin: "0 auto" }}>
-      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", marginBottom: "0.75rem" }}>
-        <div style={{ fontSize: "0.85rem", color: "#555" }}>
-          Extending an ad by {extension} costs <strong>{costText}</strong>.
-          {farmcoinBalance !== null && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, marginLeft: 6 }}>
-              Your balance: <FarmCoinIcon size={16} /> <strong>{farmcoinBalance}</strong>
-            </span>
-          )}
+    <div style={{ fontFamily: FONT }}>
+      {show === "live" && (
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", marginBottom: "0.75rem" }}>
+          <div style={{ fontSize: "0.88rem", color: "#333" }}>
+            {extensionCost > 0 ? (
+              <>
+                Extending an ad by {extension} costs <strong>{costText}</strong>.
+              </>
+            ) : (
+              <>
+                Extending an ad by {extension} is <strong>free</strong>.
+              </>
+            )}
+            {farmcoinBalance !== null && (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 4, marginLeft: 6 }}>
+                Your balance: <FarmCoinIcon size={16} /> <strong>{farmcoinBalance}</strong>
+              </span>
+            )}
+          </div>
+          <button type="button" onClick={onPostNew} style={btn("#2e7d32", true)}>
+            ＋ New classified ad
+          </button>
         </div>
-        <button type="button" onClick={onPostNew} style={btn("#2e7d32", true)}>
-          ＋ Post an ad
-        </button>
-      </div>
+      )}
 
       {message && (
         <div style={{ marginBottom: "0.75rem", padding: "0.6rem 0.75rem", borderRadius: 10, background: message.ok ? "#e8f5e9" : "#ffebee", color: message.ok ? "#1b5e20" : "#c62828", fontWeight: 600, fontSize: "0.9rem" }}>
@@ -98,15 +112,17 @@ export function MyAds({
         </div>
       )}
 
-      {ads.length === 0 && (
-        <div style={{ textAlign: "center", padding: "2rem 1rem", border: "2px dashed #c8e6c9", borderRadius: 16, color: "#555" }}>
-          You have no ads yet. Post one to sell, offer a service or say what you are looking for.
-        </div>
+      {shown.length === 0 && (
+        <p style={{ margin: 0, color: "#444" }}>
+          {show === "live"
+            ? "You have no classified ads on MarketSpace now. Post one to sell, offer a service or say what you are looking for."
+            : "No past classified ads yet."}
+        </p>
       )}
 
       <div style={{ display: "grid", gap: "0.75rem" }}>
-        {ads.map((ad) => {
-          const live = ad.status === "active" && ad.expiresAt > now;
+        {shown.map((ad) => {
+          const live = isLive(ad);
           const statusKey = ad.status === "active" && !live ? "expired" : ad.status;
           const s = STATUS[statusKey] ?? STATUS.active;
           const canExtend = ad.status === "active" || ad.status === "expired";
@@ -142,15 +158,16 @@ export function MyAds({
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", alignItems: "center", marginBottom: 4 }}>
                   <span style={{ padding: "0.1rem 0.5rem", borderRadius: 999, background: s.bg, color: s.color, fontWeight: 800, fontSize: "0.7rem" }}>{s.label}</span>
                   <span style={{ padding: "0.1rem 0.5rem", borderRadius: 999, background: ad.kind === "wanted" ? "#fff3c4" : "#f1f1f1", fontWeight: 700, fontSize: "0.7rem" }}>{ad.kind === "wanted" ? "WANTED" : "OFFER"}</span>
-                  <span style={{ fontSize: "0.72rem", color: "#777" }}>
+                  <span style={{ fontSize: "0.75rem", color: "#444" }}>
                     {ad.categoryIcon} {ad.categoryName}
                   </span>
                 </div>
-                <div style={{ fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ad.title}</div>
-                <div style={{ fontSize: "0.82rem", color: "#555" }}>
-                  {priceLine(ad)} · 📍 {ad.district}
+                <div style={{ fontWeight: 800, color: "#222", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ad.title}</div>
+                <div style={{ fontSize: "0.88rem", fontWeight: 700, color: "#333" }}>{priceLine(ad) || "No price given"}</div>
+                <div style={{ fontSize: "0.8rem", color: "#444" }}>
+                  📍 {ad.district} · shows in {SECTION_LABELS.classifieds} · posted {formatDate(ad.createdAt)}
                 </div>
-                <div style={{ fontSize: "0.78rem", color: "#777", marginTop: 2 }}>
+                <div style={{ fontSize: "0.8rem", color: "#444", marginTop: 2 }}>
                   {live && `${daysLeft(ad.expiresAt, now)} day${daysLeft(ad.expiresAt, now) === 1 ? "" : "s"} left (until ${formatDate(ad.expiresAt)})`}
                   {statusKey === "expired" && `Expired ${formatDate(ad.expiresAt)}. Hidden from the board.`}
                   {ad.status === "removed" && `Reason: ${ad.removedReason ?? "not given"}`}

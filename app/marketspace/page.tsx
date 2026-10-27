@@ -13,8 +13,9 @@ import { AdForm, type EditableAd } from "./components/AdForm";
 import { Discover, type Chip } from "./components/Discover";
 import { MyAds } from "./components/MyAds";
 import { MyLots } from "./components/MyLots";
+import { PastLotPosts } from "./components/PastLotPosts";
 import { TopBar } from "./components/TopBar";
-import { FONT, GLASS, useMarketspaceSession, useUgandaNow } from "./components/shared";
+import { FONT, GLASS, PANEL, useMarketspaceSession, useUgandaNow } from "./components/shared";
 
 // The QR decoder loads only when someone taps Scan QR, so the board stays light on slow phones.
 const QrScanSheet = nextDynamic(() => import("./components/QrScanSheet").then((m) => m.QrScanSheet), { ssr: false });
@@ -34,9 +35,11 @@ export default function MarketspacePage() {
 /**
  * MarketSpace: the one market every member and visitor uses. Scan a
  * Farm2Market QR code or Discover every post (farmers' produce, bulk lots,
- * processors' and vendors' lots, classified ads). Sellers vend their lot
- * listings here and post classified ads; MarketSpace is anonymous, with
- * category badges and aliases instead of phone numbers.
+ * processors' and vendors' lots, classified ads). A new post comes from one
+ * of two places: My Ledger (lot listings) or a classified ad; My posts keeps
+ * what is on MarketSpace now and the past posts with their prices.
+ * MarketSpace is anonymous, with category badges and aliases instead of
+ * phone numbers.
  */
 function MarketspaceInner() {
   const router = useRouter();
@@ -72,11 +75,34 @@ function MarketspaceInner() {
     if (t !== "post") setEditing(null);
     if (t === "post") setPostKind(isSeller ? "choose" : "ad");
   };
+  const postFrom = (kind: "lots" | "ad") => {
+    setEditing(null);
+    setNotice(null);
+    setPostKind(kind);
+    setTab("post");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // ← Back on every page below the top: always to the page it belongs to
+  const back: (() => void) | null =
+    tab === "discover"
+      ? onBoard
+        ? () => {
+            setOnBoard(false);
+            router.replace("/marketspace", { scroll: false });
+          }
+        : null
+      : tab === "post" && editing
+        ? () => go("mine")
+        : tab === "post" && isSeller && postKind !== "choose"
+          ? () => setPostKind("choose")
+          : () => go("discover");
+
   const tabButton = (t: Tab, label: string) => (
     <button
       type="button"
       onClick={() => go(t)}
-      style={{ flex: 1, minHeight: 44, border: "none", borderBottom: `3px solid ${tab === t ? "#2e7d32" : "transparent"}`, background: "none", fontWeight: 800, fontSize: "0.92rem", color: tab === t ? "#1b5e20" : "#666", fontFamily: FONT, cursor: "pointer" }}
+      style={{ flex: 1, minHeight: 44, border: "none", borderBottom: `3px solid ${tab === t ? "#2e7d32" : "transparent"}`, background: "none", fontWeight: 800, fontSize: "0.9rem", color: tab === t ? "#1b5e20" : "#555", fontFamily: FONT, cursor: "pointer" }}
     >
       {label}
     </button>
@@ -92,6 +118,7 @@ function MarketspaceInner() {
     alignItems: "center",
     justifyContent: "center",
     gap: "0.4rem",
+    padding: "0.8rem",
     fontWeight: 800,
     fontSize: "1.05rem",
     fontFamily: FONT,
@@ -99,7 +126,24 @@ function MarketspaceInner() {
     cursor: "pointer",
     boxShadow: "0 6px 20px rgba(0,0,0,0.18)",
   };
-  const section: React.CSSProperties = { ...GLASS, padding: "1rem", borderRadius: 14, marginBottom: "1rem" };
+  const tileNote: React.CSSProperties = { fontSize: "0.82rem", fontWeight: 600, color: "#444", textAlign: "center" };
+  const heading: React.CSSProperties = { margin: "0 0 0.3rem", color: "#1b5e20" };
+  const lead: React.CSSProperties = { margin: "0 0 0.8rem", color: "#333", fontSize: "0.9rem" };
+  const subHeading = (first: boolean): React.CSSProperties => ({ margin: first ? "0.4rem 0 0.5rem" : "1.2rem 0 0.5rem", fontSize: "0.98rem", color: "#222" });
+  const myAdsProps = token &&
+    me && {
+      sessionToken: token,
+      now: liveNow,
+      farmcoinBalance: me.farmcoinBalance ?? null,
+      settings: me.settings,
+      onEdit: (ad: EditableAd) => {
+        setEditing(ad);
+        setNotice(null);
+        setTab("post");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      },
+      onPostNew: () => postFrom("ad"),
+    };
 
   return (
     <div style={{ minHeight: "100vh", background: "transparent", fontFamily: FONT }}>
@@ -107,13 +151,26 @@ function MarketspaceInner() {
 
       {isUser && (
         <nav style={{ display: "flex", background: "#fff", borderBottom: "1px solid #e6e6e6", position: "sticky", top: 57, zIndex: 40 }}>
-          {tabButton("discover", "Discover")}
-          {tabButton("post", editing ? "Edit ad" : "Post")}
-          {tabButton("mine", "My posts")}
+          {tabButton("discover", "🔎 Discover")}
+          {tabButton("post", editing ? "✏️ Edit ad" : "➕ New post")}
+          {tabButton("mine", "📋 My posts")}
         </nav>
       )}
 
       <main style={{ maxWidth: 1080, margin: "0 auto", padding: "1rem" }}>
+        {back && (
+          <button
+            type="button"
+            onClick={() => {
+              back();
+              window.scrollTo({ top: 0 });
+            }}
+            style={{ display: "inline-flex", alignItems: "center", minHeight: 44, padding: "0 1.1rem", marginBottom: "0.9rem", borderRadius: 999, border: "1.5px solid #2e7d32", background: "#fff", color: "#1b5e20", fontWeight: 800, fontSize: "0.95rem", fontFamily: FONT, cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}
+          >
+            ← Back
+          </button>
+        )}
+
         {notice && (
           <div style={{ marginBottom: "0.9rem", padding: "0.7rem 0.9rem", borderRadius: 12, background: "#e8f5e9", color: "#1b5e20", fontWeight: 700 }}>✓ {notice}</div>
         )}
@@ -149,75 +206,79 @@ function MarketspaceInner() {
         {tab === "post" && isUser && token && config && (
           <>
             {postKind === "choose" && isSeller && !editing && (
-              <div style={{ display: "flex", gap: "0.9rem", flexWrap: "wrap" }}>
-                <button type="button" onClick={() => setPostKind("lots")} style={{ ...bigTile, minWidth: 220 }}>
-                  <span style={{ fontSize: "2.2rem" }}>🌾</span>
-                  Sell lots from my ledger
-                  <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "#555" }}>Buyers pay in steps through the app</span>
-                </button>
-                <button type="button" onClick={() => setPostKind("ad")} style={{ ...bigTile, minWidth: 220 }}>
-                  <span style={{ fontSize: "2.2rem" }}>📰</span>
-                  Post a classified ad
-                  <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "#555" }}>Services, equipment, wanted</span>
-                </button>
+              <div style={PANEL}>
+                <h3 style={heading}>What do you want to post?</h3>
+                <p style={lead}>Every post comes from one of these two places.</p>
+                <div style={{ display: "flex", gap: "0.9rem", flexWrap: "wrap" }}>
+                  <button type="button" onClick={() => setPostKind("lots")} style={{ ...bigTile, minWidth: 220 }}>
+                    <span style={{ fontSize: "2.2rem" }}>📒</span>
+                    From My Ledger
+                    <span style={tileNote}>Lots of produce or stock you recorded. Purchasers pay in steps through the app.</span>
+                  </button>
+                  <button type="button" onClick={() => setPostKind("ad")} style={{ ...bigTile, minWidth: 220 }}>
+                    <span style={{ fontSize: "2.2rem" }}>📰</span>
+                    Classified Ad
+                    <span style={tileNote}>Services, equipment, land, or something you are looking for</span>
+                  </button>
+                </div>
               </div>
             )}
             {postKind === "lots" && !editing && (
-              <div style={section}>
-                <h3 style={{ marginTop: 0 }}>Sell lots from my ledger</h3>
-                <MyLots token={token} now={liveNow} />
+              <div style={PANEL}>
+                <h3 style={heading}>📒 From My Ledger</h3>
+                <p style={lead}>Your lots that are not on MarketSpace. Put one on to post it.</p>
+                <MyLots token={token} now={liveNow} show="toPost" onGo={(where) => (where === "mine" ? go("mine") : postFrom("lots"))} />
               </div>
             )}
             {(postKind === "ad" || editing) && (
-              <AdForm
-                key={editing?._id ?? "new"}
-                sessionToken={token}
-                groups={config.groups}
-                defaultPhone={me?.phoneNumber ?? null}
-                settings={me!.settings}
-                nextAd={me!.nextAd}
-                farmcoinBalance={me?.farmcoinBalance ?? null}
-                editing={editing}
-                onCancel={editing ? () => { setEditing(null); setTab("mine"); } : undefined}
-                onDone={(msg) => {
-                  setNotice(msg);
-                  setEditing(null);
-                  setTab("mine");
-                  window.scrollTo({ top: 0, behavior: "smooth" });
-                }}
-              />
+              <div style={{ ...PANEL, maxWidth: 640, margin: "0 auto 1rem" }}>
+                <h3 style={heading}>{editing ? "✏️ Edit classified ad" : "📰 New classified ad"}</h3>
+                <AdForm
+                  key={editing?._id ?? "new"}
+                  sessionToken={token}
+                  groups={config.groups}
+                  defaultPhone={me?.phoneNumber ?? null}
+                  settings={me!.settings}
+                  nextAd={me!.nextAd}
+                  farmcoinBalance={me?.farmcoinBalance ?? null}
+                  editing={editing}
+                  onCancel={editing ? () => go("mine") : undefined}
+                  onDone={(msg) => {
+                    setNotice(msg);
+                    setEditing(null);
+                    setTab("mine");
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                />
+              </div>
             )}
           </>
         )}
 
-        {tab === "mine" && isUser && token && (
+        {tab === "mine" && isUser && token && myAdsProps && (
           <>
-            {isSeller && (
-              <div style={section}>
-                <h3 style={{ marginTop: 0 }}>My lots</h3>
-                <MyLots token={token} now={liveNow} />
-              </div>
-            )}
-            <div style={section}>
-              <h3 style={{ marginTop: 0 }}>My classified ads</h3>
-              <MyAds
-                sessionToken={token}
-                now={liveNow}
-                farmcoinBalance={me?.farmcoinBalance ?? null}
-                settings={me!.settings}
-                onEdit={(ad) => {
-                  setEditing(ad);
-                  setNotice(null);
-                  setTab("post");
-                  window.scrollTo({ top: 0, behavior: "smooth" });
-                }}
-                onPostNew={() => {
-                  setEditing(null);
-                  setNotice(null);
-                  setPostKind("ad");
-                  setTab("post");
-                }}
-              />
+            <div style={PANEL}>
+              <h3 style={heading}>🟢 On MarketSpace now</h3>
+              {isSeller && (
+                <>
+                  <h4 style={subHeading(true)}>📒 From My Ledger</h4>
+                  <MyLots token={token} now={liveNow} show="posted" onGo={(where) => (where === "post" ? postFrom("lots") : go("mine"))} />
+                </>
+              )}
+              <h4 style={subHeading(!isSeller)}>📰 Classified ads</h4>
+              <MyAds {...myAdsProps} show="live" />
+            </div>
+            <div style={PANEL}>
+              <h3 style={heading}>🕘 Past posts</h3>
+              <p style={lead}>Posts that ended, with the price they had.</p>
+              {isSeller && (
+                <>
+                  <h4 style={subHeading(true)}>📒 From My Ledger</h4>
+                  <PastLotPosts token={token} />
+                </>
+              )}
+              <h4 style={subHeading(!isSeller)}>📰 Classified ads</h4>
+              <MyAds {...myAdsProps} show="past" />
             </div>
           </>
         )}

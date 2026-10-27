@@ -6,6 +6,7 @@ import type { FunctionReturnType } from "convex/server";
 import { api } from "../../../convex/_generated/api";
 import { PACKAGED_COMMIT_PERCENT, packagedUnitPrice, packagesText, type PlanStep } from "../../../convex/lotOrdersShared";
 import { LotTermsFields, PackagedTermsFields, planProblem } from "./LotTermsFields";
+import { lotSections } from "../../../convex/marketspaceShared";
 
 type MyLots = NonNullable<FunctionReturnType<typeof api.marketspace.myLots>>;
 export type MyLot = MyLots["lots"][number];
@@ -78,6 +79,9 @@ export function VendSheet({ token, lot, info, onClose }: { token: string; lot: M
               : packagesText(lot.lotsLeft, label)
             : `${lot.lotsLeft} lot${lot.lotsLeft === 1 ? "" : "s"} of ${lot.unitSize.toLocaleString()} kg`}{" "}
           for sale. Your listing stays in your ledger; only its MarketSpace card hides when its time runs out.
+        </p>
+        <p style={{ margin: 0, padding: "0.55rem 0.7rem", borderRadius: 10, background: "#f1f8e9", fontSize: "0.9rem", fontWeight: 700, color: "#1b5e20" }}>
+          It will show in {lotSections(info.role, { bulk, farmGate: false }).join(" and ")} on Discover.
         </p>
 
         <div>

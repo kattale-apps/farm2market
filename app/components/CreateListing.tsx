@@ -9,11 +9,12 @@ import { FarmCoinReward, FarmCoinVideoPreloader } from "./FarmCoinAnimation";
 import { FarmCoinIcon } from "./icons/Brand";
 import { ugandaDateFromInstant } from "../../convex/exportMarketsShared";
 import { LOT_BAG_SIZES_KG } from "../../convex/constants";
-import { defaultPlan, type PlanStep } from "../../convex/lotOrdersShared";
+import { defaultPlan, type PlanStep, PACKAGED_COMMIT_PERCENT, isPackagedPlan, packagedPlan } from "../../convex/lotOrdersShared";
 import { PhotoSetCapture, type CapturedPhoto } from "./exportMarkets/PhotoSetCapture";
 import { uploadEvidencePhotos } from "./exportMarkets/PhotoSetCapture";
 import { getCurrentLocation } from "../utils/gps";
-import { LotTermsFields, planProblem } from "./lots/LotTermsFields";
+import { LotTermsFields, PackagedTermsFields, planProblem } from "./lots/LotTermsFields";
+import { GoodsQrChooser, reuseCodeOf } from "./qr/GoodsQr";
 
 interface CreateListingProps {
   userId: Id<"users">;
@@ -117,6 +118,13 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
   const [gps, setGps] = useState<{ lat: number; lng: number; accuracy?: number; capturedAt: string } | null>(null);
   const [gpsState, setGpsState] = useState<"reading" | "ok" | "none">("reading");
   const [commitPercent, setCommitPercent] = useState(30);
+  // Packaged items: single items or batches, and no payment steps unless switched on
+  const [packSellAs, setPackSellAs] = useState<"single" | "batches">("single");
+  const [perBatch, setPerBatch] = useState("10");
+  const [takesOffers, setTakesOffers] = useState(false);
+  const [qr, setQr] = useState<Id<"goodsCodes"> | "new" | undefined>(undefined);
+  const [pkgCommit, setPkgCommit] = useState(PACKAGED_COMMIT_PERCENT);
+  const [pkgSteps, setPkgSteps] = useState<PlanStep[]>(() => packagedPlan());
   const [steps, setSteps] = useState<PlanStep[]>(() => defaultPlan(effectiveRole, 30));
   // Vendors, processors and exporters: stock bought in the app (traced) or not.
   const myStock = useQuery(api.lotOrders.myStock, sellsStock ? { userId } : "skip");
@@ -150,6 +158,12 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
     setSteps(defaultPlan(effectiveRole, 30));
     setStockChoice("off_app");
     setStockId("");
+    setPackSellAs("single");
+    setPerBatch("10");
+    setTakesOffers(false);
+    setQr(undefined);
+    setPkgCommit(PACKAGED_COMMIT_PERCENT);
+    setPkgSteps(packagedPlan());
   };
 
   // Load custom products and packaging from localStorage
@@ -329,6 +343,19 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
           setLoading(false);
           return;
         }
+        const batchSize = packSellAs === "batches" ? parseInt(perBatch) : 1;
+        if (packSellAs === "batches" && !(batchSize >= 2)) {
+          setMessage({ type: "error", text: "A batch needs at least 2 items" });
+          setLoading(false);
+          return;
+        }
+        const withSteps = !isPackagedPlan(pkgSteps, pkgCommit);
+        const pkgProblem = withSteps ? planProblem(pkgSteps, pkgCommit) : null;
+        if (pkgProblem) {
+          setMessage({ type: "error", text: `Payment steps: ${pkgProblem}` });
+          setLoading(false);
+          return;
+        }
 
         const isCustomPkg = formData.packagingType === "__custom__";
         if (isCustomPkg && !customPackagingInput.trim()) {
@@ -347,6 +374,11 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
           availableUnits: units,
           pricingUnit: "per_package" as const,
           pricePerUnit: ppu,
+          packagesPerBatch: batchSize,
+          takesOffers,
+          goodsCodeId: reuseCodeOf(qr),
+          commitPercent: withSteps ? pkgCommit : undefined,
+          milestonePlan: withSteps ? pkgSteps : undefined,
           qualityRating: formData.qualityRating || undefined,
           qualityComment: formData.qualityComment.trim() || undefined,
           deliveryProcessorId: formData.deliveryProcessorId ? (formData.deliveryProcessorId as Id<"users">) : undefined,
@@ -357,7 +389,9 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
         const displayPkg = isCustomPkg ? customPackagingInput.trim() : formData.packagingType;
         setMessage({
           type: "success",
-          text: `Listing created! UTID: ${result.utid}. ${result.totalUnits} ${displayPkg}(s) listed.`,
+          text: batchSize > 1
+            ? `Listing created! UTID: ${result.utid}. ${result.totalUnits} batch(es) of ${batchSize} ${displayPkg}(s) listed. Put them on MarketSpace from MarketSpace → My posts.`
+            : `Listing created! UTID: ${result.utid}. ${result.totalUnits} ${displayPkg}(s) listed. Put them on MarketSpace from MarketSpace → My posts.`,
         });
 
         // Reset form
@@ -451,6 +485,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
         milestonePlan: steps,
         inventoryId: sellsStock && listingMode === "unit" && stockId ? (stockId as Id<"traderInventory">) : undefined,
         stockSource: sellsStock && listingMode === "unit" ? (stockChoice === "stock" ? "in_app" : "off_app") : undefined,
+        goodsCodeId: reuseCodeOf(qr),
       });
 
       setMessage({
@@ -1310,7 +1345,43 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
               </div>
               <div>
                 <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
-                  Number of Units Available *
+                  Sell As *
+                </label>
+                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                  {([["single", "Single Items"], ["batches", "In Batches (bulk)"]] as const).map(([value, text]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setPackSellAs(value)}
+                      style={{ minHeight: 44, padding: "0 0.9rem", borderRadius: 999, border: `2px solid ${packSellAs === value ? "#2e7d32" : "#ddd"}`, background: packSellAs === value ? "#e8f5e9" : "#fff", color: "#222", fontWeight: 700, cursor: "pointer" }}
+                    >
+                      {text}
+                    </button>
+                  ))}
+                </div>
+                <p style={{ margin: "0.4rem 0 0", fontSize: "0.8rem", color: "#666" }}>
+                  {packSellAs === "single" ? "Buyers choose how many they want, one order for all." : "Buyers buy whole batches. Verified sellers can show them under Local Bulk on MarketSpace."}
+                </p>
+              </div>
+              {packSellAs === "batches" && (
+                <div>
+                  <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                    Items in One Batch *
+                  </label>
+                  <input
+                    type="number"
+                    value={perBatch}
+                    onChange={(e) => setPerBatch(e.target.value)}
+                    placeholder="e.g., 10, 20"
+                    min="2"
+                    step="1"
+                    style={{ width: "100%", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "6px", fontSize: "1rem" }}
+                  />
+                </div>
+              )}
+              <div>
+                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                  {packSellAs === "batches" ? "Number of Batches *" : "Number of Items *"}
                 </label>
                 <input
                   type="number"
@@ -1339,9 +1410,26 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
                 />
                 {formData.availableUnits && formData.pricePerUnit && (
                   <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.85rem", color: "#666" }}>
-                    Total Value: {formatUGX(parseInt(formData.availableUnits) * parseFloat(formData.pricePerUnit))}
+                    Total Value: {formatUGX(parseInt(formData.availableUnits) * parseFloat(formData.pricePerUnit) * (packSellAs === "batches" ? parseInt(perBatch) || 1 : 1))}
                   </p>
                 )}
+              </div>
+              <div>
+                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                  Take Offers?
+                </label>
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  {([[false, "No, fixed price"], [true, "Yes, buyers can offer"]] as const).map(([value, text]) => (
+                    <button
+                      key={String(value)}
+                      type="button"
+                      onClick={() => setTakesOffers(value)}
+                      style={{ minHeight: 44, padding: "0 0.9rem", borderRadius: 999, border: `2px solid ${takesOffers === value ? "#2e7d32" : "#ddd"}`, background: takesOffers === value ? "#e8f5e9" : "#fff", color: "#222", fontWeight: 700, cursor: "pointer" }}
+                    >
+                      {text}
+                    </button>
+                  ))}
+                </div>
               </div>
             </>
           ) : listingMode === "garden" ? (
@@ -1565,6 +1653,15 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
           )}
 
           {/* What the buyer commits up front, and the steps that bring in the rest */}
+          {listingMode === "packaging" && (
+            <PackagedTermsFields
+              sellerRole={effectiveRole}
+              commitPercent={pkgCommit}
+              steps={pkgSteps}
+              lotPrice={parseFloat(formData.pricePerUnit) > 0 ? Math.round(parseFloat(formData.pricePerUnit) * (packSellAs === "batches" ? parseInt(perBatch) || 1 : 1)) : null}
+              onChange={(c, st) => { setPkgCommit(c); setPkgSteps(st); }}
+            />
+          )}
           {listingMode !== "packaging" && (
             <LotTermsFields
               sellerRole={effectiveRole}
@@ -1631,6 +1728,8 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
               Describe the quality, freshness, or any special characteristics of your produce.
             </p>
           </div>
+
+          <GoodsQrChooser userId={userId} goodLabel={formData.produceType} value={qr} onChange={setQr} />
 
           <div style={{ display: "flex", gap: "1rem", marginTop: "0.5rem" }}>
             <button

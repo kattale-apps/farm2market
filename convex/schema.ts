@@ -189,6 +189,9 @@ export default defineSchema({
     productName: v.optional(v.string()),
     packagingTypeEnum: v.optional(v.string()),
     packagingTypeCustom: v.optional(v.string()),
+    packagesPerBatch: v.optional(v.number()), // Packaged items: items in one sellable unit (1 = single items; more = a batch, sold in bulk)
+    takesOffers: v.optional(v.boolean()), // Packaged items: the seller takes offers (price per item); lots by weight always do
+    goodsCodeId: v.optional(v.id("goodsCodes")), // The goods QR on this listing (kept after it is sold or ended)
     availableUnits: v.optional(v.number()),
     pricingUnit: v.optional(v.union(v.literal("per_package"), v.literal("per_kg"))),
     pricePerUnit: v.optional(v.number()),
@@ -232,6 +235,7 @@ export default defineSchema({
     .index("by_trader", ["traderId"])
     .index("by_inventory", ["inventoryId"])
     .index("by_processingBatch", ["processingBatchId"])
+    .index("by_goodsCode", ["goodsCodeId"])
     .index("by_utid", ["utid"])
     .index("by_status", ["status"]),
 
@@ -245,6 +249,9 @@ export default defineSchema({
     utid: v.string(), // Also written to listingUnits.lockUtid
     listingId: v.id("listings"),
     unitId: v.id("listingUnits"),
+    extraUnitIds: v.optional(v.array(v.id("listingUnits"))), // Packaged items: the other items or batches bought in the same order
+    packageCount: v.optional(v.number()), // Packaged items: how many items the order covers (lotKg is 0)
+    packageLabel: v.optional(v.string()), // Packaged items: what one item is called (crate, bunch...)
     sellerId: v.id("users"),
     buyerId: v.id("users"),
     sellerRole: v.string(),
@@ -3446,12 +3453,14 @@ export default defineSchema({
     eudrReady: v.boolean(),
     traceStagesApproved: v.number(),
     traceStagesTotal: v.number(),
+    goodsCodeId: v.optional(v.id("goodsCodes")), // The export lot's goods QR
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_exporterId", ["exporterId"])
     .index("by_status", ["status"])
-    .index("by_lotCode", ["lotCode"]),
+    .index("by_lotCode", ["lotCode"])
+    .index("by_goodsCode", ["goodsCodeId"]),
 
   // Where a lot's coffee came from.
   exportLotSources: defineTable({
@@ -3799,13 +3808,15 @@ export default defineSchema({
     marketListed: v.optional(v.boolean()),
     askingPricePerKgUgx: v.optional(v.number()),
     notes: v.optional(v.string()),
+    goodsCodeId: v.optional(v.id("goodsCodes")), // The batch's goods QR
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_processorId", ["processorId"])
     .index("by_evidenceStatus", ["evidenceStatus"])
     .index("by_marketListed", ["marketListed"])
-    .index("by_batchCode", ["batchCode"]),
+    .index("by_batchCode", ["batchCode"])
+    .index("by_goodsCode", ["goodsCodeId"]),
 
   processingBatchInputs: defineTable({
     batchId: v.id("processingBatches"),
@@ -3868,14 +3879,16 @@ export default defineSchema({
     district: v.string(), // where the buyer is
     districtKey: v.string(), // district compared without case
     validFrom: v.string(), // YYYY-MM-DD, Uganda date
-    validUntil: v.string(), // validFrom + 6 days
-    active: v.boolean(), // false once replaced or withdrawn; kept as price history
+    validUntil: v.string(), // validFrom + validDays - 1
+    validDays: v.optional(v.number()), // How long the poster chose (OFFER_DAY_CHOICES); older offers ran 7 days
+    active: v.boolean(), // false once replaced, withdrawn or ended by itself; kept as price history
     notes: v.optional(v.string()),
     createdAt: v.number(),
   })
     .index("by_ownerId", ["ownerId"])
     .index("by_districtKey_and_active", ["districtKey", "active"])
-    .index("by_active", ["active"]),
+    .index("by_active", ["active"])
+    .index("by_active_and_validUntil", ["active", "validUntil"]),
 
   deliveryBookings: defineTable({
     farmerId: v.id("users"),
@@ -4096,14 +4109,18 @@ export default defineSchema({
     bagsPerLot: v.optional(v.number()),
     lotsAvailable: v.optional(v.number()),
     qtyKg: v.optional(v.number()),
-    quantityText: v.optional(v.string()), // Ads: free-text quantity
+    quantityText: v.optional(v.string()), // Ads: free-text quantity; packaged items: "12 crates"
+    packaged: v.optional(v.boolean()), // Packaged items (priceUGX per item, quantityText), not lots by weight
     pricePerKilo: v.optional(v.number()),
     priceUGX: v.optional(v.number()), // Ads
     priceUnit: v.optional(v.string()),
     commitPercent: v.optional(v.number()),
     qualityRating: v.optional(v.string()),
     thumbStorageId: v.optional(v.id("_storage")),
-    status: v.union(v.literal("active"), v.literal("closed")), // Expiry is by time (expiresAt), not status
+    sellerCommercial: v.optional(v.union(v.literal("pending"), v.literal("verified"))), // Farmers: their commercial profile; absent = none (produceVisible)
+    // Expiry is by time (expiresAt), not status. farm_gate: a farmer's lot for sale but not on MarketSpace,
+    // seen only by verified purchasers as a farm-gate source (it does not expire)
+    status: v.union(v.literal("active"), v.literal("closed"), v.literal("farm_gate")),
     expiresAt: v.number(),
     createdAt: v.number(), // When it was (last) put up
     updatedAt: v.number(),
@@ -4111,6 +4128,7 @@ export default defineSchema({
     .index("by_status_created", ["status", "createdAt"])
     .index("by_status_view_created", ["status", "view", "createdAt"])
     .index("by_status_bulk_created", ["status", "isBulk", "createdAt"])
+    .index("by_status_view_expiresAt", ["status", "view", "expiresAt"])
     .index("by_listing", ["listingId"])
     .index("by_ad", ["adId"])
     .index("by_seller", ["sellerId", "createdAt"])
@@ -4118,6 +4136,62 @@ export default defineSchema({
       searchField: "title",
       filterFields: ["status", "view", "isBulk"],
     }),
+
+  // Commercial farmers (convex/commercialFarmers.ts): a farmer puts lots on MarketSpace only with
+  // a trading name and one commercial document. The trading name is private: the farmer and
+  // the super admin who checks the document see it; MarketSpace shows the alias and a badge.
+  commercialProfiles: defineTable({
+    userId: v.id("users"),
+    tradingName: v.string(),
+    documents: v.array(
+      v.object({
+        kind: v.union(v.literal("trading_licence"), v.literal("business_registration"), v.literal("tin")),
+        number: v.optional(v.string()),
+        photo: v.optional(evidencePhotoValidator), // Camera or gallery
+      })
+    ), // One for now; a list so more can be added later
+    status: v.union(v.literal("pending"), v.literal("verified"), v.literal("rejected")),
+    reviewNote: v.optional(v.string()), // Why it was not accepted (REJECT_REASONS)
+    reviewedBy: v.optional(v.id("users")),
+    reviewedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_status_and_updatedAt", ["status", "updatedAt"]),
+
+  // Goods QR codes (goodsCodesCore.ts): issued by the platform for every lot
+  // listing, processing batch and export lot; permanent, scan-counted, and
+  // reusable for a new listing of the same good, so printed labels keep working.
+  goodsCodes: defineTable({
+    code: v.string(), // "F2M-7KQ3XA": the QR opens /g/<code>
+    ownerId: v.id("users"),
+    goodKey: v.string(), // The good in plain lower case, to offer the code again for the same good
+    goodLabel: v.string(), // "Maize", "Tomatoes (crate)", "Coffee FAQ"
+    targetKind: v.union(v.literal("listing"), v.literal("batch"), v.literal("exportLot")),
+    listingId: v.optional(v.id("listings")),
+    batchId: v.optional(v.id("processingBatches")),
+    exportLotId: v.optional(v.id("exportLots")),
+    uses: v.number(), // Listings or batches it has been on
+    scanCount: v.number(),
+    lastScannedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_code", ["code"])
+    .index("by_owner_and_goodKey", ["ownerId", "goodKey"]),
+
+  // One scan of a goods QR (a visitor counts once an hour; the owner's own scans do not count)
+  goodsCodeScans: defineTable({
+    codeId: v.id("goodsCodes"),
+    targetId: v.string(), // The listing, batch or export lot it pointed to when scanned
+    visitorKey: v.string(), // Random per device
+    viewerRole: v.optional(v.string()),
+    at: v.number(),
+  })
+    .index("by_code_and_at", ["codeId", "at"])
+    .index("by_code_visitor_and_at", ["codeId", "visitorKey", "at"])
+    .index("by_target", ["targetId"]),
 
   // MarketSpace questions (convex/enquiriesShared.ts): the pool the super admin keeps
   enquiryQuestions: defineTable({

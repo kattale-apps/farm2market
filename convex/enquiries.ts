@@ -30,7 +30,7 @@ import {
   questionProblem,
   type Answer,
 } from "./enquiriesShared";
-import { isLiteFor, liteReason } from "./marketspaceShared";
+import { cardIsLive, isLiteFor, liteReason, produceVisible } from "./marketspaceShared";
 import { notifyOwner, requireSuperAdmin, requireUser, viewerOf } from "./marketspace";
 import { lotBuyingAccess } from "./lotOrders";
 import { todayUganda } from "./exportMarkets";
@@ -64,7 +64,7 @@ async function sourceUtid(ctx: Ctx, card: Doc<"marketCards">): Promise<string | 
 
 async function liveCard(ctx: MutationCtx, cardId: Id<"marketCards">): Promise<Doc<"marketCards">> {
   const card = await ctx.db.get(cardId);
-  if (!card || card.status !== "active" || card.expiresAt <= getUgandaTime()) throw new Error("This post is no longer on MarketSpace.");
+  if (!card || !cardIsLive(card, getUgandaTime())) throw new Error("This post is no longer on MarketSpace.");
   return card;
 }
 
@@ -91,7 +91,8 @@ export const forCard = query({
     if (!card) return null;
     const viewer = await viewerOf(ctx, args.sessionToken, args.today);
     const isMine = !!viewer.user && viewer.user._id === card.sellerId;
-    if (!isMine && (card.status !== "active" || card.expiresAt <= args.now)) return null;
+    if (!isMine && !cardIsLive(card, args.now)) return null;
+    if (!produceVisible(card, { tier: viewer.tier, role: viewer.user?.role ?? null, isMine })) return null; // The commercial farmer rule
     const full = !isLiteFor(card.view, viewer.tier, isMine);
     const mode = questionMode(card);
     const pool = (await activeQuestions(ctx)).filter((q) => questionFits(q.appliesTo, audiencesOf(card)));
@@ -208,6 +209,7 @@ export const ask = mutation({
     if (questionMode(card) !== "ask") throw new Error("Wanted ads take responses, not questions.");
     const tier = (await lotBuyingAccess(ctx, user, todayUganda())).ok ? "verified" : "member";
     if (isLiteFor(card.view, tier)) throw new Error(liteReason(tier));
+    if (!produceVisible(card, { tier, role: user.role, isMine: false })) throw new Error("This post is no longer on MarketSpace.");
 
     const ids = [...new Set(args.questionIds)];
     if (ids.length === 0) throw new Error("Choose at least one question.");

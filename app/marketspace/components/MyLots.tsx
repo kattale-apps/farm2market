@@ -9,7 +9,10 @@ import { VendSheet, type MyLot } from "../../components/lots/VendSheet";
 import { ugandaDateFromInstant } from "../../../convex/exportMarketsShared";
 import { QuestionsSheet } from "./Questions";
 import { FONT, formatUGX } from "./shared";
+import { PACKAGED_COMMIT_PERCENT, isPackagedPlan, packagesText } from "../../../convex/lotOrdersShared";
 import { formatUgandaDateTime } from "../../utils/timeUtils";
+import { GoodsQr } from "../../components/qr/GoodsQr";
+import { CommercialProfileSheet, commercialStatusText } from "./CommercialProfile";
 
 const SELLER_ROLES = ["farmer", "vendor", "store", "trader"];
 
@@ -24,6 +27,7 @@ export function MyLots({ token, now }: { token: string; now: number }) {
   const [vending, setVending] = useState<MyLot | null>(null);
   const [editing, setEditing] = useState<MyLot | null>(null);
   const [questionsFor, setQuestionsFor] = useState<string | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [today] = useState(() => ugandaDateFromInstant(Date.now()));
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -58,6 +62,14 @@ export function MyLots({ token, now }: { token: string; now: number }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
       {msg && <div style={{ fontWeight: 600, color: msg.ok ? "#2e7d32" : "#c62828" }}>{msg.text}</div>}
+      {info.commercialStatus && (
+        <div style={{ padding: "0.7rem 0.8rem", borderRadius: 12, background: info.commercialStatus === "verified" ? "#e8f5e9" : "#fff8e1", border: `1px solid ${info.commercialStatus === "verified" ? "#a5d6a7" : "#ffe082"}` }}>
+          <div style={{ fontSize: "0.88rem", color: "#333" }}>{commercialStatusText(info.commercialStatus)}</div>
+          <button type="button" onClick={() => setProfileOpen(true)} style={{ ...button(info.commercialStatus === "none" || info.commercialStatus === "rejected" ? "go" : "plain"), marginTop: "0.5rem" }}>
+            {info.commercialStatus === "none" ? "Add Commercial Profile" : info.commercialStatus === "rejected" ? "Fix My Profile" : "My Commercial Profile"}
+          </button>
+        </div>
+      )}
       {info.lots.length === 0 ? (
         <p style={{ margin: 0, color: "#666" }}>
           You have no lots for sale. <Link href="/farmer/farm2market" style={{ color: "#1b5e20", fontWeight: 700 }}>Create a lot listing →</Link>
@@ -76,7 +88,20 @@ export function MyLots({ token, now }: { token: string; now: number }) {
                 )}
               </div>
               <div style={{ fontSize: "0.85rem", color: "#555" }}>
-                {lot.lotsLeft} lot{lot.lotsLeft === 1 ? "" : "s"} of {lot.unitSize.toLocaleString()} kg · {formatUGX(lot.pricePerKilo)}/kg · buyer pays {lot.commitPercent ?? 100}% first
+                {lot.packaged ? (
+                  <>
+                    {(lot.packagesPerBatch ?? 1) > 1
+                      ? `${lot.lotsLeft} batch${lot.lotsLeft === 1 ? "" : "es"} of ${packagesText(lot.packagesPerBatch ?? 1, lot.packageLabel ?? "item")}`
+                      : packagesText(lot.lotsLeft, lot.packageLabel ?? "item")}{" "}
+                    · {formatUGX(lot.pricePerUnit ?? 0)} per {lot.packageLabel ?? "item"} ·{" "}
+                    {isPackagedPlan(lot.milestonePlan, lot.commitPercent ?? PACKAGED_COMMIT_PERCENT) ? "paid in full, no steps" : `buyer pays ${lot.commitPercent}% first`}
+                    {lot.takesOffers ? " · takes offers" : ""}
+                  </>
+                ) : (
+                  <>
+                    {lot.lotsLeft} lot{lot.lotsLeft === 1 ? "" : "s"} of {lot.unitSize.toLocaleString()} kg · {formatUGX(lot.pricePerKilo)}/kg · buyer pays {lot.commitPercent ?? 100}% first
+                  </>
+                )}
               </div>
               <div style={{ fontSize: "0.85rem", fontWeight: 700, color: live ? "#2e7d32" : "#777", margin: "0.3rem 0" }}>
                 {live
@@ -84,9 +109,17 @@ export function MyLots({ token, now }: { token: string; now: number }) {
                   : lot.vendExpiresAt !== null
                     ? "Its MarketSpace time ran out: refresh to show it again"
                     : "Not on MarketSpace"}
+                {lot.farmGate && (
+                  <div style={{ fontWeight: 400, color: "#8d5300" }}>🚜 Verified purchasers still see it, to buy at the farm gate.</div>
+                )}
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
-                <button type="button" onClick={() => setVending(lot)} style={button(live ? "plain" : "go")}>
+                <button
+                  type="button"
+                  // Farmers need a commercial profile to put lots on MarketSpace
+                  onClick={() => (info.commercialStatus === "none" || info.commercialStatus === "rejected" ? setProfileOpen(true) : setVending(lot))}
+                  style={button(live ? "plain" : "go")}
+                >
                   {live ? "Change" : "Put on MarketSpace"}
                 </button>
                 {lot.vendExpiresAt !== null && (
@@ -106,6 +139,7 @@ export function MyLots({ token, now }: { token: string; now: number }) {
                   </button>
                 )}
               </div>
+              <GoodsQr goodsCode={lot.goodsCode} sessionToken={token} />
             </div>
           );
         })
@@ -119,6 +153,15 @@ export function MyLots({ token, now }: { token: string; now: number }) {
           onClose={(text) => {
             setVending(null);
             if (text) setMsg({ ok: true, text });
+          }}
+        />
+      )}
+      {profileOpen && (
+        <CommercialProfileSheet
+          token={token}
+          onClose={(done) => {
+            setProfileOpen(false);
+            if (done) setMsg({ ok: true, text: done });
           }}
         />
       )}

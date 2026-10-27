@@ -13,6 +13,8 @@ import { useOfflineMutation } from "../hooks/useOfflineMutation";
 import { savePdfFromJsPDF } from "../utils/pdfDownload";
 import { VerifiedBadge } from "./icons/Brand";
 import { EditListingTerms } from "./lots/EditListingTerms";
+import { GoodsQr } from "./qr/GoodsQr";
+import { packagesText } from "../../convex/lotOrdersShared";
 import { LotLedger } from "./lots/LotLedger";
 import { MyStock } from "./lots/MyStock";
 
@@ -647,6 +649,7 @@ export function Farm2MarketContent({ userId, userRole, isMobile }: Farm2MarketCo
                         <span style={{ padding: "0.2rem 0.6rem", borderRadius: "999px", fontSize: "0.75rem", fontWeight: "600", background: statusColor, color: "#fff" }}>{status}</span>
                       </div>
                       <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.35rem", fontFamily: "monospace" }}>UTID: {listing.utid}</div>
+                      {listing.goodsCode && <div style={{ fontSize: "0.8rem", color: "#1b5e20", marginTop: "0.2rem", fontWeight: 600 }}>▦ QR {listing.goodsCode.code} · {listing.goodsCode.scanCount} scan{listing.goodsCode.scanCount === 1 ? "" : "s"}</div>}
                     </div>
                   );
                 })}
@@ -670,10 +673,11 @@ export function Farm2MarketContent({ userId, userRole, isMobile }: Farm2MarketCo
                       <div style={{ marginBottom: "0.5rem", padding: "0.5rem", background: "#f5f5f5", borderRadius: "6px", border: "1px solid #e0e0e0" }}>
                         <div style={{ fontSize: "clamp(0.9rem, 2.5vw, 1rem)", color: "#666", fontWeight: "600", marginBottom: "0.25rem", fontFamily: '"Montserrat", sans-serif' }}>UTID:</div>
                         <div style={{ fontSize: "clamp(0.84rem, 2.45vw, 1.05rem)", color: "#2c2c2c", fontFamily: "monospace", fontWeight: "700", letterSpacing: "0.05em", wordBreak: "break-all" }}>{listing.utid}</div>
+                        {listing.goodsCode && <div style={{ fontSize: "0.8rem", color: "#1b5e20", marginTop: "0.25rem", fontWeight: 600 }}>▦ QR {listing.goodsCode.code} · {listing.goodsCode.scanCount} scan{listing.goodsCode.scanCount === 1 ? "" : "s"}</div>}
                       </div>
-                      <div style={{ fontWeight: "600", marginBottom: "0.5rem", fontSize: "clamp(1rem, 3vw, 1.1rem)", color: "#1a1a1a" }}>{getProduceEmoji(listing.produceType)} {listing.totalKilos}kg {listing.produceType}</div>
+                      <div style={{ fontWeight: "600", marginBottom: "0.5rem", fontSize: "clamp(1rem, 3vw, 1.1rem)", color: "#1a1a1a" }}>{getProduceEmoji(listing.produceType)} {listing.listingMode === "packaging" ? `${packagesText(listing.units.total * (listing.packagesPerBatch ?? 1), listing.packageLabel ?? "item")}${(listing.packagesPerBatch ?? 1) > 1 ? ` in batches of ${listing.packagesPerBatch}` : ""}` : `${listing.totalKilos}kg`} {listing.produceType}</div>
                       <div style={{ fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)", fontWeight: "600", color: statusColor }}>Status: {status}</div>
-                      {listing.listingMode !== "packaging" && canCancel && (
+                      {canCancel && (
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); setEditingTerms(listing); }}
@@ -1206,6 +1210,12 @@ export function Farm2MarketContent({ userId, userRole, isMobile }: Farm2MarketCo
                 <div style={{ fontSize: "clamp(1rem, 3vw, 1.2rem)", color: "#666", marginBottom: "0.5rem", fontWeight: "600", fontFamily: '"Montserrat", sans-serif' }}>Transaction UTID</div>
                 <div style={{ fontSize: "clamp(1.12rem, 3.5vw, 1.4rem)", fontFamily: "monospace", wordBreak: "break-all", color: "#2c2c2c", padding: "0.75rem", background: "#f5f5f5", borderRadius: "8px", fontWeight: "700", letterSpacing: "0.05em", border: "2px solid #e0e0e0" }}>{selectedListing.utid}</div>
               </div>
+              {selectedListing.goodsCode && (
+                <div>
+                  <div style={{ fontSize: "clamp(0.75rem, 2vw, 0.8rem)", color: "#666", marginBottom: "0.25rem", fontWeight: "600" }}>Goods QR</div>
+                  <GoodsQr goodsCode={selectedListing.goodsCode} userId={userId} />
+                </div>
+              )}
               <div><div style={{ fontSize: "clamp(0.75rem, 2vw, 0.8rem)", color: "#666", marginBottom: "0.25rem", fontWeight: "600" }}>Produce Type</div><div style={{ fontSize: "clamp(0.9rem, 2.5vw, 1rem)", color: "#1a1a1a", fontWeight: "500" }}>{getProduceEmoji(selectedListing.produceType)} {selectedListing.produceType}</div></div>
               <div><div style={{ fontSize: "clamp(0.75rem, 2vw, 0.8rem)", color: "#666", marginBottom: "0.25rem", fontWeight: "600" }}>Quantity</div><div style={{ fontSize: "clamp(0.9rem, 2.5vw, 1rem)", color: "#1a1a1a", fontWeight: "500" }}>{selectedListing.totalKilos} kg ({lotSummary(selectedListing)})</div></div>
               <div>

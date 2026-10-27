@@ -1,14 +1,27 @@
 /**
  * Buying offers - plain shared constants (no Convex server imports).
  *
- * Processors post weekly buying prices for crops they process (coffee first);
- * vendors post buying offers for foodstuffs that need no processing. Farmers
- * see both by district and book a delivery at most 5 days ahead, so a booking
- * never falls outside the week the price is valid for.
+ * Processors and exporters post buying prices for crops they process or
+ * export (coffee first); vendors post buying offers for foodstuffs. Farmers
+ * see them by district and book a delivery while the price is up.
+ *
+ * Like MarketSpace posts, a price ends by itself: the poster picks how long it
+ * stays up (a day, three days or a week) and posts it again to keep it up, so
+ * farmers never travel on an old price.
  */
 
-/** A posted price is valid for a week from the day it is posted. */
+/** How long a posted price stays up before it ends by itself. */
+export const OFFER_DAY_CHOICES = [1, 3, 7];
+export const DEFAULT_OFFER_DAYS = 3;
+/** The longest a price can stay up in one go. */
 export const OFFER_VALID_DAYS = 7;
+
+/** Days a price has left, counting today (1 on its last day, 0 once it ended). */
+export function offerDaysLeft(today: string, validUntil: string): number {
+  if (validUntil < today) return 0;
+  const ms = Date.parse(`${validUntil}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`);
+  return Math.round(ms / 86_400_000) + 1;
+}
 /** Farmers can book a delivery at most this many days ahead. */
 export const MAX_BOOKING_DAYS_AHEAD = 5;
 

@@ -11,6 +11,7 @@ import {
   COFFEE_TYPES,
   DEFAULT_EXPORT_CROP,
   PRODUCT_FORMS,
+  exportLotGoodLabel,
   productFormLabel,
   DEFAULT_BAG_WEIGHT_KG,
   INCOTERMS,
@@ -33,6 +34,7 @@ import {
 } from "./ui";
 import { PhotoSetCapture, CapturedPhoto, evidencePhotoPayload } from "./PhotoSetCapture";
 import { ProcessorPurchasesPanel, TracePipelineEditor } from "./ProcessorPurchases";
+import { GoodsQr, GoodsQrChooser, reuseCodeOf, type GoodsCodeSummary } from "../qr/GoodsQr";
 
 type Msg = { tone: "error" | "success" | "info"; text: string } | null;
 type LotDetail = FunctionReturnType<typeof api.exportLots.getMyLot>;
@@ -55,7 +57,8 @@ export function ExporterLots({
   const [msg, setMsg] = useState<Msg>(null);
 
   if (openLotId) {
-    return <LotWorkspace userId={userId} lotId={openLotId} onBack={() => setOpenLotId(null)} isActiveExporter={isActiveExporter} crop={crop} productForms={productForms} />;
+    const goodsCode = allLots?.find((l) => l._id === openLotId)?.goodsCode ?? null;
+    return <LotWorkspace userId={userId} lotId={openLotId} goodsCode={goodsCode} onBack={() => setOpenLotId(null)} isActiveExporter={isActiveExporter} crop={crop} productForms={productForms} />;
   }
 
   return (
@@ -114,6 +117,11 @@ export function ExporterLots({
                 {lot.openDeals} open deal{lot.openDeals === 1 ? "" : "s"}
               </div>
               <TraceBadges traceLevel={lot.traceLevel} eudrReady={lot.eudrReady} />
+              {lot.goodsCode && (
+                <div style={{ fontSize: "0.8rem", color: "#1b5e20", fontWeight: 600, marginTop: "0.2rem" }}>
+                  ▦ QR {lot.goodsCode.code} · {lot.goodsCode.scanCount} scan{lot.goodsCode.scanCount === 1 ? "" : "s"}
+                </div>
+              )}
             </div>
           </button>
         ))
@@ -188,6 +196,7 @@ function LotForm({
     ...(example ?? {}),
   });
   const [practiceResult, setPracticeResult] = useState<string[] | null>(null);
+  const [qr, setQr] = useState<Id<"goodsCodes"> | "new" | undefined>(undefined);
   const set = (k: keyof LotFormValues) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
   const text = (k: keyof LotFormValues, t: string, ph = "", req = false) => (
     <div>
@@ -268,6 +277,11 @@ function LotForm({
         <input type="checkbox" checked={f.sampleAvailable} onChange={(e) => setF({ ...f, sampleAvailable: e.target.checked })} />
         A sample is available for the platform to collect
       </label>
+      {!lot && !practice && f.grade.trim() && (
+        <div style={{ marginBottom: "0.6rem" }}>
+          <GoodsQrChooser userId={userId} goodLabel={exportLotGoodLabel({ crop, coffeeType: f.coffeeType, grade: f.grade.trim() })} value={qr} onChange={setQr} />
+        </div>
+      )}
       <p style={{ fontSize: "0.8rem", color: "#666" }}>Prices are given on request. Buyers ask; you quote per deal.</p>
       <div style={{ display: "flex", gap: "0.5rem" }}>
         <button
@@ -316,6 +330,7 @@ function LotForm({
                 warehouseLocation: f.warehouseLocation,
                 incoterms: f.incoterms,
                 sampleAvailable: f.sampleAvailable,
+                goodsCodeId: lot ? undefined : reuseCodeOf(qr),
               });
               onDone(r.lotId);
             } catch (e) {
@@ -359,6 +374,7 @@ function LotForm({
 function LotWorkspace({
   userId,
   lotId,
+  goodsCode,
   onBack,
   isActiveExporter,
   crop,
@@ -366,6 +382,7 @@ function LotWorkspace({
 }: {
   userId: Id<"users">;
   lotId: Id<"exportLots">;
+  goodsCode: GoodsCodeSummary | null;
   onBack: () => void;
   isActiveExporter: boolean;
   crop: string;
@@ -418,6 +435,7 @@ function LotWorkspace({
               .filter(Boolean)
               .join(" · ")}
           </div>
+          <GoodsQr goodsCode={goodsCode} userId={userId} />
           <div style={{ margin: "0.5rem 0" }}>
             <TraceBadges traceLevel={lot.traceLevel} eudrReady={lot.eudrReady} />
           </div>

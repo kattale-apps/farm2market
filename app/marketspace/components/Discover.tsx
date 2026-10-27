@@ -6,21 +6,31 @@ import { usePaginatedQuery, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
+import { seesFarmGate as farmGateFor } from "../../../convex/marketspaceShared";
 import { AcceptedOffers } from "../../components/lots/AcceptedOffers";
 import { MarketCard, type CardLayout, type MarketCardData } from "./MarketCard";
 import { DISTRICTS, FONT, GLASS, tint } from "./shared";
 
-export type Chip = "all" | "produce" | "bulk" | "lots" | "classifieds";
+export type Chip = "all" | "produce" | "farmgate" | "bulk" | "lots" | "classifieds";
 
 const CHIPS: { key: Chip; label: string }[] = [
   { key: "all", label: "All" },
   { key: "produce", label: "🌾 Farmers Produce" },
+  { key: "farmgate", label: "🚜 Farm Gate" }, // Verified purchasers only: farmers' lots not on MarketSpace
   { key: "bulk", label: "📦 Local Bulk" },
-  { key: "lots", label: "🏭 Processors & Vendors" },
+  { key: "lots", label: "🏪 Vendors and Processors" },
   { key: "classifieds", label: "📰 Classifieds" },
 ];
 
 type Groups = NonNullable<FunctionReturnType<typeof api.marketspace.getBoardConfig>>["groups"];
+
+/** The Vendors and Processors market, filtered by who sells (exporters sell lots there too). */
+const SELLER_CHIPS: { key: string; label: string }[] = [
+  { key: "", label: "All Sellers" },
+  { key: "vendor", label: "Vendors" },
+  { key: "store", label: "Processors" },
+  { key: "trader", label: "Exporters" },
+];
 
 const LAYOUTS: { key: CardLayout; label: string }[] = [
   { key: "list", label: "☰ List" },
@@ -126,16 +136,21 @@ export function Discover({
     setChip(c);
     setCategoryId(null);
     setKind("all");
+    setSellerRole("");
     onChipChange(c);
   };
 
   const verified = me?.tier === "verified";
+  // Verified purchasers buy at the farm gate: they see every farmer's lots
+  const seesFarmGate = farmGateFor({ tier: me?.tier ?? "public", role: me?.role ?? null });
+  const chips = CHIPS.filter((c) => c.key !== "farmgate" || seesFarmGate);
   const filters = {
     now: boardNow,
     today,
     sessionToken: token ?? undefined,
     view: chip === "produce" || chip === "lots" || chip === "classifieds" ? chip : undefined,
     bulk: chip === "bulk" ? true : undefined,
+    farmGate: chip === "farmgate" ? true : undefined,
     kind: chip === "classifieds" && kind !== "all" ? kind : undefined,
     categoryId: chip === "classifieds" && categoryId ? (categoryId as Id<"marketspaceCategories">) : undefined,
     district: district || undefined,
@@ -185,12 +200,28 @@ export function Discover({
       />
 
       <div style={{ display: "flex", gap: "0.45rem", overflowX: "auto", padding: "0.7rem 0 0.2rem" }}>
-        {CHIPS.map((c) => (
+        {chips.map((c) => (
           <button key={c.key} type="button" onClick={() => pickChip(c.key)} style={chipStyle(chip === c.key)}>
             {c.label}
           </button>
         ))}
       </div>
+
+      {chip === "farmgate" && (
+        <p style={{ margin: "0.5rem 0 0", fontSize: "0.85rem", color: "#555" }}>
+          Farmers&apos; lots that are not on MarketSpace. Only verified purchasers see them, to buy at the farm gate.
+        </p>
+      )}
+
+      {chip === "lots" && (
+        <div style={{ display: "flex", gap: "0.45rem", overflowX: "auto", padding: "0.4rem 0 0.1rem" }}>
+          {SELLER_CHIPS.map((r) => (
+            <button key={r.key || "all"} type="button" onClick={() => setSellerRole(r.key)} style={chipStyle(sellerRole === r.key, "#6d4c00")}>
+              {r.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {chip === "classifieds" && (
         <div style={{ display: "flex", gap: "0.45rem", overflowX: "auto", padding: "0.4rem 0 0.1rem" }}>
@@ -251,7 +282,7 @@ export function Discover({
               <input type="number" min={0} value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} placeholder="Max UGX/kg" aria-label="Highest price per kg" style={{ ...select, padding: "0 0.5rem" }} />
             </div>
           ) : (
-            <div style={{ fontSize: "0.8rem", color: "#666", alignSelf: "center" }}>Price filters are for verified buyers.</div>
+            <div style={{ fontSize: "0.8rem", color: "#666", alignSelf: "center" }}>Price filters are for verified purchasers.</div>
           )}
           {filtersOn > 0 && (
             <button type="button" onClick={() => { setDistrict(""); setStockSource(""); setSellerRole(""); setMinPrice(""); setMaxPrice(""); }} style={{ ...chipStyle(false), minHeight: 42 }}>

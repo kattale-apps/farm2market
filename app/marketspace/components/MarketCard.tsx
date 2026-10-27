@@ -37,13 +37,16 @@ export function MarketCard({ card, now, layout = "list" }: { card: MarketCardDat
   const isLot = card.view !== "classifieds";
   let price: string | null;
   if (card.lite) price = card.priceBand;
+  else if (card.packaged) price = card.priceUGX !== null ? `${formatUGX(card.priceUGX)} ${card.priceUnit ?? "each"}` : null;
   else if (isLot) price = card.pricePerKilo ? `${formatUGX(card.pricePerKilo)}/kg` : null;
   else price = card.priceUGX !== null ? `${formatUGX(card.priceUGX)}${card.priceUnit ? ` ${card.priceUnit}` : ""}` : null;
   const quantity = card.lite
     ? card.quantityBand
-    : isLot
-      ? `${card.lotsAvailable} lot${card.lotsAvailable === 1 ? "" : "s"} of ${card.lotKg?.toLocaleString()} kg`
-      : card.quantityText;
+    : card.packaged
+      ? card.quantityText
+      : isLot
+        ? `${card.lotsAvailable} lot${card.lotsAvailable === 1 ? "" : "s"} of ${card.lotKg?.toLocaleString()} kg`
+        : card.quantityText;
 
   return (
     <Link
@@ -68,6 +71,8 @@ export function MarketCard({ card, now, layout = "list" }: { card: MarketCardDat
         <div style={{ fontWeight: 800, fontSize: size.title, lineHeight: 1.25 }}>{card.title}</div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem" }}>
           {pill(card.sellerCategory, "#f1f3f0", "#333")}
+          {card.commercialFarmer && pill("✔ Commercial Farmer", "#e3f2fd", "#0d47a1")}
+          {card.farmGate && pill("🚜 Farm gate", "#fff3e0", "#8d5300")}
           {card.isBulk && pill(`📦 Bulk${card.bulkLabel ? ` · ${card.bulkLabel}` : ""}`, "#ede7f6", "#4527a0")}
           {stock && pill(stock.text, stock.bg, stock.fg)}
         </div>

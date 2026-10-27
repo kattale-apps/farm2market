@@ -40,6 +40,7 @@ export function BuyerOffersPanel({ userId }: { userId: Id<"users"> }) {
   const bookings = useQuery(api.marketOffers.listIncomingBookings, { userId });
   const receipts = useQuery(api.marketOffers.listMyReceipts, { userId });
   const withdraw = useMutation(api.marketOffers.withdrawOffer);
+  const repost = useMutation(api.marketOffers.repostOffer);
   const respond = useMutation(api.marketOffers.respondToBooking);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [recording, setRecording] = useState<string | null>(null);
@@ -59,10 +60,10 @@ export function BuyerOffersPanel({ userId }: { userId: Id<"users"> }) {
       {msg && <div style={{ background: msg.ok ? "#e8f5e9" : "#ffebee", color: msg.ok ? "#1b5e20" : "#c62828", borderRadius: 8, padding: "0.5rem 0.7rem", marginBottom: 10, fontSize: "0.86rem" }}>{msg.text}</div>}
 
       <div style={box}>
-        <h2 style={{ margin: "0 0 4px", fontSize: "1.05rem", color: ACCENT }}>This week&apos;s buying prices</h2>
+        <h2 style={{ margin: "0 0 4px", fontSize: "1.05rem", color: ACCENT }}>My Buying Prices</h2>
         <p style={{ fontSize: "0.82rem", color: "#607d8b", marginTop: 0 }}>
-          Farmers in {data.district ?? "your district"} see these prices and can book a delivery up to 5 days ahead. Each price is valid for a
-          week; post it again weekly to stay on the board.
+          Farmers in {data.district ?? "your district"} see these prices and book a delivery while a price is up. Each price ends by itself
+          after the days you choose, so farmers never travel on an old price. Keep it up or post it again with one tap.
         </p>
         {!data.canPost ? (
           <div style={{ fontSize: "0.85rem", color: "#e65100" }}>
@@ -73,7 +74,7 @@ export function BuyerOffersPanel({ userId }: { userId: Id<"users"> }) {
                 : "Add your district to your profile to post buying offers."}
           </div>
         ) : (
-          <PostOfferForm userId={userId} crops={data.crops} kind={data.kind} onPosted={(t) => setMsg({ ok: true, text: t })} onError={(t) => setMsg({ ok: false, text: t })} />
+          <PostOfferForm userId={userId} crops={data.crops} kind={data.kind} dayChoices={data.dayChoices} defaultDays={data.defaultDays} onPosted={(t) => setMsg({ ok: true, text: t })} onError={(t) => setMsg({ ok: false, text: t })} />
         )}
         {data.live.map((o) => (
           <div key={o._id} style={{ borderTop: "1px solid #eee", padding: "0.5rem 0", fontSize: "0.86rem", display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
@@ -82,14 +83,40 @@ export function BuyerOffersPanel({ userId }: { userId: Id<"users"> }) {
                 {cropName(o.crop)}
                 {o.form ? ` · ${formLabel(o.form)}` : ""}
               </b>{" "}
-              UGX {o.priceUgx.toLocaleString()}/{o.unit} · until {o.validUntil}
+              UGX {o.priceUgx.toLocaleString()}/{o.unit}
               {o.minQuantity ? ` · min ${o.minQuantity}` : ""}
+              <span style={{ display: "block", fontSize: "0.78rem", color: o.daysLeft <= 1 ? "#e65100" : "#2e7d32", fontWeight: 700 }}>
+                {o.daysLeft <= 1 ? "Ends today" : `Ends in ${o.daysLeft} days`} ({o.validUntil})
+              </span>
             </span>
-            <button style={btn("#c62828", true)} onClick={() => run(() => withdraw({ userId, offerId: o._id }), "Price withdrawn.")}>
-              Withdraw
-            </button>
+            <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <button style={btn(ACCENT, true)} onClick={() => run(() => repost({ userId, offerId: o._id }), "Price kept up for another period.")}>
+                Keep Up
+              </button>
+              <button style={btn("#c62828", true)} onClick={() => run(() => withdraw({ userId, offerId: o._id }), "Price withdrawn.")}>
+                Withdraw
+              </button>
+            </span>
           </div>
         ))}
+        {data.ended.length > 0 && (
+          <div style={{ marginTop: 10 }}>
+            <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#78909c" }}>Ended Prices</div>
+            {data.ended.map((o) => (
+              <div key={o._id} style={{ borderTop: "1px solid #f3f3f3", padding: "0.4rem 0", fontSize: "0.84rem", color: "#607d8b", display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                <span>
+                  {cropName(o.crop)}
+                  {o.form ? ` · ${formLabel(o.form)}` : ""} · UGX {o.priceUgx.toLocaleString()}/{o.unit} · ended {o.validUntil}
+                </span>
+                {data.canPost && (
+                  <button style={btn(ACCENT)} onClick={() => run(() => repost({ userId, offerId: o._id }), "Price posted again.")}>
+                    Post Again
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div style={box}>
@@ -150,7 +177,7 @@ export function BuyerOffersPanel({ userId }: { userId: Id<"users"> }) {
 
 type CropOption = { key: string; label: string; units: string[] };
 
-function PostOfferForm({ userId, crops, kind, onPosted, onError }: { userId: Id<"users">; crops: CropOption[]; kind: Kind; onPosted: (t: string) => void; onError: (t: string) => void }) {
+function PostOfferForm({ userId, crops, kind, dayChoices, defaultDays, onPosted, onError }: { userId: Id<"users">; crops: CropOption[]; kind: Kind; dayChoices: number[]; defaultDays: number; onPosted: (t: string) => void; onError: (t: string) => void }) {
   const post = useMutation(api.marketOffers.postOffer);
   const [crop, setCrop] = useState(crops[0]?.key ?? "");
   const cropInfo = crops.find((c) => c.key === crop);
@@ -159,6 +186,7 @@ function PostOfferForm({ userId, crops, kind, onPosted, onError }: { userId: Id<
   const [price, setPrice] = useState("");
   const [minQuantity, setMinQuantity] = useState("");
   const [notes, setNotes] = useState("");
+  const [days, setDays] = useState(defaultDays);
   const [busy, setBusy] = useState(false);
   return (
     <div style={{ background: "#fff8e1", borderRadius: 10, padding: "0.7rem", marginBottom: 8 }}>
@@ -192,15 +220,23 @@ function PostOfferForm({ userId, crops, kind, onPosted, onError }: { userId: Id<
         <input style={field} inputMode="decimal" placeholder="Minimum quantity (optional)" value={minQuantity} onChange={(e) => setMinQuantity(e.target.value)} />
       </div>
       <input style={{ ...field, marginTop: 8 }} placeholder="Note to farmers (e.g. moisture below 14%)" value={notes} onChange={(e) => setNotes(e.target.value)} />
+      <div style={{ marginTop: 8, fontSize: "0.82rem", fontWeight: 700 }}>Stays up for</div>
+      <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+        {dayChoices.map((d) => (
+          <button key={d} type="button" onClick={() => setDays(d)} style={{ minHeight: 38, padding: "0 0.8rem", borderRadius: 999, border: `2px solid ${days === d ? ACCENT : "#ddd"}`, background: days === d ? "#fff3e0" : "#fff", fontWeight: 700, cursor: "pointer" }}>
+            {d === 1 ? "1 day" : `${d} days`}
+          </button>
+        ))}
+      </div>
       <button
         style={{ ...btn(ACCENT), marginTop: 8 }}
         disabled={busy}
         onClick={async () => {
           setBusy(true);
           try {
-            await post({ userId, crop, form: kind !== "vendor" ? form : undefined, unit: kind !== "vendor" ? "kg" : unit, priceUgx: Number(price), minQuantity: minQuantity.trim() ? Number(minQuantity) : undefined, notes: notes || undefined });
+            await post({ userId, crop, form: kind !== "vendor" ? form : undefined, unit: kind !== "vendor" ? "kg" : unit, priceUgx: Number(price), minQuantity: minQuantity.trim() ? Number(minQuantity) : undefined, notes: notes || undefined, days });
             setPrice("");
-            onPosted("Price posted for this week.");
+            onPosted(`Price posted for ${days === 1 ? "today" : `${days} days`}. It ends by itself after that.`);
           } catch (e) {
             onError(errorText(e));
           } finally {
@@ -208,7 +244,7 @@ function PostOfferForm({ userId, crops, kind, onPosted, onError }: { userId: Id<
           }
         }}
       >
-        Post price for this week
+        Post Price
       </button>
     </div>
   );

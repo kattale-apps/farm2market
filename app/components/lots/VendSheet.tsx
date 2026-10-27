@@ -4,8 +4,8 @@ import { useState } from "react";
 import { useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "../../../convex/_generated/api";
-import type { PlanStep } from "../../../convex/lotOrdersShared";
-import { LotTermsFields, planProblem } from "./LotTermsFields";
+import { PACKAGED_COMMIT_PERCENT, packagedUnitPrice, packagesText, type PlanStep } from "../../../convex/lotOrdersShared";
+import { LotTermsFields, PackagedTermsFields, planProblem } from "./LotTermsFields";
 
 type MyLots = NonNullable<FunctionReturnType<typeof api.marketspace.myLots>>;
 export type MyLot = MyLots["lots"][number];
@@ -19,11 +19,16 @@ export function VendSheet({ token, lot, info, onClose }: { token: string; lot: M
   const vend = useMutation(api.marketspace.vendListing);
   const updateTerms = useMutation(api.listings.updateListingTerms);
   const [days, setDays] = useState(lot.vendRefreshDays && info.dayChoices.includes(lot.vendRefreshDays) ? lot.vendRefreshDays : info.dayChoices[Math.min(1, info.dayChoices.length - 1)]);
+  // Packaged items: bulk means batches (no kilo range); priced per item
+  const packaged = lot.packaged;
+  const perBatch = lot.packagesPerBatch ?? 1;
+  const label = lot.packageLabel ?? "item";
   const kgForSale = lot.lotsLeft * lot.unitSize;
-  const fits = info.bulkRanges.filter((r) => kgForSale >= r.minKg && (r.maxKg === null || kgForSale <= r.maxKg));
+  const fits = packaged ? [] : info.bulkRanges.filter((r) => kgForSale >= r.minKg && (r.maxKg === null || kgForSale <= r.maxKg));
+  const canBatchBulk = packaged && perBatch > 1;
   const [bulk, setBulk] = useState(lot.isBulk);
-  const [range, setRange] = useState(lot.bulkRange ?? fits[0]?.key ?? "");
-  const [commitPercent, setCommitPercent] = useState(lot.commitPercent ?? 100);
+  const [range, setRange] = useState(packaged ? "batches" : lot.bulkRange ?? fits[0]?.key ?? "");
+  const [commitPercent, setCommitPercent] = useState(lot.commitPercent ?? (packaged ? PACKAGED_COMMIT_PERCENT : 100));
   const [steps, setSteps] = useState<PlanStep[]>(lot.milestonePlan);
   const [termsChanged, setTermsChanged] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -67,7 +72,12 @@ export function VendSheet({ token, lot, info, onClose }: { token: string; lot: M
           <button type="button" onClick={() => onClose()} aria-label="Close" style={{ border: "none", background: "#f1f1f1", borderRadius: 999, width: 36, height: 36, cursor: "pointer" }}>✕</button>
         </div>
         <p style={{ margin: 0, fontSize: "0.85rem", color: "#555" }}>
-          {lot.lotsLeft} lot{lot.lotsLeft === 1 ? "" : "s"} of {lot.unitSize.toLocaleString()} kg for sale. Your listing stays in your ledger; only its MarketSpace card hides when its time runs out.
+          {packaged
+            ? perBatch > 1
+              ? `${lot.lotsLeft} batch${lot.lotsLeft === 1 ? "" : "es"} of ${packagesText(perBatch, label)}`
+              : packagesText(lot.lotsLeft, label)
+            : `${lot.lotsLeft} lot${lot.lotsLeft === 1 ? "" : "s"} of ${lot.unitSize.toLocaleString()} kg`}{" "}
+          for sale. Your listing stays in your ledger; only its MarketSpace card hides when its time runs out.
         </p>
 
         <div>
@@ -82,11 +92,14 @@ export function VendSheet({ token, lot, info, onClose }: { token: string; lot: M
 
         <div>
           <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontWeight: 700, color: info.canSellBulk ? "#222" : "#999" }}>
-            <input type="checkbox" checked={bulk} disabled={!info.canSellBulk} onChange={(e) => setBulk(e.target.checked)} />
+            <input type="checkbox" checked={bulk} disabled={!info.canSellBulk || (packaged && !canBatchBulk)} onChange={(e) => setBulk(e.target.checked)} />
             📦 Sell in bulk (Local Bulk)
           </label>
           {!info.canSellBulk && <div style={{ fontSize: "0.8rem", color: "#8d6e00", marginTop: "0.3rem" }}>{info.bulkReason}</div>}
-          {bulk && (
+          {info.canSellBulk && packaged && !canBatchBulk && (
+            <div style={{ fontSize: "0.8rem", color: "#8d6e00", marginTop: "0.3rem" }}>Single items are not bulk. List them in batches to sell in bulk.</div>
+          )}
+          {bulk && !packaged && (
             <div style={{ marginTop: "0.5rem" }}>
               <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                 {info.bulkRanges.map((r) => {
@@ -105,17 +118,31 @@ export function VendSheet({ token, lot, info, onClose }: { token: string; lot: M
         </div>
 
         <div style={{ borderTop: "1px solid #eee", paddingTop: "0.9rem" }}>
-          <LotTermsFields
-            sellerRole={info.role}
-            commitPercent={commitPercent}
-            steps={steps}
-            lotPrice={Math.round(lot.pricePerKilo * lot.unitSize)}
-            onChange={(c, s) => {
-              setCommitPercent(c);
-              setSteps(s);
-              setTermsChanged(true);
-            }}
-          />
+          {packaged ? (
+            <PackagedTermsFields
+              sellerRole={info.role}
+              commitPercent={commitPercent}
+              steps={steps}
+              lotPrice={packagedUnitPrice(lot.pricePerUnit ?? 0, perBatch)}
+              onChange={(c, s) => {
+                setCommitPercent(c);
+                setSteps(s);
+                setTermsChanged(true);
+              }}
+            />
+          ) : (
+            <LotTermsFields
+              sellerRole={info.role}
+              commitPercent={commitPercent}
+              steps={steps}
+              lotPrice={Math.round(lot.pricePerKilo * lot.unitSize)}
+              onChange={(c, s) => {
+                setCommitPercent(c);
+                setSteps(s);
+                setTermsChanged(true);
+              }}
+            />
+          )}
           <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "0.4rem" }}>Lots already ordered keep the steps they were ordered on.</div>
         </div>
 

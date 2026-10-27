@@ -34,20 +34,25 @@ import {
   validateAd,
   validateSettings,
   shapeCard,
+  cardIsLive,
+  produceVisible,
+  seesFarmGate,
   vendDayChoices,
   walletForRole,
   withDefaults,
   type CardView,
   type MarketspaceSettings,
   type ViewerTier,
+  PACKAGED_BATCHES,
 } from "./marketspaceShared";
-import { syncAdCard, syncListingCard } from "./marketCards";
-import { bulkSellingDecision, defaultPlan } from "./lotOrdersShared";
+import { commercialStatusOf, syncAdCard, syncListingCard } from "./marketCards";
+import { PACKAGED_COMMIT_PERCENT, bulkSellingDecision, defaultPlan, packageLabel, packagedPlan, packagedUnitPrice } from "./lotOrdersShared";
 import { isActiveProcessor } from "./processors";
 import { todayUganda } from "./exportMarkets";
 import { maskContactDetails } from "./exportMarketsShared";
 import { lotBuyingAccess } from "./lotOrders";
 import { roleLabel } from "./roleLabels";
+import { goodsCodeSummary } from "./goodsCodesCore";
 
 type Ctx = QueryCtx | MutationCtx;
 
@@ -634,13 +639,16 @@ export const vendListing = mutation({
   },
   handler: async (ctx, args) => {
     const { user, listing } = await requireOwnListing(ctx, args.sessionToken, args.listingId);
-    if (listing.listingMode === "packaging") throw new Error("Packaged items are sold from your shop, not as lots.");
     if (listing.withdrawnAt || (listing.status !== "active" && listing.status !== "partially_locked")) {
       throw new Error("This listing is not for sale any more.");
     }
     const lots = await lotsLeft(ctx, listing._id);
     if (lots === 0) throw new Error("Every lot of this listing is sold or in an order.");
     if (!listing.photos?.length) throw new Error("Add at least one photo (Edit terms) before vending.");
+    // The commercial farmer rule: farmers put lots on MarketSpace with a commercial profile
+    if (user.role === "farmer" && !(await commercialStatusOf(ctx, user._id))) {
+      throw new Error("Add your commercial profile (trading name and a document) to put lots on MarketSpace.");
+    }
 
     const settings = await getSettings(ctx);
     if (!vendDayChoices(settings.maxVendDays).includes(args.days)) {
@@ -652,7 +660,15 @@ export const vendListing = mutation({
     if (args.bulkRange) {
       const access = await canSellBulk(ctx, user);
       if (!access.ok) throw new Error(access.reason);
-      const problem = bulkRangeProblem(args.bulkRange, lots * (listing.unitSize || 10));
+      // Packaged items: bulk means batches (several items to a unit), with no kilo range
+      const problem =
+        listing.listingMode === "packaging"
+          ? args.bulkRange !== PACKAGED_BATCHES.key || (listing.packagesPerBatch ?? 1) < 2
+            ? "Packaged items sell in bulk as batches: list them in batches of 2 or more items"
+            : null
+          : args.bulkRange === PACKAGED_BATCHES.key
+            ? "Choose a bulk range"
+            : bulkRangeProblem(args.bulkRange, lots * (listing.unitSize || 10));
       if (problem) throw new Error(problem);
       bulk = args.bulkRange;
       // Switching bulk on may cost FarmCoin (a super admin setting, 0 = free).
@@ -692,7 +708,7 @@ export const refreshVend = mutation({
   },
 });
 
-/** Take a listing off MarketSpace. It stays in the seller's ledger and on sale to verified buyers. */
+/** Take a listing off MarketSpace. It stays in the seller's ledger and on sale to verified purchasers. */
 export const stopVend = mutation({
   args: { sessionToken: v.string(), listingId: v.id("listings") },
   handler: async (ctx, args) => {
@@ -721,9 +737,10 @@ export const myLots = query({
       .take(100);
     const lots = [];
     for (const l of listings) {
-      if (l.listingMode === "packaging" || l.withdrawnAt) continue;
+      if (l.withdrawnAt) continue;
       if (l.status !== "active" && l.status !== "partially_locked") continue;
-      const commitPercent = l.commitPercent ?? 100;
+      const packaged = l.listingMode === "packaging";
+      const commitPercent = l.commitPercent ?? (packaged ? PACKAGED_COMMIT_PERCENT : 100);
       const card = await ctx.db
         .query("marketCards")
         .withIndex("by_listing", (q) => q.eq("listingId", l._id))
@@ -739,8 +756,15 @@ export const myLots = query({
         lotsLeft: await lotsLeft(ctx, l._id),
         pricePerKilo: l.pricePerKilo,
         commitPercent: l.commitPercent ?? null,
-        milestonePlan: l.milestonePlan ?? defaultPlan(user.role, commitPercent),
+        milestonePlan: l.milestonePlan ?? (packaged ? packagedPlan() : defaultPlan(user.role, commitPercent)),
         hasCustomPlan: !!l.milestonePlan,
+        // Packaged items: sold per item (pricePerUnit), one by one or in batches of packagesPerBatch
+        packaged,
+        packageLabel: packaged ? packageLabel(l) : null,
+        packagesPerBatch: packaged ? l.packagesPerBatch ?? 1 : null,
+        pricePerUnit: packaged ? l.pricePerUnit ?? 0 : null,
+        takesOffers: packaged ? l.takesOffers === true : true,
+        goodsCode: await goodsCodeSummary(ctx, l.goodsCodeId),
         photoCount: l.photos?.length ?? 0,
         stockSource: l.stockSource ?? null,
         vendExpiresAt: l.vendExpiresAt ?? null,
@@ -748,10 +772,18 @@ export const myLots = query({
         isBulk: !!l.isBulk,
         bulkRange: l.bulkRange ?? null,
         cardId: card?._id ?? null,
+        farmGate: card?.status === "farm_gate", // Not on MarketSpace: verified purchasers still see it
         waitingQuestions: card ? await waitingQuestions(ctx, card._id) : 0,
       });
     }
     const bulk = await canSellBulk(ctx, user);
+    const commercial =
+      user.role === "farmer"
+        ? await ctx.db
+            .query("commercialProfiles")
+            .withIndex("by_userId", (q) => q.eq("userId", user._id))
+            .first()
+        : null;
     return {
       userId: user._id,
       role: user.role,
@@ -760,6 +792,8 @@ export const myLots = query({
       bulkRanges: BULK_RANGES,
       canSellBulk: bulk.ok,
       bulkReason: bulk.reason ?? null,
+      // Farmers: their commercial profile, needed to vend ("none" until they fill it in)
+      commercialStatus: user.role === "farmer" ? (commercial?.status ?? ("none" as const)) : null,
       bulkCostFarmcoin: settings.bulkVendCostFarmcoin,
     };
   },
@@ -770,7 +804,7 @@ export const myLots = query({
 //
 // Who is viewing comes from the session token, never an id argument:
 // visitors and unverified members get lite cards (bands, no price, no
-// alias); verified buyers get the full card and can buy. No response ever
+// alias); verified purchasers get the full card and can buy. No response ever
 // carries a phone number.
 // ------------------------------------------------------------------
 
@@ -816,6 +850,7 @@ const discoverFilters = {
   sellerRole: v.optional(v.string()),
   minPricePerKilo: v.optional(v.number()), // Verified viewers only (a visitor could find the exact price by filtering)
   maxPricePerKilo: v.optional(v.number()),
+  farmGate: v.optional(v.boolean()), // Farmers' lots not on MarketSpace: verified purchasers only
 };
 
 type DiscoverFilters = {
@@ -831,8 +866,15 @@ type DiscoverFilters = {
   maxPricePerKilo?: number;
 };
 
+type Viewer = { user: Doc<"users"> | null; tier: ViewerTier };
+
+/** The commercial farmer rule for this viewer (marketspaceShared produceVisible). */
+function visibleTo(card: Doc<"marketCards">, viewer: Viewer): boolean {
+  return produceVisible(card, { tier: viewer.tier, role: viewer.user?.role ?? null, isMine: !!viewer.user && viewer.user._id === card.sellerId });
+}
+
 function matchesFilters(card: Doc<"marketCards">, f: DiscoverFilters, tier: ViewerTier): boolean {
-  if (card.expiresAt <= f.now) return false;
+  if (!cardIsLive(card, f.now)) return false;
   if (f.view && card.view !== f.view) return false;
   if (f.bulk && !card.isBulk) return false;
   if (f.kind && card.kind !== f.kind) return false;
@@ -855,6 +897,22 @@ export const discover = query({
   handler: async (ctx, args) => {
     const tax = await loadTaxonomy(ctx);
     const viewer = await viewerOf(ctx, args.sessionToken, args.today);
+    const farmGateOk = seesFarmGate({ tier: viewer.tier, role: viewer.user?.role ?? null });
+    if (args.farmGate) {
+      // Farm Gate: farmers' lots not on MarketSpace, for verified purchasers
+      if (!farmGateOk) return { page: [], isDone: true, continueCursor: "", tier: viewer.tier, seesFarmGate: false };
+      const result = await ctx.db
+        .query("marketCards")
+        .withIndex("by_status_view_created", (q) => q.eq("status", "farm_gate").eq("view", "produce"))
+        .order("desc")
+        .paginate(args.paginationOpts);
+      const page = [];
+      for (const card of result.page) {
+        if (!matchesFilters(card, args, viewer.tier)) continue;
+        page.push(await shapeForViewer(ctx, card, viewer, tax));
+      }
+      return { ...result, page, tier: viewer.tier, seesFarmGate: true };
+    }
     const base = args.bulk
       ? ctx.db.query("marketCards").withIndex("by_status_bulk_created", (q) => q.eq("status", "active").eq("isBulk", true))
       : args.view
@@ -866,10 +924,10 @@ export const discover = query({
       .paginate(args.paginationOpts);
     const page = [];
     for (const card of result.page) {
-      if (!cardVisible(card, tax) || !matchesFilters(card, args, viewer.tier)) continue;
+      if (!cardVisible(card, tax) || !matchesFilters(card, args, viewer.tier) || !visibleTo(card, viewer)) continue;
       page.push(await shapeForViewer(ctx, card, viewer, tax));
     }
-    return { ...result, page, tier: viewer.tier };
+    return { ...result, page, tier: viewer.tier, seesFarmGate: farmGateOk };
   },
 });
 
@@ -881,18 +939,20 @@ export const searchCards = query({
     if (!text) return [];
     const tax = await loadTaxonomy(ctx);
     const viewer = await viewerOf(ctx, args.sessionToken, args.today);
+    if (args.farmGate && !seesFarmGate({ tier: viewer.tier, role: viewer.user?.role ?? null })) return [];
     const hits = await ctx.db
       .query("marketCards")
       .withSearchIndex("search_title", (q) => {
-        let s = q.search("title", text).eq("status", "active");
-        if (args.view) s = s.eq("view", args.view);
+        let s = q.search("title", text).eq("status", args.farmGate ? "farm_gate" : "active");
+        if (args.farmGate) s = s.eq("view", "produce");
+        else if (args.view) s = s.eq("view", args.view);
         if (args.bulk) s = s.eq("isBulk", true);
         return s;
       })
       .take(40);
     const cards = [];
     for (const card of hits) {
-      if (!cardVisible(card, tax) || !matchesFilters(card, args, viewer.tier)) continue;
+      if (!cardVisible(card, tax) || !matchesFilters(card, args, viewer.tier) || !visibleTo(card, viewer)) continue;
       cards.push(await shapeForViewer(ctx, card, viewer, tax));
     }
     return cards;
@@ -912,28 +972,39 @@ export const cardDetail = query({
     if (!card) return null;
     const viewer = await viewerOf(ctx, args.sessionToken, args.today);
     const isMine = !!viewer.user && viewer.user._id === card.sellerId;
-    const live = card.status === "active" && card.expiresAt > args.now;
+    const live = cardIsLive(card, args.now);
     if (!live && !isMine) return null;
+    if (!visibleTo(card, viewer)) return null; // The commercial farmer rule
     const tax = await loadTaxonomy(ctx);
     if (!cardVisible(card, tax) && !isMine) return null;
     const shaped = await shapeForViewer(ctx, card, viewer, tax);
     const photoIds: Id<"_storage">[] = [];
     let steps = null;
     let lotPrice: number | null = null;
+    let packagesPerBatch: number | null = null;
+    let takesOffers = false;
+    let unitLabel: string | null = null;
     let freeUnitIds: Id<"listingUnits">[] = [];
     let description: string | null = null;
     let qualityComment: string | null = null;
     let neededBy: string | null = null;
     let negotiable: boolean | null = null;
+    let goodsCode: string | null = null; // The listing's goods QR (/g/<code>), printed on the goods
 
     if (card.sourceKind === "listing" && card.listingId) {
       const listing = await ctx.db.get(card.listingId);
       if (!listing) return null;
       photoIds.push(...(listing.photos ?? []).map((p) => p.storageId));
+      goodsCode = (await goodsCodeSummary(ctx, listing.goodsCodeId))?.code ?? null;
       if (!shaped.lite) {
-        const commit = listing.commitPercent ?? 100;
-        steps = listing.milestonePlan ?? defaultPlan(card.sellerRole, commit);
-        lotPrice = Math.round(listing.pricePerKilo * (listing.unitSize || 10));
+        const packaged = listing.listingMode === "packaging";
+        const commit = listing.commitPercent ?? (packaged ? PACKAGED_COMMIT_PERCENT : 100);
+        steps = listing.milestonePlan ?? (packaged ? packagedPlan() : defaultPlan(card.sellerRole, commit));
+        // One sellable unit: a lot by weight, or one item or batch of packaged items
+        lotPrice = packaged ? packagedUnitPrice(listing.pricePerUnit ?? 0, listing.packagesPerBatch ?? 1) : Math.round(listing.pricePerKilo * (listing.unitSize || 10));
+        packagesPerBatch = packaged ? listing.packagesPerBatch ?? 1 : null;
+        takesOffers = packaged ? listing.takesOffers === true : true;
+        unitLabel = packaged ? packageLabel(listing) : null;
         qualityComment = listing.qualityComment ?? null;
         if (viewer.tier === "verified" && !isMine) {
           const units = await ctx.db
@@ -962,10 +1033,14 @@ export const cardDetail = query({
       ...shaped,
       sourceKind: card.sourceKind,
       adId: card.adId ?? null, // For reports
+      goodsCode,
       live,
       photoUrls,
       steps,
       lotPrice,
+      packagesPerBatch,
+      unitLabel,
+      takesOffers,
       freeUnitIds,
       description,
       qualityComment,

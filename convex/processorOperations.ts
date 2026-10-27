@@ -17,13 +17,14 @@ import { mutation, query, QueryCtx, MutationCtx } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
 import { getUgandaTime } from "./utils";
 import { EUDR_POLYGON_THRESHOLD_HA, EXPORT_CROPS, MASS_BALANCE_TOLERANCE, isIsoDate } from "./exportMarketsShared";
-import { BATCH_OUTPUT_FORM_KEYS, CAPABILITY_KEYS, INTAKE_FORM_KEYS, outturnPercent, traceLevelFromIntakes } from "./processorShared";
+import { BATCH_OUTPUT_FORM_KEYS, CAPABILITY_KEYS, INTAKE_FORM_KEYS, batchGoodLabel, outturnPercent, traceLevelFromIntakes } from "./processorShared";
 import { assertEvidencePhotos, evidencePhotoValidator, hasManualPhoto } from "./evidencePhotos";
 import { audit, notify, todayUganda } from "./exportMarkets";
 import { issueReceipt } from "./marketOffers";
 import { recomputeLotSummary, uniqueCode } from "./exportLots";
 import { getProcessorProfile, processorCommunities, requireProcessorUser, requireStorageOfficer } from "./processors";
 import { lotListedKg } from "./batchLots";
+import { goodsCodeSummary, issueGoodsCode } from "./goodsCodesCore";
 
 type Ctx = QueryCtx | MutationCtx;
 
@@ -335,6 +336,7 @@ export const createBatch = mutation({
     inputs: v.array(v.object({ intakeId: v.id("processorIntakes"), kilos: v.number() })),
     startedDate: v.string(),
     notes: v.optional(v.string()),
+    goodsCodeId: v.optional(v.id("goodsCodes")), // Reuse the processor's QR for the same good
   },
   handler: async (ctx, args) => {
     const user = await requireAdmittedProcessor(ctx, args.userId);
@@ -384,6 +386,13 @@ export const createBatch = mutation({
       await ctx.db.insert("processingBatchInputs", { batchId, intakeId: c.intake._id, kilos: c.kilos });
       await ctx.db.patch(c.intake._id, { allocatedKilos: Math.round((c.intake.allocatedKilos + c.kilos) * 10) / 10 });
     }
+    const goodsCodeId = await issueGoodsCode(ctx, {
+      ownerId: user._id,
+      goodLabel: batchGoodLabel(args.crop, args.outputForm),
+      target: { kind: "batch", id: batchId },
+      reuseCodeId: args.goodsCodeId,
+    });
+    await ctx.db.patch(batchId, { goodsCodeId });
     return { batchId, batchCode };
   },
 });
@@ -444,6 +453,7 @@ export const listMyBatches = query({
         outturnPercent: outturnPercent(b.weightInKg, b.weightOutKg),
         inputs: inputs.map((i) => ({ intakeCode: i.intake.intakeCode, kilos: i.kilos, sourceKind: i.intake.sourceKind })),
         photoRows: await photosWithUrls(ctx, b.photos),
+        goodsCode: await goodsCodeSummary(ctx, b.goodsCodeId),
       });
     }
     return rows;

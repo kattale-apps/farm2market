@@ -3,6 +3,8 @@
  * Pure functions only: no database access.
  */
 
+import { PURCHASER_ROLES } from "./lotOrdersShared";
+
 export const DAY_MS = 24 * 60 * 60 * 1000;
 export const TITLE_MAX = 80;
 export const DESCRIPTION_MAX = 1000;
@@ -223,6 +225,9 @@ export function bulkRange(key: string | undefined | null) {
   return BULK_RANGES.find((r) => r.key === key) ?? null;
 }
 
+/** Packaged items sold in batches go under Local Bulk without a kilo range. */
+export const PACKAGED_BATCHES = { key: "batches", label: "Packaged batches" };
+
 /** Why `kg` does not fit the range, or null when it does. */
 export function bulkRangeProblem(key: string, kg: number): string | null {
   const range = bulkRange(key);
@@ -253,20 +258,47 @@ export function quantityBand(kg: number | undefined | null): string | null {
   return range?.label ?? null;
 }
 
-/** Who is looking at a card: not signed in, signed in, or a verified buyer (convex/lotOrders lotBuyingAccess). */
+/** Who is looking at a card: not signed in, signed in, or a verified purchaser (convex/lotOrders lotBuyingAccess). */
 export type ViewerTier = "public" | "member" | "verified";
 
 export type CardView = "produce" | "lots" | "classifieds";
 
 /**
- * Lite cards hide what only buyers should see. Visitors get lite cards
+ * Lite cards hide what only verified purchasers should see. Visitors get lite cards
  * everywhere; signed-in members get full classified ads but lite produce
- * and lots until they are verified buyers. A seller always sees their own
+ * and lots until they are verified purchasers. A seller always sees their own
  * card in full.
  */
 export function isLiteFor(view: CardView, tier: ViewerTier, isMine = false): boolean {
   if (isMine || tier === "verified") return false;
   return tier === "public" || view !== "classifieds";
+}
+
+/**
+ * Farmers' produce (the commercial farmer rule). Verified purchasers (exporters,
+ * processors, vendors and business buyers) see every farmer's lots,
+ * including farm-gate cards (lots not on MarketSpace); visitors and
+ * unverified members see only verified commercial farmers' lots. Other posts
+ * and a seller's own lots are not affected.
+ */
+export function produceVisible(
+  card: { view: CardView; status: string; sellerCommercial?: "pending" | "verified" },
+  viewer: { tier: ViewerTier; role: string | null; isMine: boolean }
+): boolean {
+  if (card.view !== "produce" || viewer.isMine) return true;
+  if (seesFarmGate(viewer)) return true;
+  if (card.status === "farm_gate") return false;
+  return card.sellerCommercial === "verified";
+}
+
+/** Verified purchasers (exporters, processors, vendors and business buyers) buy at the farm gate, so they see every farmer's lots. */
+export function seesFarmGate(viewer: { tier: ViewerTier; role: string | null }): boolean {
+  return viewer.tier === "verified" && (PURCHASER_ROLES as readonly string[]).includes(viewer.role ?? "");
+}
+
+/** Whether a card can be opened and bought from now: on MarketSpace and in time, or a farm-gate card. */
+export function cardIsLive(card: { status: string; expiresAt: number }, now: number): boolean {
+  return (card.status === "active" && card.expiresAt > now) || card.status === "farm_gate";
 }
 
 /** The line a lite card shows instead of the details. */
@@ -292,11 +324,14 @@ type CardSource = {
   lotsAvailable?: number;
   qtyKg?: number;
   quantityText?: string;
+  packaged?: boolean;
   pricePerKilo?: number;
   priceUGX?: number;
   priceUnit?: string;
   commitPercent?: number;
   qualityRating?: string;
+  status?: string;
+  sellerCommercial?: "pending" | "verified";
   expiresAt: number;
   createdAt: number;
 };
@@ -312,7 +347,7 @@ export function shapeCard(
   extras: { thumbUrl: string | null; sellerAlias: string | null; sellerCategory: string }
 ) {
   const lite = isLiteFor(card.view, viewer.tier, viewer.isMine);
-  const range = bulkRange(card.bulkRange);
+  const range = card.bulkRange === PACKAGED_BATCHES.key ? PACKAGED_BATCHES : bulkRange(card.bulkRange);
   return {
     cardId: card._id,
     view: card.view,
@@ -324,6 +359,9 @@ export function shapeCard(
     stockSource: card.stockSource ?? null,
     isBulk: card.isBulk,
     bulkLabel: range?.label ?? null,
+    packaged: !!card.packaged, // Priced per item (priceUGX, priceUnit), counted in quantityText
+    farmGate: card.status === "farm_gate", // Not on MarketSpace: seen by verified purchasers as a farm-gate source
+    commercialFarmer: card.view === "produce" && card.sellerCommercial === "verified", // The "Commercial Farmer" badge
     createdAt: card.createdAt,
     expiresAt: card.expiresAt,
     isMine: viewer.isMine,

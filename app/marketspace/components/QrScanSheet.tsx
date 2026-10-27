@@ -14,6 +14,8 @@ import { FONT } from "./shared";
 function targetOf(text: string): string | null {
   const raw = text.trim();
   if (!raw) return null;
+  // The code printed under a goods QR, typed in by hand
+  if (/^F2M-[A-Z0-9]{6}$/i.test(raw)) return `/g/${raw.toUpperCase()}`;
   try {
     const url = new URL(raw, window.location.origin);
     if (url.origin !== window.location.origin && !/farm2market/i.test(url.hostname)) return null;
@@ -150,7 +152,7 @@ export function QrScanSheet({ onClose }: { onClose: () => void }) {
             type="text"
             value={pasted}
             onChange={(e) => setPasted(e.target.value)}
-            placeholder="Or paste a MarketSpace link"
+            placeholder="Or paste a link, or type the code (F2M-…)"
             style={{ flex: 1, minHeight: 44, borderRadius: 10, border: "1px solid #ccc", padding: "0 0.7rem", fontFamily: FONT }}
           />
           <button type="button" onClick={() => open(pasted)} disabled={!pasted.trim()} style={{ ...big, minHeight: 44, padding: "0 1rem", fontSize: "0.9rem" }}>Open</button>

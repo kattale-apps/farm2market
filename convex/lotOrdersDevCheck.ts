@@ -24,15 +24,17 @@ import { Id } from "./_generated/dataModel";
 import { generateUTID, getUgandaTime } from "./utils";
 import { assertTestMode } from "./testUtils";
 import { postWallet } from "./walletSplit";
+import { resyncFarmerCards } from "./marketCards";
 
 const FARMER_EMAIL = "lotcheck.farmer@pilot.farm2market"; // Pilot domain: no FarmCoin gate
 const BUYER_EMAIL = "lotcheck.buyer@local";
 const ADMIN_EMAIL = "lotcheck.admin@local"; // No password: cannot log in; decides test disputes, then removed
 const MEMBER_EMAIL = "lotcheck.member@local"; // Signed in, not verified: sees lite produce cards
 const EXPORTER_EMAIL = "lotcheck.exporter@local"; // Verified exporter: lists stock as lots, sells in bulk
-const TEST_EMAILS = [FARMER_EMAIL, BUYER_EMAIL, ADMIN_EMAIL, MEMBER_EMAIL, EXPORTER_EMAIL];
+const VENDOR_EMAIL = "lotcheck.vendor@local"; // Vendor in Kampala: posts buying prices to farmers
+const TEST_EMAILS = [FARMER_EMAIL, BUYER_EMAIL, ADMIN_EMAIL, MEMBER_EMAIL, EXPORTER_EMAIL, VENDOR_EMAIL];
 
-async function testUser(ctx: MutationCtx, email: string, role: "farmer" | "buyer" | "admin" | "trader", alias: string, verified = role === "buyer") {
+async function testUser(ctx: MutationCtx, email: string, role: "farmer" | "buyer" | "admin" | "trader" | "vendor", alias: string, verified = role === "buyer") {
   const existing = await ctx.db
     .query("users")
     .withIndex("by_email", (q) => q.eq("email", email))
@@ -119,7 +121,7 @@ export const ageHandover = internalMutation({
 /**
  * MarketSpace walkthrough: the extra test accounts and a one-day session for
  * each, so session-token functions (discover, cardDetail, vendListing,
- * enquiries.*) can be called as a farmer, a verified buyer, an unverified
+ * enquiries.*) can be called as a farmer, a verified business buyer, an unverified
  * member and a verified exporter. Visitors are calls without a token.
  */
 export const marketspaceSessions = internalMutation({
@@ -131,6 +133,8 @@ export const marketspaceSessions = internalMutation({
       buyer: await testUser(ctx, BUYER_EMAIL, "buyer", "LOTCHECK-B"),
       member: await testUser(ctx, MEMBER_EMAIL, "buyer", "LOTCHECK-M", false),
       exporter: await testUser(ctx, EXPORTER_EMAIL, "trader", "LOTCHECK-E", true),
+      vendor: await testUser(ctx, VENDOR_EMAIL, "vendor", "LOTCHECK-V"),
+      admin: await testUser(ctx, ADMIN_EMAIL, "admin", "LOTCHECK-A"), // Super admin: checks commercial profiles
     };
     const tokens: Record<string, string> = {};
     for (const [who, userId] of Object.entries(users)) {
@@ -188,6 +192,54 @@ export const fundTestWallet = internalMutation({
       metadata: { source: "admin_demo_deposit", reason: "Trace walkthrough (test account)" },
     });
     return { userId };
+  },
+});
+
+/** A test vendor in Kampala (and the test farmer placed there too), for the buying-price walkthrough. */
+export const seedVendor = internalMutation({
+  args: { mode: v.string() },
+  handler: async (ctx, args) => {
+    assertTestMode(args.mode);
+    const vendorId = await testUser(ctx, VENDOR_EMAIL, "vendor", "LOTCHECK-V");
+    const farmerId = await testUser(ctx, FARMER_EMAIL, "farmer", "LOTCHECK-F");
+    await ctx.db.patch(vendorId, { districtText: "Kampala" });
+    await ctx.db.patch(farmerId, { districtText: "Kampala" });
+    return { vendorId, farmerId };
+  },
+});
+
+/** Stands in for a posted buying price's days running out (test posters only). */
+export const ageBuyingPrice = internalMutation({
+  args: { mode: v.string(), offerId: v.id("buyingOffers") },
+  handler: async (ctx, args) => {
+    assertTestMode(args.mode);
+    const offer = await ctx.db.get(args.offerId);
+    if (!offer || !(await ctx.db.get(offer.ownerId))?.isTestUser) throw new Error("Only test prices can be moved in time");
+    const d = new Date(`${offer.validFrom}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() - 2);
+    await ctx.db.patch(offer._id, { validFrom: d.toISOString().slice(0, 10), validUntil: d.toISOString().slice(0, 10) });
+  },
+});
+
+/**
+ * Gives the test farmer a commercial profile with this status straight away (no document photo), so
+ * walkthroughs that vend farmer lots can run; the commercial farmer walkthrough drives the real flow.
+ */
+export const setTestCommercialProfile = internalMutation({
+  args: { mode: v.string(), status: v.union(v.literal("pending"), v.literal("verified"), v.literal("rejected")) },
+  handler: async (ctx, args) => {
+    assertTestMode(args.mode);
+    const farmerId = await testUser(ctx, FARMER_EMAIL, "farmer", "LOTCHECK-F");
+    const now = getUgandaTime();
+    const existing = await ctx.db
+      .query("commercialProfiles")
+      .withIndex("by_userId", (q) => q.eq("userId", farmerId))
+      .first();
+    const fields = { tradingName: "LOTCHECK Farm Traders", documents: [{ kind: "tin" as const, number: "1000000000" }], status: args.status, updatedAt: now };
+    if (existing) await ctx.db.patch(existing._id, fields);
+    else await ctx.db.insert("commercialProfiles", { userId: farmerId, ...fields, createdAt: now });
+    await resyncFarmerCards(ctx, farmerId);
+    return { farmerId };
   },
 });
 
@@ -287,6 +339,10 @@ export const cleanup = internalMutation({
         await ctx.db.delete(row._id);
         count("sessions");
       }
+      for (const row of await ctx.db.query("buyingOffers").withIndex("by_ownerId", (q) => q.eq("ownerId", user._id)).collect()) {
+        await ctx.db.delete(row._id);
+        count("buyingOffers");
+      }
       for (const row of await ctx.db.query("purchaseReceipts").withIndex("by_buyerId", (q) => q.eq("buyerId", user._id)).collect()) {
         await ctx.db.delete(row._id);
         count("purchaseReceipts");
@@ -302,6 +358,19 @@ export const cleanup = internalMutation({
       for (const row of await ctx.db.query("notifications").withIndex("by_user", (q) => q.eq("userId", user._id)).collect()) {
         await ctx.db.delete(row._id);
         count("notifications");
+      }
+      for (const profile of await ctx.db.query("commercialProfiles").withIndex("by_userId", (q) => q.eq("userId", user._id)).collect()) {
+        for (const d of profile.documents) if (d.photo) await ctx.storage.delete(d.photo.storageId).catch(() => undefined);
+        await ctx.db.delete(profile._id);
+        count("commercialProfiles");
+      }
+      for (const code of await ctx.db.query("goodsCodes").withIndex("by_owner_and_goodKey", (q) => q.eq("ownerId", user._id)).collect()) {
+        for (const scan of await ctx.db.query("goodsCodeScans").withIndex("by_code_and_at", (q) => q.eq("codeId", code._id)).collect()) {
+          await ctx.db.delete(scan._id);
+          count("goodsCodeScans");
+        }
+        await ctx.db.delete(code._id);
+        count("goodsCodes");
       }
       await ctx.db.delete(user._id);
       count("users");

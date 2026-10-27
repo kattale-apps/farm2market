@@ -87,11 +87,25 @@ crons.interval(
   internal.lotOrders.runScheduled,
 );
 
+// MarketSpace: a farmer's lot whose MarketSpace time ran out goes back to the farm gate (verified purchasers still see it).
+crons.interval(
+  "farm-gate cards after MarketSpace time ends",
+  { minutes: 30 },
+  internal.commercialFarmers.farmGateAfterVendEnds,
+);
+
 // MarketSpace: hide ads that have reached their expiry.
 crons.interval(
   "expire marketspace ads",
   { minutes: 30 },
   internal.marketspace.expireAds,
+);
+
+// Buying prices: end the ones whose days are up, so farmers never see an old price.
+crons.interval(
+  "end stale buying prices",
+  { hours: 6 },
+  internal.marketOffers.endStaleOffers,
 );
 
 export default crons;

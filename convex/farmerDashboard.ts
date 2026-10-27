@@ -15,7 +15,8 @@ import { deliveryPointOf } from "./processors";
 import { findLock, postWallet } from "./walletSplit";
 import { roleLabel } from "./roleLabels";
 import { refreshListingStatus } from "./lotOrders";
-import { LOT_SELLER_ROLES } from "./lotOrdersShared";
+import { LOT_SELLER_ROLES, packageLabel } from "./lotOrdersShared";
+import { goodsCodeSummary } from "./goodsCodesCore";
 
 /**
  * Get farmer's listings
@@ -82,6 +83,12 @@ export const getFarmerListings = query({
           qualityComment: listing.qualityComment || null,
           deliveryPoint,
           collectionLocationText: listing.collectionLocationText || null,
+          // Packaged items: priced per item, sold one by one or in batches
+          pricePerUnit: listing.pricePerUnit ?? null,
+          packagesPerBatch: listing.listingMode === "packaging" ? listing.packagesPerBatch ?? 1 : null,
+          packageLabel: listing.listingMode === "packaging" ? packageLabel(listing) : null,
+          takesOffers: listing.listingMode === "packaging" ? listing.takesOffers === true : null,
+          goodsCode: await goodsCodeSummary(ctx, listing.goodsCodeId),
           // Unit breakdown
           units: {
             available: availableCount,

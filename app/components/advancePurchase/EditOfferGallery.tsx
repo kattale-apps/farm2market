@@ -5,6 +5,7 @@ import { useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { validateImageFile } from "../../utils/imageValidation";
+import { PhotoPickButtons } from "../PhotoPickButtons";
 
 interface Photo {
   storageId: Id<"_storage">;
@@ -174,10 +175,7 @@ export function EditOfferGallery({ farmerId, offerId, photos }: Props) {
     }
   };
 
-  const handleAdd = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    e.target.value = "";
-    if (files.length === 0) return;
+  const handleAdd = async (files: File[]) => {
     setUploading(true);
     setError(null);
     try {
@@ -305,14 +303,9 @@ export function EditOfferGallery({ farmerId, offerId, photos }: Props) {
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
         {!managing ? (
           <>
-            <label style={{
-              display: "inline-block", padding: "0.4rem 0.75rem",
-              background: uploading ? "#eee" : "#e8f5e9", border: "1px solid #a5d6a7", borderRadius: 8,
-              color: "#2e7d32", fontSize: "0.78rem", fontWeight: 700, cursor: uploading ? "not-allowed" : "pointer",
-            }}>
-              {uploading ? "Uploading…" : "+ Add gallery photos"}
-              <input type="file" accept="image/*" multiple disabled={uploading} onChange={handleAdd} style={{ display: "none" }} />
-            </label>
+            <div style={{ flex: "1 1 220px", maxWidth: 320 }}>
+              <PhotoPickButtons multiple size="small" onPick={handleAdd} disabled={uploading} label={uploading ? "Uploading…" : "🖼️ Add photos"} />
+            </div>
             {photos.length > 1 && (
               <button
                 type="button"

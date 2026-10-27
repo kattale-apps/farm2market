@@ -32,6 +32,7 @@ import { ExporterLots, PracticeLot } from "../../components/exportMarkets/Export
 import { DealsList } from "../../components/exportMarkets/DealsList";
 import { PriceTicker } from "../../components/exportMarkets/PriceTicker";
 import { HomeTabButton, TabBackBar, useTabHistory } from "../../components/nav/TabNav";
+import { PhotoPickButtons } from "../../components/PhotoPickButtons";
 
 type Msg = { tone: "error" | "success" | "info"; text: string } | null;
 type Tab = "overview" | "profile" | "documents" | "lots" | "deals";
@@ -662,12 +663,10 @@ function DocumentSlot({ slot, userId, setMsg, canUpload }: { slot: WS["slots"][n
       ) : (
         <div style={{ marginTop: "0.6rem", background: "#fafafa", border: "1px solid #eee", borderRadius: 8, padding: "0.75rem" }}>
           <label style={label}>File (PDF or photo) *</label>
-          <input
-            type="file"
-            accept="application/pdf,image/*"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            style={{ marginBottom: "0.6rem", fontFamily: FONT }}
-          />
+          <div style={{ marginBottom: "0.6rem", maxWidth: 360 }}>
+            <PhotoPickButtons documents size="small" onPick={([f]) => setFile(f)} label={file ? "📄 Change file" : undefined} />
+            {file && <div style={{ fontSize: "0.8rem", color: "#333", marginTop: 4, fontFamily: FONT }}>✓ {file.name}</div>}
+          </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "0.5rem" }}>
             <div>
               <label style={label}>Document number</label>

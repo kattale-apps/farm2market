@@ -8,6 +8,7 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useSearchParams } from "next/navigation";
 import CommunitySwitcher from "@/app/components/CommunitySwitcher";
+import { PhotoPickButtons } from "@/app/components/PhotoPickButtons";
 import { useStoredUser } from "@/app/hooks/useStoredUser";
 import { fromStoredUgandaTime, inUgandaTime } from "../../../utils/timeUtils";
 
@@ -28,7 +29,6 @@ export default function MemberMessagingFeed() {
     replyToPostId?: Id<"noticeboardPosts">;
   } | null>(null);
   const [isSending, setIsSending] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
@@ -94,8 +94,7 @@ export default function MemberMessagingFeed() {
     );
   }
 
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleImageSelect = ([file]: File[]) => {
     if (file) {
       setSelectedImageFile(file);
       const reader = new FileReader();
@@ -334,20 +333,8 @@ export default function MemberMessagingFeed() {
       {/* Sticky Composer */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4">
         <div className="max-w-2xl mx-auto flex gap-2 items-end">
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="px-4 py-3 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition flex-shrink-0"
-            title="Attach image (payment required)"
-          >
-            📎
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleImageSelect}
-            className="hidden"
-          />
+          {/* Attach an image (payment required): gallery or the phone's camera */}
+          <PhotoPickButtons size="icon" onPick={handleImageSelect} />
 
           <textarea
             value={messageText}

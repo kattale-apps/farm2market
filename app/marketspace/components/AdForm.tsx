@@ -1,12 +1,13 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { TITLE_MAX, DESCRIPTION_MAX, daysText, validateAd, normalizeUgandaPhone, type MarketspaceSettings } from "../../../convex/marketspaceShared";
 import { FarmCoinIcon } from "../../components/icons/Brand";
 import { compressImage, uploadToConvex } from "../../utils/imageCompress";
+import { PhotoPickButtons } from "../../components/PhotoPickButtons";
 import { DISTRICTS, FONT, tint } from "./shared";
 
 type Group = { _id: string; name: string; icon: string; color: string; categories: { _id: string; name: string; icon: string }[] };
@@ -105,15 +106,13 @@ export function AdForm({
   const [uploading, setUploading] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const cameraRef = useRef<HTMLInputElement>(null);
-  const galleryRef = useRef<HTMLInputElement>(null);
 
   const group = groups.find((g) => g._id === groupId);
   const wanted = kind === "wanted";
   const maxPhotos = settings.maxPhotosPerAd;
   const cannotAfford = !editing && nextAd.cost > 0 && (farmcoinBalance ?? 0) < nextAd.cost;
 
-  const addFiles = async (files: FileList | null) => {
+  const addFiles = async (files: File[]) => {
     if (!files?.length) return;
     const room = maxPhotos - photos.length;
     const picked = Array.from(files).slice(0, room);
@@ -406,37 +405,10 @@ export function AdForm({
         )}
       </div>
       {photos.length + uploading < maxPhotos && (
-        <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.6rem" }}>
-          <button type="button" onClick={() => cameraRef.current?.click()} style={{ flex: 1, minHeight: 46, borderRadius: 10, border: "1.5px solid #2e7d32", background: "#fff", color: "#1b5e20", fontWeight: 700, fontFamily: FONT, cursor: "pointer" }}>
-            📷 Take photo
-          </button>
-          <button type="button" onClick={() => galleryRef.current?.click()} style={{ flex: 1, minHeight: 46, borderRadius: 10, border: "1.5px solid #2e7d32", background: "#fff", color: "#1b5e20", fontWeight: 700, fontFamily: FONT, cursor: "pointer" }}>
-            🖼️ From gallery
-          </button>
+        <div style={{ marginTop: "0.6rem" }}>
+          <PhotoPickButtons multiple onPick={(files) => addFiles(files)} />
         </div>
       )}
-      <input
-        ref={cameraRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        hidden
-        onChange={(e) => {
-          addFiles(e.target.files);
-          e.target.value = "";
-        }}
-      />
-      <input
-        ref={galleryRef}
-        type="file"
-        accept="image/*"
-        multiple
-        hidden
-        onChange={(e) => {
-          addFiles(e.target.files);
-          e.target.value = "";
-        }}
-      />
 
       {!editing && (
         <div

@@ -15,11 +15,11 @@ export function commercialStatusText(status: CommercialStatus): string {
     case "verified":
       return "✔ Commercial Farmer: everyone on MarketSpace can see your lots.";
     case "pending":
-      return "⏳ Farm2Market is checking your document. Vendors and business buyers already see your lots on MarketSpace; visitors will once it is verified.";
+      return "⏳ Farm2Market is checking your document. Verified buyers already see your lots on MarketSpace; visitors will once it is verified.";
     case "rejected":
-      return "Your commercial profile was not accepted. Fix it and send it again to show your lots to vendors and visitors.";
+      return "Your commercial profile was not accepted. Fix it and send it again to show your lots to visitors.";
     default:
-      return "To put lots on MarketSpace, add your commercial profile: your trading name and one document. Without it, verified processors and exporters still see your lots, and you can answer vendors' buying prices.";
+      return "To put lots on MarketSpace, add your commercial profile: your trading name and one document. Without it, verified buyers still see your lots at the farm gate.";
   }
 }
 

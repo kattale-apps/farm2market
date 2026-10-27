@@ -9,9 +9,9 @@
  *
  * Farmers' lots follow the commercial farmer rule (marketspaceShared
  * produceVisible): a farmer's lot for sale always has a card, "active" while
- * it is on MarketSpace and "farm_gate" otherwise, so verified processors and
- * exporters can find every farmer lot. Cards carry the farmer's commercial
- * profile status, so Discover decides who sees them without extra reads.
+ * it is on MarketSpace and "farm_gate" otherwise, so verified buyers can
+ * find every farmer lot. Cards carry the farmer's commercial profile status,
+ * so Discover decides who sees them without extra reads.
  *
  * Helpers only (no registered functions), so marketspace.ts and
  * lotOrders.ts can both call them without importing each other.
@@ -21,7 +21,6 @@ import { MutationCtx, QueryCtx } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
 import { getUgandaTime } from "./utils";
 import { packageLabel, packagesText } from "./lotOrdersShared";
-import { produceVisible } from "./marketspaceShared";
 
 /** A deleted post takes its questions, answers and wanted-ad responses with it (a post has a few dozen at most). */
 async function deleteCardQuestions(ctx: MutationCtx, cardId: Id<"marketCards">) {
@@ -55,23 +54,6 @@ export async function resyncFarmerCards(ctx: MutationCtx, farmerId: Id<"users">)
   for (const l of listings) {
     if (l.status === "active" || l.status === "partially_locked") await syncListingCard(ctx, l._id);
   }
-}
-
-/**
- * Whether this buyer may buy or make an offer on a farmer's lot (the
- * commercial farmer rule): vendors and business buyers only on lots that
- * commercial farmers put on MarketSpace; verified processors and exporters
- * on every farmer lot. Other sellers' lots are not affected. Returns the
- * reason it is closed to them, or null.
- */
-export async function farmerLotProblem(ctx: QueryCtx | MutationCtx, listingId: Id<"listings">, buyer: Doc<"users">): Promise<string | null> {
-  const card = await ctx.db
-    .query("marketCards")
-    .withIndex("by_listing", (q) => q.eq("listingId", listingId))
-    .first();
-  if (!card || card.view !== "produce") return null;
-  const open = produceVisible(card, { tier: "verified", role: buyer.role, isMine: card.sellerId === buyer._id });
-  return open ? null : "This farmer sells to vendors and business buyers through their posted buying prices, not as lots.";
 }
 
 /**

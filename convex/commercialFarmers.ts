@@ -4,9 +4,9 @@
  * A farmer fills in a commercial profile (a trading name and one commercial
  * document) to put lots on MarketSpace; the super admin checks the document.
  * Who then sees the farmer's lots is produceVisible (marketspaceShared):
- * vendors and business buyers once the profile is in, visitors and
- * unverified members once it is verified; verified processors and exporters
- * see every farmer lot, at the farm gate too.
+ * visitors and unverified members once the profile is verified; verified
+ * buyers (exporters, processors, vendors and business buyers) see every
+ * farmer lot, at the farm gate too.
  *
  * Who is acting always comes from the session token. The trading name and
  * the document go only to the farmer and the super admin.
@@ -191,7 +191,7 @@ export const review = mutation({
 
 /**
  * A farmer's lot whose MarketSpace time ran out goes back to the farm gate,
- * where verified processors and exporters still see it (runs every 30
+ * where verified buyers still see it (runs every 30
  * minutes, after the card's time has passed).
  */
 export const farmGateAfterVendEnds = internalMutation({
@@ -216,8 +216,8 @@ const ADD_PROFILE_TITLE = "Add your commercial profile";
 /**
  * One-off when the rule goes live: every farmer's lot for sale gets its card
  * (farm-gate when not on MarketSpace), and farmers with lots on MarketSpace
- * but no commercial profile are told their lots are now hidden from vendors
- * and visitors. 100 listings at a time; it schedules itself until done.
+ * but no commercial profile are told their lots are now hidden from
+ * visitors. 100 listings at a time; it schedules itself until done.
  * Run: npx convex run commercialFarmers:applyCommercialFarmerRule '{"cursor":null}'
  */
 export const applyCommercialFarmerRule = internalMutation({
@@ -251,7 +251,7 @@ export const applyCommercialFarmerRule = internalMutation({
         ctx,
         farmer._id,
         ADD_PROFILE_TITLE,
-        "Your lots on MarketSpace are now hidden from vendors and visitors. Add your trading name and a commercial document in MarketSpace → My lots to show them again. Verified processors and exporters can still see and buy your lots, and you can still answer vendors' buying prices."
+        "Your lots are no longer shown to visitors on MarketSpace. Add your trading name and a commercial document in MarketSpace → My lots to put them back. Verified buyers can still see and buy your lots at the farm gate."
       );
       told++;
     }

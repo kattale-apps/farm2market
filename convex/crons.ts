@@ -87,7 +87,7 @@ crons.interval(
   internal.lotOrders.runScheduled,
 );
 
-// MarketSpace: a farmer's lot whose MarketSpace time ran out goes back to the farm gate (verified processors and exporters still see it).
+// MarketSpace: a farmer's lot whose MarketSpace time ran out goes back to the farm gate (verified buyers still see it).
 crons.interval(
   "farm-gate cards after MarketSpace time ends",
   { minutes: 30 },

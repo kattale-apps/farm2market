@@ -6,6 +6,7 @@ import { usePaginatedQuery, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
+import { seesFarmGate as farmGateFor } from "../../../convex/marketspaceShared";
 import { AcceptedOffers } from "../../components/lots/AcceptedOffers";
 import { MarketCard, type CardLayout, type MarketCardData } from "./MarketCard";
 import { DISTRICTS, FONT, GLASS, tint } from "./shared";
@@ -15,7 +16,7 @@ export type Chip = "all" | "produce" | "farmgate" | "bulk" | "lots" | "classifie
 const CHIPS: { key: Chip; label: string }[] = [
   { key: "all", label: "All" },
   { key: "produce", label: "🌾 Farmers Produce" },
-  { key: "farmgate", label: "🚜 Farm Gate" }, // Verified processors and exporters only: farmers' lots not on MarketSpace
+  { key: "farmgate", label: "🚜 Farm Gate" }, // Verified buyers only: farmers' lots not on MarketSpace
   { key: "bulk", label: "📦 Local Bulk" },
   { key: "lots", label: "🏪 Vendors and Processors" },
   { key: "classifieds", label: "📰 Classifieds" },
@@ -140,8 +141,8 @@ export function Discover({
   };
 
   const verified = me?.tier === "verified";
-  // Verified processors and exporters buy at the farm gate: they see every farmer's lots
-  const seesFarmGate = verified && (me?.role === "store" || me?.role === "trader");
+  // Verified buyers buy at the farm gate: they see every farmer's lots
+  const seesFarmGate = farmGateFor({ tier: me?.tier ?? "public", role: me?.role ?? null });
   const chips = CHIPS.filter((c) => c.key !== "farmgate" || seesFarmGate);
   const filters = {
     now: boardNow,
@@ -208,7 +209,7 @@ export function Discover({
 
       {chip === "farmgate" && (
         <p style={{ margin: "0.5rem 0 0", fontSize: "0.85rem", color: "#555" }}>
-          Farmers&apos; lots that are not on MarketSpace. Only verified processors and exporters see them, to buy at the farm gate.
+          Farmers&apos; lots that are not on MarketSpace. Only verified buyers see them, to buy at the farm gate.
         </p>
       )}
 

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { BULK_RANGES, bulkRangeProblem, isLiteFor, priceBand, quantityBand, shapeCard, vendDayChoices, withDefaults } from "../convex/marketspaceShared";
+import { BULK_RANGES, bulkRangeProblem, isLiteFor, priceBand, purchaseHelp, quantityBand, shapeCard, vendDayChoices, withDefaults } from "../convex/marketspaceShared";
 import { maskContactDetails } from "../convex/exportMarketsShared";
 import { LOT_SELLER_ROLES, PACKAGED_COMMIT_PERCENT, bulkSellingDecision, defaultPlan, defaultSteps, isPackagedPlan, packageLabel, packagedPlan, packagedUnitPrice, packagesText, stockRowSource, stockSourceProblem, validatePlan } from "../convex/lotOrdersShared";
 
@@ -75,17 +75,32 @@ const lotCard = {
 const extras = { thumbUrl: "https://x/photo.jpg", sellerAlias: "Farmer F-12", sellerCategory: "Farmer" };
 
 test("who gets a lite card", () => {
-  assert.equal(isLiteFor("produce", "public"), true);
-  assert.equal(isLiteFor("classifieds", "public"), true);
-  assert.equal(isLiteFor("produce", "member"), true);
-  assert.equal(isLiteFor("lots", "member"), true);
-  assert.equal(isLiteFor("classifieds", "member"), false);
-  assert.equal(isLiteFor("produce", "verified"), false);
-  assert.equal(isLiteFor("produce", "public", true), false, "a seller sees their own card in full");
+  const produce = { view: "produce" as const, isBulk: false, status: "active" };
+  const lots = { view: "lots" as const, isBulk: false, status: "active" };
+  const ads = { view: "classifieds" as const, isBulk: false };
+  const bulk = { ...produce, isBulk: true };
+  const farmGate = { ...produce, status: "farm_gate" };
+  const as = (tier: "public" | "member" | "verified", role: string | null, isMine = false) => ({ tier, role, isMine });
+  assert.equal(isLiteFor(produce, as("public", null)), true);
+  assert.equal(isLiteFor(ads, as("public", null)), true);
+  assert.equal(isLiteFor(ads, as("member", "farmer")), false, "members see classified ads in full");
+  assert.equal(isLiteFor(produce, as("verified", "buyer")), false);
+  assert.equal(isLiteFor(bulk, as("verified", "vendor")), false);
+  assert.equal(isLiteFor(produce, as("public", null, true)), false, "a seller sees their own card in full");
+  // Purchasers not verified yet: lots on MarketSpace that are not bulk in full, bulk and farm-gate lots lite
+  for (const role of ["buyer", "vendor", "store", "trader"]) {
+    assert.equal(isLiteFor(produce, as("member", role)), false, role);
+    assert.equal(isLiteFor(lots, as("member", role)), false, role);
+    assert.equal(isLiteFor(bulk, as("member", role)), true, role);
+    assert.equal(isLiteFor(farmGate, as("member", role)), true, role);
+  }
+  // Members who do not buy lots keep the preview
+  assert.equal(isLiteFor(produce, as("member", "farmer")), true);
+  assert.equal(isLiteFor(lots, as("member", "transporter")), true);
 });
 
 test("lite cards carry bands but never the exact price, alias or lot details", () => {
-  const lite = shapeCard(lotCard, { tier: "public", isMine: false }, extras);
+  const lite = shapeCard(lotCard, { tier: "public", role: null, isMine: false }, extras);
   assert.equal(lite.lite, true);
   assert.match(lite.liteReason ?? "", /Sign up as a buyer/);
   for (const hidden of ["sellerAlias", "pricePerKilo", "lotKg", "lotsAvailable", "qtyKg", "commitPercent", "qualityRating"] as const) {
@@ -97,10 +112,14 @@ test("lite cards carry bands but never the exact price, alias or lot details", (
   assert.equal(lite.bulkLabel, "100 kg – 1 tonne");
   assert.equal(JSON.stringify(lite).includes("1200"), false, "the exact price is nowhere in a lite card");
 
-  const member = shapeCard(lotCard, { tier: "member", isMine: false }, extras);
-  assert.match(member.liteReason ?? "", /Get verified/);
+  const member = shapeCard(lotCard, { tier: "member", role: "buyer", isMine: false }, extras);
+  assert.match(member.liteReason ?? "", /Bulk lots are for verified purchasers/, "a buyer not verified yet: only bulk lots are lite");
+  assert.match(shapeCard(lotCard, { tier: "member", role: "farmer", isMine: false }, extras).liteReason ?? "", /Get verified/);
+  const open = shapeCard({ ...lotCard, isBulk: false }, { tier: "member", role: "buyer", isMine: false }, extras);
+  assert.equal(open.lite, false, "a buyer not verified yet sees a lot that is not bulk in full");
+  assert.equal(open.pricePerKilo, 1200);
 
-  const full = shapeCard(lotCard, { tier: "verified", isMine: false }, extras);
+  const full = shapeCard(lotCard, { tier: "verified", role: "buyer", isMine: false }, extras);
   assert.equal(full.lite, false);
   assert.equal(full.pricePerKilo, 1200);
   assert.equal(full.sellerAlias, "Farmer F-12");
@@ -108,7 +127,7 @@ test("lite cards carry bands but never the exact price, alias or lot details", (
 });
 
 test("cards and posts carry no contact details", () => {
-  assert.equal("contactPhone" in shapeCard(lotCard, { tier: "verified", isMine: false }, extras), false);
+  assert.equal("contactPhone" in shapeCard(lotCard, { tier: "verified", role: "buyer", isMine: false }, extras), false);
   // Normal produce wording passes the contact check
   for (const ok of ["2 bags of 50 kg, 1,000 kg total", "Harvested 2026-10-01, moisture 13%", "Grade A coffee, 19,200 kg"]) {
     assert.equal(maskContactDetails(ok).masked, false, ok);
@@ -173,4 +192,33 @@ test("packaged items read plainly", () => {
   assert.equal(packagesText(2, "bunch"), "2 bunches");
   assert.equal(packagesText(4, "box"), "4 boxes");
   assert.equal(packagesText(2, "Tin / Debe"), "2 × Tin / Debe");
+});
+
+test("only a vendor whose business documents were approved shows Verified Vendor", () => {
+  const vendorCard = { ...lotCard, view: "lots" as const, sellerRole: "vendor" };
+  assert.equal(shapeCard({ ...vendorCard, sellerCommercial: "verified" }, { tier: "public", role: null, isMine: false }, extras).verifiedVendor, true);
+  assert.equal(shapeCard({ ...vendorCard, sellerCommercial: "pending" }, { tier: "public", role: null, isMine: false }, extras).verifiedVendor, false);
+  assert.equal(shapeCard(vendorCard, { tier: "public", role: null, isMine: false }, extras).verifiedVendor, false);
+  const farmer = shapeCard({ ...lotCard, sellerCommercial: "verified" }, { tier: "public", role: null, isMine: false }, extras);
+  assert.equal(farmer.verifiedVendor, false, "a farmer gets the Commercial Farmer badge instead");
+  assert.equal(farmer.commercialFarmer, true);
+});
+
+test("Purchase now tells an unverified member what to do next", () => {
+  const vendor = purchaseHelp("vendor");
+  assert.equal(vendor.ledger, true, "vendors get verified with their business profile in My Ledger");
+  assert.match(vendor.text, /business profile/);
+  for (const role of ["trader", "store", "buyer"]) {
+    const help = purchaseHelp(role);
+    assert.equal(help.ledger, false);
+    assert.match(help.text, /not verified your account yet. Lots that are not bulk you can buy now/, role);
+  }
+  for (const role of ["farmer", "transporter", null]) {
+    assert.match(purchaseHelp(role).text, /Buying lots is for vendors, processors, exporters and business buyers/, String(role));
+  }
+});
+
+test("an animal lot sold by weight says animals, a crop lot says bags", () => {
+  assert.equal(shapeCard({ ...lotCard, produceKind: "animal" }, { tier: "verified", role: "buyer", isMine: false }, extras).animal, true);
+  assert.equal(shapeCard(lotCard, { tier: "verified", role: "buyer", isMine: false }, extras).animal, false, "no kind stored: a crop");
 });

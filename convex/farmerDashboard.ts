@@ -69,6 +69,7 @@ export const getFarmerListings = query({
           totalUnits: listing.totalUnits,
           bagKg: listing.bagKg ?? null,
           bagsPerLot: listing.bagsPerLot ?? null,
+          produceKind: listing.produceKind ?? "crop", // Animals by weight: a lot is animals, not bags
           // Lot terms, for "Edit terms" (older listings: none stored)
           listingMode: listing.listingMode ?? "unit",
           commitPercent: listing.commitPercent ?? null,

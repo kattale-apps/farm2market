@@ -185,6 +185,7 @@ export default defineSchema({
     qualityRating: v.optional(v.string()), // Quality rating from admin-managed dropdown (e.g., "Premium", "Good", "Fair")
     qualityComment: v.optional(v.string()), // Farmer's text comment about produce quality
     deliveryProcessorId: v.optional(v.id("users")), // Processor facility the produce is delivered to (optional)
+    produceKind: v.optional(v.union(v.literal("crop"), v.literal("animal"))), // What it sells (convex/produceKinds.ts); absent = crop
     // Trader packaging-based listing fields (optional for backward compatibility)
     productName: v.optional(v.string()),
     packagingTypeEnum: v.optional(v.string()),
@@ -1864,6 +1865,7 @@ export default defineSchema({
       v.literal("village_market")
     ),
     marketName: v.optional(v.string()), // Mandatory for new onboarding, optional in schema for backward compat
+    businessName: v.optional(v.string()), // The vendor's shop or business name, if any; only Farm2Market sees it (prefills the business profile)
     stallNumber: v.optional(v.string()), // Optional stall number
     onboardingCompleted: v.boolean(),
     createdAt: v.number(),
@@ -1875,7 +1877,8 @@ export default defineSchema({
     vehicleType: v.union(
       v.literal("cold_storage"),
       v.literal("open_pickup"),
-      v.literal("box_body")
+      v.literal("box_body"),
+      v.literal("motorcycle") // Boda boda: anyone with one can be a transporter
     ),
     vehicleTypeCustom: v.optional(v.string()), // Free text when "other" selected on UI
     weightCapacityTonnes: v.number(),
@@ -4117,7 +4120,8 @@ export default defineSchema({
     commitPercent: v.optional(v.number()),
     qualityRating: v.optional(v.string()),
     thumbStorageId: v.optional(v.id("_storage")),
-    sellerCommercial: v.optional(v.union(v.literal("pending"), v.literal("verified"))), // Farmers: their commercial profile; absent = none (produceVisible)
+    sellerCommercial: v.optional(v.union(v.literal("pending"), v.literal("verified"))), // Farmers and vendors: their commercial profile; absent = none (farmers: produceVisible; vendors: the Verified Vendor badge)
+    produceKind: v.optional(v.union(v.literal("crop"), v.literal("animal"))), // Lots: a crop or live animals (a lot by weight is animals, not bags)
     // Expiry is by time (expiresAt), not status. farm_gate: a farmer's lot for sale but not on MarketSpace,
     // seen only by verified purchasers as a farm-gate source (it does not expire)
     status: v.union(v.literal("active"), v.literal("closed"), v.literal("farm_gate")),
@@ -4137,9 +4141,10 @@ export default defineSchema({
       filterFields: ["status", "view", "isBulk"],
     }),
 
-  // Commercial farmers (convex/commercialFarmers.ts): a farmer puts lots on MarketSpace only with
-  // a trading name and one commercial document. The trading name is private: the farmer and
-  // the super admin who checks the document see it; MarketSpace shows the alias and a badge.
+  // Commercial profiles (convex/commercialFarmers.ts): a trading name and one commercial document.
+  // A farmer needs one to put lots on MarketSpace; a vendor sends one to be verified (the super
+  // admin's approval verifies them). The trading name is private: the seller and the super admin
+  // who checks the document see it; MarketSpace shows the alias and a badge.
   commercialProfiles: defineTable({
     userId: v.id("users"),
     tradingName: v.string(),

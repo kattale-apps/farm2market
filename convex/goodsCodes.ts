@@ -18,7 +18,7 @@ import { exportLotGoodLabel } from "./exportMarketsShared";
 import { roleLabel } from "./roleLabels";
 import { sessionUser, viewerOf } from "./marketspace";
 import { FarmOrigin, originsOfBatch, originsOfListing, traceSummary } from "./traceChain";
-import { goodKeyOf, issueGoodsCode } from "./goodsCodesCore";
+import { goodKeyOf, issueGoodsCode, sellerPlace } from "./goodsCodesCore";
 import { batchGoodLabel, formLabel } from "./processorShared";
 import { cardIsLive, produceVisible, type ViewerTier } from "./marketspaceShared";
 
@@ -291,6 +291,7 @@ export const ownerView = query({
       lastScannedAt: code.lastScannedAt ?? null,
       createdAt: code.createdAt,
       photoUrl: await photoUrl(ctx, photoStorageId),
+      place: await sellerPlace(ctx, code.ownerId), // Printed on the label above the QR
       maxCounted: MAX_COUNTED,
       items: items.slice(0, 20),
     };

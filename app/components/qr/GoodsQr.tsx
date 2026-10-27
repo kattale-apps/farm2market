@@ -52,7 +52,7 @@ export function GoodsQr({
             <p style={{ fontSize: "0.85rem", color: "#777" }}>Loading…</p>
           ) : view === null ? null : (
             <>
-              <GoodsLabel code={view.code} name={view.goodLabel} photoUrl={view.photoUrl} />
+              <GoodsLabel code={view.code} name={view.goodLabel} photoUrl={view.photoUrl} place={view.place} />
               <p style={{ fontSize: "0.85rem", color: "#444", margin: "0.5rem 0" }}>
                 Print it on bags, crates or your stall. Anyone who scans it sees what this is and where it comes from. Use it again when you list the same good, so your printed labels keep working.
               </p>

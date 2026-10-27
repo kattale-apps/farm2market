@@ -475,8 +475,11 @@ export default function FinanceDashboardPage() {
         )}
 
         {isSuperAdmin && (
-          <div style={{ marginTop: "1.5rem", display: "grid", gap: "0.75rem", maxWidth: 640 }}>
+          <div id="verification" style={{ marginTop: "1.5rem", display: "grid", gap: "0.75rem", maxWidth: 640, scrollMarginTop: "1rem" }}>
             <div style={{ fontWeight: 600 }}>Verification: who can buy lots, and sell in bulk on MarketSpace</div>
+            <div style={{ fontSize: "0.85rem", color: "#555" }}>
+              Choose an account and mark it verified or not verified. Vendors who send their business documents are checked in MarketSpace admin → Farmer &amp; Vendor Documents; approving them verifies them here too.
+            </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "0.75rem" }}>
               <select
                 value={verificationRole}
@@ -521,7 +524,7 @@ export default function FinanceDashboardPage() {
             </div>
             {verificationTraderId && (
               <div style={{ fontSize: "0.85rem", color: "#666" }}>
-                Selected trader ID: <strong>{verificationTraderId}</strong>
+                Selected account ID: <strong>{verificationTraderId}</strong>
               </div>
             )}
             <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
@@ -535,7 +538,7 @@ export default function FinanceDashboardPage() {
                       traderId: verificationTraderId as any,
                       status: "verified",
                     });
-                    setMessage({ type: "success", text: "Exporter verified." });
+                    setMessage({ type: "success", text: "Account verified." });
                   } catch (error: any) {
                     setMessage({ type: "error", text: error.message || "Failed to verify trader" });
                   }
@@ -562,7 +565,7 @@ export default function FinanceDashboardPage() {
                       traderId: verificationTraderId as any,
                       status: "pending",
                     });
-                    setMessage({ type: "success", text: "Exporter set to not verified." });
+                    setMessage({ type: "success", text: "Account set to not verified." });
                   } catch (error: any) {
                     setMessage({ type: "error", text: error.message || "Failed to update trader" });
                   }

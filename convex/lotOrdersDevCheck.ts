@@ -13,6 +13,9 @@
  * questions can be driven as each kind of viewer through the real
  * session-token functions.
  *
+ * Transport: a test boda boda transporter in Kampala, not verified yet, so
+ * Book Transport can be driven as the person booking.
+ *
  * Internal functions only: callable from the Convex CLI or dashboard, never
  * from the app. Every helper refuses to touch anything that is not tied to
  * a test account.
@@ -24,7 +27,7 @@ import { Id } from "./_generated/dataModel";
 import { generateUTID, getUgandaTime } from "./utils";
 import { assertTestMode } from "./testUtils";
 import { postWallet } from "./walletSplit";
-import { resyncFarmerCards } from "./marketCards";
+import { resyncSellerCards } from "./marketCards";
 
 const FARMER_EMAIL = "lotcheck.farmer@pilot.farm2market"; // Pilot domain: no FarmCoin gate
 const BUYER_EMAIL = "lotcheck.buyer@local";
@@ -32,9 +35,10 @@ const ADMIN_EMAIL = "lotcheck.admin@local"; // No password: cannot log in; decid
 const MEMBER_EMAIL = "lotcheck.member@local"; // Signed in, not verified: sees lite produce cards
 const EXPORTER_EMAIL = "lotcheck.exporter@local"; // Verified exporter: lists stock as lots, sells in bulk
 const VENDOR_EMAIL = "lotcheck.vendor@local"; // Vendor in Kampala: posts buying prices to farmers
-const TEST_EMAILS = [FARMER_EMAIL, BUYER_EMAIL, ADMIN_EMAIL, MEMBER_EMAIL, EXPORTER_EMAIL, VENDOR_EMAIL];
+const TRANSPORTER_EMAIL = "lotcheck.transporter@local"; // Boda boda in Kampala, not verified yet: shows in Book Transport
+const TEST_EMAILS = [FARMER_EMAIL, BUYER_EMAIL, ADMIN_EMAIL, MEMBER_EMAIL, EXPORTER_EMAIL, VENDOR_EMAIL, TRANSPORTER_EMAIL];
 
-async function testUser(ctx: MutationCtx, email: string, role: "farmer" | "buyer" | "admin" | "trader" | "vendor", alias: string, verified = role === "buyer") {
+async function testUser(ctx: MutationCtx, email: string, role: "farmer" | "buyer" | "admin" | "trader" | "vendor" | "transporter", alias: string, verified = role === "buyer") {
   const existing = await ctx.db
     .query("users")
     .withIndex("by_email", (q) => q.eq("email", email))
@@ -177,12 +181,20 @@ export const seedExporterStock = internalMutation({
   },
 });
 
-/** Gives a test account demo money (never cashable), e.g. the test exporter buying lots in the trace walkthrough. */
+/**
+ * Gives a test account demo money (never cashable), e.g. the test exporter buying lots in the trace
+ * walkthrough, or the unverified test buyer (member) buying a lot that is not bulk.
+ */
 export const fundTestWallet = internalMutation({
-  args: { mode: v.string(), who: v.union(v.literal("buyer"), v.literal("exporter")), demoUGX: v.number() },
+  args: { mode: v.string(), who: v.union(v.literal("buyer"), v.literal("exporter"), v.literal("member")), demoUGX: v.number() },
   handler: async (ctx, args) => {
     assertTestMode(args.mode);
-    const userId = args.who === "buyer" ? await testUser(ctx, BUYER_EMAIL, "buyer", "LOTCHECK-B") : await testUser(ctx, EXPORTER_EMAIL, "trader", "LOTCHECK-E", true);
+    const userId =
+      args.who === "buyer"
+        ? await testUser(ctx, BUYER_EMAIL, "buyer", "LOTCHECK-B")
+        : args.who === "member"
+          ? await testUser(ctx, MEMBER_EMAIL, "buyer", "LOTCHECK-M", false)
+          : await testUser(ctx, EXPORTER_EMAIL, "trader", "LOTCHECK-E", true);
     await postWallet(ctx, {
       userId,
       utid: generateUTID("admin"),
@@ -195,16 +207,38 @@ export const fundTestWallet = internalMutation({
   },
 });
 
-/** A test vendor in Kampala (and the test farmer placed there too), for the buying-price walkthrough. */
+/** A test vendor in Kampala (and the test farmer placed there too), for the buying-price walkthrough and the QR label's place line. */
 export const seedVendor = internalMutation({
   args: { mode: v.string() },
   handler: async (ctx, args) => {
     assertTestMode(args.mode);
     const vendorId = await testUser(ctx, VENDOR_EMAIL, "vendor", "LOTCHECK-V");
     const farmerId = await testUser(ctx, FARMER_EMAIL, "farmer", "LOTCHECK-F");
-    await ctx.db.patch(vendorId, { districtText: "Kampala" });
-    await ctx.db.patch(farmerId, { districtText: "Kampala" });
+    await ctx.db.patch(vendorId, { districtText: "Kampala", subCountyText: "Nakawa Division" });
+    await ctx.db.patch(farmerId, { districtText: "Kampala", subCountyText: "Nakawa Division" });
     return { vendorId, farmerId };
+  },
+});
+
+/** A test boda boda transporter in Kampala, onboarded but not verified yet (no vehicle or driver checked). */
+export const seedTransporter = internalMutation({
+  args: { mode: v.string() },
+  handler: async (ctx, args) => {
+    assertTestMode(args.mode);
+    const transporterId = await testUser(ctx, TRANSPORTER_EMAIL, "transporter", "LOTCHECK-T");
+    await ctx.db.patch(transporterId, { districtText: "Kampala" });
+    const existing = await ctx.db.query("transporterProfiles").withIndex("by_userId", (q) => q.eq("userId", transporterId)).first();
+    if (!existing) {
+      await ctx.db.insert("transporterProfiles", {
+        userId: transporterId,
+        vehicleType: "motorcycle",
+        weightCapacityTonnes: 0.2,
+        vehicleCount: 1,
+        onboardingCompleted: true,
+        createdAt: getUgandaTime(),
+      });
+    }
+    return { transporterId };
   },
 });
 
@@ -238,7 +272,7 @@ export const setTestCommercialProfile = internalMutation({
     const fields = { tradingName: "LOTCHECK Farm Traders", documents: [{ kind: "tin" as const, number: "1000000000" }], status: args.status, updatedAt: now };
     if (existing) await ctx.db.patch(existing._id, fields);
     else await ctx.db.insert("commercialProfiles", { userId: farmerId, ...fields, createdAt: now });
-    await resyncFarmerCards(ctx, farmerId);
+    await resyncSellerCards(ctx, farmerId);
     return { farmerId };
   },
 });
@@ -363,6 +397,33 @@ export const cleanup = internalMutation({
         for (const d of profile.documents) if (d.photo) await ctx.storage.delete(d.photo.storageId).catch(() => undefined);
         await ctx.db.delete(profile._id);
         count("commercialProfiles");
+      }
+      for (const row of await ctx.db.query("vendorProfiles").withIndex("by_userId", (q) => q.eq("userId", user._id)).collect()) {
+        await ctx.db.delete(row._id);
+        count("vendorProfiles");
+      }
+      // Transport: the transporter's profile, vehicles, drivers and trips, and trips the test accounts booked
+      for (const row of await ctx.db.query("transporterProfiles").withIndex("by_userId", (q) => q.eq("userId", user._id)).collect()) {
+        await ctx.db.delete(row._id);
+        count("transporterProfiles");
+      }
+      for (const x of await ctx.db.query("transportVehicles").withIndex("by_transporterId", (q) => q.eq("transporterId", user._id)).collect()) {
+        for (const s of [x.logbookStorageId, x.insuranceStorageId, x.photoStorageId]) if (s) await ctx.storage.delete(s).catch(() => undefined);
+        await ctx.db.delete(x._id);
+        count("transportVehicles");
+      }
+      for (const d of await ctx.db.query("transportDrivers").withIndex("by_transporterId", (q) => q.eq("transporterId", user._id)).collect()) {
+        await ctx.storage.delete(d.licenceStorageId).catch(() => undefined);
+        await ctx.db.delete(d._id);
+        count("transportDrivers");
+      }
+      for (const b of [
+        ...(await ctx.db.query("transportBookings").withIndex("by_transporterId", (q) => q.eq("transporterId", user._id)).collect()),
+        ...(await ctx.db.query("transportBookings").withIndex("by_requesterId", (q) => q.eq("requesterId", user._id)).collect()),
+      ]) {
+        if (!(await ctx.db.get(b._id))) continue;
+        await ctx.db.delete(b._id);
+        count("transportBookings");
       }
       for (const code of await ctx.db.query("goodsCodes").withIndex("by_owner_and_goodKey", (q) => q.eq("ownerId", user._id)).collect()) {
         for (const scan of await ctx.db.query("goodsCodeScans").withIndex("by_code_and_at", (q) => q.eq("codeId", code._id)).collect()) {

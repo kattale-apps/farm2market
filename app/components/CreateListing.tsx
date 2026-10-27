@@ -10,6 +10,7 @@ import { FarmCoinIcon } from "./icons/Brand";
 import { ugandaDateFromInstant } from "../../convex/exportMarketsShared";
 import { LOT_BAG_SIZES_KG } from "../../convex/constants";
 import { defaultPlan, type PlanStep, PACKAGED_COMMIT_PERCENT, isPackagedPlan, packagedPlan } from "../../convex/lotOrdersShared";
+import { ANIMAL_OPTIONS, ANIMAL_UNIT, isAnimalOption, type ProduceKind } from "../../convex/produceKinds";
 import { PhotoSetCapture, type CapturedPhoto } from "./exportMarkets/PhotoSetCapture";
 import { uploadEvidencePhotos } from "./exportMarkets/PhotoSetCapture";
 import { watchLocation } from "../utils/gps";
@@ -69,6 +70,9 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
   
   const [listingMode, setListingMode] = useState<"unit" | "garden" | "packaging">("unit");
   const [gardenSizeMode, setGardenSizeMode] = useState<"acres" | "emiigo">("acres");
+  // A crop or an animal. An animal sells per animal (packaging, unit "head") or by weight (lots of animals)
+  const [produceKind, setProduceKind] = useState<ProduceKind>("crop");
+  const animal = produceKind === "animal";
 
   // ── Vendor daily price form ───────────────────────────────────────────────
   const [showPriceForm, setShowPriceForm] = useState(false);
@@ -125,7 +129,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
   const [takesOffers, setTakesOffers] = useState(false);
   const [qr, setQr] = useState<Id<"goodsCodes"> | "new" | undefined>(undefined);
   const [pkgCommit, setPkgCommit] = useState(PACKAGED_COMMIT_PERCENT);
-  const [pkgSteps, setPkgSteps] = useState<PlanStep[]>(() => packagedPlan());
+  const [pkgSteps, setPkgSteps] = useState<PlanStep[]>(() => packagedPlan(effectiveRole));
   const [steps, setSteps] = useState<PlanStep[]>(() => defaultPlan(effectiveRole, 30));
   // Vendors, processors and exporters: stock bought in the app (traced) or not.
   const myStock = useQuery(api.lotOrders.myStock, sellsStock ? { userId } : "skip");
@@ -163,7 +167,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
     setTakesOffers(false);
     setQr(undefined);
     setPkgCommit(PACKAGED_COMMIT_PERCENT);
-    setPkgSteps(packagedPlan());
+    setPkgSteps(packagedPlan(effectiveRole));
   };
 
   // Load custom products and packaging from localStorage
@@ -241,6 +245,24 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
 
   // Every active produce type can be listed (storage locations are retired).
   const filteredProduceOptions = useMemo(() => produceOptions ?? [], [produceOptions]);
+  // Crops: the admin's produce options; animals: the animal list, plus admin options in an animal category
+  const kindOptions = useMemo(() => {
+    const admin = filteredProduceOptions.filter((p) => isAnimalOption(p) === animal);
+    if (!animal) return admin;
+    const builtIn = ANIMAL_OPTIONS.map((a) => ({ ...a, category: "Animals" }));
+    return [...builtIn, ...admin.filter((p) => !builtIn.some((a) => a.value.toLowerCase() === p.value.toLowerCase()))];
+  }, [filteredProduceOptions, animal]);
+
+  const chooseKind = (kind: ProduceKind) => {
+    setProduceKind(kind);
+    setFormData({ ...formData, produceType: "", packagingType: kind === "animal" ? ANIMAL_UNIT : "" });
+    setListingMode(kind === "animal" ? "packaging" : "unit");
+  };
+  // An animal per animal is a packaged listing of "heads"; by weight it is lots of animals
+  const chooseAnimalSale = (mode: "packaging" | "unit") => {
+    setListingMode(mode);
+    setFormData({ ...formData, packagingType: mode === "packaging" ? ANIMAL_UNIT : "" });
+  };
 
   const handlePriceSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -368,6 +390,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
         const result = await createListing({
           farmerId: userId,
           produceType: formData.produceType.trim(),
+          produceKind: animal ? "animal" : undefined,
           listingMode: "packaging",
           packagingTypeEnum: isCustomPkg ? undefined : formData.packagingType,
           packagingTypeCustom: isCustomPkg ? customPackagingInput.trim() : undefined,
@@ -386,7 +409,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
           gps: gps ?? undefined,
         });
 
-        const displayPkg = isCustomPkg ? customPackagingInput.trim() : formData.packagingType;
+        const displayPkg = animal ? "animal" : isCustomPkg ? customPackagingInput.trim() : formData.packagingType;
         setMessage({
           type: "success",
           text: batchSize > 1
@@ -399,6 +422,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
         resetLotFields();
         setCustomPackagingInput("");
         setListingMode("unit");
+        setProduceKind("crop");
         setTimeout(() => { setShowForm(false); setMessage(null); }, 5000);
         setLoading(false);
         return;
@@ -472,6 +496,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
         qualityRating: formData.qualityRating || undefined,
         qualityComment: formData.qualityComment.trim() || undefined,
         deliveryProcessorId: formData.deliveryProcessorId ? (formData.deliveryProcessorId as Id<"users">) : undefined,
+        produceKind: animal ? "animal" : undefined,
         listingMode,
         gardenSize,
         gardenDimensions,
@@ -500,6 +525,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
       resetLotFields();
       setListingMode("unit");
       setGardenSizeMode("acres");
+      setProduceKind("crop");
 
       // Hide form after success
       setTimeout(() => {
@@ -826,8 +852,47 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
       <form onSubmit={handleSubmit}>
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
           
-          {/* Listing Mode Selection (exporters sell by weight only) */}
-          {isExporter ? null : isVendorOrStore ? (
+          {/* Crop or animal (exporters list the crop stock they hold) */}
+          {!isExporter && (
+            <div>
+              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                What are you selling? *
+              </label>
+              <div style={{ display: "flex", gap: "0.75rem" }}>
+                {([["crop", "🌾", "Crop"], ["animal", "🐄", "Animal"]] as const).map(([kind, icon, text]) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    onClick={() => chooseKind(kind)}
+                    style={{ flex: 1, minHeight: 64, borderRadius: 12, border: `2px solid ${produceKind === kind ? "#2e7d32" : "#ddd"}`, background: produceKind === kind ? "#e8f5e9" : "#fff", color: "#222", fontWeight: 800, fontSize: "1.05rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}
+                  >
+                    <span style={{ fontSize: "1.7rem" }}>{icon}</span> {text}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Listing Mode Selection (exporters sell by weight only; animals per animal or by weight) */}
+          {isExporter ? null : animal ? (
+          <div>
+            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+              How do you sell it? *
+            </label>
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              {([["packaging", "🐄 Per animal"], ["unit", "⚖️ By weight (kg)"]] as const).map(([mode, text]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => chooseAnimalSale(mode)}
+                  style={{ minHeight: 44, padding: "0 0.9rem", borderRadius: 999, border: `2px solid ${listingMode === mode ? "#2e7d32" : "#ddd"}`, background: listingMode === mode ? "#e8f5e9" : "#fff", color: "#222", fontWeight: 700, cursor: "pointer" }}
+                >
+                  {text}
+                </button>
+              ))}
+            </div>
+          </div>
+          ) : isVendorOrStore ? (
           <div>
             <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
               Listing Mode *
@@ -930,11 +995,11 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
           {/* STEP 2: Produce Type Selection (filtered by location) */}
           <div>
             <label style={{ display: "block", marginBottom: "0.75rem", fontWeight: "600", color: "#333" }}>
-              Select Produce Type *
+              {animal ? "Select Animal *" : "Select Produce Type *"}
             </label>
 
             {/* Vendor custom products — chips */}
-            {isVendorOrStore && customProducts.length > 0 && (
+            {isVendorOrStore && !animal && customProducts.length > 0 && (
               <div style={{ marginBottom: "0.75rem" }}>
                 <p style={{ fontSize: "0.8rem", color: "#555", marginBottom: "0.4rem", fontWeight: "600" }}>⭐ My custom products</p>
                 <div style={{ display: "flex", gap: "0.5rem", overflowX: "auto", paddingBottom: "0.25rem", WebkitOverflowScrolling: "touch" as any }}>
@@ -968,7 +1033,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
             )}
 
             {/* Vendor commodity memory — suggestion chips */}
-            {isVendorOrStore && recentCommodities && recentCommodities.commodities.length > 0 && (
+            {isVendorOrStore && !animal && recentCommodities && recentCommodities.commodities.length > 0 && (
               <div style={{ marginBottom: "0.75rem" }}>
                 <p style={{ fontSize: "0.8rem", color: "#555", marginBottom: "0.4rem", fontWeight: "600" }}>
                   🔄 Recent commodities
@@ -1014,7 +1079,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
             )}
             {produceOptions === undefined ? (
               <p style={{ color: "#999", fontSize: "0.9rem" }}>Loading produce options...</p>
-            ) : filteredProduceOptions.length === 0 ? (
+            ) : kindOptions.length === 0 ? (
               <p style={{ color: "#d32f2f", fontSize: "0.9rem", padding: "1rem", background: "#ffebee", borderRadius: "6px" }}>
                 No produce types available for the selected location. Please contact admin or select a different location.
               </p>
@@ -1022,8 +1087,8 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
               <>
                 {(() => {
                   // Group produce options by category
-                  const grouped: Record<string, typeof filteredProduceOptions> = {};
-                  filteredProduceOptions.forEach((p) => {
+                  const grouped: Record<string, typeof kindOptions> = {};
+                  kindOptions.forEach((p) => {
                     const cat = (p as any).category || "Other";
                     if (!grouped[cat]) grouped[cat] = [];
                     grouped[cat].push(p);
@@ -1069,7 +1134,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
                   type="text"
                   value={formData.produceType}
                   onChange={(e) => setFormData({ ...formData, produceType: e.target.value })}
-                  placeholder="Or type another produce type..."
+                  placeholder={animal ? "Or type another animal..." : "Or type another produce type..."}
                   required
                   style={{
                     width: "100%",
@@ -1081,7 +1146,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
                 />
 
                 {/* Add & save custom product (vendor/store only) */}
-                {isVendorOrStore && (
+                {isVendorOrStore && !animal && (
                   <div style={{ marginTop: "0.75rem" }}>
                     {!showAddCustomProduct ? (
                       <button
@@ -1213,6 +1278,25 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
 
           {listingMode !== "garden" && listingMode !== "packaging" && (
             <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+              {/* Animals by weight: a lot is animals of about this weight each (stored like bags) */}
+              {animal ? (
+              <div>
+                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                  Weight of one animal (kg) *
+                </label>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={formData.bagKg}
+                  onChange={(e) => setFormData({ ...formData, bagKg: e.target.value })}
+                  placeholder="About how many kg, e.g. 80"
+                  min="0.1"
+                  step="0.1"
+                  required
+                  style={{ width: "100%", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "6px", fontSize: "1rem", boxSizing: "border-box" }}
+                />
+              </div>
+              ) : (
               <div>
                 <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
                   Bag size *
@@ -1252,11 +1336,12 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
                   />
                 )}
               </div>
+              )}
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "0.75rem" }}>
                 <div>
                   <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
-                    Bags in each lot *
+                    {animal ? "Animals in each lot *" : "Bags in each lot *"}
                   </label>
                   <input
                     type="number"
@@ -1289,7 +1374,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
               {lotPlan && (
                 <div style={{ padding: "0.75rem 0.9rem", borderRadius: 8, background: "#e8f5e9", border: "1px solid #a5d6a7", color: "#1b5e20", fontSize: "0.95rem", lineHeight: 1.5 }}>
                   You are selling <strong>{lotPlan.lotCount} lot{lotPlan.lotCount === 1 ? "" : "s"}</strong>.
-                  {" "}Each lot is {lotPlan.bagsPerLot} bag{lotPlan.bagsPerLot === 1 ? "" : "s"} of {lotPlan.bagKg} kg = <strong>{lotPlan.lotKg.toLocaleString()} kg</strong>.
+                  {" "}Each lot is {lotPlan.bagsPerLot} {animal ? `animal${lotPlan.bagsPerLot === 1 ? "" : "s"} of about` : `bag${lotPlan.bagsPerLot === 1 ? "" : "s"} of`} {lotPlan.bagKg} kg = <strong>{lotPlan.lotKg.toLocaleString()} kg</strong>.
                   {" "}Total: <strong>{lotPlan.totalKilos.toLocaleString()} kg</strong>.
                 </div>
               )}
@@ -1301,6 +1386,8 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
 
           {listingMode === "packaging" ? (
             <>
+              {/* Animals per animal: the unit is always a head */}
+              {!animal && (
               <div>
                 <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
                   Packaging Type *
@@ -1343,12 +1430,13 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
                   />
                 )}
               </div>
+              )}
               <div>
                 <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
                   Sell As *
                 </label>
                 <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                  {([["single", "Single Items"], ["batches", "In Batches (bulk)"]] as const).map(([value, text]) => (
+                  {(animal ? ([["single", "One by one"], ["batches", "In groups (bulk)"]] as const) : ([["single", "Single Items"], ["batches", "In Batches (bulk)"]] as const)).map(([value, text]) => (
                     <button
                       key={value}
                       type="button"
@@ -1360,13 +1448,13 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
                   ))}
                 </div>
                 <p style={{ margin: "0.4rem 0 0", fontSize: "0.8rem", color: "#666" }}>
-                  {packSellAs === "single" ? "Buyers choose how many they want, one order for all." : "Buyers buy whole batches. Verified sellers can show them under Local Bulk on MarketSpace."}
+                  {packSellAs === "single" ? `Buyers choose how many ${animal ? "animals " : ""}they want, one order for all.` : `Buyers buy whole ${animal ? "groups" : "batches"}. Verified sellers can show them under Local Bulk on MarketSpace.`}
                 </p>
               </div>
               {packSellAs === "batches" && (
                 <div>
                   <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
-                    Items in One Batch *
+                    {animal ? "Animals in One Group *" : "Items in One Batch *"}
                   </label>
                   <input
                     type="number"
@@ -1381,7 +1469,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
               )}
               <div>
                 <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
-                  {packSellAs === "batches" ? "Number of Batches *" : "Number of Items *"}
+                  {packSellAs === "batches" ? (animal ? "Number of Groups *" : "Number of Batches *") : animal ? "Number of Animals *" : "Number of Items *"}
                 </label>
                 <input
                   type="number"
@@ -1396,7 +1484,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
               </div>
               <div>
                 <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
-                  Price Per {formData.packagingType || "Unit"} (UGX) *
+                  {animal ? "Price Per Animal (UGX) *" : `Price Per ${formData.packagingType || "Unit"} (UGX) *`}
                 </label>
                 <input
                   type="number"
@@ -1755,7 +1843,7 @@ export function CreateListing({ userId, userRole }: CreateListingProps) {
                 fontWeight: "600",
               }}
             >
-              {loading ? "Creating..." : listingMode === "garden" ? "Create Garden Listing" : listingMode === "packaging" ? "Create Packaging Listing" : "Create Listing"}
+              {loading ? "Creating..." : listingMode === "garden" ? "Create Garden Listing" : animal ? "Create Animal Listing" : listingMode === "packaging" ? "Create Packaging Listing" : "Create Listing"}
             </button>
             <button
               type="button"

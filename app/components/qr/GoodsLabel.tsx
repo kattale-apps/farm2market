@@ -30,6 +30,17 @@ export function goodsIcon(label: string): string {
     [["egg"], "🥚"],
     [["milk"], "🥛"],
     [["honey"], "🍯"],
+    [["cowpea", "pigeon"], "🫘"], // Crops, not animals: cowpeas are not cows, pigeon peas are not pigs
+    // Animals (convex/produceKinds.ts)
+    [["cattle", "cow", "bull", "heifer"], "🐮"],
+    [["goat"], "🐐"],
+    [["sheep"], "🐑"],
+    [["pig"], "🐷"],
+    [["chicken", "hen", "broiler", "layer", "kuroiler"], "🐔"],
+    [["duck"], "🦆"],
+    [["turkey"], "🦃"],
+    [["rabbit"], "🐇"],
+    [["fish", "tilapia", "mukene", "nile perch"], "🐟"],
   ];
   return icons.find(([words]) => words.some((w) => key.includes(w)))?.[1] ?? "🌾";
 }
@@ -82,9 +93,10 @@ const BANNER_GAP = 24;
 const GREEN = "#1b5e20";
 const SITE_LINES = ["Visit farm2marketuganda.com", "and check the MarketSpace"]; // The label's bottom line, in two lines to stay readable when printed
 const SITE_BLOCK = 24 + 42 + 38; // Divider gap and the two lines
+const PLACE_LINE = 46; // "📍 Mukono District · Goma Subcounty" under the name
 
-/** Draws the label: the QR head banner and the name, the QR with the good's icon in the middle and the Farm2Market logo on its free corner, the code to type in, and the website to visit. */
-async function drawLabel(url: string, code: string, label: string, photoUrl: string | null, bannerUrl: string): Promise<string> {
+/** Draws the label: the QR head banner and the name, where the goods are sold, the QR with the good's icon in the middle and the Farm2Market logo on its free corner, the code to type in, and the website to visit. */
+async function drawLabel(url: string, code: string, label: string, photoUrl: string | null, bannerUrl: string, place: string | null): Promise<string> {
   const icon = goodsIcon(label);
   const name = label.trim();
   const [photo, second, logo] = await Promise.all([
@@ -100,7 +112,7 @@ async function drawLabel(url: string, code: string, label: string, photoUrl: str
   const measure = canvas.getContext("2d")!;
   measure.font = "800 56px Montserrat, Arial, sans-serif";
   const lines = nameLines(measure, name, W - 80);
-  const H = 40 + (banner.length > 0 ? BANNER + 24 : 0) + lines.length * 66 + 16 + QR + BADGE / 2 + 20 + 64 + 44 + SITE_BLOCK + 36;
+  const H = 40 + (banner.length > 0 ? BANNER + 24 : 0) + lines.length * 66 + (place ? PLACE_LINE : 0) + 16 + QR + BADGE / 2 + 20 + 64 + 44 + SITE_BLOCK + 36;
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext("2d")!;
@@ -135,6 +147,19 @@ async function drawLabel(url: string, code: string, label: string, photoUrl: str
   for (const line of lines) {
     ctx.fillText(line, W / 2, y);
     y += 66;
+  }
+  // Where the goods are sold, just above the QR; a long name gets a smaller font to fit
+  if (place) {
+    const text = `📍 ${place}`;
+    let size = 32;
+    ctx.font = `700 ${size}px Montserrat, Arial, sans-serif`;
+    while (size > 22 && ctx.measureText(text).width > W - 80) {
+      size -= 2;
+      ctx.font = `700 ${size}px Montserrat, Arial, sans-serif`;
+    }
+    ctx.fillStyle = "#333";
+    ctx.fillText(text, W / 2, y);
+    y += PLACE_LINE;
   }
   y += 16;
 
@@ -199,20 +224,24 @@ async function drawLabel(url: string, code: string, label: string, photoUrl: str
 /**
  * The printable label for a goods QR: the QR head banner (the listing photo
  * and a second picture side by side, the second picture alone when there is
- * no photo) and the name sit above the code and the good's icon in its
- * middle, so people can tell labels apart by eye; the Farm2Market logo sits
+ * no photo), the name and where the goods are sold (district and subcounty)
+ * sit above the code and the good's icon in its middle, so people can tell
+ * labels apart by eye; the Farm2Market logo sits
  * on the code's free corner, so they know whose code it is.
  */
 export function GoodsLabel({
   code,
   name,
   photoUrl,
+  place = null,
   bannerUrl = BANNER_PLACEHOLDER,
   width = 240,
 }: {
   code: string;
   name: string;
   photoUrl?: string | null;
+  /** The seller's district and subcounty, printed above the QR */
+  place?: string | null;
   /** The QR head banner's second picture (the placeholder until a sponsor's picture is set) */
   bannerUrl?: string;
   width?: number;
@@ -225,13 +254,13 @@ export function GoodsLabel({
     if (!url) return;
     let cancelled = false;
     setFailed(false);
-    drawLabel(url, code, name.trim() || "Farm2Market goods", photoUrl ?? null, bannerUrl)
+    drawLabel(url, code, name.trim() || "Farm2Market goods", photoUrl ?? null, bannerUrl, place)
       .then((png) => !cancelled && setLabel(png))
       .catch(() => !cancelled && setFailed(true));
     return () => {
       cancelled = true;
     };
-  }, [url, code, name, photoUrl, bannerUrl]);
+  }, [url, code, name, photoUrl, bannerUrl, place]);
 
   const download = () => {
     if (!label) return;

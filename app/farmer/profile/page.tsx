@@ -36,6 +36,7 @@ export default function FarmerProfilePage() {
 
   // Vendor fields
   const [marketName, setMarketName] = useState("");
+  const [businessName, setBusinessName] = useState("");
   const [marketType, setMarketType] = useState("");
   const [stallNumber, setStallNumber] = useState("");
   // Store fields
@@ -194,6 +195,7 @@ export default function FarmerProfilePage() {
   useEffect(() => {
     if (vendorProfile && !isEditing) {
       setMarketName(vendorProfile.marketName || "");
+      setBusinessName(vendorProfile.businessName || "");
       setMarketType(vendorProfile.marketType || "");
       setStallNumber(vendorProfile.stallNumber || "");
     }
@@ -236,6 +238,7 @@ export default function FarmerProfilePage() {
           userId,
           marketType: (marketType || undefined) as any,
           marketName: marketName || undefined,
+          businessName,
           stallNumber: stallNumber || undefined,
         });
       } else if (userRole === "store") {
@@ -394,6 +397,9 @@ export default function FarmerProfilePage() {
                   )}
                   {vendorProfile?.marketName && (
                     <div><strong>Market Name:</strong> {vendorProfile.marketName}</div>
+                  )}
+                  {vendorProfile?.businessName && (
+                    <div><strong>Business Name:</strong> {vendorProfile.businessName}</div>
                   )}
                   {vendorProfile?.stallNumber && (
                     <div><strong>Stall Number:</strong> {vendorProfile.stallNumber}</div>
@@ -664,6 +670,10 @@ export default function FarmerProfilePage() {
                 <div>
                   <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>Market Name</label>
                   <input type="text" value={marketName} onChange={(e) => setMarketName(e.target.value)} placeholder="e.g., Owino Market" style={{ width: "100%", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "8px", fontSize: "1rem" }} />
+                </div>
+                <div>
+                  <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>Business Name (if you have one)</label>
+                  <input type="text" value={businessName} onChange={(e) => setBusinessName(e.target.value)} maxLength={80} placeholder="e.g., Nakato Fresh Foods" style={{ width: "100%", padding: "0.75rem", border: "1px solid #ddd", borderRadius: "8px", fontSize: "1rem" }} />
                 </div>
                 <div>
                   <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "500" }}>Stall Number (optional)</label>

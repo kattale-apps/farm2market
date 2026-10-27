@@ -3,7 +3,7 @@
  * Pure functions only: no database access.
  */
 
-import { PURCHASER_ROLES } from "./lotOrdersShared";
+import { PURCHASER_ROLES, openToUnverified } from "./lotOrdersShared";
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 export const TITLE_MAX = 80;
@@ -264,14 +264,21 @@ export type ViewerTier = "public" | "member" | "verified";
 export type CardView = "produce" | "lots" | "classifieds";
 
 /**
- * Lite cards hide what only verified purchasers should see. Visitors get lite cards
- * everywhere; signed-in members get full classified ads but lite produce
- * and lots until they are verified purchasers. A seller always sees their own
- * card in full.
+ * Lite cards hide what only buyers of that card should see. Visitors get lite
+ * cards everywhere. Signed-in members get full classified ads; produce and
+ * lots in full when they can buy them: verified purchasers every lot, and
+ * purchasers not verified yet the lots on MarketSpace that are not bulk
+ * (openToUnverified). A seller always sees their own card in full.
  */
-export function isLiteFor(view: CardView, tier: ViewerTier, isMine = false): boolean {
-  if (isMine || tier === "verified") return false;
-  return tier === "public" || view !== "classifieds";
+export function isLiteFor(
+  card: { view: CardView; isBulk: boolean; status?: string },
+  viewer: { tier: ViewerTier; role: string | null; isMine?: boolean }
+): boolean {
+  if (viewer.isMine || viewer.tier === "verified") return false;
+  if (viewer.tier === "public") return true;
+  if (card.view === "classifieds") return false;
+  const purchaser = (PURCHASER_ROLES as readonly string[]).includes(viewer.role ?? "");
+  return !(purchaser && openToUnverified({ bulk: card.isBulk, onMarketSpace: card.status !== "farm_gate" }));
 }
 
 /**
@@ -345,11 +352,28 @@ export function pastLotOutcome(
   return "all_ordered"; // Closed while still vended: every lot left is in an order
 }
 
-/** The line a lite card shows instead of the details. */
-export function liteReason(tier: ViewerTier): string {
-  return tier === "public"
-    ? "Sign up as a buyer to see prices and full details."
-    : "Get verified to see prices, ask questions and buy.";
+/** The line a lite card shows instead of the details: a purchaser not verified yet sees it only on bulk lots. */
+export function liteReason(tier: ViewerTier, card?: { isBulk: boolean }): string {
+  if (tier === "public") return "Sign up as a buyer to see prices and full details.";
+  if (card?.isBulk) return "Bulk lots are for verified purchasers. Get verified to see prices and buy in bulk.";
+  return "Get verified to see prices, ask questions and buy.";
+}
+
+/**
+ * What Purchase now on a lite lot tells a signed-in member: a purchaser not
+ * verified yet sees lite cards only on bulk lots, so it explains getting
+ * verified (a vendor by sending their business profile from My Ledger,
+ * ledger: true); everyone else does not buy lots.
+ */
+export function purchaseHelp(role: string | null): { text: string; ledger: boolean } {
+  const why = "Bulk lots are for verified purchasers, to keep big payments safe.";
+  if (role === "vendor") {
+    return { text: `${why} Send your business profile (business name and one document) from My Ledger. When Farm2Market approves it, you can buy in bulk.`, ledger: true };
+  }
+  if ((PURCHASER_ROLES as readonly string[]).includes(role ?? "")) {
+    return { text: `${why} Farm2Market has not verified your account yet. Lots that are not bulk you can buy now.`, ledger: false };
+  }
+  return { text: "Buying lots is for vendors, processors, exporters and business buyers.", ledger: false };
 }
 
 type CardSource = {
@@ -376,6 +400,7 @@ type CardSource = {
   qualityRating?: string;
   status?: string;
   sellerCommercial?: "pending" | "verified";
+  produceKind?: "crop" | "animal";
   expiresAt: number;
   createdAt: number;
 };
@@ -387,10 +412,10 @@ type CardSource = {
  */
 export function shapeCard(
   card: CardSource,
-  viewer: { tier: ViewerTier; isMine: boolean },
+  viewer: { tier: ViewerTier; role: string | null; isMine: boolean },
   extras: { thumbUrl: string | null; sellerAlias: string | null; sellerCategory: string }
 ) {
-  const lite = isLiteFor(card.view, viewer.tier, viewer.isMine);
+  const lite = isLiteFor(card, viewer);
   const range = card.bulkRange === PACKAGED_BATCHES.key ? PACKAGED_BATCHES : bulkRange(card.bulkRange);
   return {
     cardId: card._id,
@@ -404,13 +429,15 @@ export function shapeCard(
     isBulk: card.isBulk,
     bulkLabel: range?.label ?? null,
     packaged: !!card.packaged, // Priced per item (priceUGX, priceUnit), counted in quantityText
+    animal: card.produceKind === "animal", // Live animals: a lot by weight is animals, not bags
     farmGate: card.status === "farm_gate", // Not on MarketSpace: seen by verified purchasers as a farm-gate source
     commercialFarmer: card.view === "produce" && card.sellerCommercial === "verified", // The "Commercial Farmer" badge
+    verifiedVendor: card.sellerRole === "vendor" && card.sellerCommercial === "verified", // The "Verified Vendor" badge: business documents approved
     createdAt: card.createdAt,
     expiresAt: card.expiresAt,
     isMine: viewer.isMine,
     lite,
-    liteReason: lite ? liteReason(viewer.tier) : null,
+    liteReason: lite ? liteReason(viewer.tier, card) : null,
     // Bands for everyone
     priceBand: priceBand(card.pricePerKilo),
     quantityBand: quantityBand(card.qtyKg),

@@ -466,7 +466,13 @@ function UserRow({
                       : "Incomplete"
                 }
               />
-              <Detail label="Verification" value={user.verificationStatus} />
+              <div>
+                <Detail label="Verification" value={user.verificationStatus} />
+                {/* The verify / not verified switch lives on the Finance page */}
+                <a href="/admin/finance#verification" style={{ fontSize: "0.78rem", color: "#1b5e20", fontWeight: 700 }}>
+                  Change in Finance → Verification
+                </a>
+              </div>
               <Detail label="Password set" value={user.hasPassword ? "Yes" : "No"} />
               <Detail label="Active sessions" value={String(user.activeSessionCount)} />
               <Detail label="Joined" value={formatUgandaDateTime(user.createdAt)} />

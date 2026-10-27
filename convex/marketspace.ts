@@ -53,7 +53,7 @@ import { todayUganda } from "./exportMarkets";
 import { maskContactDetails } from "./exportMarketsShared";
 import { lotBuyingAccess } from "./lotOrders";
 import { roleLabel } from "./roleLabels";
-import { goodsCodeSummary } from "./goodsCodesCore";
+import { goodsCodeSummary, sellerPlace } from "./goodsCodesCore";
 
 type Ctx = QueryCtx | MutationCtx;
 
@@ -757,7 +757,7 @@ export const myLots = query({
         lotsLeft: await lotsLeft(ctx, l._id),
         pricePerKilo: l.pricePerKilo,
         commitPercent: l.commitPercent ?? null,
-        milestonePlan: l.milestonePlan ?? (packaged ? packagedPlan() : defaultPlan(user.role, commitPercent)),
+        milestonePlan: l.milestonePlan ?? (packaged ? packagedPlan(user.role) : defaultPlan(user.role, commitPercent)),
         hasCustomPlan: !!l.milestonePlan,
         // Packaged items: sold per item (pricePerUnit), one by one or in batches of packagesPerBatch
         packaged,
@@ -778,8 +778,9 @@ export const myLots = query({
       });
     }
     const bulk = await canSellBulk(ctx, user);
+    const sendsProfile = user.role === "farmer" || user.role === "vendor";
     const commercial =
-      user.role === "farmer"
+      sendsProfile
         ? await ctx.db
             .query("commercialProfiles")
             .withIndex("by_userId", (q) => q.eq("userId", user._id))
@@ -793,8 +794,8 @@ export const myLots = query({
       bulkRanges: BULK_RANGES,
       canSellBulk: bulk.ok,
       bulkReason: bulk.reason ?? null,
-      // Farmers: their commercial profile, needed to vend ("none" until they fill it in)
-      commercialStatus: user.role === "farmer" ? (commercial?.status ?? ("none" as const)) : null,
+      // Farmers: their commercial profile, needed to vend; vendors: their business profile, to be verified ("none" until they fill it in)
+      commercialStatus: sendsProfile ? (commercial?.status ?? ("none" as const)) : null,
       bulkCostFarmcoin: settings.bulkVendCostFarmcoin,
     };
   },
@@ -870,7 +871,7 @@ async function shapeForViewer(ctx: QueryCtx, card: Doc<"marketCards">, viewer: {
   return {
     ...shapeCard(
       card,
-      { tier: viewer.tier, isMine: !!viewer.user && viewer.user._id === card.sellerId },
+      { tier: viewer.tier, role: viewer.user?.role ?? null, isMine: !!viewer.user && viewer.user._id === card.sellerId },
       {
         thumbUrl: card.thumbStorageId ? await ctx.storage.getUrl(card.thumbStorageId) : null,
         sellerAlias: seller ? `${roleLabel(seller.role)} ${seller.alias}`.trim() : null,
@@ -1035,23 +1036,25 @@ export const cardDetail = query({
     let neededBy: string | null = null;
     let negotiable: boolean | null = null;
     let goodsCode: string | null = null; // The listing's goods QR (/g/<code>), printed on the goods
+    let place: string | null = null; // The seller's district and subcounty, printed on the label
 
     if (card.sourceKind === "listing" && card.listingId) {
       const listing = await ctx.db.get(card.listingId);
       if (!listing) return null;
       photoIds.push(...(listing.photos ?? []).map((p) => p.storageId));
       goodsCode = (await goodsCodeSummary(ctx, listing.goodsCodeId))?.code ?? null;
+      if (goodsCode) place = await sellerPlace(ctx, card.sellerId);
       if (!shaped.lite) {
         const packaged = listing.listingMode === "packaging";
         const commit = listing.commitPercent ?? (packaged ? PACKAGED_COMMIT_PERCENT : 100);
-        steps = listing.milestonePlan ?? (packaged ? packagedPlan() : defaultPlan(card.sellerRole, commit));
+        steps = listing.milestonePlan ?? (packaged ? packagedPlan(card.sellerRole) : defaultPlan(card.sellerRole, commit));
         // One sellable unit: a lot by weight, or one item or batch of packaged items
         lotPrice = packaged ? packagedUnitPrice(listing.pricePerUnit ?? 0, listing.packagesPerBatch ?? 1) : Math.round(listing.pricePerKilo * (listing.unitSize || 10));
         packagesPerBatch = packaged ? listing.packagesPerBatch ?? 1 : null;
         takesOffers = packaged ? listing.takesOffers === true : true;
         unitLabel = packaged ? packageLabel(listing) : null;
         qualityComment = listing.qualityComment ?? null;
-        if (viewer.tier === "verified" && !isMine) {
+        if (!isMine) { // Not lite: this viewer can buy it (a verified purchaser, or not bulk and on MarketSpace)
           const units = await ctx.db
             .query("listingUnits")
             .withIndex("by_listing", (q) => q.eq("listingId", listing._id))
@@ -1079,6 +1082,7 @@ export const cardDetail = query({
       sourceKind: card.sourceKind,
       adId: card.adId ?? null, // For reports
       goodsCode,
+      place,
       live,
       photoUrls,
       steps,
@@ -1093,6 +1097,8 @@ export const cardDetail = query({
       negotiable,
       viewerTier: viewer.tier,
       viewerUserId: viewer.user?._id ?? null,
+      viewerRole: viewer.user?.role ?? null, // What Purchase now tells a member who cannot buy this lot
+      canBuy: card.sourceKind === "listing" && !shaped.lite && !isMine, // Purchase now commits from the card
     };
   },
 });

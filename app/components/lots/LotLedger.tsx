@@ -39,6 +39,11 @@ function hoursLeft(deadline: number) {
   return Math.max(0, Math.round((deadline - getUgandaTime()) / 3_600_000));
 }
 
+/** Minutes left until a stored Uganda-time deadline (the seller's 2 hours to confirm). */
+function minutesLeft(deadline: number) {
+  return Math.max(0, Math.round((deadline - getUgandaTime()) / 60_000));
+}
+
 /**
  * One ledger for every category: lots you sold and lots you bought, with the
  * money in escrow, what finished steps have earned (pending until the lot is
@@ -116,6 +121,7 @@ function SummaryTile({ label, value, color }: { label: string; value: number; co
 }
 
 function OrderCard({ order: o, side, userId }: { order: LedgerOrder; side: "seller" | "buyer"; userId: Id<"users"> }) {
+  const confirmOrder = useMutation(api.lotOrders.confirmOrder);
   const markStepDone = useMutation(api.lotOrders.markStepDone);
   const payDue = useMutation(api.lotOrders.payDue);
   const payAll = useMutation(api.lotOrders.payAll);
@@ -211,6 +217,13 @@ function OrderCard({ order: o, side, userId }: { order: LedgerOrder; side: "sell
         })}
       </ol>
 
+      {o.status === "in_progress" && o.confirmBy && (
+        <div style={{ padding: "0.6rem 0.75rem", borderRadius: 8, background: side === "seller" ? "#fff8e1" : "#e3f2fd", color: side === "seller" ? "#8d6e00" : "#0d47a1", fontWeight: 700, fontSize: "0.88rem" }}>
+          {side === "seller"
+            ? `⏰ New order: confirm it by ${formatUgandaDateTime(o.confirmBy)} (${minutesLeft(o.confirmBy)} min left), or the buyer's money goes back.`
+            : `Waiting for the seller to confirm by ${formatUgandaDateTime(o.confirmBy)}. If they do not, your money comes back.`}
+        </div>
+      )}
       {o.status === "payment_due" && o.paymentDueBy && (
         <div style={{ padding: "0.6rem 0.75rem", borderRadius: 8, background: side === "buyer" ? "#ffebee" : "#fff8e1", color: side === "buyer" ? "#b71c1c" : "#8d6e00", fontWeight: 700, fontSize: "0.88rem" }}>
           {side === "buyer"
@@ -234,7 +247,12 @@ function OrderCard({ order: o, side, userId }: { order: LedgerOrder; side: "sell
       {/* Actions */}
       {o.isOpen && o.status !== "disputed" && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
-          {side === "seller" && o.status === "in_progress" && next && !next.handedOverAt && (
+          {side === "seller" && o.status === "in_progress" && o.confirmBy && (
+            <button type="button" disabled={busy} onClick={() => run(() => confirmOrder({ sellerId: userId, orderId: o.orderId }), "Order confirmed. The buyer was told.")} style={button("go")}>
+              ✔ Confirm order
+            </button>
+          )}
+          {side === "seller" && o.status === "in_progress" && !o.confirmBy && next && !next.handedOverAt && (
             <button type="button" disabled={busy} onClick={() => setProofOpen((v) => !v)} style={button("go")}>
               {next.handover ? "Mark handed over" : `Mark "${next.name}" done`}
             </button>

@@ -321,8 +321,8 @@ function PurchaseCard({
       <section style={{ ...card, background: "#e8f5e9", border: `2px solid ${GREEN}` }}>
         <div style={{ fontWeight: 800, fontSize: "1.05rem", color: DARK_GREEN }}>✔ {formatUGX(done.committed)} is in escrow</div>
         <div style={{ fontSize: "0.92rem", lineHeight: 1.5, margin: "0.4rem 0 0.6rem" }}>
-          For {done.what} of {done.title}. The seller was told, and you both see it in your wallets below. The seller is paid only when you
-          collect. Follow the steps in My Lot Orders on your dashboard.
+          For {done.what} of {done.title}. The seller was told, and you both see it in your wallets below. The seller has 2 hours to confirm;
+          if they do not, your money comes back. The seller is paid only when you collect. Follow the steps in My Lot Orders on your dashboard.
         </div>
         <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
           <Link href="/" style={linkStyle}>My dashboard →</Link>

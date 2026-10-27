@@ -110,6 +110,17 @@ export const expirePaymentWindow = internalMutation({
   },
 });
 
+/** Stands in for the seller's 2 hours to confirm running out (test orders only); the hourly sweep or expireIfUnconfirmed then gives the escrow back. */
+export const expireConfirmWindow = internalMutation({
+  args: { mode: v.string(), orderId: v.id("lotOrders") },
+  handler: async (ctx, args) => {
+    assertTestMode(args.mode);
+    const order = await assertTestOrder(ctx, args.orderId);
+    if (order.confirmBy === undefined || order.confirmedAt !== undefined) throw new Error("This order is not waiting for the seller's confirmation");
+    await ctx.db.patch(order._id, { confirmBy: getUgandaTime() - 1 });
+  },
+});
+
 /** Stands in for 3 days passing since handover (test orders only). */
 export const ageHandover = internalMutation({
   args: { mode: v.string(), orderId: v.id("lotOrders") },

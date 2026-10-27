@@ -27,6 +27,7 @@
 import { v, ConvexError } from "convex/values";
 import { internalMutation, mutation, query, MutationCtx, QueryCtx } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
+import { internal } from "./_generated/api";
 import { generateUTID, getUgandaTime, calculateTraderExposureInternal, getTraderCommissionPercentage } from "./utils";
 import { MAX_TRADER_EXPOSURE_UGX } from "./constants";
 import { checkPilotMode } from "./pilotMode";
@@ -41,6 +42,9 @@ import { syncListingCard } from "./marketCards";
 import { cardIsLive } from "./marketspaceShared";
 import {
   AUTO_SETTLE_MS,
+  SELLER_CONFIRM_MS,
+  confirmLapsed,
+  takesRepeatOrders,
   PAYMENT_GRACE_MS,
   lotBuyingDecision,
   lotsToRestock,
@@ -291,12 +295,18 @@ async function markDelivered(ctx: MutationCtx, order: Order, now: number) {
   await refreshListingStatus(ctx, order.listingId);
 }
 
-/** The order ended without a sale: the lot goes back on the market, unless the seller withdrew the listing. */
+/**
+ * The order ended without a sale: the lot goes back on the market, unless the
+ * seller withdrew the listing. A post that takes repeat orders already got a
+ * new lot for this one (restockLots), so the old lot closes and the post is
+ * topped up instead: it offers as many as before, not one more.
+ */
 async function releaseLot(ctx: MutationCtx, order: Order) {
   const listing = await ctx.db.get(order.listingId);
+  const repeat = !!listing && takesRepeatOrders({ stockSource: listing.stockSource, withdrawn: !!listing.withdrawnAt });
   for (const unitId of orderUnits(order)) {
     await ctx.db.patch(unitId, {
-      status: listing?.withdrawnAt ? "cancelled" : "available",
+      status: listing?.withdrawnAt || repeat ? "cancelled" : "available",
       lockedBy: undefined,
       lockedAt: undefined,
       lockUtid: undefined,
@@ -306,6 +316,7 @@ async function releaseLot(ctx: MutationCtx, order: Order) {
       lotOrderId: undefined,
     });
   }
+  if (repeat) await restockLots(ctx, order.listingId);
   await refreshListingStatus(ctx, order.listingId);
 }
 
@@ -397,6 +408,28 @@ async function penalise(ctx: MutationCtx, order: Order) {
       `A fine of ${ugx(fineToSeller + fineToPlatform)} was kept and ${ugx(toBuyer)} returned to your wallet.`, order.utid);
   await notify(ctx, order.sellerId, "Order cancelled: buyer missed a payment",
     `The buyer did not pay in time. ${ugx(fineToSeller)} compensation is in your wallet and the lot is back on the market.`, order.utid);
+}
+
+/** The seller did not confirm a new order within 2 hours: the whole escrow goes back to the buyer, no fine either way. */
+async function revertUnconfirmed(ctx: MutationCtx, order: Order) {
+  const now = getUgandaTime();
+  const utid = generateUTID("system");
+  await payOut(ctx, order, 0, order.paidAmount, utid, "seller_did_not_confirm", now);
+  await ctx.db.patch(order._id, {
+    status: "cancelled",
+    toSeller: 0,
+    toBuyer: order.paidAmount,
+    settleUtid: utid,
+    closedAt: now,
+    updatedAt: now,
+  });
+  await releaseLot(ctx, order);
+
+  const goods = orderGoods(order);
+  await notify(ctx, order.buyerId, "Order cancelled: the seller did not confirm",
+    `The seller did not confirm your order for ${goods} within 2 hours, so ${ugx(order.paidAmount)} is back in your wallet. You can order again any time.`, order.utid);
+  await notify(ctx, order.sellerId, "Order cancelled: not confirmed in 2 hours",
+    `You did not confirm the order for ${goods} within 2 hours, so the buyer's money went back to them. Your post is still up for new orders.`, order.utid);
 }
 
 // ------------------------------------------------------------------
@@ -532,6 +565,7 @@ export async function commitLots(ctx: MutationCtx, buyerId: Id<"users">, unitIds
       lockUtids: [utid],
       milestones: plan.map((s) => ({ ...s })),
       status: "in_progress",
+      confirmBy: now + SELLER_CONFIRM_MS, // Or the buyer's escrow goes back (expireIfUnconfirmed)
       createdAt: now,
       updatedAt: now,
     });
@@ -566,12 +600,14 @@ export async function commitLots(ctx: MutationCtx, buyerId: Id<"users">, unitIds
 
   // Both sides are told; each wallet shows the money in escrow (myPending)
   const what = `${packaged ? packagesText(lots.length * perBatch, packageLabel(listing)) : `${orders.length} lot(s)`} of ${listing.produceType}`;
-  await notify(ctx, seller._id, "A buyer committed to your lots",
+  await notify(ctx, seller._id, "New order: confirm within 2 hours",
     `${await partyLabel(ctx, buyerId)} put ${ugx(committedTotal)} (${commitPercent}%) into escrow for ${what}. ` +
-      `Start with "${plan[0].name}" in your ledger; each step you finish brings in its share of the price.`, orders[0].utid);
+      `Confirm the order in your ledger within 2 hours, or the buyer's money goes back. Then start with "${plan[0].name}"; each step you finish brings in its share of the price.`, orders[0].utid);
   await notify(ctx, buyerId, "Your money is in escrow",
     `${ugx(committedTotal)} left your wallet into escrow for ${what} from ${await partyLabel(ctx, seller._id)}. ` +
-      `The seller is paid only when you collect. Follow the steps in your lot orders.`, orders[0].utid);
+      `The seller has 2 hours to confirm; if they do not, your money comes back. The seller is paid only when you collect.`, orders[0].utid);
+  // The seller's 2 hours: checked when they end (and by the hourly sweep in case this did not run)
+  for (const o of orders) await ctx.scheduler.runAfter(SELLER_CONFIRM_MS, internal.lotOrders.expireIfUnconfirmed, { orderId: o.orderId });
 
   return {
     orders,
@@ -767,6 +803,35 @@ export const confirmCollected = mutation({
  * charges its share from the buyer; the handover needs the whole price in
  * escrow first.
  */
+/** The seller confirms a new order (within 2 hours), so the buyer's escrow stays and the steps can start. */
+export const confirmOrder = mutation({
+  args: { sellerId: v.id("users"), orderId: v.id("lotOrders") },
+  handler: async (ctx, args) => {
+    await checkPilotMode(ctx);
+    const order = await loadOrder(ctx, args.orderId, args.sellerId, "seller");
+    if (order.confirmedAt !== undefined || order.confirmBy === undefined) return { confirmed: true };
+    const now = getUgandaTime();
+    if (order.status !== "in_progress" || confirmLapsed(order, now)) {
+      throw new Error("This order can no longer be confirmed: the 2 hours ran out and the buyer's money is going back.");
+    }
+    await ctx.db.patch(order._id, { confirmedAt: now, updatedAt: now });
+    await notify(ctx, order.buyerId, "The seller confirmed your order",
+      `${await partyLabel(ctx, order.sellerId)} confirmed your order for ${orderGoods(order)}. Follow the steps in your lot orders.`, order.utid);
+    return { confirmed: true };
+  },
+});
+
+/** When the seller's 2 hours end: a new order they did not confirm goes back to the buyer (scheduled by the commit). */
+export const expireIfUnconfirmed = internalMutation({
+  args: { orderId: v.id("lotOrders") },
+  handler: async (ctx, args) => {
+    const order = await ctx.db.get(args.orderId);
+    if (!order || !confirmLapsed(order, getUgandaTime())) return { reverted: false };
+    await revertUnconfirmed(ctx, order);
+    return { reverted: true };
+  },
+});
+
 export const markStepDone = mutation({
   args: {
     sellerId: v.id("users"),
@@ -781,6 +846,9 @@ export const markStepDone = mutation({
     const index = nextStepIndex(order.milestones);
     if (index < 0) throw new Error("All steps are done");
     assertEvidencePhotos(args.photos, 6);
+    if (confirmLapsed(order, getUgandaTime())) throw new Error("This order was not confirmed within 2 hours, so the buyer's money is going back.");
+    // Doing a step confirms a new order
+    if (order.confirmBy !== undefined && order.confirmedAt === undefined) await ctx.db.patch(order._id, { confirmedAt: getUgandaTime() });
 
     const now = getUgandaTime();
     const step = order.milestones[index];
@@ -953,11 +1021,26 @@ export const resolveOrder = mutation({
   },
 });
 
-/** Hourly: settle lots 3 days after handover, and penalise payments 48 hours overdue. */
+/**
+ * Hourly: settle lots 3 days after handover, penalise payments 48 hours
+ * overdue, and give back escrow on new orders the seller did not confirm in 2
+ * hours (each is also checked when its 2 hours end: expireIfUnconfirmed).
+ */
 export const runScheduled = internalMutation({
   args: {},
   handler: async (ctx) => {
     const now = getUgandaTime();
+    const unconfirmed = await ctx.db
+      .query("lotOrders")
+      .withIndex("by_status_confirm", (q) => q.eq("status", "in_progress").lt("confirmBy", now))
+      .take(50);
+    let reverted = 0;
+    for (const order of unconfirmed) {
+      if (!confirmLapsed(order, now)) continue; // Confirmed in time
+      await revertUnconfirmed(ctx, order);
+      reverted++;
+    }
+
     const toSettle = await ctx.db
       .query("lotOrders")
       .withIndex("by_status_handover", (q) => q.eq("status", "awaiting_collection_confirm").lt("handedOverAt", now - AUTO_SETTLE_MS))
@@ -970,7 +1053,7 @@ export const runScheduled = internalMutation({
       .take(50);
     for (const order of overdue) await penalise(ctx, order);
 
-    return { settled: toSettle.length, penalised: overdue.length };
+    return { settled: toSettle.length, penalised: overdue.length, reverted };
   },
 });
 
@@ -1068,6 +1151,7 @@ function orderCard(order: Order, otherLabel: string) {
     paymentDueBy: order.paymentDueBy ?? null,
     handedOverAt: order.handedOverAt ?? null,
     autoSettleAt: order.handedOverAt ? order.handedOverAt + AUTO_SETTLE_MS : null,
+    confirmBy: order.confirmedAt === undefined ? order.confirmBy ?? null : null, // A new order waiting for the seller's confirmation
     disputeReason: order.disputeReason ?? null,
     toSeller: order.toSeller ?? null,
     toBuyer: order.toBuyer ?? null,

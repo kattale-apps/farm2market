@@ -181,12 +181,20 @@ export const seedExporterStock = internalMutation({
   },
 });
 
-/** Gives a test account demo money (never cashable), e.g. the test exporter buying lots in the trace walkthrough. */
+/**
+ * Gives a test account demo money (never cashable), e.g. the test exporter buying lots in the trace
+ * walkthrough, or the unverified test buyer (member) buying a lot that is not bulk.
+ */
 export const fundTestWallet = internalMutation({
-  args: { mode: v.string(), who: v.union(v.literal("buyer"), v.literal("exporter")), demoUGX: v.number() },
+  args: { mode: v.string(), who: v.union(v.literal("buyer"), v.literal("exporter"), v.literal("member")), demoUGX: v.number() },
   handler: async (ctx, args) => {
     assertTestMode(args.mode);
-    const userId = args.who === "buyer" ? await testUser(ctx, BUYER_EMAIL, "buyer", "LOTCHECK-B") : await testUser(ctx, EXPORTER_EMAIL, "trader", "LOTCHECK-E", true);
+    const userId =
+      args.who === "buyer"
+        ? await testUser(ctx, BUYER_EMAIL, "buyer", "LOTCHECK-B")
+        : args.who === "member"
+          ? await testUser(ctx, MEMBER_EMAIL, "buyer", "LOTCHECK-M", false)
+          : await testUser(ctx, EXPORTER_EMAIL, "trader", "LOTCHECK-E", true);
     await postWallet(ctx, {
       userId,
       utid: generateUTID("admin"),

@@ -54,20 +54,30 @@ export const COMMIT_PERCENT_CHOICES = [20, 30, 50, 100] as const;
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+/** Lots a purchaser not verified yet can buy: on MarketSpace and not bulk (bulk and farm-gate lots need verification). */
+export function openToUnverified(lot: { bulk: boolean; onMarketSpace: boolean }): boolean {
+  return lot.onMarketSpace && !lot.bulk;
+}
+
 /**
- * Who can buy lots: exporters, processors, vendors and business buyers the
- * super admin verified. A processor whose facility the platform approved
- * (`approvedProcessor`) counts as verified.
+ * Who can buy lots: exporters, processors, vendors and business buyers. The
+ * super admin's verification lets them buy every lot; a processor whose
+ * facility the platform approved (`approvedProcessor`) counts as verified.
+ * Without it they still buy a `lot` that is on MarketSpace and not bulk
+ * (27 Oct 2026); with no `lot` given, the answer is whether they are verified.
  */
 export function lotBuyingDecision(
   user: { role: string; verificationStatus?: string; isVerifiedTrader?: boolean } | null,
-  approvedProcessor: boolean
+  approvedProcessor: boolean,
+  lot?: { bulk: boolean; onMarketSpace: boolean }
 ): { ok: boolean; reason?: string } {
   if (!user || !(PURCHASER_ROLES as readonly string[]).includes(user.role)) {
     return { ok: false, reason: "Only exporters, processors, vendors and business buyers can buy lots." };
   }
   if (user.verificationStatus === "verified" || user.isVerifiedTrader === true) return { ok: true };
   if (user.role === "store" && approvedProcessor) return { ok: true };
+  if (lot && openToUnverified(lot)) return { ok: true };
+  if (lot?.bulk) return { ok: false, reason: "Bulk lots are for verified purchasers. Get verified by Farm2Market to buy in bulk." };
   return { ok: false, reason: "Get verified by Farm2Market to buy lots. Ask the super admin to verify your account." };
 }
 

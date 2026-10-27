@@ -68,17 +68,27 @@ const STOCK_HOLDER_ROLES = ["trader", "transporter", "store", "vendor"];
 // Helpers
 // ------------------------------------------------------------------
 
-/** Who can buy lots: verified exporters, processors, vendors and business buyers. */
+/**
+ * Who can buy lots: verified exporters, processors, vendors and business
+ * buyers; with a `lot`, unverified ones too when it is on MarketSpace and not
+ * bulk (lotBuyingDecision).
+ */
 export async function lotBuyingAccess(
   ctx: Ctx,
   user: Doc<"users"> | null,
-  today: string
+  today: string,
+  lot?: { bulk: boolean; onMarketSpace: boolean }
 ): Promise<{ ok: boolean; reason?: string }> {
   // A processor whose facility the platform approved is already verified.
   const approvedProcessor = user?.role === "store" && user.verificationStatus !== "verified"
     ? await isActiveProcessor(ctx, user._id, today)
     : false;
-  return lotBuyingDecision(user, approvedProcessor);
+  return lotBuyingDecision(user, approvedProcessor, lot);
+}
+
+/** What lotBuyingAccess needs to know about a listing: bulk, and on MarketSpace now. */
+export function lotForBuying(listing: Doc<"listings">, now: number) {
+  return { bulk: listing.isBulk === true, onMarketSpace: listing.vendExpiresAt !== undefined && listing.vendExpiresAt > now };
 }
 
 async function walletBalance(ctx: Ctx, userId: Id<"users">): Promise<number> {
@@ -373,8 +383,7 @@ export async function commitLots(ctx: MutationCtx, buyerId: Id<"users">, unitIds
   const ids = [...new Set(unitIds)];
   if (ids.length < 1 || ids.length > 50) throw new Error("Choose between 1 and 50 lots");
   const buyer = await ctx.db.get(buyerId);
-  const access = await lotBuyingAccess(ctx, buyer, todayUganda());
-  if (!buyer || !access.ok) throw new Error(access.reason);
+  if (!buyer) throw new Error("Please log in again");
 
   let listing: Doc<"listings"> | null = null;
   const lots: { unit: Doc<"listingUnits">; price: number; negotiationId?: Id<"negotiations"> }[] = [];
@@ -408,6 +417,9 @@ export async function commitLots(ctx: MutationCtx, buyerId: Id<"users">, unitIds
     lots.push({ unit, price, negotiationId });
   }
   if (!listing?.farmerId) throw new Error("Listing not found");
+  // Verified purchasers buy any lot; unverified ones lots on MarketSpace that are not bulk
+  const access = await lotBuyingAccess(ctx, buyer, todayUganda(), lotForBuying(listing, getUgandaTime()));
+  if (!access.ok) throw new Error(access.reason);
   const seller = await ctx.db.get(listing.farmerId);
   if (!seller) throw new Error("Seller not found");
 

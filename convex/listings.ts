@@ -71,15 +71,15 @@ export const getCollectionPointForUser = query({
 
 /**
  * Checks a lot plan and returns its sizes: one lot is `bagsPerLot` bags of
- * `bagKg` each, and the listing has `lotCount` equal lots. Throws a plain
- * message the seller can act on.
+ * `bagKg` each (for animals: animals of about `bagKg` each), and the listing
+ * has `lotCount` equal lots. Throws a plain message the seller can act on.
  */
-export function planLots(bagKg: number, bagsPerLot: number, lotCount: number) {
+export function planLots(bagKg: number, bagsPerLot: number, lotCount: number, animal = false) {
   if (!Number.isFinite(bagKg) || bagKg <= 0 || bagKg > MAX_BAG_KG) {
-    throw new Error(`Bag size must be more than 0 kg and at most ${MAX_BAG_KG} kg`);
+    throw new Error(`${animal ? "The weight of one animal" : "Bag size"} must be more than 0 kg and at most ${MAX_BAG_KG} kg`);
   }
   if (!Number.isInteger(bagsPerLot) || bagsPerLot < 1 || bagsPerLot > MAX_BAGS_PER_LOT) {
-    throw new Error(`Bags in each lot must be a whole number from 1 to ${MAX_BAGS_PER_LOT}`);
+    throw new Error(`${animal ? "Animals" : "Bags"} in each lot must be a whole number from 1 to ${MAX_BAGS_PER_LOT}`);
   }
   if (!Number.isInteger(lotCount) || lotCount < 1 || lotCount > MAX_LOTS_PER_LISTING) {
     throw new Error(`Number of lots must be a whole number from 1 to ${MAX_LOTS_PER_LISTING}`);
@@ -102,6 +102,7 @@ export const createListing = mutation({
     qualityRating: v.optional(v.string()),
     qualityComment: v.optional(v.string()),
     deliveryProcessorId: v.optional(v.id("users")), // processor facility the farmer delivers to
+    produceKind: v.optional(v.union(v.literal("crop"), v.literal("animal"))), // An animal sells per animal (packaging, "head") or by weight
     // Garden mode fields
     listingMode: v.optional(v.union(v.literal("unit"), v.literal("garden"), v.literal("packaging"))),
     gardenSize: v.optional(v.number()),
@@ -158,7 +159,7 @@ export const createListing = mutation({
     // This prevents spam and manipulation attempts.
     const listingMode = args.listingMode || "unit"; // Default to unit mode
     const lots = listingMode === "unit" && args.bagKg !== undefined
-      ? planLots(args.bagKg, args.bagsPerLot ?? 1, args.lotCount ?? 1)
+      ? planLots(args.bagKg, args.bagsPerLot ?? 1, args.lotCount ?? 1, args.produceKind === "animal")
       : null;
     const normalizedTotalKilos = listingMode === "garden"
       ? Math.max(args.totalKilos || 1, 1)
@@ -339,6 +340,7 @@ export const createListing = mutation({
       bagKg: lots?.bagKg,
       bagsPerLot: lots?.bagsPerLot,
       photos,
+      produceKind: args.produceKind === "animal" ? ("animal" as const) : undefined,
       gps: args.gps,
       commitPercent: terms?.commitPercent,
       milestonePlan: terms?.milestonePlan,

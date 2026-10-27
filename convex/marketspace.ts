@@ -871,7 +871,7 @@ async function shapeForViewer(ctx: QueryCtx, card: Doc<"marketCards">, viewer: {
   return {
     ...shapeCard(
       card,
-      { tier: viewer.tier, isMine: !!viewer.user && viewer.user._id === card.sellerId },
+      { tier: viewer.tier, role: viewer.user?.role ?? null, isMine: !!viewer.user && viewer.user._id === card.sellerId },
       {
         thumbUrl: card.thumbStorageId ? await ctx.storage.getUrl(card.thumbStorageId) : null,
         sellerAlias: seller ? `${roleLabel(seller.role)} ${seller.alias}`.trim() : null,
@@ -1054,7 +1054,7 @@ export const cardDetail = query({
         takesOffers = packaged ? listing.takesOffers === true : true;
         unitLabel = packaged ? packageLabel(listing) : null;
         qualityComment = listing.qualityComment ?? null;
-        if (viewer.tier === "verified" && !isMine) {
+        if (!isMine) { // Not lite: this viewer can buy it (a verified purchaser, or not bulk and on MarketSpace)
           const units = await ctx.db
             .query("listingUnits")
             .withIndex("by_listing", (q) => q.eq("listingId", listing._id))
@@ -1097,7 +1097,8 @@ export const cardDetail = query({
       negotiable,
       viewerTier: viewer.tier,
       viewerUserId: viewer.user?._id ?? null,
-      viewerRole: viewer.user?.role ?? null, // What Purchase now tells an unverified member
+      viewerRole: viewer.user?.role ?? null, // What Purchase now tells a member who cannot buy this lot
+      canBuy: card.sourceKind === "listing" && !shaped.lite && !isMine, // Purchase now commits from the card
     };
   },
 });

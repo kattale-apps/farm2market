@@ -24,7 +24,7 @@ import {
 import { Id } from "./_generated/dataModel";
 import { postWallet } from "./walletSplit";
 import { LOT_SELLER_ROLES, OFFER_FOLLOW_UP_ROLES, PURCHASER_ROLES, packageLabel } from "./lotOrdersShared";
-import { lotBuyingAccess } from "./lotOrders";
+import { lotBuyingAccess, lotForBuying } from "./lotOrders";
 import { todayUganda } from "./exportMarkets";
 import { roleLabel } from "./roleLabels";
 
@@ -52,10 +52,6 @@ export const makeOffer = mutation({
     if (!user || !(PURCHASER_ROLES as readonly string[]).includes(user.role)) {
       throwAppError(invalidRoleError("trader"));
     }
-    // Only verified exporters, processors, vendors and business buyers buy lots.
-    const access = await lotBuyingAccess(ctx, user, todayUganda());
-    if (!access.ok) throw new Error(access.reason);
-
     // Validate inputs
     if (args.unitIds.length === 0) {
       throw new Error("Please select at least one unit");
@@ -121,6 +117,9 @@ export const makeOffer = mutation({
     }
 
     const listing = Array.from(listings.values())[0];
+    // Verified purchasers make offers on any lot; unverified ones on lots on MarketSpace that are not bulk
+    const access = await lotBuyingAccess(ctx, user, todayUganda(), lotForBuying(listing, getUgandaTime()));
+    if (!access.ok) throw new Error(access.reason);
     // Packaged items: the offer is per item, and a unit is one item or a batch
     const packaged = listing.listingMode === "packaging";
     const unitSize = packaged ? listing.packagesPerBatch ?? 1 : listing.unitSize || LISTING_UNIT_SIZE_KG;

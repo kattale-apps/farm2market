@@ -185,7 +185,8 @@ export function Discover({
 
   return (
     <div>
-      {verified && me?.userId && me.role && ["trader", "store", "vendor", "buyer"].includes(me.role) && (
+      {/* Purchasers commit their accepted offers here, verified or not (unverified ones make offers on lots that are not bulk) */}
+      {me?.userId && me.role && ["trader", "store", "vendor", "buyer"].includes(me.role) && (
         <AcceptedOffers userId={me.userId} />
       )}
 
@@ -299,7 +300,11 @@ export function Discover({
               🔒 You see a preview. <Link href={`/login?role=buyer&returnTo=${encodeURIComponent(`/marketspace?view=${chip}`)}`} style={{ color: "#1b5e20", fontWeight: 800 }}>Sign up as a buyer</Link> to see prices and full details.
             </>
           ) : (
-            <>🔒 Farm produce and lots show a preview until Farm2Market verifies you as a purchaser.</>
+            <>
+              {["trader", "store", "vendor", "buyer"].includes(me.role ?? "")
+                ? "🔒 Bulk lots show a preview until Farm2Market verifies you as a purchaser. Other lots you can buy now."
+                : "🔒 Farm produce and lots show a preview. Buying lots is for vendors, processors, exporters and business buyers."}
+            </>
           )}
         </div>
       )}

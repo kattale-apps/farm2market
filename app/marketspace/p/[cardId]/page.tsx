@@ -118,7 +118,6 @@ export default function CardPage() {
           <span style={{ padding: "0.15rem 0.6rem", borderRadius: 999, background: "#f1f3f0", fontWeight: 700 }}>{card.sellerAlias ?? card.sellerCategory}</span>
           {card.commercialFarmer && <span style={{ padding: "0.15rem 0.6rem", borderRadius: 999, background: "#e3f2fd", color: "#0d47a1", fontWeight: 700 }}>✔ Commercial Farmer</span>}
           {card.verifiedVendor && <span style={{ padding: "0.15rem 0.6rem", borderRadius: 999, background: "#e3f2fd", color: "#0d47a1", fontWeight: 700 }}>✔ Verified Vendor</span>}
-          {card.soldOut && <span style={{ padding: "0.15rem 0.6rem", borderRadius: 999, background: "#ffebee", color: "#c62828", fontWeight: 800 }}>Sold out for now</span>}
           {card.farmGate && <span style={{ padding: "0.15rem 0.6rem", borderRadius: 999, background: "#fff3e0", color: "#8d5300", fontWeight: 700 }}>🚜 Farm gate: not on MarketSpace</span>}
           {card.isBulk && <span style={{ padding: "0.15rem 0.6rem", borderRadius: 999, background: "#ede7f6", color: "#4527a0", fontWeight: 700 }}>📦 Bulk{card.bulkLabel ? ` · ${card.bulkLabel}` : ""}</span>}
           {card.stockSource && <span style={{ padding: "0.15rem 0.6rem", borderRadius: 999, background: "#e8f5e9", color: "#1b5e20", fontWeight: 700 }}>{STOCK[card.stockSource]}</span>}
@@ -197,7 +196,7 @@ export default function CardPage() {
           ) : card.canBuy ? (
             free === 0 ? (
               <div style={{ marginTop: "0.7rem", color: "#8d6e00", fontWeight: 700 }}>
-                {card.soldOut ? "Sold out for now. The seller keeps this post up, so check back or ask a question below." : "Every free lot has an offer waiting for the seller."}
+                {card.soldOut ? "Every lot of this traced stock is in an order. Ask the seller a question below." : "Every free lot has an offer waiting for the seller."}
               </div>
             ) : (
               <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center", marginTop: "0.8rem" }}>

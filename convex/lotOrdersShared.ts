@@ -50,6 +50,16 @@ export const LOT_SELLER_ROLES = ["farmer", "vendor", "store", "trader"] as const
 export const MAX_PLAN_STEPS = 8;
 export const PAYMENT_GRACE_MS = 48 * 60 * 60 * 1000; // Buyer has 48 hours to pay a step's share
 export const AUTO_SETTLE_MS = 3 * 24 * 60 * 60 * 1000; // Settles 3 days after handover unless the buyer reports a problem
+export const SELLER_CONFIRM_MS = 2 * 60 * 60 * 1000; // The seller confirms a new order within 2 hours, or the buyer's escrow goes back
+
+/**
+ * Whether a new order ran out of time for the seller's confirmation: still
+ * in progress, not confirmed, and past its confirmBy. Orders made before the
+ * rule have no confirmBy and never lapse.
+ */
+export function confirmLapsed(order: { status: string; confirmBy?: number; confirmedAt?: number }, now: number): boolean {
+  return order.status === "in_progress" && order.confirmBy !== undefined && order.confirmedAt === undefined && order.confirmBy <= now;
+}
 export const COMMIT_PERCENT_CHOICES = [20, 30, 50, 100] as const;
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -284,8 +294,13 @@ export function commitAmount(total: number, commitPercent: number): number {
  * stay limited to that traced stock; a withdrawn listing gets none.
  */
 export function lotsToRestock(listing: { totalUnits: number; freeLots: number; stockSource?: string; withdrawn: boolean }): number {
-  if (listing.withdrawn || listing.stockSource === "in_app") return 0;
+  if (!takesRepeatOrders(listing)) return 0;
   return Math.max(0, listing.totalUnits - listing.freeLots);
+}
+
+/** Whether a listing takes repeat orders: not withdrawn, and not limited to traced stock bought in the app. */
+export function takesRepeatOrders(listing: { stockSource?: string; withdrawn: boolean }): boolean {
+  return !listing.withdrawn && listing.stockSource !== "in_app";
 }
 
 /**

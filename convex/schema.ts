@@ -286,6 +286,9 @@ export default defineSchema({
     paymentDueBy: v.optional(v.number()),
     paymentDueStep: v.optional(v.number()),
     handedOverAt: v.optional(v.number()),
+    // The seller confirms a new order within 2 hours (lotOrdersShared SELLER_CONFIRM_MS), or the buyer's escrow goes back
+    confirmBy: v.optional(v.number()),
+    confirmedAt: v.optional(v.number()),
     disputeReason: v.optional(v.string()),
     disputeKind: v.optional(v.union(v.literal("cancel"), v.literal("problem"))),
     disputedBy: v.optional(v.id("users")),
@@ -307,7 +310,8 @@ export default defineSchema({
     .index("by_utid", ["utid"])
     .index("by_status", ["status", "updatedAt"])
     .index("by_status_handover", ["status", "handedOverAt"])
-    .index("by_status_due", ["status", "paymentDueBy"]),
+    .index("by_status_due", ["status", "paymentDueBy"])
+    .index("by_status_confirm", ["status", "confirmBy"]),
 
   /**
    * Listing units (10kg each)

@@ -772,7 +772,7 @@ export const myLots = query({
         isBulk: !!l.isBulk,
         bulkRange: l.bulkRange ?? null,
         cardId: card?._id ?? null,
-        farmGate: card?.status === "farm_gate", // Not on MarketSpace: verified processors and exporters still see it
+        farmGate: card?.status === "farm_gate", // Not on MarketSpace: verified buyers still see it
         waitingQuestions: card ? await waitingQuestions(ctx, card._id) : 0,
       });
     }
@@ -850,7 +850,7 @@ const discoverFilters = {
   sellerRole: v.optional(v.string()),
   minPricePerKilo: v.optional(v.number()), // Verified viewers only (a visitor could find the exact price by filtering)
   maxPricePerKilo: v.optional(v.number()),
-  farmGate: v.optional(v.boolean()), // Farmers' lots not on MarketSpace: verified processors and exporters only
+  farmGate: v.optional(v.boolean()), // Farmers' lots not on MarketSpace: verified buyers only
 };
 
 type DiscoverFilters = {
@@ -899,7 +899,7 @@ export const discover = query({
     const viewer = await viewerOf(ctx, args.sessionToken, args.today);
     const farmGateOk = seesFarmGate({ tier: viewer.tier, role: viewer.user?.role ?? null });
     if (args.farmGate) {
-      // Farm Gate: farmers' lots not on MarketSpace, for verified processors and exporters
+      // Farm Gate: farmers' lots not on MarketSpace, for verified buyers
       if (!farmGateOk) return { page: [], isDone: true, continueCursor: "", tier: viewer.tier, seesFarmGate: false };
       const result = await ctx.db
         .query("marketCards")

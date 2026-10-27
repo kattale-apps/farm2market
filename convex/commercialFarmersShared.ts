@@ -4,9 +4,10 @@
  *
  * A farmer puts lots on MarketSpace only with a commercial profile: a
  * trading name and one commercial document. Farmers without one still sell
- * to vendors by answering their posted buying prices, and verified
- * processors and exporters still see every farmer's lots as farm-gate
- * sources. Who sees which farmer lots is produceVisible (marketspaceShared).
+ * to vendors by answering their posted buying prices, and verified buyers
+ * (exporters, processors, vendors and business buyers) still see every
+ * farmer's lots as farm-gate sources. Who sees which farmer lots is
+ * produceVisible (marketspaceShared).
  *
  * The trading name is private: only the farmer and the super admin who
  * checks the document see it. MarketSpace shows the alias and a

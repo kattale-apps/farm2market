@@ -3,6 +3,8 @@
  * Pure functions only: no database access.
  */
 
+import { PURCHASER_ROLES } from "./lotOrdersShared";
+
 export const DAY_MS = 24 * 60 * 60 * 1000;
 export const TITLE_MAX = 80;
 export const DESCRIPTION_MAX = 1000;
@@ -273,12 +275,11 @@ export function isLiteFor(view: CardView, tier: ViewerTier, isMine = false): boo
 }
 
 /**
- * Farmers' produce (the commercial farmer rule). Verified processors and
- * exporters see every farmer's lots, including farm-gate cards (lots not on
- * MarketSpace); vendors and business buyers see lots that commercial farmers
- * put on MarketSpace; visitors and unverified members see only verified
- * commercial farmers' lots. Other posts and a seller's own lots are not
- * affected.
+ * Farmers' produce (the commercial farmer rule). Verified buyers (exporters,
+ * processors, vendors and business buyers) see every farmer's lots,
+ * including farm-gate cards (lots not on MarketSpace); visitors and
+ * unverified members see only verified commercial farmers' lots. Other posts
+ * and a seller's own lots are not affected.
  */
 export function produceVisible(
   card: { view: CardView; status: string; sellerCommercial?: "pending" | "verified" },
@@ -287,13 +288,12 @@ export function produceVisible(
   if (card.view !== "produce" || viewer.isMine) return true;
   if (seesFarmGate(viewer)) return true;
   if (card.status === "farm_gate") return false;
-  if (viewer.tier === "verified") return card.sellerCommercial !== undefined;
   return card.sellerCommercial === "verified";
 }
 
-/** Verified processors and exporters: they buy at the farm gate, so they see every farmer's lots. */
+/** Verified buyers (exporters, processors, vendors and business buyers) buy at the farm gate, so they see every farmer's lots. */
 export function seesFarmGate(viewer: { tier: ViewerTier; role: string | null }): boolean {
-  return viewer.tier === "verified" && (viewer.role === "store" || viewer.role === "trader");
+  return viewer.tier === "verified" && (PURCHASER_ROLES as readonly string[]).includes(viewer.role ?? "");
 }
 
 /** Whether a card can be opened and bought from now: on MarketSpace and in time, or a farm-gate card. */
@@ -360,7 +360,7 @@ export function shapeCard(
     isBulk: card.isBulk,
     bulkLabel: range?.label ?? null,
     packaged: !!card.packaged, // Priced per item (priceUGX, priceUnit), counted in quantityText
-    farmGate: card.status === "farm_gate", // Not on MarketSpace: seen by verified processors and exporters as a farm-gate source
+    farmGate: card.status === "farm_gate", // Not on MarketSpace: seen by verified buyers as a farm-gate source
     commercialFarmer: card.view === "produce" && card.sellerCommercial === "verified", // The "Commercial Farmer" badge
     createdAt: card.createdAt,
     expiresAt: card.expiresAt,

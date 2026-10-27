@@ -76,7 +76,7 @@ export function MyLots({ token, now, show, onGo }: { token: string; now: number;
       href="/farmer/farm2market"
       style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem", minHeight: 52, marginTop: "0.3rem", borderRadius: 12, background: "#2e7d32", color: "#fff", fontWeight: 800, fontSize: "1.05rem", fontFamily: FONT, textDecoration: "none", boxShadow: "0 3px 10px rgba(46,125,50,0.35)" }}
     >
-      ➕ Create a lot listing
+      Create +
     </Link>
   );
 

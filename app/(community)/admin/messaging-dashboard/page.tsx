@@ -2,12 +2,13 @@
 
 export const dynamic = "force-dynamic";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import CommunitySwitcher from "@/app/components/CommunitySwitcher";
+import { PhotoPickButtons } from "@/app/components/PhotoPickButtons";
 import { useStoredUser } from "@/app/hooks/useStoredUser";
 import { fromStoredUgandaTime, inUgandaTime } from "../../../utils/timeUtils";
 
@@ -21,7 +22,6 @@ export default function MessagingDashboard() {
   const [caption, setCaption] = useState("");
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [pendingPost, setPendingPost] = useState<{
     file: File;
     caption: string;
@@ -85,8 +85,7 @@ export default function MessagingDashboard() {
     quotaTrackerId,
   } = dashboardData;
 
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleImageSelect = ([file]: File[]) => {
     if (file) {
       setImageFile(file);
       const reader = new FileReader();
@@ -253,22 +252,11 @@ export default function MessagingDashboard() {
                 </button>
               </div>
             ) : (
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition"
-              >
-                <div className="text-4xl mb-2">📸</div>
-                <p className="text-gray-600">Click to upload an image</p>
+              <div>
+                <PhotoPickButtons onPick={handleImageSelect} />
                 <p className="text-xs text-gray-500 mt-2">PNG, JPG, GIF up to 10MB</p>
               </div>
             )}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleImageSelect}
-              className="hidden"
-            />
           </div>
 
           {/* Caption Input */}

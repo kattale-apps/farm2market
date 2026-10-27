@@ -10,6 +10,7 @@ import { Id } from "../../../convex/_generated/dataModel";
 import { ugandaDateFromInstant } from "../../../convex/exportMarketsShared";
 import { useStoredUser } from "../../hooks/useStoredUser";
 import { VEHICLE_LABEL } from "../../components/transport/TransportDirectory";
+import { PhotoPickButtons } from "../../components/PhotoPickButtons";
 
 const FONT = '"Montserrat", sans-serif';
 const RED = "#c62828";
@@ -132,11 +133,13 @@ function Fleet({ userId, vehicles, drivers, say }: { userId: Id<"users">; vehicl
   const [dFile, setDFile] = useState<File | undefined>();
   const [busy, setBusy] = useState(false);
   const statusText = (s: string, notes?: string) => (s === "verified" ? "✔ verified" : s === "rejected" ? `✖ rejected${notes ? `: ${notes}` : ""}` : "⏳ waiting for verification");
-  const fileInput = (onPick: (f?: File) => void, label: string) => (
-    <label style={{ fontSize: "0.8rem" }}>
-      {label}
-      <input type="file" accept="image/*,application/pdf" onChange={(e) => onPick(e.target.files?.[0])} style={{ display: "block", maxWidth: "100%", marginTop: 4 }} />
-    </label>
+  // A document or photo: 📄 File (or 🖼️ Gallery for a photo) and 📷, with the chosen file's name
+  const fileInput = (onPick: (f?: File) => void, label: string, picked: File | undefined, documents = true) => (
+    <div style={{ fontSize: "0.8rem" }}>
+      <div style={{ marginBottom: 4 }}>{label}</div>
+      <PhotoPickButtons documents={documents} size="small" onPick={([f]) => onPick(f)} />
+      {picked && <div style={{ marginTop: 4, color: "#333" }}>✓ {picked.name}</div>}
+    </div>
   );
   return (
     <div style={box}>
@@ -177,9 +180,9 @@ function Fleet({ userId, vehicles, drivers, say }: { userId: Id<"users">; vehicl
           Insurance expiry
           <input style={field} type="date" value={v.insuranceExpiry} onChange={(e) => setV({ ...v, insuranceExpiry: e.target.value })} />
         </label>
-        {fileInput((f) => setVFiles({ ...vFiles, logbook: f }), "Logbook (photo or PDF) *")}
-        {fileInput((f) => setVFiles({ ...vFiles, insurance: f }), "Insurance certificate *")}
-        {fileInput((f) => setVFiles({ ...vFiles, photo: f }), "Vehicle photo")}
+        {fileInput((f) => setVFiles({ ...vFiles, logbook: f }), "Logbook (photo or PDF) *", vFiles.logbook)}
+        {fileInput((f) => setVFiles({ ...vFiles, insurance: f }), "Insurance certificate *", vFiles.insurance)}
+        {fileInput((f) => setVFiles({ ...vFiles, photo: f }), "Vehicle photo", vFiles.photo, false)}
       </div>
       <button
         style={{ ...btn(RED), marginTop: 8 }}
@@ -213,7 +216,7 @@ function Fleet({ userId, vehicles, drivers, say }: { userId: Id<"users">; vehicl
           Licence expiry
           <input style={field} type="date" value={d.expiry} onChange={(e) => setD({ ...d, expiry: e.target.value })} />
         </label>
-        {fileInput(setDFile, "Licence (photo or PDF) *")}
+        {fileInput(setDFile, "Licence (photo or PDF) *", dFile)}
       </div>
       <button
         style={{ ...btn(RED), marginTop: 8 }}

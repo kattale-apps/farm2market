@@ -24,6 +24,7 @@ import { useStoredUser } from "@/app/hooks/useStoredUser";
 import { useNetwork } from "@/app/context/NetworkContext";
 import { offlineDb, type DiagnosticDraftEntry } from "@/app/lib/offlineDb";
 import { compressImage, uploadToConvex } from "@/app/utils/imageCompress";
+import { PhotoPickButtons } from "@/app/components/PhotoPickButtons";
 import { formatUgandaDateTime, getUgandaTime } from "@/app/utils/timeUtils";
 import {
   DIAGNOSTIC_HOSTS,
@@ -525,28 +526,8 @@ export default function CropCheck({
             <h2 style={{ fontSize: "1.15rem", margin: "0 0 0.75rem" }}>
               {isAnimals ? "2. Take a photo of the sick animal" : "2. Take a photo of the sick part"}
             </h2>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-              <label style={{ ...bigTile(false), minHeight: 140 }}>
-                <span style={{ fontSize: "2.6rem" }}>📷</span>
-                Take photo
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  onChange={(e) => onPhoto(e.target.files?.[0])}
-                  style={{ display: "none" }}
-                />
-              </label>
-              <label style={{ ...bigTile(false), minHeight: 140 }}>
-                <span style={{ fontSize: "2.6rem" }}>🖼️</span>
-                From gallery
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => onPhoto(e.target.files?.[0])}
-                  style={{ display: "none" }}
-                />
-              </label>
+            <div style={{ marginBottom: 10 }}>
+              <PhotoPickButtons onPick={([file]) => onPhoto(file)} />
             </div>
             <button onClick={() => setStep("symptoms")} style={secondaryButton}>
               Skip photo →

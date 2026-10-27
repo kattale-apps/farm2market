@@ -35,6 +35,7 @@ import {
 import { PhotoSetCapture, CapturedPhoto, evidencePhotoPayload } from "./PhotoSetCapture";
 import { ProcessorPurchasesPanel, TracePipelineEditor } from "./ProcessorPurchases";
 import { GoodsQr, GoodsQrChooser, reuseCodeOf, type GoodsCodeSummary } from "../qr/GoodsQr";
+import { PhotoPickButtons } from "../PhotoPickButtons";
 
 type Msg = { tone: "error" | "success" | "info"; text: string } | null;
 type LotDetail = FunctionReturnType<typeof api.exportLots.getMyLot>;
@@ -496,27 +497,25 @@ function LotPhotos({ userId, data, setMsg }: { userId: Id<"users">; data: LotDet
         ))}
       </div>
       {lot.photoStorageIds.length < 8 && (
-        <input
-          type="file"
-          accept="image/*"
-          disabled={busy}
-          style={{ marginTop: "0.5rem", fontFamily: FONT }}
-          onChange={async (e) => {
-            const file = e.target.files?.[0];
-            e.target.value = "";
-            if (!file) return;
-            if (file.size > 8 * 1024 * 1024) return setMsg({ tone: "error", text: "Photos must be 8 MB or smaller." });
-            setBusy(true);
-            try {
-              const storageId = await uploadToConvex(await getUrl({ userId }), file);
-              await setPhotos({ userId, lotId: lot._id, photoStorageIds: [...lot.photoStorageIds, storageId as Id<"_storage">] });
-            } catch (err) {
-              setMsg({ tone: "error", text: errorText(err) });
-            } finally {
-              setBusy(false);
-            }
-          }}
-        />
+        <div style={{ marginTop: "0.5rem", maxWidth: 360 }}>
+          <PhotoPickButtons
+            size="small"
+            disabled={busy}
+            label={busy ? "Uploading…" : undefined}
+            onPick={async ([file]) => {
+              if (file.size > 8 * 1024 * 1024) return setMsg({ tone: "error", text: "Photos must be 8 MB or smaller." });
+              setBusy(true);
+              try {
+                const storageId = await uploadToConvex(await getUrl({ userId }), file);
+                await setPhotos({ userId, lotId: lot._id, photoStorageIds: [...lot.photoStorageIds, storageId as Id<"_storage">] });
+              } catch (err) {
+                setMsg({ tone: "error", text: errorText(err) });
+              } finally {
+                setBusy(false);
+              }
+            }}
+          />
+        </div>
       )}
     </div>
   );

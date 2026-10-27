@@ -5,9 +5,10 @@ export const dynamic = "force-dynamic";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { CommunityQRCode } from "../../components/CommunityQRCode";
+import { PhotoPickButtons } from "../../components/PhotoPickButtons";
 import { useStoredUser } from "../../hooks/useStoredUser";
 
 export default function CommunitiesPage() {
@@ -26,8 +27,6 @@ export default function CommunitiesPage() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState("");
-  const galleryInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -88,8 +87,7 @@ export default function CommunitiesPage() {
   const deleteCommunity = useMutation(api.communities.deleteCommunity);
   const generateUploadUrl = useMutation(api.files.generateUploadUrl);
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleLogoUpload = ([file]: File[]) => {
     if (file) {
       setLogoFile(file);
       const reader = new FileReader();
@@ -328,52 +326,10 @@ export default function CommunitiesPage() {
                   <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
                     Community Logo
                   </label>
-                  <input
-                    ref={galleryInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleLogoUpload}
-                    style={{ display: "none" }}
-                  />
-                  <input
-                    ref={cameraInputRef}
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={handleLogoUpload}
-                    style={{ display: "none" }}
-                  />
                   <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center" }}>
-                    <button
-                      type="button"
-                      onClick={() => galleryInputRef.current?.click()}
-                      style={{
-                        padding: "0.5rem 1rem",
-                        border: "1px solid #ccc",
-                        borderRadius: "6px",
-                        background: "#f5f5f5",
-                        cursor: "pointer",
-                        fontWeight: 600,
-                        fontSize: "0.85rem",
-                      }}
-                    >
-                      📁 Gallery
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => cameraInputRef.current?.click()}
-                      style={{
-                        padding: "0.5rem 1rem",
-                        border: "1px solid #ccc",
-                        borderRadius: "6px",
-                        background: "#f5f5f5",
-                        cursor: "pointer",
-                        fontWeight: 600,
-                        fontSize: "0.85rem",
-                      }}
-                    >
-                      📷 Camera
-                    </button>
+                    <div style={{ flex: "1 1 220px", maxWidth: 320 }}>
+                      <PhotoPickButtons size="small" onPick={handleLogoUpload} />
+                    </div>
                     {logoFile && (
                       <button
                         type="button"

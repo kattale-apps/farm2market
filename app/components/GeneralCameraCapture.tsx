@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useRef, useState, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import { validateImageFile, fileToBase64DataUrl } from "../utils/imageValidation";
+import { PhotoPickButtons } from "./PhotoPickButtons";
 import { getCurrentLocation } from "../utils/gps";
 import { inUgandaTime } from "../utils/timeUtils";
 import { readExifLocationTime } from "../utils/exif";
@@ -28,7 +29,7 @@ function ugandaLocalInput(iso: string | null): string {
 }
 
 /** Draw the photo onto a canvas with the same GPS and time stamp as a camera photo. */
-async function stampImage(dataUrl: string, stampText: string): Promise<string> {
+export async function stampImage(dataUrl: string, stampText: string): Promise<string> {
   const img = await new Promise<HTMLImageElement>((resolve, reject) => {
     const i = new Image();
     i.onload = () => resolve(i);
@@ -60,8 +61,6 @@ async function stampImage(dataUrl: string, stampText: string): Promise<string> {
  * and the time; returns a JSON string with the data URL and its metadata.
  */
 export function GeneralCameraCapture({ onCapture, evidence = false }: GeneralCameraCaptureProps) {
-  const galleryInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -172,26 +171,18 @@ export function GeneralCameraCapture({ onCapture, evidence = false }: GeneralCam
     [onCapture, evidence, addGalleryFile]
   );
 
-  const handleFile = (use: (file: File) => Promise<unknown>) => async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const input = e.target;
-    const file = input.files?.[0];
-    if (!file) return;
+  const handlePick = async ([file]: File[], source: "gallery" | "camera") => {
     setError(null);
     const validation = validateImageFile(file);
-    if (!validation.valid) {
-      setError(validation.error || "Invalid file");
-      input.value = "";
-      return;
-    }
+    if (!validation.valid) return setError(validation.error || "Invalid file");
     setIsCapturing(true);
     try {
-      await use(file);
+      await (source === "camera" ? addCameraFile(file) : addGalleryFile(file));
     } catch (err) {
       console.error("Photo failed:", err);
       setError(`Could not add the photo: ${(err as Error).message}`);
     } finally {
       setIsCapturing(false);
-      input.value = "";
     }
   };
 
@@ -285,51 +276,8 @@ export function GeneralCameraCapture({ onCapture, evidence = false }: GeneralCam
       )}
 
       {!pendingGallery && (
-        <div style={{ display: "flex", gap: "0.6rem" }}>
-          <button
-            type="button"
-            onClick={() => galleryInputRef.current?.click()}
-            disabled={isCapturing}
-            style={{
-              flex: 1,
-              minHeight: 52,
-              background: "#1976d2",
-              color: "#fff",
-              border: "none",
-              borderRadius: 10,
-              cursor: isCapturing ? "not-allowed" : "pointer",
-              fontSize: "1.05rem",
-              fontWeight: 700,
-              opacity: isCapturing ? 0.6 : 1,
-            }}
-          >
-            {isCapturing ? "Adding photo…" : preview ? "🖼️ Change photo" : "🖼️ Gallery"}
-          </button>
-          <button
-            type="button"
-            aria-label="Take a photo with the camera"
-            title="Camera"
-            onClick={() => cameraInputRef.current?.click()}
-            disabled={isCapturing}
-            style={{
-              width: 64,
-              minHeight: 52,
-              background: "#fff",
-              border: "2px solid #1976d2",
-              borderRadius: 10,
-              cursor: isCapturing ? "not-allowed" : "pointer",
-              fontSize: "1.6rem",
-              opacity: isCapturing ? 0.6 : 1,
-            }}
-          >
-            📷
-          </button>
-        </div>
+        <PhotoPickButtons onPick={handlePick} disabled={isCapturing} label={isCapturing ? "Adding photo…" : preview ? "🖼️ Change photo" : undefined} />
       )}
-
-      {/* Hidden inputs: the gallery, and the phone's own camera app */}
-      <input ref={galleryInputRef} type="file" accept="image/*" onChange={handleFile(addGalleryFile)} style={{ display: "none" }} />
-      <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" onChange={handleFile(addCameraFile)} style={{ display: "none" }} />
 
       {error && <p style={{ color: "#d32f2f", fontSize: "0.85rem", marginTop: "0.5rem" }}>{error}</p>}
     </div>

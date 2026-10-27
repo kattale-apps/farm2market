@@ -32,6 +32,7 @@ import {
   PageHeader,
 } from "../../components/exportMarkets/ui";
 import { PhotoSetCapture, CapturedPhoto } from "../../components/exportMarkets/PhotoSetCapture";
+import { PhotoPickButtons } from "../../components/PhotoPickButtons";
 
 type Data = NonNullable<FunctionReturnType<typeof api.exportDeals.getDeal>>;
 type Msg = { tone: "error" | "success" | "info"; text: string } | null;
@@ -387,15 +388,13 @@ function BuyerKycPanel({ userId, dealId, setMsg }: { userId: Id<"users">; dealId
               {s.type.hasExpiry && (
                 <input type="date" style={{ ...input, maxWidth: 170 }} value={expiry[s.type.key] ?? ""} onChange={(e) => setExpiry({ ...expiry, [s.type.key]: e.target.value })} title="Expiry date" />
               )}
-              <input
-                type="file"
-                accept="application/pdf,image/*"
+              <div style={{ flex: "1 1 220px", maxWidth: 320 }}>
+              <PhotoPickButtons
+                documents
+                size="small"
                 disabled={busy === s.type.key}
-                style={{ fontFamily: FONT }}
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  e.target.value = "";
-                  if (!file) return;
+                label={busy === s.type.key ? "Uploading…" : undefined}
+                onPick={async ([file]) => {
                   setBusy(s.type.key);
                   try {
                     const storageId = await uploadToConvex(await getUrl({ userId }), file);
@@ -415,6 +414,7 @@ function BuyerKycPanel({ userId, dealId, setMsg }: { userId: Id<"users">; dealId
                   }
                 }}
               />
+              </div>
             </div>
           )}
         </div>
@@ -860,21 +860,20 @@ function DocumentsStep({ data, userId, setMsg, step }: P & { step: Data["steps"]
                     )}
                   </>
                 ) : (
-                  <input
-                    type="file"
-                    accept="application/pdf,image/*"
-                    disabled={busy === labelText}
-                    style={{ fontFamily: FONT }}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      e.target.value = "";
-                      if (!file) return;
-                      run(labelText, async () => {
-                        const storageId = await uploadToConvex(await getUrl({ userId }), file);
-                        await upload({ userId, dealId: deal._id, stepKey: step.key, label: labelText, storageId: storageId as Id<"_storage">, fileName: file.name, contentType: file.type || undefined });
-                      });
-                    }}
-                  />
+                  <div style={{ maxWidth: 320 }}>
+                    <PhotoPickButtons
+                      documents
+                      size="small"
+                      disabled={busy === labelText}
+                      label={busy === labelText ? "Uploading…" : undefined}
+                      onPick={([file]) =>
+                        run(labelText, async () => {
+                          const storageId = await uploadToConvex(await getUrl({ userId }), file);
+                          await upload({ userId, dealId: deal._id, stepKey: step.key, label: labelText, storageId: storageId as Id<"_storage">, fileName: file.name, contentType: file.type || undefined });
+                        })
+                      }
+                    />
+                  </div>
                 )}
               </div>
             )}

@@ -2,7 +2,7 @@
 
 export const dynamic = "force-dynamic";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { useStoredUser } from "@/app/hooks/useStoredUser";
 import { QR_STYLE_PRESETS } from "@/app/lib/qrStyles";
 import { validateImageFile } from "@/app/utils/imageValidation";
+import { PhotoPickButtons } from "@/app/components/PhotoPickButtons";
 import { QrNav } from "../QrNav";
 
 type FieldType = "text" | "email" | "phone" | "number" | "textarea" | "select" | "radio" | "checkbox" | "date";
@@ -52,16 +53,13 @@ export default function CreateQrCodePage() {
   ]);
 
   const [status, setStatus] = useState<{ type: "idle" | "loading" | "error"; message?: string }>({ type: "idle" });
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const addField = () => setFields((prev) => [...prev, { fieldType: "text", label: "", required: false }]);
   const removeField = (index: number) => setFields((prev) => prev.filter((_, i) => i !== index));
   const updateField = (index: number, patch: Partial<DraftField>) =>
     setFields((prev) => prev.map((f, i) => (i === index ? { ...f, ...patch } : f)));
 
-  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleLogoChange = ([file]: File[]) => {
     const result = validateImageFile(file);
     if (!result.valid) {
       setStatus({ type: "error", message: result.error });
@@ -206,10 +204,13 @@ export default function CreateQrCodePage() {
               </button>
             ))}
           </div>
-          <label style={{ ...labelStyle, marginTop: "0.75rem" }}>
+          <div style={{ ...labelStyle, marginTop: "0.75rem" }}>
             Logo (optional, embedded in the QR)
-            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleLogoChange} style={{ marginTop: "0.4rem" }} />
-          </label>
+            <div style={{ marginTop: "0.4rem", maxWidth: 320 }}>
+              <PhotoPickButtons size="small" onPick={handleLogoChange} />
+            </div>
+            {logoFile && <div style={{ marginTop: 4, fontWeight: 400 }}>✓ {logoFile.name}</div>}
+          </div>
         </section>
 
         <section style={sectionStyle}>

@@ -3302,10 +3302,6 @@ export default function CommunityDashboardPage() {
       style={{
         minHeight: "100vh",
         padding: "clamp(0.75rem, 3vw, 2rem)",
-        backgroundImage: "url('/backgrounds/farm-bg.jpg')",
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        backgroundRepeat: "no-repeat",
         backgroundColor: "#f5f5f5",
       }}
     >

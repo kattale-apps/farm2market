@@ -70,8 +70,8 @@ function LoginPageInner() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showPassword, setShowPassword] = useState(true);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(true);
   const [pendingCommunitySlug, setPendingCommunitySlug] = useState<string | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -472,6 +472,8 @@ function LoginPageInner() {
             </label>
             <input
               type="text"
+              name="username"
+              autoComplete="username"
               inputMode="text"
               autoCapitalize="none"
               value={identifier}
@@ -501,6 +503,8 @@ function LoginPageInner() {
             <div style={{ position: "relative" }}>
               <input
                 type={showPassword ? "text" : "password"}
+                name="password"
+                autoComplete={authStep === "confirmSignup" ? "new-password" : "current-password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -551,6 +555,8 @@ function LoginPageInner() {
               <div style={{ position: "relative" }}>
                 <input
                   type={showConfirmPassword ? "text" : "password"}
+                  name="confirmPassword"
+                  autoComplete="new-password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required

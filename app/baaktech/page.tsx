@@ -94,6 +94,8 @@ const industries = [
     detail: "Solar sales application built to streamline field and showroom sales for SHENZHEN SINEXCEL ISUNA ENERGY TECHNOLOGY CO. LTD.",
     href: "https://lumina-xi-ochre-15.vercel.app/",
     link: "View the solar sales application",
+    image: "/baaktech/solar-app.png",
+    imageAlt: "Solar sales application home screen",
   },
   {
     title: "Agriculture & digital market systems",
@@ -101,6 +103,8 @@ const industries = [
     detail: "Scope: product architecture, web platform development, user onboarding workflows, database management and ongoing technical support.",
     href: "https://farm2marketuganda.com",
     link: "Visit Farm2MarketUganda.com",
+    image: "/baaktech/farm2market.png",
+    imageAlt: "Farm2Market Uganda sign-up and login screen",
   },
   {
     title: "Civic accountability, missions & digital finance",
@@ -409,6 +413,10 @@ export default function BaaktechPage() {
           <div className={styles.projectGrid}>
             {industries.map((item) => (
               <article className={styles.projectCard} key={item.title}>
+                {item.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img className={styles.projectShot} src={item.image} alt={item.imageAlt} loading="lazy" />
+                ) : null}
                 <div className={styles.projectBody}>
                   <h3>{item.title}</h3>
                   <p>{item.text}</p>

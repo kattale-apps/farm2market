@@ -109,7 +109,7 @@ const industries = [
   {
     title: "Civic accountability, missions & digital finance",
     text: "Mobile civic-reporting tools for ActionAid Uganda and secure user-data capture for the AMISOM project. Large-scale user onboarding and adoption campaigns for Binance, CoinList, Huobi and MobiBuy.",
-    detail: "Marketing, distribution and supply-chain support for brands including Target Link, Holdex, MYP, DSPD, Double Barrel, Vicland, UBL, Katale Global and Takenow.",
+    detail: "Marketing, distribution and supply-chain support for brands including Target Link, Holdex, MYP, DSPD, Double Barrel, Vicland, UBL, Kattale Global and Takenow.",
   },
 ];
 
@@ -487,11 +487,11 @@ export default function BaaktechPage() {
           <SectionHeading kicker="Partnerships" title="Strategic relationships." />
           <div className={styles.partnerCard}>
             <div>
-              <h3>Kattale Group of Brands (U)</h3>
+              <h3>Kattale Group of Brands (Uganda) Ltd</h3>
               <p>
                 BAAKTech works in strategic partnership with Kattale Group of
-                Brands (UG) and Kattale Global (USA), collaborating on product
-                ideation, development, deployment and maintenance, commercial
+                Brands (Uganda) Ltd and Kattale Global Holdings (USA) Ltd,
+                collaborating on product ideation, development, deployment and maintenance, commercial
                 brand representation, product marketing, distribution logistics
                 and technology-enabled market expansion in Uganda.
               </p>

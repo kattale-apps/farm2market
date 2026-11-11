@@ -579,10 +579,10 @@ export default function BaaktechPage() {
           </div>
           <div className={styles.profileCard}>
             <span className={styles.documentIcon} aria-hidden="true">▤</span>
-            <h3>Company profile</h3>
-            <p>Download a short overview of BAAKTech Uganda Limited and its services.</p>
-            <a href="/baaktech-company-profile.pdf" download>
-              Download company profile (PDF) <span aria-hidden="true">↓</span>
+            <h3>BAAKTech Brief</h3>
+            <p>A one-page overview of BAAKTech Uganda Limited and its services.</p>
+            <a href="/baaktech-brief.pdf" download="BAAKTech-Brief.pdf">
+              Download BAAKTech Brief (PDF) <span aria-hidden="true">↓</span>
             </a>
           </div>
         </div>
